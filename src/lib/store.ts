@@ -26,7 +26,7 @@ interface CommitteeStore {
   activeCommitteeId: string | null;
 
   // Committee lifecycle
-  createCommittee: (name: string, topic: string, chairName: string, delegates: string[]) => string;
+  createCommittee: (name: string, topic: string, chairNames: string[], delegates: string[]) => string;
   joinCommittee: (code: string) => Committee | null;
   setActiveCommittee: (id: string) => void;
 
@@ -78,13 +78,13 @@ export const useCommitteeStore = create<CommitteeStore>()(
       committees: {},
       activeCommitteeId: null,
 
-      createCommittee: (name, topic, chairName, delegateNames) => {
+      createCommittee: (name, topic, chairNames, delegateNames) => {
         const id = generateId();
         const code = generateCode();
         const delegates: Delegate[] = delegateNames.map((country) => ({
           id: generateId(),
           country,
-          status: 'absent',
+          status: 'present',
         }));
 
         const committee: Committee = {
@@ -92,9 +92,10 @@ export const useCommitteeStore = create<CommitteeStore>()(
           code,
           name,
           topic,
-          chairName,
+          chairName: chairNames[0] ?? 'Chair',
+          chairNames,
           delegates,
-          phase: 'pre-session',
+          phase: 'speakers-list',
           speakersList: [],
           currentSpeaker: null,
           speakerTimeLimit: 90,

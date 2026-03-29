@@ -76,6 +76,7 @@ export interface Committee {
   name: string;
   topic: string;
   chairName: string;
+  chairNames: string[];
   delegates: Delegate[];
   phase: SessionPhase;
   speakersList: SpeakerEntry[];
