@@ -84,7 +84,7 @@ export const useCommitteeStore = create<CommitteeStore>()(
         const delegates: Delegate[] = delegateNames.map((country) => ({
           id: generateId(),
           country,
-          status: 'present',
+          status: 'absent',
         }));
 
         const committee: Committee = {
@@ -95,7 +95,7 @@ export const useCommitteeStore = create<CommitteeStore>()(
           chairName: chairNames[0] ?? 'Chair',
           chairNames,
           delegates,
-          phase: 'speakers-list',
+          phase: 'pre-session',
           speakersList: [],
           currentSpeaker: null,
           speakerTimeLimit: 90,

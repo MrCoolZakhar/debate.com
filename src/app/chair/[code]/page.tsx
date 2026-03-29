@@ -4,28 +4,14 @@ import { use, useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import { useCommitteeStore } from '@/lib/store';
 import { Committee } from '@/lib/types';
-import RollCallPanel from '@/components/RollCallPanel';
-import MotionsPanel from '@/components/MotionsPanel';
+import RollCallPanel, { FlagCircle } from '@/components/RollCallPanel';
+import MotionsModal from '@/components/MotionsModal';
 import { getFlagEmoji, getCountryByName } from '@/lib/countries';
 
 function formatTime(seconds: number) {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
   return `${m}:${s.toString().padStart(2, '0')}`;
-}
-
-function BigFlag({ country }: { country: string }) {
-  const found = getCountryByName(country);
-  return <span className="text-8xl leading-none select-none">{found ? getFlagEmoji(found.code) : '🌐'}</span>;
-}
-
-function SmallFlag({ country }: { country: string }) {
-  const found = getCountryByName(country);
-  return (
-    <div className="w-9 h-9 rounded-full bg-[#1e2540] flex items-center justify-center text-xl shrink-0">
-      {found ? getFlagEmoji(found.code) : '🌐'}
-    </div>
-  );
 }
 
 function AddSpeakerInput({ committee, onAdd }: { committee: Committee; onAdd: (id: string) => void }) {
@@ -52,7 +38,7 @@ function AddSpeakerInput({ committee, onAdd }: { committee: Committee; onAdd: (i
         {top && query && <span className="text-xs text-[#4a5580] px-3 truncate max-w-[140px]">↵ {top.country}</span>}
       </div>
       {query && matches.length > 0 && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-[#0f1526] border border-[#1e2540] rounded-xl overflow-hidden z-20 shadow-xl">
+        <div className="absolute bottom-full left-0 right-0 mb-1 bg-[#0f1526] border border-[#1e2540] rounded-xl overflow-hidden z-20 shadow-xl">
           {matches.slice(0, 6).map((d, i) => {
             const found = getCountryByName(d.country);
             return (
@@ -111,7 +97,7 @@ function ModeratedCaucusView({ committee }: { committee: Committee }) {
       <div className="flex-1 flex flex-col items-center justify-center">
         {caucus.currentSpeaker ? (
           <>
-            <BigFlag country={caucus.currentSpeaker} />
+            <FlagCircle country={caucus.currentSpeaker} size="xl" />
             <h1 className="text-5xl font-black text-white mt-4 mb-2">{caucus.currentSpeaker}</h1>
             <div className={`text-7xl font-black font-mono mt-3 mb-4 tabular-nums ${
               caucus.speakerTimeRemaining <= 5 ? 'text-red-400' : caucus.speakerTimeRemaining <= 15 ? 'text-yellow-400' : 'text-white'
@@ -229,7 +215,6 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
 
   const present = committee.delegates.filter((d) => d.status !== 'absent').length;
   const progress = committee.currentSpeaker ? (committee.speakerTimeRemaining / committee.speakerTimeLimit) * 100 : 100;
-  const inCaucus = committee.phase === 'moderated-caucus' || committee.phase === 'unmoderated-caucus';
 
   return (
     <div className="min-h-screen bg-[#0a0e1a] flex flex-col">
@@ -265,7 +250,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
 
         {/* Roll Call (collapsible, hidden by default) */}
         {showRollCall && (
-          <aside className="w-48 border-r border-[#1e2540] bg-[#0d1120] flex flex-col overflow-hidden shrink-0">
+          <aside className="w-64 border-r border-[#1e2540] bg-[#0d1120] flex flex-col overflow-hidden shrink-0">
             <RollCallPanel committee={committee} />
           </aside>
         )}
@@ -311,7 +296,31 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
               <div className="flex-1 flex flex-col items-center justify-center px-8 py-10 min-h-0">
                 {committee.currentSpeaker ? (
                   <>
-                    <BigFlag country={committee.currentSpeaker.country} />
+                    {/* Next up — flags above timer */}
+                    {committee.speakersList.length > 0 && (
+                      <div className="flex items-end gap-5 mb-8">
+                        {committee.speakersList.slice(0, 4).map((s, i) => (
+                          <div key={s.delegateId} className="flex flex-col items-center gap-2 relative group">
+                            <FlagCircle country={s.country} size="lg" />
+                            <span className="text-xs text-[#8892aa] text-center max-w-[80px] truncate">{s.country}</span>
+                            <button
+                              onClick={() => removeFromSpeakersList(committee.id, s.delegateId)}
+                              className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full text-white text-xs items-center justify-center hidden group-hover:flex leading-none"
+                            >✕</button>
+                          </div>
+                        ))}
+                        {committee.speakersList.length > 4 && (
+                          <div className="flex flex-col items-center gap-2">
+                            <div className="w-20 h-20 rounded-full bg-[#1a2035] flex items-center justify-center">
+                              <span className="text-lg font-bold text-[#8892aa]">+{committee.speakersList.length - 4}</span>
+                            </div>
+                            <span className="text-xs text-[#4a5580]">more</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    <FlagCircle country={committee.currentSpeaker.country} size="xl" />
                     <h1 className="text-5xl font-black text-white mt-5 mb-2 text-center">{committee.currentSpeaker.country}</h1>
                     <div className={`text-8xl font-black font-mono mt-4 mb-6 tabular-nums ${
                       committee.speakerTimeRemaining <= 10 ? 'text-red-400' : committee.speakerTimeRemaining <= 30 ? 'text-yellow-400' : 'text-white'
@@ -335,6 +344,30 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
                   </>
                 ) : (
                   <>
+                    {/* Next up — flags above no-speaker state */}
+                    {committee.speakersList.length > 0 && (
+                      <div className="flex items-end gap-5 mb-10">
+                        {committee.speakersList.slice(0, 4).map((s, i) => (
+                          <div key={s.delegateId} className="flex flex-col items-center gap-2 relative group">
+                            <FlagCircle country={s.country} size="lg" />
+                            <span className="text-xs text-[#8892aa] text-center max-w-[80px] truncate">{s.country}</span>
+                            <button
+                              onClick={() => removeFromSpeakersList(committee.id, s.delegateId)}
+                              className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full text-white text-xs items-center justify-center hidden group-hover:flex leading-none"
+                            >✕</button>
+                          </div>
+                        ))}
+                        {committee.speakersList.length > 4 && (
+                          <div className="flex flex-col items-center gap-2">
+                            <div className="w-20 h-20 rounded-full bg-[#1a2035] flex items-center justify-center">
+                              <span className="text-lg font-bold text-[#8892aa]">+{committee.speakersList.length - 4}</span>
+                            </div>
+                            <span className="text-xs text-[#4a5580]">more</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     <div className="text-7xl mb-6">🎙️</div>
                     <h2 className="text-3xl font-black text-white mb-2">No Current Speaker</h2>
                     <p className="text-[#8892aa] mb-8 text-center">Add delegates below, then call the first speaker</p>
@@ -364,41 +397,17 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
                   </div>
                 </div>
 
-                {/* Next speakers */}
-                {committee.speakersList.length > 0 && (
-                  <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1">
-                    <span className="text-xs text-[#4a5580] font-mono shrink-0">NEXT</span>
-                    {committee.speakersList.map((s, i) => (
-                      <div key={s.delegateId} className="flex items-center gap-1 shrink-0">
-                        <span className="text-xs text-[#4a5580] font-mono">{i + 1}</span>
-                        <div className="relative group">
-                          <SmallFlag country={s.country} />
-                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-[#1e2540] text-white text-xs px-2 py-1 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-                            {s.country}
-                          </div>
-                          <button onClick={() => removeFromSpeakersList(committee.id, s.delegateId)}
-                            className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-600 rounded-full text-white text-xs items-center justify-center hidden group-hover:flex leading-none">
-                            ✕
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
                 <AddSpeakerInput committee={committee} onAdd={(id) => addToSpeakersList(committee.id, id)} />
               </div>
             </div>
           )}
         </main>
-
-        {/* Motions panel */}
-        {showMotions && (
-          <aside className="w-72 border-l border-[#1e2540] bg-[#0d1120] flex flex-col overflow-hidden shrink-0">
-            <MotionsPanel committee={committee} />
-          </aside>
-        )}
       </div>
+
+      {/* Motions modal overlay */}
+      {showMotions && (
+        <MotionsModal committee={committee} onClose={() => setShowMotions(false)} />
+      )}
     </div>
   );
 }
