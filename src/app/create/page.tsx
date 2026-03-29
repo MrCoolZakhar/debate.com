@@ -4,168 +4,182 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useCommitteeStore } from '@/lib/store';
+import { UN_COUNTRIES, getFlagEmoji, getCountryByName } from '@/lib/countries';
 
-const DEFAULT_COUNTRIES = [
-  'United States', 'China', 'Russia', 'United Kingdom', 'France',
-  'Germany', 'Brazil', 'India', 'Japan', 'Canada', 'Australia',
-  'South Africa', 'Nigeria', 'Mexico', 'Argentina', 'Saudi Arabia',
-  'Iran', 'Turkey', 'South Korea', 'Indonesia',
-];
+function FlagBadge({ name, onRemove }: { name: string; onRemove: () => void }) {
+  const found = getCountryByName(name);
+  const flag = found ? getFlagEmoji(found.code) : '🌐';
+  return (
+    <div className="flex items-center gap-1.5 bg-[#141929] border border-[#1e2540] rounded-lg px-2 py-1.5 group">
+      <span className="text-sm">{flag}</span>
+      <span className="text-xs text-[#c0c8d8] max-w-[100px] truncate">{name}</span>
+      <button onClick={onRemove} className="text-[#3a4060] hover:text-red-400 transition-colors ml-0.5">✕</button>
+    </div>
+  );
+}
 
 export default function CreatePage() {
   const router = useRouter();
   const createCommittee = useCommitteeStore((s) => s.createCommittee);
 
+  const [step, setStep] = useState(1);
   const [committeeName, setCommitteeName] = useState('');
   const [topic, setTopic] = useState('');
   const [chairName, setChairName] = useState('');
-  const [delegates, setDelegates] = useState<string[]>([...DEFAULT_COUNTRIES]);
-  const [newDelegate, setNewDelegate] = useState('');
-  const [step, setStep] = useState(1);
+  const [delegates, setDelegates] = useState<string[]>([]);
+  const [search, setSearch] = useState('');
+  const [customName, setCustomName] = useState('');
 
-  const addDelegate = () => {
-    const trimmed = newDelegate.trim();
-    if (trimmed && !delegates.includes(trimmed)) {
-      setDelegates([...delegates, trimmed]);
-    }
-    setNewDelegate('');
+  const available = UN_COUNTRIES.filter(
+    (c) =>
+      !delegates.includes(c.name) &&
+      c.name.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const toggle = (name: string) => {
+    setDelegates((prev) =>
+      prev.includes(name) ? prev.filter((d) => d !== name) : [...prev, name]
+    );
   };
 
-  const removeDelegate = (country: string) => {
-    setDelegates(delegates.filter((d) => d !== country));
+  const addCustom = () => {
+    const name = customName.trim();
+    if (name && !delegates.includes(name)) {
+      setDelegates((prev) => [...prev, name]);
+    }
+    setCustomName('');
   };
 
   const handleCreate = () => {
-    if (!committeeName.trim() || !topic.trim() || !chairName.trim() || delegates.length === 0) return;
+    if (!committeeName.trim() || !topic.trim() || !chairName.trim()) return;
     const code = createCommittee(committeeName.trim(), topic.trim(), chairName.trim(), delegates);
     router.push(`/chair/${code}`);
   };
 
   return (
     <div className="min-h-screen bg-[#0a0e1a] flex flex-col">
-      {/* Nav */}
-      <nav className="border-b border-[#1e2540] px-6 h-16 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-sm font-bold">M</div>
+      <nav className="border-b border-[#1e2540] px-6 h-14 flex items-center justify-between">
+        <Link href="/" className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-xs font-bold">M</div>
           <span className="font-bold text-white">MUN Command</span>
-        </Link>
-        <Link href="/join" className="text-sm text-[#8892aa] hover:text-white transition-colors">
-          Join as Delegate →
         </Link>
       </nav>
 
-      <div className="flex-1 flex items-center justify-center px-6 py-12">
+      <div className="flex-1 flex items-start justify-center px-6 py-10">
         <div className="w-full max-w-2xl">
-          <div className="mb-8">
-            <div className="flex gap-2 mb-6">
-              {[1, 2].map((s) => (
-                <div key={s} className="flex items-center gap-2">
-                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${
-                    step >= s ? 'bg-blue-600 text-white' : 'bg-[#1e2540] text-[#4a5580]'
-                  }`}>{s}</div>
-                  {s < 2 && <div className={`w-16 h-0.5 transition-colors ${step > s ? 'bg-blue-600' : 'bg-[#1e2540]'}`} />}
-                </div>
-              ))}
-            </div>
-            <h1 className="text-3xl font-black text-white">
-              {step === 1 ? 'Committee Setup' : 'Add Delegates'}
-            </h1>
-            <p className="text-[#8892aa] mt-1">
-              {step === 1 ? 'Configure your committee details' : `${delegates.length} delegates added`}
-            </p>
+          {/* Steps */}
+          <div className="flex items-center gap-3 mb-8">
+            {[1, 2].map((s) => (
+              <div key={s} className="flex items-center gap-2">
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${step >= s ? 'bg-blue-600 text-white' : 'bg-[#1e2540] text-[#4a5580]'}`}>{s}</div>
+                {s < 2 && <div className={`w-12 h-0.5 ${step > s ? 'bg-blue-600' : 'bg-[#1e2540]'}`} />}
+              </div>
+            ))}
+            <span className="text-sm text-[#8892aa] ml-2">{step === 1 ? 'Committee details' : 'Add delegates'}</span>
           </div>
 
-          {step === 1 ? (
-            <div className="space-y-5">
+          {step === 1 && (
+            <div className="space-y-4">
+              <h1 className="text-2xl font-black text-white mb-6">Create Committee</h1>
               <div>
                 <label className="block text-sm font-medium text-[#c0c8d8] mb-2">Committee Name</label>
-                <input
-                  type="text"
-                  value={committeeName}
-                  onChange={(e) => setCommitteeName(e.target.value)}
-                  placeholder="e.g. Security Council, ECOSOC, DISEC"
-                  className="w-full bg-[#0f1526] border border-[#1e2540] rounded-lg px-4 py-3 text-white placeholder-[#4a5580] focus:outline-none focus:border-blue-600 transition-colors"
-                />
+                <input type="text" value={committeeName} onChange={(e) => setCommitteeName(e.target.value)}
+                  placeholder="e.g. Security Council" autoFocus
+                  className="w-full bg-[#0f1526] border border-[#1e2540] rounded-xl px-4 py-3 text-white placeholder-[#4a5580] focus:outline-none focus:border-blue-600 transition-colors" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-[#c0c8d8] mb-2">Topic / Agenda Item</label>
-                <input
-                  type="text"
-                  value={topic}
-                  onChange={(e) => setTopic(e.target.value)}
+                <label className="block text-sm font-medium text-[#c0c8d8] mb-2">Topic</label>
+                <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)}
                   placeholder="e.g. The situation in the Middle East"
-                  className="w-full bg-[#0f1526] border border-[#1e2540] rounded-lg px-4 py-3 text-white placeholder-[#4a5580] focus:outline-none focus:border-blue-600 transition-colors"
-                />
+                  className="w-full bg-[#0f1526] border border-[#1e2540] rounded-xl px-4 py-3 text-white placeholder-[#4a5580] focus:outline-none focus:border-blue-600 transition-colors" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-[#c0c8d8] mb-2">Chair / Director Name</label>
-                <input
-                  type="text"
-                  value={chairName}
-                  onChange={(e) => setChairName(e.target.value)}
+                <label className="block text-sm font-medium text-[#c0c8d8] mb-2">Your Name (Chair)</label>
+                <input type="text" value={chairName} onChange={(e) => setChairName(e.target.value)}
                   placeholder="Your name"
-                  className="w-full bg-[#0f1526] border border-[#1e2540] rounded-lg px-4 py-3 text-white placeholder-[#4a5580] focus:outline-none focus:border-blue-600 transition-colors"
-                />
+                  className="w-full bg-[#0f1526] border border-[#1e2540] rounded-xl px-4 py-3 text-white placeholder-[#4a5580] focus:outline-none focus:border-blue-600 transition-colors" />
               </div>
               <button
                 onClick={() => setStep(2)}
                 disabled={!committeeName.trim() || !topic.trim() || !chairName.trim()}
-                className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-blue-900 disabled:text-blue-700 text-white py-3 rounded-lg font-semibold transition-colors"
+                className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-[#1e2540] disabled:text-[#3a4060] text-white py-3 rounded-xl font-bold transition-colors mt-2"
               >
                 Next: Add Delegates →
               </button>
             </div>
-          ) : (
+          )}
+
+          {step === 2 && (
             <div className="space-y-4">
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={newDelegate}
-                  onChange={(e) => setNewDelegate(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && addDelegate()}
-                  placeholder="Add country or delegate..."
-                  className="flex-1 bg-[#0f1526] border border-[#1e2540] rounded-lg px-4 py-3 text-white placeholder-[#4a5580] focus:outline-none focus:border-blue-600 transition-colors"
-                />
-                <button
-                  onClick={addDelegate}
-                  className="bg-[#1e2540] hover:bg-[#2a3050] text-white px-5 py-3 rounded-lg font-medium transition-colors"
-                >
-                  Add
-                </button>
+              <div className="flex items-center justify-between">
+                <h1 className="text-2xl font-black text-white">Add Delegates</h1>
+                <span className="text-sm text-[#8892aa]">{delegates.length} selected</span>
               </div>
 
-              <div className="bg-[#0f1526] border border-[#1e2540] rounded-xl p-4 max-h-72 overflow-y-auto">
-                <div className="grid grid-cols-2 gap-1.5">
-                  {delegates.map((country) => (
-                    <div
-                      key={country}
-                      className="flex items-center justify-between bg-[#141929] rounded-lg px-3 py-2 group"
+              {/* Search */}
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search countries..."
+                autoFocus
+                className="w-full bg-[#0f1526] border border-[#1e2540] rounded-xl px-4 py-3 text-white placeholder-[#4a5580] focus:outline-none focus:border-blue-600 transition-colors"
+              />
+
+              {/* Country grid */}
+              <div className="bg-[#0f1526] border border-[#1e2540] rounded-xl overflow-hidden">
+                <div className="max-h-72 overflow-y-auto p-2 grid grid-cols-2 gap-1">
+                  {available.slice(0, 100).map((c) => (
+                    <button
+                      key={c.code + c.name}
+                      onClick={() => toggle(c.name)}
+                      className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-[#1e2540] transition-colors text-left"
                     >
-                      <span className="text-sm text-[#c0c8d8]">{country}</span>
-                      <button
-                        onClick={() => removeDelegate(country)}
-                        className="text-[#4a5580] hover:text-red-400 transition-colors ml-2 text-xs opacity-0 group-hover:opacity-100"
-                      >
-                        ✕
-                      </button>
-                    </div>
+                      <span className="text-base">{getFlagEmoji(c.code)}</span>
+                      <span className="text-xs text-[#c0c8d8] truncate">{c.name}</span>
+                    </button>
                   ))}
+                  {available.length === 0 && (
+                    <div className="col-span-2 text-center py-6 text-[#4a5580] text-sm">No more countries to add</div>
+                  )}
+                </div>
+                {/* Custom entry */}
+                <div className="border-t border-[#1e2540] p-3 flex gap-2">
+                  <input
+                    type="text"
+                    value={customName}
+                    onChange={(e) => setCustomName(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && addCustom()}
+                    placeholder="Add custom name (e.g. European Union)..."
+                    className="flex-1 bg-[#141929] border border-[#1e2540] rounded-lg px-3 py-2 text-white text-sm focus:outline-none placeholder-[#4a5580]"
+                  />
+                  <button onClick={addCustom} className="bg-[#1e2540] hover:bg-[#2a3050] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                    Add
+                  </button>
                 </div>
               </div>
 
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setStep(1)}
-                  className="flex-1 border border-[#1e2540] hover:border-[#2a3050] text-[#8892aa] hover:text-white py-3 rounded-lg font-semibold transition-colors"
-                >
+              {/* Selected delegates */}
+              {delegates.length > 0 && (
+                <div>
+                  <p className="text-xs text-[#4a5580] mb-2 font-mono">SELECTED DELEGATES</p>
+                  <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto">
+                    {delegates.map((name) => (
+                      <FlagBadge key={name} name={name} onRemove={() => setDelegates((prev) => prev.filter((d) => d !== name))} />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-2">
+                <button onClick={() => setStep(1)} className="flex-1 border border-[#1e2540] hover:border-[#2a3050] text-[#8892aa] hover:text-white py-3 rounded-xl font-semibold transition-colors">
                   ← Back
                 </button>
                 <button
                   onClick={handleCreate}
-                  disabled={delegates.length === 0}
-                  className="flex-2 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-900 disabled:text-blue-700 text-white px-8 py-3 rounded-lg font-semibold transition-colors"
+                  className="flex-[2] bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-xl font-bold transition-colors"
                 >
-                  Launch Committee 🚀
+                  Launch Committee →
                 </button>
               </div>
             </div>

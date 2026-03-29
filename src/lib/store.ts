@@ -33,6 +33,7 @@ interface CommitteeStore {
   // Roll call
   setDelegateStatus: (committeeId: string, delegateId: string, status: DelegateStatus) => void;
   completeRollCall: (committeeId: string) => void;
+  addDelegate: (committeeId: string, country: string) => void;
 
   // Phase management
   setPhase: (committeeId: string, phase: SessionPhase) => void;
@@ -148,6 +149,20 @@ export const useCommitteeStore = create<CommitteeStore>()(
             },
           },
         })),
+
+      addDelegate: (committeeId, country) =>
+        set((state) => {
+          const committee = state.committees[committeeId];
+          if (!committee) return state;
+          if (committee.delegates.some((d) => d.country === country)) return state;
+          const newDelegate: Delegate = { id: Math.random().toString(36).substring(2, 11), country, status: 'absent' };
+          return {
+            committees: {
+              ...state.committees,
+              [committeeId]: { ...committee, delegates: [...committee.delegates, newDelegate] },
+            },
+          };
+        }),
 
       setPhase: (committeeId, phase) =>
         set((state) => ({

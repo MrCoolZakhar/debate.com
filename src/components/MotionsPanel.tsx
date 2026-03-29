@@ -4,240 +4,281 @@ import { useState } from 'react';
 import { Committee, MotionType } from '@/lib/types';
 import { useCommitteeStore } from '@/lib/store';
 
-const MOTION_LABELS: Record<MotionType, string> = {
-  'moderated-caucus': 'Moderated Caucus',
-  'unmoderated-caucus': 'Unmoderated Caucus',
-  'close-debate': 'Close Debate',
-  'adjourn': 'Adjourn Session',
-  'extend-speakers-time': 'Extend Speakers Time',
-  'set-speakers-time': 'Set Speakers Time',
+type SimpleMotionType = 'moderated-caucus' | 'unmoderated-caucus' | 'tour-de-table' | 'close-debate' | 'custom';
+
+const MOTION_INFO: Record<SimpleMotionType, { label: string; icon: string; description: string; hasTime: boolean; hasSpeakingTime: boolean }> = {
+  'moderated-caucus': { label: 'Moderated Caucus', icon: '🎙️', description: 'Structured debate with speaking slots', hasTime: true, hasSpeakingTime: true },
+  'unmoderated-caucus': { label: 'Unmoderated Caucus', icon: '💬', description: 'Open networking time', hasTime: true, hasSpeakingTime: false },
+  'tour-de-table': { label: 'Tour de Table', icon: '🔄', description: 'Every delegate speaks briefly', hasTime: false, hasSpeakingTime: true },
+  'close-debate': { label: 'Close Debate', icon: '🔔', description: 'Move to voting procedure', hasTime: false, hasSpeakingTime: false },
+  'custom': { label: 'Custom Motion', icon: '✏️', description: 'Enter any other motion', hasTime: false, hasSpeakingTime: false },
 };
 
-export default function MotionsPanel({ committee }: { committee: Committee }) {
-  const { proposeMotion, voteOnMotion, dismissMotion, startCaucus } = useCommitteeStore();
-  const [showForm, setShowForm] = useState(false);
-  const [motionType, setMotionType] = useState<MotionType>('moderated-caucus');
-  const [proposedBy, setProposedBy] = useState('');
-  const [totalTime, setTotalTime] = useState('600');
-  const [speakingTime, setSpeakingTime] = useState('60');
-  const [purpose, setPurpose] = useState('');
-  const [votingMotionId, setVotingMotionId] = useState<string | null>(null);
-  const [forVotes, setForVotes] = useState('');
-  const [againstVotes, setAgainstVotes] = useState('');
-  const [abstainVotes, setAbstainVotes] = useState('');
+function formatTime(seconds: number) {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return m > 0 ? `${m}m ${s > 0 ? s + 's' : ''}`.trim() : `${s}s`;
+}
 
-  const handlePropose = () => {
-    if (!proposedBy.trim()) return;
-    proposeMotion(committee.id, motionType, proposedBy.trim(), {
-      totalTime: parseInt(totalTime) || undefined,
-      speakingTime: parseInt(speakingTime) || undefined,
-      purpose: purpose.trim() || undefined,
+function speakersCount(totalSeconds: number, speakingSeconds: number) {
+  if (!speakingSeconds) return 0;
+  return Math.floor(totalSeconds / speakingSeconds);
+}
+
+export default function MotionsPanel({ committee }: { committee: Committee }) {
+  const { proposeMotion, voteOnMotion, dismissMotion, startCaucus, setPhase, addToSpeakersList } = useCommitteeStore();
+  const [selected, setSelected] = useState<SimpleMotionType | null>(null);
+  const [proposedBy, setProposedBy] = useState('');
+  const [totalTime, setTotalTime] = useState(600);
+  const [speakingTime, setSpeakingTime] = useState(60);
+  const [purpose, setPurpose] = useState('');
+  const [customText, setCustomText] = useState('');
+  const [votingId, setVotingId] = useState<string | null>(null);
+  const [forV, setForV] = useState('');
+  const [againstV, setAgainstV] = useState('');
+  const [abstainV, setAbstainV] = useState('');
+
+  const presentDelegates = committee.delegates.filter((d) => d.status !== 'absent');
+
+  const handleSubmit = () => {
+    if (!proposedBy && selected !== 'close-debate' && selected !== 'tour-de-table') return;
+    if (!selected) return;
+
+    if (selected === 'close-debate') {
+      setPhase(committee.id, 'voting');
+      setSelected(null);
+      return;
+    }
+
+    if (selected === 'tour-de-table') {
+      // Add all present delegates to the speakers list
+      presentDelegates.forEach((d) => addToSpeakersList(committee.id, d.id));
+      setSelected(null);
+      return;
+    }
+
+    const motionType: MotionType = selected === 'custom' ? 'adjourn' : selected as MotionType;
+    proposeMotion(committee.id, motionType, proposedBy, {
+      totalTime: MOTION_INFO[selected].hasTime ? totalTime : undefined,
+      speakingTime: MOTION_INFO[selected].hasSpeakingTime ? speakingTime : undefined,
+      purpose: purpose || customText || undefined,
     });
-    setShowForm(false);
+    setSelected(null);
     setProposedBy('');
     setPurpose('');
+    setCustomText('');
   };
 
-  const handleVoteResult = (motionId: string) => {
-    voteOnMotion(committee.id, motionId, parseInt(forVotes) || 0, parseInt(againstVotes) || 0, parseInt(abstainVotes) || 0);
+  const handleVote = (motionId: string) => {
+    const f = parseInt(forV) || 0;
+    const a = parseInt(againstV) || 0;
+    const abs = parseInt(abstainV) || 0;
+    voteOnMotion(committee.id, motionId, f, a, abs);
     const motion = committee.motions.find((m) => m.id === motionId);
-    if (motion && (motion.type === 'moderated-caucus' || motion.type === 'unmoderated-caucus')) {
-      const passed = (parseInt(forVotes) || 0) > (parseInt(againstVotes) || 0);
-      if (passed) {
-        startCaucus(committee.id, {
-          active: true,
-          type: motion.type === 'moderated-caucus' ? 'moderated' : 'unmoderated',
-          totalTime: motion.totalTime || 600,
-          speakingTime: motion.speakingTime || 60,
-          purpose: motion.purpose || '',
-        });
-      }
+    if (motion && f > a && (motion.type === 'moderated-caucus' || motion.type === 'unmoderated-caucus')) {
+      startCaucus(committee.id, {
+        active: true,
+        type: motion.type === 'moderated-caucus' ? 'moderated' : 'unmoderated',
+        totalTime: motion.totalTime || 600,
+        speakingTime: motion.speakingTime || 60,
+        purpose: motion.purpose || '',
+      });
     }
-    setVotingMotionId(null);
-    setForVotes('');
-    setAgainstVotes('');
-    setAbstainVotes('');
+    setVotingId(null);
+    setForV(''); setAgainstV(''); setAbstainV('');
   };
 
-  const pending = committee.motions.filter((m) => m.status === 'pending' || m.status === 'voting');
-  const resolved = committee.motions.filter((m) => m.status === 'passed' || m.status === 'failed');
+  const pending = committee.motions.filter((m) => m.status === 'pending');
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between p-4 border-b border-[#1e2540]">
-        <div>
-          <h3 className="font-bold text-white">Motions</h3>
-          <p className="text-[#8892aa] text-xs mt-0.5">{pending.length} pending</p>
-        </div>
-        <button
-          onClick={() => setShowForm((v) => !v)}
-          className="bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1.5 rounded-lg font-medium transition-colors"
-        >
-          + New Motion
-        </button>
+      <div className="p-3 border-b border-[#1e2540]">
+        <span className="text-xs font-mono text-[#4a5580]">MOTIONS</span>
       </div>
 
-      {showForm && (
-        <div className="p-4 border-b border-[#1e2540] bg-[#0d1120] space-y-3">
-          <div>
-            <label className="text-xs text-[#8892aa] block mb-1">Motion Type</label>
-            <select
-              value={motionType}
-              onChange={(e) => setMotionType(e.target.value as MotionType)}
-              className="w-full bg-[#141929] border border-[#1e2540] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-600"
+      {/* Motion type selector */}
+      {!selected ? (
+        <div className="p-3 space-y-1.5">
+          <p className="text-xs text-[#4a5580] mb-2">Raise a motion:</p>
+          {(Object.entries(MOTION_INFO) as [SimpleMotionType, typeof MOTION_INFO[SimpleMotionType]][]).map(([key, info]) => (
+            <button
+              key={key}
+              onClick={() => setSelected(key)}
+              className="w-full flex items-center gap-3 px-3 py-2.5 bg-[#141929] hover:bg-[#1e2540] border border-transparent hover:border-blue-700/30 rounded-xl transition-all text-left"
             >
-              {Object.entries(MOTION_LABELS).map(([k, v]) => (
-                <option key={k} value={k}>{v}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="text-xs text-[#8892aa] block mb-1">Proposed By</label>
-            <select
-              value={proposedBy}
-              onChange={(e) => setProposedBy(e.target.value)}
-              className="w-full bg-[#141929] border border-[#1e2540] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-600"
-            >
-              <option value="">Select delegate...</option>
-              {committee.delegates.filter((d) => d.status !== 'absent').map((d) => (
-                <option key={d.id} value={d.country}>{d.country}</option>
-              ))}
-            </select>
-          </div>
-          {(motionType === 'moderated-caucus' || motionType === 'unmoderated-caucus') && (
-            <>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-xs text-[#8892aa] block mb-1">Total Time (sec)</label>
-                  <input
-                    type="number"
-                    value={totalTime}
-                    onChange={(e) => setTotalTime(e.target.value)}
-                    className="w-full bg-[#141929] border border-[#1e2540] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-600"
-                  />
-                </div>
-                {motionType === 'moderated-caucus' && (
-                  <div>
-                    <label className="text-xs text-[#8892aa] block mb-1">Speaking Time (sec)</label>
-                    <input
-                      type="number"
-                      value={speakingTime}
-                      onChange={(e) => setSpeakingTime(e.target.value)}
-                      className="w-full bg-[#141929] border border-[#1e2540] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-600"
-                    />
-                  </div>
-                )}
+              <span className="text-lg">{info.icon}</span>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-semibold text-white">{info.label}</div>
+                <div className="text-xs text-[#4a5580]">{info.description}</div>
               </div>
-              <div>
-                <label className="text-xs text-[#8892aa] block mb-1">Purpose</label>
-                <input
-                  type="text"
-                  value={purpose}
-                  onChange={(e) => setPurpose(e.target.value)}
-                  placeholder="Discuss climate change policy..."
-                  className="w-full bg-[#141929] border border-[#1e2540] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-600 placeholder-[#4a5580]"
-                />
-              </div>
-            </>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="p-3 space-y-3">
+          <button onClick={() => setSelected(null)} className="text-xs text-[#8892aa] hover:text-white transition-colors">
+            ← Back
+          </button>
+          <div className="text-sm font-bold text-white flex items-center gap-2">
+            <span>{MOTION_INFO[selected].icon}</span>
+            {MOTION_INFO[selected].label}
+          </div>
+
+          {selected !== 'close-debate' && selected !== 'tour-de-table' && (
+            <div>
+              <label className="text-xs text-[#8892aa] block mb-1">Proposed by</label>
+              <select
+                value={proposedBy}
+                onChange={(e) => setProposedBy(e.target.value)}
+                className="w-full bg-[#141929] border border-[#1e2540] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-600"
+              >
+                <option value="">Select delegate...</option>
+                {presentDelegates.map((d) => (
+                  <option key={d.id} value={d.country}>{d.country}</option>
+                ))}
+              </select>
+            </div>
           )}
-          <div className="flex gap-2">
-            <button
-              onClick={handlePropose}
-              disabled={!proposedBy}
-              className="flex-1 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-900 disabled:text-blue-700 text-white py-2 rounded-lg text-sm font-semibold transition-colors"
-            >
-              Submit Motion
-            </button>
-            <button
-              onClick={() => setShowForm(false)}
-              className="px-4 py-2 bg-[#1e2540] hover:bg-[#2a3050] text-[#8892aa] rounded-lg text-sm transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
+
+          {selected === 'custom' && (
+            <div>
+              <label className="text-xs text-[#8892aa] block mb-1">Motion text</label>
+              <input
+                type="text"
+                value={customText}
+                onChange={(e) => setCustomText(e.target.value)}
+                placeholder="Describe the motion..."
+                className="w-full bg-[#141929] border border-[#1e2540] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-600 placeholder-[#4a5580]"
+              />
+            </div>
+          )}
+
+          {MOTION_INFO[selected].hasTime && (
+            <div>
+              <label className="text-xs text-[#8892aa] block mb-1">Total time (seconds)</label>
+              <div className="flex gap-2 items-center">
+                <input
+                  type="number"
+                  value={totalTime}
+                  onChange={(e) => setTotalTime(parseInt(e.target.value) || 0)}
+                  className="flex-1 bg-[#141929] border border-[#1e2540] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-600"
+                />
+                <span className="text-xs text-[#8892aa]">= {formatTime(totalTime)}</span>
+              </div>
+              <div className="flex gap-1.5 mt-1.5">
+                {[120, 300, 600, 900, 1200].map((t) => (
+                  <button key={t} onClick={() => setTotalTime(t)}
+                    className={`text-xs px-2 py-1 rounded transition-colors ${totalTime === t ? 'bg-blue-700 text-white' : 'bg-[#141929] text-[#8892aa] hover:text-white'}`}>
+                    {formatTime(t)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {MOTION_INFO[selected].hasSpeakingTime && (
+            <div>
+              <label className="text-xs text-[#8892aa] block mb-1">Speaking time per delegate (seconds)</label>
+              <div className="flex gap-2 items-center">
+                <input
+                  type="number"
+                  value={speakingTime}
+                  onChange={(e) => setSpeakingTime(parseInt(e.target.value) || 0)}
+                  className="flex-1 bg-[#141929] border border-[#1e2540] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-600"
+                />
+                <span className="text-xs text-[#8892aa]">{speakingTime}s</span>
+              </div>
+              <div className="flex gap-1.5 mt-1.5">
+                {[30, 45, 60, 90, 120].map((t) => (
+                  <button key={t} onClick={() => setSpeakingTime(t)}
+                    className={`text-xs px-2 py-1 rounded transition-colors ${speakingTime === t ? 'bg-blue-700 text-white' : 'bg-[#141929] text-[#8892aa] hover:text-white'}`}>
+                    {t}s
+                  </button>
+                ))}
+              </div>
+              {MOTION_INFO[selected].hasTime && speakingTime > 0 && (
+                <p className="text-xs text-blue-400 mt-1.5">
+                  ≈ {speakersCount(totalTime, speakingTime)} speakers fit in this time
+                </p>
+              )}
+            </div>
+          )}
+
+          {(selected === 'moderated-caucus') && (
+            <div>
+              <label className="text-xs text-[#8892aa] block mb-1">Purpose (optional)</label>
+              <input
+                type="text"
+                value={purpose}
+                onChange={(e) => setPurpose(e.target.value)}
+                placeholder="e.g. Discuss humanitarian aid..."
+                className="w-full bg-[#141929] border border-[#1e2540] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-600 placeholder-[#4a5580]"
+              />
+            </div>
+          )}
+
+          {selected === 'tour-de-table' && (
+            <p className="text-xs text-[#8892aa]">
+              Adds all {presentDelegates.length} present delegates to the speakers list in their current order.
+            </p>
+          )}
+          {selected === 'close-debate' && (
+            <p className="text-xs text-[#8892aa]">Immediately opens voting procedure.</p>
+          )}
+
+          <button
+            onClick={handleSubmit}
+            disabled={!selected || (!proposedBy && selected !== 'close-debate' && selected !== 'tour-de-table')}
+            className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-[#1e2540] disabled:text-[#3a4060] text-white py-2.5 rounded-lg text-sm font-bold transition-colors"
+          >
+            {selected === 'close-debate' ? 'Open Voting' : selected === 'tour-de-table' ? 'Add All to List' : 'Submit Motion'}
+          </button>
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
-        {pending.length === 0 && (
-          <div className="text-center py-8 text-[#4a5580] text-sm">No pending motions</div>
-        )}
-        {pending.map((motion) => (
-          <div key={motion.id} className="bg-[#141929] border border-[#1e2540] rounded-xl p-4">
-            <div className="flex items-start justify-between mb-2">
-              <div>
-                <div className="font-semibold text-white text-sm">{MOTION_LABELS[motion.type]}</div>
-                <div className="text-xs text-[#8892aa] mt-0.5">By {motion.proposedBy}</div>
-              </div>
-              <button
-                onClick={() => dismissMotion(committee.id, motion.id)}
-                className="text-[#4a5580] hover:text-red-400 text-xs transition-colors"
-              >
-                ✕
-              </button>
-            </div>
-            {motion.purpose && (
-              <div className="text-xs text-[#8892aa] mb-2 italic">"{motion.purpose}"</div>
-            )}
-            {(motion.totalTime || motion.speakingTime) && (
-              <div className="flex gap-3 text-xs text-[#4a5580] mb-3">
-                {motion.totalTime && <span>Total: {Math.floor(motion.totalTime / 60)}m {motion.totalTime % 60}s</span>}
-                {motion.speakingTime && <span>Speaking: {motion.speakingTime}s</span>}
-              </div>
-            )}
-            {votingMotionId === motion.id ? (
-              <div className="space-y-2">
-                <div className="grid grid-cols-3 gap-2">
-                  <div>
-                    <label className="text-xs text-green-400 block mb-1">For</label>
-                    <input type="number" value={forVotes} onChange={(e) => setForVotes(e.target.value)}
-                      className="w-full bg-[#1e2540] border border-green-700/30 rounded px-2 py-1 text-white text-sm focus:outline-none" />
-                  </div>
-                  <div>
-                    <label className="text-xs text-red-400 block mb-1">Against</label>
-                    <input type="number" value={againstVotes} onChange={(e) => setAgainstVotes(e.target.value)}
-                      className="w-full bg-[#1e2540] border border-red-700/30 rounded px-2 py-1 text-white text-sm focus:outline-none" />
-                  </div>
-                  <div>
-                    <label className="text-xs text-yellow-400 block mb-1">Abstain</label>
-                    <input type="number" value={abstainVotes} onChange={(e) => setAbstainVotes(e.target.value)}
-                      className="w-full bg-[#1e2540] border border-yellow-700/30 rounded px-2 py-1 text-white text-sm focus:outline-none" />
-                  </div>
+      {/* Pending motions */}
+      {pending.length > 0 && (
+        <div className="border-t border-[#1e2540] flex-1 overflow-y-auto p-3 space-y-2">
+          <p className="text-xs text-[#4a5580] font-mono">PENDING ({pending.length})</p>
+          {pending.map((m) => (
+            <div key={m.id} className="bg-[#141929] border border-[#1e2540] rounded-xl p-3">
+              <div className="flex items-start justify-between mb-1">
+                <div className="text-sm font-semibold text-white truncate">
+                  {m.purpose || m.type.replace(/-/g, ' ')}
                 </div>
-                <button
-                  onClick={() => handleVoteResult(motion.id)}
-                  className="w-full bg-green-700 hover:bg-green-600 text-white py-1.5 rounded text-sm font-semibold transition-colors"
-                >
-                  Record Vote
+                <button onClick={() => dismissMotion(committee.id, m.id)} className="text-[#3a4060] hover:text-red-400 text-xs ml-2 transition-colors shrink-0">✕</button>
+              </div>
+              <div className="text-xs text-[#8892aa] mb-2">By {m.proposedBy}</div>
+              {m.totalTime && (
+                <div className="text-xs text-[#4a5580] mb-2">
+                  {formatTime(m.totalTime)}{m.speakingTime ? ` · ${m.speakingTime}s/speaker · ≈${speakersCount(m.totalTime, m.speakingTime)} speakers` : ''}
+                </div>
+              )}
+              {votingId === m.id ? (
+                <div className="space-y-2">
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {[['For', 'text-green-400', forV, setForV], ['Against', 'text-red-400', againstV, setAgainstV], ['Abstain', 'text-yellow-400', abstainV, setAbstainV]] .map(([label, color, val, setter]) => (
+                      <div key={label as string}>
+                        <label className={`block text-xs font-bold mb-1 ${color}`}>{label as string}</label>
+                        <input type="number" min={0} value={val as string}
+                          onChange={(e) => (setter as (v: string) => void)(e.target.value)}
+                          className="w-full bg-[#1e2540] rounded px-2 py-1.5 text-white text-sm text-center focus:outline-none font-bold" />
+                      </div>
+                    ))}
+                  </div>
+                  <button onClick={() => handleVote(m.id)} className="w-full bg-green-700 hover:bg-green-600 text-white py-1.5 rounded text-xs font-bold transition-colors">
+                    Record Vote
+                  </button>
+                </div>
+              ) : (
+                <button onClick={() => setVotingId(m.id)} className="w-full bg-[#1e2540] hover:bg-[#2a3050] text-white py-1.5 rounded text-xs font-medium transition-colors">
+                  Put to Vote
                 </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => setVotingMotionId(motion.id)}
-                className="w-full bg-[#1e2540] hover:bg-[#2a3050] text-white py-2 rounded-lg text-xs font-medium transition-colors"
-              >
-                Put to Vote
-              </button>
-            )}
-          </div>
-        ))}
-
-        {resolved.length > 0 && (
-          <div className="mt-4">
-            <div className="text-xs text-[#4a5580] font-mono mb-2">RESOLVED</div>
-            {resolved.map((motion) => (
-              <div key={motion.id} className={`flex items-center justify-between px-3 py-2 rounded-lg mb-1 ${
-                motion.status === 'passed' ? 'bg-green-950/30 border border-green-800/20' : 'bg-red-950/30 border border-red-800/20'
-              }`}>
-                <span className="text-xs text-[#c0c8d8]">{MOTION_LABELS[motion.type]}</span>
-                <span className={`text-xs font-bold ${motion.status === 'passed' ? 'text-green-400' : 'text-red-400'}`}>
-                  {motion.status === 'passed' ? '✓ Passed' : '✗ Failed'}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
