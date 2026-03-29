@@ -32,11 +32,26 @@ export interface Motion {
   id: string;
   type: MotionType;
   proposedBy: string;
-  totalTime?: number; // seconds
-  speakingTime?: number; // seconds per speaker (moderated caucus)
+  totalTime?: number;
+  speakingTime?: number;
   purpose?: string;
   votes: { for: number; against: number; abstain: number };
   status: 'pending' | 'voting' | 'passed' | 'failed';
+}
+
+// ── Pending motions (floor entertainment + voting) ──
+export type PendingMotionType = 'moderated' | 'unmoderated' | 'consultation' | 'tour';
+
+export interface PendingMotion {
+  id: string;
+  type: PendingMotionType;
+  proposedBy: string;
+  totalTime: number;        // seconds
+  speakingTime: number;     // seconds (0 for unmod/consultation/tour)
+  topic: string;            // required for moderated
+  speakerList: string[];    // ordered speaker countries (moderated only)
+  proposerPosition: 'first' | 'last' | null;
+  disruptiveness: number;   // higher = more disruptive
 }
 
 export type ResolutionStatus = 'draft' | 'submitted' | 'approved' | 'rejected' | 'passed' | 'failed';
@@ -81,9 +96,10 @@ export interface Committee {
   phase: SessionPhase;
   speakersList: SpeakerEntry[];
   currentSpeaker: SpeakerEntry | null;
-  speakerTimeLimit: number; // seconds
+  speakerTimeLimit: number;
   speakerTimeRemaining: number;
   motions: Motion[];
+  pendingMotions: PendingMotion[];
   resolutions: Resolution[];
   caucus: CaucusState | null;
   messages: ChatMessage[];

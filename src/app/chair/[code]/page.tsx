@@ -86,7 +86,7 @@ function ModeratedCaucusView({ committee }: { committee: Committee }) {
   const speakerProgress = caucus.speakingTime > 0 ? (caucus.speakerTimeRemaining / caucus.speakingTime) * 100 : 0;
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-between px-8 py-8 min-h-0">
+    <div className="flex-1 overflow-y-auto flex flex-col items-center justify-between px-8 py-8 min-h-0">
       {/* Top: purpose + total time */}
       <div className="w-full text-center mb-4">
         <p className="text-xs text-blue-400 font-mono mb-1">MODERATED CAUCUS</p>
@@ -217,7 +217,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
   const progress = committee.currentSpeaker ? (committee.speakerTimeRemaining / committee.speakerTimeLimit) * 100 : 100;
 
   return (
-    <div className="min-h-screen bg-[#0a0e1a] flex flex-col">
+    <div className="h-screen bg-[#0a0e1a] flex flex-col overflow-hidden">
       {/* Slim header */}
       <header className="border-b border-[#1e2540] bg-[#0d1120] px-4 h-11 flex items-center gap-3 shrink-0">
         <Link href="/">
@@ -233,9 +233,14 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
         </button>
         <button
           onClick={() => setShowMotions((v) => !v)}
-          className={`text-xs px-3 py-1 rounded-lg transition-colors shrink-0 ${showMotions ? 'bg-blue-700 text-white' : 'bg-[#1e2540] text-[#8892aa] hover:text-white'}`}
+          className={`text-xs px-3 py-1 rounded-lg transition-colors shrink-0 relative ${showMotions ? 'bg-blue-700 text-white' : 'bg-[#1e2540] text-[#8892aa] hover:text-white'}`}
         >
           Motions
+          {(committee.pendingMotions ?? []).length > 0 && (
+            <span className="absolute -top-1 -right-1 w-4 h-4 bg-blue-500 rounded-full text-white text-[10px] flex items-center justify-center font-bold">
+              {committee.pendingMotions.length}
+            </span>
+          )}
         </button>
         <button
           onClick={() => { navigator.clipboard.writeText(committee.code); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
@@ -256,7 +261,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
         )}
 
         {/* Center */}
-        <main className="flex-1 overflow-y-auto flex flex-col">
+        <main className="flex-1 overflow-hidden flex flex-col">
 
           {/* Moderated caucus — full screen */}
           {committee.phase === 'moderated-caucus' && committee.caucus && (
@@ -291,28 +296,28 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
 
           {/* Speakers list */}
           {committee.phase === 'speakers-list' && (
-            <div className="flex-1 flex flex-col">
+            <div className="flex-1 flex flex-col overflow-hidden">
               {/* Big current speaker */}
-              <div className="flex-1 flex flex-col items-center justify-center px-8 py-10 min-h-0">
+              <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-8 py-10 min-h-0">
                 {committee.currentSpeaker ? (
                   <>
-                    {/* Next up — flags above timer */}
+                    {/* Next up — flags above timer, up to 15, scrollable */}
                     {committee.speakersList.length > 0 && (
-                      <div className="flex items-end gap-5 mb-8">
-                        {committee.speakersList.slice(0, 4).map((s, i) => (
-                          <div key={s.delegateId} className="flex flex-col items-center gap-2 relative group">
+                      <div className="flex items-end gap-4 mb-8 overflow-x-auto pb-1 max-w-full">
+                        {committee.speakersList.slice(0, 15).map((s, i) => (
+                          <div key={s.delegateId} className="flex flex-col items-center gap-2 relative group shrink-0">
                             <FlagCircle country={s.country} size="lg" />
-                            <span className="text-xs text-[#8892aa] text-center max-w-[80px] truncate">{s.country}</span>
+                            <span className="text-xs text-[#8892aa] text-center w-20 truncate">{s.country}</span>
                             <button
                               onClick={() => removeFromSpeakersList(committee.id, s.delegateId)}
                               className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full text-white text-xs items-center justify-center hidden group-hover:flex leading-none"
                             >✕</button>
                           </div>
                         ))}
-                        {committee.speakersList.length > 4 && (
-                          <div className="flex flex-col items-center gap-2">
+                        {committee.speakersList.length > 15 && (
+                          <div className="flex flex-col items-center gap-2 shrink-0">
                             <div className="w-20 h-20 rounded-full bg-[#1a2035] flex items-center justify-center">
-                              <span className="text-lg font-bold text-[#8892aa]">+{committee.speakersList.length - 4}</span>
+                              <span className="text-lg font-bold text-[#8892aa]">+{committee.speakersList.length - 15}</span>
                             </div>
                             <span className="text-xs text-[#4a5580]">more</span>
                           </div>

@@ -165,47 +165,72 @@ export default function CreatePage() {
               </button>
               <div className="flex items-center justify-between mb-6">
                 <h1 className="text-2xl font-black text-white">Add Delegates</h1>
-                <span className="text-sm text-[#8892aa]">{delegates.length} selected</span>
+                <span className="text-sm text-[#8892aa]">{delegates.length} added</span>
               </div>
 
-              <input type="text" value={search} onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search countries..." autoFocus
-                className="w-full bg-[#0f1526] border border-[#1e2540] rounded-xl px-4 py-3 text-white placeholder-[#4a5580] focus:outline-none focus:border-blue-600 transition-colors mb-3" />
-
-              <div className="bg-[#0f1526] border border-[#1e2540] rounded-xl overflow-hidden mb-4">
-                <div className="max-h-64 overflow-y-auto p-2 grid grid-cols-2 gap-0.5">
-                  {available.slice(0, 100).map((c) => (
-                    <button key={c.code + c.name} onClick={() => setDelegates((p) => [...p, c.name])}
-                      className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-[#1e2540] transition-colors text-left">
-                      <span className="text-base">{getFlagEmoji(c.code)}</span>
-                      <span className="text-xs text-[#c0c8d8] truncate">{c.name}</span>
-                    </button>
-                  ))}
+              {/* Autocomplete search — Enter adds top match */}
+              <div className="relative mb-4">
+                <div className="flex items-center bg-[#0f1526] border border-[#1e2540] focus-within:border-blue-600 rounded-xl overflow-visible transition-colors">
+                  <input
+                    type="text"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const top = available[0];
+                        if (top) { setDelegates((p) => [...p, top.name]); setSearch(''); }
+                        else if (search.trim() && !delegates.includes(search.trim())) {
+                          setDelegates((p) => [...p, search.trim()]); setSearch('');
+                        }
+                      }
+                      if (e.key === 'Escape') setSearch('');
+                    }}
+                    placeholder="Type to search countries..."
+                    autoFocus
+                    className="flex-1 bg-transparent px-4 py-3.5 text-white placeholder-[#4a5580] focus:outline-none text-base"
+                  />
+                  {available[0] && search && (
+                    <span className="text-xs text-[#4a5580] px-3">↵ {available[0].name}</span>
+                  )}
                 </div>
-                <div className="border-t border-[#1e2540] p-3 flex gap-2">
-                  <input type="text" value={customInput} onChange={(e) => setCustomInput(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter' && customInput.trim()) { setDelegates((p) => [...p, customInput.trim()]); setCustomInput(''); } }}
-                    placeholder="Custom name..."
-                    className="flex-1 bg-[#141929] border border-[#1e2540] rounded-lg px-3 py-2 text-white text-sm focus:outline-none placeholder-[#4a5580]" />
-                  <button onClick={() => { if (customInput.trim()) { setDelegates((p) => [...p, customInput.trim()]); setCustomInput(''); } }}
-                    className="bg-[#1e2540] hover:bg-[#2a3050] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">Add</button>
-                </div>
-              </div>
-
-              {delegates.length > 0 && (
-                <div className="mb-4">
-                  <p className="text-xs text-[#4a5580] font-mono mb-2">SELECTED ({delegates.length})</p>
-                  <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
-                    {delegates.map((name) => (
-                      <FlagBadge key={name} name={name} onRemove={() => setDelegates((p) => p.filter((d) => d !== name))} />
+                {search && available.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-[#0f1526] border border-[#1e2540] rounded-xl overflow-hidden z-20 shadow-xl">
+                    {available.slice(0, 8).map((c, i) => (
+                      <button key={c.code} onMouseDown={(e) => { e.preventDefault(); setDelegates((p) => [...p, c.name]); setSearch(''); }}
+                        className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${i === 0 ? 'bg-blue-900/30 text-white' : 'text-[#c0c8d8] hover:bg-[#1e2540]'}`}>
+                        <span className="text-2xl">{getFlagEmoji(c.code)}</span>
+                        <span className="text-base">{c.name}</span>
+                        {i === 0 && <span className="ml-auto text-xs text-[#4a5580]">Enter ↵</span>}
+                      </button>
                     ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Selected delegates list */}
+              {delegates.length > 0 && (
+                <div className="bg-[#0f1526] border border-[#1e2540] rounded-xl overflow-hidden mb-4">
+                  <p className="text-xs text-[#4a5580] font-mono px-4 pt-3 pb-1">ADDED ({delegates.length})</p>
+                  <div className="max-h-72 overflow-y-auto">
+                    {delegates.map((name) => {
+                      const found = getCountryByName(name);
+                      return (
+                        <div key={name} className="flex items-center gap-3 px-4 py-3 border-b border-[#1e2540]/50 last:border-0">
+                          <span className="text-2xl">{found ? getFlagEmoji(found.code) : '🌐'}</span>
+                          <span className="text-base text-white flex-1">{name}</span>
+                          <button onClick={() => setDelegates((p) => p.filter((d) => d !== name))}
+                            className="text-[#3a4060] hover:text-red-400 transition-colors text-sm">✕</button>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
 
               <button onClick={handleCreate} disabled={delegates.length === 0}
-                className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-[#1e2540] disabled:text-[#3a4060] text-white py-3.5 rounded-xl font-bold transition-colors">
-                Launch Committee →
+                className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-[#1e2540] disabled:text-[#3a4060] text-white py-3.5 rounded-xl font-bold transition-colors text-base">
+                Launch Committee with {delegates.length} delegate{delegates.length !== 1 ? 's' : ''} →
               </button>
             </div>
           )}

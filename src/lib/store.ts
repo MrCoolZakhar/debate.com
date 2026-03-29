@@ -7,11 +7,18 @@ import {
   SessionPhase,
   Motion,
   MotionType,
+  PendingMotion,
+  PendingMotionType,
   Resolution,
   CaucusState,
   ChatMessage,
   SpeakerEntry,
 } from './types';
+
+function calcDisruptiveness(type: PendingMotionType, totalTime: number): number {
+  const base = { consultation: 4_000_000, tour: 3_000_000, unmoderated: 2_000_000, moderated: 1_000_000 };
+  return base[type] + totalTime;
+}
 
 function generateCode(): string {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -54,6 +61,12 @@ interface CommitteeStore {
   ) => void;
   voteOnMotion: (committeeId: string, motionId: string, forCount: number, againstCount: number, abstainCount: number) => void;
   dismissMotion: (committeeId: string, motionId: string) => void;
+
+  // Pending motions (floor + voting)
+  addPendingMotion: (committeeId: string, motion: Omit<PendingMotion, 'id' | 'disruptiveness'>) => void;
+  removePendingMotion: (committeeId: string, motionId: string) => void;
+  enactPendingMotion: (committeeId: string, motionId: string) => void;
+  clearPendingMotions: (committeeId: string) => void;
 
   // Caucus
   startCaucus: (committeeId: string, caucus: Omit<CaucusState, 'remainingTime' | 'speakerTimeRemaining' | 'currentSpeaker'>) => void;
@@ -101,6 +114,7 @@ export const useCommitteeStore = create<CommitteeStore>()(
           speakerTimeLimit: 90,
           speakerTimeRemaining: 90,
           motions: [],
+          pendingMotions: [],
           resolutions: [],
           caucus: null,
           messages: [],
@@ -307,6 +321,126 @@ export const useCommitteeStore = create<CommitteeStore>()(
             [committeeId]: {
               ...state.committees[committeeId],
               motions: state.committees[committeeId].motions.filter((m) => m.id !== motionId),
+            },
+          },
+        })),
+
+      addPendingMotion: (committeeId, motionData) => {
+        const motion: PendingMotion = {
+          ...motionData,
+          id: generateId(),
+          disruptiveness: calcDisruptiveness(motionData.type, motionData.totalTime),
+        };
+        set((state) => ({
+          committees: {
+            ...state.committees,
+            [committeeId]: {
+              ...state.committees[committeeId],
+              pendingMotions: [...(state.committees[committeeId].pendingMotions ?? []), motion],
+            },
+          },
+        }));
+      },
+
+      removePendingMotion: (committeeId, motionId) =>
+        set((state) => ({
+          committees: {
+            ...state.committees,
+            [committeeId]: {
+              ...state.committees[committeeId],
+              pendingMotions: (state.committees[committeeId].pendingMotions ?? []).filter((m) => m.id !== motionId),
+            },
+          },
+        })),
+
+      enactPendingMotion: (committeeId, motionId) => {
+        const state = get();
+        const committee = state.committees[committeeId];
+        if (!committee) return;
+        const motion = (committee.pendingMotions ?? []).find((m) => m.id === motionId);
+        if (!motion) return;
+
+        if (motion.type === 'tour') {
+          const present = committee.delegates.filter((d) => d.status !== 'absent');
+          const entries: SpeakerEntry[] = present.map((d) => ({ delegateId: d.id, country: d.country }));
+          set((s) => ({
+            committees: {
+              ...s.committees,
+              [committeeId]: {
+                ...s.committees[committeeId],
+                speakersList: entries,
+                pendingMotions: [],
+              },
+            },
+          }));
+          return;
+        }
+
+        if (motion.type === 'moderated') {
+          // Build ordered speaker list from motion.speakerList
+          const entries: SpeakerEntry[] = motion.speakerList
+            .map((country) => {
+              const d = committee.delegates.find((del) => del.country === country);
+              return d ? { delegateId: d.id, country: d.country } : null;
+            })
+            .filter(Boolean) as SpeakerEntry[];
+
+          const caucus: CaucusState = {
+            active: true,
+            type: 'moderated',
+            totalTime: motion.totalTime,
+            remainingTime: motion.totalTime,
+            speakingTime: motion.speakingTime,
+            speakerTimeRemaining: motion.speakingTime,
+            purpose: motion.topic,
+            currentSpeaker: null,
+          };
+          set((s) => ({
+            committees: {
+              ...s.committees,
+              [committeeId]: {
+                ...s.committees[committeeId],
+                caucus,
+                phase: 'moderated-caucus',
+                speakersList: entries,
+                pendingMotions: [],
+              },
+            },
+          }));
+          return;
+        }
+
+        // unmoderated / consultation
+        const caucus: CaucusState = {
+          active: true,
+          type: 'unmoderated',
+          totalTime: motion.totalTime,
+          remainingTime: motion.totalTime,
+          speakingTime: 0,
+          speakerTimeRemaining: 0,
+          purpose: motion.type === 'consultation' ? 'Consultation of the Whole' : (motion.topic || ''),
+          currentSpeaker: null,
+        };
+        set((s) => ({
+          committees: {
+            ...s.committees,
+            [committeeId]: {
+              ...s.committees[committeeId],
+              caucus,
+              phase: 'unmoderated-caucus',
+              pendingMotions: [],
+            },
+          },
+        }));
+      },
+
+      clearPendingMotions: (committeeId) =>
+        set((state) => ({
+          committees: {
+            ...state.committees,
+            [committeeId]: {
+              ...state.committees[committeeId],
+              pendingMotions: [],
             },
           },
         })),
