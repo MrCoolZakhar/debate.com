@@ -71,6 +71,9 @@ interface CommitteeStore {
   // Caucus
   startCaucus: (committeeId: string, caucus: Omit<CaucusState, 'remainingTime' | 'speakerTimeRemaining' | 'currentSpeaker'>) => void;
   tickCaucus: (committeeId: string) => void;
+  tickCaucusTotalOnly: (committeeId: string) => void;
+  tickCaucusSpeakerOnly: (committeeId: string) => void;
+  advanceCaucusSpeaker: (committeeId: string) => void;
   endCaucus: (committeeId: string) => void;
   nextCaucusSpeaker: (committeeId: string, speakerCountry: string) => void;
 
@@ -480,6 +483,60 @@ export const useCommitteeStore = create<CommitteeStore>()(
                 ...committee,
                 phase: newTotal === 0 ? 'speakers-list' : committee.phase,
                 caucus: updatedCaucus,
+              },
+            },
+          };
+        }),
+
+      tickCaucusTotalOnly: (committeeId) =>
+        set((state) => {
+          const committee = state.committees[committeeId];
+          if (!committee?.caucus) return state;
+          const newTotal = Math.max(0, committee.caucus.remainingTime - 1);
+          return {
+            committees: {
+              ...state.committees,
+              [committeeId]: {
+                ...committee,
+                phase: newTotal === 0 ? 'speakers-list' : committee.phase,
+                caucus: newTotal === 0 ? null : { ...committee.caucus, remainingTime: newTotal },
+              },
+            },
+          };
+        }),
+
+      tickCaucusSpeakerOnly: (committeeId) =>
+        set((state) => {
+          const committee = state.committees[committeeId];
+          if (!committee?.caucus) return state;
+          const newSpeaker = Math.max(0, committee.caucus.speakerTimeRemaining - 1);
+          return {
+            committees: {
+              ...state.committees,
+              [committeeId]: {
+                ...committee,
+                caucus: { ...committee.caucus, speakerTimeRemaining: newSpeaker },
+              },
+            },
+          };
+        }),
+
+      advanceCaucusSpeaker: (committeeId) =>
+        set((state) => {
+          const committee = state.committees[committeeId];
+          if (!committee?.caucus) return state;
+          const [next, ...rest] = committee.speakersList;
+          return {
+            committees: {
+              ...state.committees,
+              [committeeId]: {
+                ...committee,
+                speakersList: rest,
+                caucus: {
+                  ...committee.caucus,
+                  currentSpeaker: next?.country ?? null,
+                  speakerTimeRemaining: committee.caucus.speakingTime,
+                },
               },
             },
           };

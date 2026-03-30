@@ -56,119 +56,151 @@ function AddSpeakerInput({ committee, onAdd }: { committee: Committee; onAdd: (i
   );
 }
 
-// ── Full-screen moderated caucus view ──
+// ── Moderated caucus — mirrors speakers-list structure ──
 function ModeratedCaucusView({ committee }: { committee: Committee }) {
-  const { tickCaucus, endCaucus, nextCaucusSpeaker } = useCommitteeStore();
-  const [running, setRunning] = useState(true);
-  const [speakerQuery, setSpeakerQuery] = useState('');
-  const speakerInputRef = useRef<HTMLInputElement>(null);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const { tickCaucusTotalOnly, tickCaucusSpeakerOnly, advanceCaucusSpeaker, endCaucus, addToSpeakersList, removeFromSpeakersList } = useCommitteeStore();
+  const [totalRunning, setTotalRunning] = useState(true);
+  const [speakerRunning, setSpeakerRunning] = useState(false);
+  const totalRef = useRef<NodeJS.Timeout | null>(null);
+  const speakerRef = useRef<NodeJS.Timeout | null>(null);
   const caucus = committee.caucus!;
 
+  // Total caucus timer
   useEffect(() => {
-    if (running && caucus.remainingTime > 0) {
-      intervalRef.current = setInterval(() => tickCaucus(committee.id), 1000);
+    if (totalRunning && caucus.remainingTime > 0) {
+      totalRef.current = setInterval(() => tickCaucusTotalOnly(committee.id), 1000);
     } else {
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (totalRef.current) clearInterval(totalRef.current);
     }
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [running, caucus.remainingTime, committee.id, tickCaucus]);
+    return () => { if (totalRef.current) clearInterval(totalRef.current); };
+  }, [totalRunning, caucus.remainingTime, committee.id, tickCaucusTotalOnly]);
 
-  const presentDelegates = committee.delegates.filter((d) => d.status !== 'absent');
-  const speakerMatches = speakerQuery.trim()
-    ? presentDelegates.filter((d) => d.country.toLowerCase().startsWith(speakerQuery.toLowerCase()))
-        .concat(presentDelegates.filter((d) => !d.country.toLowerCase().startsWith(speakerQuery.toLowerCase()) && d.country.toLowerCase().includes(speakerQuery.toLowerCase())))
-    : [];
-  const topSpeaker = speakerMatches[0] ?? null;
-  const callSpeaker = (country: string) => { nextCaucusSpeaker(committee.id, country); setSpeakerQuery(''); speakerInputRef.current?.focus(); };
+  // Per-speaker timer
+  useEffect(() => {
+    if (speakerRunning && caucus.currentSpeaker && caucus.speakerTimeRemaining > 0) {
+      speakerRef.current = setInterval(() => tickCaucusSpeakerOnly(committee.id), 1000);
+    } else {
+      if (speakerRef.current) clearInterval(speakerRef.current);
+    }
+    return () => { if (speakerRef.current) clearInterval(speakerRef.current); };
+  }, [speakerRunning, caucus.currentSpeaker, caucus.speakerTimeRemaining, committee.id, tickCaucusSpeakerOnly]);
 
-  const totalProgress = caucus.totalTime > 0 ? (caucus.remainingTime / caucus.totalTime) * 100 : 0;
+  // Stop speaker timer when it hits 0
+  useEffect(() => {
+    if (caucus.speakerTimeRemaining === 0) setSpeakerRunning(false);
+  }, [caucus.speakerTimeRemaining]);
+
+  const handleNext = () => { setSpeakerRunning(false); advanceCaucusSpeaker(committee.id); };
   const speakerProgress = caucus.speakingTime > 0 ? (caucus.speakerTimeRemaining / caucus.speakingTime) * 100 : 0;
+  const totalProgress = caucus.totalTime > 0 ? (caucus.remainingTime / caucus.totalTime) * 100 : 0;
 
   return (
-    <div className="flex-1 overflow-y-auto flex flex-col items-center justify-between px-8 py-8 min-h-0">
-      {/* Top: purpose + total time */}
-      <div className="w-full text-center mb-4">
-        <p className="text-xs text-blue-400 font-mono mb-1">MODERATED CAUCUS</p>
-        {caucus.purpose && <p className="text-[#8892aa] text-base">{caucus.purpose}</p>}
-      </div>
+    <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Main area — same layout as speakers-list */}
+      <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-8 py-10 min-h-0">
+        {/* Topic */}
+        <div className="text-center mb-6">
+          <p className="text-xs text-blue-400 font-mono tracking-widest">MODERATED CAUCUS</p>
+          {caucus.purpose && <p className="text-[#8892aa] text-base mt-1">{caucus.purpose}</p>}
+        </div>
 
-      {/* Current caucus speaker */}
-      <div className="flex-1 flex flex-col items-center justify-center">
         {caucus.currentSpeaker ? (
           <>
+            {/* Next-up speaker flags */}
+            {committee.speakersList.length > 0 && (
+              <div className="flex items-start gap-4 mb-8 overflow-x-auto pt-2 pb-1 max-w-full">
+                {committee.speakersList.slice(0, 15).map((s) => (
+                  <div key={s.delegateId} className="flex flex-col items-center gap-2 relative group shrink-0">
+                    <FlagCircle country={s.country} size="lg" />
+                    <span className="text-xs text-[#8892aa] text-center w-20 truncate">{s.country}</span>
+                    <button onClick={() => removeFromSpeakersList(committee.id, s.delegateId)}
+                      className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full text-white text-xs items-center justify-center hidden group-hover:flex leading-none">✕</button>
+                  </div>
+                ))}
+                {committee.speakersList.length > 15 && (
+                  <div className="flex flex-col items-center gap-2 shrink-0">
+                    <div className="w-20 h-20 rounded-full bg-[#1a2035] flex items-center justify-center">
+                      <span className="text-lg font-bold text-[#8892aa]">+{committee.speakersList.length - 15}</span>
+                    </div>
+                    <span className="text-xs text-[#4a5580]">more</span>
+                  </div>
+                )}
+              </div>
+            )}
+
             <FlagCircle country={caucus.currentSpeaker} size="xl" />
-            <h1 className="text-5xl font-black text-white mt-4 mb-2">{caucus.currentSpeaker}</h1>
-            <div className={`text-7xl font-black font-mono mt-3 mb-4 tabular-nums ${
+            <h1 className="text-5xl font-black text-white mt-5 mb-2 text-center">{caucus.currentSpeaker}</h1>
+            <div className={`text-8xl font-black font-mono mt-4 mb-6 tabular-nums ${
               caucus.speakerTimeRemaining <= 5 ? 'text-red-400' : caucus.speakerTimeRemaining <= 15 ? 'text-yellow-400' : 'text-white'
             }`}>
               {formatTime(caucus.speakerTimeRemaining)}
             </div>
-            <div className="w-full max-w-sm h-2 bg-[#1a1f2e] rounded-full overflow-hidden">
+            <div className="w-full max-w-md h-2 bg-[#1a1f2e] rounded-full overflow-hidden mb-8">
               <div className={`h-full rounded-full transition-all ${speakerProgress > 50 ? 'bg-blue-500' : speakerProgress > 20 ? 'bg-yellow-500' : 'bg-red-500'}`}
                 style={{ width: `${speakerProgress}%` }} />
+            </div>
+            <div className="flex gap-3 w-full max-w-sm">
+              <button onClick={() => setSpeakerRunning((r) => !r)}
+                className={`flex-1 py-3 rounded-xl font-bold text-base transition-colors text-white ${speakerRunning ? 'bg-yellow-600 hover:bg-yellow-500' : 'bg-green-600 hover:bg-green-500'}`}>
+                {speakerRunning ? '⏸ Pause' : '▶ Start'}
+              </button>
+              <button onClick={handleNext}
+                className="flex-1 bg-[#1e2540] hover:bg-[#2a3050] text-white py-3 rounded-xl font-bold text-base transition-colors">
+                Next →
+              </button>
             </div>
           </>
         ) : (
           <>
-            <div className="text-6xl mb-4">🎙️</div>
-            <p className="text-2xl font-black text-white mb-2">Call a Speaker</p>
-            <p className="text-[#8892aa] text-sm">Type a country name below</p>
+            {/* Next-up when no current speaker */}
+            {committee.speakersList.length > 0 && (
+              <div className="flex items-start gap-4 mb-10 overflow-x-auto pt-2 pb-1 max-w-full">
+                {committee.speakersList.slice(0, 15).map((s) => (
+                  <div key={s.delegateId} className="flex flex-col items-center gap-2 relative group shrink-0">
+                    <FlagCircle country={s.country} size="lg" />
+                    <span className="text-xs text-[#8892aa] text-center w-20 truncate">{s.country}</span>
+                    <button onClick={() => removeFromSpeakersList(committee.id, s.delegateId)}
+                      className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full text-white text-xs items-center justify-center hidden group-hover:flex leading-none">✕</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="text-7xl mb-6">🎙️</div>
+            <h2 className="text-3xl font-black text-white mb-2">No Current Speaker</h2>
+            <p className="text-[#8892aa] mb-8 text-center">Add delegates below, then call the first speaker</p>
+            <button onClick={handleNext} disabled={committee.speakersList.length === 0}
+              className="bg-blue-600 hover:bg-blue-500 disabled:bg-[#1e2540] disabled:text-[#3a4060] text-white px-10 py-4 rounded-xl font-bold text-lg transition-colors">
+              Call First Speaker
+            </button>
           </>
         )}
       </div>
 
-      {/* Bottom controls */}
-      <div className="w-full max-w-md space-y-4">
-        {/* Total time */}
-        <div className="flex items-center justify-between">
-          <div>
+      {/* Bottom bar — same as speakers-list */}
+      <div className="border-t border-[#1e2540] bg-[#0d1120] px-6 py-4">
+        {/* Total time row */}
+        <div className="flex items-center gap-3 mb-4">
+          <div className="shrink-0">
             <p className="text-xs text-[#4a5580] font-mono">TOTAL REMAINING</p>
-            <p className={`text-2xl font-black font-mono ${caucus.remainingTime <= 30 ? 'text-red-400' : 'text-white'}`}>
+            <p className={`text-xl font-black font-mono ${caucus.remainingTime <= 30 ? 'text-red-400' : 'text-white'}`}>
               {formatTime(caucus.remainingTime)}
             </p>
           </div>
-          <div className="flex gap-2">
-            <button onClick={() => setRunning((r) => !r)}
-              className={`px-5 py-2 rounded-xl font-bold text-sm transition-colors ${running ? 'bg-yellow-600 hover:bg-yellow-500 text-white' : 'bg-green-600 hover:bg-green-500 text-white'}`}>
-              {running ? '⏸ Pause' : '▶ Resume'}
-            </button>
-            <button onClick={() => endCaucus(committee.id)}
-              className="px-5 py-2 rounded-xl font-bold text-sm bg-[#1e2540] hover:bg-red-900/40 hover:text-red-400 text-[#8892aa] transition-colors border border-transparent hover:border-red-800/30">
-              End
-            </button>
+          <div className="flex-1 h-1.5 bg-[#1a1f2e] rounded-full overflow-hidden">
+            <div className="h-full bg-blue-600/60 rounded-full transition-all" style={{ width: `${totalProgress}%` }} />
           </div>
+          <button onClick={() => setTotalRunning((r) => !r)}
+            className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-colors ${totalRunning ? 'bg-yellow-700/40 text-yellow-400 hover:bg-yellow-700/60' : 'bg-green-700/40 text-green-400 hover:bg-green-700/60'}`}>
+            {totalRunning ? '⏸ Pause total' : '▶ Resume total'}
+          </button>
+          <button onClick={() => endCaucus(committee.id)}
+            className="px-3 py-1.5 rounded-lg font-bold text-xs bg-[#1e2540] hover:bg-red-900/40 hover:text-red-400 text-[#8892aa] transition-colors">
+            End Caucus
+          </button>
         </div>
 
-        <div className="h-1.5 bg-[#1a1f2e] rounded-full overflow-hidden">
-          <div className="h-full bg-blue-600/60 rounded-full transition-all" style={{ width: `${totalProgress}%` }} />
-        </div>
-
-        {/* Call next speaker */}
-        <div className="relative">
-          <div className="flex items-center bg-[#0f1526] border border-[#1e2540] focus-within:border-blue-600 rounded-xl overflow-hidden transition-colors">
-            <input ref={speakerInputRef} type="text" value={speakerQuery} onChange={(e) => setSpeakerQuery(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter' && topSpeaker) { e.preventDefault(); callSpeaker(topSpeaker.country); } if (e.key === 'Escape') setSpeakerQuery(''); }}
-              placeholder="Call next speaker..." autoFocus
-              className="flex-1 bg-transparent px-4 py-3 text-white placeholder-[#4a5580] focus:outline-none text-sm" />
-            {topSpeaker && speakerQuery && <span className="text-xs text-[#4a5580] px-3 truncate max-w-[140px]">↵ {topSpeaker.country}</span>}
-          </div>
-          {speakerQuery && speakerMatches.length > 0 && (
-            <div className="absolute bottom-full left-0 right-0 mb-1 bg-[#0f1526] border border-[#1e2540] rounded-xl overflow-hidden z-20 shadow-xl">
-              {speakerMatches.slice(0, 5).map((d, i) => {
-                const found = getCountryByName(d.country);
-                return (
-                  <button key={d.id} onMouseDown={(e) => { e.preventDefault(); callSpeaker(d.country); }}
-                    className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${i === 0 ? 'bg-blue-900/30 text-white' : 'text-[#c0c8d8] hover:bg-[#1e2540]'}`}>
-                    <span className="text-lg">{found ? getFlagEmoji(found.code) : '🌐'}</span>
-                    <span className="text-sm">{d.country}</span>
-                    {i === 0 && <span className="ml-auto text-xs text-[#4a5580]">Enter ↵</span>}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
+        {/* Add speaker */}
+        <AddSpeakerInput committee={committee} onAdd={(id) => addToSpeakersList(committee.id, id)} />
       </div>
     </div>
   );
