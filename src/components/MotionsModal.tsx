@@ -5,17 +5,24 @@ import { Committee, PendingMotion, PendingMotionType } from '@/lib/types';
 import { useCommitteeStore } from '@/lib/store';
 import { getCountryByName, getFlagEmoji } from '@/lib/countries';
 
-type ModalView = 'list' | 'raise' | 'vote';
+type ModalView = 'list' | 'raise' | 'vote' | 'speaker-list';
 
 const TYPE_META: Record<PendingMotionType, { icon: string; label: string; sub: string }> = {
   consultation: { icon: '🤝', label: 'Consultation of the Whole', sub: 'Informal session, all together' },
   tour:         { icon: '🔄', label: 'Tour de Table',              sub: 'Everyone gets a brief turn' },
-  unmoderated:  { icon: '💬', label: 'Unmoderated Caucus',        sub: 'Free time for delegates to talk' },
-  moderated:    { icon: '🎙️', label: 'Moderated Caucus',          sub: 'Structured speeches, one by one' },
+  unmoderated:  { icon: '💬', label: 'Unmoderated Caucus',         sub: 'Free time for delegates to talk' },
+  moderated:    { icon: '🎙️', label: 'Moderated Caucus',           sub: 'Structured speeches, one by one' },
 };
 
-// Ordered most → least disruptive (for choosing type)
 const TYPE_ORDER: PendingMotionType[] = ['consultation', 'tour', 'unmoderated', 'moderated'];
+
+// 2/3 majority for COW and Tour de Table, simple majority for others
+function requiredVotes(type: PendingMotionType, present: number): { needed: number; fraction: string } {
+  if (type === 'consultation' || type === 'tour') {
+    return { needed: Math.ceil((present * 2) / 3), fraction: '2/3 majority' };
+  }
+  return { needed: Math.floor(present / 2) + 1, fraction: 'Simple majority' };
+}
 
 function DisruptivenessBadge({ type }: { type: PendingMotionType }) {
   const labels: Record<PendingMotionType, string> = {
@@ -30,52 +37,64 @@ function DisruptivenessBadge({ type }: { type: PendingMotionType }) {
     unmoderated: 'bg-yellow-900/40 text-yellow-400 border-yellow-800/40',
     moderated: 'bg-blue-900/40 text-blue-400 border-blue-800/40',
   };
-  return (
-    <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${colors[type]}`}>
-      {labels[type]}
-    </span>
-  );
+  return <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${colors[type]}`}>{labels[type]}</span>;
 }
 
-function CountryAutocomplete({
-  placeholder,
+// ── Proposer autocomplete (clears dropdown after selection) ───────────────────
+function ProposerInput({
+  candidates,
   value,
   onChange,
-  candidates,
-  onSelect,
 }: {
-  placeholder: string;
+  candidates: string[];
   value: string;
   onChange: (v: string) => void;
-  candidates: string[];
-  onSelect: (v: string) => void;
 }) {
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const matches = value.trim()
+
+  const matches = query.trim()
     ? candidates
-        .filter((c) => c.toLowerCase().startsWith(value.toLowerCase()))
-        .concat(candidates.filter((c) => !c.toLowerCase().startsWith(value.toLowerCase()) && c.toLowerCase().includes(value.toLowerCase())))
+        .filter((c) => c.toLowerCase().startsWith(query.toLowerCase()))
+        .concat(candidates.filter((c) => !c.toLowerCase().startsWith(query.toLowerCase()) && c.toLowerCase().includes(query.toLowerCase())))
     : [];
   const top = matches[0] ?? null;
-  const commit = (country: string) => { onSelect(country); onChange(country); };
+
+  const commit = (country: string) => {
+    onChange(country);
+    setQuery(country);
+    setOpen(false);
+  };
+
   return (
     <div className="relative">
-      <div className="flex items-center bg-[#141929] border border-[#1e2540] focus-within:border-blue-600 rounded-xl overflow-hidden transition-colors">
-        <input
-          ref={inputRef}
-          type="text"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && top) { e.preventDefault(); commit(top); }
-            if (e.key === 'Escape') onChange('');
-          }}
-          placeholder={placeholder}
-          className="flex-1 bg-transparent px-4 py-3 text-white placeholder-[#4a5580] focus:outline-none text-sm"
-        />
-        {top && value && <span className="text-xs text-[#4a5580] px-3 truncate max-w-[140px]">↵ {top}</span>}
-      </div>
-      {value && matches.length > 0 && (
+      {value && !open ? (
+        <div className="flex items-center gap-3 bg-[#141929] border border-green-800/40 rounded-xl px-4 py-3">
+          <span className="text-lg">{(() => { const f = getCountryByName(value); return f ? getFlagEmoji(f.code) : '🌐'; })()}</span>
+          <span className="text-sm text-white flex-1">{value}</span>
+          <button onClick={() => { setOpen(true); setQuery(''); onChange(''); inputRef.current?.focus(); }}
+            className="text-xs text-[#4a5580] hover:text-white transition-colors">change</button>
+        </div>
+      ) : (
+        <div className="flex items-center bg-[#141929] border border-[#1e2540] focus-within:border-blue-600 rounded-xl overflow-hidden transition-colors">
+          <input
+            ref={inputRef}
+            autoFocus={open}
+            type="text"
+            value={query}
+            onChange={(e) => { setQuery(e.target.value); setOpen(true); onChange(''); }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && top) { e.preventDefault(); commit(top); }
+              if (e.key === 'Escape') { setQuery(''); setOpen(false); }
+            }}
+            placeholder="Type country name…"
+            className="flex-1 bg-transparent px-4 py-3 text-white placeholder-[#4a5580] focus:outline-none text-sm"
+          />
+          {top && query && <span className="text-xs text-[#4a5580] px-3 truncate max-w-[120px]">↵ {top}</span>}
+        </div>
+      )}
+      {open && query && matches.length > 0 && (
         <div className="absolute bottom-full left-0 right-0 mb-1 bg-[#0f1526] border border-[#1e2540] rounded-xl overflow-hidden z-30 shadow-xl max-h-48 overflow-y-auto">
           {matches.slice(0, 6).map((country, i) => {
             const found = getCountryByName(country);
@@ -94,47 +113,18 @@ function CountryAutocomplete({
   );
 }
 
-// ── Raise Motion Form ──
-function RaiseMotionForm({
-  committee,
-  onBack,
-  onRaised,
-}: {
-  committee: Committee;
-  onBack: () => void;
-  onRaised: () => void;
-}) {
+// ── Raise Motion Form ─────────────────────────────────────────────────────────
+function RaiseMotionForm({ committee, onBack, onRaised }: { committee: Committee; onBack: () => void; onRaised: () => void }) {
   const { addPendingMotion } = useCommitteeStore();
   const [type, setType] = useState<PendingMotionType | null>(null);
-  const [proposerQuery, setProposerQuery] = useState('');
   const [proposer, setProposer] = useState('');
   const [totalMins, setTotalMins] = useState(10);
   const [totalSecs, setTotalSecs] = useState(0);
   const [speakingTime, setSpeakingTime] = useState(60);
   const [topic, setTopic] = useState('');
-  const [speakerQuery, setSpeakerQuery] = useState('');
-  const [speakerList, setSpeakerList] = useState<string[]>([]);
-  const [proposerPosition, setProposerPosition] = useState<'first' | 'last'>('first');
 
   const presentCountries = committee.delegates.filter((d) => d.status !== 'absent').map((d) => d.country);
   const totalTime = totalMins * 60 + totalSecs;
-  const maxSpeakers = speakingTime > 0 ? Math.floor(totalTime / speakingTime) : 0;
-  const spotsLeft = maxSpeakers - speakerList.length;
-
-  const speakerCandidates = presentCountries.filter((c) => !speakerList.includes(c));
-
-  const addSpeaker = (country: string) => {
-    if (speakerList.length >= maxSpeakers) return;
-    setSpeakerList((p) => [...p, country]);
-    setSpeakerQuery('');
-  };
-
-  const buildFinalList = (): string[] => {
-    if (!type || type !== 'moderated' || !proposer) return speakerList;
-    // Insert proposer first or last
-    const without = speakerList.filter((c) => c !== proposer);
-    return proposerPosition === 'first' ? [proposer, ...without] : [...without, proposer];
-  };
 
   const canSubmit = () => {
     if (!type || !proposer) return false;
@@ -145,27 +135,25 @@ function RaiseMotionForm({
 
   const submit = () => {
     if (!type || !canSubmit()) return;
-    const finalList = buildFinalList();
     addPendingMotion(committee.id, {
       type,
       proposedBy: proposer,
       totalTime: type === 'tour' ? 0 : totalTime,
       speakingTime: type === 'moderated' ? speakingTime : 0,
       topic: topic.trim(),
-      speakerList: finalList,
-      proposerPosition: type === 'moderated' ? proposerPosition : null,
+      speakerList: [],
+      proposerPosition: null,
     });
     onRaised();
   };
 
   return (
-    <div className="px-7 pb-7 space-y-5 overflow-y-auto max-h-[80vh]">
-      <div className="flex items-center gap-3 mb-1">
+    <div className="px-7 pb-7 space-y-5 overflow-y-auto">
+      <div className="flex items-center gap-3">
         <button onClick={onBack} className="text-sm text-[#8892aa] hover:text-white transition-colors">← Back</button>
         <h2 className="text-2xl font-black text-white">Raise a Motion</h2>
       </div>
 
-      {/* Type selection */}
       {!type ? (
         <div className="grid grid-cols-2 gap-3">
           {TYPE_ORDER.map((t) => {
@@ -197,24 +185,18 @@ function RaiseMotionForm({
           {/* Proposed by */}
           <div>
             <label className="block text-sm font-semibold text-[#c0c8d8] mb-2">Proposed by</label>
-            <CountryAutocomplete
-              placeholder="Type country name..."
-              value={proposerQuery}
-              onChange={setProposerQuery}
-              candidates={presentCountries}
-              onSelect={(c) => { setProposer(c); setProposerQuery(c); }}
-            />
+            <ProposerInput candidates={presentCountries} value={proposer} onChange={setProposer} />
           </div>
 
-          {/* Tour de table — just confirm */}
+          {/* Tour: simple confirm */}
           {type === 'tour' && (
             <div className="bg-[#141929] border border-[#1e2540] rounded-2xl p-4">
               <p className="text-white font-semibold">Add all {presentCountries.length} present delegates to the speakers list</p>
-              <p className="text-sm text-[#8892aa] mt-1">They will be called in order during the speakers list</p>
+              <p className="text-sm text-[#8892aa] mt-1">They will be called in order after the motion passes</p>
             </div>
           )}
 
-          {/* Total time (not for tour) */}
+          {/* Total time */}
           {type !== 'tour' && (
             <div>
               <label className="block text-sm font-semibold text-[#c0c8d8] mb-2">Total time</label>
@@ -231,9 +213,9 @@ function RaiseMotionForm({
                 </div>
               </div>
               <div className="flex gap-2 mt-2">
-                {[[2,0],[5,0],[10,0],[15,0],[20,0]].map(([m,s]) => (
-                  <button key={m} onClick={() => { setTotalMins(m); setTotalSecs(s); }}
-                    className={`text-xs px-2.5 py-1.5 rounded-lg transition-colors ${totalMins === m && totalSecs === s ? 'bg-blue-700 text-white font-bold' : 'bg-[#141929] text-[#8892aa] hover:text-white'}`}>
+                {[2, 5, 10, 15, 20].map((m) => (
+                  <button key={m} onClick={() => { setTotalMins(m); setTotalSecs(0); }}
+                    className={`text-xs px-2.5 py-1.5 rounded-lg transition-colors ${totalMins === m && totalSecs === 0 ? 'bg-blue-700 text-white font-bold' : 'bg-[#141929] text-[#8892aa] hover:text-white'}`}>
                     {m}m
                   </button>
                 ))}
@@ -241,7 +223,7 @@ function RaiseMotionForm({
             </div>
           )}
 
-          {/* Speaking time + speaker list (moderated only) */}
+          {/* Speaking time (moderated only) */}
           {type === 'moderated' && (
             <>
               <div>
@@ -253,7 +235,7 @@ function RaiseMotionForm({
                     <span className="text-[#8892aa] text-sm">sec</span>
                   </div>
                   {speakingTime > 0 && totalTime > 0 && (
-                    <span className="text-blue-400 text-sm">≈ {maxSpeakers} speakers max</span>
+                    <span className="text-blue-400 text-sm">≈ {Math.floor(totalTime / speakingTime)} speakers max</span>
                   )}
                 </div>
                 <div className="flex gap-2 mt-2">
@@ -274,58 +256,6 @@ function RaiseMotionForm({
                 <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)}
                   placeholder="e.g. Humanitarian response in conflict zones"
                   className="w-full bg-[#141929] border border-[#1e2540] rounded-xl px-4 py-3 text-white placeholder-[#4a5580] focus:outline-none focus:border-blue-600 transition-colors" />
-              </div>
-
-              {/* Proposer position */}
-              {proposer && (
-                <div>
-                  <label className="block text-sm font-semibold text-[#c0c8d8] mb-2">
-                    Does {proposer} want to speak first or last?
-                  </label>
-                  <div className="flex gap-3">
-                    {(['first', 'last'] as const).map((pos) => (
-                      <button key={pos} onClick={() => setProposerPosition(pos)}
-                        className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-colors capitalize ${proposerPosition === pos ? 'bg-blue-700 text-white' : 'bg-[#141929] border border-[#1e2540] text-[#8892aa] hover:text-white'}`}>
-                        {pos}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Speaker list */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-sm font-semibold text-[#c0c8d8]">Speaker list</label>
-                  <span className={`text-xs font-mono ${spotsLeft <= 0 ? 'text-red-400' : 'text-green-400'}`}>
-                    {speakerList.length}/{maxSpeakers} — {spotsLeft > 0 ? `${spotsLeft} spot${spotsLeft !== 1 ? 's' : ''} left` : 'Full'}
-                  </span>
-                </div>
-                {speakerList.length > 0 && (
-                  <div className="mb-2 space-y-1">
-                    {speakerList.map((country, i) => {
-                      const found = getCountryByName(country);
-                      return (
-                        <div key={country} className="flex items-center gap-2 bg-[#141929] border border-[#1e2540] rounded-lg px-3 py-2">
-                          <span className="text-xs text-[#4a5580] font-mono w-4">{i + 1}</span>
-                          <span className="text-base">{found ? getFlagEmoji(found.code) : '🌐'}</span>
-                          <span className="text-sm text-white flex-1">{country}</span>
-                          <button onClick={() => setSpeakerList((p) => p.filter((_, idx) => idx !== i))}
-                            className="text-[#3a4060] hover:text-red-400 text-xs transition-colors">✕</button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-                {spotsLeft > 0 && (
-                  <CountryAutocomplete
-                    placeholder="Add speaker..."
-                    value={speakerQuery}
-                    onChange={setSpeakerQuery}
-                    candidates={speakerCandidates}
-                    onSelect={addSpeaker}
-                  />
-                )}
               </div>
             </>
           )}
@@ -350,121 +280,255 @@ function RaiseMotionForm({
   );
 }
 
-// ── Voting view ──
-function VotingView({
+// ── Speaker list builder (shown after a moderated caucus motion passes) ────────
+function SpeakerListBuilder({
   committee,
+  motion,
   onDone,
 }: {
   committee: Committee;
-  onDone: () => void;
+  motion: PendingMotion;
+  onDone: (list: string[]) => void;
 }) {
-  const { enactPendingMotion, removePendingMotion } = useCommitteeStore();
-  const sorted = [...(committee.pendingMotions ?? [])].sort((a, b) => b.disruptiveness - a.disruptiveness);
-  const [current, setCurrent] = useState(0);
-  const [forVotes, setForVotes] = useState('');
-  const [againstVotes, setAgainstVotes] = useState('');
-  const [abstainVotes, setAbstainVotes] = useState('');
+  const maxSpeakers = motion.speakingTime > 0 ? Math.floor(motion.totalTime / motion.speakingTime) : 0;
+  const [speakerList, setSpeakerList] = useState<string[]>([]);
+  const [position, setPosition] = useState<'first' | 'last'>('first');
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  if (sorted.length === 0) {
-    return (
-      <div className="px-7 pb-7 text-center">
-        <p className="text-[#8892aa] mb-4">No motions to vote on.</p>
-        <button onClick={onDone} className="text-sm text-blue-400 hover:text-blue-300">← Back</button>
-      </div>
-    );
-  }
+  const presentCountries = committee.delegates.filter((d) => d.status !== 'absent').map((d) => d.country);
+  const candidates = presentCountries.filter((c) => !speakerList.includes(c));
+  const matches = query.trim()
+    ? candidates.filter((c) => c.toLowerCase().startsWith(query.toLowerCase()))
+        .concat(candidates.filter((c) => !c.toLowerCase().startsWith(query.toLowerCase()) && c.toLowerCase().includes(query.toLowerCase())))
+    : [];
+  const top = matches[0] ?? null;
 
-  const motion = sorted[current];
-  const present = committee.delegates.filter((d) => d.status !== 'absent').length;
-  const majority = Math.floor(present / 2) + 1;
-  const forN = parseInt(forVotes) || 0;
-  const againstN = parseInt(againstVotes) || 0;
-
-  const pass = () => {
-    enactPendingMotion(committee.id, motion.id);
-    onDone();
+  const addSpeaker = (country: string) => {
+    if (speakerList.length >= maxSpeakers) return;
+    setSpeakerList((p) => [...p, country]);
+    setQuery('');
+    setOpen(false);
+    inputRef.current?.focus();
   };
 
-  const fail = () => {
-    removePendingMotion(committee.id, motion.id);
-    if (current < sorted.length - 1) {
-      setCurrent((c) => c + 1);
-      setForVotes(''); setAgainstVotes(''); setAbstainVotes('');
-    } else {
-      onDone();
-    }
+  const buildFinal = () => {
+    const without = speakerList.filter((c) => c !== motion.proposedBy);
+    const base = position === 'first' ? [motion.proposedBy, ...without] : [...without, motion.proposedBy];
+    return base.slice(0, maxSpeakers);
   };
 
-  const meta = TYPE_META[motion.type];
-  const mins = Math.floor(motion.totalTime / 60);
-  const secs = motion.totalTime % 60;
+  const spotsLeft = maxSpeakers - speakerList.length;
 
   return (
-    <div className="px-7 pb-7 space-y-5">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-black text-white">Vote on Motions</h2>
-        <span className="text-sm text-[#4a5580]">{current + 1} / {sorted.length}</span>
+    <div className="px-7 pb-7 space-y-5 overflow-y-auto">
+      <div>
+        <h2 className="text-2xl font-black text-white mb-1">Build Speaker List</h2>
+        <p className="text-sm text-[#8892aa]">
+          {motion.topic} · {motion.speakingTime}s/speaker · up to {maxSpeakers} speakers
+        </p>
       </div>
 
-      {/* Motion card */}
-      <div className="bg-[#141929] border border-[#1e2540] rounded-2xl p-5 space-y-3">
-        <div className="flex items-center gap-3">
-          <span className="text-3xl">{meta.icon}</span>
-          <div>
-            <div className="text-lg font-bold text-white">{meta.label}</div>
-            <DisruptivenessBadge type={motion.type} />
-          </div>
+      {/* Proposer position */}
+      <div>
+        <label className="block text-sm font-semibold text-[#c0c8d8] mb-2">
+          Does <span className="text-white">{motion.proposedBy}</span> speak first or last?
+        </label>
+        <div className="flex gap-3">
+          {(['first', 'last'] as const).map((pos) => (
+            <button key={pos} onClick={() => setPosition(pos)}
+              className={`flex-1 py-2.5 rounded-xl font-bold text-sm capitalize transition-colors ${position === pos ? 'bg-blue-700 text-white' : 'bg-[#141929] border border-[#1e2540] text-[#8892aa] hover:text-white'}`}>
+              {pos}
+            </button>
+          ))}
         </div>
-        {motion.type !== 'tour' && (
-          <div className="text-sm text-[#8892aa]">
-            Total: <span className="text-white">{mins > 0 ? `${mins}m ` : ''}{secs > 0 ? `${secs}s` : ''}</span>
-            {motion.type === 'moderated' && <> · Speaking: <span className="text-white">{motion.speakingTime}s</span></>}
-          </div>
-        )}
-        {motion.topic && <div className="text-sm text-blue-300">"{motion.topic}"</div>}
-        <div className="text-sm text-[#8892aa]">Proposed by <span className="text-white">{motion.proposedBy}</span></div>
-        {motion.speakerList.length > 0 && (
-          <div className="text-xs text-[#4a5580]">
-            {motion.speakerList.length} speaker{motion.speakerList.length !== 1 ? 's' : ''} listed: {motion.speakerList.slice(0, 3).join(', ')}{motion.speakerList.length > 3 ? '...' : ''}
-          </div>
-        )}
-        <div className="text-xs text-[#4a5580]">Needs {majority} votes to pass ({present} present)</div>
       </div>
 
-      {/* Vote inputs */}
-      <div className="grid grid-cols-3 gap-3">
-        {[
-          { label: 'In Favour', color: 'text-green-400', val: forVotes, set: setForVotes },
-          { label: 'Against', color: 'text-red-400', val: againstVotes, set: setAgainstVotes },
-          { label: 'Abstain', color: 'text-yellow-400', val: abstainVotes, set: setAbstainVotes },
-        ].map(({ label, color, val, set }) => (
-          <div key={label}>
-            <label className={`block text-xs font-bold mb-1.5 ${color}`}>{label}</label>
-            <input type="number" min={0} value={val} onChange={(e) => set(e.target.value)}
-              className="w-full bg-[#141929] border border-[#1e2540] rounded-xl px-2 py-3 text-white text-2xl font-black text-center focus:outline-none focus:border-blue-600" />
+      {/* Speaker list */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <label className="text-sm font-semibold text-[#c0c8d8]">Speakers</label>
+          <span className={`text-xs font-mono ${spotsLeft <= 0 ? 'text-red-400' : 'text-green-400'}`}>
+            {speakerList.length}/{maxSpeakers} — {spotsLeft > 0 ? `${spotsLeft} spot${spotsLeft !== 1 ? 's' : ''} left` : 'Full'}
+          </span>
+        </div>
+
+        {speakerList.length > 0 && (
+          <div className="mb-3 space-y-1">
+            {speakerList.map((country, i) => {
+              const found = getCountryByName(country);
+              return (
+                <div key={country} className="flex items-center gap-2 bg-[#141929] border border-[#1e2540] rounded-lg px-3 py-2">
+                  <span className="text-xs text-[#4a5580] font-mono w-4">{i + 1}</span>
+                  <span className="text-base">{found ? getFlagEmoji(found.code) : '🌐'}</span>
+                  <span className="text-sm text-white flex-1">{country}</span>
+                  <button onClick={() => setSpeakerList((p) => p.filter((_, idx) => idx !== i))}
+                    className="text-[#3a4060] hover:text-red-400 text-xs transition-colors">✕</button>
+                </div>
+              );
+            })}
           </div>
-        ))}
+        )}
+
+        {spotsLeft > 0 && (
+          <div className="relative">
+            <div className="flex items-center bg-[#141929] border border-[#1e2540] focus-within:border-blue-600 rounded-xl overflow-hidden transition-colors">
+              <input
+                ref={inputRef}
+                type="text"
+                value={query}
+                onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && top) { e.preventDefault(); addSpeaker(top); }
+                  if (e.key === 'Escape') { setQuery(''); setOpen(false); }
+                }}
+                placeholder="Add speaker…"
+                className="flex-1 bg-transparent px-4 py-3 text-white placeholder-[#4a5580] focus:outline-none text-sm"
+              />
+              {top && query && <span className="text-xs text-[#4a5580] px-3 truncate max-w-[120px]">↵ {top}</span>}
+            </div>
+            {open && query && matches.length > 0 && (
+              <div className="absolute bottom-full left-0 right-0 mb-1 bg-[#0f1526] border border-[#1e2540] rounded-xl overflow-hidden z-30 shadow-xl max-h-44 overflow-y-auto">
+                {matches.slice(0, 6).map((country, i) => {
+                  const found = getCountryByName(country);
+                  return (
+                    <button key={country} onMouseDown={(e) => { e.preventDefault(); addSpeaker(country); }}
+                      className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${i === 0 ? 'bg-blue-900/30 text-white' : 'text-[#c0c8d8] hover:bg-[#1e2540]'}`}>
+                      <span className="text-lg">{found ? getFlagEmoji(found.code) : '🌐'}</span>
+                      <span className="text-sm">{country}</span>
+                      {i === 0 && <span className="ml-auto text-xs text-[#4a5580]">Enter ↵</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      <div className="flex gap-3">
-        <button onClick={pass} disabled={forN < majority}
-          className="flex-1 py-4 rounded-2xl font-black text-base transition-colors bg-green-700 hover:bg-green-600 disabled:bg-[#1e2540] disabled:text-[#3a4060] text-white">
-          ✓ Motion Passes
-        </button>
-        <button onClick={fail}
-          className="flex-1 py-4 rounded-2xl font-black text-base transition-colors bg-[#1e2540] hover:bg-red-900/40 hover:text-red-400 text-[#8892aa]">
-          ✗ Fails → Next
-        </button>
-      </div>
+      <button onClick={() => onDone(buildFinal())}
+        className="w-full bg-green-700 hover:bg-green-600 text-white py-4 rounded-2xl text-base font-black transition-colors">
+        Start Caucus →
+      </button>
     </div>
   );
 }
 
-// ── Main modal ──
+// ── Voting view — all motions at once ──────────────────────────────────────────
+function VotingView({
+  committee,
+  onAccepted,
+  onAllDone,
+}: {
+  committee: Committee;
+  onAccepted: (motion: PendingMotion) => void;
+  onAllDone: () => void;
+}) {
+  const { enactPendingMotion, removePendingMotion } = useCommitteeStore();
+  const sorted = [...(committee.pendingMotions ?? [])].sort((a, b) => b.disruptiveness - a.disruptiveness);
+  const present = committee.delegates.filter((d) => d.status !== 'absent').length;
+
+  if (sorted.length === 0) {
+    return (
+      <div className="px-7 pb-7 text-center py-8">
+        <p className="text-[#8892aa]">No motions to vote on.</p>
+        <button onClick={onAllDone} className="mt-4 text-sm text-blue-400 hover:text-blue-300">← Back</button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-7 pb-7 space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-black text-white">Vote on Motions</h2>
+        <span className="text-xs text-[#4a5580] font-mono">MOST DISRUPTIVE FIRST</span>
+      </div>
+
+      <div className="space-y-3">
+        {sorted.map((m) => {
+          const meta = TYPE_META[m.type];
+          const { needed, fraction } = requiredVotes(m.type, present);
+          const mins = Math.floor(m.totalTime / 60);
+          const secs = m.totalTime % 60;
+          return (
+            <div key={m.id} className="bg-[#141929] border border-[#1e2540] rounded-2xl p-4 space-y-3">
+              <div className="flex items-start gap-3">
+                <span className="text-3xl">{meta.icon}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-base font-bold text-white">{meta.label}</span>
+                    <DisruptivenessBadge type={m.type} />
+                  </div>
+                  {m.type !== 'tour' && (
+                    <div className="text-xs text-[#8892aa] mt-0.5">
+                      {mins > 0 ? `${mins}m ` : ''}{secs > 0 ? `${secs}s` : ''}
+                      {m.type === 'moderated' && <> · {m.speakingTime}s/speaker</>}
+                    </div>
+                  )}
+                  {m.topic && <div className="text-xs text-blue-300 mt-0.5">"{m.topic}"</div>}
+                  <div className="text-xs text-[#8892aa] mt-0.5">By <span className="text-white">{m.proposedBy}</span></div>
+                </div>
+              </div>
+
+              {/* Quorum info */}
+              <div className="flex items-center gap-2 bg-[#0f1526] rounded-xl px-3 py-2">
+                <span className="text-xs text-[#4a5580]">{fraction}</span>
+                <span className="text-xs text-white font-bold ml-auto">Needs {needed} of {present} votes</span>
+              </div>
+
+              {/* Accept / Reject */}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => onAccepted(m)}
+                  className="flex-1 bg-green-700 hover:bg-green-600 text-white py-2.5 rounded-xl font-bold text-sm transition-colors"
+                >
+                  ✓ Accept
+                </button>
+                <button
+                  onClick={() => removePendingMotion(committee.id, m.id)}
+                  className="flex-1 bg-[#1e2540] hover:bg-red-900/40 hover:text-red-400 text-[#8892aa] py-2.5 rounded-xl font-bold text-sm transition-colors"
+                >
+                  ✗ Reject
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <button onClick={onAllDone} className="w-full text-sm text-[#4a5580] hover:text-white transition-colors py-2">
+        Close floor (no motion passes)
+      </button>
+    </div>
+  );
+}
+
+// ── Main Modal ────────────────────────────────────────────────────────────────
 export default function MotionsModal({ committee, onClose }: { committee: Committee; onClose: () => void }) {
-  const { removePendingMotion } = useCommitteeStore();
+  const { removePendingMotion, enactPendingMotion } = useCommitteeStore();
   const [view, setView] = useState<ModalView>('list');
+  const [pendingEnact, setPendingEnact] = useState<PendingMotion | null>(null);
+
   const pending = [...(committee.pendingMotions ?? [])].sort((a, b) => b.disruptiveness - a.disruptiveness);
+
+  const handleMotionAccepted = (motion: PendingMotion) => {
+    if (motion.type === 'moderated') {
+      // Build speaker list before enacting
+      setPendingEnact(motion);
+      setView('speaker-list');
+    } else {
+      // Enact immediately
+      enactPendingMotion(committee.id, motion.id);
+      onClose();
+    }
+  };
+
+  const handleSpeakerListDone = (list: string[]) => {
+    if (!pendingEnact) return;
+    enactPendingMotion(committee.id, pendingEnact.id, list);
+    onClose();
+  };
 
   return (
     <div
@@ -472,26 +536,30 @@ export default function MotionsModal({ committee, onClose }: { committee: Commit
       style={{ background: 'rgba(5, 8, 20, 0.88)', backdropFilter: 'blur(4px)' }}
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="bg-[#0f1526] border border-[#1e2540] rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+      <div className="bg-[#0f1526] border border-[#1e2540] rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-7 pt-7 pb-3 shrink-0">
-          <span />
+        <div className="flex items-center justify-end px-7 pt-6 pb-0 shrink-0">
           <button onClick={onClose} className="text-[#4a5580] hover:text-white transition-colors text-xl leading-none">✕</button>
         </div>
 
-        <div className="overflow-y-auto flex-1">
+        <div className="overflow-y-auto flex-1 pt-2">
           {view === 'raise' && (
-            <RaiseMotionForm
-              committee={committee}
-              onBack={() => setView('list')}
-              onRaised={() => setView('list')}
-            />
+            <RaiseMotionForm committee={committee} onBack={() => setView('list')} onRaised={() => setView('list')} />
           )}
 
           {view === 'vote' && (
             <VotingView
               committee={committee}
-              onDone={() => { setView('list'); onClose(); }}
+              onAccepted={handleMotionAccepted}
+              onAllDone={() => { setView('list'); onClose(); }}
+            />
+          )}
+
+          {view === 'speaker-list' && pendingEnact && (
+            <SpeakerListBuilder
+              committee={committee}
+              motion={pendingEnact}
+              onDone={handleSpeakerListDone}
             />
           )}
 
@@ -507,7 +575,7 @@ export default function MotionsModal({ committee, onClose }: { committee: Commit
                 </div>
               ) : (
                 <div className="space-y-2">
-                  <p className="text-xs text-[#4a5580] font-mono">RANKED BY DISRUPTIVENESS (vote most disruptive first)</p>
+                  <p className="text-xs text-[#4a5580] font-mono">RANKED — MOST DISRUPTIVE FIRST</p>
                   {pending.map((m, i) => {
                     const meta = TYPE_META[m.type];
                     const mins = Math.floor(m.totalTime / 60);

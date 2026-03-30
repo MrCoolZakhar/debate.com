@@ -179,7 +179,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
   const { committees, nextSpeaker, addToSpeakersList, removeFromSpeakersList, setSpeakerTimeLimit, tickSpeakerTimer } = useCommitteeStore();
   const [committee, setCommittee] = useState<Committee | null>(null);
   const [timerRunning, setTimerRunning] = useState(false);
-  const [showRollCall, setShowRollCall] = useState(false);
+  const [showRollCall, setShowRollCall] = useState(true); // open by default for roll call
   const [showMotions, setShowMotions] = useState(false);
   const [copied, setCopied] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -263,6 +263,23 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
         {/* Center */}
         <main className="flex-1 overflow-hidden flex flex-col">
 
+          {/* Pre-session: roll call prompt */}
+          {(committee.phase === 'pre-session' || committee.phase === 'roll-call') && (
+            <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
+              <div className="text-6xl mb-5">📋</div>
+              <h2 className="text-3xl font-black text-white mb-3">Start with Roll Call</h2>
+              <p className="text-[#8892aa] text-lg max-w-sm mb-6">
+                Mark who is present before opening the floor. Quorum must be reached to begin the session.
+              </p>
+              <button
+                onClick={() => setShowRollCall(true)}
+                className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-4 rounded-2xl font-bold text-base transition-colors"
+              >
+                Open Roll Call →
+              </button>
+            </div>
+          )}
+
           {/* Moderated caucus — full screen */}
           {committee.phase === 'moderated-caucus' && committee.caucus && (
             <ModeratedCaucusView committee={committee} />
@@ -303,7 +320,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
                   <>
                     {/* Next up — flags above timer, up to 15, scrollable */}
                     {committee.speakersList.length > 0 && (
-                      <div className="flex items-end gap-4 mb-8 overflow-x-auto pb-1 max-w-full">
+                      <div className="flex items-start gap-4 mb-8 overflow-x-auto pt-2 pb-1 max-w-full">
                         {committee.speakersList.slice(0, 15).map((s, i) => (
                           <div key={s.delegateId} className="flex flex-col items-center gap-2 relative group shrink-0">
                             <FlagCircle country={s.country} size="lg" />

@@ -65,7 +65,7 @@ interface CommitteeStore {
   // Pending motions (floor + voting)
   addPendingMotion: (committeeId: string, motion: Omit<PendingMotion, 'id' | 'disruptiveness'>) => void;
   removePendingMotion: (committeeId: string, motionId: string) => void;
-  enactPendingMotion: (committeeId: string, motionId: string) => void;
+  enactPendingMotion: (committeeId: string, motionId: string, speakerList?: string[]) => void;
   clearPendingMotions: (committeeId: string) => void;
 
   // Caucus
@@ -353,7 +353,7 @@ export const useCommitteeStore = create<CommitteeStore>()(
           },
         })),
 
-      enactPendingMotion: (committeeId, motionId) => {
+      enactPendingMotion: (committeeId, motionId, speakerListArg) => {
         const state = get();
         const committee = state.committees[committeeId];
         if (!committee) return;
@@ -377,8 +377,9 @@ export const useCommitteeStore = create<CommitteeStore>()(
         }
 
         if (motion.type === 'moderated') {
-          // Build ordered speaker list from motion.speakerList
-          const entries: SpeakerEntry[] = motion.speakerList
+          // Use provided speakerList (built after voting), or fall back to motion.speakerList
+          const list = speakerListArg ?? motion.speakerList;
+          const entries: SpeakerEntry[] = list
             .map((country) => {
               const d = committee.delegates.find((del) => del.country === country);
               return d ? { delegateId: d.id, country: d.country } : null;
