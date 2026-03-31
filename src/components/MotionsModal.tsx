@@ -5,7 +5,7 @@ import { Committee, PendingMotion, PendingMotionType } from '@/lib/types';
 import { useCommitteeStore } from '@/lib/store';
 import { getCountryByName, getFlagEmoji } from '@/lib/countries';
 
-type ModalView = 'list' | 'raise' | 'vote' | 'speaker-list';
+type ModalView = 'list' | 'raise' | 'vote';
 
 const TYPE_META: Record<PendingMotionType, { icon: string; label: string; sub: string }> = {
   consultation: { icon: '🤝', label: 'Consultation of the Whole', sub: 'Informal session, all together' },
@@ -508,25 +508,12 @@ function VotingView({
 export default function MotionsModal({ committee, onClose }: { committee: Committee; onClose: () => void }) {
   const { removePendingMotion, enactPendingMotion } = useCommitteeStore();
   const [view, setView] = useState<ModalView>('list');
-  const [pendingEnact, setPendingEnact] = useState<PendingMotion | null>(null);
 
   const pending = [...(committee.pendingMotions ?? [])].sort((a, b) => b.disruptiveness - a.disruptiveness);
 
   const handleMotionAccepted = (motion: PendingMotion) => {
-    if (motion.type === 'moderated') {
-      // Build speaker list before enacting
-      setPendingEnact(motion);
-      setView('speaker-list');
-    } else {
-      // Enact immediately
-      enactPendingMotion(committee.id, motion.id);
-      onClose();
-    }
-  };
-
-  const handleSpeakerListDone = (list: string[]) => {
-    if (!pendingEnact) return;
-    enactPendingMotion(committee.id, pendingEnact.id, list);
+    // All motion types enact immediately; moderated caucus handles proposer position on the caucus page
+    enactPendingMotion(committee.id, motion.id);
     onClose();
   };
 
@@ -552,14 +539,6 @@ export default function MotionsModal({ committee, onClose }: { committee: Commit
               committee={committee}
               onAccepted={handleMotionAccepted}
               onAllDone={() => { setView('list'); onClose(); }}
-            />
-          )}
-
-          {view === 'speaker-list' && pendingEnact && (
-            <SpeakerListBuilder
-              committee={committee}
-              motion={pendingEnact}
-              onDone={handleSpeakerListDone}
             />
           )}
 

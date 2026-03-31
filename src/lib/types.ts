@@ -75,6 +75,9 @@ export interface CaucusState {
   purpose: string;
   currentSpeaker: string | null;
   speakerTimeRemaining: number;
+  proposedBy: string;
+  proposerPosition: 'first' | 'last' | null;
+  spokenCountries: string[];
 }
 
 export interface ChatMessage {

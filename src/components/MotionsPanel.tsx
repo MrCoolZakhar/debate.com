@@ -82,6 +82,9 @@ export default function MotionsPanel({ committee }: { committee: Committee }) {
         totalTime: motion.totalTime || 600,
         speakingTime: motion.speakingTime || 60,
         purpose: motion.purpose || '',
+        proposedBy: motion.proposedBy,
+        proposerPosition: null,
+        spokenCountries: [],
       });
     }
     setVotingId(null);

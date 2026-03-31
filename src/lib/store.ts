@@ -74,6 +74,7 @@ interface CommitteeStore {
   tickCaucusTotalOnly: (committeeId: string) => void;
   tickCaucusSpeakerOnly: (committeeId: string) => void;
   advanceCaucusSpeaker: (committeeId: string) => void;
+  setProposerPosition: (committeeId: string, position: 'first' | 'last') => void;
   endCaucus: (committeeId: string) => void;
   nextCaucusSpeaker: (committeeId: string, speakerCountry: string) => void;
 
@@ -380,15 +381,7 @@ export const useCommitteeStore = create<CommitteeStore>()(
         }
 
         if (motion.type === 'moderated') {
-          // Use provided speakerList (built after voting), or fall back to motion.speakerList
-          const list = speakerListArg ?? motion.speakerList;
-          const entries: SpeakerEntry[] = list
-            .map((country) => {
-              const d = committee.delegates.find((del) => del.country === country);
-              return d ? { delegateId: d.id, country: d.country } : null;
-            })
-            .filter(Boolean) as SpeakerEntry[];
-
+          // Start caucus with empty speaker list — proposer position chosen on the caucus page
           const caucus: CaucusState = {
             active: true,
             type: 'moderated',
@@ -398,6 +391,9 @@ export const useCommitteeStore = create<CommitteeStore>()(
             speakerTimeRemaining: motion.speakingTime,
             purpose: motion.topic,
             currentSpeaker: null,
+            proposedBy: motion.proposedBy,
+            proposerPosition: null,
+            spokenCountries: [],
           };
           set((s) => ({
             committees: {
@@ -406,7 +402,7 @@ export const useCommitteeStore = create<CommitteeStore>()(
                 ...s.committees[committeeId],
                 caucus,
                 phase: 'moderated-caucus',
-                speakersList: entries,
+                speakersList: [],
                 pendingMotions: [],
               },
             },
@@ -424,6 +420,9 @@ export const useCommitteeStore = create<CommitteeStore>()(
           speakerTimeRemaining: 0,
           purpose: motion.type === 'consultation' ? 'Consultation of the Whole' : (motion.topic || ''),
           currentSpeaker: null,
+          proposedBy: motion.proposedBy,
+          proposerPosition: null,
+          spokenCountries: [],
         };
         set((s) => ({
           committees: {
@@ -455,6 +454,9 @@ export const useCommitteeStore = create<CommitteeStore>()(
           remainingTime: caucusInput.totalTime,
           speakerTimeRemaining: caucusInput.speakingTime,
           currentSpeaker: null,
+          proposedBy: (caucusInput as CaucusState).proposedBy ?? '',
+          proposerPosition: (caucusInput as CaucusState).proposerPosition ?? null,
+          spokenCountries: (caucusInput as CaucusState).spokenCountries ?? [],
         };
         set((state) => ({
           committees: {
@@ -525,6 +527,10 @@ export const useCommitteeStore = create<CommitteeStore>()(
         set((state) => {
           const committee = state.committees[committeeId];
           if (!committee?.caucus) return state;
+          const prev = committee.caucus.currentSpeaker;
+          const spokenCountries = prev && !committee.caucus.spokenCountries.includes(prev)
+            ? [...committee.caucus.spokenCountries, prev]
+            : committee.caucus.spokenCountries;
           const [next, ...rest] = committee.speakersList;
           return {
             committees: {
@@ -536,7 +542,30 @@ export const useCommitteeStore = create<CommitteeStore>()(
                   ...committee.caucus,
                   currentSpeaker: next?.country ?? null,
                   speakerTimeRemaining: committee.caucus.speakingTime,
+                  spokenCountries,
                 },
+              },
+            },
+          };
+        }),
+
+      setProposerPosition: (committeeId, position) =>
+        set((state) => {
+          const committee = state.committees[committeeId];
+          if (!committee?.caucus) return state;
+          const proposer = committee.caucus.proposedBy;
+          const delegate = committee.delegates.find((d) => d.country === proposer);
+          if (!delegate) return state;
+          const entry: SpeakerEntry = { delegateId: delegate.id, country: proposer };
+          const without = committee.speakersList.filter((s) => s.delegateId !== delegate.id);
+          const newList = position === 'first' ? [entry, ...without] : [...without, entry];
+          return {
+            committees: {
+              ...state.committees,
+              [committeeId]: {
+                ...committee,
+                speakersList: newList,
+                caucus: { ...committee.caucus, proposerPosition: position },
               },
             },
           };
