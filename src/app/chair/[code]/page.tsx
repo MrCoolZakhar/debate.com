@@ -67,20 +67,20 @@ function CaucusSpeakerQueue({
   const { removeFromSpeakersList } = useCommitteeStore();
   if (committee.speakersList.length === 0) return null;
   return (
-    <div className="flex items-start gap-4 overflow-x-auto pt-2 pb-1 max-w-full">
+    <div className="flex items-start gap-3 overflow-x-auto pt-1 pb-1 max-w-full">
       {committee.speakersList.slice(0, 15).map((s) => {
         const alreadySpoke = spokenCountries.includes(s.country);
         return (
-          <div key={s.delegateId} className="flex flex-col items-center gap-1.5 relative group shrink-0">
+          <div key={s.delegateId} className="flex flex-col items-center gap-1 relative group shrink-0">
             <div className="relative">
-              <FlagCircle country={s.country} size="lg" />
+              <FlagCircle country={s.country} size="sm" />
               {alreadySpoke && (
-                <div className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center">
-                  <span className="text-xs font-bold text-yellow-300">spoke</span>
+                <div className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center">
+                  <span className="text-[9px] font-bold text-yellow-300">✓</span>
                 </div>
               )}
             </div>
-            <span className={`text-xs text-center w-20 truncate ${alreadySpoke ? 'text-yellow-400' : 'text-[#8892aa]'}`}>
+            <span className={`text-[10px] text-center w-12 truncate ${alreadySpoke ? 'text-yellow-400' : 'text-[#8892aa]'}`}>
               {s.country}
             </span>
             <button onClick={() => removeFromSpeakersList(committee.id, s.delegateId)}
@@ -89,11 +89,11 @@ function CaucusSpeakerQueue({
         );
       })}
       {committee.speakersList.length > 15 && (
-        <div className="flex flex-col items-center gap-2 shrink-0">
-          <div className="w-20 h-20 rounded-full bg-[#1a2035] flex items-center justify-center">
-            <span className="text-lg font-bold text-[#8892aa]">+{committee.speakersList.length - 15}</span>
+        <div className="flex flex-col items-center gap-1 shrink-0">
+          <div className="w-10 h-10 rounded-full bg-[#1a2035] flex items-center justify-center">
+            <span className="text-xs font-bold text-[#8892aa]">+{committee.speakersList.length - 15}</span>
           </div>
-          <span className="text-xs text-[#4a5580]">more</span>
+          <span className="text-[10px] text-[#4a5580]">more</span>
         </div>
       )}
     </div>
@@ -144,33 +144,21 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd }: { committe
 
 // ── Moderated caucus — mirrors speakers-list structure ──
 function ModeratedCaucusView({ committee }: { committee: Committee }) {
-  const { tickCaucusTotalOnly, tickCaucusSpeakerOnly, advanceCaucusSpeaker, setProposerPosition, endCaucus, addToSpeakersList } = useCommitteeStore();
-  const [totalRunning, setTotalRunning] = useState(false);
+  const { tickCaucusBoth, advanceCaucusSpeaker, setProposerPosition, endCaucus, addToSpeakersList } = useCommitteeStore();
   const [speakerRunning, setSpeakerRunning] = useState(false);
-  const totalRef = useRef<NodeJS.Timeout | null>(null);
   const speakerRef = useRef<NodeJS.Timeout | null>(null);
   const caucus = committee.caucus!;
   const spokenCountries = caucus.spokenCountries ?? [];
 
-  // Total caucus timer
+  // Single interval: ticks both total and speaker when speaker is running
   useEffect(() => {
-    if (totalRunning && caucus.remainingTime > 0) {
-      totalRef.current = setInterval(() => tickCaucusTotalOnly(committee.id), 1000);
-    } else {
-      if (totalRef.current) clearInterval(totalRef.current);
-    }
-    return () => { if (totalRef.current) clearInterval(totalRef.current); };
-  }, [totalRunning, caucus.remainingTime, committee.id, tickCaucusTotalOnly]);
-
-  // Per-speaker timer
-  useEffect(() => {
-    if (speakerRunning && caucus.currentSpeaker && caucus.speakerTimeRemaining > 0) {
-      speakerRef.current = setInterval(() => tickCaucusSpeakerOnly(committee.id), 1000);
+    if (speakerRunning && caucus.currentSpeaker && caucus.speakerTimeRemaining > 0 && caucus.remainingTime > 0) {
+      speakerRef.current = setInterval(() => tickCaucusBoth(committee.id), 1000);
     } else {
       if (speakerRef.current) clearInterval(speakerRef.current);
     }
     return () => { if (speakerRef.current) clearInterval(speakerRef.current); };
-  }, [speakerRunning, caucus.currentSpeaker, caucus.speakerTimeRemaining, committee.id, tickCaucusSpeakerOnly]);
+  }, [speakerRunning, caucus.currentSpeaker, caucus.speakerTimeRemaining, caucus.remainingTime, committee.id, tickCaucusBoth]);
 
   useEffect(() => {
     if (caucus.speakerTimeRemaining === 0) setSpeakerRunning(false);
@@ -182,15 +170,14 @@ function ModeratedCaucusView({ committee }: { committee: Committee }) {
 
   // ── Step 1: Proposer position ──────────────────────────────────────────────
   if (caucus.proposerPosition === null) {
-    const found = getCountryByName(caucus.proposedBy);
     return (
       <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
-        <p className="text-xs text-blue-400 font-mono tracking-widest mb-6">MODERATED CAUCUS — {caucus.purpose}</p>
-        <div className="mb-6">
+        <p className="text-xs text-blue-400 font-mono tracking-widest mb-4">MODERATED CAUCUS — {caucus.purpose}</p>
+        <div className="mb-4">
           <FlagCircle country={caucus.proposedBy} size="xl" />
         </div>
         <h2 className="text-3xl font-black text-white mb-2">{caucus.proposedBy}</h2>
-        <p className="text-[#8892aa] text-lg mb-10">
+        <p className="text-[#8892aa] text-lg mb-8">
           proposed this caucus. Would they like to speak <span className="text-white font-semibold">first</span> or <span className="text-white font-semibold">last</span>?
         </p>
         <div className="flex gap-4 w-full max-w-sm">
@@ -210,40 +197,40 @@ function ModeratedCaucusView({ committee }: { committee: Committee }) {
   // ── Step 2: Normal caucus view ─────────────────────────────────────────────
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-8 py-10 min-h-0">
-        <div className="text-center mb-6">
+      <div className="flex-1 flex flex-col items-center justify-center px-8 py-4 min-h-0">
+        <div className="text-center mb-3">
           <p className="text-xs text-blue-400 font-mono tracking-widest">MODERATED CAUCUS</p>
-          {caucus.purpose && <p className="text-[#8892aa] text-base mt-1">{caucus.purpose}</p>}
+          {caucus.purpose && <p className="text-[#8892aa] text-sm mt-0.5">{caucus.purpose}</p>}
           {spokenCountries.length > 0 && (
-            <p className="text-xs text-yellow-500 mt-1">{spokenCountries.length} delegate{spokenCountries.length !== 1 ? 's' : ''} already spoke</p>
+            <p className="text-xs text-yellow-500 mt-0.5">{spokenCountries.length} delegate{spokenCountries.length !== 1 ? 's' : ''} already spoke</p>
           )}
         </div>
 
         {caucus.currentSpeaker ? (
           <>
             {committee.speakersList.length > 0 && (
-              <div className="mb-8 w-full flex justify-center">
+              <div className="mb-4 w-full flex justify-center">
                 <CaucusSpeakerQueue committee={committee} spokenCountries={spokenCountries} />
               </div>
             )}
             <FlagCircle country={caucus.currentSpeaker} size="xl" />
-            <h1 className="text-5xl font-black text-white mt-5 mb-2 text-center">{caucus.currentSpeaker}</h1>
-            <div className={`text-8xl font-black font-mono mt-4 mb-6 tabular-nums ${
+            <h1 className="text-3xl font-black text-white mt-3 mb-1 text-center">{caucus.currentSpeaker}</h1>
+            <div className={`text-6xl font-black font-mono mt-2 mb-3 tabular-nums ${
               caucus.speakerTimeRemaining <= 5 ? 'text-red-400' : caucus.speakerTimeRemaining <= 15 ? 'text-yellow-400' : 'text-white'
             }`}>
               {formatTime(caucus.speakerTimeRemaining)}
             </div>
-            <div className="w-full max-w-md h-2 bg-[#1a1f2e] rounded-full overflow-hidden mb-8">
+            <div className="w-full max-w-md h-2 bg-[#1a1f2e] rounded-full overflow-hidden mb-4">
               <div className={`h-full rounded-full transition-all ${speakerProgress > 50 ? 'bg-blue-500' : speakerProgress > 20 ? 'bg-yellow-500' : 'bg-red-500'}`}
                 style={{ width: `${speakerProgress}%` }} />
             </div>
             <div className="flex gap-3 w-full max-w-sm">
               <button onClick={() => setSpeakerRunning((r) => !r)}
-                className={`flex-1 py-3 rounded-xl font-bold text-base transition-colors text-white ${speakerRunning ? 'bg-yellow-600 hover:bg-yellow-500' : 'bg-green-600 hover:bg-green-500'}`}>
+                className={`flex-1 py-2.5 rounded-xl font-bold text-base transition-colors text-white ${speakerRunning ? 'bg-yellow-600 hover:bg-yellow-500' : 'bg-green-600 hover:bg-green-500'}`}>
                 {speakerRunning ? '⏸ Pause' : '▶ Start'}
               </button>
               <button onClick={handleNext}
-                className="flex-1 bg-[#1e2540] hover:bg-[#2a3050] text-white py-3 rounded-xl font-bold text-base transition-colors">
+                className="flex-1 bg-[#1e2540] hover:bg-[#2a3050] text-white py-2.5 rounded-xl font-bold text-base transition-colors">
                 Next →
               </button>
             </div>
@@ -251,15 +238,15 @@ function ModeratedCaucusView({ committee }: { committee: Committee }) {
         ) : (
           <>
             {committee.speakersList.length > 0 && (
-              <div className="mb-10 w-full flex justify-center">
+              <div className="mb-4 w-full flex justify-center">
                 <CaucusSpeakerQueue committee={committee} spokenCountries={spokenCountries} />
               </div>
             )}
-            <div className="text-7xl mb-6">🎙️</div>
-            <h2 className="text-3xl font-black text-white mb-2">No Current Speaker</h2>
-            <p className="text-[#8892aa] mb-8 text-center">Add delegates below, then call the first speaker</p>
+            <div className="text-5xl mb-3">🎙️</div>
+            <h2 className="text-2xl font-black text-white mb-1">No Current Speaker</h2>
+            <p className="text-[#8892aa] mb-4 text-center text-sm">Add delegates below, then call the first speaker</p>
             <button onClick={handleNext} disabled={committee.speakersList.length === 0}
-              className="bg-blue-600 hover:bg-blue-500 disabled:bg-[#1e2540] disabled:text-[#3a4060] text-white px-10 py-4 rounded-xl font-bold text-lg transition-colors">
+              className="bg-blue-600 hover:bg-blue-500 disabled:bg-[#1e2540] disabled:text-[#3a4060] text-white px-8 py-3 rounded-xl font-bold text-base transition-colors">
               Call First Speaker
             </button>
           </>
@@ -267,21 +254,18 @@ function ModeratedCaucusView({ committee }: { committee: Committee }) {
       </div>
 
       {/* Bottom bar */}
-      <div className="border-t border-[#1e2540] bg-[#0d1120] px-6 py-4">
-        <div className="flex items-center gap-3 mb-4">
+      <div className="border-t border-[#1e2540] bg-[#0d1120] px-6 py-3">
+        <div className="flex items-center gap-3 mb-3">
           <div className="shrink-0">
             <p className="text-xs text-[#4a5580] font-mono">TOTAL REMAINING</p>
-            <p className={`text-xl font-black font-mono ${caucus.remainingTime <= 30 ? 'text-red-400' : 'text-white'}`}>
+            <p className={`text-lg font-black font-mono ${caucus.remainingTime <= 30 ? 'text-red-400' : 'text-white'}`}>
               {formatTime(caucus.remainingTime)}
             </p>
           </div>
           <div className="flex-1 h-1.5 bg-[#1a1f2e] rounded-full overflow-hidden">
             <div className="h-full bg-blue-600/60 rounded-full transition-all" style={{ width: `${totalProgress}%` }} />
           </div>
-          <button onClick={() => setTotalRunning((r) => !r)}
-            className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-colors ${totalRunning ? 'bg-yellow-700/40 text-yellow-400 hover:bg-yellow-700/60' : 'bg-green-700/40 text-green-400 hover:bg-green-700/60'}`}>
-            {totalRunning ? '⏸ Pause total' : '▶ Start total'}
-          </button>
+          <span className="text-xs text-[#4a5580]">ticks with speaker</span>
           <button onClick={() => endCaucus(committee.id)}
             className="px-3 py-1.5 rounded-lg font-bold text-xs bg-[#1e2540] hover:bg-red-900/40 hover:text-red-400 text-[#8892aa] transition-colors">
             End Caucus
@@ -411,9 +395,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
 
           {/* Voting */}
           {committee.phase === 'voting' && (
-            <div className="flex-1 p-8 max-w-2xl mx-auto w-full">
-              <VotingView committee={committee} />
-            </div>
+            <VotingView committee={committee} />
           )}
 
           {/* Adjourned */}
@@ -434,7 +416,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
           {committee.phase === 'speakers-list' && (
             <div className="flex-1 flex flex-col overflow-hidden">
               {/* Big current speaker */}
-              <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-8 py-10 min-h-0">
+              <div className="flex-1 flex flex-col items-center justify-center px-8 py-6 min-h-0 overflow-hidden">
                 {committee.currentSpeaker ? (
                   <>
                     {/* Next up — flags above timer, up to 15, scrollable */}
@@ -463,7 +445,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
 
                     <FlagCircle country={committee.currentSpeaker.country} size="xl" />
                     <h1 className="text-5xl font-black text-white mt-5 mb-2 text-center">{committee.currentSpeaker.country}</h1>
-                    <div className={`text-8xl font-black font-mono mt-4 mb-6 tabular-nums ${
+                    <div className={`text-7xl font-black font-mono mt-3 mb-4 tabular-nums ${
                       committee.speakerTimeRemaining <= 10 ? 'text-red-400' : committee.speakerTimeRemaining <= 30 ? 'text-yellow-400' : 'text-white'
                     }`}>
                       {formatTime(committee.speakerTimeRemaining)}
@@ -592,47 +574,89 @@ function UnmoderatedCaucusView({ committee }: { committee: Committee }) {
   );
 }
 
+function VoteCircle({ label, count, total, strokeColor, onInc, onDec }: {
+  label: string; count: number; total: number; strokeColor: string;
+  onInc: () => void; onDec: () => void;
+}) {
+  const r = 36; const circumference = 2 * Math.PI * r;
+  const fraction = total > 0 ? Math.min(count / total, 1) : 0;
+  const labelColor = label === 'In Favour' ? 'text-green-400' : label === 'Against' ? 'text-red-400' : 'text-yellow-400';
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <div className="relative">
+        <svg width="110" height="110" viewBox="0 0 100 100">
+          <circle cx="50" cy="50" r={r} fill="none" stroke="#1e2540" strokeWidth="10" />
+          <circle cx="50" cy="50" r={r} fill="none" stroke={strokeColor} strokeWidth="10"
+            strokeDasharray={circumference}
+            strokeDashoffset={circumference * (1 - fraction)}
+            strokeLinecap="round"
+            transform="rotate(-90 50 50)"
+            style={{ transition: 'stroke-dashoffset 0.3s ease' }}
+          />
+          <text x="50" y="56" textAnchor="middle" fill="white" fontSize="24" fontWeight="bold" fontFamily="monospace">{count}</text>
+        </svg>
+        <button onClick={onInc}
+          className="absolute -top-1 -right-1 w-7 h-7 bg-[#1e2540] hover:bg-[#2a3050] rounded-full text-white font-bold text-base flex items-center justify-center border border-[#2a3050] leading-none">+</button>
+        <button onClick={onDec} disabled={count === 0}
+          className="absolute -bottom-1 -right-1 w-7 h-7 bg-[#1e2540] hover:bg-[#2a3050] disabled:opacity-30 rounded-full text-white text-lg flex items-center justify-center border border-[#2a3050] leading-none">−</button>
+      </div>
+      <span className={`text-sm font-semibold ${labelColor}`}>{label}</span>
+    </div>
+  );
+}
+
 function VotingView({ committee }: { committee: Committee }) {
   const { updateResolutionStatus, setPhase } = useCommitteeStore();
   const [votes, setVotes] = useState<Record<string, { for: number; against: number; abstain: number }>>({});
+  const totalPresent = committee.delegates.filter((d) => d.status !== 'absent').length;
   const approved = committee.resolutions.filter((r) => r.status === 'approved');
+
+  const adj = (id: string, field: 'for' | 'against' | 'abstain', delta: number) =>
+    setVotes((p) => {
+      const v = p[id] || { for: 0, against: 0, abstain: 0 };
+      return { ...p, [id]: { ...v, [field]: Math.max(0, (v[field] || 0) + delta) } };
+    });
+
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-black text-white">Voting Procedure</h2>
-        <button onClick={() => setPhase(committee.id, 'speakers-list')} className="text-sm text-[#8892aa] hover:text-white border border-[#1e2540] px-3 py-1.5 rounded-lg transition-colors">← Back</button>
-      </div>
-      {approved.length === 0 ? (
-        <div className="text-center py-12 text-[#4a5580]">No approved resolutions to vote on.</div>
-      ) : approved.map((res) => {
-        const v = votes[res.id] || { for: 0, against: 0, abstain: 0 };
-        const done = res.status === 'passed' || res.status === 'failed';
-        return (
-          <div key={res.id} className="bg-[#0f1526] border border-[#1e2540] rounded-xl p-5">
-            <h3 className="font-bold text-white mb-4">{res.title}</h3>
-            {done ? (
-              <div className={`text-center py-4 rounded-xl ${res.status === 'passed' ? 'bg-green-950/40 border border-green-800/40' : 'bg-red-950/40 border border-red-800/40'}`}>
-                <p className={`text-2xl font-black ${res.status === 'passed' ? 'text-green-400' : 'text-red-400'}`}>{res.status === 'passed' ? '✓ PASSED' : '✗ FAILED'}</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <div className="grid grid-cols-3 gap-3">
-                  {(['for', 'against', 'abstain'] as const).map((f) => (
-                    <div key={f}>
-                      <label className={`block text-xs font-bold mb-1 ${f === 'for' ? 'text-green-400' : f === 'against' ? 'text-red-400' : 'text-yellow-400'}`}>{f.charAt(0).toUpperCase() + f.slice(1)}</label>
-                      <input type="number" min={0} value={v[f]}
-                        onChange={(e) => setVotes((p) => ({ ...p, [res.id]: { ...v, [f]: parseInt(e.target.value) || 0 } }))}
-                        className="w-full bg-[#141929] border border-[#1e2540] rounded-lg px-2 py-2 text-white text-xl font-bold text-center focus:outline-none" />
-                    </div>
-                  ))}
+    <div className="flex-1 overflow-y-auto">
+      <div className="p-8 max-w-2xl mx-auto w-full">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-black text-white">Voting Procedure</h2>
+          <button onClick={() => setPhase(committee.id, 'speakers-list')} className="text-sm text-[#8892aa] hover:text-white border border-[#1e2540] px-3 py-1.5 rounded-lg transition-colors">← Back</button>
+        </div>
+        {approved.length === 0 ? (
+          <div className="text-center py-12 text-[#4a5580]">No approved resolutions to vote on.</div>
+        ) : approved.map((res) => {
+          const v = votes[res.id] || { for: 0, against: 0, abstain: 0 };
+          const done = res.status === 'passed' || res.status === 'failed';
+          return (
+            <div key={res.id} className="bg-[#0f1526] border border-[#1e2540] rounded-xl p-6 mb-4">
+              <h3 className="font-bold text-white mb-6 text-lg text-center">{res.title}</h3>
+              {done ? (
+                <div className={`text-center py-6 rounded-xl ${res.status === 'passed' ? 'bg-green-950/40 border border-green-800/40' : 'bg-red-950/40 border border-red-800/40'}`}>
+                  <p className={`text-3xl font-black ${res.status === 'passed' ? 'text-green-400' : 'text-red-400'}`}>{res.status === 'passed' ? '✓ PASSED' : '✗ FAILED'}</p>
+                  <p className="text-sm text-[#8892aa] mt-2">{v.for} in favour · {v.against} against · {v.abstain} abstain</p>
                 </div>
-                <button onClick={() => updateResolutionStatus(committee.id, res.id, v.for > v.against ? 'passed' : 'failed')}
-                  className="w-full bg-blue-600 hover:bg-blue-500 text-white py-2.5 rounded-lg font-bold transition-colors">Finalize Vote</button>
-              </div>
-            )}
-          </div>
-        );
-      })}
+              ) : (
+                <div>
+                  <div className="flex justify-around items-center mb-8">
+                    <VoteCircle label="In Favour" count={v.for} total={totalPresent} strokeColor="#22c55e"
+                      onInc={() => adj(res.id, 'for', 1)} onDec={() => adj(res.id, 'for', -1)} />
+                    <VoteCircle label="Abstain" count={v.abstain} total={totalPresent} strokeColor="#eab308"
+                      onInc={() => adj(res.id, 'abstain', 1)} onDec={() => adj(res.id, 'abstain', -1)} />
+                    <VoteCircle label="Against" count={v.against} total={totalPresent} strokeColor="#ef4444"
+                      onInc={() => adj(res.id, 'against', 1)} onDec={() => adj(res.id, 'against', -1)} />
+                  </div>
+                  <button onClick={() => updateResolutionStatus(committee.id, res.id, v.for > v.against ? 'passed' : 'failed')}
+                    className="w-full bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-xl font-bold transition-colors text-base">
+                    Finalize Vote
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

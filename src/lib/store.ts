@@ -73,6 +73,7 @@ interface CommitteeStore {
   tickCaucus: (committeeId: string) => void;
   tickCaucusTotalOnly: (committeeId: string) => void;
   tickCaucusSpeakerOnly: (committeeId: string) => void;
+  tickCaucusBoth: (committeeId: string) => void;
   advanceCaucusSpeaker: (committeeId: string) => void;
   setProposerPosition: (committeeId: string, position: 'first' | 'last') => void;
   endCaucus: (committeeId: string) => void;
@@ -518,6 +519,28 @@ export const useCommitteeStore = create<CommitteeStore>()(
               [committeeId]: {
                 ...committee,
                 caucus: { ...committee.caucus, speakerTimeRemaining: newSpeaker },
+              },
+            },
+          };
+        }),
+
+      tickCaucusBoth: (committeeId) =>
+        set((state) => {
+          const committee = state.committees[committeeId];
+          if (!committee?.caucus) return state;
+          const newTotal = Math.max(0, committee.caucus.remainingTime - 1);
+          const newSpeaker = Math.max(0, committee.caucus.speakerTimeRemaining - 1);
+          return {
+            committees: {
+              ...state.committees,
+              [committeeId]: {
+                ...committee,
+                phase: newTotal === 0 ? 'speakers-list' : committee.phase,
+                caucus: newTotal === 0 ? null : {
+                  ...committee.caucus,
+                  remainingTime: newTotal,
+                  speakerTimeRemaining: newSpeaker,
+                },
               },
             },
           };
