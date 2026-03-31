@@ -65,6 +65,7 @@ interface CommitteeStore {
   // Pending motions (floor + voting)
   addPendingMotion: (committeeId: string, motion: Omit<PendingMotion, 'id' | 'disruptiveness'>) => void;
   removePendingMotion: (committeeId: string, motionId: string) => void;
+  updatePendingMotion: (committeeId: string, motionId: string, updates: Partial<Omit<PendingMotion, 'id'>>) => void;
   enactPendingMotion: (committeeId: string, motionId: string, speakerList?: string[]) => void;
   clearPendingMotions: (committeeId: string) => void;
 
@@ -354,6 +355,21 @@ export const useCommitteeStore = create<CommitteeStore>()(
             [committeeId]: {
               ...state.committees[committeeId],
               pendingMotions: (state.committees[committeeId].pendingMotions ?? []).filter((m) => m.id !== motionId),
+            },
+          },
+        })),
+
+      updatePendingMotion: (committeeId, motionId, updates) =>
+        set((state) => ({
+          committees: {
+            ...state.committees,
+            [committeeId]: {
+              ...state.committees[committeeId],
+              pendingMotions: (state.committees[committeeId].pendingMotions ?? []).map((m) =>
+                m.id === motionId
+                  ? { ...m, ...updates, disruptiveness: calcDisruptiveness(m.type, (updates.totalTime ?? m.totalTime)) }
+                  : m
+              ),
             },
           },
         })),

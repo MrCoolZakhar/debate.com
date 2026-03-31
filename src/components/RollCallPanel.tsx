@@ -35,7 +35,28 @@ export function FlagCircle({ country, size = 'md' }: { country: string; size?: '
 }
 
 
-// ── Add-country autocomplete input ────────────────────────────────────────────
+// ── 3-state iPhone-style slider ───────────────────────────────────────────────
+function StatusSlider({ status, onCycle }: { status: DelegateStatus; onCycle: () => void }) {
+  const thumbPos = status === 'absent' ? 'left-[2px]' : status === 'present' ? 'left-[26px]' : 'left-[50px]';
+  const thumbColor = status === 'absent' ? 'bg-[#3a4060]' : status === 'present' ? 'bg-green-500' : 'bg-blue-500';
+
+  return (
+    <button
+      onClick={(e) => { e.stopPropagation(); onCycle(); }}
+      className="relative w-[76px] h-[26px] rounded-full bg-[#141929] border border-[#1e2540] cursor-pointer shrink-0 select-none"
+      title="Tap to cycle: Absent → Present → PV"
+    >
+      <div className="absolute inset-0 flex items-center justify-around px-1 pointer-events-none">
+        <span className={`text-[10px] font-bold z-10 ${status === 'absent' ? 'text-white' : 'text-[#3a4060]'}`}>A</span>
+        <span className={`text-[10px] font-bold z-10 ${status === 'present' ? 'text-white' : 'text-[#3a4060]'}`}>P</span>
+        <span className={`text-[10px] font-bold z-10 ${status === 'present-voting' ? 'text-white' : 'text-[#3a4060]'}`}>PV</span>
+      </div>
+      <div className={`absolute top-[3px] w-[22px] h-[20px] rounded-full transition-all duration-200 ${thumbPos} ${thumbColor}`} />
+    </button>
+  );
+}
+
+
 function AddCountryInput({ committee }: { committee: Committee }) {
   const { addDelegate } = useCommitteeStore();
   const [query, setQuery] = useState('');
@@ -182,28 +203,19 @@ export default function RollCallPanel({ committee }: { committee: Committee }) {
         {filtered.map((d) => (
           <div
             key={d.id}
-            onClick={() => cycleStatus(d.id, d.status)}
-            className={`flex items-center gap-2 px-2.5 py-2 rounded-xl transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-2.5 py-2 rounded-xl transition-all ${
               d.status === 'present'
-                ? 'bg-green-950/40 border border-green-800/30 hover:bg-green-950/60'
+                ? 'bg-green-950/40 border border-green-800/30'
                 : d.status === 'present-voting'
-                ? 'bg-blue-950/40 border border-blue-800/30 hover:bg-blue-950/60'
-                : 'border border-transparent hover:bg-[#141929]'
+                ? 'bg-blue-950/40 border border-blue-800/30'
+                : 'border border-transparent'
             }`}
           >
             <FlagCircle country={d.country} size="xs" />
             <span className={`flex-1 text-sm truncate ${d.status !== 'absent' ? 'text-white font-medium' : 'text-[#8892aa]'}`}>
               {d.country}
             </span>
-            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
-              d.status === 'present'
-                ? 'bg-green-700/50 text-green-300 border border-green-700/40'
-                : d.status === 'present-voting'
-                ? 'bg-blue-700/50 text-blue-300 border border-blue-700/40'
-                : 'bg-[#1e2540] text-[#4a5580] border border-[#2a3050]'
-            }`}>
-              {d.status === 'present' ? 'P' : d.status === 'present-voting' ? 'PV' : 'A'}
-            </span>
+            <StatusSlider status={d.status} onCycle={() => cycleStatus(d.id, d.status)} />
           </div>
         ))}
       </div>
