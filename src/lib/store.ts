@@ -10,6 +10,8 @@ import {
   PendingMotion,
   PendingMotionType,
   Resolution,
+  CommitteeDocument,
+  DocumentStatus,
   CaucusState,
   ChatMessage,
   SpeakerEntry,
@@ -84,6 +86,11 @@ interface CommitteeStore {
   addResolution: (committeeId: string, title: string, sponsors: string[], content: string) => void;
   updateResolutionStatus: (committeeId: string, resolutionId: string, status: Resolution['status']) => void;
 
+  // Documents
+  addDocument: (committeeId: string, doc: Omit<CommitteeDocument, 'id' | 'submittedAt'>) => void;
+  updateDocumentStatus: (committeeId: string, docId: string, status: DocumentStatus) => void;
+  removeDocument: (committeeId: string, docId: string) => void;
+
   // Chat
   sendMessage: (committeeId: string, sender: string, content: string, isPrivate?: boolean) => void;
 
@@ -122,6 +129,7 @@ export const useCommitteeStore = create<CommitteeStore>()(
           motions: [],
           pendingMotions: [],
           resolutions: [],
+          documents: [],
           caucus: null,
           messages: [],
           createdAt: new Date(),
@@ -671,6 +679,47 @@ export const useCommitteeStore = create<CommitteeStore>()(
               resolutions: state.committees[committeeId].resolutions.map((r) =>
                 r.id === resolutionId ? { ...r, status } : r
               ),
+            },
+          },
+        })),
+
+      addDocument: (committeeId, docData) => {
+        const doc: CommitteeDocument = {
+          ...docData,
+          id: generateId(),
+          submittedAt: new Date().toISOString(),
+        };
+        set((state) => ({
+          committees: {
+            ...state.committees,
+            [committeeId]: {
+              ...state.committees[committeeId],
+              documents: [...(state.committees[committeeId].documents ?? []), doc],
+            },
+          },
+        }));
+      },
+
+      updateDocumentStatus: (committeeId, docId, status) =>
+        set((state) => ({
+          committees: {
+            ...state.committees,
+            [committeeId]: {
+              ...state.committees[committeeId],
+              documents: (state.committees[committeeId].documents ?? []).map((d) =>
+                d.id === docId ? { ...d, status } : d
+              ),
+            },
+          },
+        })),
+
+      removeDocument: (committeeId, docId) =>
+        set((state) => ({
+          committees: {
+            ...state.committees,
+            [committeeId]: {
+              ...state.committees[committeeId],
+              documents: (state.committees[committeeId].documents ?? []).filter((d) => d.id !== docId),
             },
           },
         })),

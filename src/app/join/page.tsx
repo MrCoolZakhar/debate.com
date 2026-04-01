@@ -85,7 +85,7 @@ export default function JoinPage() {
                 className={`flex-1 flex flex-col items-center gap-1 py-3 px-2 rounded-xl border transition-all text-center ${
                   mode === t.key
                     ? 'bg-[#2E1E0F] border-[#7B4A1E] text-white'
-                    : 'bg-[#150F09] border-[#2E1E0F] text-[#C4A882] hover:border-[#7B4A1E]/60'
+                    : 'bg-white border-[#D4B896] text-[#5C3A1E] hover:border-[#7B4A1E]'
                 }`}>
                 <span className="text-xl">{t.icon}</span>
                 <span className="text-xs font-bold">{t.label}</span>
@@ -95,34 +95,34 @@ export default function JoinPage() {
 
           <div className="space-y-5">
             <div>
-              <label className="block text-sm font-medium text-[#E8D5B7] mb-2">Session Code</label>
+              <label className="block text-sm font-medium text-[#1A0F08] mb-2">Session Code</label>
               <input
                 type="text"
                 value={code}
                 onChange={(e) => handleCodeChange(e.target.value)}
                 placeholder="ABC123"
-                className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-lg px-4 py-3 text-white placeholder-[#7A5A38] focus:outline-none focus:border-[#7B4A1E] transition-colors font-mono text-xl tracking-widest text-center uppercase"
+                className="w-full bg-white border border-[#D4B896] rounded-lg px-4 py-3 text-[#1A0F08] placeholder-[#B8A090] focus:outline-none focus:border-[#7B4A1E] transition-colors font-mono text-xl tracking-widest text-center uppercase"
                 maxLength={6}
               />
               {error && <p className="text-red-400 text-sm mt-2">{error}</p>}
             </div>
 
             {foundCommittee && (
-              <div className="bg-[#7B4A1E]/20 border border-[#7B4A1E]/40 rounded-xl p-4">
-                <div className="text-[#B8844A] text-xs font-mono mb-2">COMMITTEE FOUND</div>
-                <div className="text-white font-bold">{foundCommittee.name}</div>
-                <div className="text-[#C4A882] text-sm mt-1">{foundCommittee.topic}</div>
-                <div className="text-[#7A5A38] text-xs mt-2">{foundCommittee.delegates.length} delegates registered</div>
+              <div className="bg-[#7B4A1E]/10 border border-[#D4B896] rounded-xl p-4">
+                <div className="text-[#7B4A1E] text-xs font-mono mb-2">COMMITTEE FOUND</div>
+                <div className="text-[#1A0F08] font-bold">{foundCommittee.name}</div>
+                <div className="text-[#5C3A1E] text-sm mt-1">{foundCommittee.topic}</div>
+                <div className="text-[#9A7A58] text-xs mt-2">{foundCommittee.delegates.length} delegates registered</div>
               </div>
             )}
 
             {foundCommittee && mode === 'delegate' && (
               <div>
-                <label className="block text-sm font-medium text-[#E8D5B7] mb-2">Your Country / Delegation</label>
+                <label className="block text-sm font-medium text-[#1A0F08] mb-2">Your Country / Delegation</label>
                 <select
                   value={country}
                   onChange={(e) => setCountry(e.target.value)}
-                  className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-lg px-4 py-3 text-white focus:outline-none focus:border-[#7B4A1E] transition-colors"
+                  className="w-full bg-white border border-[#D4B896] rounded-lg px-4 py-3 text-[#1A0F08] focus:outline-none focus:border-[#7B4A1E] transition-colors"
                 >
                   <option value="">Select your country...</option>
                   {foundCommittee.delegates.map((d) => (
@@ -141,9 +141,9 @@ export default function JoinPage() {
             </button>
           </div>
 
-          <p className="text-center text-[#7A5A38] text-sm mt-8">
+          <p className="text-center text-[#9A7A58] text-sm mt-8">
             Are you a chair?{' '}
-            <Link href="/create" className="text-[#B8844A] hover:text-[#E8C49A]">
+            <Link href="/create" className="text-[#7B4A1E] hover:text-[#5C3A1E]">
               Create a committee instead
             </Link>
           </p>
