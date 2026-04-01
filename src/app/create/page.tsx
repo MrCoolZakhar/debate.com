@@ -256,19 +256,19 @@ function CreatePageInner() {
               {/* Right: Selected delegates + launch */}
               <div className="flex flex-col min-h-0">
                 <div className="flex items-center justify-between mb-2 shrink-0">
-                  <label className="text-xs font-semibold text-[#C4A882]">Selected Delegates</label>
+                  <label className="text-xs font-semibold text-[#5C3A1E]">Selected Delegates</label>
                   <div className="flex items-center gap-3">
-                    <span className="text-xs font-bold text-white">{delegates.length} added</span>
+                    <span className="text-xs font-bold text-[#1A0F08]">{delegates.length} added</span>
                     {delegates.length > 0 && (
-                      <button onClick={() => setDelegates([])} className="text-xs text-[#7A5A38] hover:text-red-400 transition-colors">Clear all</button>
+                      <button onClick={() => setDelegates([])} className="text-xs text-[#9A7A58] hover:text-red-500 transition-colors">Clear all</button>
                     )}
                   </div>
                 </div>
 
                 {/* Scrollable list */}
-                <div className="flex-1 bg-[#150F09] border border-[#2E1E0F] rounded-xl overflow-hidden mb-4 min-h-0">
+                <div className="flex-1 bg-white border border-[#D4B896] rounded-xl overflow-hidden mb-4 min-h-0">
                   {delegates.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-full text-[#7A5A38] text-sm gap-2">
+                    <div className="flex flex-col items-center justify-center h-full text-[#9A7A58] text-sm gap-2">
                       <span className="text-3xl">🌍</span>
                       <span>No delegates added yet</span>
                     </div>
@@ -277,11 +277,11 @@ function CreatePageInner() {
                       {delegates.map((name) => {
                         const found = getCountryByName(name);
                         return (
-                          <div key={name} className="flex items-center gap-3 px-4 py-2.5 border-b border-[#2E1E0F]/50 last:border-0 hover:bg-[#1A1209] transition-colors group">
+                          <div key={name} className="flex items-center gap-3 px-4 py-2.5 border-b border-[#D4B896]/50 last:border-0 hover:bg-[#F5F0E8] transition-colors group">
                             <span className="text-lg">{found ? getFlagEmoji(found.code) : '🌐'}</span>
-                            <span className="text-sm text-white flex-1 truncate">{name}</span>
+                            <span className="text-sm text-[#1A0F08] flex-1 truncate">{name}</span>
                             <button onClick={() => setDelegates((p) => p.filter((d) => d !== name))}
-                              className="text-[#7A5A38] group-hover:text-red-400 transition-colors text-sm opacity-0 group-hover:opacity-100">✕</button>
+                              className="text-[#9A7A58] group-hover:text-red-500 transition-colors text-sm opacity-0 group-hover:opacity-100">✕</button>
                           </div>
                         );
                       })}
