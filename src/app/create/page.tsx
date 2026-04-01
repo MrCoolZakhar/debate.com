@@ -75,19 +75,19 @@ function CommitteeNameInput({
         onFocus={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
         placeholder="e.g. Human Rights Council or HRC"
-        className="w-full bg-white border border-[#D4B896] rounded-xl px-4 py-3 text-[#1A0F08] placeholder-[#B8A090] focus:outline-none focus:border-[#7B4A1E] transition-colors"
+        className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-xl px-4 py-3 text-white placeholder-[#7A5A38] focus:outline-none focus:border-[#7B4A1E] transition-colors"
       />
       {open && matches.length > 0 && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-[#D4B896] rounded-xl overflow-hidden z-30 shadow-xl">
+        <div className="absolute top-full left-0 right-0 mt-1 bg-[#150F09] border border-[#2E1E0F] rounded-xl overflow-hidden z-30 shadow-xl">
           {matches.slice(0, 6).map((p, i) => (
             <button
               key={p.name}
               onMouseDown={(e) => { e.preventDefault(); onPresetSelect(p); setOpen(false); }}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${i === 0 ? 'bg-[#7B4A1E]/10 text-[#1A0F08]' : 'text-[#1A0F08] hover:bg-[#F5F0E8]'}`}
+              className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${i === 0 ? 'bg-[#7B4A1E]/20 text-white' : 'text-[#E8D5B7] hover:bg-[#2E1E0F]'}`}
             >
               <span className="text-lg">{p.icon}</span>
               <span className="text-sm flex-1">{p.name}</span>
-              <span className="text-xs text-[#9A7A58] shrink-0">{p.acronym}</span>
+              <span className="text-xs text-[#7A5A38] shrink-0">{p.acronym}</span>
             </button>
           ))}
         </div>
@@ -151,11 +151,11 @@ function CreatePageInner() {
   };
 
   return (
-    <div className="h-screen bg-[#FAF7F2] flex flex-col overflow-hidden">
-      <nav className="border-b border-[#D4B896] bg-white px-6 h-14 flex items-center justify-between shrink-0">
+    <div className="h-screen bg-[#0D0906] flex flex-col overflow-hidden">
+      <nav className="border-b border-[#2E1E0F] bg-[#150F09] px-6 h-14 flex items-center justify-between shrink-0">
         <Link href="/" className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#7B4A1E] to-[#4E7C45] flex items-center justify-center text-xs font-bold text-white">G</div>
-          <span className="font-bold text-[#1A0F08]">Gavelling</span>
+          <span className="font-bold text-white">Gavelling</span>
         </Link>
       </nav>
 
@@ -165,13 +165,13 @@ function CreatePageInner() {
         <div className="flex-1 flex flex-col overflow-hidden px-8 py-6">
             <div className="flex items-center gap-3 mb-6 shrink-0">
               <span className="text-2xl">✏️</span>
-              <h1 className="text-2xl font-black text-[#1A0F08]">New Committee</h1>
+              <h1 className="text-2xl font-black text-white">New Committee</h1>
             </div>
 
             {/* Name + Topic inline */}
             <div className="grid grid-cols-2 gap-4 mb-5 shrink-0">
               <div>
-                <label className="block text-xs font-semibold text-[#5C3A1E] mb-1.5">Committee Name</label>
+                <label className="block text-xs font-semibold text-[#C4A882] mb-1.5">Committee Name</label>
                 <CommitteeNameInput
                   value={committeeName}
                   onChange={setCommitteeName}
@@ -179,10 +179,10 @@ function CreatePageInner() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-[#5C3A1E] mb-1.5">Topic / Agenda Item</label>
+                <label className="block text-xs font-semibold text-[#C4A882] mb-1.5">Topic / Agenda Item</label>
                 <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)}
                   placeholder="e.g. The right to education"
-                  className="w-full bg-white border border-[#D4B896] rounded-xl px-4 py-3 text-[#1A0F08] placeholder-[#B8A090] focus:outline-none focus:border-[#7B4A1E] transition-colors" />
+                  className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-xl px-4 py-3 text-white placeholder-[#7A5A38] focus:outline-none focus:border-[#7B4A1E] transition-colors" />
               </div>
             </div>
 
@@ -193,28 +193,28 @@ function CreatePageInner() {
               <div className="flex flex-col gap-4 min-h-0">
                 {/* Search */}
                 <div className="shrink-0">
-                  <label className="block text-xs font-semibold text-[#5C3A1E] mb-1.5">Search &amp; Add</label>
+                  <label className="block text-xs font-semibold text-[#C4A882] mb-1.5">Search &amp; Add</label>
                   <div className="relative">
-                    <div className="flex items-center bg-white border border-[#D4B896] focus-within:border-[#7B4A1E] rounded-xl overflow-visible transition-colors">
+                    <div className="flex items-center bg-[#150F09] border border-[#2E1E0F] focus-within:border-[#7B4A1E] rounded-xl overflow-visible transition-colors">
                       <input type="text" value={search} onChange={(e) => setSearch(e.target.value)}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') { e.preventDefault(); const top = available[0]; if (top) { addDelegate(top.name); setSearch(''); } }
                           if (e.key === 'Escape') setSearch('');
                         }}
                         placeholder="Search countries..."
-                        className="flex-1 bg-transparent px-4 py-3 text-[#1A0F08] placeholder-[#B8A090] focus:outline-none text-sm" />
+                        className="flex-1 bg-transparent px-4 py-3 text-white placeholder-[#7A5A38] focus:outline-none text-sm" />
                       {available[0] && search && (
-                        <span className="text-xs text-[#9A7A58] px-3 shrink-0">↵ {available[0].name}</span>
+                        <span className="text-xs text-[#7A5A38] px-3 shrink-0">↵ {available[0].name}</span>
                       )}
                     </div>
                     {search && available.length > 0 && (
-                      <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-[#D4B896] rounded-xl overflow-hidden z-20 shadow-xl">
+                      <div className="absolute top-full left-0 right-0 mt-1 bg-[#150F09] border border-[#2E1E0F] rounded-xl overflow-hidden z-20 shadow-xl">
                         {available.slice(0, 6).map((c, i) => (
                           <button key={c.code} onMouseDown={(e) => { e.preventDefault(); addDelegate(c.name); setSearch(''); }}
-                            className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${i === 0 ? 'bg-[#7B4A1E]/10 text-[#1A0F08]' : 'text-[#1A0F08] hover:bg-[#F5F0E8]'}`}>
+                            className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${i === 0 ? 'bg-[#7B4A1E]/20 text-white' : 'text-[#E8D5B7] hover:bg-[#2E1E0F]'}`}>
                             <span className="text-xl">{getFlagEmoji(c.code)}</span>
                             <span className="text-sm flex-1">{c.name}</span>
-                            {i === 0 && <span className="ml-auto text-xs text-[#9A7A58]">Enter ↵</span>}
+                            {i === 0 && <span className="ml-auto text-xs text-[#7A5A38]">Enter ↵</span>}
                           </button>
                         ))}
                       </div>

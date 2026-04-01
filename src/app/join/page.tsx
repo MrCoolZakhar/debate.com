@@ -62,21 +62,21 @@ export default function JoinPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#FAF7F2] flex flex-col">
-      <nav className="border-b border-[#D4B896] px-6 h-16 flex items-center justify-between bg-white">
+    <div className="min-h-screen bg-[#0D0906] flex flex-col">
+      <nav className="border-b border-[#2E1E0F] px-6 h-16 flex items-center justify-between bg-[#150F09]">
         <Link href="/" className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#7B4A1E] to-[#4E7C45] flex items-center justify-center text-sm font-bold text-white">G</div>
-          <span className="font-bold text-[#1A0F08]">Gavelling</span>
+          <span className="font-bold text-white">Gavelling</span>
         </Link>
-        <Link href="/create" className="text-sm text-[#7B4A1E] hover:text-[#5C3A1E] transition-colors">
+        <Link href="/create" className="text-sm text-[#7B4A1E] hover:text-[#C4A882] transition-colors">
           Chair? Create Committee →
         </Link>
       </nav>
 
       <div className="flex-1 flex items-center justify-center px-6 py-12">
         <div className="w-full max-w-md">
-          <h1 className="text-3xl font-black text-[#1A0F08] mb-2">Join a Session</h1>
-          <p className="text-[#5C3A1E] mb-8">Enter the session code and choose your role.</p>
+          <h1 className="text-3xl font-black text-white mb-2">Join a Session</h1>
+          <p className="text-[#C4A882] mb-8">Enter the session code and choose your role.</p>
 
           {/* Mode tabs */}
           <div className="flex gap-2 mb-8">
@@ -85,7 +85,7 @@ export default function JoinPage() {
                 className={`flex-1 flex flex-col items-center gap-1 py-3 px-2 rounded-xl border transition-all text-center ${
                   mode === t.key
                     ? 'bg-[#2E1E0F] border-[#7B4A1E] text-white'
-                    : 'bg-white border-[#D4B896] text-[#5C3A1E] hover:border-[#7B4A1E]'
+                    : 'bg-[#1A1209] border-[#2E1E0F] text-[#C4A882] hover:border-[#7B4A1E]'
                 }`}>
                 <span className="text-xl">{t.icon}</span>
                 <span className="text-xs font-bold">{t.label}</span>
@@ -95,34 +95,34 @@ export default function JoinPage() {
 
           <div className="space-y-5">
             <div>
-              <label className="block text-sm font-medium text-[#1A0F08] mb-2">Session Code</label>
+              <label className="block text-sm font-medium text-[#E8D5B7] mb-2">Session Code</label>
               <input
                 type="text"
                 value={code}
                 onChange={(e) => handleCodeChange(e.target.value)}
                 placeholder="ABC123"
-                className="w-full bg-white border border-[#D4B896] rounded-lg px-4 py-3 text-[#1A0F08] placeholder-[#B8A090] focus:outline-none focus:border-[#7B4A1E] transition-colors font-mono text-xl tracking-widest text-center uppercase"
+                className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-lg px-4 py-3 text-white placeholder-[#7A5A38] focus:outline-none focus:border-[#7B4A1E] transition-colors font-mono text-xl tracking-widest text-center uppercase"
                 maxLength={6}
               />
               {error && <p className="text-red-400 text-sm mt-2">{error}</p>}
             </div>
 
             {foundCommittee && (
-              <div className="bg-[#7B4A1E]/10 border border-[#D4B896] rounded-xl p-4">
+              <div className="bg-[#7B4A1E]/10 border border-[#2E1E0F] rounded-xl p-4">
                 <div className="text-[#7B4A1E] text-xs font-mono mb-2">COMMITTEE FOUND</div>
-                <div className="text-[#1A0F08] font-bold">{foundCommittee.name}</div>
-                <div className="text-[#5C3A1E] text-sm mt-1">{foundCommittee.topic}</div>
-                <div className="text-[#9A7A58] text-xs mt-2">{foundCommittee.delegates.length} delegates registered</div>
+                <div className="text-white font-bold">{foundCommittee.name}</div>
+                <div className="text-[#C4A882] text-sm mt-1">{foundCommittee.topic}</div>
+                <div className="text-[#7A5A38] text-xs mt-2">{foundCommittee.delegates.length} delegates registered</div>
               </div>
             )}
 
             {foundCommittee && mode === 'delegate' && (
               <div>
-                <label className="block text-sm font-medium text-[#1A0F08] mb-2">Your Country / Delegation</label>
+                <label className="block text-sm font-medium text-[#E8D5B7] mb-2">Your Country / Delegation</label>
                 <select
                   value={country}
                   onChange={(e) => setCountry(e.target.value)}
-                  className="w-full bg-white border border-[#D4B896] rounded-lg px-4 py-3 text-[#1A0F08] focus:outline-none focus:border-[#7B4A1E] transition-colors"
+                  className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-lg px-4 py-3 text-white focus:outline-none focus:border-[#7B4A1E] transition-colors"
                 >
                   <option value="">Select your country...</option>
                   {foundCommittee.delegates.map((d) => (
@@ -141,9 +141,9 @@ export default function JoinPage() {
             </button>
           </div>
 
-          <p className="text-center text-[#9A7A58] text-sm mt-8">
+          <p className="text-center text-[#7A5A38] text-sm mt-8">
             Are you a chair?{' '}
-            <Link href="/create" className="text-[#7B4A1E] hover:text-[#5C3A1E]">
+            <Link href="/create" className="text-[#7B4A1E] hover:text-[#C4A882]">
               Create a committee instead
             </Link>
           </p>
