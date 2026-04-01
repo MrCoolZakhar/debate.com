@@ -28,7 +28,7 @@ export default function DelegateSession({ params }: { params: Promise<{ code: st
 
   if (!committee) {
     return (
-      <div className="min-h-screen bg-[#0a0e1a] flex items-center justify-center">
+      <div className="min-h-screen bg-[#FAF7F2] flex items-center justify-center">
         <div className="text-center">
           <div className="text-4xl mb-4">🔍</div>
           <h1 className="text-2xl font-bold text-white mb-2">Session not found</h1>
@@ -57,7 +57,7 @@ export default function DelegateSession({ params }: { params: Promise<{ code: st
   };
 
   return (
-    <div className="min-h-screen bg-[#0a0e1a] flex flex-col">
+    <div className="min-h-screen bg-[#FAF7F2] flex flex-col">
       {/* Header */}
       <header className="border-b border-[#1e2540] bg-[#0d1120] px-4 h-14 flex items-center gap-3">
         <Link href="/" className="flex items-center gap-2">

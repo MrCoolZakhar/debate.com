@@ -62,21 +62,21 @@ export default function JoinPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#0D0906] flex flex-col">
-      <nav className="border-b border-[#2E1E0F] px-6 h-16 flex items-center justify-between">
+    <div className="min-h-screen bg-[#FAF7F2] flex flex-col">
+      <nav className="border-b border-[#D4B896] px-6 h-16 flex items-center justify-between bg-white">
         <Link href="/" className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#7B4A1E] to-[#4E7C45] flex items-center justify-center text-sm font-bold text-white">G</div>
-          <span className="font-bold text-white">Gavelling</span>
+          <span className="font-bold text-[#1A0F08]">Gavelling</span>
         </Link>
-        <Link href="/create" className="text-sm text-[#B8844A] hover:text-[#E8C49A] transition-colors">
+        <Link href="/create" className="text-sm text-[#7B4A1E] hover:text-[#5C3A1E] transition-colors">
           Chair? Create Committee →
         </Link>
       </nav>
 
       <div className="flex-1 flex items-center justify-center px-6 py-12">
         <div className="w-full max-w-md">
-          <h1 className="text-3xl font-black text-white mb-2">Join a Session</h1>
-          <p className="text-[#C4A882] mb-8">Enter the session code and choose your role.</p>
+          <h1 className="text-3xl font-black text-[#1A0F08] mb-2">Join a Session</h1>
+          <p className="text-[#5C3A1E] mb-8">Enter the session code and choose your role.</p>
 
           {/* Mode tabs */}
           <div className="flex gap-2 mb-8">

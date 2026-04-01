@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useRef, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useCommitteeStore } from '@/lib/store';
 import { UN_COUNTRIES, getFlagEmoji, getCountryByName } from '@/lib/countries';
-import { PRESETS, CommitteePreset, UNSC_MEMBERS } from '@/lib/presets';
+import { UNSC_MEMBERS } from '@/lib/presets';
 
 // ── Committee presets for the autocomplete ────────────────────────────────────
 const COMMITTEE_PRESETS = [
@@ -98,14 +98,8 @@ function CommitteeNameInput({
 
 function CreatePageInner() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const createCommittee = useCommitteeStore((s) => s.createCommittee);
 
-  // If ?mode=custom is set, go directly to custom
-  const initialStep = searchParams?.get('mode') === 'custom' ? 'custom' : 'preset';
-
-  const [step, setStep] = useState<'preset' | 'details' | 'custom'>(initialStep as 'preset' | 'details' | 'custom');
-  const [selectedPreset, setSelectedPreset] = useState<CommitteePreset | null>(null);
   const [committeeName, setCommitteeName] = useState('');
   const [topic, setTopic] = useState('');
   const [delegates, setDelegates] = useState<string[]>([]);
@@ -113,21 +107,9 @@ function CreatePageInner() {
   const [pasteText, setPasteText] = useState('');
   const [pasteError, setPasteError] = useState('');
 
-  const selectPreset = (preset: CommitteePreset) => {
-    setSelectedPreset(preset);
-    setCommitteeName(preset.defaultName);
-    if (preset.members === null) {
-      setDelegates([]);
-      setStep('custom');
-    } else {
-      setDelegates(preset.members);
-      setStep('details');
-    }
-  };
-
-  const handleCreate = (delegateList = delegates) => {
+  const handleCreate = () => {
     if (!committeeName.trim() || !topic.trim()) return;
-    const code = createCommittee(committeeName.trim(), topic.trim(), ['Chair'], delegateList);
+    const code = createCommittee(committeeName.trim(), topic.trim(), ['Chair'], delegates);
     router.push(`/chair/${code}`);
   };
 
@@ -169,81 +151,21 @@ function CreatePageInner() {
   };
 
   return (
-    <div className="h-screen bg-[#0D0906] flex flex-col overflow-hidden">
-      <nav className="border-b border-[#2E1E0F] px-6 h-14 flex items-center justify-between shrink-0">
+    <div className="h-screen bg-[#FAF7F2] flex flex-col overflow-hidden">
+      <nav className="border-b border-[#D4B896] bg-white px-6 h-14 flex items-center justify-between shrink-0">
         <Link href="/" className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#7B4A1E] to-[#4E7C45] flex items-center justify-center text-xs font-bold text-white">G</div>
-          <span className="font-bold text-white">Gavelling</span>
+          <span className="font-bold text-[#1A0F08]">Gavelling</span>
         </Link>
       </nav>
 
       <div className="flex-1 flex overflow-hidden">
 
-        {/* ── Preset selection ── */}
-        {step === 'preset' && (
-          <div className="flex-1 flex items-center justify-center px-6">
-            <div className="w-full max-w-lg">
-              <h1 className="text-3xl font-black text-white mb-2">New Committee</h1>
-              <p className="text-[#C4A882] mb-8">Choose a committee type to get started.</p>
-              <div className="space-y-3">
-                {PRESETS.map((preset) => (
-                  <button key={preset.id} onClick={() => selectPreset(preset)}
-                    className="w-full flex items-center gap-5 bg-[#150F09] hover:bg-[#1A1209] border border-[#2E1E0F] hover:border-[#7B4A1E]/40 rounded-2xl p-5 text-left transition-all group">
-                    <span className="text-4xl">{preset.icon}</span>
-                    <div className="flex-1">
-                      <div className="text-lg font-bold text-white group-hover:text-[#E8C49A] transition-colors">{preset.label}</div>
-                      <div className="text-sm text-[#C4A882] mt-0.5">{preset.subtitle}</div>
-                    </div>
-                    <span className="text-[#7A5A38] group-hover:text-white transition-colors text-xl">→</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ── Details (UNSC / GA — presets with fixed members) ── */}
-        {step === 'details' && (
-          <div className="flex-1 flex items-center justify-center px-6">
-            <div className="w-full max-w-lg">
-              <button onClick={() => setStep('preset')} className="text-sm text-[#C4A882] hover:text-white transition-colors mb-6 flex items-center gap-1">← Back</button>
-              <div className="flex items-center gap-3 mb-8">
-                <span className="text-3xl">{selectedPreset?.icon}</span>
-                <div>
-                  <h1 className="text-2xl font-black text-white">Committee Details</h1>
-                  <p className="text-[#C4A882] text-sm">{selectedPreset?.label} · {delegates.length} delegates</p>
-                </div>
-              </div>
-              <div className="space-y-5">
-                <div>
-                  <label className="block text-sm font-medium text-[#E8D5B7] mb-2">Committee Name</label>
-                  <input type="text" value={committeeName} onChange={(e) => setCommitteeName(e.target.value)}
-                    placeholder="e.g. UN Security Council"
-                    className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-xl px-4 py-3 text-white placeholder-[#7A5A38] focus:outline-none focus:border-[#7B4A1E] transition-colors" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[#E8D5B7] mb-2">Topic / Agenda Item</label>
-                  <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)}
-                    placeholder="e.g. The situation in the Middle East"
-                    className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-xl px-4 py-3 text-white placeholder-[#7A5A38] focus:outline-none focus:border-[#7B4A1E] transition-colors" />
-                </div>
-                <button onClick={() => handleCreate()} disabled={!canProceed}
-                  className="w-full bg-[#3D6B35] hover:bg-[#4A7C42] disabled:bg-[#2E1E0F] disabled:text-[#7A5A38] text-white py-3.5 rounded-xl font-bold transition-colors">
-                  Launch with {delegates.length} delegates →
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* ── Custom: full-screen single-page layout ── */}
-        {step === 'custom' && (
-          <div className="flex-1 flex flex-col overflow-hidden px-8 py-6">
+        <div className="flex-1 flex flex-col overflow-hidden px-8 py-6">
             <div className="flex items-center gap-3 mb-6 shrink-0">
-              <button onClick={() => setStep('preset')} className="text-sm text-[#C4A882] hover:text-white transition-colors flex items-center gap-1">← Back</button>
-              <span className="text-[#3D2A15]">|</span>
               <span className="text-2xl">✏️</span>
-              <h1 className="text-2xl font-black text-white">Custom Committee</h1>
+              <h1 className="text-2xl font-black text-[#1A0F08]">New Committee</h1>
             </div>
 
             {/* Name + Topic inline */}
@@ -375,15 +297,15 @@ function CreatePageInner() {
               </div>
             </div>
           </div>
-        )}
+        </div>
       </div>
-    </div>
   );
 }
 
 export default function CreatePage() {
+
   return (
-    <Suspense fallback={<div className="h-screen bg-[#0D0906] flex items-center justify-center"><span className="text-[#C4A882]">Loading...</span></div>}>
+    <Suspense fallback={<div className="h-screen bg-[#FAF7F2] flex items-center justify-center"><span className="text-[#7A5A38]">Loading...</span></div>}>
       <CreatePageInner />
     </Suspense>
   );

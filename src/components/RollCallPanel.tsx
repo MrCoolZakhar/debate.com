@@ -46,10 +46,10 @@ function StatusSlider({ status, onCycle }: { status: DelegateStatus; onCycle: ()
       className="relative w-[76px] h-[26px] rounded-full bg-[#1A1209] border border-[#2E1E0F] cursor-pointer shrink-0 select-none"
       title="Tap to cycle: Absent → Present → PV"
     >
-      <div className="absolute inset-0 flex items-center justify-around px-1 pointer-events-none">
-        <span className={`text-[10px] font-bold z-10 ${status === 'absent' ? 'text-white' : 'text-[#7A5A38]'}`}>A</span>
-        <span className={`text-[10px] font-bold z-10 ${status === 'present' ? 'text-white' : 'text-[#7A5A38]'}`}>P</span>
-        <span className={`text-[10px] font-bold z-10 ${status === 'present-voting' ? 'text-white' : 'text-[#7A5A38]'}`}>PV</span>
+      <div className="absolute inset-0 grid grid-cols-3 items-center pointer-events-none">
+        <span className={`text-[10px] font-bold text-center ${status === 'absent' ? 'text-white' : 'text-[#7A5A38]'}`}>A</span>
+        <span className={`text-[10px] font-bold text-center ${status === 'present' ? 'text-white' : 'text-[#7A5A38]'}`}>P</span>
+        <span className={`text-[10px] font-bold text-center ${status === 'present-voting' ? 'text-white' : 'text-[#7A5A38]'}`}>PV</span>
       </div>
       <div className={`absolute top-[3px] w-[22px] h-[20px] rounded-full transition-all duration-200 ${thumbPos} ${thumbColor}`} />
     </button>

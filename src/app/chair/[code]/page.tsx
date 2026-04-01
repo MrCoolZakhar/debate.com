@@ -319,9 +319,9 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
 
   if (!committee) {
     return (
-      <div className="min-h-screen bg-[#0D0906] flex items-center justify-center">
+      <div className="min-h-screen bg-[#FAF7F2] flex items-center justify-center">
         <div className="text-center">
-          <p className="text-white text-xl font-bold mb-4">Committee not found</p>
+          <p className="text-[#1A0F08] text-xl font-bold mb-4">Committee not found</p>
           <Link href="/create" className="bg-[#7B4A1E] text-white px-6 py-3 rounded-xl font-semibold">Create one</Link>
         </div>
       </div>
@@ -332,7 +332,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
   const progress = committee.currentSpeaker ? (committee.speakerTimeRemaining / committee.speakerTimeLimit) * 100 : 100;
 
   return (
-    <div className="h-screen bg-[#0D0906] flex flex-col overflow-hidden">
+    <div className="h-screen bg-[#FAF7F2] flex flex-col overflow-hidden">
       {/* Slim header */}
       <header className="border-b border-[#2E1E0F] bg-[#150F08] px-4 h-11 flex items-center gap-3 shrink-0">
         <Link href="/">

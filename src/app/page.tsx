@@ -56,7 +56,7 @@ export default function LandingPage() {
             href="/join"
             className="border border-[#D4B896] hover:border-[#7B4A1E] text-[#5C3A1E] hover:text-[#1A0F08] px-8 py-4 rounded-xl font-semibold text-lg transition-colors inline-flex items-center justify-center"
           >
-            Join as Delegate
+            Join Session
           </Link>
         </div>
       </section>
