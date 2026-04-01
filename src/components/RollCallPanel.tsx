@@ -1,0 +1,227 @@
+'use client';
+
+import { useRef, useState } from 'react';
+import { Committee, DelegateStatus } from '@/lib/types';
+import { useCommitteeStore } from '@/lib/store';
+import { getFlagEmoji, getCountryByName, UN_COUNTRIES } from '@/lib/countries';
+
+// ── FlagCircle (fixed: no top-clipping) ──────────────────────────────────────
+export function FlagCircle({ country, size = 'md' }: { country: string; size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' }) {
+  const found = getCountryByName(country);
+  const flag = found ? getFlagEmoji(found.code) : '🌐';
+  const dim: Record<string, { box: string; font: string }> = {
+    xs: { box: 'w-7 h-7',   font: '1.6rem' },
+    sm: { box: 'w-10 h-10', font: '2.2rem' },
+    md: { box: 'w-12 h-12', font: '2.8rem' },
+    lg: { box: 'w-20 h-20', font: '4.5rem' },
+    xl: { box: 'w-32 h-32', font: '7rem'   },
+  };
+  const { box, font } = dim[size];
+  return (
+    <div className={`relative ${box} rounded-full overflow-hidden bg-[#1a2035] shrink-0`}>
+      <span style={{
+        fontSize: font,
+        lineHeight: '1',
+        position: 'absolute',
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%)',
+        display: 'block',
+      }}>
+        {flag}
+      </span>
+    </div>
+  );
+}
+
+
+// ── Add-country autocomplete input ────────────────────────────────────────────
+function AddCountryInput({ committee }: { committee: Committee }) {
+  const { addDelegate } = useCommitteeStore();
+  const [query, setQuery] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+  const existingNames = new Set(committee.delegates.map((d) => d.country.toLowerCase()));
+
+  // All UN countries matching query — startsWith first, then includes
+  const allMatches = query.trim()
+    ? UN_COUNTRIES.filter((c) => c.name.toLowerCase().startsWith(query.toLowerCase()))
+        .concat(UN_COUNTRIES.filter((c) => !c.name.toLowerCase().startsWith(query.toLowerCase()) && c.name.toLowerCase().includes(query.toLowerCase())))
+    : [];
+  const top = allMatches.find((c) => !existingNames.has(c.name.toLowerCase())) ?? allMatches[0] ?? null;
+
+  const commit = (name: string) => {
+    if (!existingNames.has(name.toLowerCase())) {
+      addDelegate(committee.id, name);
+    }
+    setQuery('');
+    inputRef.current?.focus();
+  };
+
+  return (
+    <div className="relative">
+      <div className="flex items-center bg-[#0d1120] border border-[#1e2540] focus-within:border-blue-600 rounded-xl overflow-hidden transition-colors">
+        <input
+          ref={inputRef}
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && top) { e.preventDefault(); commit(top.name); }
+            if (e.key === 'Escape') setQuery('');
+          }}
+          placeholder="Add country…"
+          className="flex-1 bg-transparent px-3 py-2.5 text-white text-sm placeholder-[#4a5580] focus:outline-none"
+        />
+        {top && query && !existingNames.has(top.name.toLowerCase()) && (
+          <span className="text-[10px] text-[#4a5580] px-2 truncate max-w-[80px]">↵ {top.name}</span>
+        )}
+      </div>
+      {query && allMatches.length > 0 && (
+        <div className="absolute bottom-full left-0 right-0 mb-1 bg-[#0d1120] border border-[#1e2540] rounded-xl overflow-hidden z-30 shadow-xl max-h-52 overflow-y-auto">
+          {allMatches.slice(0, 8).map((c, i) => {
+            const alreadyAdded = existingNames.has(c.name.toLowerCase());
+            return (
+              <button
+                key={c.code}
+                onMouseDown={(e) => { e.preventDefault(); if (!alreadyAdded) commit(c.name); }}
+                disabled={alreadyAdded}
+                className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-left transition-colors ${
+                  alreadyAdded
+                    ? 'opacity-50 cursor-default bg-[#0f1526]'
+                    : i === 0
+                    ? 'bg-blue-900/30 text-white'
+                    : 'text-[#c0c8d8] hover:bg-[#1e2540]'
+                }`}
+              >
+                <span className="text-base">{getFlagEmoji(c.code)}</span>
+                <span className="text-sm flex-1">{c.name}</span>
+                {alreadyAdded
+                  ? <span className="text-[10px] text-yellow-500 shrink-0">Already on GSL</span>
+                  : i === 0
+                  ? <span className="text-[10px] text-[#4a5580] shrink-0">Enter ↵</span>
+                  : null}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Roll Call Panel ───────────────────────────────────────────────────────────
+export default function RollCallPanel({ committee }: { committee: Committee }) {
+  const { setDelegateStatus, setPhase } = useCommitteeStore();
+  const [search, setSearch] = useState('');
+
+  const present = committee.delegates.filter((d) => d.status !== 'absent').length;
+  const total = committee.delegates.length;
+  const quorum = Math.ceil(total / 2) + 1;
+  const hasQuorum = present >= quorum;
+
+  // Always alphabetical
+  const sorted = [...committee.delegates].sort((a, b) => a.country.localeCompare(b.country));
+  const filtered = sorted.filter((d) =>
+    d.country.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const cycleStatus = (id: string, current: DelegateStatus) => {
+    const next: DelegateStatus =
+      current === 'absent' ? 'present' : current === 'present' ? 'present-voting' : 'absent';
+    setDelegateStatus(committee.id, id, next);
+  };
+
+  return (
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* Header */}
+      <div className="px-4 pt-4 pb-3 border-b border-[#1e2540] shrink-0">
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-sm font-bold text-white">Roll Call</span>
+          <div className="flex gap-3">
+            <button
+              onClick={() => committee.delegates.forEach((d) => setDelegateStatus(committee.id, d.id, 'present'))}
+              className="text-xs text-[#8892aa] hover:text-green-400 transition-colors"
+            >
+              All Present
+            </button>
+            <button
+              onClick={() => committee.delegates.forEach((d) => setDelegateStatus(committee.id, d.id, 'absent'))}
+              className="text-xs text-[#8892aa] hover:text-red-400 transition-colors"
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between mb-2">
+          <span className={`text-base font-bold ${hasQuorum ? 'text-green-400' : 'text-yellow-400'}`}>
+            {present} / {total} present
+          </span>
+          <span className="text-xs text-[#4a5580]">
+            {hasQuorum ? '✓ Quorum' : `Need ${quorum - present} more`}
+          </span>
+        </div>
+        <div className="h-1.5 bg-[#1a1f2e] rounded-full overflow-hidden mb-3">
+          <div
+            className={`h-full rounded-full transition-all ${hasQuorum ? 'bg-green-500' : 'bg-yellow-500'}`}
+            style={{ width: total > 0 ? `${(present / total) * 100}%` : '0%' }}
+          />
+        </div>
+
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Filter…"
+          className="w-full bg-[#141929] border border-[#1e2540] rounded-lg px-3 py-2 text-white text-sm placeholder-[#4a5580] focus:outline-none focus:border-blue-600"
+        />
+      </div>
+
+      {/* Delegate list — scrolls independently */}
+      <div className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
+        {filtered.map((d) => (
+          <div
+            key={d.id}
+            onClick={() => cycleStatus(d.id, d.status)}
+            className={`flex items-center gap-2 px-2.5 py-2 rounded-xl transition-all cursor-pointer ${
+              d.status === 'present'
+                ? 'bg-green-950/40 border border-green-800/30 hover:bg-green-950/60'
+                : d.status === 'present-voting'
+                ? 'bg-blue-950/40 border border-blue-800/30 hover:bg-blue-950/60'
+                : 'border border-transparent hover:bg-[#141929]'
+            }`}
+          >
+            <FlagCircle country={d.country} size="xs" />
+            <span className={`flex-1 text-sm truncate ${d.status !== 'absent' ? 'text-white font-medium' : 'text-[#8892aa]'}`}>
+              {d.country}
+            </span>
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
+              d.status === 'present'
+                ? 'bg-green-700/50 text-green-300 border border-green-700/40'
+                : d.status === 'present-voting'
+                ? 'bg-blue-700/50 text-blue-300 border border-blue-700/40'
+                : 'bg-[#1e2540] text-[#4a5580] border border-[#2a3050]'
+            }`}>
+              {d.status === 'present' ? 'P' : d.status === 'present-voting' ? 'PV' : 'A'}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {/* Footer */}
+      <div className="border-t border-[#1e2540] px-3 py-3 space-y-2 shrink-0">
+        <AddCountryInput committee={committee} />
+
+        {(committee.phase === 'pre-session' || committee.phase === 'roll-call') && (
+          <button
+            onClick={() => setPhase(committee.id, 'speakers-list')}
+            disabled={!hasQuorum}
+            className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-[#1e2540] disabled:text-[#3a4060] text-white py-3 rounded-xl text-sm font-bold transition-colors"
+          >
+            {hasQuorum ? 'Begin Session →' : `Need ${quorum - present} more for quorum`}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
