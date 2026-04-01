@@ -285,6 +285,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
   const [showRollCall, setShowRollCall] = useState(true); // open by default for roll call
   const [showMotions, setShowMotions] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showRollCallIntro, setShowRollCallIntro] = useState(true);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -530,6 +531,33 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
       {/* Motions modal overlay */}
       {showMotions && (
         <MotionsModal committee={committee} onClose={() => setShowMotions(false)} />
+      )}
+
+      {/* Roll call intro popup — shown on first open during pre-session */}
+      {showRollCallIntro && showRollCall && (committee.phase === 'pre-session' || committee.phase === 'roll-call') && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(5, 8, 20, 0.80)', backdropFilter: 'blur(4px)' }}
+        >
+          <div className="bg-[#0f1526] border border-[#1e2540] rounded-3xl w-full max-w-md shadow-2xl p-8 text-center">
+            <div className="text-5xl mb-4">📋</div>
+            <h2 className="text-2xl font-black text-white mb-3">Welcome to Roll Call</h2>
+            <p className="text-[#8892aa] mb-2 leading-relaxed">
+              Use the sidebar to mark each delegate as <span className="text-green-400 font-semibold">Present (P)</span>, <span className="text-blue-400 font-semibold">Present &amp; Voting (PV)</span>, or <span className="text-[#8892aa] font-semibold">Absent (A)</span>.
+            </p>
+            <p className="text-[#8892aa] mb-6 text-sm leading-relaxed">
+              Tap the slider next to each country's flag to cycle through statuses. Once quorum is reached you can begin the session.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowRollCallIntro(false)}
+                className="flex-1 bg-blue-600 hover:bg-blue-500 text-white py-3.5 rounded-xl font-bold transition-colors"
+              >
+                Got it, let's start →
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

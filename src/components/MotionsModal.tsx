@@ -415,6 +415,91 @@ function SpeakerListBuilder({
   );
 }
 
+// ── Inline motion editor ──────────────────────────────────────────────────────
+function MotionEditor({ committee, motion, onDone }: { committee: Committee; motion: PendingMotion; onDone: () => void }) {
+  const { updatePendingMotion } = useCommitteeStore();
+  const [totalMins, setTotalMins] = useState(Math.floor(motion.totalTime / 60));
+  const [totalSecs, setTotalSecs] = useState(motion.totalTime % 60);
+  const [speakingTime, setSpeakingTime] = useState(motion.speakingTime || 60);
+  const [topic, setTopic] = useState(motion.topic || '');
+  const presentCountries = committee.delegates.filter((d) => d.status !== 'absent').map((d) => d.country);
+  const [proposer, setProposer] = useState(motion.proposedBy);
+
+  const save = () => {
+    const totalTime = totalMins * 60 + totalSecs;
+    updatePendingMotion(committee.id, motion.id, {
+      totalTime,
+      speakingTime: motion.type === 'moderated' ? speakingTime : motion.speakingTime,
+      topic,
+      proposedBy: proposer,
+    });
+    onDone();
+  };
+
+  return (
+    <div className="mt-3 pt-3 border-t border-[#1e2540] space-y-3">
+      <p className="text-xs font-semibold text-[#8892aa] font-mono">EDIT MOTION</p>
+
+      {/* Proposer */}
+      <div>
+        <label className="block text-xs text-[#8892aa] mb-1">Proposed by</label>
+        <ProposerInput candidates={presentCountries} value={proposer} onChange={setProposer} />
+      </div>
+
+      {/* Total time */}
+      {motion.type !== 'tour' && (
+        <div>
+          <label className="block text-xs text-[#8892aa] mb-1">Total time</label>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 bg-[#0f1526] border border-[#1e2540] rounded-lg px-2.5 py-2">
+              <input type="number" min={0} value={totalMins} onChange={(e) => setTotalMins(parseInt(e.target.value) || 0)}
+                className="w-10 bg-transparent text-white text-sm font-bold text-center focus:outline-none" />
+              <span className="text-[#4a5580] text-xs">min</span>
+            </div>
+            <div className="flex items-center gap-1.5 bg-[#0f1526] border border-[#1e2540] rounded-lg px-2.5 py-2">
+              <input type="number" min={0} max={59} value={totalSecs} onChange={(e) => setTotalSecs(Math.min(59, parseInt(e.target.value) || 0))}
+                className="w-10 bg-transparent text-white text-sm font-bold text-center focus:outline-none" />
+              <span className="text-[#4a5580] text-xs">sec</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Speaking time */}
+      {motion.type === 'moderated' && (
+        <div>
+          <label className="block text-xs text-[#8892aa] mb-1">Speaking time / delegate</label>
+          <div className="flex items-center gap-1.5 bg-[#0f1526] border border-[#1e2540] rounded-lg px-2.5 py-2 w-fit">
+            <input type="number" min={0} value={speakingTime} onChange={(e) => setSpeakingTime(parseInt(e.target.value) || 0)}
+              className="w-12 bg-transparent text-white text-sm font-bold text-center focus:outline-none" />
+            <span className="text-[#4a5580] text-xs">sec</span>
+          </div>
+        </div>
+      )}
+
+      {/* Topic */}
+      {(motion.type === 'moderated' || motion.type === 'unmoderated') && (
+        <div>
+          <label className="block text-xs text-[#8892aa] mb-1">
+            Topic {motion.type === 'moderated' && <span className="text-red-400">*</span>}
+          </label>
+          <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)}
+            className="w-full bg-[#0f1526] border border-[#1e2540] rounded-lg px-3 py-2 text-white text-sm placeholder-[#4a5580] focus:outline-none focus:border-blue-600" />
+        </div>
+      )}
+
+      <div className="flex gap-2">
+        <button onClick={save} className="flex-1 bg-blue-600 hover:bg-blue-500 text-white py-2 rounded-lg font-bold text-sm transition-colors">
+          Save
+        </button>
+        <button onClick={onDone} className="px-4 py-2 bg-[#0f1526] hover:bg-[#1e2540] text-[#8892aa] rounded-lg text-sm transition-colors">
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Voting view — all motions at once ──────────────────────────────────────────
 function VotingView({
   committee,
@@ -425,7 +510,8 @@ function VotingView({
   onAccepted: (motion: PendingMotion) => void;
   onAllDone: () => void;
 }) {
-  const { enactPendingMotion, removePendingMotion } = useCommitteeStore();
+  const { removePendingMotion } = useCommitteeStore();
+  const [editingId, setEditingId] = useState<string | null>(null);
   const sorted = [...(committee.pendingMotions ?? [])].sort((a, b) => b.disruptiveness - a.disruptiveness);
   const present = committee.delegates.filter((d) => d.status !== 'absent').length;
 
@@ -451,6 +537,7 @@ function VotingView({
           const { needed, fraction } = requiredVotes(m.type, present);
           const mins = Math.floor(m.totalTime / 60);
           const secs = m.totalTime % 60;
+          const isEditing = editingId === m.id;
           return (
             <div key={m.id} className="bg-[#141929] border border-[#1e2540] rounded-2xl p-4 space-y-3">
               <div className="flex items-start gap-3">
@@ -469,29 +556,48 @@ function VotingView({
                   {m.topic && <div className="text-xs text-blue-300 mt-0.5">"{m.topic}"</div>}
                   <div className="text-xs text-[#8892aa] mt-0.5">By <span className="text-white">{m.proposedBy}</span></div>
                 </div>
+                {/* Edit button */}
+                <button
+                  onClick={() => setEditingId(isEditing ? null : m.id)}
+                  className={`p-1.5 rounded-lg transition-colors shrink-0 ${isEditing ? 'bg-blue-700/40 text-blue-300' : 'text-[#4a5580] hover:text-white hover:bg-[#1e2540]'}`}
+                  title="Edit motion"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                  </svg>
+                </button>
               </div>
+
+              {/* Inline editor */}
+              {isEditing && (
+                <MotionEditor committee={committee} motion={m} onDone={() => setEditingId(null)} />
+              )}
 
               {/* Quorum info */}
-              <div className="flex items-center gap-2 bg-[#0f1526] rounded-xl px-3 py-2">
-                <span className="text-xs text-[#4a5580]">{fraction}</span>
-                <span className="text-xs text-white font-bold ml-auto">Needs {needed} of {present} votes</span>
-              </div>
+              {!isEditing && (
+                <>
+                  <div className="flex items-center gap-2 bg-[#0f1526] rounded-xl px-3 py-2">
+                    <span className="text-xs text-[#4a5580]">{fraction}</span>
+                    <span className="text-xs text-white font-bold ml-auto">Needs {needed} of {present} votes</span>
+                  </div>
 
-              {/* Accept / Reject */}
-              <div className="flex gap-2">
-                <button
-                  onClick={() => onAccepted(m)}
-                  className="flex-1 bg-green-700 hover:bg-green-600 text-white py-2.5 rounded-xl font-bold text-sm transition-colors"
-                >
-                  ✓ Accept
-                </button>
-                <button
-                  onClick={() => removePendingMotion(committee.id, m.id)}
-                  className="flex-1 bg-[#1e2540] hover:bg-red-900/40 hover:text-red-400 text-[#8892aa] py-2.5 rounded-xl font-bold text-sm transition-colors"
-                >
-                  ✗ Reject
-                </button>
-              </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => onAccepted(m)}
+                      className="flex-1 bg-green-700 hover:bg-green-600 text-white py-2.5 rounded-xl font-bold text-sm transition-colors"
+                    >
+                      ✓ Accept
+                    </button>
+                    <button
+                      onClick={() => removePendingMotion(committee.id, m.id)}
+                      className="flex-1 bg-[#1e2540] hover:bg-red-900/40 hover:text-red-400 text-[#8892aa] py-2.5 rounded-xl font-bold text-sm transition-colors"
+                    >
+                      ✗ Reject
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           );
         })}
