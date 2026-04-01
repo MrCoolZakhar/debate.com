@@ -539,27 +539,46 @@ function VotingView({
           const secs = m.totalTime % 60;
           const isEditing = editingId === m.id;
           return (
-            <div key={m.id} className="bg-[#F5F0E8] border border-[#D4B896] rounded-2xl p-4 space-y-3">
-              <div className="flex items-start gap-3">
-                <span className="text-3xl">{meta.icon}</span>
+            <div key={m.id} className="bg-[#F5F0E8] border border-[#D4B896] rounded-2xl p-5 space-y-4">
+              <div className="flex items-start gap-4">
+                <span className="text-4xl">{meta.icon}</span>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-base font-bold text-[#1A0F08]">{meta.label}</span>
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                    <span className="text-lg font-black text-[#1A0F08]">{meta.label}</span>
                     <DisruptivenessBadge type={m.type} />
                   </div>
-                  {m.type !== 'tour' && (
-                    <div className="text-xs text-[#5C3A1E] mt-0.5">
-                      {mins > 0 ? `${mins}m ` : ''}{secs > 0 ? `${secs}s` : ''}
-                      {m.type === 'moderated' && <> · {m.speakingTime}s/speaker</>}
+                  {/* Proposer with flag */}
+                  {(() => { const f = getCountryByName(m.proposedBy); return (
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-xl">{f ? getFlagEmoji(f.code) : '🌐'}</span>
+                      <span className="text-sm font-semibold text-[#1A0F08]">{m.proposedBy}</span>
+                    </div>
+                  ); })()}
+                  {/* Topic — prominent */}
+                  {m.topic && (
+                    <div className="mt-2 px-3 py-1.5 bg-white border border-[#D4B896] rounded-lg">
+                      <span className="text-xs font-mono text-[#9A7A58] uppercase tracking-wide">Topic</span>
+                      <p className="text-sm font-semibold text-[#1A0F08] mt-0.5">"{m.topic}"</p>
                     </div>
                   )}
-                  {m.topic && <div className="text-xs text-blue-600 mt-0.5">"{m.topic}"</div>}
-                  <div className="text-xs text-[#5C3A1E] mt-0.5">By <span className="text-[#1A0F08]">{m.proposedBy}</span></div>
+                  {/* Times — prominent */}
+                  {m.type !== 'tour' && (
+                    <div className="flex items-center gap-3 mt-2">
+                      <div className="px-3 py-1 bg-white border border-[#D4B896] rounded-lg text-sm font-bold text-[#7B4A1E]">
+                        {mins > 0 ? `${mins}m` : ''}{secs > 0 ? ` ${secs}s` : ''} total
+                      </div>
+                      {m.type === 'moderated' && (
+                        <div className="px-3 py-1 bg-white border border-[#D4B896] rounded-lg text-sm font-bold text-[#3D6B35]">
+                          {m.speakingTime}s / speaker
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
                 {/* Edit button */}
                 <button
                   onClick={() => setEditingId(isEditing ? null : m.id)}
-                  className={`p-1.5 rounded-lg transition-colors shrink-0 ${isEditing ? 'bg-[#7B4A1E]/40 text-[#E8C49A]' : 'text-[#7A5A38] hover:text-white hover:bg-[#2E1E0F]'}`}
+                  className={`p-1.5 rounded-lg transition-colors shrink-0 ${isEditing ? 'bg-[#7B4A1E]/20 text-[#7B4A1E]' : 'text-[#9A7A58] hover:text-[#1A0F08] hover:bg-[#E8DDD0]'}`}
                   title="Edit motion"
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -577,7 +596,7 @@ function VotingView({
               {/* Quorum info */}
               {!isEditing && (
                 <>
-                  <div className="flex items-center gap-2 bg-[#F5F0E8] rounded-xl px-3 py-2">
+                  <div className="flex items-center gap-2 bg-white border border-[#D4B896] rounded-xl px-3 py-2">
                     <span className="text-xs text-[#9A7A58]">{fraction}</span>
                     <span className="text-xs text-[#1A0F08] font-bold ml-auto">Needs {needed} of {present} votes</span>
                   </div>
@@ -629,7 +648,7 @@ export default function MotionsModal({ committee, onClose }: { committee: Commit
       style={{ background: 'rgba(5, 8, 20, 0.88)', backdropFilter: 'blur(4px)' }}
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="bg-white border border-[#D4B896] rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
+      <div className="bg-white border border-[#D4B896] rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-end px-7 pt-6 pb-0 shrink-0">
           <button onClick={onClose} className="text-[#9A7A58] hover:text-[#1A0F08] transition-colors text-xl leading-none">✕</button>
@@ -665,22 +684,40 @@ export default function MotionsModal({ committee, onClose }: { committee: Commit
                     const meta = TYPE_META[m.type];
                     const mins = Math.floor(m.totalTime / 60);
                     const secs = m.totalTime % 60;
+                    const proposerFlag = getCountryByName(m.proposedBy);
                     return (
-                      <div key={m.id} className="flex items-center gap-3 bg-[#F5F0E8] border border-[#D4B896] rounded-xl px-4 py-3">
-                        <span className="text-xs text-[#9A7A58] font-mono w-4">{i + 1}</span>
-                        <span className="text-2xl">{meta.icon}</span>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-sm font-bold text-[#1A0F08]">{meta.label}</div>
-                          <div className="text-xs text-[#5C3A1E] truncate">
-                            {m.proposedBy}
-                            {m.type !== 'tour' && <> · {mins > 0 ? `${mins}m ` : ''}{secs > 0 ? `${secs}s` : ''}</>}
-                            {m.type === 'moderated' && <> · {m.speakingTime}s/speaker</>}
-                            {m.topic && <> · "{m.topic}"</>}
+                      <div key={m.id} className="bg-[#F5F0E8] border border-[#D4B896] rounded-xl px-4 py-4">
+                        <div className="flex items-start gap-3">
+                          <span className="text-xs text-[#9A7A58] font-mono w-4 mt-1">{i + 1}</span>
+                          <span className="text-2xl">{meta.icon}</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-base font-black text-[#1A0F08]">{meta.label}</span>
+                              <DisruptivenessBadge type={m.type} />
+                            </div>
+                            <div className="flex items-center gap-1.5 mt-1">
+                              <span className="text-base">{proposerFlag ? getFlagEmoji(proposerFlag.code) : '🌐'}</span>
+                              <span className="text-sm font-semibold text-[#1A0F08]">{m.proposedBy}</span>
+                            </div>
+                            {m.topic && (
+                              <p className="text-sm text-[#5C3A1E] mt-1 font-medium">"{m.topic}"</p>
+                            )}
+                            {m.type !== 'tour' && (
+                              <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                                <span className="text-xs font-bold text-[#7B4A1E] bg-white border border-[#D4B896] px-2 py-0.5 rounded-md">
+                                  {mins > 0 ? `${mins}m` : ''}{secs > 0 ? ` ${secs}s` : ''} total
+                                </span>
+                                {m.type === 'moderated' && (
+                                  <span className="text-xs font-bold text-[#3D6B35] bg-white border border-[#D4B896] px-2 py-0.5 rounded-md">
+                                    {m.speakingTime}s/speaker
+                                  </span>
+                                )}
+                              </div>
+                            )}
                           </div>
+                          <button onClick={() => removePendingMotion(committee.id, m.id)}
+                            className="text-[#9A7A58] hover:text-red-500 text-sm transition-colors mt-0.5">✕</button>
                         </div>
-                        <DisruptivenessBadge type={m.type} />
-                        <button onClick={() => removePendingMotion(committee.id, m.id)}
-                          className="text-[#9A7A58] hover:text-red-500 text-xs transition-colors ml-1">✕</button>
                       </div>
                     );
                   })}
