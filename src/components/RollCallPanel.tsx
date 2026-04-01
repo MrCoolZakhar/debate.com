@@ -18,7 +18,7 @@ export function FlagCircle({ country, size = 'md' }: { country: string; size?: '
   };
   const { box, font } = dim[size];
   return (
-    <div className={`relative ${box} rounded-full overflow-hidden bg-[#1a2035] shrink-0`}>
+    <div className={`relative ${box} rounded-full overflow-hidden bg-[#2E1E0F] shrink-0`}>
       <span style={{
         fontSize: font,
         lineHeight: '1',
@@ -37,19 +37,19 @@ export function FlagCircle({ country, size = 'md' }: { country: string; size?: '
 
 // ── 3-state iPhone-style slider ───────────────────────────────────────────────
 function StatusSlider({ status, onCycle }: { status: DelegateStatus; onCycle: () => void }) {
-  const thumbPos = status === 'absent' ? 'left-[2px]' : status === 'present' ? 'left-[26px]' : 'left-[50px]';
+  const thumbPos = status === 'absent' ? 'left-[2px]' : status === 'present' ? 'left-[27px]' : 'left-[52px]';
   const thumbColor = status === 'absent' ? 'bg-[#3a4060]' : status === 'present' ? 'bg-green-500' : 'bg-blue-500';
 
   return (
     <button
       onClick={(e) => { e.stopPropagation(); onCycle(); }}
-      className="relative w-[76px] h-[26px] rounded-full bg-[#141929] border border-[#1e2540] cursor-pointer shrink-0 select-none"
+      className="relative w-[76px] h-[26px] rounded-full bg-[#1A1209] border border-[#2E1E0F] cursor-pointer shrink-0 select-none"
       title="Tap to cycle: Absent → Present → PV"
     >
       <div className="absolute inset-0 flex items-center justify-around px-1 pointer-events-none">
-        <span className={`text-[10px] font-bold z-10 ${status === 'absent' ? 'text-white' : 'text-[#3a4060]'}`}>A</span>
-        <span className={`text-[10px] font-bold z-10 ${status === 'present' ? 'text-white' : 'text-[#3a4060]'}`}>P</span>
-        <span className={`text-[10px] font-bold z-10 ${status === 'present-voting' ? 'text-white' : 'text-[#3a4060]'}`}>PV</span>
+        <span className={`text-[10px] font-bold z-10 ${status === 'absent' ? 'text-white' : 'text-[#7A5A38]'}`}>A</span>
+        <span className={`text-[10px] font-bold z-10 ${status === 'present' ? 'text-white' : 'text-[#7A5A38]'}`}>P</span>
+        <span className={`text-[10px] font-bold z-10 ${status === 'present-voting' ? 'text-white' : 'text-[#7A5A38]'}`}>PV</span>
       </div>
       <div className={`absolute top-[3px] w-[22px] h-[20px] rounded-full transition-all duration-200 ${thumbPos} ${thumbColor}`} />
     </button>
@@ -80,7 +80,7 @@ function AddCountryInput({ committee }: { committee: Committee }) {
 
   return (
     <div className="relative">
-      <div className="flex items-center bg-[#0d1120] border border-[#1e2540] focus-within:border-blue-600 rounded-xl overflow-hidden transition-colors">
+      <div className="flex items-center bg-[#0D0906] border border-[#2E1E0F] focus-within:border-[#7B4A1E] rounded-xl overflow-hidden transition-colors">
         <input
           ref={inputRef}
           type="text"
@@ -91,14 +91,14 @@ function AddCountryInput({ committee }: { committee: Committee }) {
             if (e.key === 'Escape') setQuery('');
           }}
           placeholder="Add country…"
-          className="flex-1 bg-transparent px-3 py-2.5 text-white text-sm placeholder-[#4a5580] focus:outline-none"
+          className="flex-1 bg-transparent px-3 py-2.5 text-white text-sm placeholder-[#7A5A38] focus:outline-none"
         />
         {top && query && !existingNames.has(top.name.toLowerCase()) && (
-          <span className="text-[10px] text-[#4a5580] px-2 truncate max-w-[80px]">↵ {top.name}</span>
+          <span className="text-[10px] text-[#7A5A38] px-2 truncate max-w-[80px]">↵ {top.name}</span>
         )}
       </div>
       {query && allMatches.length > 0 && (
-        <div className="absolute bottom-full left-0 right-0 mb-1 bg-[#0d1120] border border-[#1e2540] rounded-xl overflow-hidden z-30 shadow-xl max-h-52 overflow-y-auto">
+        <div className="absolute bottom-full left-0 right-0 mb-1 bg-[#0D0906] border border-[#2E1E0F] rounded-xl overflow-hidden z-30 shadow-xl max-h-52 overflow-y-auto">
           {allMatches.slice(0, 8).map((c, i) => {
             const alreadyAdded = existingNames.has(c.name.toLowerCase());
             return (
@@ -108,10 +108,10 @@ function AddCountryInput({ committee }: { committee: Committee }) {
                 disabled={alreadyAdded}
                 className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-left transition-colors ${
                   alreadyAdded
-                    ? 'opacity-50 cursor-default bg-[#0f1526]'
+                    ? 'opacity-50 cursor-default bg-[#150F09]'
                     : i === 0
-                    ? 'bg-blue-900/30 text-white'
-                    : 'text-[#c0c8d8] hover:bg-[#1e2540]'
+                    ? 'bg-[#7B4A1E]/20 text-white'
+                    : 'text-[#E8D5B7] hover:bg-[#2E1E0F]'
                 }`}
               >
                 <span className="text-base">{getFlagEmoji(c.code)}</span>
@@ -119,7 +119,7 @@ function AddCountryInput({ committee }: { committee: Committee }) {
                 {alreadyAdded
                   ? <span className="text-[10px] text-yellow-500 shrink-0">Already on GSL</span>
                   : i === 0
-                  ? <span className="text-[10px] text-[#4a5580] shrink-0">Enter ↵</span>
+                  ? <span className="text-[10px] text-[#7A5A38] shrink-0">Enter ↵</span>
                   : null}
               </button>
             );
@@ -137,7 +137,7 @@ export default function RollCallPanel({ committee }: { committee: Committee }) {
 
   const present = committee.delegates.filter((d) => d.status !== 'absent').length;
   const total = committee.delegates.length;
-  const quorum = Math.ceil(total / 2) + 1;
+  const quorum = Math.ceil(total / 4);
   const hasQuorum = present >= quorum;
 
   // Always alphabetical
@@ -155,19 +155,19 @@ export default function RollCallPanel({ committee }: { committee: Committee }) {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Header */}
-      <div className="px-4 pt-4 pb-3 border-b border-[#1e2540] shrink-0">
+      <div className="px-4 pt-4 pb-3 border-b border-[#2E1E0F] shrink-0">
         <div className="flex items-center justify-between mb-3">
           <span className="text-sm font-bold text-white">Roll Call</span>
           <div className="flex gap-3">
             <button
               onClick={() => committee.delegates.forEach((d) => setDelegateStatus(committee.id, d.id, 'present'))}
-              className="text-xs text-[#8892aa] hover:text-green-400 transition-colors"
+              className="text-xs text-[#C4A882] hover:text-green-400 transition-colors"
             >
               All Present
             </button>
             <button
               onClick={() => committee.delegates.forEach((d) => setDelegateStatus(committee.id, d.id, 'absent'))}
-              className="text-xs text-[#8892aa] hover:text-red-400 transition-colors"
+              className="text-xs text-[#C4A882] hover:text-red-400 transition-colors"
             >
               Clear
             </button>
@@ -178,11 +178,11 @@ export default function RollCallPanel({ committee }: { committee: Committee }) {
           <span className={`text-base font-bold ${hasQuorum ? 'text-green-400' : 'text-yellow-400'}`}>
             {present} / {total} present
           </span>
-          <span className="text-xs text-[#4a5580]">
+          <span className="text-xs text-[#7A5A38]">
             {hasQuorum ? '✓ Quorum' : `Need ${quorum - present} more`}
           </span>
         </div>
-        <div className="h-1.5 bg-[#1a1f2e] rounded-full overflow-hidden mb-3">
+        <div className="h-1.5 bg-[#2E1E0F] rounded-full overflow-hidden mb-3">
           <div
             className={`h-full rounded-full transition-all ${hasQuorum ? 'bg-green-500' : 'bg-yellow-500'}`}
             style={{ width: total > 0 ? `${(present / total) * 100}%` : '0%' }}
@@ -194,7 +194,7 @@ export default function RollCallPanel({ committee }: { committee: Committee }) {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Filter…"
-          className="w-full bg-[#141929] border border-[#1e2540] rounded-lg px-3 py-2 text-white text-sm placeholder-[#4a5580] focus:outline-none focus:border-blue-600"
+          className="w-full bg-[#1A1209] border border-[#2E1E0F] rounded-lg px-3 py-2 text-white text-sm placeholder-[#7A5A38] focus:outline-none focus:border-[#7B4A1E]"
         />
       </div>
 
@@ -207,12 +207,12 @@ export default function RollCallPanel({ committee }: { committee: Committee }) {
               d.status === 'present'
                 ? 'bg-green-950/40 border border-green-800/30'
                 : d.status === 'present-voting'
-                ? 'bg-blue-950/40 border border-blue-800/30'
+                ? 'bg-[#7B4A1E]/20 border border-[#7B4A1E]/30'
                 : 'border border-transparent'
             }`}
           >
             <FlagCircle country={d.country} size="xs" />
-            <span className={`flex-1 text-sm truncate ${d.status !== 'absent' ? 'text-white font-medium' : 'text-[#8892aa]'}`}>
+            <span className={`flex-1 text-sm truncate ${d.status !== 'absent' ? 'text-white font-medium' : 'text-[#C4A882]'}`}>
               {d.country}
             </span>
             <StatusSlider status={d.status} onCycle={() => cycleStatus(d.id, d.status)} />
@@ -221,14 +221,14 @@ export default function RollCallPanel({ committee }: { committee: Committee }) {
       </div>
 
       {/* Footer */}
-      <div className="border-t border-[#1e2540] px-3 py-3 space-y-2 shrink-0">
+      <div className="border-t border-[#2E1E0F] px-3 py-3 space-y-2 shrink-0">
         <AddCountryInput committee={committee} />
 
         {(committee.phase === 'pre-session' || committee.phase === 'roll-call') && (
           <button
             onClick={() => setPhase(committee.id, 'speakers-list')}
             disabled={!hasQuorum}
-            className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-[#1e2540] disabled:text-[#3a4060] text-white py-3 rounded-xl text-sm font-bold transition-colors"
+            className="w-full bg-[#3D6B35] hover:bg-[#4A7C42] disabled:bg-[#2E1E0F] disabled:text-[#7A5A38] text-white py-3 rounded-xl text-sm font-bold transition-colors"
           >
             {hasQuorum ? 'Begin Session →' : `Need ${quorum - present} more for quorum`}
           </button>

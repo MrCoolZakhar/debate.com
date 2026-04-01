@@ -285,7 +285,6 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
   const [showRollCall, setShowRollCall] = useState(true); // open by default for roll call
   const [showMotions, setShowMotions] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [showRollCallIntro, setShowRollCallIntro] = useState(true);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -308,10 +307,10 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
 
   if (!committee) {
     return (
-      <div className="min-h-screen bg-[#0a0e1a] flex items-center justify-center">
+      <div className="min-h-screen bg-[#0D0906] flex items-center justify-center">
         <div className="text-center">
           <p className="text-white text-xl font-bold mb-4">Committee not found</p>
-          <Link href="/create" className="bg-blue-600 text-white px-6 py-3 rounded-xl font-semibold">Create one</Link>
+          <Link href="/create" className="bg-[#7B4A1E] text-white px-6 py-3 rounded-xl font-semibold">Create one</Link>
         </div>
       </div>
     );
@@ -321,68 +320,82 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
   const progress = committee.currentSpeaker ? (committee.speakerTimeRemaining / committee.speakerTimeLimit) * 100 : 100;
 
   return (
-    <div className="h-screen bg-[#0a0e1a] flex flex-col overflow-hidden">
+    <div className="h-screen bg-[#0D0906] flex flex-col overflow-hidden">
       {/* Slim header */}
-      <header className="border-b border-[#1e2540] bg-[#0d1120] px-4 h-11 flex items-center gap-3 shrink-0">
+      <header className="border-b border-[#2E1E0F] bg-[#150F08] px-4 h-11 flex items-center gap-3 shrink-0">
         <Link href="/">
-          <div className="w-6 h-6 rounded-md bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-xs font-bold shrink-0">M</div>
+          <div className="w-6 h-6 rounded-md bg-gradient-to-br from-[#7B4A1E] to-[#4E7C45] flex items-center justify-center text-xs font-bold shrink-0 text-white">G</div>
         </Link>
         <span className="font-bold text-white text-sm truncate">{committee.name}</span>
-        <span className="text-[#4a5580] text-xs hidden sm:block truncate flex-1">{committee.topic}</span>
-        <button
-          onClick={() => setShowRollCall((v) => !v)}
-          className={`text-xs px-3 py-1 rounded-lg transition-colors shrink-0 ${showRollCall ? 'bg-green-800/50 text-green-300' : 'bg-[#1e2540] text-[#8892aa] hover:text-white'}`}
-        >
-          Roll Call {present}/{committee.delegates.length}
-        </button>
+        <span className="text-[#7A5A38] text-xs hidden sm:block truncate flex-1">{committee.topic}</span>
+        {committee.phase !== 'pre-session' && (
+          <button
+            onClick={() => setShowRollCall((v) => !v)}
+            className={`text-xs px-3 py-1 rounded-lg transition-colors shrink-0 ${showRollCall ? 'bg-green-800/50 text-green-300' : 'bg-[#2E1E0F] text-[#C4A882] hover:text-white'}`}
+          >
+            Roll Call {present}/{committee.delegates.length}
+          </button>
+        )}
         <button
           onClick={() => setShowMotions((v) => !v)}
-          className={`text-xs px-3 py-1 rounded-lg transition-colors shrink-0 relative ${showMotions ? 'bg-blue-700 text-white' : 'bg-[#1e2540] text-[#8892aa] hover:text-white'}`}
+          className={`text-xs px-3 py-1 rounded-lg transition-colors shrink-0 relative ${showMotions ? 'bg-[#7B4A1E] text-white' : 'bg-[#2E1E0F] text-[#C4A882] hover:text-white'}`}
         >
           Motions
           {(committee.pendingMotions ?? []).length > 0 && (
-            <span className="absolute -top-1 -right-1 w-4 h-4 bg-blue-500 rounded-full text-white text-[10px] flex items-center justify-center font-bold">
+            <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#7B4A1E] rounded-full text-white text-[10px] flex items-center justify-center font-bold">
               {committee.pendingMotions.length}
             </span>
           )}
         </button>
         <button
           onClick={() => { navigator.clipboard.writeText(committee.code); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
-          className="text-xs font-mono bg-[#1e2540] hover:bg-[#2a3050] text-white px-2.5 py-1 rounded-lg transition-colors shrink-0"
+          className="text-xs font-mono bg-[#2E1E0F] hover:bg-[#3D2A15] text-white px-2.5 py-1 rounded-lg transition-colors shrink-0"
         >
           {copied ? '✓' : committee.code}
         </button>
       </header>
 
-      {/* Body */}
-      <div className="flex-1 flex overflow-hidden" style={{ height: 'calc(100vh - 44px)' }}>
+      {/* Stats bar — only during active session */}
+      {committee.phase !== 'pre-session' && (
+        <div className="border-b border-[#2E1E0F] bg-[#150F08] px-4 py-1.5 flex items-center gap-6 shrink-0">
+          <span className="text-xs text-[#C4A882] font-mono">
+            {present} present
+          </span>
+          <div className="flex items-center gap-1.5">
+            <MiniPie fraction={2/3} color="#B8844A" />
+            <span className="text-xs text-[#C4A882]">2/3: <span className="text-white font-bold">{Math.ceil((present * 2) / 3)}</span></span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <MiniPie fraction={1/2} color="#6BA562" />
+            <span className="text-xs text-[#C4A882]">1/2: <span className="text-white font-bold">{Math.floor(present / 2) + 1}</span></span>
+          </div>
+        </div>
+      )}
 
-        {/* Roll Call (collapsible, hidden by default) */}
-        {showRollCall && (
-          <aside className="w-64 border-r border-[#1e2540] bg-[#0d1120] flex flex-col overflow-hidden shrink-0">
-            <RollCallPanel committee={committee} />
-          </aside>
+      {/* Body */}
+      <div className="flex-1 flex overflow-hidden">
+
+        {/* Pre-session: full-width roll call */}
+        {committee.phase === 'pre-session' && (
+          <div className="flex-1 flex items-center justify-center px-6 py-8">
+            <div className="w-full max-w-lg bg-[#150F09] border border-[#2E1E0F] rounded-2xl overflow-hidden" style={{ height: '80vh', maxHeight: '640px' }}>
+              <RollCallPanel committee={committee} />
+            </div>
+          </div>
         )}
 
-        {/* Center */}
-        <main className="flex-1 overflow-hidden flex flex-col">
+        {/* Active session layout: optional sidebar + main */}
+        {committee.phase !== 'pre-session' && (
+          <>
+            {/* Roll Call sidebar (collapsible) */}
+            {showRollCall && (
+              <aside className="w-64 border-r border-[#2E1E0F] bg-[#0D0906] flex flex-col overflow-hidden shrink-0">
+                <RollCallPanel committee={committee} />
+              </aside>
+            )}
 
-          {/* Pre-session: roll call prompt */}
-          {(committee.phase === 'pre-session' || committee.phase === 'roll-call') && (
-            <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
-              <div className="text-6xl mb-5">📋</div>
-              <h2 className="text-3xl font-black text-white mb-3">Start with Roll Call</h2>
-              <p className="text-[#8892aa] text-lg max-w-sm mb-6">
-                Mark who is present before opening the floor. Quorum must be reached to begin the session.
-              </p>
-              <button
-                onClick={() => setShowRollCall(true)}
-                className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-4 rounded-2xl font-bold text-base transition-colors"
-              >
-                Open Roll Call →
-              </button>
-            </div>
-          )}
+            {/* Center */}
+            <main className="flex-1 overflow-hidden flex flex-col">
 
           {/* Moderated caucus — full screen */}
           {committee.phase === 'moderated-caucus' && committee.caucus && (
@@ -533,32 +546,6 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
         <MotionsModal committee={committee} onClose={() => setShowMotions(false)} />
       )}
 
-      {/* Roll call intro popup — shown on first open during pre-session */}
-      {showRollCallIntro && showRollCall && (committee.phase === 'pre-session' || committee.phase === 'roll-call') && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: 'rgba(5, 8, 20, 0.80)', backdropFilter: 'blur(4px)' }}
-        >
-          <div className="bg-[#0f1526] border border-[#1e2540] rounded-3xl w-full max-w-md shadow-2xl p-8 text-center">
-            <div className="text-5xl mb-4">📋</div>
-            <h2 className="text-2xl font-black text-white mb-3">Welcome to Roll Call</h2>
-            <p className="text-[#8892aa] mb-2 leading-relaxed">
-              Use the sidebar to mark each delegate as <span className="text-green-400 font-semibold">Present (P)</span>, <span className="text-blue-400 font-semibold">Present &amp; Voting (PV)</span>, or <span className="text-[#8892aa] font-semibold">Absent (A)</span>.
-            </p>
-            <p className="text-[#8892aa] mb-6 text-sm leading-relaxed">
-              Tap the slider next to each country's flag to cycle through statuses. Once quorum is reached you can begin the session.
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowRollCallIntro(false)}
-                className="flex-1 bg-blue-600 hover:bg-blue-500 text-white py-3.5 rounded-xl font-bold transition-colors"
-              >
-                Got it, let's start →
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
