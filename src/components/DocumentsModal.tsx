@@ -8,11 +8,11 @@ import { getCountryByName, getFlagEmoji } from '@/lib/countries';
 type DocTab = 'working-paper' | 'draft-resolution';
 
 const STATUS_META: Record<DocumentStatus, { label: string; color: string }> = {
-  submitted:   { label: 'Submitted',    color: 'bg-blue-100 text-blue-700 border-blue-200' },
-  'on-floor':  { label: 'On Floor',     color: 'bg-yellow-100 text-yellow-700 border-yellow-200' },
-  introduced:  { label: 'Introduced',   color: 'bg-purple-100 text-purple-700 border-purple-200' },
-  passed:      { label: 'Passed',       color: 'bg-green-100 text-green-700 border-green-200' },
-  failed:      { label: 'Failed',       color: 'bg-red-100 text-red-600 border-red-200' },
+  submitted:   { label: 'Submitted',    color: 'bg-blue-950/40 text-blue-400 border-blue-800/40' },
+  'on-floor':  { label: 'On Floor',     color: 'bg-yellow-950/40 text-yellow-400 border-yellow-800/40' },
+  introduced:  { label: 'Introduced',   color: 'bg-purple-950/40 text-purple-400 border-purple-800/40' },
+  passed:      { label: 'Passed',       color: 'bg-green-950/40 text-green-400 border-green-800/40' },
+  failed:      { label: 'Failed',       color: 'bg-red-950/40 text-red-400 border-red-800/40' },
 };
 
 const STATUS_NEXT: Partial<Record<DocumentStatus, DocumentStatus>> = {
@@ -39,10 +39,10 @@ function CountryChip({
 }) {
   const found = getCountryByName(country);
   return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-[#F0EDE8] border border-[#D4B896] rounded-full text-xs text-[#1A0F08]">
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-[#2E1E0F] border border-[#2E1E0F] rounded-full text-xs text-white">
       {found ? getFlagEmoji(found.code) : '🌐'}
       {country}
-      <button onClick={onRemove} className="text-[#9A7A58] hover:text-red-500 ml-0.5 leading-none">✕</button>
+      <button onClick={onRemove} className="text-[#7A5A38] hover:text-red-500 ml-0.5 leading-none">✕</button>
     </span>
   );
 }
@@ -70,7 +70,7 @@ function MultiCountrySelect({
 
   return (
     <div>
-      <label className="block text-sm font-semibold text-[#5C3A1E] mb-1.5">{label}</label>
+      <label className="block text-sm font-semibold text-[#C4A882] mb-1.5">{label}</label>
       <div className="flex flex-wrap gap-1.5 mb-2 min-h-[28px]">
         {selected.map((c) => (
           <CountryChip
@@ -86,17 +86,17 @@ function MultiCountrySelect({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search to add…"
-          className="w-full bg-white border border-[#D4B896] rounded-lg px-3 py-2 text-[#1A0F08] placeholder-[#B8A090] text-sm focus:outline-none focus:border-[#7B4A1E] transition-colors"
+          className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-lg px-3 py-2 text-white placeholder-[#7A5A38] text-sm focus:outline-none focus:border-[#7B4A1E] transition-colors"
         />
         {query && available.length > 0 && (
-          <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-[#D4B896] rounded-xl overflow-hidden z-20 shadow-lg max-h-36 overflow-y-auto">
+          <div className="absolute top-full left-0 right-0 mt-1 bg-[#150F09] border border-[#2E1E0F] rounded-xl overflow-hidden z-20 shadow-lg max-h-36 overflow-y-auto">
             {available.slice(0, 6).map((c, i) => {
               const found = getCountryByName(c);
               return (
                 <button
                   key={c}
                   onMouseDown={(e) => { e.preventDefault(); add(c); }}
-                  className={`w-full flex items-center gap-2 px-3 py-2 text-left transition-colors ${i === 0 ? 'bg-[#7B4A1E]/10 text-[#1A0F08]' : 'text-[#1A0F08] hover:bg-[#F5F0E8]'}`}
+                  className={`w-full flex items-center gap-2 px-3 py-2 text-left transition-colors ${i === 0 ? 'bg-[#7B4A1E]/20 text-white' : 'text-[#E8D5B7] hover:bg-[#2E1E0F]'}`}
                 >
                   <span>{found ? getFlagEmoji(found.code) : '🌐'}</span>
                   <span className="text-sm">{c}</span>
@@ -156,25 +156,25 @@ function SubmitForm({ committee, type, onDone }: SubmitFormProps) {
   return (
     <div className="space-y-4 px-7 pb-7">
       <div className="flex items-center gap-3">
-        <button onClick={onDone} className="text-sm text-[#5C3A1E] hover:text-[#1A0F08] transition-colors">← Back</button>
-        <h2 className="text-xl font-black text-[#1A0F08]">
+        <button onClick={onDone} className="text-sm text-[#C4A882] hover:text-white transition-colors">← Back</button>
+        <h2 className="text-xl font-black text-white">
           Submit {type === 'working-paper' ? 'Working Paper' : 'Draft Resolution'}
         </h2>
       </div>
 
-      <div className="bg-[#F5F0E8] border border-[#D4B896] rounded-xl px-4 py-2.5">
-        <span className="text-xs text-[#9A7A58] font-mono">DOCUMENT CODE</span>
-        <span className="ml-3 text-sm font-bold text-[#1A0F08] font-mono">{docCode}</span>
+      <div className="bg-[#1A1209] border border-[#2E1E0F] rounded-xl px-4 py-2.5">
+        <span className="text-xs text-[#7A5A38] font-mono">DOCUMENT CODE</span>
+        <span className="ml-3 text-sm font-bold text-white font-mono">{docCode}</span>
       </div>
 
       <div>
-        <label className="block text-sm font-semibold text-[#5C3A1E] mb-1.5">Title <span className="text-red-500">*</span></label>
+        <label className="block text-sm font-semibold text-[#C4A882] mb-1.5">Title <span className="text-red-500">*</span></label>
         <input
           type="text"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="e.g. Strengthening international cooperation on…"
-          className="w-full bg-white border border-[#D4B896] rounded-xl px-4 py-3 text-[#1A0F08] placeholder-[#B8A090] focus:outline-none focus:border-[#7B4A1E] transition-colors"
+          className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-xl px-4 py-3 text-white placeholder-[#7A5A38] focus:outline-none focus:border-[#7B4A1E] transition-colors"
         />
       </div>
 
@@ -193,20 +193,20 @@ function SubmitForm({ committee, type, onDone }: SubmitFormProps) {
       />
 
       <div>
-        <label className="block text-sm font-semibold text-[#5C3A1E] mb-1.5">Content <span className="text-[#9A7A58] font-normal">(optional)</span></label>
+        <label className="block text-sm font-semibold text-[#C4A882] mb-1.5">Content <span className="text-[#7A5A38] font-normal">(optional)</span></label>
         <textarea
           value={content}
           onChange={(e) => setContent(e.target.value)}
           placeholder="Paste the full text of the document…"
           rows={5}
-          className="w-full bg-white border border-[#D4B896] rounded-xl px-4 py-3 text-[#1A0F08] placeholder-[#B8A090] focus:outline-none focus:border-[#7B4A1E] transition-colors text-sm resize-none"
+          className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-xl px-4 py-3 text-white placeholder-[#7A5A38] focus:outline-none focus:border-[#7B4A1E] transition-colors text-sm resize-none"
         />
       </div>
 
       <button
         onClick={handleSubmit}
         disabled={!canSubmit}
-        className="w-full bg-[#7B4A1E] hover:bg-[#8B5A2B] disabled:bg-[#E8DDD0] disabled:text-[#9A7A58] text-white py-3.5 rounded-xl font-bold transition-colors"
+        className="w-full bg-[#7B4A1E] hover:bg-[#8B5A2B] disabled:bg-[#2E1E0F] disabled:text-[#7A5A38] text-white py-3.5 rounded-xl font-bold transition-colors"
       >
         Submit Document
       </button>
@@ -226,31 +226,31 @@ function DocCard({ doc, committeeId }: DocCardProps) {
   const nextStatus = STATUS_NEXT[doc.status];
 
   return (
-    <div className="bg-[#F5F0E8] border border-[#D4B896] rounded-xl p-4 space-y-3">
+    <div className="bg-[#1A1209] border border-[#2E1E0F] rounded-xl p-4 space-y-3">
       <div className="flex items-start gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1">
             <span className="text-xs font-mono font-bold text-[#7B4A1E]">{doc.docCode}</span>
             <StatusBadge status={doc.status} />
           </div>
-          <p className="text-sm font-bold text-[#1A0F08] leading-snug">{doc.title}</p>
+          <p className="text-sm font-bold text-white leading-snug">{doc.title}</p>
         </div>
         <button
           onClick={() => removeDocument(committeeId, doc.id)}
-          className="text-[#9A7A58] hover:text-red-500 transition-colors text-sm shrink-0"
+          className="text-[#7A5A38] hover:text-red-500 transition-colors text-sm shrink-0"
           title="Delete"
         >
           🗑
         </button>
       </div>
 
-      <div className="text-xs text-[#5C3A1E]">
+      <div className="text-xs text-[#C4A882]">
         <span className="font-semibold">Sponsors: </span>
         {doc.sponsors.join(', ') || '—'}
       </div>
 
       {doc.signatories.length > 0 && (
-        <div className="text-xs text-[#5C3A1E]">
+        <div className="text-xs text-[#C4A882]">
           <span className="font-semibold">Signatories: </span>
           {doc.signatories.join(', ')}
         </div>
@@ -260,12 +260,12 @@ function DocCard({ doc, committeeId }: DocCardProps) {
         <div>
           <button
             onClick={() => setExpanded((v) => !v)}
-            className="text-xs text-[#7B4A1E] hover:text-[#5C3A1E] transition-colors"
+            className="text-xs text-[#7B4A1E] hover:text-[#C4A882] transition-colors"
           >
             {expanded ? '▲ Hide content' : '▼ Show content'}
           </button>
           {expanded && (
-            <pre className="mt-2 text-xs text-[#1A0F08] bg-white border border-[#D4B896] rounded-lg px-3 py-2 whitespace-pre-wrap font-sans leading-relaxed max-h-48 overflow-y-auto">
+            <pre className="mt-2 text-xs text-white bg-[#150F09] border border-[#2E1E0F] rounded-lg px-3 py-2 whitespace-pre-wrap font-sans leading-relaxed max-h-48 overflow-y-auto">
               {doc.content}
             </pre>
           )}
@@ -284,14 +284,14 @@ function DocCard({ doc, committeeId }: DocCardProps) {
         {doc.status === 'introduced' && (
           <button
             onClick={() => updateDocumentStatus(committeeId, doc.id, 'failed')}
-            className="flex-1 bg-[#F0EDE8] hover:bg-red-50 border border-[#D4B896] hover:border-red-200 text-[#5C3A1E] hover:text-red-500 py-2 rounded-lg font-bold text-xs transition-colors"
+            className="flex-1 bg-[#2E1E0F] hover:bg-red-950/40 border border-[#2E1E0F] hover:border-red-800/40 text-[#C4A882] hover:text-red-500 py-2 rounded-lg font-bold text-xs transition-colors"
           >
             ✗ Fail
           </button>
         )}
       </div>
 
-      <div className="text-xs text-[#9A7A58]">
+      <div className="text-xs text-[#7A5A38]">
         Submitted {new Date(doc.submittedAt).toLocaleDateString()}
       </div>
     </div>
@@ -316,11 +316,11 @@ export default function DocumentsModal({
       style={{ background: 'rgba(5, 8, 20, 0.88)', backdropFilter: 'blur(4px)' }}
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="bg-white border border-[#D4B896] rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
+      <div className="bg-[#1A1209] border border-[#2E1E0F] rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-7 pt-6 pb-4 shrink-0 border-b border-[#D4B896]">
-          <h2 className="text-2xl font-black text-[#1A0F08]">Documents</h2>
-          <button onClick={onClose} className="text-[#9A7A58] hover:text-[#1A0F08] transition-colors text-xl leading-none">✕</button>
+        <div className="flex items-center justify-between px-7 pt-6 pb-4 shrink-0 border-b border-[#2E1E0F]">
+          <h2 className="text-2xl font-black text-white">Documents</h2>
+          <button onClick={onClose} className="text-[#7A5A38] hover:text-white transition-colors text-xl leading-none">✕</button>
         </div>
 
         {/* Tabs */}
@@ -336,7 +336,7 @@ export default function DocumentsModal({
                   className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-colors relative ${
                     tab === t
                       ? 'bg-[#7B4A1E] text-white'
-                      : 'bg-[#F0EDE8] border border-[#D4B896] text-[#5C3A1E] hover:border-[#7B4A1E]'
+                      : 'bg-[#1A1209] border border-[#2E1E0F] text-[#C4A882] hover:border-[#7B4A1E]'
                   }`}
                 >
                   {label}
@@ -366,8 +366,8 @@ export default function DocumentsModal({
               {docs.length === 0 ? (
                 <div className="text-center py-10">
                   <div className="text-4xl mb-3">{tab === 'working-paper' ? '📄' : '📜'}</div>
-                  <p className="text-[#5C3A1E] font-semibold">No {tab === 'working-paper' ? 'working papers' : 'draft resolutions'} yet.</p>
-                  <p className="text-sm text-[#9A7A58] mt-1">Submit the first one below.</p>
+                  <p className="text-[#C4A882] font-semibold">No {tab === 'working-paper' ? 'working papers' : 'draft resolutions'} yet.</p>
+                  <p className="text-sm text-[#7A5A38] mt-1">Submit the first one below.</p>
                 </div>
               ) : (
                 docs.map((doc) => (
@@ -377,7 +377,7 @@ export default function DocumentsModal({
 
               <button
                 onClick={() => setShowForm(true)}
-                className="w-full bg-[#F5F0E8] hover:bg-[#EDE8E0] border border-[#D4B896] hover:border-[#7B4A1E] text-[#1A0F08] py-3.5 rounded-2xl font-bold transition-all mt-2"
+                className="w-full bg-[#1A1209] hover:bg-[#2E1E0F] border border-[#2E1E0F] hover:border-[#7B4A1E] text-white py-3.5 rounded-2xl font-bold transition-all mt-2"
               >
                 + Submit New {tab === 'working-paper' ? 'Working Paper' : 'Draft Resolution'}
               </button>
