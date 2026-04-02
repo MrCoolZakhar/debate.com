@@ -15,7 +15,7 @@ export default function LandingPage() {
       <nav className="bg-white border-b border-[#D4B896] sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src="/gavelling-logo.png" alt="Gavelling" className="h-9 w-auto" />
+            <img src="/gavelling-logo.png" alt="Gavelling" className="h-9 w-auto" onError={(e)=>{(e.target as HTMLImageElement).style.display="none"}} />
           </div>
           <div className="flex items-center gap-3">
             <Link href="/join" className="text-sm text-[#5C3A1E] hover:text-[#1A0F08] transition-colors px-4 py-2">
@@ -90,7 +90,7 @@ export default function LandingPage() {
       {/* Footer */}
       <footer className="max-w-7xl mx-auto px-6 py-12 flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <img src="/gavelling-logo.png" alt="Gavelling" className="h-8 w-auto" />
+          <img src="/gavelling-logo.png" alt="Gavelling" className="h-8 w-auto" onError={(e)=>{(e.target as HTMLImageElement).style.display="none"}} />
         </div>
         <p className="text-sm text-[#5C3A1E]">
           © {new Date().getFullYear()} Gavelling. Built for the MUN community.
