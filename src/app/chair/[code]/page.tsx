@@ -328,9 +328,21 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    const found = Object.values(committees).find((c) => c.code === code.toUpperCase());
-    setCommittee(found ?? null);
-  }, [committees, code]);
+    async function loadCommittee() {
+      const { getCommitteeByCode, subscribeToCommittee } = await import('@/lib/committeeService');
+      const found = await getCommitteeByCode(code);
+      setCommittee(found ?? null);
+      if (found) {
+        const unsubscribe = subscribeToCommittee(found.id, async () => {
+          const updated = await getCommitteeByCode(code);
+          if (updated) setCommittee(updated);
+        });
+        return unsubscribe;
+      }
+    }
+    const cleanup = loadCommittee();
+    return () => { cleanup.then((fn) => fn?.()) };
+  }, [code]);
 
   useEffect(() => {
     if (timerRunning && committee?.currentSpeaker) {
