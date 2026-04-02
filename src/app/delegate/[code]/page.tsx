@@ -4,13 +4,181 @@ import { use, useEffect, useState, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useCommitteeStore } from '@/lib/store';
-import { Committee, DocumentType } from '@/lib/types';
+import { Committee, CommitteeDocument, DocumentType } from '@/lib/types';
 import ChatPanel from '@/components/ChatPanel';
 
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
   return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+function autoDocCode(type: DocumentType, existingDocs: { type: DocumentType }[]): string {
+  const prefix = type === 'working-paper' ? 'WP' : 'DR';
+  const sep = type === 'working-paper' ? '.' : '/';
+  const sameType = existingDocs.filter((d) => d.type === type);
+  const num = sameType.length + 1;
+  return `${prefix} 1${sep}${num}`;
+}
+
+type AddDocFn = (committeeId: string, doc: Omit<CommitteeDocument, 'id' | 'submittedAt'>) => void;
+
+function DelegateDocumentsTab({
+  committee,
+  country,
+  addDocument,
+}: {
+  committee: Committee;
+  country: string;
+  addDocument: AddDocFn;
+}) {
+  const [title, setTitle] = useState('');
+  const [docType, setDocType] = useState<DocumentType>('working-paper');
+  const [sponsors, setSponsors] = useState('');
+  const [fileName, setFileName] = useState<string | null>(null);
+  const [fileUrl, setFileUrl] = useState<string | null>(null);
+  const [submitted, setSubmitted] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const canSubmit = title.trim();
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setFileUrl(reader.result as string);
+      setFileName(file.name);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSubmit = () => {
+    if (!canSubmit) return;
+    const sponsorList = sponsors.split(',').map((s) => s.trim()).filter(Boolean);
+    addDocument(committee.id, {
+      type: docType,
+      docCode: autoDocCode(docType, committee.documents ?? []),
+      title: title.trim(),
+      sponsors: sponsorList.length > 0 ? sponsorList : [country],
+      content: '',
+      status: 'submitted',
+      ...(fileUrl && fileName ? { fileUrl, fileName } : {}),
+    });
+    setTitle('');
+    setSponsors('');
+    setFileName(null);
+    setFileUrl(null);
+    setSubmitted(true);
+    setTimeout(() => setSubmitted(false), 3000);
+  };
+
+  return (
+    <div className="p-4 max-w-2xl mx-auto space-y-4">
+      <h2 className="text-lg font-bold text-white">Submit Document</h2>
+
+      {submitted && (
+        <div className="bg-green-900/30 border border-green-700/40 rounded-xl px-4 py-3 text-green-400 text-sm font-semibold">
+          ✓ Document submitted successfully!
+        </div>
+      )}
+
+      <div className="bg-[#1A1209] border border-[#2E1E0F] rounded-xl p-4 space-y-4">
+        <div>
+          <label className="block text-sm font-semibold text-[#C4A882] mb-1.5">Title *</label>
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Document title…"
+            className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-xl px-4 py-3 text-white placeholder-[#7A5A38] focus:outline-none focus:border-[#7B4A1E] transition-colors text-sm"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-semibold text-[#C4A882] mb-1.5">Type</label>
+          <select
+            value={docType}
+            onChange={(e) => setDocType(e.target.value as DocumentType)}
+            className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#7B4A1E] transition-colors text-sm"
+          >
+            <option value="working-paper">Working Paper</option>
+            <option value="draft-resolution">Draft Resolution</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-semibold text-[#C4A882] mb-1.5">Sponsors <span className="text-[#7A5A38] font-normal">(comma-separated, defaults to your country)</span></label>
+          <input
+            type="text"
+            value={sponsors}
+            onChange={(e) => setSponsors(e.target.value)}
+            placeholder="e.g. Germany, France, Brazil"
+            className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-xl px-4 py-3 text-white placeholder-[#7A5A38] focus:outline-none focus:border-[#7B4A1E] transition-colors text-sm"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-semibold text-[#C4A882] mb-1.5">Attachment <span className="text-[#7A5A38] font-normal">(optional)</span></label>
+          {fileName ? (
+            <div className="flex items-center gap-2 bg-[#150F09] border border-[#2E1E0F] rounded-xl px-4 py-3">
+              <span className="text-sm text-white flex-1 truncate">📎 {fileName}</span>
+              <button
+                onClick={() => { setFileName(null); setFileUrl(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
+                className="text-[#7A5A38] hover:text-red-500 transition-colors text-sm"
+              >✕</button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full bg-[#150F09] border border-dashed border-[#2E1E0F] hover:border-[#7B4A1E] rounded-xl px-4 py-3 text-[#7A5A38] hover:text-[#C4A882] text-sm transition-colors text-left"
+            >
+              + Upload file (.pdf, .doc, .docx, .txt)
+            </button>
+          )}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf,.doc,.docx,.txt"
+            onChange={handleFileChange}
+            className="hidden"
+          />
+        </div>
+
+        <button
+          onClick={handleSubmit}
+          disabled={!canSubmit}
+          className="w-full bg-[#7B4A1E] hover:bg-[#8B5A2B] disabled:bg-[#2E1E0F] disabled:text-[#7A5A38] text-white py-3 rounded-xl font-bold transition-colors text-sm"
+        >
+          Submit Document
+        </button>
+      </div>
+
+      {/* Show submitted docs by this delegate */}
+      {(committee.documents ?? []).length > 0 && (
+        <div>
+          <h3 className="text-sm font-semibold text-[#C4A882] mb-2">Committee Documents</h3>
+          <div className="space-y-2">
+            {(committee.documents ?? []).map((doc) => (
+              <div key={doc.id} className="bg-[#1A1209] border border-[#2E1E0F] rounded-xl p-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-xs font-mono font-bold text-[#7B4A1E]">{doc.docCode}</span>
+                  <span className="text-xs text-[#7A5A38] capitalize">{doc.status}</span>
+                </div>
+                <p className="text-sm font-semibold text-white">{doc.title}</p>
+                {doc.fileUrl && doc.fileName && (
+                  <a href={doc.fileUrl} download={doc.fileName} className="text-xs text-blue-400 hover:text-blue-300 transition-colors mt-1 block">
+                    📎 {doc.fileName}
+                  </a>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function DelegateSession({ params }: { params: Promise<{ code: string }> }) {
