@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import { Committee, DelegateStatus } from '@/lib/types';
 import { useCommitteeStore } from '@/lib/store';
 import { getFlagEmoji, getCountryByName, UN_COUNTRIES } from '@/lib/countries';
+import { setDelegateStatus as setDelegateStatusInDB, setPhase as setPhaseInDB } from '@/lib/committeeService';
 
 // ── FlagCircle (fixed: no top-clipping) ──────────────────────────────────────
 export function FlagCircle({ country, size = 'md' }: { country: string; size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' }) {
@@ -151,6 +152,7 @@ export default function RollCallPanel({ committee, onAddToList, onListIds }: { c
     const next: DelegateStatus =
       current === 'absent' ? 'present' : current === 'present' ? 'present-voting' : 'absent';
     setDelegateStatus(committee.id, id, next);
+    setDelegateStatusInDB(id, next);
   };
 
   return (
@@ -161,13 +163,13 @@ export default function RollCallPanel({ committee, onAddToList, onListIds }: { c
           <span className="text-sm font-bold text-white">Roll Call</span>
           <div className="flex gap-3">
             <button
-              onClick={() => committee.delegates.forEach((d) => setDelegateStatus(committee.id, d.id, 'present'))}
+              onClick={() => committee.delegates.forEach((d) => { setDelegateStatus(committee.id, d.id, 'present'); setDelegateStatusInDB(d.id, 'present'); })}
               className="text-xs text-[#C4A882] hover:text-green-600 transition-colors"
             >
               All Present
             </button>
             <button
-              onClick={() => committee.delegates.forEach((d) => setDelegateStatus(committee.id, d.id, 'absent'))}
+              onClick={() => committee.delegates.forEach((d) => { setDelegateStatus(committee.id, d.id, 'absent'); setDelegateStatusInDB(d.id, 'absent'); })}
               className="text-xs text-[#C4A882] hover:text-red-500 transition-colors"
             >
               Clear
@@ -238,7 +240,7 @@ export default function RollCallPanel({ committee, onAddToList, onListIds }: { c
 
         {(committee.phase === 'pre-session' || committee.phase === 'roll-call') && (
           <button
-            onClick={() => setPhase(committee.id, 'speakers-list')}
+            onClick={() => { setPhase(committee.id, 'speakers-list'); setPhaseInDB(committee.id, 'speakers-list'); }}
             disabled={!hasQuorum}
             className="w-full bg-[#3D6B35] hover:bg-[#4A7C42] disabled:bg-[#2E1E0F] disabled:text-[#7A5A38] text-white py-3 rounded-xl text-sm font-bold transition-colors"
           >
