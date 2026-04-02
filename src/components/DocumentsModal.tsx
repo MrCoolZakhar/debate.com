@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, KeyboardEvent } from 'react';
+import { useRouter } from 'next/navigation';
 import { Committee, CommitteeDocument, DocumentType, DocumentStatus } from '@/lib/types';
 import { useCommitteeStore } from '@/lib/store';
 import { getCountryByName, getFlagEmoji } from '@/lib/countries';
@@ -47,13 +48,11 @@ function CountryChip({
   );
 }
 
-function MultiCountrySelect({
-  label,
+function SponsorSelect({
   candidates,
   selected,
   onChange,
 }: {
-  label: string;
   candidates: string[];
   selected: string[];
   onChange: (v: string[]) => void;
@@ -68,9 +67,18 @@ function MultiCountrySelect({
     setQuery('');
   };
 
+  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (available.length > 0) {
+        add(available[0]);
+      }
+    }
+  };
+
   return (
     <div>
-      <label className="block text-sm font-semibold text-[#C4A882] mb-1.5">{label}</label>
+      <label className="block text-sm font-semibold text-[#C4A882] mb-1.5">Sponsors <span className="text-red-500">*</span></label>
       <div className="flex flex-wrap gap-1.5 mb-2 min-h-[28px]">
         {selected.map((c) => (
           <CountryChip
@@ -85,7 +93,8 @@ function MultiCountrySelect({
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search to add…"
+          onKeyDown={handleKeyDown}
+          placeholder="Type to filter delegates, Enter to add…"
           className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-lg px-3 py-2 text-white placeholder-[#7A5A38] text-sm focus:outline-none focus:border-[#7B4A1E] transition-colors"
         />
         {query && available.length > 0 && (
@@ -129,15 +138,27 @@ function SubmitForm({ committee, type, onDone }: SubmitFormProps) {
   const presentCountries = committee.delegates
     .filter((d) => d.status !== 'absent')
     .map((d) => d.country);
-  const allCountries = committee.delegates.map((d) => d.country);
 
   const [title, setTitle] = useState('');
   const [sponsors, setSponsors] = useState<string[]>([]);
-  const [signatories, setSignatories] = useState<string[]>([]);
   const [content, setContent] = useState('');
+  const [fileName, setFileName] = useState<string | null>(null);
+  const [fileUrl, setFileUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const docCode = autoDocCode(type, committee.documents ?? []);
   const canSubmit = title.trim() && sponsors.length > 0;
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setFileUrl(reader.result as string);
+      setFileName(file.name);
+    };
+    reader.readAsDataURL(file);
+  };
 
   const handleSubmit = () => {
     if (!canSubmit) return;
@@ -146,9 +167,9 @@ function SubmitForm({ committee, type, onDone }: SubmitFormProps) {
       docCode,
       title: title.trim(),
       sponsors,
-      signatories,
       content: content.trim(),
       status: 'submitted',
+      ...(fileUrl && fileName ? { fileUrl, fileName } : {}),
     });
     onDone();
   };
@@ -178,18 +199,10 @@ function SubmitForm({ committee, type, onDone }: SubmitFormProps) {
         />
       </div>
 
-      <MultiCountrySelect
-        label="Sponsors *"
+      <SponsorSelect
         candidates={presentCountries}
         selected={sponsors}
         onChange={setSponsors}
-      />
-
-      <MultiCountrySelect
-        label="Signatories"
-        candidates={allCountries.filter((c) => !sponsors.includes(c))}
-        selected={signatories}
-        onChange={setSignatories}
       />
 
       <div>
@@ -200,6 +213,35 @@ function SubmitForm({ committee, type, onDone }: SubmitFormProps) {
           placeholder="Paste the full text of the document…"
           rows={5}
           className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-xl px-4 py-3 text-white placeholder-[#7A5A38] focus:outline-none focus:border-[#7B4A1E] transition-colors text-sm resize-none"
+        />
+      </div>
+
+      {/* File Upload */}
+      <div>
+        <label className="block text-sm font-semibold text-[#C4A882] mb-1.5">Attachment <span className="text-[#7A5A38] font-normal">(optional)</span></label>
+        {fileName ? (
+          <div className="flex items-center gap-2 bg-[#150F09] border border-[#2E1E0F] rounded-xl px-4 py-3">
+            <span className="text-sm text-white flex-1 truncate">📎 {fileName}</span>
+            <button
+              onClick={() => { setFileName(null); setFileUrl(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
+              className="text-[#7A5A38] hover:text-red-500 transition-colors text-sm"
+            >✕</button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="w-full bg-[#150F09] border border-dashed border-[#2E1E0F] hover:border-[#7B4A1E] rounded-xl px-4 py-3 text-[#7A5A38] hover:text-[#C4A882] text-sm transition-colors text-left"
+          >
+            + Upload file (.pdf, .doc, .docx, .txt)
+          </button>
+        )}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".pdf,.doc,.docx,.txt"
+          onChange={handleFileChange}
+          className="hidden"
         />
       </div>
 
@@ -214,16 +256,54 @@ function SubmitForm({ committee, type, onDone }: SubmitFormProps) {
   );
 }
 
+// Presentation setup dialog state
+type PresentationDialogPhase = 'ask' | 'timing' | null;
+
 interface DocCardProps {
   doc: CommitteeDocument;
   committeeId: string;
 }
 
 function DocCard({ doc, committeeId }: DocCardProps) {
-  const { updateDocumentStatus, removeDocument } = useCommitteeStore();
+  const { updateDocumentStatus, updateDocument, removeDocument } = useCommitteeStore();
   const [expanded, setExpanded] = useState(false);
+  const [presentationDialog, setPresentationDialog] = useState<PresentationDialogPhase>(null);
+  const [presentationMinutes, setPresentationMinutes] = useState(5);
+  const [qaMinutes, setQaMinutes] = useState(3);
 
   const nextStatus = STATUS_NEXT[doc.status];
+  const isIntroduceStep = nextStatus === 'introduced' || (doc.status === 'submitted' && nextStatus === 'on-floor');
+  // Show presentation dialog for on-floor -> introduced step
+  const needsPresentationPrompt = nextStatus === 'introduced';
+
+  const handleAdvance = () => {
+    if (!nextStatus) return;
+    if (needsPresentationPrompt) {
+      setPresentationDialog('ask');
+    } else {
+      updateDocumentStatus(committeeId, doc.id, nextStatus);
+    }
+  };
+
+  const handlePresentationYes = () => {
+    setPresentationDialog('timing');
+  };
+
+  const handlePresentationNo = () => {
+    setPresentationDialog(null);
+    if (nextStatus) updateDocumentStatus(committeeId, doc.id, nextStatus);
+  };
+
+  const handleConfirmPresentation = () => {
+    if (nextStatus) {
+      updateDocument(committeeId, doc.id, {
+        status: nextStatus,
+        presentationMinutes,
+        qaMinutes,
+      });
+    }
+    setPresentationDialog(null);
+  };
 
   return (
     <div className="bg-[#1A1209] border border-[#2E1E0F] rounded-xl p-4 space-y-3">
@@ -249,10 +329,23 @@ function DocCard({ doc, committeeId }: DocCardProps) {
         {doc.sponsors.join(', ') || '—'}
       </div>
 
-      {doc.signatories.length > 0 && (
-        <div className="text-xs text-[#C4A882]">
-          <span className="font-semibold">Signatories: </span>
-          {doc.signatories.join(', ')}
+      {/* Presentation info */}
+      {(doc.presentationMinutes || doc.qaMinutes) && (
+        <div className="text-xs text-purple-300">
+          🎤 {doc.presentationMinutes ?? 0} min presentation · {doc.qaMinutes ?? 0} min Q&A
+        </div>
+      )}
+
+      {/* File download */}
+      {doc.fileUrl && doc.fileName && (
+        <div className="text-xs">
+          <a
+            href={doc.fileUrl}
+            download={doc.fileName}
+            className="text-blue-400 hover:text-blue-300 transition-colors"
+          >
+            📎 {doc.fileName}
+          </a>
         </div>
       )}
 
@@ -272,24 +365,86 @@ function DocCard({ doc, committeeId }: DocCardProps) {
         </div>
       )}
 
-      <div className="flex gap-2 pt-1">
-        {nextStatus && doc.status !== 'passed' && doc.status !== 'failed' && (
+      {/* Presentation dialog */}
+      {presentationDialog === 'ask' && (
+        <div className="bg-[#150F09] border border-[#2E1E0F] rounded-xl p-4 space-y-3">
+          <p className="text-sm font-semibold text-white">Set up presentation?</p>
+          <div className="flex gap-2">
+            <button
+              onClick={handlePresentationYes}
+              className="flex-1 bg-[#7B4A1E] hover:bg-[#8B5A2B] text-white py-2 rounded-lg font-bold text-xs transition-colors"
+            >
+              Yes — set up timing
+            </button>
+            <button
+              onClick={handlePresentationNo}
+              className="flex-1 bg-[#2E1E0F] hover:bg-[#3E2A1A] text-[#C4A882] py-2 rounded-lg font-bold text-xs transition-colors"
+            >
+              No — skip
+            </button>
+          </div>
+        </div>
+      )}
+
+      {presentationDialog === 'timing' && (
+        <div className="bg-[#150F09] border border-[#2E1E0F] rounded-xl p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-[#C4A882]">Presentation Duration</span>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min={1}
+                max={60}
+                value={presentationMinutes}
+                onChange={(e) => setPresentationMinutes(Number(e.target.value))}
+                className="w-16 bg-[#1A1209] border border-[#2E1E0F] rounded-lg px-2 py-1 text-white text-sm text-center focus:outline-none focus:border-[#7B4A1E]"
+              />
+              <span className="text-sm text-[#7A5A38]">min</span>
+            </div>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-[#C4A882]">Q&A Duration</span>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min={0}
+                max={60}
+                value={qaMinutes}
+                onChange={(e) => setQaMinutes(Number(e.target.value))}
+                className="w-16 bg-[#1A1209] border border-[#2E1E0F] rounded-lg px-2 py-1 text-white text-sm text-center focus:outline-none focus:border-[#7B4A1E]"
+              />
+              <span className="text-sm text-[#7A5A38]">min</span>
+            </div>
+          </div>
           <button
-            onClick={() => updateDocumentStatus(committeeId, doc.id, nextStatus)}
-            className="flex-1 bg-[#7B4A1E] hover:bg-[#8B5A2B] text-white py-2 rounded-lg font-bold text-xs transition-colors"
+            onClick={handleConfirmPresentation}
+            className="w-full bg-[#7B4A1E] hover:bg-[#8B5A2B] text-white py-2 rounded-lg font-bold text-xs transition-colors"
           >
-            Advance → {STATUS_META[nextStatus].label}
+            Confirm &amp; Introduce
           </button>
-        )}
-        {doc.status === 'introduced' && (
-          <button
-            onClick={() => updateDocumentStatus(committeeId, doc.id, 'failed')}
-            className="flex-1 bg-[#2E1E0F] hover:bg-red-950/40 border border-[#2E1E0F] hover:border-red-800/40 text-[#C4A882] hover:text-red-500 py-2 rounded-lg font-bold text-xs transition-colors"
-          >
-            ✗ Fail
-          </button>
-        )}
-      </div>
+        </div>
+      )}
+
+      {presentationDialog === null && (
+        <div className="flex gap-2 pt-1">
+          {nextStatus && doc.status !== 'passed' && doc.status !== 'failed' && (
+            <button
+              onClick={handleAdvance}
+              className="flex-1 bg-[#7B4A1E] hover:bg-[#8B5A2B] text-white py-2 rounded-lg font-bold text-xs transition-colors"
+            >
+              {nextStatus === 'introduced' ? 'Introduce' : `Advance → ${STATUS_META[nextStatus].label}`}
+            </button>
+          )}
+          {doc.status === 'introduced' && (
+            <button
+              onClick={() => updateDocumentStatus(committeeId, doc.id, 'failed')}
+              className="flex-1 bg-[#2E1E0F] hover:bg-red-950/40 border border-[#2E1E0F] hover:border-red-800/40 text-[#C4A882] hover:text-red-500 py-2 rounded-lg font-bold text-xs transition-colors"
+            >
+              ✗ Fail
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="text-xs text-[#7A5A38]">
         Submitted {new Date(doc.submittedAt).toLocaleDateString()}
@@ -305,10 +460,14 @@ export default function DocumentsModal({
   committee: Committee;
   onClose: () => void;
 }) {
+  const router = useRouter();
   const [tab, setTab] = useState<DocTab>('working-paper');
   const [showForm, setShowForm] = useState(false);
 
   const docs = (committee.documents ?? []).filter((d) => d.type === tab);
+  const introducedDRs = (committee.documents ?? []).filter(
+    (d) => d.type === 'draft-resolution' && d.status === 'introduced'
+  );
 
   return (
     <div
@@ -381,6 +540,20 @@ export default function DocumentsModal({
               >
                 + Submit New {tab === 'working-paper' ? 'Working Paper' : 'Draft Resolution'}
               </button>
+
+              {/* Ready to Vote button — only shown on DR tab when there are introduced DRs */}
+              {tab === 'draft-resolution' && introducedDRs.length > 0 && (
+                <div className="pt-2">
+                  <div className="border-t border-[#2E1E0F] pt-4">
+                    <button
+                      onClick={() => { onClose(); router.push(`/voting/${committee.code}`); }}
+                      className="w-full bg-[#1A1209] hover:bg-[#2E1E0F] border border-[#7B4A1E] text-white py-3.5 rounded-2xl font-bold transition-all flex items-center justify-center gap-2"
+                    >
+                      🗳️ Ready to Vote on Draft Resolutions
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

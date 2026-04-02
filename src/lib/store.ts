@@ -89,10 +89,11 @@ interface CommitteeStore {
   // Documents
   addDocument: (committeeId: string, doc: Omit<CommitteeDocument, 'id' | 'submittedAt'>) => void;
   updateDocumentStatus: (committeeId: string, docId: string, status: DocumentStatus) => void;
+  updateDocument: (committeeId: string, docId: string, updates: Partial<CommitteeDocument>) => void;
   removeDocument: (committeeId: string, docId: string) => void;
 
   // Chat
-  sendMessage: (committeeId: string, sender: string, content: string, isPrivate?: boolean) => void;
+  sendMessage: (committeeId: string, sender: string, content: string, isPrivate?: boolean, recipient?: string) => void;
 
   // Voting
   startVoting: (committeeId: string) => void;
@@ -713,6 +714,19 @@ export const useCommitteeStore = create<CommitteeStore>()(
           },
         })),
 
+      updateDocument: (committeeId, docId, updates) =>
+        set((state) => ({
+          committees: {
+            ...state.committees,
+            [committeeId]: {
+              ...state.committees[committeeId],
+              documents: (state.committees[committeeId].documents ?? []).map((d) =>
+                d.id === docId ? { ...d, ...updates } : d
+              ),
+            },
+          },
+        })),
+
       removeDocument: (committeeId, docId) =>
         set((state) => ({
           committees: {
@@ -724,13 +738,14 @@ export const useCommitteeStore = create<CommitteeStore>()(
           },
         })),
 
-      sendMessage: (committeeId, sender, content, isPrivate = false) => {
+      sendMessage: (committeeId, sender, content, isPrivate = false, recipient) => {
         const message: ChatMessage = {
           id: generateId(),
           sender,
           content,
           timestamp: new Date(),
           isPrivate,
+          ...(recipient ? { recipient } : {}),
         };
         set((state) => ({
           committees: {

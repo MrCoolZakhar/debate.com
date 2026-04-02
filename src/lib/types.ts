@@ -75,10 +75,14 @@ export interface CommitteeDocument {
   docCode: string;        // e.g. "WP 1.1" or "DR 1/1"
   title: string;
   sponsors: string[];
-  signatories: string[];
   content: string;
   status: DocumentStatus;
   submittedAt: string;    // ISO string (avoid Date serialization issues with Zustand persist)
+  fileUrl?: string;
+  fileName?: string;
+  presentationMinutes?: number;
+  qaMinutes?: number;
+  signatories?: string[]; // kept optional for backwards-compat, not used in UI
 }
 
 export interface CaucusState {
@@ -101,6 +105,7 @@ export interface ChatMessage {
   content: string;
   timestamp: Date;
   isPrivate: boolean;
+  recipient?: string;
 }
 
 export interface Committee {

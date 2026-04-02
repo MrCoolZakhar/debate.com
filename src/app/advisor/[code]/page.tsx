@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useCommitteeStore } from '@/lib/store';
 import { Committee } from '@/lib/types';
 import { FlagCircle } from '@/components/RollCallPanel';
+import { getFlagEmoji, getCountryByName } from '@/lib/countries';
 
 function formatTime(seconds: number) {
   const m = Math.floor(seconds / 60);
@@ -18,9 +19,148 @@ function ordinal(n: number): string {
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
 }
 
-function DelegateCard({ delegate, committee }: { delegate: Committee['delegates'][0]; committee: Committee }) {
-  const [expanded, setExpanded] = useState(false);
+const NUDGE_EMOJIS = ['👍', '💪', '🌟', '⭐', '🎯'];
 
+function ExpandedDelegateCard({
+  delegate,
+  committee,
+  onClose,
+}: {
+  delegate: Committee['delegates'][0];
+  committee: Committee;
+  onClose: () => void;
+}) {
+  const { sendMessage } = useCommitteeStore();
+  const [nudgeSent, setNudgeSent] = useState<string | null>(null);
+
+  const queueIndex = committee.speakersList.findIndex((s) => s.delegateId === delegate.id);
+  const isCurrentSpeaker = committee.currentSpeaker?.delegateId === delegate.id;
+
+  // Find last motion raised by this country (check pendingMotions by proposedBy)
+  const lastMotion = [...(committee.pendingMotions ?? [])].reverse().find(
+    (m) => m.proposedBy === delegate.country
+  );
+
+  const statusLabel =
+    delegate.status === 'present' ? 'Present' :
+    delegate.status === 'present-voting' ? 'Present & Voting' : 'Absent';
+
+  const statusColor =
+    delegate.status === 'present' ? 'text-green-400' :
+    delegate.status === 'present-voting' ? 'text-[#B8844A]' :
+    'text-[#7A5A38]';
+
+  const found = getCountryByName(delegate.country);
+  const flag = found ? getFlagEmoji(found.code) : '🌐';
+
+  const handleNudge = (emoji: string) => {
+    sendMessage(committee.id, 'Faculty Advisor', `${emoji} to ${delegate.country}`, false);
+    setNudgeSent(emoji);
+    setTimeout(() => setNudgeSent(null), 1500);
+  };
+
+  let queueDisplay: string;
+  if (isCurrentSpeaker) {
+    queueDisplay = '🎤 Currently Speaking';
+  } else if (queueIndex >= 0) {
+    queueDisplay = `Next up: #${queueIndex + 1} in queue`;
+  } else {
+    queueDisplay = 'Not in queue';
+  }
+
+  let motionDisplay: string;
+  if (lastMotion) {
+    const typeLabel: Record<string, string> = {
+      moderated: 'Moderated Caucus',
+      unmoderated: 'Unmoderated Caucus',
+      consultation: 'Consultation',
+      tour: 'Tour de Table',
+    };
+    motionDisplay = typeLabel[lastMotion.type] || lastMotion.type;
+    if (lastMotion.topic) motionDisplay += ` — ${lastMotion.topic}`;
+  } else {
+    motionDisplay = 'No motion raised';
+  }
+
+  return (
+    <div
+      className="relative bg-[#1A1209] border border-[#7B4A1E]/60 rounded-2xl p-6 flex flex-col gap-4 transition-all duration-200"
+      onClick={(e) => e.stopPropagation()}
+    >
+      {/* X button */}
+      <button
+        onClick={onClose}
+        className="absolute top-3 right-3 text-[#7A5A38] hover:text-white text-xl leading-none"
+        aria-label="Close"
+      >
+        ×
+      </button>
+
+      {/* Flag + name */}
+      <div className="flex flex-col items-center gap-2 pt-2">
+        <span style={{ fontSize: '4.5rem', lineHeight: 1 }}>{flag}</span>
+        <h2 className="text-3xl font-black text-white text-center">{delegate.country}</h2>
+        <span className={`text-sm font-bold ${statusColor}`}>{statusLabel}</span>
+      </div>
+
+      {/* Info rows */}
+      <div className="space-y-3 w-full">
+        <div className="bg-[#150F09] border border-[#2E1E0F] rounded-xl px-4 py-3">
+          <p className="text-xs text-[#7A5A38] font-mono uppercase tracking-wider mb-1">Last Motion Raised</p>
+          <p className="text-sm text-white">{motionDisplay}</p>
+        </div>
+
+        <div className="bg-[#150F09] border border-[#2E1E0F] rounded-xl px-4 py-3">
+          <p className="text-xs text-[#7A5A38] font-mono uppercase tracking-wider mb-1">Position in Speakers Queue</p>
+          <p className="text-sm text-white">{queueDisplay}</p>
+        </div>
+      </div>
+
+      {/* Nudge buttons */}
+      <div>
+        <p className="text-xs text-[#7A5A38] font-mono uppercase tracking-wider mb-2">Send Nudge</p>
+        <div className="flex gap-2 flex-wrap">
+          {NUDGE_EMOJIS.map((emoji) => (
+            <button
+              key={emoji}
+              onClick={() => handleNudge(emoji)}
+              className="text-2xl bg-[#150F09] border border-[#2E1E0F] rounded-xl px-3 py-2 hover:border-[#7B4A1E] hover:bg-[#2E1E0F] transition-colors"
+            >
+              {emoji}
+            </button>
+          ))}
+        </div>
+        {nudgeSent && (
+          <p className="text-xs text-green-400 mt-2">Sent! {nudgeSent}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CollapsedDelegateCard({
+  delegate,
+  onSelect,
+}: {
+  delegate: Committee['delegates'][0];
+  onSelect: () => void;
+}) {
+  const found = getCountryByName(delegate.country);
+  const flag = found ? getFlagEmoji(found.code) : '🌐';
+
+  return (
+    <button
+      onClick={onSelect}
+      className="flex flex-col items-center gap-1 w-16 h-16 justify-center rounded-xl border border-[#2E1E0F] bg-[#150F09] hover:border-[#7B4A1E] transition-all duration-200 shrink-0"
+      title={delegate.country}
+    >
+      <span style={{ fontSize: '1.5rem', lineHeight: 1 }}>{flag}</span>
+      <span className="text-[9px] text-[#C4A882] truncate max-w-full px-1 leading-tight">{delegate.country}</span>
+    </button>
+  );
+}
+
+function NormalDelegateCard({ delegate, committee, onSelect }: { delegate: Committee['delegates'][0]; committee: Committee; onSelect: () => void }) {
   const queueIndex = committee.speakersList.findIndex((s) => s.delegateId === delegate.id);
   const isCurrentSpeaker = committee.currentSpeaker?.delegateId === delegate.id;
 
@@ -29,18 +169,19 @@ function DelegateCard({ delegate, committee }: { delegate: Committee['delegates'
     delegate.status === 'present-voting' ? 'bg-[#7B4A1E]/20 border-[#7B4A1E]/30' :
     'border-transparent';
 
-  const statusLabel =
-    delegate.status === 'present' ? 'P' :
-    delegate.status === 'present-voting' ? 'PV' : 'A';
   const statusLabelColor =
     delegate.status === 'present' ? 'text-green-400' :
     delegate.status === 'present-voting' ? 'text-[#B8844A]' :
     'text-[#7A5A38]';
 
+  const statusLabel =
+    delegate.status === 'present' ? 'P' :
+    delegate.status === 'present-voting' ? 'PV' : 'A';
+
   return (
     <div
-      className={`border rounded-xl transition-all cursor-pointer ${statusColor} ${isCurrentSpeaker ? 'ring-2 ring-[#B8844A]' : ''}`}
-      onClick={() => setExpanded((v) => !v)}
+      className={`border rounded-xl transition-all duration-200 cursor-pointer ${statusColor} ${isCurrentSpeaker ? 'ring-2 ring-[#B8844A]' : ''}`}
+      onClick={onSelect}
     >
       <div className="flex items-center gap-2 px-3 py-2.5">
         <FlagCircle country={delegate.country} size="xs" />
@@ -53,27 +194,6 @@ function DelegateCard({ delegate, committee }: { delegate: Committee['delegates'
         )}
         <span className={`text-xs font-bold ${statusLabelColor} shrink-0 w-6 text-center`}>{statusLabel}</span>
       </div>
-
-      {expanded && (
-        <div className="px-3 pb-3 pt-1 border-t border-[#2E1E0F] space-y-1.5">
-          <div className="text-xs text-[#C4A882]">
-            Status: <span className="text-white font-semibold capitalize">{delegate.status.replace('-', ' ')}</span>
-          </div>
-          {isCurrentSpeaker && committee.speakerTimeRemaining !== undefined && (
-            <div className="text-xs text-[#C4A882]">
-              Time remaining: <span className="text-white font-semibold font-mono">{formatTime(committee.speakerTimeRemaining)}</span>
-            </div>
-          )}
-          {queueIndex >= 0 && !isCurrentSpeaker && (
-            <div className="text-xs text-[#C4A882]">
-              Queue position: <span className="text-white font-semibold">{ordinal(queueIndex + 1)}</span>
-            </div>
-          )}
-          {queueIndex < 0 && !isCurrentSpeaker && (
-            <div className="text-xs text-[#7A5A38]">Not on speakers list</div>
-          )}
-        </div>
-      )}
     </div>
   );
 }
@@ -82,6 +202,7 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
   const { code } = use(params);
   const { committees } = useCommitteeStore();
   const [committee, setCommittee] = useState<Committee | null>(null);
+  const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
 
   useEffect(() => {
     const found = Object.values(committees).find((c) => c.code === code.toUpperCase());
@@ -105,6 +226,12 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
     : 100;
 
   const sortedDelegates = [...committee.delegates].sort((a, b) => a.country.localeCompare(b.country));
+  const selectedDelegate = selectedCountry
+    ? sortedDelegates.find((d) => d.country === selectedCountry) ?? null
+    : null;
+  const otherDelegates = selectedCountry
+    ? sortedDelegates.filter((d) => d.country !== selectedCountry)
+    : sortedDelegates;
 
   return (
     <div className="h-screen bg-[#0D0906] flex flex-col overflow-hidden">
@@ -177,14 +304,52 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
 
         {/* Right: All delegates grid */}
         <main className="flex-1 overflow-y-auto p-4">
-          <div className="mb-3">
-            <h2 className="text-sm font-bold text-[#C4A882]">All Delegates — click to expand</h2>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
-            {sortedDelegates.map((d) => (
-              <DelegateCard key={d.id} delegate={d} committee={committee} />
-            ))}
-          </div>
+          {selectedCountry === null ? (
+            <>
+              <div className="mb-3">
+                <h2 className="text-sm font-bold text-[#C4A882]">All Delegates — click to expand</h2>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
+                {sortedDelegates.map((d) => (
+                  <NormalDelegateCard
+                    key={d.id}
+                    delegate={d}
+                    committee={committee}
+                    onSelect={() => setSelectedCountry(d.country)}
+                  />
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="flex gap-4">
+              {/* Expanded card — ~50% width */}
+              <div className="w-1/2 shrink-0 transition-all duration-200">
+                {selectedDelegate && (
+                  <ExpandedDelegateCard
+                    delegate={selectedDelegate}
+                    committee={committee}
+                    onClose={() => setSelectedCountry(null)}
+                  />
+                )}
+              </div>
+
+              {/* Other delegates — small cards wrapping flex row */}
+              <div className="flex-1 overflow-y-auto">
+                <p className="text-xs text-[#7A5A38] font-mono uppercase tracking-wider mb-3">
+                  Other Delegates ({otherDelegates.length})
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {otherDelegates.map((d) => (
+                    <CollapsedDelegateCard
+                      key={d.id}
+                      delegate={d}
+                      onSelect={() => setSelectedCountry(d.country)}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </main>
       </div>
     </div>
