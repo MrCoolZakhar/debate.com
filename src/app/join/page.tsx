@@ -65,8 +65,7 @@ export default function JoinPage() {
     <div className="min-h-screen bg-[#0D0906] flex flex-col">
       <nav className="border-b border-[#2E1E0F] px-6 h-16 flex items-center justify-between bg-[#150F09]">
         <Link href="/" className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#7B4A1E] to-[#4E7C45] flex items-center justify-center text-sm font-bold text-white">G</div>
-          <span className="font-bold text-white">Gavelling</span>
+          <img src="/gavelling-logo.png" alt="Gavelling" className="h-9 w-auto" />
         </Link>
         <Link href="/create" className="text-sm text-[#7B4A1E] hover:text-[#C4A882] transition-colors">
           Chair? Create Committee →

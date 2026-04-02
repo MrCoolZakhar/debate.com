@@ -61,7 +61,7 @@ export default function DelegateSession({ params }: { params: Promise<{ code: st
       {/* Header */}
       <header className="border-b border-[#2E1E0F] bg-[#150F08] px-4 h-14 flex items-center gap-3">
         <Link href="/" className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#7B4A1E] to-[#4E7C45] flex items-center justify-center text-xs font-bold text-white">G</div>
+          <img src="/gavelling-logo.png" alt="Gavelling" className="h-8 w-auto" />
         </Link>
         <div className="flex-1 min-w-0">
           <div className="font-bold text-white text-sm truncate">{committee.name}</div>

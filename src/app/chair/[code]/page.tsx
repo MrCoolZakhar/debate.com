@@ -32,34 +32,45 @@ function AddSpeakerInput({ committee, onAdd }: { committee: Committee; onAdd: (i
   const inputRef = useRef<HTMLInputElement>(null);
   const onList = new Set(committee.speakersList.map((s) => s.delegateId));
   const eligible = committee.delegates.filter(
-    (d) => d.status !== 'absent' && !onList.has(d.id) && d.id !== committee.currentSpeaker?.delegateId
+    (d) => d.status !== 'absent' && d.id !== committee.currentSpeaker?.delegateId
   );
   const matches = query.trim()
     ? eligible
         .filter((d) => d.country.toLowerCase().startsWith(query.toLowerCase()))
         .concat(eligible.filter((d) => !d.country.toLowerCase().startsWith(query.toLowerCase()) && d.country.toLowerCase().includes(query.toLowerCase())))
     : [];
-  const top = matches[0] ?? null;
-  const commit = (d: typeof top) => { if (!d) return; onAdd(d.id); setQuery(''); inputRef.current?.focus(); };
+  const topNotOnList = matches.find((d) => !onList.has(d.id)) ?? null;
+  const commit = (d: typeof topNotOnList) => { if (!d || onList.has(d.id)) return; onAdd(d.id); setQuery(''); inputRef.current?.focus(); };
   return (
     <div className="relative">
       <div className="flex items-center bg-[#150F09] border border-[#2E1E0F] focus-within:border-[#7B4A1E] rounded-xl overflow-hidden transition-colors">
         <input ref={inputRef} type="text" value={query} onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(top); } if (e.key === 'Escape') setQuery(''); }}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(topNotOnList); } if (e.key === 'Escape') setQuery(''); }}
           placeholder="Add to speakers list..." autoFocus
           className="flex-1 bg-transparent px-4 py-3 text-white placeholder-[#7A5A38] focus:outline-none text-sm" />
-        {top && query && <span className="text-xs text-[#7A5A38] px-3 truncate max-w-[140px]">↵ {top.country}</span>}
+        {topNotOnList && query && <span className="text-xs text-[#7A5A38] px-3 truncate max-w-[140px]">↵ {topNotOnList.country}</span>}
       </div>
       {query && matches.length > 0 && (
         <div className="absolute bottom-full left-0 right-0 mb-1 bg-[#150F09] border border-[#2E1E0F] rounded-xl overflow-hidden z-20 shadow-xl">
           {matches.slice(0, 6).map((d, i) => {
             const found = getCountryByName(d.country);
+            const alreadyOnList = onList.has(d.id);
+            if (alreadyOnList) {
+              return (
+                <div key={d.id} className="w-full flex items-center gap-3 px-4 py-2.5 opacity-50 cursor-not-allowed">
+                  <span className="text-lg">{found ? getFlagEmoji(found.code) : '🌐'}</span>
+                  <span className="text-sm flex-1 text-[#7A5A38]">{d.country}</span>
+                  <span className="text-xs text-[#7A5A38]">already on list</span>
+                </div>
+              );
+            }
+            const isFirst = d === topNotOnList;
             return (
               <button key={d.id} onMouseDown={(e) => { e.preventDefault(); commit(d); }}
-                className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${i === 0 ? 'bg-[#7B4A1E]/20 text-white' : 'text-[#E8D5B7] hover:bg-[#2E1E0F]'}`}>
+                className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${isFirst ? 'bg-[#7B4A1E]/20 text-white' : 'text-[#E8D5B7] hover:bg-[#2E1E0F]'}`}>
                 <span className="text-lg">{found ? getFlagEmoji(found.code) : '🌐'}</span>
                 <span className="text-sm">{d.country}</span>
-                {i === 0 && <span className="ml-auto text-xs text-[#7A5A38]">Enter ↵</span>}
+                {isFirst && <span className="ml-auto text-xs text-[#7A5A38]">Enter ↵</span>}
               </button>
             );
           })}
@@ -79,14 +90,18 @@ function CaucusSpeakerQueue({
 }) {
   const { removeFromSpeakersList } = useCommitteeStore();
   if (committee.speakersList.length === 0) return null;
+  const queueSize = committee.speakersList.length;
+  const flagSize = queueSize <= 8 ? 'lg' : 'sm';
+  const displayList = committee.speakersList.slice(0, 15);
+  const overflow = queueSize > 15 ? queueSize - 15 : 0;
   return (
-    <div className="flex items-start gap-3 overflow-x-auto pt-1 pb-1 max-w-full">
-      {committee.speakersList.slice(0, 15).map((s) => {
+    <div className="flex flex-wrap items-start gap-3 pt-1 pb-1 max-w-full justify-center">
+      {displayList.map((s) => {
         const alreadySpoke = spokenCountries.includes(s.country);
         return (
-          <div key={s.delegateId} className="flex flex-col items-center gap-1 relative group shrink-0">
+          <div key={s.delegateId} className="flex flex-col items-center gap-1 relative group">
             <div className="relative">
-              <FlagCircle country={s.country} size="sm" />
+              <FlagCircle country={s.country} size={flagSize} />
               {alreadySpoke && (
                 <div className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center">
                   <span className="text-[9px] font-bold text-yellow-300">✓</span>
@@ -101,10 +116,10 @@ function CaucusSpeakerQueue({
           </div>
         );
       })}
-      {committee.speakersList.length > 15 && (
-        <div className="flex flex-col items-center gap-1 shrink-0">
-          <div className="w-10 h-10 rounded-full bg-[#2E1E0F] flex items-center justify-center">
-            <span className="text-xs font-bold text-[#C4A882]">+{committee.speakersList.length - 15}</span>
+      {overflow > 0 && (
+        <div className="flex flex-col items-center gap-1">
+          <div className="w-9 h-9 rounded-full bg-[#2E1E0F] flex items-center justify-center">
+            <span className="text-xs font-bold text-[#C4A882]">+{overflow}</span>
           </div>
           <span className="text-[10px] text-[#7A5A38]">more</span>
         </div>
@@ -118,34 +133,45 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd }: { committe
   const [query, setQuery] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const onList = new Set(committee.speakersList.map((s) => s.delegateId));
-  const eligible = committee.delegates.filter((d) => d.status !== 'absent' && !onList.has(d.id));
+  const eligible = committee.delegates.filter((d) => d.status !== 'absent');
   const matches = query.trim()
     ? eligible.filter((d) => d.country.toLowerCase().startsWith(query.toLowerCase()))
         .concat(eligible.filter((d) => !d.country.toLowerCase().startsWith(query.toLowerCase()) && d.country.toLowerCase().includes(query.toLowerCase())))
     : [];
-  const top = matches[0] ?? null;
-  const commit = (d: typeof top) => { if (!d) return; onAdd(d.id); setQuery(''); inputRef.current?.focus(); };
+  const topNotOnList = matches.find((d) => !onList.has(d.id)) ?? null;
+  const commit = (d: typeof topNotOnList) => { if (!d || onList.has(d.id)) return; onAdd(d.id); setQuery(''); inputRef.current?.focus(); };
   return (
     <div className="relative">
       <div className="flex items-center bg-[#150F09] border border-[#2E1E0F] focus-within:border-[#7B4A1E] rounded-xl overflow-hidden transition-colors">
         <input ref={inputRef} type="text" value={query} onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(top); } if (e.key === 'Escape') setQuery(''); }}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(topNotOnList); } if (e.key === 'Escape') setQuery(''); }}
           placeholder="Add to speakers list…"
           className="flex-1 bg-transparent px-4 py-3 text-white placeholder-[#7A5A38] focus:outline-none text-sm" />
-        {top && query && <span className="text-xs text-[#7A5A38] px-3 truncate max-w-[140px]">↵ {top.country}</span>}
+        {topNotOnList && query && <span className="text-xs text-[#7A5A38] px-3 truncate max-w-[140px]">↵ {topNotOnList.country}</span>}
       </div>
       {query && matches.length > 0 && (
         <div className="absolute bottom-full left-0 right-0 mb-1 bg-[#150F09] border border-[#2E1E0F] rounded-xl overflow-hidden z-20 shadow-xl">
-          {matches.slice(0, 6).map((d, i) => {
+          {matches.slice(0, 6).map((d) => {
             const found = getCountryByName(d.country);
+            const alreadyOnList = onList.has(d.id);
             const spoke = spokenCountries.includes(d.country);
+            if (alreadyOnList) {
+              return (
+                <div key={d.id} className="w-full flex items-center gap-3 px-4 py-2.5 opacity-50 cursor-not-allowed">
+                  <span className="text-lg">{found ? getFlagEmoji(found.code) : '🌐'}</span>
+                  <span className="text-sm flex-1 text-[#7A5A38]">{d.country}</span>
+                  <span className="text-xs text-[#7A5A38]">already on list</span>
+                </div>
+              );
+            }
+            const isFirst = d === topNotOnList;
             return (
               <button key={d.id} onMouseDown={(e) => { e.preventDefault(); commit(d); }}
-                className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${i === 0 ? 'bg-[#7B4A1E]/20 text-white' : 'text-[#E8D5B7] hover:bg-[#2E1E0F]'}`}>
+                className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${isFirst ? 'bg-[#7B4A1E]/20 text-white' : 'text-[#E8D5B7] hover:bg-[#2E1E0F]'}`}>
                 <span className="text-lg">{found ? getFlagEmoji(found.code) : '🌐'}</span>
                 <span className="text-sm flex-1">{d.country}</span>
                 {spoke && <span className="text-[10px] text-yellow-500 shrink-0">already spoke</span>}
-                {i === 0 && !spoke && <span className="text-xs text-[#7A5A38] shrink-0">Enter ↵</span>}
+                {isFirst && !spoke && <span className="text-xs text-[#7A5A38] shrink-0">Enter ↵</span>}
               </button>
             );
           })}
@@ -338,10 +364,13 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
       {/* Slim header */}
       <header className="border-b border-[#2E1E0F] bg-[#150F08] px-4 h-11 flex items-center gap-3 shrink-0">
         <Link href="/">
-          <div className="w-6 h-6 rounded-md bg-gradient-to-br from-[#7B4A1E] to-[#4E7C45] flex items-center justify-center text-xs font-bold shrink-0 text-white">G</div>
+          <img src="/gavelling-logo.png" alt="Gavelling" className="h-8 w-auto" />
         </Link>
         <span className="font-bold text-white text-sm truncate">{committee.name}</span>
         <span className="text-[#7A5A38] text-xs hidden sm:block truncate flex-1">{committee.topic}</span>
+        <span className="text-xs text-[#C4A882] font-mono shrink-0 hidden sm:block">
+          {present}P · 2/3:{Math.ceil((present * 2) / 3)} · 1/2:{Math.floor(present / 2) + 1}
+        </span>
         {committee.phase !== 'pre-session' && (
           <button
             onClick={() => setShowRollCall((v) => !v)}
@@ -407,7 +436,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
         {committee.phase === 'pre-session' && (
           <div className="flex-1 flex items-center justify-center px-6 py-8">
             <div className="w-full max-w-lg bg-[#1A1209] border border-[#2E1E0F] rounded-2xl overflow-hidden shadow-lg" style={{ height: '80vh', maxHeight: '640px' }}>
-              <RollCallPanel committee={committee} />
+              <RollCallPanel committee={committee} onAddToList={(id) => addToSpeakersList(committee.id, id)} onListIds={new Set(committee.speakersList.map(s => s.delegateId))} />
             </div>
           </div>
         )}
@@ -418,7 +447,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
             {/* Roll Call sidebar (collapsible) */}
             {showRollCall && (
               <aside className="w-64 border-r border-[#2E1E0F] bg-[#0D0906] flex flex-col overflow-hidden shrink-0">
-                <RollCallPanel committee={committee} />
+                <RollCallPanel committee={committee} onAddToList={(id) => addToSpeakersList(committee.id, id)} onListIds={new Set(committee.speakersList.map(s => s.delegateId))} />
               </aside>
             )}
 
@@ -461,29 +490,35 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
               <div className="flex-1 flex flex-col items-center justify-center px-8 py-6 min-h-0 overflow-hidden">
                 {committee.currentSpeaker ? (
                   <>
-                    {/* Next up — flags above timer, up to 15, scrollable */}
-                    {committee.speakersList.length > 0 && (
-                      <div className="flex items-start gap-4 mb-8 overflow-x-auto pt-2 pb-1 max-w-full">
-                        {committee.speakersList.slice(0, 15).map((s) => (
-                          <div key={s.delegateId} className="flex flex-col items-center gap-2 relative group shrink-0">
-                            <FlagCircle country={s.country} size="lg" />
-                            <span className="text-xs text-[#C4A882] text-center w-20 truncate">{s.country}</span>
-                            <button
-                              onClick={() => removeFromSpeakersList(committee.id, s.delegateId)}
-                              className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full text-white text-xs items-center justify-center hidden group-hover:flex leading-none"
-                            >✕</button>
-                          </div>
-                        ))}
-                        {committee.speakersList.length > 15 && (
-                          <div className="flex flex-col items-center gap-2 shrink-0">
-                            <div className="w-20 h-20 rounded-full bg-[#2E1E0F] flex items-center justify-center">
-                              <span className="text-lg font-bold text-[#C4A882]">+{committee.speakersList.length - 15}</span>
+                    {/* Next up — flags above timer, dynamic sizing, wrapping */}
+                    {committee.speakersList.length > 0 && (() => {
+                      const qLen = committee.speakersList.length;
+                      const fSize = qLen <= 8 ? 'lg' : 'sm';
+                      const displayItems = committee.speakersList.slice(0, 15);
+                      const extra = qLen > 15 ? qLen - 15 : 0;
+                      return (
+                        <div className="flex flex-wrap items-start gap-4 mb-8 pt-2 pb-1 max-w-full justify-center">
+                          {displayItems.map((s) => (
+                            <div key={s.delegateId} className="flex flex-col items-center gap-2 relative group">
+                              <FlagCircle country={s.country} size={fSize} />
+                              <span className="text-xs text-[#C4A882] text-center w-14 truncate">{s.country}</span>
+                              <button
+                                onClick={() => removeFromSpeakersList(committee.id, s.delegateId)}
+                                className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full text-white text-xs items-center justify-center hidden group-hover:flex leading-none"
+                              >✕</button>
                             </div>
-                            <span className="text-xs text-[#7A5A38]">more</span>
-                          </div>
-                        )}
-                      </div>
-                    )}
+                          ))}
+                          {extra > 0 && (
+                            <div className="flex flex-col items-center gap-2">
+                              <div className="w-14 h-14 rounded-full bg-[#2E1E0F] flex items-center justify-center">
+                                <span className="text-sm font-bold text-[#C4A882]">+{extra}</span>
+                              </div>
+                              <span className="text-xs text-[#7A5A38]">more</span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
 
                     <FlagCircle country={committee.currentSpeaker.country} size="xl" />
                     <h1 className="text-5xl font-black text-white mt-5 mb-2 text-center">{committee.currentSpeaker.country}</h1>
@@ -498,7 +533,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
                     </div>
                     {committee.speakersList.length === 0 && (
                       <div className="mb-4 px-4 py-2 bg-yellow-900/30 border border-yellow-700/40 rounded-xl text-yellow-400 text-sm text-center max-w-sm">
-                        ⚠ Last speaker — add more delegates before the timer ends.
+                        Add at least one more delegate before advancing — advancing now ends the speakers list.
                       </div>
                     )}
                     <div className="flex gap-3 w-full max-w-sm mt-2">
@@ -507,7 +542,8 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
                         {timerRunning ? '⏸ Pause' : '▶ Start'}
                       </button>
                       <button onClick={() => { setTimerRunning(false); nextSpeaker(committee.id); }}
-                        className="flex-1 bg-[#2E1E0F] hover:bg-[#3D2A15] border border-[#2E1E0F] text-white py-3 rounded-xl font-bold text-base transition-colors">
+                        disabled={committee.speakersList.length === 0}
+                        className="flex-1 bg-[#2E1E0F] hover:bg-[#3D2A15] disabled:opacity-40 disabled:cursor-not-allowed border border-[#2E1E0F] text-white py-3 rounded-xl font-bold text-base transition-colors">
                         Next →
                       </button>
                     </div>
@@ -515,28 +551,34 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
                 ) : (
                   <>
                     {/* Next up — flags above no-speaker state */}
-                    {committee.speakersList.length > 0 && (
-                      <div className="flex items-end gap-5 mb-10">
-                        {committee.speakersList.slice(0, 4).map((s) => (
-                          <div key={s.delegateId} className="flex flex-col items-center gap-2 relative group">
-                            <FlagCircle country={s.country} size="lg" />
-                            <span className="text-xs text-[#C4A882] text-center max-w-[80px] truncate">{s.country}</span>
-                            <button
-                              onClick={() => removeFromSpeakersList(committee.id, s.delegateId)}
-                              className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full text-white text-xs items-center justify-center hidden group-hover:flex leading-none"
-                            >✕</button>
-                          </div>
-                        ))}
-                        {committee.speakersList.length > 4 && (
-                          <div className="flex flex-col items-center gap-2">
-                            <div className="w-20 h-20 rounded-full bg-[#2E1E0F] flex items-center justify-center">
-                              <span className="text-lg font-bold text-[#C4A882]">+{committee.speakersList.length - 4}</span>
+                    {committee.speakersList.length > 0 && (() => {
+                      const qLen = committee.speakersList.length;
+                      const fSize = qLen <= 8 ? 'lg' : 'sm';
+                      const displayItems = committee.speakersList.slice(0, 15);
+                      const extra = qLen > 15 ? qLen - 15 : 0;
+                      return (
+                        <div className="flex flex-wrap items-end gap-4 mb-10 justify-center max-w-full">
+                          {displayItems.map((s) => (
+                            <div key={s.delegateId} className="flex flex-col items-center gap-2 relative group">
+                              <FlagCircle country={s.country} size={fSize} />
+                              <span className="text-xs text-[#C4A882] text-center w-14 truncate">{s.country}</span>
+                              <button
+                                onClick={() => removeFromSpeakersList(committee.id, s.delegateId)}
+                                className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full text-white text-xs items-center justify-center hidden group-hover:flex leading-none"
+                              >✕</button>
                             </div>
-                            <span className="text-xs text-[#7A5A38]">more</span>
-                          </div>
-                        )}
-                      </div>
-                    )}
+                          ))}
+                          {extra > 0 && (
+                            <div className="flex flex-col items-center gap-2">
+                              <div className="w-14 h-14 rounded-full bg-[#2E1E0F] flex items-center justify-center">
+                                <span className="text-sm font-bold text-[#C4A882]">+{extra}</span>
+                              </div>
+                              <span className="text-xs text-[#7A5A38]">more</span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
 
                     <div className="text-7xl mb-6">🎙️</div>
                     <h2 className="text-3xl font-black text-white mb-2">No Current Speaker</h2>

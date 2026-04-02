@@ -15,8 +15,7 @@ export default function LandingPage() {
       <nav className="bg-white border-b border-[#D4B896] sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#7B4A1E] to-[#4E7C45] flex items-center justify-center text-sm font-bold text-white">G</div>
-            <span className="font-bold text-lg tracking-tight text-[#1A0F08]">Gavelling</span>
+            <img src="/gavelling-logo.png" alt="Gavelling" className="h-9 w-auto" />
           </div>
           <div className="flex items-center gap-3">
             <Link href="/join" className="text-sm text-[#5C3A1E] hover:text-[#1A0F08] transition-colors px-4 py-2">
@@ -61,48 +60,6 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* THREE BIG BUBBLES */}
-      <section className="max-w-5xl mx-auto px-6 pb-24">
-        <div className="flex flex-col md:flex-row gap-4 items-stretch">
-          {/* Left: Regular Debate */}
-          <div className="flex-1 bg-[#F0EDE8] border border-[#D4B896] rounded-3xl p-8 flex flex-col opacity-60">
-            <div className="text-4xl mb-4">⚖️</div>
-            <h3 className="text-2xl font-black text-[#5C3A1E] mb-2">Regular Debate</h3>
-            <p className="text-[#5C3A1E] text-sm leading-relaxed flex-1">Coming soon — focused on for/against structures with structured rebuttal rounds.</p>
-            <div className="mt-6 px-4 py-2 bg-[#D4B896]/40 rounded-xl text-center text-xs text-[#5C3A1E] font-semibold">Coming Soon</div>
-          </div>
-
-          {/* Middle: MUN — LARGE, ACTIVE */}
-          <div className="flex-[1.4] bg-gradient-to-br from-[#7B4A1E] to-[#4E7C45] rounded-3xl p-8 flex flex-col shadow-2xl relative overflow-hidden">
-            <div className="absolute inset-0 bg-white/5 rounded-3xl" />
-            <div className="relative">
-              <div className="text-5xl mb-4">🌐</div>
-              <h3 className="text-3xl font-black text-white mb-3">MUN</h3>
-              <p className="text-white/80 text-sm leading-relaxed mb-4">Full Model UN committee management. Roll call, speakers list, motions, caucuses, resolutions, and voting procedures.</p>
-              <ul className="text-white/70 text-xs space-y-1 mb-8">
-                <li>✓ Roll call with quorum tracking</li>
-                <li>✓ General Speakers List with timer</li>
-                <li>✓ Moderated &amp; unmoderated caucus</li>
-                <li>✓ Motion system with voting</li>
-                <li>✓ Preset committees (UNSC, HRC, NATO...)</li>
-              </ul>
-              <Link href="/create"
-                className="block w-full text-center bg-white text-[#7B4A1E] hover:bg-[#FAF7F2] px-6 py-3.5 rounded-2xl font-black text-base transition-colors">
-                Launch your committee →
-              </Link>
-            </div>
-          </div>
-
-          {/* Right: Crisis */}
-          <div className="flex-1 bg-[#F0EDE8] border border-[#D4B896] rounded-3xl p-8 flex flex-col opacity-60">
-            <div className="text-4xl mb-4">⚡</div>
-            <h3 className="text-2xl font-black text-[#5C3A1E] mb-2">Crisis</h3>
-            <p className="text-[#5C3A1E] text-sm leading-relaxed flex-1">Coming soon — crisis arc management with directive tracking and press releases.</p>
-            <div className="mt-6 px-4 py-2 bg-[#D4B896]/40 rounded-xl text-center text-xs text-[#5C3A1E] font-semibold">Coming Soon</div>
-          </div>
-        </div>
-      </section>
-
       {/* How it works */}
       <section id="how-it-works" className="bg-white border-y border-[#D4B896] py-24">
         <div className="max-w-5xl mx-auto px-6">
@@ -133,8 +90,7 @@ export default function LandingPage() {
       {/* Footer */}
       <footer className="max-w-7xl mx-auto px-6 py-12 flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#7B4A1E] to-[#4E7C45] flex items-center justify-center text-xs font-bold text-white">G</div>
-          <span className="font-bold text-[#1A0F08]">Gavelling</span>
+          <img src="/gavelling-logo.png" alt="Gavelling" className="h-8 w-auto" />
         </div>
         <p className="text-sm text-[#5C3A1E]">
           © {new Date().getFullYear()} Gavelling. Built for the MUN community.

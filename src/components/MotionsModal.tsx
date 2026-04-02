@@ -524,105 +524,115 @@ function VotingView({
     );
   }
 
+  const primary = sorted[0];
+  const rest = sorted.slice(1, 4);
+
+  const renderMotionCard = (m: typeof sorted[0], large: boolean) => {
+    const meta = TYPE_META[m.type];
+    const { needed, fraction } = requiredVotes(m.type, present);
+    const mins = Math.floor(m.totalTime / 60);
+    const secs = m.totalTime % 60;
+    const isEditing = editingId === m.id;
+    return (
+      <div key={m.id} className={`bg-[#1A1209] border border-[#2E1E0F] rounded-2xl flex flex-col ${large ? 'p-6 space-y-4 flex-1 min-w-0' : 'p-4 space-y-3'}`}>
+        <div className="flex items-start gap-3">
+          <span className={large ? 'text-5xl' : 'text-2xl'}>{meta.icon}</span>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap mb-1">
+              <span className={`font-black text-white ${large ? 'text-xl' : 'text-sm'}`}>{meta.label}</span>
+              <DisruptivenessBadge type={m.type} />
+            </div>
+            {(() => { const f = getCountryByName(m.proposedBy); return (
+              <div className="flex items-center gap-2 mt-1">
+                <span className={large ? 'text-xl' : 'text-base'}>{f ? getFlagEmoji(f.code) : '🌐'}</span>
+                <span className={`font-semibold text-white ${large ? 'text-base' : 'text-xs'}`}>{m.proposedBy}</span>
+              </div>
+            ); })()}
+            {large && m.topic && (
+              <div className="mt-2 px-3 py-1.5 bg-[#150F09] border border-[#2E1E0F] rounded-lg">
+                <span className="text-xs font-mono text-[#7A5A38] uppercase tracking-wide">Topic</span>
+                <p className="text-sm font-semibold text-white mt-0.5">"{m.topic}"</p>
+              </div>
+            )}
+            {!large && m.topic && (
+              <p className="text-xs text-[#C4A882] mt-1 truncate">"{m.topic}"</p>
+            )}
+            {large && m.type !== 'tour' && (
+              <div className="flex items-center gap-3 mt-2">
+                <div className="px-3 py-1 bg-[#150F09] border border-[#2E1E0F] rounded-lg text-sm font-bold text-[#7B4A1E]">
+                  {mins > 0 ? `${mins}m` : ''}{secs > 0 ? ` ${secs}s` : ''} total
+                </div>
+                {m.type === 'moderated' && (
+                  <div className="px-3 py-1 bg-[#150F09] border border-[#2E1E0F] rounded-lg text-sm font-bold text-[#3D6B35]">
+                    {m.speakingTime}s / speaker
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          <button
+            onClick={() => setEditingId(isEditing ? null : m.id)}
+            className={`p-1.5 rounded-lg transition-colors shrink-0 ${isEditing ? 'bg-[#7B4A1E]/20 text-[#7B4A1E]' : 'text-[#7A5A38] hover:text-white hover:bg-[#2E1E0F]'}`}
+            title="Edit motion"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+            </svg>
+          </button>
+        </div>
+
+        {isEditing && (
+          <MotionEditor committee={committee} motion={m} onDone={() => setEditingId(null)} />
+        )}
+
+        {!isEditing && (
+          <>
+            <div className="flex items-center gap-2 bg-[#150F09] border border-[#2E1E0F] rounded-xl px-3 py-2">
+              <span className="text-xs text-[#7A5A38]">{fraction}</span>
+              <span className="text-xs text-white font-bold ml-auto">Needs {needed} of {present}</span>
+            </div>
+            <div className="flex gap-2 mt-auto">
+              <button
+                onClick={() => onAccepted(m)}
+                className="flex-1 bg-green-700 hover:bg-green-600 text-white py-2.5 rounded-xl font-bold text-sm transition-colors"
+              >
+                ✓ Accept
+              </button>
+              <button
+                onClick={() => removePendingMotion(committee.id, m.id)}
+                className="flex-1 bg-[#2E1E0F] hover:bg-red-950/40 hover:text-red-500 text-[#C4A882] border border-[#2E1E0F] hover:border-red-800/40 py-2.5 rounded-xl font-bold text-sm transition-colors"
+              >
+                ✗ Reject
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    );
+  };
+
   return (
-    <div className="px-7 pb-7 space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="px-7 pb-7 space-y-4 min-h-[70vh] flex flex-col">
+      <div className="flex items-center justify-between shrink-0">
         <h2 className="text-2xl font-black text-white">Vote on Motions</h2>
         <span className="text-xs text-[#7A5A38] font-mono">MOST DISRUPTIVE FIRST</span>
       </div>
 
-      <div className="space-y-3">
-        {sorted.map((m) => {
-          const meta = TYPE_META[m.type];
-          const { needed, fraction } = requiredVotes(m.type, present);
-          const mins = Math.floor(m.totalTime / 60);
-          const secs = m.totalTime % 60;
-          const isEditing = editingId === m.id;
-          return (
-            <div key={m.id} className="bg-[#1A1209] border border-[#2E1E0F] rounded-2xl p-5 space-y-4">
-              <div className="flex items-start gap-4">
-                <span className="text-4xl">{meta.icon}</span>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap mb-1">
-                    <span className="text-lg font-black text-white">{meta.label}</span>
-                    <DisruptivenessBadge type={m.type} />
-                  </div>
-                  {/* Proposer with flag */}
-                  {(() => { const f = getCountryByName(m.proposedBy); return (
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="text-xl">{f ? getFlagEmoji(f.code) : '🌐'}</span>
-                      <span className="text-sm font-semibold text-white">{m.proposedBy}</span>
-                    </div>
-                  ); })()}
-                  {/* Topic — prominent */}
-                  {m.topic && (
-                    <div className="mt-2 px-3 py-1.5 bg-[#150F09] border border-[#2E1E0F] rounded-lg">
-                      <span className="text-xs font-mono text-[#7A5A38] uppercase tracking-wide">Topic</span>
-                      <p className="text-sm font-semibold text-white mt-0.5">"{m.topic}"</p>
-                    </div>
-                  )}
-                  {/* Times — prominent */}
-                  {m.type !== 'tour' && (
-                    <div className="flex items-center gap-3 mt-2">
-                      <div className="px-3 py-1 bg-[#150F09] border border-[#2E1E0F] rounded-lg text-sm font-bold text-[#7B4A1E]">
-                        {mins > 0 ? `${mins}m` : ''}{secs > 0 ? ` ${secs}s` : ''} total
-                      </div>
-                      {m.type === 'moderated' && (
-                        <div className="px-3 py-1 bg-[#150F09] border border-[#2E1E0F] rounded-lg text-sm font-bold text-[#3D6B35]">
-                          {m.speakingTime}s / speaker
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-                {/* Edit button */}
-                <button
-                  onClick={() => setEditingId(isEditing ? null : m.id)}
-                  className={`p-1.5 rounded-lg transition-colors shrink-0 ${isEditing ? 'bg-[#7B4A1E]/20 text-[#7B4A1E]' : 'text-[#7A5A38] hover:text-white hover:bg-[#2E1E0F]'}`}
-                  title="Edit motion"
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                  </svg>
-                </button>
-              </div>
+      {sorted.length === 1 ? (
+        <div className="flex-1 flex flex-col">
+          {renderMotionCard(primary, true)}
+        </div>
+      ) : (
+        <div className="flex gap-4 flex-1 min-h-0">
+          {renderMotionCard(primary, true)}
+          <div className="w-72 flex flex-col gap-3">
+            {rest.map((m) => renderMotionCard(m, false))}
+          </div>
+        </div>
+      )}
 
-              {/* Inline editor */}
-              {isEditing && (
-                <MotionEditor committee={committee} motion={m} onDone={() => setEditingId(null)} />
-              )}
-
-              {/* Quorum info */}
-              {!isEditing && (
-                <>
-                  <div className="flex items-center gap-2 bg-[#150F09] border border-[#2E1E0F] rounded-xl px-3 py-2">
-                    <span className="text-xs text-[#7A5A38]">{fraction}</span>
-                    <span className="text-xs text-white font-bold ml-auto">Needs {needed} of {present} votes</span>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => onAccepted(m)}
-                      className="flex-1 bg-green-700 hover:bg-green-600 text-white py-2.5 rounded-xl font-bold text-sm transition-colors"
-                    >
-                      ✓ Accept
-                    </button>
-                    <button
-                      onClick={() => removePendingMotion(committee.id, m.id)}
-                      className="flex-1 bg-[#2E1E0F] hover:bg-red-950/40 hover:text-red-500 text-[#C4A882] border border-[#2E1E0F] hover:border-red-800/40 py-2.5 rounded-xl font-bold text-sm transition-colors"
-                    >
-                      ✗ Reject
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      <button onClick={onAllDone} className="w-full text-sm text-[#7A5A38] hover:text-white transition-colors py-2">
+      <button onClick={onAllDone} className="w-full text-sm text-[#7A5A38] hover:text-white transition-colors py-2 shrink-0">
         Close floor (no motion passes)
       </button>
     </div>
@@ -648,7 +658,7 @@ export default function MotionsModal({ committee, onClose }: { committee: Commit
       style={{ background: 'rgba(5, 8, 20, 0.88)', backdropFilter: 'blur(4px)' }}
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="bg-[#1A1209] border border-[#2E1E0F] rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
+      <div className={`bg-[#1A1209] border border-[#2E1E0F] rounded-3xl w-full shadow-2xl overflow-hidden max-h-[92vh] flex flex-col ${view === 'vote' ? 'max-w-5xl' : 'max-w-2xl'}`}>
         {/* Header */}
         <div className="flex items-center justify-end px-7 pt-6 pb-0 shrink-0">
           <button onClick={onClose} className="text-[#7A5A38] hover:text-white transition-colors text-xl leading-none">✕</button>

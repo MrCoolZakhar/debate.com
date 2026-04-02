@@ -100,6 +100,7 @@ function CreatePageInner() {
   const router = useRouter();
   const createCommittee = useCommitteeStore((s) => s.createCommittee);
 
+  const [committeeMode, setCommitteeMode] = useState<'select' | 'build'>('select');
   const [committeeName, setCommitteeName] = useState('');
   const [topic, setTopic] = useState('');
   const [delegates, setDelegates] = useState<string[]>([]);
@@ -154,16 +155,53 @@ function CreatePageInner() {
     <div className="h-screen bg-[#0D0906] flex flex-col overflow-hidden">
       <nav className="border-b border-[#2E1E0F] bg-[#150F09] px-6 h-14 flex items-center justify-between shrink-0">
         <Link href="/" className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#7B4A1E] to-[#4E7C45] flex items-center justify-center text-xs font-bold text-white">G</div>
-          <span className="font-bold text-white">Gavelling</span>
+          <img src="/gavelling-logo.png" alt="Gavelling" className="h-8 w-auto" />
         </Link>
       </nav>
 
       <div className="flex-1 flex overflow-hidden">
 
+        {/* ── Committee type selection screen ── */}
+        {committeeMode === 'select' && (
+          <div className="flex-1 flex flex-col items-center justify-center px-8 py-6">
+            <h1 className="text-2xl font-black text-white mb-2">Choose Committee Type</h1>
+            <p className="text-[#C4A882] text-sm mb-8">Select the type of committee you want to run.</p>
+            <div className="flex flex-row gap-4 w-full max-w-4xl">
+              {/* Regular Debate — Coming Soon */}
+              <div className="flex-1 flex flex-col items-center justify-center bg-[#1A1209] border border-[#2E1E0F] rounded-3xl p-8 min-h-[300px] opacity-60 cursor-not-allowed relative">
+                <span className="text-5xl mb-4">🗣️</span>
+                <h2 className="text-xl font-black text-white mb-2">Regular Debate</h2>
+                <p className="text-[#C4A882] text-sm text-center mb-4">Traditional parliamentary debate</p>
+                <span className="px-3 py-1 bg-[#2E1E0F] border border-[#3D2A15] text-[#7A5A38] rounded-full text-xs font-semibold">Coming Soon</span>
+              </div>
+
+              {/* MUN — Active */}
+              <div
+                onClick={() => setCommitteeMode('build')}
+                className="flex-1 flex flex-col items-center justify-center bg-[#1A1209] border-2 border-[#7B4A1E] rounded-3xl p-8 min-h-[300px] cursor-pointer hover:bg-[#2E1E0F] hover:border-[#C4A882] transition-all group"
+              >
+                <span className="text-5xl mb-4">🌍</span>
+                <h2 className="text-xl font-black text-white mb-2">Model United Nations</h2>
+                <p className="text-[#C4A882] text-sm text-center mb-4">United Nations committee simulation</p>
+                <span className="px-4 py-2 bg-[#7B4A1E] group-hover:bg-[#8B5A2B] text-white rounded-xl text-sm font-bold transition-colors">Start →</span>
+              </div>
+
+              {/* Crisis — Coming Soon */}
+              <div className="flex-1 flex flex-col items-center justify-center bg-[#1A1209] border border-[#2E1E0F] rounded-3xl p-8 min-h-[300px] opacity-60 cursor-not-allowed relative">
+                <span className="text-5xl mb-4">⚡</span>
+                <h2 className="text-xl font-black text-white mb-2">Crisis Committee</h2>
+                <p className="text-[#C4A882] text-sm text-center mb-4">Fast-paced crisis scenarios</p>
+                <span className="px-3 py-1 bg-[#2E1E0F] border border-[#3D2A15] text-[#7A5A38] rounded-full text-xs font-semibold">Coming Soon</span>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ── Custom: full-screen single-page layout ── */}
+        {committeeMode === 'build' && (
         <div className="flex-1 flex flex-col overflow-hidden px-8 py-6">
             <div className="flex items-center gap-3 mb-6 shrink-0">
+              <button onClick={() => setCommitteeMode('select')} className="text-sm text-[#C4A882] hover:text-white transition-colors">← Back</button>
               <span className="text-2xl">✏️</span>
               <h1 className="text-2xl font-black text-white">New Committee</h1>
             </div>
@@ -297,8 +335,10 @@ function CreatePageInner() {
               </div>
             </div>
           </div>
-        </div>
+        )}
+
       </div>
+    </div>
   );
 }
 
