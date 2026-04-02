@@ -8,6 +8,13 @@ import RollCallPanel, { FlagCircle } from '@/components/RollCallPanel';
 import MotionsModal from '@/components/MotionsModal';
 import DocumentsModal from '@/components/DocumentsModal';
 import { getFlagEmoji, getCountryByName } from '@/lib/countries';
+import {
+  setPhase as setPhaseInDB,
+  addToSpeakersList as addToSpeakersListInDB,
+  removeFromSpeakersList as removeFromSpeakersListInDB,
+  nextSpeaker as nextSpeakerInDB,
+  tickSpeakerTimer as tickSpeakerTimerInDB,
+} from '@/lib/committeeService';
 
 function MiniPie({ fraction, color }: { fraction: number; color: string }) {
   const r = 8; const c = 2 * Math.PI * r;
@@ -346,7 +353,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
 
   useEffect(() => {
     if (timerRunning && committee?.currentSpeaker) {
-      intervalRef.current = setInterval(() => tickSpeakerTimer(committee.id), 1000);
+      intervalRef.current = setInterval(() => { tickSpeakerTimer(committee.id); tickSpeakerTimerInDB(committee.id); }, 1000);
     } else {
       if (intervalRef.current) clearInterval(intervalRef.current);
     }
