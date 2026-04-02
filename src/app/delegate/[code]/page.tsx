@@ -1,10 +1,10 @@
 'use client';
 
-import { use, useEffect, useState } from 'react';
+import { use, useEffect, useState, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useCommitteeStore } from '@/lib/store';
-import { Committee } from '@/lib/types';
+import { Committee, DocumentType } from '@/lib/types';
 import ChatPanel from '@/components/ChatPanel';
 
 function formatTime(seconds: number): string {
@@ -17,9 +17,9 @@ export default function DelegateSession({ params }: { params: Promise<{ code: st
   const { code } = use(params);
   const searchParams = useSearchParams();
   const country = searchParams.get('country') || '';
-  const { committees, addToSpeakersList, proposeMotion } = useCommitteeStore();
+  const { committees, addToSpeakersList, proposeMotion, addDocument } = useCommitteeStore();
   const [committee, setCommittee] = useState<Committee | null>(null);
-  const [tab, setTab] = useState<'session' | 'motions' | 'resolutions' | 'chat'>('session');
+  const [tab, setTab] = useState<'session' | 'motions' | 'resolutions' | 'documents' | 'chat'>('session');
 
   useEffect(() => {
     const found = Object.values(committees).find((c) => c.code === code.toUpperCase());
@@ -75,7 +75,7 @@ export default function DelegateSession({ params }: { params: Promise<{ code: st
 
       {/* Tab nav */}
       <div className="flex border-b border-[#2E1E0F] bg-[#150F08]">
-        {(['session', 'motions', 'resolutions', 'chat'] as const).map((t) => (
+        {(['session', 'motions', 'resolutions', 'documents', 'chat'] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -272,6 +272,10 @@ export default function DelegateSession({ params }: { params: Promise<{ code: st
               ))
             )}
           </div>
+        )}
+
+        {tab === 'documents' && (
+          <DelegateDocumentsTab committee={committee} country={country} addDocument={addDocument} />
         )}
 
         {tab === 'chat' && (
