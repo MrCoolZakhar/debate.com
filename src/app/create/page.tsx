@@ -3,7 +3,7 @@
 import { useState, useRef, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { createCommittee as createCommitteeInDB } from '@/lib/committeeService';
+import { useCommitteeStore } from '@/lib/store';
 import { UN_COUNTRIES, getFlagEmoji, getCountryByName } from '@/lib/countries';
 import { UNSC_MEMBERS } from '@/lib/presets';
 
@@ -98,6 +98,7 @@ function CommitteeNameInput({
 
 function CreatePageInner() {
   const router = useRouter();
+  const createCommittee = useCommitteeStore((s) => s.createCommittee);
   const [chairNames, setChairNames] = useState<string[]>(['']);
 
   const [committeeMode, setCommitteeMode] = useState<'select' | 'build'>('select');
@@ -106,20 +107,14 @@ function CreatePageInner() {
   const [delegates, setDelegates] = useState<string[]>([]);
   const [search, setSearch] = useState('');
   const [pasteText, setPasteText] = useState('');
-  const [creating, setCreating] = useState(false);
+
   const [pasteError, setPasteError] = useState('');
 
-  const handleCreate = async () => {
-      const names = chairNames.map((n) => n.trim()).filter(Boolean);
-      if (!committeeName.trim() || !topic.trim() || names.length === 0) return;
-      setCreating(true);
-      const code = await createCommitteeInDB(committeeName.trim(), topic.trim(), names, delegates);
-      if (code) {
-        router.push(`/chair/${code}`);
-      } else {
-        alert('Something went wrong creating the committee. Please try again.');
-        setCreating(false);
-      }
+  const handleCreate = () => {
+    const names = chairNames.map((n) => n.trim()).filter(Boolean);
+    if (!committeeName.trim() || !topic.trim() || names.length === 0) return;
+    const code = createCommittee(committeeName.trim(), topic.trim(), names, delegates);
+    router.push(`/chair/${code}`);
   };
 
   const canProceed = committeeName.trim() && topic.trim();
@@ -342,9 +337,9 @@ function CreatePageInner() {
                 </div>
 
                 {/* Launch button */}
-                <button onClick={() => handleCreate()} disabled={!canProceed || creating}
+                <button onClick={() => handleCreate()} disabled={!canProceed}
   className="w-full bg-[#3D6B35] hover:bg-[#4A7C42] disabled:bg-[#2E1E0F] disabled:text-[#7A5A38] text-white py-4 rounded-xl font-bold transition-colors text-base shrink-0">
-  {creating ? 'Creating...' : canProceed ? `Start Session →` : 'Enter committee name and topic above'}
+  {canProceed ? `Start Session →` : 'Enter committee name and topic above'}
                 </button>
               </div>
             </div>

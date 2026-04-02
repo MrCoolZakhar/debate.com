@@ -8,13 +8,7 @@ import RollCallPanel, { FlagCircle } from '@/components/RollCallPanel';
 import MotionsModal from '@/components/MotionsModal';
 import DocumentsModal from '@/components/DocumentsModal';
 import { getFlagEmoji, getCountryByName } from '@/lib/countries';
-import {
-  setPhase as setPhaseInDB,
-  addToSpeakersList as addToSpeakersListInDB,
-  removeFromSpeakersList as removeFromSpeakersListInDB,
-  nextSpeaker as nextSpeakerInDB,
-  tickSpeakerTimer as tickSpeakerTimerInDB,
-} from '@/lib/committeeService';
+
 
 function MiniPie({ fraction, color }: { fraction: number; color: string }) {
   const r = 8; const c = 2 * Math.PI * r;
@@ -327,7 +321,6 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
   const { code } = use(params);
   const { committees, nextSpeaker, addToSpeakersList, removeFromSpeakersList, setSpeakerTimeLimit, tickSpeakerTimer } = useCommitteeStore();
   const [committee, setCommittee] = useState<Committee | null>(null);
-  const [loading, setLoading] = useState(true);
   const [timerRunning, setTimerRunning] = useState(false);
   const [showRollCall, setShowRollCall] = useState(true); // open by default for roll call
   const [showMotions, setShowMotions] = useState(false);
@@ -336,26 +329,13 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    async function loadCommittee() {
-      const { getCommitteeByCode, subscribeToCommittee } = await import('@/lib/committeeService');
-      const found = await getCommitteeByCode(code);
-      setCommittee(found ?? null);
-      setLoading(false);
-      if (found) {
-        const unsubscribe = subscribeToCommittee(found.id, async () => {
-          const updated = await getCommitteeByCode(code);
-          if (updated) setCommittee(updated);
-        });
-        return unsubscribe;
-      }
-    }
-    const cleanup = loadCommittee();
-    return () => { cleanup.then((fn) => fn?.()) };
-  }, [code]);
+    const found = Object.values(committees).find((c) => c.code === code.toUpperCase());
+    setCommittee(found ?? null);
+  }, [committees, code]);
 
   useEffect(() => {
     if (timerRunning && committee?.currentSpeaker) {
-      intervalRef.current = setInterval(() => { tickSpeakerTimer(committee.id); tickSpeakerTimerInDB(committee.id); }, 1000);
+      intervalRef.current = setInterval(() => { tickSpeakerTimer(committee.id); }, 1000);
     } else {
       if (intervalRef.current) clearInterval(intervalRef.current);
     }
@@ -365,17 +345,6 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
   useEffect(() => {
     if (committee?.speakerTimeRemaining === 0) setTimerRunning(false);
   }, [committee?.speakerTimeRemaining]);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#0D0906] flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-8 h-8 border-2 border-[#7B4A1E] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-[#C4A882] text-sm">Loading session...</p>
-        </div>
-      </div>
-    );
-  }
 
   if (!committee) {
     return (
@@ -468,9 +437,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
         {committee.phase === 'pre-session' && (
           <div className="flex-1 flex items-center justify-center px-6 py-8">
             <div className="w-full max-w-lg bg-[#1A1209] border border-[#2E1E0F] rounded-2xl overflow-hidden shadow-lg" style={{ height: '80vh', maxHeight: '640px' }}>
-              <RollCallPanel committee={committee} onAddToList={(id) => addToSpeakersList(committee.id, id)} onListIds={new Set(committee.speakersList.map(s => s.delegateId))} onStatusChange={(delegateId, status) => {
-               setCommittee((prev) => prev ? { ...prev, delegates: prev.delegates.map((d) => d.id === delegateId ? { ...d, status } : d) } : prev);
-               }} />
+              <RollCallPanel committee={committee} onAddToList={(id) => addToSpeakersList(committee.id, id)} onListIds={new Set(committee.speakersList.map(s => s.delegateId))} />
             </div>
           </div>
         )}
@@ -481,9 +448,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
             {/* Roll Call sidebar (collapsible) */}
             {showRollCall && (
               <aside className="w-64 border-r border-[#2E1E0F] bg-[#0D0906] flex flex-col overflow-hidden shrink-0">
-                <RollCallPanel committee={committee} onAddToList={(id) => addToSpeakersList(committee.id, id)} onListIds={new Set(committee.speakersList.map(s => s.delegateId))} onStatusChange={(delegateId, status) => {
-                setCommittee((prev) => prev ? { ...prev, delegates: prev.delegates.map((d) => d.id === delegateId ? { ...d, status } : d) } : prev);
-                }} />
+                <RollCallPanel committee={committee} onAddToList={(id) => addToSpeakersList(committee.id, id)} onListIds={new Set(committee.speakersList.map(s => s.delegateId))} />
               </aside>
             )}
 
