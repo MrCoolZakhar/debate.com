@@ -66,6 +66,25 @@ export interface Resolution {
   submittedAt: Date;
 }
 
+export type DocumentType = 'working-paper' | 'draft-resolution';
+export type DocumentStatus = 'submitted' | 'on-floor' | 'introduced' | 'passed' | 'failed';
+
+export interface CommitteeDocument {
+  id: string;
+  type: DocumentType;
+  docCode: string;        // e.g. "WP 1.1" or "DR 1/1"
+  title: string;
+  sponsors: string[];
+  content: string;
+  status: DocumentStatus;
+  submittedAt: string;    // ISO string (avoid Date serialization issues with Zustand persist)
+  fileUrl?: string;
+  fileName?: string;
+  presentationMinutes?: number;
+  qaMinutes?: number;
+  signatories?: string[]; // kept optional for backwards-compat, not used in UI
+}
+
 export interface CaucusState {
   active: boolean;
   type: 'moderated' | 'unmoderated';
@@ -86,6 +105,7 @@ export interface ChatMessage {
   content: string;
   timestamp: Date;
   isPrivate: boolean;
+  recipient?: string;
 }
 
 export interface Committee {
@@ -104,6 +124,7 @@ export interface Committee {
   motions: Motion[];
   pendingMotions: PendingMotion[];
   resolutions: Resolution[];
+  documents: CommitteeDocument[];
   caucus: CaucusState | null;
   messages: ChatMessage[];
   createdAt: Date;
