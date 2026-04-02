@@ -113,7 +113,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       {/* Header */}
       <header className="border-b border-[#2E1E0F] bg-[#150F08] px-6 h-14 flex items-center gap-4 shrink-0">
         <Link href="/" className="flex items-center gap-2">
-          <img src="/gavelling-logo.png" alt="Gavelling" className="h-8 w-auto" />
+          <img src="/gavelling-logo.png" alt="Gavelling" className="h-8 w-auto" onError={(e)=>{(e.target as HTMLImageElement).style.display="none"}} />
         </Link>
         <div className="flex-1 min-w-0">
           <div className="font-bold text-white text-sm truncate">{committee.name}</div>

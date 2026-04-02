@@ -163,7 +163,7 @@ function CreatePageInner() {
     <div className="h-screen bg-[#0D0906] flex flex-col overflow-hidden">
       <nav className="border-b border-[#2E1E0F] bg-[#150F09] px-6 h-14 flex items-center justify-between shrink-0">
         <Link href="/" className="flex items-center gap-2">
-          <img src="/gavelling-logo.png" alt="Gavelling" className="h-8 w-auto" />
+          <img src="/gavelling-logo.png" alt="Gavelling" className="h-8 w-auto" onError={(e)=>{(e.target as HTMLImageElement).style.display="none"}} />
         </Link>
       </nav>
 
