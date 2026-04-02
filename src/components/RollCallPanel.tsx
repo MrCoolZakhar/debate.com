@@ -11,10 +11,10 @@ export function FlagCircle({ country, size = 'md' }: { country: string; size?: '
   const flag = found ? getFlagEmoji(found.code) : '🌐';
   const dim: Record<string, { box: string; font: string }> = {
     xs: { box: 'w-7 h-7',   font: '1.6rem' },
-    sm: { box: 'w-10 h-10', font: '2.2rem' },
+    sm: { box: 'w-9 h-9',   font: '2rem'   },
     md: { box: 'w-12 h-12', font: '2.8rem' },
-    lg: { box: 'w-20 h-20', font: '4.5rem' },
-    xl: { box: 'w-32 h-32', font: '7rem'   },
+    lg: { box: 'w-14 h-14', font: '3.2rem' },
+    xl: { box: 'w-20 h-20', font: '4.5rem' },
   };
   const { box, font } = dim[size];
   return (
@@ -38,7 +38,7 @@ export function FlagCircle({ country, size = 'md' }: { country: string; size?: '
 // ── 3-state iPhone-style slider ───────────────────────────────────────────────
 function StatusSlider({ status, onCycle }: { status: DelegateStatus; onCycle: () => void }) {
   const thumbPos = status === 'absent' ? 'left-[2px]' : status === 'present' ? 'left-[27px]' : 'left-[52px]';
-  const thumbColor = status === 'absent' ? 'bg-[#3a4060]' : status === 'present' ? 'bg-green-500' : 'bg-blue-500';
+  const thumbColor = status === 'absent' ? 'bg-red-300' : status === 'present' ? 'bg-green-500' : 'bg-blue-500';
 
   return (
     <button
@@ -47,7 +47,7 @@ function StatusSlider({ status, onCycle }: { status: DelegateStatus; onCycle: ()
       title="Tap to cycle: Absent → Present → PV"
     >
       <div className="absolute inset-0 grid grid-cols-3 items-center pointer-events-none">
-        <span className={`text-[10px] font-bold text-center ${status === 'absent' ? 'text-white' : 'text-[#7A5A38]'}`}>A</span>
+        <span className={`text-[10px] font-bold text-center ${status === 'absent' ? 'text-red-900' : 'text-[#7A5A38]'}`}>A</span>
         <span className={`text-[10px] font-bold text-center ${status === 'present' ? 'text-white' : 'text-[#7A5A38]'}`}>P</span>
         <span className={`text-[10px] font-bold text-center ${status === 'present-voting' ? 'text-white' : 'text-[#7A5A38]'}`}>PV</span>
       </div>
@@ -132,7 +132,7 @@ function AddCountryInput({ committee }: { committee: Committee }) {
 }
 
 // ── Roll Call Panel ───────────────────────────────────────────────────────────
-export default function RollCallPanel({ committee }: { committee: Committee }) {
+export default function RollCallPanel({ committee, onAddToList, onListIds }: { committee: Committee; onAddToList?: (delegateId: string) => void; onListIds?: Set<string> }) {
   const { setDelegateStatus, setPhase } = useCommitteeStore();
   const [search, setSearch] = useState('');
 
@@ -201,24 +201,35 @@ export default function RollCallPanel({ committee }: { committee: Committee }) {
 
       {/* Delegate list — scrolls independently */}
       <div className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
-        {filtered.map((d) => (
-          <div
-            key={d.id}
-            className={`flex items-center gap-2 px-2.5 py-2 rounded-xl transition-all ${
-              d.status === 'present'
-                ? 'bg-green-950/30 border border-green-800/30'
-                : d.status === 'present-voting'
-                ? 'bg-blue-950/30 border border-blue-800/30'
-                : 'border border-transparent'
-            }`}
-          >
-            <FlagCircle country={d.country} size="xs" />
-            <span className={`flex-1 text-sm truncate ${d.status !== 'absent' ? 'text-white font-medium' : 'text-[#7A5A38]'}`}>
-              {d.country}
-            </span>
-            <StatusSlider status={d.status} onCycle={() => cycleStatus(d.id, d.status)} />
-          </div>
-        ))}
+        {filtered.map((d) => {
+          const isOnList = onListIds?.has(d.id) ?? false;
+          return (
+            <div
+              key={d.id}
+              onClick={onAddToList ? () => onAddToList(d.id) : undefined}
+              className={`flex items-center gap-2 px-2.5 py-2 rounded-xl transition-all ${
+                d.status === 'present'
+                  ? 'bg-green-950/30 border border-green-800/30'
+                  : d.status === 'present-voting'
+                  ? 'bg-blue-950/30 border border-blue-800/30'
+                  : 'border border-transparent'
+              } ${onAddToList ? 'cursor-pointer hover:bg-[#2E1E0F]/50' : ''}`}
+            >
+              <div className="relative shrink-0">
+                <FlagCircle country={d.country} size="xs" />
+                {isOnList && (
+                  <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full text-white text-[7px] flex items-center justify-center font-bold">✓</div>
+                )}
+              </div>
+              <span className={`flex-1 text-sm truncate ${d.status !== 'absent' ? 'text-white font-medium' : 'text-[#7A5A38]'}`}>
+                {d.country}
+              </span>
+              <div onClick={(e) => e.stopPropagation()}>
+                <StatusSlider status={d.status} onCycle={() => cycleStatus(d.id, d.status)} />
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       {/* Footer */}
