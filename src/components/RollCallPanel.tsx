@@ -133,7 +133,7 @@ function AddCountryInput({ committee }: { committee: Committee }) {
 }
 
 // ── Roll Call Panel ───────────────────────────────────────────────────────────
-export default function RollCallPanel({ committee, onAddToList, onListIds }: { committee: Committee; onAddToList?: (delegateId: string) => void; onListIds?: Set<string> }) {
+export default function RollCallPanel({ committee, onAddToList, onListIds, onStatusChange }: { committee: Committee; onAddToList?: (delegateId: string) => void; onListIds?: Set<string>; onStatusChange?: (delegateId: string, status: DelegateStatus) => void }) {
   // Zustand no longer needed — Supabase + real-time handles state
   const [search, setSearch] = useState('');
 
@@ -151,6 +151,7 @@ export default function RollCallPanel({ committee, onAddToList, onListIds }: { c
   const cycleStatus = (id: string, current: DelegateStatus) => {
     const next: DelegateStatus =
       current === 'absent' ? 'present' : current === 'present' ? 'present-voting' : 'absent';
+    onStatusChange?.(id, next);
     setDelegateStatusInDB(id, next);
   };
 
