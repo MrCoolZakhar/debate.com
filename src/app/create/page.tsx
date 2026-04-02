@@ -213,7 +213,6 @@ function CreatePageInner() {
   <span className="text-2xl">✏️</span>
   <h1 className="text-2xl font-black text-white">New Committee</h1>
 </div>
-            </div>
 
             {/* Name + Topic inline */}
             <div className="grid grid-cols-3 gap-4 mb-5 shrink-0">
