@@ -36,10 +36,16 @@ function formatTime(seconds: number) {
 }
 
 // ── Optimistic helper ─────────────────────────────────────────────────────────
-// Updates local committee state instantly while Supabase syncs in background
+// Updates local committee state instantly while Supabase syncs in background.
+// Also stamps localUpdateTime so the real-time subscription knows to pause
+// for 2 seconds — preventing DB roundtrips from overwriting instant UI changes.
 type CommitteeSetter = React.Dispatch<React.SetStateAction<Committee | null>>;
 
+// Module-level so it persists across renders without causing re-renders
+const localUpdateTime = { current: 0 };
+
 function updateLocal(setCommittee: CommitteeSetter, updater: (c: Committee) => Committee) {
+  localUpdateTime.current = Date.now();
   setCommittee((prev) => prev ? updater(prev) : prev);
 }
 
@@ -196,28 +202,34 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd }: {
 function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee; setCommittee: CommitteeSetter }) {
   const [speakerRunning, setSpeakerRunning] = useState(false);
   const speakerRef = useRef<NodeJS.Timeout | null>(null);
+  // Ref so the interval always reads latest caucus state without restarting
+  const caucusRef = useRef(committee.caucus);
+  caucusRef.current = committee.caucus;
   const caucus = committee.caucus!;
   const spokenCountries = caucus.spokenCountries ?? [];
 
   useEffect(() => {
-    if (speakerRunning && caucus.currentSpeaker && caucus.speakerTimeRemaining > 0 && caucus.remainingTime > 0) {
+    if (speakerRunning) {
       speakerRef.current = setInterval(() => {
-        updateLocal(setCommittee, (c) => {
-          if (!c.caucus) return c;
-          const newTotal = Math.max(0, c.caucus.remainingTime - 1);
-          const newSpeaker = Math.max(0, c.caucus.speakerTimeRemaining - 1);
-          return { ...c, caucus: newTotal === 0 ? null : { ...c.caucus, remainingTime: newTotal, speakerTimeRemaining: newSpeaker }, phase: newTotal === 0 ? 'speakers-list' : c.phase };
+        const c = caucusRef.current;
+        if (!c || c.remainingTime <= 0) { setSpeakerRunning(false); return; }
+        updateLocal(setCommittee, (prev) => {
+          if (!prev.caucus) return prev;
+          const newTotal = Math.max(0, prev.caucus.remainingTime - 1);
+          const newSpeaker = Math.max(0, prev.caucus.speakerTimeRemaining - 1);
+          if (newSpeaker === 0) setSpeakerRunning(false);
+          return {
+            ...prev,
+            phase: newTotal === 0 ? 'speakers-list' : prev.phase,
+            caucus: newTotal === 0 ? null : { ...prev.caucus, remainingTime: newTotal, speakerTimeRemaining: newSpeaker },
+          };
         });
       }, 1000);
     } else {
       if (speakerRef.current) clearInterval(speakerRef.current);
     }
     return () => { if (speakerRef.current) clearInterval(speakerRef.current); };
-  }, [speakerRunning, caucus.currentSpeaker, caucus.speakerTimeRemaining, caucus.remainingTime]);
-
-  useEffect(() => {
-    if (caucus.speakerTimeRemaining === 0) setSpeakerRunning(false);
-  }, [caucus.speakerTimeRemaining]);
+  }, [speakerRunning]);
 
   const handleRemoveFromQueue = (delegateId: string) => {
     updateLocal(setCommittee, (c) => ({ ...c, speakersList: c.speakersList.filter((s) => s.delegateId !== delegateId) }));
@@ -370,10 +382,14 @@ function UnmoderatedCaucusView({ committee, setCommittee }: { committee: Committ
   const [running, setRunning] = useState(true);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const caucus = committee.caucus!;
+  // Ref so interval always reads latest time without restarting
+  const remainingRef = useRef(caucus.remainingTime);
+  remainingRef.current = caucus.remainingTime;
 
   useEffect(() => {
-    if (running && caucus.remainingTime > 0) {
+    if (running) {
       intervalRef.current = setInterval(() => {
+        if (remainingRef.current <= 0) { setRunning(false); return; }
         updateLocal(setCommittee, (c) => {
           if (!c.caucus) return c;
           const newTotal = Math.max(0, c.caucus.remainingTime - 1);
@@ -384,7 +400,7 @@ function UnmoderatedCaucusView({ committee, setCommittee }: { committee: Committ
       if (intervalRef.current) clearInterval(intervalRef.current);
     }
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [running, caucus.remainingTime]);
+  }, [running]);
 
   const handleEndCaucus = () => {
     updateLocal(setCommittee, (c) => ({ ...c, caucus: null, phase: 'speakers-list' }));
@@ -509,6 +525,10 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
   const [copied, setCopied] = useState(false);
   const [speakerTimeLimit, setSpeakerTimeLimitLocal] = useState(90);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  // Refs let intervals read latest values without restarting when state changes
+  const timerRunningRef = useRef(false);
+  const committeeIdRef = useRef('');
+  timerRunningRef.current = timerRunning;
 
   // Load from Supabase + subscribe to real-time
   useEffect(() => {
@@ -516,12 +536,31 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
     async function load() {
       const found = await getCommitteeByCode(code);
       setCommittee(found ?? null);
-      if (found) setSpeakerTimeLimitLocal(found.speakerTimeLimit);
+      if (found) {
+        setSpeakerTimeLimitLocal(found.speakerTimeLimit);
+        committeeIdRef.current = found.id;
+      }
       setLoading(false);
       if (found) {
         unsubscribe = subscribeToCommittee(found.id, async () => {
+          // Suppress real-time refetch for 2s after any local optimistic update.
+          // Prevents DB roundtrips from overwriting instant UI changes (roll call
+          // flicker, timer jumps, speakers list flicker, etc.)
+          if (Date.now() - localUpdateTime.current < 2000) return;
           const updated = await getCommitteeByCode(code);
-          if (updated) setCommittee(updated);
+          if (updated) {
+            setCommittee((prev) => {
+              if (!prev) return updated;
+              // Never overwrite speakerTimeRemaining from DB while timer is
+              // running locally — the local countdown is authoritative
+              return {
+                ...updated,
+                speakerTimeRemaining: timerRunningRef.current
+                  ? prev.speakerTimeRemaining
+                  : updated.speakerTimeRemaining,
+              };
+            });
+          }
         });
       }
     }
@@ -529,25 +568,24 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
     return () => unsubscribe?.();
   }, [code]);
 
-  // Speaker timer — fully optimistic, ticks locally every second
+  // Speaker timer — only restarts when timerRunning changes, NOT on every
+  // committee state update. Uses committeeIdRef so DB call never needs the
+  // interval to restart.
   useEffect(() => {
-    if (timerRunning && committee?.currentSpeaker) {
+    if (timerRunning) {
       intervalRef.current = setInterval(() => {
         updateLocal(setCommittee, (c) => {
           const newTime = Math.max(0, c.speakerTimeRemaining - 1);
+          if (newTime === 0) setTimerRunning(false);
           return { ...c, speakerTimeRemaining: newTime };
         });
-        tickSpeakerTimerInDB(committee.id);
+        if (committeeIdRef.current) tickSpeakerTimerInDB(committeeIdRef.current);
       }, 1000);
     } else {
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
     }
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [timerRunning, committee?.id, committee?.currentSpeaker]);
-
-  useEffect(() => {
-    if (committee?.speakerTimeRemaining === 0) setTimerRunning(false);
-  }, [committee?.speakerTimeRemaining]);
+    return () => { if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; } };
+  }, [timerRunning]);
 
   if (loading) {
     return (
