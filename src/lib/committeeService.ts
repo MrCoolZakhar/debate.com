@@ -702,7 +702,7 @@ export function subscribeToCommittee(
   onChange: (table: string) => void,
 ): () => void {
   const channel = supabase
-    .channel(`committee-${committeeId}`)
+    .channel(`committee-${committeeId}-${Date.now()}`)
     .on('postgres_changes', {
       event: '*',
       schema: 'public',
