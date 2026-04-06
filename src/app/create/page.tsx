@@ -3,11 +3,10 @@
 import { useState, useRef, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useCommitteeStore } from '@/lib/store';
+import { createCommittee as createCommitteeInDB } from '@/lib/committeeService';
 import { UN_COUNTRIES, getFlagEmoji, getCountryByName } from '@/lib/countries';
 import { UNSC_MEMBERS } from '@/lib/presets';
 
-// ── Committee presets for the autocomplete ────────────────────────────────────
 const COMMITTEE_PRESETS = [
   { name: 'UN Security Council', acronym: 'UNSC', icon: '🛡️', members: UNSC_MEMBERS },
   { name: 'UN General Assembly', acronym: 'GA/UNGA', icon: '🌍', members: null },
@@ -44,47 +43,31 @@ function fuzzyMatchCountry(raw: string): string | null {
   return null;
 }
 
-// Committee name autocomplete input
-function CommitteeNameInput({
-  value,
-  onChange,
-  onPresetSelect,
-}: {
+function CommitteeNameInput({ value, onChange, onPresetSelect }: {
   value: string;
   onChange: (v: string) => void;
   onPresetSelect: (preset: typeof COMMITTEE_PRESETS[0]) => void;
 }) {
   const [open, setOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-
   const matches = value.trim()
-    ? COMMITTEE_PRESETS.filter(
-        (p) =>
-          p.name.toLowerCase().includes(value.toLowerCase()) ||
-          p.acronym.toLowerCase().includes(value.toLowerCase())
-      )
+    ? COMMITTEE_PRESETS.filter((p) =>
+        p.name.toLowerCase().includes(value.toLowerCase()) ||
+        p.acronym.toLowerCase().includes(value.toLowerCase()))
     : [];
-
   return (
     <div className="relative">
-      <input
-        ref={inputRef}
-        type="text"
-        value={value}
+      <input ref={inputRef} type="text" value={value}
         onChange={(e) => { onChange(e.target.value); setOpen(true); }}
         onFocus={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
         placeholder="e.g. Human Rights Council or HRC"
-        className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-xl px-4 py-3 text-white placeholder-[#7A5A38] focus:outline-none focus:border-[#7B4A1E] transition-colors"
-      />
+        className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-xl px-4 py-3 text-white placeholder-[#7A5A38] focus:outline-none focus:border-[#7B4A1E] transition-colors" />
       {open && matches.length > 0 && (
         <div className="absolute top-full left-0 right-0 mt-1 bg-[#150F09] border border-[#2E1E0F] rounded-xl overflow-hidden z-30 shadow-xl">
           {matches.slice(0, 6).map((p, i) => (
-            <button
-              key={p.name}
-              onMouseDown={(e) => { e.preventDefault(); onPresetSelect(p); setOpen(false); }}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${i === 0 ? 'bg-[#7B4A1E]/20 text-white' : 'text-[#E8D5B7] hover:bg-[#2E1E0F]'}`}
-            >
+            <button key={p.name} onMouseDown={(e) => { e.preventDefault(); onPresetSelect(p); setOpen(false); }}
+              className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${i === 0 ? 'bg-[#7B4A1E]/20 text-white' : 'text-[#E8D5B7] hover:bg-[#2E1E0F]'}`}>
               <span className="text-lg">{p.icon}</span>
               <span className="text-sm flex-1">{p.name}</span>
               <span className="text-xs text-[#7A5A38] shrink-0">{p.acronym}</span>
@@ -98,26 +81,30 @@ function CommitteeNameInput({
 
 function CreatePageInner() {
   const router = useRouter();
-  const createCommittee = useCommitteeStore((s) => s.createCommittee);
   const [chairNames, setChairNames] = useState<string[]>(['']);
-
   const [committeeMode, setCommitteeMode] = useState<'select' | 'build'>('select');
   const [committeeName, setCommitteeName] = useState('');
   const [topic, setTopic] = useState('');
   const [delegates, setDelegates] = useState<string[]>([]);
   const [search, setSearch] = useState('');
   const [pasteText, setPasteText] = useState('');
-
   const [pasteError, setPasteError] = useState('');
+  const [creating, setCreating] = useState(false);
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     const names = chairNames.map((n) => n.trim()).filter(Boolean);
     if (!committeeName.trim() || !topic.trim() || names.length === 0) return;
-    const code = createCommittee(committeeName.trim(), topic.trim(), names, delegates);
-    router.push(`/chair/${code}`);
+    setCreating(true);
+    const code = await createCommitteeInDB(committeeName.trim(), topic.trim(), names, delegates);
+    if (code) {
+      router.push(`/chair/${code}`);
+    } else {
+      alert('Something went wrong creating the committee. Please try again.');
+      setCreating(false);
+    }
   };
 
-  const canProceed = committeeName.trim() && topic.trim();
+  const canProceed = committeeName.trim() && topic.trim() && chairNames.some((n) => n.trim());
 
   const available = UN_COUNTRIES.filter(
     (c) => !delegates.includes(c.name) && c.name.toLowerCase().includes(search.toLowerCase())
@@ -149,47 +136,36 @@ function CreatePageInner() {
 
   const handleCommitteePreset = (preset: typeof COMMITTEE_PRESETS[0]) => {
     setCommitteeName(preset.name);
-    if (preset.members !== null) {
-      setDelegates(preset.members);
-    }
+    if (preset.members !== null) setDelegates(preset.members);
   };
 
   return (
     <div className="h-screen bg-[#0D0906] flex flex-col overflow-hidden">
       <nav className="border-b border-[#2E1E0F] bg-[#150F09] px-6 h-14 flex items-center justify-between shrink-0">
         <Link href="/" className="flex items-center gap-2">
-          <img src="/gavelling-logo.png" alt="Gavelling" className="h-8 w-auto" onError={(e)=>{(e.target as HTMLImageElement).style.display="none"}} />
+          <img src="/gavelling-logo.png" alt="Gavelling" className="h-8 w-auto" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
         </Link>
       </nav>
 
       <div className="flex-1 flex overflow-hidden">
-
-        {/* ── Committee type selection screen ── */}
         {committeeMode === 'select' && (
           <div className="flex-1 flex flex-col items-center justify-center px-8 py-6">
             <h1 className="text-2xl font-black text-white mb-2">Choose Committee Type</h1>
             <p className="text-[#C4A882] text-sm mb-8">Select the type of committee you want to run.</p>
             <div className="flex flex-row gap-4 w-full max-w-4xl">
-              {/* Regular Debate — Coming Soon */}
               <div className="flex-1 flex flex-col items-center justify-center bg-[#1A1209] border border-[#2E1E0F] rounded-3xl p-8 min-h-[300px] opacity-60 cursor-not-allowed relative">
                 <span className="text-5xl mb-4">🗣️</span>
                 <h2 className="text-xl font-black text-white mb-2">Regular Debate</h2>
                 <p className="text-[#C4A882] text-sm text-center mb-4">Traditional parliamentary debate</p>
                 <span className="px-3 py-1 bg-[#2E1E0F] border border-[#3D2A15] text-[#7A5A38] rounded-full text-xs font-semibold">Coming Soon</span>
               </div>
-
-              {/* MUN — Active */}
-              <div
-                onClick={() => setCommitteeMode('build')}
-                className="flex-1 flex flex-col items-center justify-center bg-[#1A1209] border-2 border-[#7B4A1E] rounded-3xl p-8 min-h-[300px] cursor-pointer hover:bg-[#2E1E0F] hover:border-[#C4A882] transition-all group"
-              >
+              <div onClick={() => setCommitteeMode('build')}
+                className="flex-1 flex flex-col items-center justify-center bg-[#1A1209] border-2 border-[#7B4A1E] rounded-3xl p-8 min-h-[300px] cursor-pointer hover:bg-[#2E1E0F] hover:border-[#C4A882] transition-all group">
                 <span className="text-5xl mb-4">🌍</span>
                 <h2 className="text-xl font-black text-white mb-2">Model United Nations</h2>
                 <p className="text-[#C4A882] text-sm text-center mb-4">United Nations committee simulation</p>
                 <span className="px-4 py-2 bg-[#7B4A1E] group-hover:bg-[#8B5A2B] text-white rounded-xl text-sm font-bold transition-colors">Start →</span>
               </div>
-
-              {/* Crisis — Coming Soon */}
               <div className="flex-1 flex flex-col items-center justify-center bg-[#1A1209] border border-[#2E1E0F] rounded-3xl p-8 min-h-[300px] opacity-60 cursor-not-allowed relative">
                 <span className="text-5xl mb-4">⚡</span>
                 <h2 className="text-xl font-black text-white mb-2">Crisis Committee</h2>
@@ -200,31 +176,25 @@ function CreatePageInner() {
           </div>
         )}
 
-        {/* ── Custom: full-screen single-page layout ── */}
         {committeeMode === 'build' && (
-        <div className="flex-1 flex flex-col overflow-hidden px-8 py-6">
+          <div className="flex-1 flex flex-col overflow-hidden px-8 py-6">
             <div className="flex items-center gap-3 mb-6 shrink-0">
-  <button onClick={() => setCommitteeMode('select')} className="text-sm text-[#C4A882] hover:text-white transition-colors">← Back</button>
-  <span className="text-2xl">✏️</span>
-  <h1 className="text-2xl font-black text-white">New Committee</h1>
-</div>
+              <button onClick={() => setCommitteeMode('select')} className="text-sm text-[#C4A882] hover:text-white transition-colors">← Back</button>
+              <span className="text-2xl">✏️</span>
+              <h1 className="text-2xl font-black text-white">New Committee</h1>
+            </div>
 
-            {/* Name + Topic inline */}
             <div className="grid grid-cols-3 gap-4 mb-5 shrink-0">
               <div>
                 <label className="block text-xs font-semibold text-[#C4A882] mb-1.5">Committee Name</label>
-                <CommitteeNameInput
-                  value={committeeName}
-                  onChange={setCommitteeName}
-                  onPresetSelect={handleCommitteePreset}
-                />
+                <CommitteeNameInput value={committeeName} onChange={setCommitteeName} onPresetSelect={handleCommitteePreset} />
               </div>
               <div>
-  <label className="block text-xs font-semibold text-[#C4A882] mb-1.5">Chair Name</label>
-  <input type="text" value={chairNames[0]} onChange={(e) => setChairNames([e.target.value])}
-    placeholder="e.g. John Smith"
-    className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-xl px-4 py-3 text-white placeholder-[#7A5A38] focus:outline-none focus:border-[#7B4A1E] transition-colors" />
-</div>
+                <label className="block text-xs font-semibold text-[#C4A882] mb-1.5">Chair Name</label>
+                <input type="text" value={chairNames[0]} onChange={(e) => setChairNames([e.target.value])}
+                  placeholder="e.g. John Smith"
+                  className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-xl px-4 py-3 text-white placeholder-[#7A5A38] focus:outline-none focus:border-[#7B4A1E] transition-colors" />
+              </div>
               <div>
                 <label className="block text-xs font-semibold text-[#C4A882] mb-1.5">Topic / Agenda Item</label>
                 <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)}
@@ -233,12 +203,8 @@ function CreatePageInner() {
               </div>
             </div>
 
-            {/* Two-column main section — fills remaining height */}
             <div className="flex-1 grid grid-cols-2 gap-6 min-h-0">
-
-              {/* Left: Add countries */}
               <div className="flex flex-col gap-4 min-h-0">
-                {/* Search */}
                 <div className="shrink-0">
                   <label className="block text-xs font-semibold text-[#C4A882] mb-1.5">Search &amp; Add</label>
                   <div className="relative">
@@ -250,9 +216,7 @@ function CreatePageInner() {
                         }}
                         placeholder="Search countries..."
                         className="flex-1 bg-transparent px-4 py-3 text-white placeholder-[#7A5A38] focus:outline-none text-sm" />
-                      {available[0] && search && (
-                        <span className="text-xs text-[#7A5A38] px-3 shrink-0">↵ {available[0].name}</span>
-                      )}
+                      {available[0] && search && <span className="text-xs text-[#7A5A38] px-3 shrink-0">↵ {available[0].name}</span>}
                     </div>
                     {search && available.length > 0 && (
                       <div className="absolute top-full left-0 right-0 mt-1 bg-[#150F09] border border-[#2E1E0F] rounded-xl overflow-hidden z-20 shadow-xl">
@@ -269,7 +233,6 @@ function CreatePageInner() {
                   </div>
                 </div>
 
-                {/* Bundles */}
                 <div className="shrink-0">
                   <label className="block text-xs font-semibold text-[#C4A882] mb-2">Quick Bundles</label>
                   <div className="flex flex-wrap gap-2">
@@ -284,7 +247,6 @@ function CreatePageInner() {
                   </div>
                 </div>
 
-                {/* Paste list — fills remaining space */}
                 <div className="flex-1 flex flex-col min-h-0">
                   <label className="block text-xs font-semibold text-[#C4A882] mb-1.5">Paste Country List</label>
                   <textarea value={pasteText} onChange={(e) => { setPasteText(e.target.value); setPasteError(''); }}
@@ -300,7 +262,6 @@ function CreatePageInner() {
                 </div>
               </div>
 
-              {/* Right: Selected delegates + launch */}
               <div className="flex flex-col min-h-0">
                 <div className="flex items-center justify-between mb-2 shrink-0">
                   <label className="text-xs font-semibold text-[#C4A882]">Selected Delegates</label>
@@ -312,7 +273,6 @@ function CreatePageInner() {
                   </div>
                 </div>
 
-                {/* Scrollable list */}
                 <div className="flex-1 bg-[#150F09] border border-[#2E1E0F] rounded-xl overflow-hidden mb-4 min-h-0">
                   {delegates.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full text-[#7A5A38] text-sm gap-2">
@@ -336,23 +296,20 @@ function CreatePageInner() {
                   )}
                 </div>
 
-                {/* Launch button */}
-                <button onClick={() => handleCreate()} disabled={!canProceed}
-  className="w-full bg-[#3D6B35] hover:bg-[#4A7C42] disabled:bg-[#2E1E0F] disabled:text-[#7A5A38] text-white py-4 rounded-xl font-bold transition-colors text-base shrink-0">
-  {canProceed ? `Start Session →` : 'Enter committee name and topic above'}
+                <button onClick={handleCreate} disabled={!canProceed || creating}
+                  className="w-full bg-[#3D6B35] hover:bg-[#4A7C42] disabled:bg-[#2E1E0F] disabled:text-[#7A5A38] text-white py-4 rounded-xl font-bold transition-colors text-base shrink-0">
+                  {creating ? 'Creating...' : canProceed ? 'Start Session →' : 'Enter committee name, chair, and topic above'}
                 </button>
               </div>
             </div>
           </div>
         )}
-
       </div>
     </div>
   );
 }
 
 export default function CreatePage() {
-
   return (
     <Suspense fallback={<div className="h-screen bg-[#0D0906] flex items-center justify-center"><span className="text-[#7A5A38]">Loading...</span></div>}>
       <CreatePageInner />

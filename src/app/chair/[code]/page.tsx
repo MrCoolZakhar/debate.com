@@ -2,13 +2,20 @@
 
 import { use, useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
-import { useCommitteeStore } from '@/lib/store';
-import { Committee } from '@/lib/types';
+import { Committee, DelegateStatus } from '@/lib/types';
 import RollCallPanel, { FlagCircle } from '@/components/RollCallPanel';
 import MotionsModal from '@/components/MotionsModal';
 import DocumentsModal from '@/components/DocumentsModal';
 import { getFlagEmoji, getCountryByName } from '@/lib/countries';
-
+import {
+  getCommitteeByCode,
+  subscribeToCommittee,
+  setPhase as setPhaseInDB,
+  addToSpeakersList as addToSpeakersListInDB,
+  removeFromSpeakersList as removeFromSpeakersListInDB,
+  nextSpeaker as nextSpeakerInDB,
+  tickSpeakerTimer as tickSpeakerTimerInDB,
+} from '@/lib/committeeService';
 
 function MiniPie({ fraction, color }: { fraction: number; color: string }) {
   const r = 8; const c = 2 * Math.PI * r;
@@ -28,6 +35,15 @@ function formatTime(seconds: number) {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
+// ── Optimistic helper ─────────────────────────────────────────────────────────
+// Updates local committee state instantly while Supabase syncs in background
+type CommitteeSetter = React.Dispatch<React.SetStateAction<Committee | null>>;
+
+function updateLocal(setCommittee: CommitteeSetter, updater: (c: Committee) => Committee) {
+  setCommittee((prev) => prev ? updater(prev) : prev);
+}
+
+// ── Add Speaker Input ─────────────────────────────────────────────────────────
 function AddSpeakerInput({ committee, onAdd }: { committee: Committee; onAdd: (id: string) => void }) {
   const [query, setQuery] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -36,8 +52,7 @@ function AddSpeakerInput({ committee, onAdd }: { committee: Committee; onAdd: (i
     (d) => d.status !== 'absent' && d.id !== committee.currentSpeaker?.delegateId
   );
   const matches = query.trim()
-    ? eligible
-        .filter((d) => d.country.toLowerCase().startsWith(query.toLowerCase()))
+    ? eligible.filter((d) => d.country.toLowerCase().startsWith(query.toLowerCase()))
         .concat(eligible.filter((d) => !d.country.toLowerCase().startsWith(query.toLowerCase()) && d.country.toLowerCase().includes(query.toLowerCase())))
     : [];
   const topNotOnList = matches.find((d) => !onList.has(d.id)) ?? null;
@@ -81,15 +96,10 @@ function AddSpeakerInput({ committee, onAdd }: { committee: Committee; onAdd: (i
   );
 }
 
-// ── Next-up speaker flags row (shared between with/without current speaker) ──
-function CaucusSpeakerQueue({
-  committee,
-  spokenCountries,
-}: {
-  committee: Committee;
-  spokenCountries: string[];
+// ── Caucus Speaker Queue ──────────────────────────────────────────────────────
+function CaucusSpeakerQueue({ committee, spokenCountries, onRemove }: {
+  committee: Committee; spokenCountries: string[]; onRemove: (delegateId: string) => void;
 }) {
-  const { removeFromSpeakersList } = useCommitteeStore();
   if (committee.speakersList.length === 0) return null;
   const queueSize = committee.speakersList.length;
   const flagSize = queueSize <= 8 ? 'lg' : 'sm';
@@ -109,10 +119,8 @@ function CaucusSpeakerQueue({
                 </div>
               )}
             </div>
-            <span className={`text-[10px] text-center w-12 truncate ${alreadySpoke ? 'text-yellow-600' : 'text-[#C4A882]'}`}>
-              {s.country}
-            </span>
-            <button onClick={() => removeFromSpeakersList(committee.id, s.delegateId)}
+            <span className={`text-[10px] text-center w-12 truncate ${alreadySpoke ? 'text-yellow-600' : 'text-[#C4A882]'}`}>{s.country}</span>
+            <button onClick={() => onRemove(s.delegateId)}
               className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full text-white text-xs items-center justify-center hidden group-hover:flex leading-none">✕</button>
           </div>
         );
@@ -129,8 +137,10 @@ function CaucusSpeakerQueue({
   );
 }
 
-// ── Add speaker input with "already spoke" hint ──
-function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd }: { committee: Committee; spokenCountries: string[]; onAdd: (id: string) => void }) {
+// ── Caucus Add Speaker Input ──────────────────────────────────────────────────
+function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd }: {
+  committee: Committee; spokenCountries: string[]; onAdd: (id: string) => void;
+}) {
   const [query, setQuery] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const onList = new Set(committee.speakersList.map((s) => s.delegateId));
@@ -182,59 +192,102 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd }: { committe
   );
 }
 
-// ── Moderated caucus — mirrors speakers-list structure ──
-function ModeratedCaucusView({ committee }: { committee: Committee }) {
-  const { tickCaucusBoth, advanceCaucusSpeaker, setProposerPosition, endCaucus, addToSpeakersList } = useCommitteeStore();
+// ── Moderated Caucus View ─────────────────────────────────────────────────────
+function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee; setCommittee: CommitteeSetter }) {
   const [speakerRunning, setSpeakerRunning] = useState(false);
   const speakerRef = useRef<NodeJS.Timeout | null>(null);
   const caucus = committee.caucus!;
   const spokenCountries = caucus.spokenCountries ?? [];
 
-  // Single interval: ticks both total and speaker when speaker is running
   useEffect(() => {
     if (speakerRunning && caucus.currentSpeaker && caucus.speakerTimeRemaining > 0 && caucus.remainingTime > 0) {
-      speakerRef.current = setInterval(() => tickCaucusBoth(committee.id), 1000);
+      speakerRef.current = setInterval(() => {
+        updateLocal(setCommittee, (c) => {
+          if (!c.caucus) return c;
+          const newTotal = Math.max(0, c.caucus.remainingTime - 1);
+          const newSpeaker = Math.max(0, c.caucus.speakerTimeRemaining - 1);
+          return { ...c, caucus: newTotal === 0 ? null : { ...c.caucus, remainingTime: newTotal, speakerTimeRemaining: newSpeaker }, phase: newTotal === 0 ? 'speakers-list' : c.phase };
+        });
+      }, 1000);
     } else {
       if (speakerRef.current) clearInterval(speakerRef.current);
     }
     return () => { if (speakerRef.current) clearInterval(speakerRef.current); };
-  }, [speakerRunning, caucus.currentSpeaker, caucus.speakerTimeRemaining, caucus.remainingTime, committee.id, tickCaucusBoth]);
+  }, [speakerRunning, caucus.currentSpeaker, caucus.speakerTimeRemaining, caucus.remainingTime]);
 
   useEffect(() => {
     if (caucus.speakerTimeRemaining === 0) setSpeakerRunning(false);
   }, [caucus.speakerTimeRemaining]);
 
-  const handleNext = () => { setSpeakerRunning(false); advanceCaucusSpeaker(committee.id); };
+  const handleRemoveFromQueue = (delegateId: string) => {
+    updateLocal(setCommittee, (c) => ({ ...c, speakersList: c.speakersList.filter((s) => s.delegateId !== delegateId) }));
+    removeFromSpeakersListInDB(committee.id, delegateId);
+  };
+
+  const handleAddToQueue = (delegateId: string) => {
+    const delegate = committee.delegates.find((d) => d.id === delegateId);
+    if (!delegate) return;
+    const position = committee.speakersList.length + 1;
+    updateLocal(setCommittee, (c) => ({ ...c, speakersList: [...c.speakersList, { delegateId, country: delegate.country }] }));
+    addToSpeakersListInDB(committee.id, delegateId, delegate.country);
+  };
+
+  const handleNext = () => {
+    setSpeakerRunning(false);
+    const [next, ...rest] = committee.speakersList;
+    const prev = caucus.currentSpeaker;
+    updateLocal(setCommittee, (c) => {
+      if (!c.caucus) return c;
+      const spokenCountries = prev && !c.caucus.spokenCountries.includes(prev)
+        ? [...c.caucus.spokenCountries, prev] : c.caucus.spokenCountries;
+      return {
+        ...c,
+        speakersList: rest,
+        caucus: { ...c.caucus, currentSpeaker: next?.country ?? null, speakerTimeRemaining: c.caucus.speakingTime, spokenCountries },
+      };
+    });
+  };
+
+  const handleSetProposerPosition = (position: 'first' | 'last') => {
+    const proposer = caucus.proposedBy;
+    const delegate = committee.delegates.find((d) => d.country === proposer);
+    if (!delegate) return;
+    const entry = { delegateId: delegate.id, country: proposer };
+    updateLocal(setCommittee, (c) => {
+      if (!c.caucus) return c;
+      const without = c.speakersList.filter((s) => s.delegateId !== delegate.id);
+      const newList = position === 'first' ? [entry, ...without] : [...without, entry];
+      return { ...c, speakersList: newList, caucus: { ...c.caucus, proposerPosition: position } };
+    });
+  };
+
+  const handleEndCaucus = () => {
+    updateLocal(setCommittee, (c) => ({ ...c, caucus: null, phase: 'speakers-list' }));
+    setPhaseInDB(committee.id, 'speakers-list');
+  };
+
   const speakerProgress = caucus.speakingTime > 0 ? (caucus.speakerTimeRemaining / caucus.speakingTime) * 100 : 0;
   const totalProgress = caucus.totalTime > 0 ? (caucus.remainingTime / caucus.totalTime) * 100 : 0;
 
-  // ── Step 1: Proposer position ──────────────────────────────────────────────
   if (caucus.proposerPosition === null) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
         <p className="text-xs text-[#7B4A1E] font-mono tracking-widest mb-4">MODERATED CAUCUS — {caucus.purpose}</p>
-        <div className="mb-4">
-          <FlagCircle country={caucus.proposedBy} size="xl" />
-        </div>
+        <div className="mb-4"><FlagCircle country={caucus.proposedBy} size="xl" /></div>
         <h2 className="text-3xl font-black text-white mb-2">{caucus.proposedBy}</h2>
         <p className="text-[#C4A882] text-lg mb-8">
           proposed this caucus. Would they like to speak <span className="text-white font-semibold">first</span> or <span className="text-white font-semibold">last</span>?
         </p>
         <div className="flex gap-4 w-full max-w-sm">
-          <button onClick={() => setProposerPosition(committee.id, 'first')}
-            className="flex-1 py-5 rounded-2xl font-black text-xl bg-[#7B4A1E] hover:bg-[#8B5A2B] text-white transition-colors">
-            First
-          </button>
-          <button onClick={() => setProposerPosition(committee.id, 'last')}
-            className="flex-1 py-5 rounded-2xl font-black text-xl bg-[#2E1E0F] hover:bg-[#3D2A15] border border-[#2E1E0F] text-white transition-colors">
-            Last
-          </button>
+          <button onClick={() => handleSetProposerPosition('first')}
+            className="flex-1 py-5 rounded-2xl font-black text-xl bg-[#7B4A1E] hover:bg-[#8B5A2B] text-white transition-colors">First</button>
+          <button onClick={() => handleSetProposerPosition('last')}
+            className="flex-1 py-5 rounded-2xl font-black text-xl bg-[#2E1E0F] hover:bg-[#3D2A15] border border-[#2E1E0F] text-white transition-colors">Last</button>
         </div>
       </div>
     );
   }
 
-  // ── Step 2: Normal caucus view ─────────────────────────────────────────────
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       <div className="flex-1 flex flex-col items-center justify-center px-8 py-4 min-h-0">
@@ -250,14 +303,12 @@ function ModeratedCaucusView({ committee }: { committee: Committee }) {
           <>
             {committee.speakersList.length > 0 && (
               <div className="mb-4 w-full flex justify-center">
-                <CaucusSpeakerQueue committee={committee} spokenCountries={spokenCountries} />
+                <CaucusSpeakerQueue committee={committee} spokenCountries={spokenCountries} onRemove={handleRemoveFromQueue} />
               </div>
             )}
             <FlagCircle country={caucus.currentSpeaker} size="xl" />
             <h1 className="text-3xl font-black text-white mt-3 mb-1 text-center">{caucus.currentSpeaker}</h1>
-            <div className={`text-6xl font-black font-mono mt-2 mb-3 tabular-nums ${
-              caucus.speakerTimeRemaining <= 5 ? 'text-red-500' : caucus.speakerTimeRemaining <= 15 ? 'text-yellow-600' : 'text-white'
-            }`}>
+            <div className={`text-6xl font-black font-mono mt-2 mb-3 tabular-nums ${caucus.speakerTimeRemaining <= 5 ? 'text-red-500' : caucus.speakerTimeRemaining <= 15 ? 'text-yellow-600' : 'text-white'}`}>
               {formatTime(caucus.speakerTimeRemaining)}
             </div>
             <div className="w-full max-w-md h-2 bg-[#2E1E0F] rounded-full overflow-hidden mb-4">
@@ -279,7 +330,7 @@ function ModeratedCaucusView({ committee }: { committee: Committee }) {
           <>
             {committee.speakersList.length > 0 && (
               <div className="mb-4 w-full flex justify-center">
-                <CaucusSpeakerQueue committee={committee} spokenCountries={spokenCountries} />
+                <CaucusSpeakerQueue committee={committee} spokenCountries={spokenCountries} onRemove={handleRemoveFromQueue} />
               </div>
             )}
             <div className="text-5xl mb-3">🎙️</div>
@@ -293,364 +344,52 @@ function ModeratedCaucusView({ committee }: { committee: Committee }) {
         )}
       </div>
 
-      {/* Bottom bar */}
       <div className="border-t border-[#2E1E0F] bg-[#0D0906] px-6 py-3">
         <div className="flex items-center gap-3 mb-3">
           <div className="shrink-0">
             <p className="text-xs text-[#7A5A38] font-mono">TOTAL REMAINING</p>
-            <p className={`text-lg font-black font-mono ${caucus.remainingTime <= 30 ? 'text-red-500' : 'text-white'}`}>
-              {formatTime(caucus.remainingTime)}
-            </p>
+            <p className={`text-lg font-black font-mono ${caucus.remainingTime <= 30 ? 'text-red-500' : 'text-white'}`}>{formatTime(caucus.remainingTime)}</p>
           </div>
           <div className="flex-1 h-1.5 bg-[#2E1E0F] rounded-full overflow-hidden">
             <div className="h-full bg-[#B8844A]/60 rounded-full transition-all" style={{ width: `${totalProgress}%` }} />
           </div>
           <span className="text-xs text-[#7A5A38]">ticks with speaker</span>
-          <button onClick={() => endCaucus(committee.id)}
+          <button onClick={handleEndCaucus}
             className="px-3 py-1.5 rounded-lg font-bold text-xs bg-[#2E1E0F] border border-[#2E1E0F] hover:bg-red-950/40 hover:text-red-500 hover:border-red-800/40 text-[#C4A882] transition-colors">
             End Caucus
           </button>
         </div>
-        <CaucusAddSpeakerInput committee={committee} spokenCountries={spokenCountries} onAdd={(id) => addToSpeakersList(committee.id, id)} />
+        <CaucusAddSpeakerInput committee={committee} spokenCountries={spokenCountries} onAdd={handleAddToQueue} />
       </div>
     </div>
   );
 }
 
-export default function ChairSession({ params }: { params: Promise<{ code: string }> }) {
-  const { code } = use(params);
-  const { committees, nextSpeaker, addToSpeakersList, removeFromSpeakersList, setSpeakerTimeLimit, tickSpeakerTimer } = useCommitteeStore();
-  const [committee, setCommittee] = useState<Committee | null>(null);
-  const [timerRunning, setTimerRunning] = useState(false);
-  const [showRollCall, setShowRollCall] = useState(true); // open by default for roll call
-  const [showMotions, setShowMotions] = useState(false);
-  const [showDocuments, setShowDocuments] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
-
-  useEffect(() => {
-    const found = Object.values(committees).find((c) => c.code === code.toUpperCase());
-    setCommittee(found ?? null);
-  }, [committees, code]);
-
-  useEffect(() => {
-    if (timerRunning && committee?.currentSpeaker) {
-      intervalRef.current = setInterval(() => { tickSpeakerTimer(committee.id); }, 1000);
-    } else {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    }
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [timerRunning, committee?.id, committee?.currentSpeaker, tickSpeakerTimer]);
-
-  useEffect(() => {
-    if (committee?.speakerTimeRemaining === 0) setTimerRunning(false);
-  }, [committee?.speakerTimeRemaining]);
-
-  if (!committee) {
-    return (
-      <div className="min-h-screen bg-[#0D0906] flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-white text-xl font-bold mb-4">Committee not found</p>
-          <Link href="/create" className="bg-[#7B4A1E] text-white px-6 py-3 rounded-xl font-semibold">Create one</Link>
-        </div>
-      </div>
-    );
-  }
-
-  const present = committee.delegates.filter((d) => d.status !== 'absent').length;
-  const progress = committee.currentSpeaker ? (committee.speakerTimeRemaining / committee.speakerTimeLimit) * 100 : 100;
-
-  return (
-    <div className="h-screen bg-[#0D0906] flex flex-col overflow-hidden">
-      {/* Slim header */}
-      <header className="border-b border-[#2E1E0F] bg-[#150F08] px-4 h-11 flex items-center gap-3 shrink-0">
-        <Link href="/">
-          <img src="/gavelling-logo.png" alt="Gavelling" className="h-8 w-auto" onError={(e)=>{(e.target as HTMLImageElement).style.display="none"}} />
-        </Link>
-        <span className="font-bold text-white text-sm truncate">{committee.name}</span>
-        <span className="text-[#7A5A38] text-xs hidden sm:block truncate flex-1">{committee.topic}</span>
-        <span className="text-xs text-[#C4A882] font-mono shrink-0 hidden sm:block">
-          {present}P · 2/3:{Math.ceil((present * 2) / 3)} · 1/2:{Math.floor(present / 2) + 1}
-        </span>
-        {committee.phase !== 'pre-session' && (
-          <button
-            onClick={() => setShowRollCall((v) => !v)}
-            className={`text-xs px-3 py-1 rounded-lg transition-colors shrink-0 ${showRollCall ? 'bg-green-800/50 text-green-300' : 'bg-[#2E1E0F] text-[#C4A882] hover:text-white'}`}
-          >
-            Roll Call {present}/{committee.delegates.length}
-          </button>
-        )}
-        <button
-          onClick={() => setShowMotions((v) => !v)}
-          className={`text-xs px-3 py-1 rounded-lg transition-colors shrink-0 relative ${showMotions ? 'bg-[#7B4A1E] text-white' : 'bg-[#2E1E0F] text-[#C4A882] hover:text-white'}`}
-        >
-          Motions
-          {(committee.pendingMotions ?? []).length > 0 && (
-            <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#7B4A1E] rounded-full text-white text-[10px] flex items-center justify-center font-bold">
-              {committee.pendingMotions.length}
-            </span>
-          )}
-        </button>
-        <button
-          onClick={() => setShowDocuments((v) => !v)}
-          className={`text-xs px-3 py-1 rounded-lg transition-colors shrink-0 relative ${showDocuments ? 'bg-[#7B4A1E] text-white' : 'bg-[#2E1E0F] text-[#C4A882] hover:text-white'}`}
-        >
-          Documents
-          {(() => {
-            const activeCount = (committee.documents ?? []).filter((d) => d.status === 'submitted' || d.status === 'on-floor').length;
-            return activeCount > 0 ? (
-              <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#7B4A1E] rounded-full text-white text-[10px] flex items-center justify-center font-bold">
-                {activeCount}
-              </span>
-            ) : null;
-          })()}
-        </button>
-        <button
-          onClick={() => { navigator.clipboard.writeText(committee.code); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
-          className="text-xs font-mono bg-[#2E1E0F] hover:bg-[#3D2A15] text-white px-2.5 py-1 rounded-lg transition-colors shrink-0"
-        >
-          {copied ? '✓' : committee.code}
-        </button>
-      </header>
-
-      {/* Stats bar — only during active session */}
-      {committee.phase !== 'pre-session' && (
-        <div className="border-b border-[#2E1E0F] bg-[#150F08] px-4 py-1.5 flex items-center gap-6 shrink-0">
-          <span className="text-xs text-[#C4A882] font-mono">
-            {present} present
-          </span>
-          <div className="flex items-center gap-1.5">
-            <MiniPie fraction={2/3} color="#B8844A" />
-            <span className="text-xs text-[#C4A882]">2/3: <span className="text-white font-bold">{Math.ceil((present * 2) / 3)}</span></span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <MiniPie fraction={1/2} color="#6BA562" />
-            <span className="text-xs text-[#C4A882]">1/2: <span className="text-white font-bold">{Math.floor(present / 2) + 1}</span></span>
-          </div>
-        </div>
-      )}
-
-      {/* Body */}
-      <div className="flex-1 flex overflow-hidden">
-
-        {/* Pre-session: full-width roll call */}
-        {committee.phase === 'pre-session' && (
-          <div className="flex-1 flex items-center justify-center px-6 py-8">
-            <div className="w-full max-w-lg bg-[#1A1209] border border-[#2E1E0F] rounded-2xl overflow-hidden shadow-lg" style={{ height: '80vh', maxHeight: '640px' }}>
-              <RollCallPanel committee={committee} onAddToList={(id) => addToSpeakersList(committee.id, id)} onListIds={new Set(committee.speakersList.map(s => s.delegateId))} />
-            </div>
-          </div>
-        )}
-
-        {/* Active session layout: optional sidebar + main */}
-        {committee.phase !== 'pre-session' && (
-          <>
-            {/* Roll Call sidebar (collapsible) */}
-            {showRollCall && (
-              <aside className="w-64 border-r border-[#2E1E0F] bg-[#0D0906] flex flex-col overflow-hidden shrink-0">
-                <RollCallPanel committee={committee} onAddToList={(id) => addToSpeakersList(committee.id, id)} onListIds={new Set(committee.speakersList.map(s => s.delegateId))} />
-              </aside>
-            )}
-
-            {/* Center */}
-            <main className="flex-1 overflow-hidden flex flex-col">
-
-          {/* Moderated caucus — full screen */}
-          {committee.phase === 'moderated-caucus' && committee.caucus && (
-            <ModeratedCaucusView committee={committee} />
-          )}
-
-          {/* Unmoderated caucus */}
-          {committee.phase === 'unmoderated-caucus' && committee.caucus && (
-            <UnmoderatedCaucusView committee={committee} />
-          )}
-
-          {/* Voting */}
-          {committee.phase === 'voting' && (
-            <VotingView committee={committee} />
-          )}
-
-          {/* Adjourned */}
-          {committee.phase === 'adjourned' && (
-            <div className="flex-1 flex items-center justify-center">
-              <div className="text-center">
-                <div className="text-5xl mb-4">🔔</div>
-                <h2 className="text-2xl font-black text-white mb-6">Session Adjourned</h2>
-                <button onClick={() => useCommitteeStore.getState().setPhase(committee.id, 'speakers-list')}
-                  className="bg-[#7B4A1E] hover:bg-[#8B5A2B] text-white px-8 py-3 rounded-xl font-bold transition-colors">
-                  Resume Session
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Speakers list */}
-          {committee.phase === 'speakers-list' && (
-            <div className="flex-1 flex flex-col overflow-hidden">
-              {/* Big current speaker */}
-              <div className="flex-1 flex flex-col items-center justify-center px-8 py-6 min-h-0 overflow-hidden">
-                {committee.currentSpeaker ? (
-                  <>
-                    {/* Next up — flags above timer, dynamic sizing, wrapping */}
-                    {committee.speakersList.length > 0 && (() => {
-                      const qLen = committee.speakersList.length;
-                      const fSize = qLen <= 8 ? 'lg' : 'sm';
-                      const displayItems = committee.speakersList.slice(0, 15);
-                      const extra = qLen > 15 ? qLen - 15 : 0;
-                      return (
-                        <div className="flex flex-wrap items-start gap-4 mb-8 pt-2 pb-1 max-w-full justify-center">
-                          {displayItems.map((s) => (
-                            <div key={s.delegateId} className="flex flex-col items-center gap-2 relative group">
-                              <FlagCircle country={s.country} size={fSize} />
-                              <span className="text-xs text-[#C4A882] text-center w-14 truncate">{s.country}</span>
-                              <button
-                                onClick={() => removeFromSpeakersList(committee.id, s.delegateId)}
-                                className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full text-white text-xs items-center justify-center hidden group-hover:flex leading-none"
-                              >✕</button>
-                            </div>
-                          ))}
-                          {extra > 0 && (
-                            <div className="flex flex-col items-center gap-2">
-                              <div className="w-14 h-14 rounded-full bg-[#2E1E0F] flex items-center justify-center">
-                                <span className="text-sm font-bold text-[#C4A882]">+{extra}</span>
-                              </div>
-                              <span className="text-xs text-[#7A5A38]">more</span>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })()}
-
-                    <FlagCircle country={committee.currentSpeaker.country} size="xl" />
-                    <h1 className="text-5xl font-black text-white mt-5 mb-2 text-center">{committee.currentSpeaker.country}</h1>
-                    <div className={`text-7xl font-black font-mono mt-3 mb-4 tabular-nums ${
-                      committee.speakerTimeRemaining <= 10 ? 'text-red-500' : committee.speakerTimeRemaining <= 30 ? 'text-yellow-600' : 'text-white'
-                    }`}>
-                      {formatTime(committee.speakerTimeRemaining)}
-                    </div>
-                    <div className="w-full max-w-md h-2 bg-[#2E1E0F] rounded-full overflow-hidden mb-4">
-                      <div className={`h-full rounded-full transition-all ${progress > 50 ? 'bg-[#B8844A]' : progress > 20 ? 'bg-yellow-500' : 'bg-red-500'}`}
-                        style={{ width: `${progress}%` }} />
-                    </div>
-                    {committee.speakersList.length === 0 && (
-                      <div className="mb-4 px-4 py-2 bg-yellow-900/30 border border-yellow-700/40 rounded-xl text-yellow-400 text-sm text-center max-w-sm">
-                        Add at least one more delegate before advancing — advancing now ends the speakers list.
-                      </div>
-                    )}
-                    <div className="flex gap-3 w-full max-w-sm mt-2">
-                      <button onClick={() => setTimerRunning((r) => !r)}
-                        className={`flex-1 py-3 rounded-xl font-bold text-base transition-colors ${timerRunning ? 'bg-yellow-600 hover:bg-yellow-500 text-white' : 'bg-[#3D6B35] hover:bg-[#4A7C42] text-white'}`}>
-                        {timerRunning ? '⏸ Pause' : '▶ Start'}
-                      </button>
-                      <button onClick={() => { setTimerRunning(false); nextSpeaker(committee.id); }}
-                        disabled={committee.speakersList.length === 0}
-                        className="flex-1 bg-[#2E1E0F] hover:bg-[#3D2A15] disabled:opacity-40 disabled:cursor-not-allowed border border-[#2E1E0F] text-white py-3 rounded-xl font-bold text-base transition-colors">
-                        Next →
-                      </button>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    {/* Next up — flags above no-speaker state */}
-                    {committee.speakersList.length > 0 && (() => {
-                      const qLen = committee.speakersList.length;
-                      const fSize = qLen <= 8 ? 'lg' : 'sm';
-                      const displayItems = committee.speakersList.slice(0, 15);
-                      const extra = qLen > 15 ? qLen - 15 : 0;
-                      return (
-                        <div className="flex flex-wrap items-end gap-4 mb-10 justify-center max-w-full">
-                          {displayItems.map((s) => (
-                            <div key={s.delegateId} className="flex flex-col items-center gap-2 relative group">
-                              <FlagCircle country={s.country} size={fSize} />
-                              <span className="text-xs text-[#C4A882] text-center w-14 truncate">{s.country}</span>
-                              <button
-                                onClick={() => removeFromSpeakersList(committee.id, s.delegateId)}
-                                className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full text-white text-xs items-center justify-center hidden group-hover:flex leading-none"
-                              >✕</button>
-                            </div>
-                          ))}
-                          {extra > 0 && (
-                            <div className="flex flex-col items-center gap-2">
-                              <div className="w-14 h-14 rounded-full bg-[#2E1E0F] flex items-center justify-center">
-                                <span className="text-sm font-bold text-[#C4A882]">+{extra}</span>
-                              </div>
-                              <span className="text-xs text-[#7A5A38]">more</span>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })()}
-
-                    <div className="text-7xl mb-6">🎙️</div>
-                    <h2 className="text-3xl font-black text-white mb-2">No Current Speaker</h2>
-                    <p className="text-[#C4A882] mb-4 text-center">Add delegates below, then call the first speaker</p>
-                    {committee.speakersList.length === 1 && (
-                      <div className="mb-4 px-4 py-2 bg-yellow-900/30 border border-yellow-700/40 rounded-xl text-yellow-400 text-sm text-center max-w-sm">
-                        Only 1 delegate on the list — add more before starting. When the last speaker finishes, the debate ends.
-                      </div>
-                    )}
-                    <button onClick={() => nextSpeaker(committee.id)} disabled={committee.speakersList.length === 0 || committee.speakersList.length === 1}
-                      className="bg-[#7B4A1E] hover:bg-[#8B5A2B] disabled:bg-[#2E1E0F] disabled:text-[#7A5A38] text-white px-10 py-4 rounded-xl font-bold text-lg transition-colors">
-                      Call First Speaker
-                    </button>
-                  </>
-                )}
-              </div>
-
-              {/* Bottom bar */}
-              <div className="border-t border-[#2E1E0F] bg-[#0D0906] px-6 py-4">
-                {/* Time presets */}
-                <div className="flex items-center gap-3 mb-4">
-                  <span className="text-xs text-[#7A5A38] font-mono shrink-0">TIME</span>
-                  <div className="flex gap-1.5">
-                    {[30, 60, 90, 120, 180].map((t) => (
-                      <button key={t} onClick={() => setSpeakerTimeLimit(committee.id, t)}
-                        className={`text-xs px-2.5 py-1 rounded-lg transition-colors font-medium ${committee.speakerTimeLimit === t ? 'bg-[#7B4A1E] text-white' : 'bg-[#1A1209] border border-[#2E1E0F] text-[#C4A882] hover:text-white'}`}>
-                        {t}s
-                      </button>
-                    ))}
-                    <input type="number" defaultValue={committee.speakerTimeLimit}
-                      onBlur={(e) => setSpeakerTimeLimit(committee.id, parseInt(e.target.value) || 90)}
-                      className="w-14 bg-[#150F09] border border-[#2E1E0F] rounded-lg px-2 py-1 text-white text-xs text-center focus:outline-none" />
-                  </div>
-                </div>
-
-                <AddSpeakerInput committee={committee} onAdd={(id) => addToSpeakersList(committee.id, id)} />
-              </div>
-            </div>
-          )}
-            </main>
-          </>
-        )}
-      </div>
-
-      {/* Motions modal overlay */}
-      {showMotions && (
-        <MotionsModal committee={committee} onClose={() => setShowMotions(false)} />
-      )}
-
-      {/* Documents modal overlay */}
-      {showDocuments && (
-        <DocumentsModal committee={committee} onClose={() => setShowDocuments(false)} />
-      )}
-    </div>
-  );
-}
-
-function UnmoderatedCaucusView({ committee }: { committee: Committee }) {
-  const { tickCaucus, endCaucus } = useCommitteeStore();
+// ── Unmoderated Caucus View ───────────────────────────────────────────────────
+function UnmoderatedCaucusView({ committee, setCommittee }: { committee: Committee; setCommittee: CommitteeSetter }) {
   const [running, setRunning] = useState(true);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const caucus = committee.caucus!;
 
   useEffect(() => {
     if (running && caucus.remainingTime > 0) {
-      intervalRef.current = setInterval(() => tickCaucus(committee.id), 1000);
+      intervalRef.current = setInterval(() => {
+        updateLocal(setCommittee, (c) => {
+          if (!c.caucus) return c;
+          const newTotal = Math.max(0, c.caucus.remainingTime - 1);
+          return { ...c, caucus: newTotal === 0 ? null : { ...c.caucus, remainingTime: newTotal }, phase: newTotal === 0 ? 'speakers-list' : c.phase };
+        });
+      }, 1000);
     } else {
       if (intervalRef.current) clearInterval(intervalRef.current);
     }
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [running, caucus.remainingTime, committee.id, tickCaucus]);
+  }, [running, caucus.remainingTime]);
+
+  const handleEndCaucus = () => {
+    updateLocal(setCommittee, (c) => ({ ...c, caucus: null, phase: 'speakers-list' }));
+    setPhaseInDB(committee.id, 'speakers-list');
+  };
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center px-8 py-12">
@@ -667,7 +406,7 @@ function UnmoderatedCaucusView({ committee }: { committee: Committee }) {
           className={`px-8 py-3 rounded-xl font-bold transition-colors ${running ? 'bg-yellow-600 hover:bg-yellow-500 text-white' : 'bg-green-600 hover:bg-green-500 text-white'}`}>
           {running ? '⏸ Pause' : '▶ Resume'}
         </button>
-        <button onClick={() => endCaucus(committee.id)}
+        <button onClick={handleEndCaucus}
           className="px-8 py-3 rounded-xl font-bold bg-[#2E1E0F] hover:bg-red-950/40 hover:text-red-500 text-[#C4A882] border border-[#2E1E0F] hover:border-red-800/40 transition-colors">
           End Caucus
         </button>
@@ -676,9 +415,9 @@ function UnmoderatedCaucusView({ committee }: { committee: Committee }) {
   );
 }
 
+// ── Vote Circle ───────────────────────────────────────────────────────────────
 function VoteCircle({ label, count, total, strokeColor, onInc, onDec }: {
-  label: string; count: number; total: number; strokeColor: string;
-  onInc: () => void; onDec: () => void;
+  label: string; count: number; total: number; strokeColor: string; onInc: () => void; onDec: () => void;
 }) {
   const r = 36; const circumference = 2 * Math.PI * r;
   const fraction = total > 0 ? Math.min(count / total, 1) : 0;
@@ -689,42 +428,38 @@ function VoteCircle({ label, count, total, strokeColor, onInc, onDec }: {
         <svg width="110" height="110" viewBox="0 0 100 100">
           <circle cx="50" cy="50" r={r} fill="none" stroke="#2E1E0F" strokeWidth="10" />
           <circle cx="50" cy="50" r={r} fill="none" stroke={strokeColor} strokeWidth="10"
-            strokeDasharray={circumference}
-            strokeDashoffset={circumference * (1 - fraction)}
-            strokeLinecap="round"
-            transform="rotate(-90 50 50)"
-            style={{ transition: 'stroke-dashoffset 0.3s ease' }}
-          />
+            strokeDasharray={circumference} strokeDashoffset={circumference * (1 - fraction)}
+            strokeLinecap="round" transform="rotate(-90 50 50)" style={{ transition: 'stroke-dashoffset 0.3s ease' }} />
           <text x="50" y="56" textAnchor="middle" fill="white" fontSize="24" fontWeight="bold" fontFamily="monospace">{count}</text>
         </svg>
-        <button onClick={onInc}
-          className="absolute -top-1 -right-1 w-7 h-7 bg-[#2E1E0F] hover:bg-[#3D2A15] border border-[#2E1E0F] rounded-full text-white font-bold text-base flex items-center justify-center leading-none">+</button>
-        <button onClick={onDec} disabled={count === 0}
-          className="absolute -bottom-1 -right-1 w-7 h-7 bg-[#2E1E0F] hover:bg-[#3D2A15] border border-[#2E1E0F] disabled:opacity-30 rounded-full text-white text-lg flex items-center justify-center leading-none">−</button>
+        <button onClick={onInc} className="absolute -top-1 -right-1 w-7 h-7 bg-[#2E1E0F] hover:bg-[#3D2A15] border border-[#2E1E0F] rounded-full text-white font-bold text-base flex items-center justify-center leading-none">+</button>
+        <button onClick={onDec} disabled={count === 0} className="absolute -bottom-1 -right-1 w-7 h-7 bg-[#2E1E0F] hover:bg-[#3D2A15] border border-[#2E1E0F] disabled:opacity-30 rounded-full text-white text-lg flex items-center justify-center leading-none">−</button>
       </div>
       <span className={`text-sm font-semibold ${labelColor}`}>{label}</span>
     </div>
   );
 }
 
-function VotingView({ committee }: { committee: Committee }) {
-  const { updateResolutionStatus, setPhase } = useCommitteeStore();
+// ── Voting View ───────────────────────────────────────────────────────────────
+function VotingView({ committee, setCommittee }: { committee: Committee; setCommittee: CommitteeSetter }) {
   const [votes, setVotes] = useState<Record<string, { for: number; against: number; abstain: number }>>({});
   const totalPresent = committee.delegates.filter((d) => d.status !== 'absent').length;
   const approved = committee.resolutions.filter((r) => r.status === 'approved');
 
   const adj = (id: string, field: 'for' | 'against' | 'abstain', delta: number) =>
-    setVotes((p) => {
-      const v = p[id] || { for: 0, against: 0, abstain: 0 };
-      return { ...p, [id]: { ...v, [field]: Math.max(0, (v[field] || 0) + delta) } };
-    });
+    setVotes((p) => { const v = p[id] || { for: 0, against: 0, abstain: 0 }; return { ...p, [id]: { ...v, [field]: Math.max(0, (v[field] || 0) + delta) } }; });
+
+  const handleBack = () => {
+    updateLocal(setCommittee, (c) => ({ ...c, phase: 'speakers-list' }));
+    setPhaseInDB(committee.id, 'speakers-list');
+  };
 
   return (
     <div className="flex-1 overflow-y-auto">
       <div className="p-8 max-w-2xl mx-auto w-full">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-black text-white">Voting Procedure</h2>
-          <button onClick={() => setPhase(committee.id, 'speakers-list')} className="text-sm text-[#C4A882] hover:text-white border border-[#2E1E0F] px-3 py-1.5 rounded-lg transition-colors">← Back</button>
+          <button onClick={handleBack} className="text-sm text-[#C4A882] hover:text-white border border-[#2E1E0F] px-3 py-1.5 rounded-lg transition-colors">← Back</button>
         </div>
         {approved.length === 0 ? (
           <div className="text-center py-12 text-[#7A5A38]">No approved resolutions to vote on.</div>
@@ -742,15 +477,14 @@ function VotingView({ committee }: { committee: Committee }) {
               ) : (
                 <div>
                   <div className="flex justify-around items-center mb-8">
-                    <VoteCircle label="In Favour" count={v.for} total={totalPresent} strokeColor="#22c55e"
-                      onInc={() => adj(res.id, 'for', 1)} onDec={() => adj(res.id, 'for', -1)} />
-                    <VoteCircle label="Abstain" count={v.abstain} total={totalPresent} strokeColor="#eab308"
-                      onInc={() => adj(res.id, 'abstain', 1)} onDec={() => adj(res.id, 'abstain', -1)} />
-                    <VoteCircle label="Against" count={v.against} total={totalPresent} strokeColor="#ef4444"
-                      onInc={() => adj(res.id, 'against', 1)} onDec={() => adj(res.id, 'against', -1)} />
+                    <VoteCircle label="In Favour" count={v.for} total={totalPresent} strokeColor="#22c55e" onInc={() => adj(res.id, 'for', 1)} onDec={() => adj(res.id, 'for', -1)} />
+                    <VoteCircle label="Abstain" count={v.abstain} total={totalPresent} strokeColor="#eab308" onInc={() => adj(res.id, 'abstain', 1)} onDec={() => adj(res.id, 'abstain', -1)} />
+                    <VoteCircle label="Against" count={v.against} total={totalPresent} strokeColor="#ef4444" onInc={() => adj(res.id, 'against', 1)} onDec={() => adj(res.id, 'against', -1)} />
                   </div>
-                  <button onClick={() => updateResolutionStatus(committee.id, res.id, v.for > v.against ? 'passed' : 'failed')}
-                    className="w-full bg-[#7B4A1E] hover:bg-[#8B5A2B] text-white py-3 rounded-xl font-bold transition-colors text-base">
+                  <button onClick={() => {
+                    const result = v.for > v.against ? 'passed' : 'failed';
+                    updateLocal(setCommittee, (c) => ({ ...c, resolutions: c.resolutions.map((r) => r.id === res.id ? { ...r, status: result } : r) }));
+                  }} className="w-full bg-[#7B4A1E] hover:bg-[#8B5A2B] text-white py-3 rounded-xl font-bold transition-colors text-base">
                     Finalize Vote
                   </button>
                 </div>
@@ -759,6 +493,370 @@ function VotingView({ committee }: { committee: Committee }) {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+// ── Main Chair Session ────────────────────────────────────────────────────────
+export default function ChairSession({ params }: { params: Promise<{ code: string }> }) {
+  const { code } = use(params);
+  const [committee, setCommittee] = useState<Committee | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [timerRunning, setTimerRunning] = useState(false);
+  const [showRollCall, setShowRollCall] = useState(true);
+  const [showMotions, setShowMotions] = useState(false);
+  const [showDocuments, setShowDocuments] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [speakerTimeLimit, setSpeakerTimeLimitLocal] = useState(90);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Load from Supabase + subscribe to real-time
+  useEffect(() => {
+    let unsubscribe: (() => void) | undefined;
+    async function load() {
+      const found = await getCommitteeByCode(code);
+      setCommittee(found ?? null);
+      if (found) setSpeakerTimeLimitLocal(found.speakerTimeLimit);
+      setLoading(false);
+      if (found) {
+        unsubscribe = subscribeToCommittee(found.id, async () => {
+          const updated = await getCommitteeByCode(code);
+          if (updated) setCommittee(updated);
+        });
+      }
+    }
+    load();
+    return () => unsubscribe?.();
+  }, [code]);
+
+  // Speaker timer — fully optimistic, ticks locally every second
+  useEffect(() => {
+    if (timerRunning && committee?.currentSpeaker) {
+      intervalRef.current = setInterval(() => {
+        updateLocal(setCommittee, (c) => {
+          const newTime = Math.max(0, c.speakerTimeRemaining - 1);
+          return { ...c, speakerTimeRemaining: newTime };
+        });
+        tickSpeakerTimerInDB(committee.id);
+      }, 1000);
+    } else {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    }
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+  }, [timerRunning, committee?.id, committee?.currentSpeaker]);
+
+  useEffect(() => {
+    if (committee?.speakerTimeRemaining === 0) setTimerRunning(false);
+  }, [committee?.speakerTimeRemaining]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#0D0906] flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-[#7B4A1E] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-[#C4A882] text-sm">Loading session...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!committee) {
+    return (
+      <div className="min-h-screen bg-[#0D0906] flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-white text-xl font-bold mb-4">Committee not found</p>
+          <Link href="/create" className="bg-[#7B4A1E] text-white px-6 py-3 rounded-xl font-semibold">Create one</Link>
+        </div>
+      </div>
+    );
+  }
+
+  const present = committee.delegates.filter((d) => d.status !== 'absent').length;
+  const progress = committee.currentSpeaker ? (committee.speakerTimeRemaining / committee.speakerTimeLimit) * 100 : 100;
+
+  // ── Optimistic action handlers ──────────────────────────────────────────────
+
+  const handleAddToSpeakersList = (delegateId: string) => {
+    const delegate = committee.delegates.find((d) => d.id === delegateId);
+    if (!delegate) return;
+    const alreadyOn = committee.speakersList.some((s) => s.delegateId === delegateId);
+    if (alreadyOn) return;
+    updateLocal(setCommittee, (c) => ({ ...c, speakersList: [...c.speakersList, { delegateId, country: delegate.country }] }));
+    addToSpeakersListInDB(committee.id, delegateId, delegate.country);
+  };
+
+  const handleRemoveFromSpeakersList = (delegateId: string) => {
+    updateLocal(setCommittee, (c) => ({ ...c, speakersList: c.speakersList.filter((s) => s.delegateId !== delegateId) }));
+    removeFromSpeakersListInDB(committee.id, delegateId);
+  };
+
+  const handleNextSpeaker = () => {
+    setTimerRunning(false);
+    const [next, ...rest] = committee.speakersList;
+    updateLocal(setCommittee, (c) => ({
+      ...c,
+      currentSpeaker: next ?? null,
+      speakersList: rest,
+      speakerTimeRemaining: speakerTimeLimit,
+    }));
+    nextSpeakerInDB(committee.id, speakerTimeLimit);
+  };
+
+  const handleSetSpeakerTimeLimit = (seconds: number) => {
+    setSpeakerTimeLimitLocal(seconds);
+    updateLocal(setCommittee, (c) => ({ ...c, speakerTimeLimit: seconds, speakerTimeRemaining: seconds }));
+  };
+
+  const handleResumeSession = () => {
+    updateLocal(setCommittee, (c) => ({ ...c, phase: 'speakers-list' }));
+    setPhaseInDB(committee.id, 'speakers-list');
+  };
+
+  const handleStatusChange = (delegateId: string, status: DelegateStatus) => {
+    updateLocal(setCommittee, (c) => ({
+      ...c,
+      delegates: c.delegates.map((d) => d.id === delegateId ? { ...d, status } : d),
+    }));
+  };
+
+  const handlePhaseChange = (phase: string) => {
+    updateLocal(setCommittee, (c) => ({ ...c, phase: phase as Committee['phase'] }));
+  };
+
+  const handleDelegateAdd = (country: string) => {
+    const tempId = `temp-${Date.now()}`;
+    updateLocal(setCommittee, (c) => ({
+      ...c,
+      delegates: [...c.delegates, { id: tempId, country, status: 'absent' }],
+    }));
+  };
+
+  return (
+    <div className="h-screen bg-[#0D0906] flex flex-col overflow-hidden">
+      <header className="border-b border-[#2E1E0F] bg-[#150F08] px-4 h-11 flex items-center gap-3 shrink-0">
+        <Link href="/">
+          <img src="/gavelling-logo.png" alt="Gavelling" className="h-8 w-auto" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+        </Link>
+        <span className="font-bold text-white text-sm truncate">{committee.name}</span>
+        <span className="text-[#7A5A38] text-xs hidden sm:block truncate flex-1">{committee.topic}</span>
+        <span className="text-xs text-[#C4A882] font-mono shrink-0 hidden sm:block">
+          {present}P · 2/3:{Math.ceil((present * 2) / 3)} · 1/2:{Math.floor(present / 2) + 1}
+        </span>
+        {committee.phase !== 'pre-session' && (
+          <button onClick={() => setShowRollCall((v) => !v)}
+            className={`text-xs px-3 py-1 rounded-lg transition-colors shrink-0 ${showRollCall ? 'bg-green-800/50 text-green-300' : 'bg-[#2E1E0F] text-[#C4A882] hover:text-white'}`}>
+            Roll Call {present}/{committee.delegates.length}
+          </button>
+        )}
+        <button onClick={() => setShowMotions((v) => !v)}
+          className={`text-xs px-3 py-1 rounded-lg transition-colors shrink-0 relative ${showMotions ? 'bg-[#7B4A1E] text-white' : 'bg-[#2E1E0F] text-[#C4A882] hover:text-white'}`}>
+          Motions
+          {(committee.pendingMotions ?? []).length > 0 && (
+            <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#7B4A1E] rounded-full text-white text-[10px] flex items-center justify-center font-bold">{committee.pendingMotions.length}</span>
+          )}
+        </button>
+        <button onClick={() => setShowDocuments((v) => !v)}
+          className={`text-xs px-3 py-1 rounded-lg transition-colors shrink-0 relative ${showDocuments ? 'bg-[#7B4A1E] text-white' : 'bg-[#2E1E0F] text-[#C4A882] hover:text-white'}`}>
+          Documents
+          {(() => {
+            const activeCount = (committee.documents ?? []).filter((d) => d.status === 'submitted' || d.status === 'on-floor').length;
+            return activeCount > 0 ? <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#7B4A1E] rounded-full text-white text-[10px] flex items-center justify-center font-bold">{activeCount}</span> : null;
+          })()}
+        </button>
+        <button onClick={() => { navigator.clipboard.writeText(committee.code); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
+          className="text-xs font-mono bg-[#2E1E0F] hover:bg-[#3D2A15] text-white px-2.5 py-1 rounded-lg transition-colors shrink-0">
+          {copied ? '✓' : committee.code}
+        </button>
+      </header>
+
+      {committee.phase !== 'pre-session' && (
+        <div className="border-b border-[#2E1E0F] bg-[#150F08] px-4 py-1.5 flex items-center gap-6 shrink-0">
+          <span className="text-xs text-[#C4A882] font-mono">{present} present</span>
+          <div className="flex items-center gap-1.5">
+            <MiniPie fraction={2/3} color="#B8844A" />
+            <span className="text-xs text-[#C4A882]">2/3: <span className="text-white font-bold">{Math.ceil((present * 2) / 3)}</span></span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <MiniPie fraction={1/2} color="#6BA562" />
+            <span className="text-xs text-[#C4A882]">1/2: <span className="text-white font-bold">{Math.floor(present / 2) + 1}</span></span>
+          </div>
+        </div>
+      )}
+
+      <div className="flex-1 flex overflow-hidden">
+        {committee.phase === 'pre-session' && (
+          <div className="flex-1 flex items-center justify-center px-6 py-8">
+            <div className="w-full max-w-lg bg-[#1A1209] border border-[#2E1E0F] rounded-2xl overflow-hidden shadow-lg" style={{ height: '80vh', maxHeight: '640px' }}>
+              <RollCallPanel committee={committee}
+                onAddToList={handleAddToSpeakersList}
+                onListIds={new Set(committee.speakersList.map((s) => s.delegateId))}
+                onStatusChange={handleStatusChange}
+                onPhaseChange={handlePhaseChange}
+                onDelegateAdd={handleDelegateAdd} />
+            </div>
+          </div>
+        )}
+
+        {committee.phase !== 'pre-session' && (
+          <>
+            {showRollCall && (
+              <aside className="w-64 border-r border-[#2E1E0F] bg-[#0D0906] flex flex-col overflow-hidden shrink-0">
+                <RollCallPanel committee={committee}
+                  onAddToList={handleAddToSpeakersList}
+                  onListIds={new Set(committee.speakersList.map((s) => s.delegateId))}
+                  onStatusChange={handleStatusChange}
+                  onPhaseChange={handlePhaseChange}
+                  onDelegateAdd={handleDelegateAdd} />
+              </aside>
+            )}
+
+            <main className="flex-1 overflow-hidden flex flex-col">
+              {committee.phase === 'moderated-caucus' && committee.caucus && (
+                <ModeratedCaucusView committee={committee} setCommittee={setCommittee} />
+              )}
+              {committee.phase === 'unmoderated-caucus' && committee.caucus && (
+                <UnmoderatedCaucusView committee={committee} setCommittee={setCommittee} />
+              )}
+              {committee.phase === 'voting' && (
+                <VotingView committee={committee} setCommittee={setCommittee} />
+              )}
+              {committee.phase === 'adjourned' && (
+                <div className="flex-1 flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="text-5xl mb-4">🔔</div>
+                    <h2 className="text-2xl font-black text-white mb-6">Session Adjourned</h2>
+                    <button onClick={handleResumeSession}
+                      className="bg-[#7B4A1E] hover:bg-[#8B5A2B] text-white px-8 py-3 rounded-xl font-bold transition-colors">
+                      Resume Session
+                    </button>
+                  </div>
+                </div>
+              )}
+              {committee.phase === 'speakers-list' && (
+                <div className="flex-1 flex flex-col overflow-hidden">
+                  <div className="flex-1 flex flex-col items-center justify-center px-8 py-6 min-h-0 overflow-hidden">
+                    {committee.currentSpeaker ? (
+                      <>
+                        {committee.speakersList.length > 0 && (() => {
+                          const qLen = committee.speakersList.length;
+                          const fSize = qLen <= 8 ? 'lg' : 'sm';
+                          const displayItems = committee.speakersList.slice(0, 15);
+                          const extra = qLen > 15 ? qLen - 15 : 0;
+                          return (
+                            <div className="flex flex-wrap items-start gap-4 mb-8 pt-2 pb-1 max-w-full justify-center">
+                              {displayItems.map((s) => (
+                                <div key={s.delegateId} className="flex flex-col items-center gap-2 relative group">
+                                  <FlagCircle country={s.country} size={fSize} />
+                                  <span className="text-xs text-[#C4A882] text-center w-14 truncate">{s.country}</span>
+                                  <button onClick={() => handleRemoveFromSpeakersList(s.delegateId)}
+                                    className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full text-white text-xs items-center justify-center hidden group-hover:flex leading-none">✕</button>
+                                </div>
+                              ))}
+                              {extra > 0 && (
+                                <div className="flex flex-col items-center gap-2">
+                                  <div className="w-14 h-14 rounded-full bg-[#2E1E0F] flex items-center justify-center">
+                                    <span className="text-sm font-bold text-[#C4A882]">+{extra}</span>
+                                  </div>
+                                  <span className="text-xs text-[#7A5A38]">more</span>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
+                        <FlagCircle country={committee.currentSpeaker.country} size="xl" />
+                        <h1 className="text-5xl font-black text-white mt-5 mb-2 text-center">{committee.currentSpeaker.country}</h1>
+                        <div className={`text-7xl font-black font-mono mt-3 mb-4 tabular-nums ${committee.speakerTimeRemaining <= 10 ? 'text-red-500' : committee.speakerTimeRemaining <= 30 ? 'text-yellow-600' : 'text-white'}`}>
+                          {formatTime(committee.speakerTimeRemaining)}
+                        </div>
+                        <div className="w-full max-w-md h-2 bg-[#2E1E0F] rounded-full overflow-hidden mb-4">
+                          <div className={`h-full rounded-full transition-all ${progress > 50 ? 'bg-[#B8844A]' : progress > 20 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{ width: `${progress}%` }} />
+                        </div>
+                        {committee.speakersList.length === 0 && (
+                          <div className="mb-4 px-4 py-2 bg-yellow-900/30 border border-yellow-700/40 rounded-xl text-yellow-400 text-sm text-center max-w-sm">
+                            Add at least one more delegate before advancing — advancing now ends the speakers list.
+                          </div>
+                        )}
+                        <div className="flex gap-3 w-full max-w-sm mt-2">
+                          <button onClick={() => setTimerRunning((r) => !r)}
+                            className={`flex-1 py-3 rounded-xl font-bold text-base transition-colors ${timerRunning ? 'bg-yellow-600 hover:bg-yellow-500 text-white' : 'bg-[#3D6B35] hover:bg-[#4A7C42] text-white'}`}>
+                            {timerRunning ? '⏸ Pause' : '▶ Start'}
+                          </button>
+                          <button onClick={handleNextSpeaker} disabled={committee.speakersList.length === 0}
+                            className="flex-1 bg-[#2E1E0F] hover:bg-[#3D2A15] disabled:opacity-40 disabled:cursor-not-allowed border border-[#2E1E0F] text-white py-3 rounded-xl font-bold text-base transition-colors">
+                            Next →
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        {committee.speakersList.length > 0 && (() => {
+                          const qLen = committee.speakersList.length;
+                          const fSize = qLen <= 8 ? 'lg' : 'sm';
+                          const displayItems = committee.speakersList.slice(0, 15);
+                          const extra = qLen > 15 ? qLen - 15 : 0;
+                          return (
+                            <div className="flex flex-wrap items-end gap-4 mb-10 justify-center max-w-full">
+                              {displayItems.map((s) => (
+                                <div key={s.delegateId} className="flex flex-col items-center gap-2 relative group">
+                                  <FlagCircle country={s.country} size={fSize} />
+                                  <span className="text-xs text-[#C4A882] text-center w-14 truncate">{s.country}</span>
+                                  <button onClick={() => handleRemoveFromSpeakersList(s.delegateId)}
+                                    className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full text-white text-xs items-center justify-center hidden group-hover:flex leading-none">✕</button>
+                                </div>
+                              ))}
+                              {extra > 0 && (
+                                <div className="flex flex-col items-center gap-2">
+                                  <div className="w-14 h-14 rounded-full bg-[#2E1E0F] flex items-center justify-center">
+                                    <span className="text-sm font-bold text-[#C4A882]">+{extra}</span>
+                                  </div>
+                                  <span className="text-xs text-[#7A5A38]">more</span>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
+                        <div className="text-7xl mb-6">🎙️</div>
+                        <h2 className="text-3xl font-black text-white mb-2">No Current Speaker</h2>
+                        <p className="text-[#C4A882] mb-4 text-center">Add delegates below, then call the first speaker</p>
+                        {committee.speakersList.length === 1 && (
+                          <div className="mb-4 px-4 py-2 bg-yellow-900/30 border border-yellow-700/40 rounded-xl text-yellow-400 text-sm text-center max-w-sm">
+                            Only 1 delegate on the list — add more before starting.
+                          </div>
+                        )}
+                        <button onClick={handleNextSpeaker} disabled={committee.speakersList.length === 0 || committee.speakersList.length === 1}
+                          className="bg-[#7B4A1E] hover:bg-[#8B5A2B] disabled:bg-[#2E1E0F] disabled:text-[#7A5A38] text-white px-10 py-4 rounded-xl font-bold text-lg transition-colors">
+                          Call First Speaker
+                        </button>
+                      </>
+                    )}
+                  </div>
+
+                  <div className="border-t border-[#2E1E0F] bg-[#0D0906] px-6 py-4">
+                    <div className="flex items-center gap-3 mb-4">
+                      <span className="text-xs text-[#7A5A38] font-mono shrink-0">TIME</span>
+                      <div className="flex gap-1.5">
+                        {[30, 60, 90, 120, 180].map((t) => (
+                          <button key={t} onClick={() => handleSetSpeakerTimeLimit(t)}
+                            className={`text-xs px-2.5 py-1 rounded-lg transition-colors font-medium ${speakerTimeLimit === t ? 'bg-[#7B4A1E] text-white' : 'bg-[#1A1209] border border-[#2E1E0F] text-[#C4A882] hover:text-white'}`}>
+                            {t}s
+                          </button>
+                        ))}
+                        <input type="number" value={speakerTimeLimit}
+                          onChange={(e) => handleSetSpeakerTimeLimit(parseInt(e.target.value) || 90)}
+                          className="w-14 bg-[#150F09] border border-[#2E1E0F] rounded-lg px-2 py-1 text-white text-xs text-center focus:outline-none" />
+                      </div>
+                    </div>
+                    <AddSpeakerInput committee={committee} onAdd={handleAddToSpeakersList} />
+                  </div>
+                </div>
+              )}
+            </main>
+          </>
+        )}
+      </div>
+
+      {showMotions && <MotionsModal committee={committee} onClose={() => setShowMotions(false)} />}
+      {showDocuments && <DocumentsModal committee={committee} onClose={() => setShowDocuments(false)} />}
     </div>
   );
 }

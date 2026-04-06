@@ -365,6 +365,20 @@ export async function removeFromSpeakersList(
 }
 
 /**
+ * addDelegate
+ * Adds a new country to a committee mid-session.
+ */
+export async function addDelegate(
+  committeeId: string,
+  country: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from('delegates')
+    .insert({ committee_id: committeeId, country, status: 'absent' });
+  if (error) console.error('Error adding delegate:', error);
+}
+
+/**
  * nextSpeaker
  * Advances to the next speaker — removes them from the queue
  * and sets them as the current speaker.
