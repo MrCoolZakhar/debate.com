@@ -13,8 +13,11 @@ import {
   setPhase as setPhaseInDB,
   addToSpeakersList as addToSpeakersListInDB,
   removeFromSpeakersList as removeFromSpeakersListInDB,
+  addToCaucusList as addToCaucusListInDB,
+  removeFromCaucusList as removeFromCaucusListInDB,
   nextSpeaker as nextSpeakerInDB,
   tickSpeakerTimer as tickSpeakerTimerInDB,
+  updateCaucus as updateCaucusInDB,
 } from '@/lib/committeeService';
 
 function MiniPie({ fraction, color }: { fraction: number; color: string }) {
@@ -233,15 +236,14 @@ function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee
 
   const handleRemoveFromQueue = (delegateId: string) => {
     updateLocal(setCommittee, (c) => ({ ...c, speakersList: c.speakersList.filter((s) => s.delegateId !== delegateId) }));
-    removeFromSpeakersListInDB(committee.id, delegateId);
+    removeFromCaucusListInDB(committee.id, delegateId);
   };
 
   const handleAddToQueue = (delegateId: string) => {
     const delegate = committee.delegates.find((d) => d.id === delegateId);
     if (!delegate) return;
-    const position = committee.speakersList.length + 1;
     updateLocal(setCommittee, (c) => ({ ...c, speakersList: [...c.speakersList, { delegateId, country: delegate.country }] }));
-    addToSpeakersListInDB(committee.id, delegateId, delegate.country);
+    addToCaucusListInDB(committee.id, delegateId, delegate.country);
   };
 
   const handleNext = () => {
@@ -273,9 +275,14 @@ function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee
     });
   };
 
-  const handleEndCaucus = () => {
-    updateLocal(setCommittee, (c) => ({ ...c, caucus: null, phase: 'speakers-list' }));
-    setPhaseInDB(committee.id, 'speakers-list');
+  const handleEndCaucus = async () => {
+    setSpeakerRunning(false);
+    await updateCaucusInDB(committee.id, null);
+    await setPhaseInDB(committee.id, 'speakers-list');
+    // Refetch to restore the GSL from Supabase (caucus list is separate)
+    const updated = await getCommitteeByCode(committee.code);
+    if (updated) { localUpdateTime.current = Date.now(); setCommittee(updated); }
+    else { updateLocal(setCommittee, (c) => ({ ...c, caucus: null, phase: 'speakers-list', speakersList: [] })); }
   };
 
   const speakerProgress = caucus.speakingTime > 0 ? (caucus.speakerTimeRemaining / caucus.speakingTime) * 100 : 0;
@@ -402,9 +409,14 @@ function UnmoderatedCaucusView({ committee, setCommittee }: { committee: Committ
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [running]);
 
-  const handleEndCaucus = () => {
-    updateLocal(setCommittee, (c) => ({ ...c, caucus: null, phase: 'speakers-list' }));
-    setPhaseInDB(committee.id, 'speakers-list');
+  const handleEndCaucus = async () => {
+    setRunning(false);
+    await updateCaucusInDB(committee.id, null);
+    await setPhaseInDB(committee.id, 'speakers-list');
+    // Refetch to restore the GSL from Supabase (caucus list is separate)
+    const updated = await getCommitteeByCode(committee.code);
+    if (updated) { localUpdateTime.current = Date.now(); setCommittee(updated); }
+    else { updateLocal(setCommittee, (c) => ({ ...c, caucus: null, phase: 'speakers-list' })); }
   };
 
   return (
