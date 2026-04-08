@@ -893,8 +893,20 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
         )}
       </div>
 
-      {showMotions && <MotionsModal committee={committee} onClose={() => setShowMotions(false)} />}
-      {showDocuments && <DocumentsModal committee={committee} onClose={() => setShowDocuments(false)} />}
+      {showMotions && (
+        <MotionsModal
+          committee={committee}
+          onClose={() => setShowMotions(false)}
+          onCommitteeUpdate={(updater) => updateLocal(setCommittee, updater)}
+        />
+      )}
+      {showDocuments && (
+        <DocumentsModal
+          committee={committee}
+          onClose={() => setShowDocuments(false)}
+          onCommitteeUpdate={(updater) => updateLocal(setCommittee, updater)}
+        />
+      )}
     </div>
   );
 }
