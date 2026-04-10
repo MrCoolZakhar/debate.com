@@ -11,7 +11,6 @@ import {
   updateCaucus as updateCaucusInDB,
   addToCaucusList as addToCaucusListInDB,
   clearCaucusList as clearCaucusListInDB,
-  addToSpeakersList as addToSpeakersListInDB,
 } from '@/lib/committeeService';
 
 type ModalView = 'list' | 'raise' | 'vote';
@@ -246,12 +245,37 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
       await clearPendingMotionsInDB(committee.id);
       await clearCaucusListInDB(committee.id);
     } else if (motion.type === 'tour') {
-      // Tour de Table: add all present delegates to GSL
+      // Tour de Table: temporary caucus for all present delegates.
+      // GSL is NEVER touched — only the caucus list is built.
       const presentDelegates = committee.delegates.filter((d) => d.status !== 'absent');
-      update((c) => ({ ...c, pendingMotions: [], speakersList: presentDelegates.map((d) => ({ delegateId: d.id, country: d.country })) }));
+      const tourTime = presentDelegates.length * (motion.speakingTime || 60);
+      const caucus = {
+        active: true,
+        type: 'moderated' as const,
+        purpose: 'Tour de Table',
+        proposedBy: motion.proposedBy,
+        totalTime: tourTime,
+        remainingTime: tourTime,
+        speakingTime: motion.speakingTime || 60,
+        speakerTimeRemaining: motion.speakingTime || 60,
+        currentSpeaker: null,
+        proposerPosition: null,
+        spokenCountries: [],
+      };
+      // GSL (speakersList in local state) is deliberately preserved
+      update((c) => ({
+        ...c,
+        phase: 'moderated-caucus',
+        caucus,
+        pendingMotions: [],
+        speakersList: presentDelegates.map((d) => ({ delegateId: d.id, country: d.country })),
+      }));
+      await setPhaseInDB(committee.id, 'moderated-caucus');
+      await updateCaucusInDB(committee.id, caucus);
       await clearPendingMotionsInDB(committee.id);
+      await clearCaucusListInDB(committee.id);
       for (const d of presentDelegates) {
-        await addToSpeakersListInDB(committee.id, d.id, d.country);
+        await addToCaucusListInDB(committee.id, d.id, d.country);
       }
     }
     onClose();
