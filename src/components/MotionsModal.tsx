@@ -10,6 +10,7 @@ import {
   setPhase as setPhaseInDB,
   updateCaucus as updateCaucusInDB,
   addToCaucusList as addToCaucusListInDB,
+  batchAddToCaucusList as batchAddToCaucusListInDB,
   clearCaucusList as clearCaucusListInDB,
 } from '@/lib/committeeService';
 
@@ -458,10 +459,12 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
       };
       // GSL preserved, caucusQueue cleared, phase → unmoderated-caucus
       update((c) => ({ ...c, phase: 'unmoderated-caucus', caucus, pendingMotions: [], caucusQueue: [] }));
-      await clearPendingMotionsInDB(committee.id);
-      await clearCaucusListInDB(committee.id);
-      await updateCaucusInDB(committee.id, caucus);
-      await setPhaseInDB(committee.id, 'unmoderated-caucus');
+      onClose(); // Close immediately — user sees caucus screen, DB syncs in background
+      clearPendingMotionsInDB(committee.id);
+      clearCaucusListInDB(committee.id);
+      updateCaucusInDB(committee.id, caucus);
+      setPhaseInDB(committee.id, 'unmoderated-caucus');
+      return;
 
     } else if (motion.type === 'moderated') {
       // Moderated caucus — BLANK SLATE queue. Chairs add speakers manually.
@@ -473,10 +476,12 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
       };
       // GSL preserved, caucusQueue = empty (chairs fill it), phase → moderated-caucus
       update((c) => ({ ...c, phase: 'moderated-caucus', caucus, pendingMotions: [], caucusQueue: [] }));
-      await clearPendingMotionsInDB(committee.id);
-      await clearCaucusListInDB(committee.id);
-      await updateCaucusInDB(committee.id, caucus);
-      await setPhaseInDB(committee.id, 'moderated-caucus');
+      onClose(); // Close immediately — user sees caucus screen, DB syncs in background
+      clearPendingMotionsInDB(committee.id);
+      clearCaucusListInDB(committee.id);
+      updateCaucusInDB(committee.id, caucus);
+      setPhaseInDB(committee.id, 'moderated-caucus');
+      return;
 
     } else if (motion.type === 'tour') {
       // Tour de Table — all present delegates in alphabetical order (A→Z or Z→A)
@@ -499,16 +504,18 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
 
       // GSL preserved, caucusQueue filled with ordered delegates
       update((c) => ({ ...c, phase: 'moderated-caucus', caucus, pendingMotions: [], caucusQueue }));
-      await clearPendingMotionsInDB(committee.id);
-      await clearCaucusListInDB(committee.id);
-      await updateCaucusInDB(committee.id, caucus);
-      await setPhaseInDB(committee.id, 'moderated-caucus');
-      for (const d of presentDelegates) {
-        await addToCaucusListInDB(committee.id, d.id, d.country);
-      }
+      onClose(); // Close immediately — user sees tour screen, DB syncs in background
+      clearPendingMotionsInDB(committee.id);
+      clearCaucusListInDB(committee.id);
+      updateCaucusInDB(committee.id, caucus);
+      setPhaseInDB(committee.id, 'moderated-caucus');
+      // Batch insert all delegates at once — no rate limits, all delegates added
+      batchAddToCaucusListInDB(
+        committee.id,
+        presentDelegates.map((d) => ({ delegateId: d.id, country: d.country }))
+      );
+      return;
     }
-
-    onClose();
   };
 
   return (

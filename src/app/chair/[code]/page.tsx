@@ -18,6 +18,7 @@ import {
   nextSpeaker as nextSpeakerInDB,
   tickSpeakerTimer as tickSpeakerTimerInDB,
   updateCaucus as updateCaucusInDB,
+  clearCaucusList as clearCaucusListInDB,
 } from '@/lib/committeeService';
 
 function MiniPie({ fraction, color }: { fraction: number; color: string }) {
@@ -275,14 +276,15 @@ function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee
     });
   };
 
-  const handleEndCaucus = async () => {
+  const handleEndCaucus = () => {
     setSpeakerRunning(false);
-    await updateCaucusInDB(committee.id, null);
-    await setPhaseInDB(committee.id, 'speakers-list');
-    // Refetch to restore the GSL from Supabase (caucus list is separate)
-    const updated = await getCommitteeByCode(committee.code);
-    if (updated) { localUpdateTime.current = Date.now(); setCommittee(updated); }
-    else { updateLocal(setCommittee, (c) => ({ ...c, caucus: null, phase: 'speakers-list', caucusQueue: [] })); }
+    // Instantly clear caucus state and return to GSL — no async delay
+    // speakersList (GSL) was never touched, so it's already correct in local state
+    updateLocal(setCommittee, (c) => ({ ...c, caucus: null, phase: 'speakers-list', caucusQueue: [] }));
+    // Fire-and-forget DB updates in background
+    updateCaucusInDB(committee.id, null);
+    setPhaseInDB(committee.id, 'speakers-list');
+    clearCaucusListInDB(committee.id);
   };
 
   const speakerProgress = caucus.speakingTime > 0 ? (caucus.speakerTimeRemaining / caucus.speakingTime) * 100 : 0;
@@ -409,14 +411,13 @@ function UnmoderatedCaucusView({ committee, setCommittee }: { committee: Committ
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [running]);
 
-  const handleEndCaucus = async () => {
+  const handleEndCaucus = () => {
     setRunning(false);
-    await updateCaucusInDB(committee.id, null);
-    await setPhaseInDB(committee.id, 'speakers-list');
-    // Refetch to restore the GSL from Supabase (caucus list is separate)
-    const updated = await getCommitteeByCode(committee.code);
-    if (updated) { localUpdateTime.current = Date.now(); setCommittee(updated); }
-    else { updateLocal(setCommittee, (c) => ({ ...c, caucus: null, phase: 'speakers-list' })); }
+    // Instantly return to GSL — speakersList was never modified
+    updateLocal(setCommittee, (c) => ({ ...c, caucus: null, phase: 'speakers-list', caucusQueue: [] }));
+    // Fire-and-forget DB updates
+    updateCaucusInDB(committee.id, null);
+    setPhaseInDB(committee.id, 'speakers-list');
   };
 
   return (

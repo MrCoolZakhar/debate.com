@@ -233,6 +233,23 @@ export async function addToCaucusList(committeeId: string, delegateId: string, c
   if (error) console.error('Error adding to caucus list:', error);
 }
 
+// Batch insert entire caucus list at once — avoids sequential await rate limits
+export async function batchAddToCaucusList(
+  committeeId: string,
+  delegates: { delegateId: string; country: string }[],
+): Promise<void> {
+  if (delegates.length === 0) return;
+  const rows = delegates.map((d, i) => ({
+    committee_id: committeeId,
+    delegate_id: d.delegateId,
+    country: d.country,
+    position: i + 1,
+    list_type: 'caucus',
+  }));
+  const { error } = await supabase.from('speakers_list').insert(rows);
+  if (error) console.error('Error batch adding to caucus list:', error);
+}
+
 export async function removeFromCaucusList(committeeId: string, delegateId: string): Promise<void> {
   const { error } = await supabase.from('speakers_list').delete()
     .eq('committee_id', committeeId).eq('delegate_id', delegateId).eq('list_type', 'caucus');

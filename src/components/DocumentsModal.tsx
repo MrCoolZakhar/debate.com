@@ -119,64 +119,83 @@ function StageTimer({
 
   const done = remaining === 0;
   const progress = totalSeconds > 0 ? ((totalSeconds - remaining) / totalSeconds) * 100 : 100;
+  const barColor = color.includes('purple') ? 'bg-purple-500' : color.includes('blue') ? 'bg-blue-500' : 'bg-[#B8844A]';
+  const hasPdf = !!(doc.fileUrl && doc.fileName?.toLowerCase().endsWith('.pdf'));
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center px-8 py-8 text-center">
-      <p className="text-xs font-mono tracking-widest mb-2 text-[#7A5A38]">
-        {doc.type === 'working-paper' ? 'WORKING PAPER' : 'DRAFT RESOLUTION'} · {doc.docCode}
-      </p>
-      <h2 className="text-2xl font-black text-white mb-1">{doc.title}</h2>
-      <p className={`text-sm font-bold mb-6 mt-1 ${color}`}>{label}</p>
+    <div className={`flex-1 flex overflow-hidden ${showDocument ? 'flex-row' : 'flex-col items-center justify-center'}`}>
+      {/* Timer panel — left side when doc shown, centered otherwise */}
+      <div className={`flex flex-col items-center justify-center px-8 py-8 text-center ${showDocument ? 'w-96 shrink-0 border-r border-[#2E1E0F]' : 'w-full'}`}>
+        <p className="text-xs font-mono tracking-widest mb-2 text-[#7A5A38]">
+          {doc.type === 'working-paper' ? 'WORKING PAPER' : 'DRAFT RESOLUTION'} · {doc.docCode}
+        </p>
+        <h2 className={`font-black text-white mb-1 ${showDocument ? 'text-lg' : 'text-2xl'}`}>{doc.title}</h2>
+        <p className={`text-sm font-bold mb-4 mt-1 ${color}`}>{label}</p>
 
-      {!done ? (
-        <>
-          <div className={`text-8xl font-black font-mono tabular-nums mb-4 ${remaining <= 30 ? 'text-red-500' : remaining <= 60 ? 'text-yellow-500' : 'text-white'}`}>
-            {formatTime(remaining)}
-          </div>
-          <div className="w-full max-w-sm h-2 bg-[#2E1E0F] rounded-full overflow-hidden mb-8">
-            <div className={`h-full rounded-full transition-all ${color.includes('purple') ? 'bg-purple-500' : color.includes('blue') ? 'bg-blue-500' : 'bg-[#B8844A]'}`}
-              style={{ width: `${progress}%` }} />
-          </div>
-          <div className="flex gap-3 flex-wrap justify-center">
-            <button onClick={() => setRunning((r) => !r)}
-              className={`px-8 py-3 rounded-xl font-bold transition-colors ${running ? 'bg-yellow-600 hover:bg-yellow-500 text-white' : 'bg-green-600 hover:bg-green-500 text-white'}`}>
-              {running ? '⏸ Pause' : '▶ Resume'}
-            </button>
-            <button onClick={onToggleDocument}
-              className={`px-6 py-3 rounded-xl font-bold transition-colors ${showDocument ? 'bg-[#7B4A1E] text-white' : 'bg-[#2E1E0F] hover:bg-[#3D2A15] text-[#C4A882] border border-[#2E1E0F]'}`}>
-              {showDocument ? '📄 Hide Doc' : '📄 Show Doc'}
-            </button>
+        {!done ? (
+          <>
+            <div className={`font-black font-mono tabular-nums mb-4 ${remaining <= 30 ? 'text-red-500' : remaining <= 60 ? 'text-yellow-500' : 'text-white'} ${showDocument ? 'text-6xl' : 'text-8xl'}`}>
+              {formatTime(remaining)}
+            </div>
+            <div className="w-full max-w-xs h-2 bg-[#2E1E0F] rounded-full overflow-hidden mb-6">
+              <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${progress}%` }} />
+            </div>
+            <div className="flex flex-col gap-2 w-full max-w-xs">
+              <button onClick={() => setRunning((r) => !r)}
+                className={`w-full px-6 py-2.5 rounded-xl font-bold transition-colors ${running ? 'bg-yellow-600 hover:bg-yellow-500 text-white' : 'bg-green-600 hover:bg-green-500 text-white'}`}>
+                {running ? '⏸ Pause' : '▶ Resume'}
+              </button>
+              <button onClick={onToggleDocument}
+                className={`w-full px-6 py-2.5 rounded-xl font-bold transition-colors ${showDocument ? 'bg-[#7B4A1E] text-white' : 'bg-[#2E1E0F] hover:bg-[#3D2A15] text-[#C4A882] border border-[#2E1E0F]'}`}>
+                {showDocument ? '📄 Hide Doc' : hasPdf ? '📄 Show PDF' : '📄 Show Doc'}
+              </button>
+              <button onClick={onComplete}
+                className="w-full px-6 py-2.5 rounded-xl font-bold bg-[#2E1E0F] hover:bg-[#3D2A15] text-[#C4A882] border border-[#2E1E0F] transition-colors">
+                Skip →
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="text-[#C4A882] text-lg mb-6">{label} complete.</p>
             <button onClick={onComplete}
-              className="px-6 py-3 rounded-xl font-bold bg-[#2E1E0F] hover:bg-[#3D2A15] text-[#C4A882] border border-[#2E1E0F] transition-colors">
-              Skip →
+              className="px-8 py-3 rounded-2xl font-black text-base bg-[#7B4A1E] hover:bg-[#8B5A2B] text-white transition-colors">
+              Continue →
             </button>
-          </div>
-        </>
-      ) : (
-        <>
-          <p className="text-[#C4A882] text-lg mb-8">{label} complete.</p>
-          <button onClick={onComplete}
-            className="px-10 py-4 rounded-2xl font-black text-lg bg-[#7B4A1E] hover:bg-[#8B5A2B] text-white transition-colors">
-            Continue →
-          </button>
-        </>
-      )}
+          </>
+        )}
+      </div>
 
-      {/* Fullscreen document display */}
-      {showDocument && doc.content && (
-        <div className="mt-8 w-full max-w-3xl text-left bg-[#1A1209] border border-[#2E1E0F] rounded-2xl p-6 max-h-80 overflow-y-auto">
-          <div className="flex items-center gap-3 mb-4">
+      {/* Document panel — right side, only when showDocument */}
+      {showDocument && (
+        <div className="flex-1 overflow-hidden flex flex-col bg-[#0A0705]">
+          <div className="px-4 py-2 border-b border-[#2E1E0F] flex items-center gap-3 shrink-0">
             <span className="text-xs font-mono font-bold text-[#7B4A1E]">{doc.docCode}</span>
-            <span className="text-sm font-bold text-white">{doc.title}</span>
+            <span className="text-xs text-[#C4A882] truncate flex-1">{doc.title}</span>
           </div>
-          <pre className="text-sm text-[#E8D5B7] whitespace-pre-wrap font-sans leading-relaxed">{doc.content}</pre>
-        </div>
-      )}
-      {showDocument && !doc.content && (
-        <div className="mt-8 w-full max-w-xl bg-[#1A1209] border border-[#2E1E0F] rounded-2xl p-6 text-center">
-          <p className="text-[#7A5A38] text-sm">No document content saved. Delegates can view via shared file.</p>
-          {doc.fileUrl && doc.fileName && (
-            <a href={doc.fileUrl} download={doc.fileName} className="mt-3 inline-block text-blue-400 hover:text-blue-300 text-sm">📎 {doc.fileName}</a>
+          {hasPdf ? (
+            /* PDF viewer — fullscreen iframe */
+            <iframe
+              src={doc.fileUrl}
+              className="flex-1 w-full"
+              title={doc.title}
+              style={{ border: 'none' }}
+            />
+          ) : doc.content ? (
+            /* Text content fallback */
+            <div className="flex-1 overflow-y-auto p-6">
+              <pre className="text-sm text-[#E8D5B7] whitespace-pre-wrap font-sans leading-relaxed">{doc.content}</pre>
+            </div>
+          ) : (
+            /* No content */
+            <div className="flex-1 flex items-center justify-center">
+              <div className="text-center">
+                <p className="text-[#7A5A38] text-sm mb-3">No document content to display.</p>
+                {doc.fileUrl && doc.fileName && (
+                  <a href={doc.fileUrl} download={doc.fileName} className="text-blue-400 hover:text-blue-300 text-sm">📎 Download {doc.fileName}</a>
+                )}
+              </div>
+            </div>
           )}
         </div>
       )}
