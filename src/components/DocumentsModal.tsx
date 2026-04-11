@@ -12,7 +12,7 @@ import {
 
 type DocTab = 'working-paper' | 'draft-resolution';
 // Flow stages for the fullscreen presentation experience
-type PresentationStage = 'reading' | 'presentation' | 'qa' | 'vote' | null;
+type PresentationStage = 'setup' | 'reading' | 'presentation' | 'qa' | 'vote' | null;
 
 const STATUS_META: Record<DocumentStatus, { label: string; color: string }> = {
   submitted:   { label: 'Submitted',  color: 'bg-blue-950/40 text-blue-400 border-blue-800/40' },
