@@ -18,7 +18,6 @@ import {
   nextSpeaker as nextSpeakerInDB,
   tickSpeakerTimer as tickSpeakerTimerInDB,
   updateCaucus as updateCaucusInDB,
-  clearCaucusList as clearCaucusListInDB,
 } from '@/lib/committeeService';
 
 function MiniPie({ fraction, color }: { fraction: number; color: string }) {
@@ -253,12 +252,13 @@ function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee
     const prev = caucus.currentSpeaker;
     updateLocal(setCommittee, (c) => {
       if (!c.caucus) return c;
-      const spokenCountries = prev && !c.caucus.spokenCountries.includes(prev)
+      const newSpoken = prev && !c.caucus.spokenCountries.includes(prev)
         ? [...c.caucus.spokenCountries, prev] : c.caucus.spokenCountries;
       return {
         ...c,
-        speakersList: rest,
-        caucus: { ...c.caucus, currentSpeaker: next?.country ?? null, speakerTimeRemaining: c.caucus.speakingTime, spokenCountries },
+        // caucusQueue shrinks — speakersList (GSL) is NEVER modified here
+        caucusQueue: rest,
+        caucus: { ...c.caucus, currentSpeaker: next?.country ?? null, speakerTimeRemaining: c.caucus.speakingTime, spokenCountries: newSpoken },
       };
     });
   };
@@ -276,15 +276,14 @@ function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee
     });
   };
 
-  const handleEndCaucus = () => {
+  const handleEndCaucus = async () => {
     setSpeakerRunning(false);
-    // Instantly clear caucus state and return to GSL — no async delay
-    // speakersList (GSL) was never touched, so it's already correct in local state
-    updateLocal(setCommittee, (c) => ({ ...c, caucus: null, phase: 'speakers-list', caucusQueue: [] }));
-    // Fire-and-forget DB updates in background
-    updateCaucusInDB(committee.id, null);
-    setPhaseInDB(committee.id, 'speakers-list');
-    clearCaucusListInDB(committee.id);
+    await updateCaucusInDB(committee.id, null);
+    await setPhaseInDB(committee.id, 'speakers-list');
+    // Refetch to restore the GSL from Supabase (caucus list is separate)
+    const updated = await getCommitteeByCode(committee.code);
+    if (updated) { localUpdateTime.current = Date.now(); setCommittee(updated); }
+    else { updateLocal(setCommittee, (c) => ({ ...c, caucus: null, phase: 'speakers-list', caucusQueue: [] })); }
   };
 
   const speakerProgress = caucus.speakingTime > 0 ? (caucus.speakerTimeRemaining / caucus.speakingTime) * 100 : 0;
@@ -357,7 +356,7 @@ function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee
             <div className="text-5xl mb-3">🎙️</div>
             <h2 className="text-2xl font-black text-white mb-1">No Current Speaker</h2>
             <p className="text-[#C4A882] mb-4 text-center text-sm">Add delegates below, then call the first speaker</p>
-            <button onClick={handleNext} disabled={committee.speakersList.length === 0}
+            <button onClick={handleNext} disabled={(committee.caucusQueue ?? []).length === 0}
               className="bg-[#7B4A1E] hover:bg-[#8B5A2B] disabled:bg-[#2E1E0F] disabled:text-[#7A5A38] text-white px-8 py-3 rounded-xl font-bold text-base transition-colors">
               Call First Speaker
             </button>
@@ -411,13 +410,14 @@ function UnmoderatedCaucusView({ committee, setCommittee }: { committee: Committ
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [running]);
 
-  const handleEndCaucus = () => {
+  const handleEndCaucus = async () => {
     setRunning(false);
-    // Instantly return to GSL — speakersList was never modified
-    updateLocal(setCommittee, (c) => ({ ...c, caucus: null, phase: 'speakers-list', caucusQueue: [] }));
-    // Fire-and-forget DB updates
-    updateCaucusInDB(committee.id, null);
-    setPhaseInDB(committee.id, 'speakers-list');
+    await updateCaucusInDB(committee.id, null);
+    await setPhaseInDB(committee.id, 'speakers-list');
+    // Refetch to restore the GSL from Supabase (caucus list is separate)
+    const updated = await getCommitteeByCode(committee.code);
+    if (updated) { localUpdateTime.current = Date.now(); setCommittee(updated); }
+    else { updateLocal(setCommittee, (c) => ({ ...c, caucus: null, phase: 'speakers-list' })); }
   };
 
   return (
@@ -559,7 +559,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
           // Suppress real-time refetch for 2s after any local optimistic update.
           // Prevents DB roundtrips from overwriting instant UI changes (roll call
           // flicker, timer jumps, speakers list flicker, etc.)
-          if (Date.now() - localUpdateTime.current < 5000) return;
+          if (Date.now() - localUpdateTime.current < 2000) return;
           const updated = await getCommitteeByCode(code);
           if (updated) {
             setCommittee((prev) => {
