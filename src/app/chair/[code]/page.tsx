@@ -674,12 +674,16 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
     updateLocal(setCommittee, (c) => ({ ...c, phase: phase as Committee['phase'] }));
   };
 
-  const handleDelegateAdd = (country: string) => {
-    const tempId = `temp-${Date.now()}`;
-    updateLocal(setCommittee, (c) => ({
-      ...c,
-      delegates: [...c.delegates, { id: tempId, country, status: 'absent' }],
-    }));
+  const handleDelegateAdd = async (country: string) => {
+    // Insert to DB first to get the real UUID — never use temp IDs
+    const { addDelegate: addDelegateInDB } = await import('@/lib/committeeService');
+    const realId = await addDelegateInDB(committee.id, country);
+    if (realId) {
+      updateLocal(setCommittee, (c) => ({
+        ...c,
+        delegates: [...c.delegates, { id: realId, country, status: 'absent' }],
+      }));
+    }
   };
 
   return (

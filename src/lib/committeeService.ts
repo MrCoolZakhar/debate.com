@@ -233,23 +233,6 @@ export async function addToCaucusList(committeeId: string, delegateId: string, c
   if (error) console.error('Error adding to caucus list:', error);
 }
 
-// Batch insert entire caucus list at once — avoids sequential await rate limits
-export async function batchAddToCaucusList(
-  committeeId: string,
-  delegates: { delegateId: string; country: string }[],
-): Promise<void> {
-  if (delegates.length === 0) return;
-  const rows = delegates.map((d, i) => ({
-    committee_id: committeeId,
-    delegate_id: d.delegateId,
-    country: d.country,
-    position: i + 1,
-    list_type: 'caucus',
-  }));
-  const { error } = await supabase.from('speakers_list').insert(rows);
-  if (error) console.error('Error batch adding to caucus list:', error);
-}
-
 export async function removeFromCaucusList(committeeId: string, delegateId: string): Promise<void> {
   const { error } = await supabase.from('speakers_list').delete()
     .eq('committee_id', committeeId).eq('delegate_id', delegateId).eq('list_type', 'caucus');
@@ -266,9 +249,12 @@ export async function clearCaucusList(committeeId: string): Promise<void> {
 // DELEGATES
 // ============================================================
 
-export async function addDelegate(committeeId: string, country: string): Promise<void> {
-  const { error } = await supabase.from('delegates').insert({ committee_id: committeeId, country, status: 'absent' });
-  if (error) console.error('Error adding delegate:', error);
+export async function addDelegate(committeeId: string, country: string): Promise<string | null> {
+  const { data, error } = await supabase.from('delegates')
+    .insert({ committee_id: committeeId, country, status: 'absent' })
+    .select('id').single();
+  if (error) { console.error('Error adding delegate:', error); return null; }
+  return data.id as string;
 }
 
 // ============================================================
@@ -344,16 +330,31 @@ export async function updateCaucus(committeeId: string, caucus: CaucusState | nu
 
 export async function addDocument(
   committeeId: string, doc: Omit<CommitteeDocument, 'id' | 'submittedAt'>,
-): Promise<void> {
-  const { error } = await supabase.from('documents').insert({
+): Promise<CommitteeDocument | null> {
+  const { data, error } = await supabase.from('documents').insert({
     committee_id: committeeId, type: doc.type, doc_code: doc.docCode, title: doc.title,
     sponsors: doc.sponsors, content: doc.content, status: doc.status,
     file_url: doc.fileUrl ?? null, file_name: doc.fileName ?? null,
     presentation_minutes: doc.presentationMinutes ?? null,
     qa_minutes: doc.qaMinutes ?? null,
     reading_minutes: doc.readingMinutes ?? null,
-  });
-  if (error) console.error('Error adding document:', error);
+  }).select().single();
+  if (error) { console.error('Error adding document:', error); return null; }
+  return {
+    id: data.id as string,
+    type: data.type as CommitteeDocument['type'],
+    docCode: data.doc_code as string,
+    title: data.title as string,
+    sponsors: (data.sponsors as string[]) ?? [],
+    content: (data.content as string) ?? '',
+    status: data.status as DocumentStatus,
+    submittedAt: data.created_at as string,
+    fileUrl: data.file_url as string | undefined,
+    fileName: data.file_name as string | undefined,
+    presentationMinutes: data.presentation_minutes as number | undefined,
+    qaMinutes: data.qa_minutes as number | undefined,
+    readingMinutes: data.reading_minutes as number | undefined,
+  };
 }
 
 export async function updateDocumentStatus(docId: string, status: DocumentStatus): Promise<void> {
