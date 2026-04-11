@@ -109,10 +109,10 @@ function AddSpeakerInput({ committee, onAdd }: { committee: Committee; onAdd: (i
 function CaucusSpeakerQueue({ committee, spokenCountries, onRemove }: {
   committee: Committee; spokenCountries: string[]; onRemove: (delegateId: string) => void;
 }) {
-  if (committee.speakersList.length === 0) return null;
-  const queueSize = committee.speakersList.length;
+  if (committee.caucusQueue.length === 0) return null;
+  const queueSize = committee.caucusQueue.length;
   const flagSize = queueSize <= 8 ? 'lg' : 'sm';
-  const displayList = committee.speakersList.slice(0, 15);
+  const displayList = committee.caucusQueue.slice(0, 15);
   const overflow = queueSize > 15 ? queueSize - 15 : 0;
   return (
     <div className="flex flex-wrap items-start gap-3 pt-1 pb-1 max-w-full justify-center">
@@ -152,7 +152,7 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd }: {
 }) {
   const [query, setQuery] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
-  const onList = new Set(committee.speakersList.map((s) => s.delegateId));
+  const onList = new Set((committee.caucusQueue ?? committee.speakersList).map((s) => s.delegateId));
   const eligible = committee.delegates.filter((d) => d.status !== 'absent');
   const matches = query.trim()
     ? eligible.filter((d) => d.country.toLowerCase().startsWith(query.toLowerCase()))
@@ -235,20 +235,20 @@ function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee
   }, [speakerRunning]);
 
   const handleRemoveFromQueue = (delegateId: string) => {
-    updateLocal(setCommittee, (c) => ({ ...c, speakersList: c.speakersList.filter((s) => s.delegateId !== delegateId) }));
+    updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: (c.caucusQueue ?? []).filter((s) => s.delegateId !== delegateId) }));
     removeFromCaucusListInDB(committee.id, delegateId);
   };
 
   const handleAddToQueue = (delegateId: string) => {
     const delegate = committee.delegates.find((d) => d.id === delegateId);
     if (!delegate) return;
-    updateLocal(setCommittee, (c) => ({ ...c, speakersList: [...c.speakersList, { delegateId, country: delegate.country }] }));
+    updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: [...(c.caucusQueue ?? []), { delegateId, country: delegate.country }] }));
     addToCaucusListInDB(committee.id, delegateId, delegate.country);
   };
 
   const handleNext = () => {
     setSpeakerRunning(false);
-    const [next, ...rest] = committee.speakersList;
+    const [next, ...rest] = committee.caucusQueue ?? [];
     const prev = caucus.currentSpeaker;
     updateLocal(setCommittee, (c) => {
       if (!c.caucus) return c;
@@ -269,9 +269,9 @@ function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee
     const entry = { delegateId: delegate.id, country: proposer };
     updateLocal(setCommittee, (c) => {
       if (!c.caucus) return c;
-      const without = c.speakersList.filter((s) => s.delegateId !== delegate.id);
+      const without = (c.caucusQueue ?? []).filter((s) => s.delegateId !== delegate.id);
       const newList = position === 'first' ? [entry, ...without] : [...without, entry];
-      return { ...c, speakersList: newList, caucus: { ...c.caucus, proposerPosition: position } };
+      return { ...c, caucusQueue: newList, caucus: { ...c.caucus, proposerPosition: position } };
     });
   };
 
@@ -282,7 +282,7 @@ function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee
     // Refetch to restore the GSL from Supabase (caucus list is separate)
     const updated = await getCommitteeByCode(committee.code);
     if (updated) { localUpdateTime.current = Date.now(); setCommittee(updated); }
-    else { updateLocal(setCommittee, (c) => ({ ...c, caucus: null, phase: 'speakers-list', speakersList: [] })); }
+    else { updateLocal(setCommittee, (c) => ({ ...c, caucus: null, phase: 'speakers-list', caucusQueue: [] })); }
   };
 
   const speakerProgress = caucus.speakingTime > 0 ? (caucus.speakerTimeRemaining / caucus.speakingTime) * 100 : 0;
@@ -322,7 +322,7 @@ function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee
           <>
             {committee.speakersList.length > 0 && (
               <div className="mb-4 w-full flex justify-center">
-                <CaucusSpeakerQueue committee={committee} spokenCountries={spokenCountries} onRemove={handleRemoveFromQueue} />
+                <CaucusSpeakerQueue committee={{...committee, speakersList: committee.caucusQueue ?? []}} spokenCountries={spokenCountries} onRemove={handleRemoveFromQueue} />
               </div>
             )}
             <FlagCircle country={caucus.currentSpeaker} size="xl" />
@@ -349,7 +349,7 @@ function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee
           <>
             {committee.speakersList.length > 0 && (
               <div className="mb-4 w-full flex justify-center">
-                <CaucusSpeakerQueue committee={committee} spokenCountries={spokenCountries} onRemove={handleRemoveFromQueue} />
+                <CaucusSpeakerQueue committee={{...committee, speakersList: committee.caucusQueue ?? []}} spokenCountries={spokenCountries} onRemove={handleRemoveFromQueue} />
               </div>
             )}
             <div className="text-5xl mb-3">🎙️</div>

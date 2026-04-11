@@ -47,11 +47,12 @@ export interface PendingMotion {
   type: PendingMotionType;
   proposedBy: string;
   totalTime: number;        // seconds
-  speakingTime: number;     // seconds (0 for unmod/consultation/tour)
-  topic: string;            // required for moderated
-  speakerList: string[];    // ordered speaker countries (moderated only)
+  speakingTime: number;     // seconds per delegate
+  topic: string;
+  speakerList: string[];
   proposerPosition: 'first' | 'last' | null;
-  disruptiveness: number;   // higher = more disruptive
+  disruptiveness: number;
+  tourOrder?: 'asc' | 'desc'; // Tour de Table only: 'asc' = A→Z, 'desc' = Z→A
 }
 
 export type ResolutionStatus = 'draft' | 'submitted' | 'approved' | 'rejected' | 'passed' | 'failed';
@@ -72,17 +73,18 @@ export type DocumentStatus = 'submitted' | 'on-floor' | 'introduced' | 'passed' 
 export interface CommitteeDocument {
   id: string;
   type: DocumentType;
-  docCode: string;        // e.g. "WP 1.1" or "DR 1/1"
+  docCode: string;
   title: string;
   sponsors: string[];
   content: string;
   status: DocumentStatus;
-  submittedAt: string;    // ISO string (avoid Date serialization issues with Zustand persist)
+  submittedAt: string;
   fileUrl?: string;
   fileName?: string;
+  readingMinutes?: number;       // Chair-set reading time before presentation
   presentationMinutes?: number;
   qaMinutes?: number;
-  signatories?: string[]; // kept optional for backwards-compat, not used in UI
+  signatories?: string[];
 }
 
 export interface CaucusState {
@@ -117,7 +119,8 @@ export interface Committee {
   chairNames: string[];
   delegates: Delegate[];
   phase: SessionPhase;
-  speakersList: SpeakerEntry[];
+  speakersList: SpeakerEntry[];     // GSL — permanent, never touched by caucuses
+  caucusQueue: SpeakerEntry[];      // Caucus/Tour speakers — separate, wiped when caucus ends
   currentSpeaker: SpeakerEntry | null;
   speakerTimeLimit: number;
   speakerTimeRemaining: number;
