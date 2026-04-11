@@ -559,7 +559,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
           // Suppress real-time refetch for 2s after any local optimistic update.
           // Prevents DB roundtrips from overwriting instant UI changes (roll call
           // flicker, timer jumps, speakers list flicker, etc.)
-          if (Date.now() - localUpdateTime.current < 2000) return;
+          if (Date.now() - localUpdateTime.current < 5000) return;
           const updated = await getCommitteeByCode(code);
           if (updated) {
             setCommittee((prev) => {
