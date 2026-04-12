@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, KeyboardEvent } from 'react';
+import { useRouter } from 'next/navigation';
 import { Committee, CommitteeDocument, DocumentType, DocumentStatus } from '@/lib/types';
 import { getCountryByName, getFlagEmoji } from '@/lib/countries';
 import {
@@ -439,6 +440,7 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate }
   committee: Committee; onClose: () => void;
   onCommitteeUpdate?: (updater: (c: Committee) => Committee) => void;
 }) {
+  const router = useRouter();
   const [tab, setTab] = useState<DocTab>('working-paper');
   const [showForm, setShowForm] = useState(false);
 
@@ -502,8 +504,11 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate }
       setStage(null);
       setActiveDoc(null);
     } else {
-      // DR goes to vote
-      setStage('vote');
+      // DR goes to voting page
+      setStage(null);
+      setActiveDoc(null);
+      onClose();
+      router.push(`/voting/${committee.code}`);
     }
   };
 
@@ -514,9 +519,12 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate }
       setStage(null);
       setActiveDoc(null);
     } else {
-      // Save as introduced first
+      // Mark as introduced then go to voting page
       handleStatusChange(activeDoc.id, 'introduced');
-      setStage('vote');
+      setStage(null);
+      setActiveDoc(null);
+      onClose();
+      router.push(`/voting/${committee.code}`);
     }
   };
 
