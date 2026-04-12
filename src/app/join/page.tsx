@@ -1,18 +1,19 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useCommitteeStore } from '@/lib/store';
 
 type JoinMode = 'delegate' | 'chair' | 'advisor';
 
-export default function JoinPage() {
+function JoinPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { joinCommittee, committees } = useCommitteeStore();
 
   const [mode, setMode] = useState<JoinMode>('delegate');
-  const [code, setCode] = useState('');
+  const [code, setCode] = useState(searchParams.get('code') ?? '');
   const [country, setCountry] = useState('');
   const [error, setError] = useState('');
   const [foundCommittee, setFoundCommittee] = useState<{ name: string; topic: string; delegates: { country: string }[] } | null>(null);
@@ -149,5 +150,13 @@ export default function JoinPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function JoinPage() {
+  return (
+    <Suspense fallback={<div className="h-screen bg-[#0D0906] flex items-center justify-center"><span className="text-[#7A5A38]">Loading...</span></div>}>
+      <JoinPageInner />
+    </Suspense>
   );
 }
