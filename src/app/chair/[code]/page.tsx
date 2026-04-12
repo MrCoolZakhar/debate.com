@@ -15,22 +15,12 @@ import {
   removeFromSpeakersList as removeFromSpeakersListInDB,
   addToCaucusList as addToCaucusListInDB,
   removeFromCaucusList as removeFromCaucusListInDB,
+  reorderSpeakersList as reorderSpeakersListInDB,
   nextSpeaker as nextSpeakerInDB,
   tickSpeakerTimer as tickSpeakerTimerInDB,
   updateCaucus as updateCaucusInDB,
 } from '@/lib/committeeService';
 
-function MiniPie({ fraction, color }: { fraction: number; color: string }) {
-  const r = 8; const c = 2 * Math.PI * r;
-  return (
-    <svg width="20" height="20" viewBox="0 0 20 20">
-      <circle cx="10" cy="10" r={r} fill="none" stroke="#2a1a0a" strokeWidth="3"/>
-      <circle cx="10" cy="10" r={r} fill="none" stroke={color} strokeWidth="3"
-        strokeDasharray={c} strokeDashoffset={c * (1 - Math.min(fraction, 1))}
-        transform="rotate(-90 10 10)" style={{transition:'stroke-dashoffset 0.3s'}}/>
-    </svg>
-  );
-}
 
 function formatTime(seconds: number) {
   const m = Math.floor(seconds / 60);
@@ -106,20 +96,37 @@ function AddSpeakerInput({ committee, onAdd }: { committee: Committee; onAdd: (i
 }
 
 // ── Caucus Speaker Queue ──────────────────────────────────────────────────────
-function CaucusSpeakerQueue({ committee, spokenCountries, onRemove }: {
+function CaucusSpeakerQueue({ committee, spokenCountries, onRemove, onReorder }: {
   committee: Committee; spokenCountries: string[]; onRemove: (delegateId: string) => void;
+  onReorder?: (newList: { delegateId: string; country: string }[]) => void;
 }) {
+  const dragIndexRef = useRef<number | null>(null);
   if (committee.caucusQueue.length === 0) return null;
   const queueSize = committee.caucusQueue.length;
-  const flagSize = queueSize <= 8 ? 'lg' : 'sm';
+  const flagSize: 'lg' | 'sm' = queueSize <= 8 ? 'lg' : 'sm';
   const displayList = committee.caucusQueue.slice(0, 15);
   const overflow = queueSize > 15 ? queueSize - 15 : 0;
   return (
     <div className="flex flex-wrap items-start gap-3 pt-1 pb-1 max-w-full justify-center">
-      {displayList.map((s) => {
+      {displayList.map((s, i) => {
         const alreadySpoke = spokenCountries.includes(s.country);
         return (
-          <div key={s.delegateId} className="flex flex-col items-center gap-1 relative group">
+          <div
+            key={s.delegateId}
+            className="flex flex-col items-center gap-1 relative group cursor-grab active:cursor-grabbing select-none"
+            draggable
+            onDragStart={() => { dragIndexRef.current = i; }}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={() => {
+              const from = dragIndexRef.current;
+              if (from === null || from === i || !onReorder) return;
+              const full = [...committee.caucusQueue];
+              const [moved] = full.splice(from, 1);
+              full.splice(i, 0, moved);
+              onReorder(full);
+              dragIndexRef.current = null;
+            }}
+          >
             <div className="relative">
               <FlagCircle country={s.country} size={flagSize} />
               {alreadySpoke && (
@@ -129,6 +136,9 @@ function CaucusSpeakerQueue({ committee, spokenCountries, onRemove }: {
               )}
             </div>
             <span className={`text-[10px] text-center w-12 truncate ${alreadySpoke ? 'text-yellow-600' : 'text-[#C4A882]'}`}>{s.country}</span>
+            {i === 0 && !alreadySpoke && (
+              <span className="text-[9px] font-semibold text-[#B8844A]">Up next...</span>
+            )}
             <button onClick={() => onRemove(s.delegateId)}
               className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full text-white text-xs items-center justify-center hidden group-hover:flex leading-none">✕</button>
           </div>
@@ -140,6 +150,61 @@ function CaucusSpeakerQueue({ committee, spokenCountries, onRemove }: {
             <span className="text-xs font-bold text-[#C4A882]">+{overflow}</span>
           </div>
           <span className="text-[10px] text-[#7A5A38]">more</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Draggable GSL Speakers Queue ──────────────────────────────────────────────
+function DraggableSpeakersQueue({
+  list,
+  onReorder,
+  onRemove,
+}: {
+  list: { delegateId: string; country: string }[];
+  onReorder: (newList: { delegateId: string; country: string }[]) => void;
+  onRemove: (delegateId: string) => void;
+}) {
+  const dragIndexRef = useRef<number | null>(null);
+  const qLen = list.length;
+  const fSize: 'lg' | 'sm' = qLen <= 8 ? 'lg' : 'sm';
+  const displayItems = list.slice(0, 15);
+  const overflow = qLen > 15 ? qLen - 15 : 0;
+  return (
+    <div className="flex flex-wrap items-start gap-4 mb-8 pt-2 pb-1 max-w-full justify-center">
+      {displayItems.map((s, i) => (
+        <div
+          key={s.delegateId}
+          className="flex flex-col items-center gap-1 relative group cursor-grab active:cursor-grabbing select-none"
+          draggable
+          onDragStart={() => { dragIndexRef.current = i; }}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={() => {
+            const from = dragIndexRef.current;
+            if (from === null || from === i) return;
+            const newList = [...list];
+            const [moved] = newList.splice(from, 1);
+            newList.splice(i, 0, moved);
+            onReorder(newList);
+            dragIndexRef.current = null;
+          }}
+        >
+          <FlagCircle country={s.country} size={fSize} />
+          <span className="text-xs text-[#C4A882] text-center w-14 truncate">{s.country}</span>
+          {i === 0 && (
+            <span className="text-[9px] font-semibold text-[#B8844A]">Up next...</span>
+          )}
+          <button onClick={() => onRemove(s.delegateId)}
+            className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full text-white text-xs items-center justify-center hidden group-hover:flex leading-none">✕</button>
+        </div>
+      ))}
+      {overflow > 0 && (
+        <div className="flex flex-col items-center gap-2">
+          <div className="w-14 h-14 rounded-full bg-[#2E1E0F] flex items-center justify-center">
+            <span className="text-sm font-bold text-[#C4A882]">+{overflow}</span>
+          </div>
+          <span className="text-xs text-[#7A5A38]">more</span>
         </div>
       )}
     </div>
@@ -239,6 +304,11 @@ function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee
     removeFromCaucusListInDB(committee.id, delegateId);
   };
 
+  const handleReorderCaucusQueue = (newList: { delegateId: string; country: string }[]) => {
+    updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: newList }));
+    reorderSpeakersListInDB(committee.id, newList, 'caucus');
+  };
+
   const handleAddToQueue = (delegateId: string) => {
     const delegate = committee.delegates.find((d) => d.id === delegateId);
     if (!delegate) return;
@@ -323,10 +393,10 @@ function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee
           <>
             {committee.speakersList.length > 0 && (
               <div className="mb-4 w-full flex justify-center">
-                <CaucusSpeakerQueue committee={{...committee, speakersList: committee.caucusQueue ?? []}} spokenCountries={spokenCountries} onRemove={handleRemoveFromQueue} />
+                <CaucusSpeakerQueue committee={{...committee, speakersList: committee.caucusQueue ?? []}} spokenCountries={spokenCountries} onRemove={handleRemoveFromQueue} onReorder={handleReorderCaucusQueue} />
               </div>
             )}
-            <FlagCircle country={caucus.currentSpeaker} size="xl" />
+            <FlagCircle country={caucus.currentSpeaker} size="hero" />
             <h1 className="text-3xl font-black text-white mt-3 mb-1 text-center">{caucus.currentSpeaker}</h1>
             <div className={`text-6xl font-black font-mono mt-2 mb-3 tabular-nums ${caucus.speakerTimeRemaining <= 5 ? 'text-red-500' : caucus.speakerTimeRemaining <= 15 ? 'text-yellow-600' : 'text-white'}`}>
               {formatTime(caucus.speakerTimeRemaining)}
@@ -350,7 +420,7 @@ function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee
           <>
             {committee.speakersList.length > 0 && (
               <div className="mb-4 w-full flex justify-center">
-                <CaucusSpeakerQueue committee={{...committee, speakersList: committee.caucusQueue ?? []}} spokenCountries={spokenCountries} onRemove={handleRemoveFromQueue} />
+                <CaucusSpeakerQueue committee={{...committee, speakersList: committee.caucusQueue ?? []}} spokenCountries={spokenCountries} onRemove={handleRemoveFromQueue} onReorder={handleReorderCaucusQueue} />
               </div>
             )}
             <div className="text-5xl mb-3">🎙️</div>
@@ -663,6 +733,11 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
     setPhaseInDB(committee.id, 'speakers-list');
   };
 
+  const handleReorderSpeakersList = (newList: { delegateId: string; country: string }[]) => {
+    updateLocal(setCommittee, (c) => ({ ...c, speakersList: newList }));
+    reorderSpeakersListInDB(committee.id, newList, 'gsl');
+  };
+
   const handleStatusChange = (delegateId: string, status: DelegateStatus) => {
     updateLocal(setCommittee, (c) => ({
       ...c,
@@ -690,13 +765,10 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
     <div className="h-screen bg-[#0D0906] flex flex-col overflow-hidden">
       <header className="border-b border-[#2E1E0F] bg-[#150F08] px-4 h-11 flex items-center gap-3 shrink-0">
         <Link href="/">
-          <img src="/gavelling-logo.png" alt="Gavelling" className="h-8 w-auto" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+          <img src="/gavelling-logo.png" alt="Gavelling" className="w-[16vw] h-auto max-h-9 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
         </Link>
         <span className="font-bold text-white text-sm truncate">{committee.name}</span>
         <span className="text-[#7A5A38] text-xs hidden sm:block truncate flex-1">{committee.topic}</span>
-        <span className="text-xs text-[#C4A882] font-mono shrink-0 hidden sm:block">
-          {present}P · 2/3:{Math.ceil((present * 2) / 3)} · 1/2:{Math.floor(present / 2) + 1}
-        </span>
         {committee.phase !== 'pre-session' && (
           <button onClick={() => setShowRollCall((v) => !v)}
             className={`text-xs px-3 py-1 rounded-lg transition-colors shrink-0 ${showRollCall ? 'bg-green-800/50 text-green-300' : 'bg-[#2E1E0F] text-[#C4A882] hover:text-white'}`}>
@@ -724,19 +796,6 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
         </button>
       </header>
 
-      {committee.phase !== 'pre-session' && (
-        <div className="border-b border-[#2E1E0F] bg-[#150F08] px-4 py-1.5 flex items-center gap-6 shrink-0">
-          <span className="text-xs text-[#C4A882] font-mono">{present} present</span>
-          <div className="flex items-center gap-1.5">
-            <MiniPie fraction={2/3} color="#B8844A" />
-            <span className="text-xs text-[#C4A882]">2/3: <span className="text-white font-bold">{Math.ceil((present * 2) / 3)}</span></span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <MiniPie fraction={1/2} color="#6BA562" />
-            <span className="text-xs text-[#C4A882]">1/2: <span className="text-white font-bold">{Math.floor(present / 2) + 1}</span></span>
-          </div>
-        </div>
-      )}
 
       <div className="flex-1 flex overflow-hidden">
         {committee.phase === 'pre-session' && (
@@ -792,33 +851,14 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
                   <div className="flex-1 flex flex-col items-center justify-center px-8 py-6 min-h-0 overflow-hidden">
                     {committee.currentSpeaker ? (
                       <>
-                        {committee.speakersList.length > 0 && (() => {
-                          const qLen = committee.speakersList.length;
-                          const fSize = qLen <= 8 ? 'lg' : 'sm';
-                          const displayItems = committee.speakersList.slice(0, 15);
-                          const extra = qLen > 15 ? qLen - 15 : 0;
-                          return (
-                            <div className="flex flex-wrap items-start gap-4 mb-8 pt-2 pb-1 max-w-full justify-center">
-                              {displayItems.map((s) => (
-                                <div key={s.delegateId} className="flex flex-col items-center gap-2 relative group">
-                                  <FlagCircle country={s.country} size={fSize} />
-                                  <span className="text-xs text-[#C4A882] text-center w-14 truncate">{s.country}</span>
-                                  <button onClick={() => handleRemoveFromSpeakersList(s.delegateId)}
-                                    className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full text-white text-xs items-center justify-center hidden group-hover:flex leading-none">✕</button>
-                                </div>
-                              ))}
-                              {extra > 0 && (
-                                <div className="flex flex-col items-center gap-2">
-                                  <div className="w-14 h-14 rounded-full bg-[#2E1E0F] flex items-center justify-center">
-                                    <span className="text-sm font-bold text-[#C4A882]">+{extra}</span>
-                                  </div>
-                                  <span className="text-xs text-[#7A5A38]">more</span>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })()}
-                        <FlagCircle country={committee.currentSpeaker.country} size="xl" />
+                        {committee.speakersList.length > 0 && (
+                          <DraggableSpeakersQueue
+                            list={committee.speakersList}
+                            onReorder={handleReorderSpeakersList}
+                            onRemove={handleRemoveFromSpeakersList}
+                          />
+                        )}
+                        <FlagCircle country={committee.currentSpeaker.country} size="hero" />
                         <h1 className="text-5xl font-black text-white mt-5 mb-2 text-center">{committee.currentSpeaker.country}</h1>
                         <div className={`text-7xl font-black font-mono mt-3 mb-4 tabular-nums ${committee.speakerTimeRemaining <= 10 ? 'text-red-500' : committee.speakerTimeRemaining <= 30 ? 'text-yellow-600' : 'text-white'}`}>
                           {formatTime(committee.speakerTimeRemaining)}
@@ -844,32 +884,13 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
                       </>
                     ) : (
                       <>
-                        {committee.speakersList.length > 0 && (() => {
-                          const qLen = committee.speakersList.length;
-                          const fSize = qLen <= 8 ? 'lg' : 'sm';
-                          const displayItems = committee.speakersList.slice(0, 15);
-                          const extra = qLen > 15 ? qLen - 15 : 0;
-                          return (
-                            <div className="flex flex-wrap items-end gap-4 mb-10 justify-center max-w-full">
-                              {displayItems.map((s) => (
-                                <div key={s.delegateId} className="flex flex-col items-center gap-2 relative group">
-                                  <FlagCircle country={s.country} size={fSize} />
-                                  <span className="text-xs text-[#C4A882] text-center w-14 truncate">{s.country}</span>
-                                  <button onClick={() => handleRemoveFromSpeakersList(s.delegateId)}
-                                    className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full text-white text-xs items-center justify-center hidden group-hover:flex leading-none">✕</button>
-                                </div>
-                              ))}
-                              {extra > 0 && (
-                                <div className="flex flex-col items-center gap-2">
-                                  <div className="w-14 h-14 rounded-full bg-[#2E1E0F] flex items-center justify-center">
-                                    <span className="text-sm font-bold text-[#C4A882]">+{extra}</span>
-                                  </div>
-                                  <span className="text-xs text-[#7A5A38]">more</span>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })()}
+                        {committee.speakersList.length > 0 && (
+                          <DraggableSpeakersQueue
+                            list={committee.speakersList}
+                            onReorder={handleReorderSpeakersList}
+                            onRemove={handleRemoveFromSpeakersList}
+                          />
+                        )}
                         <div className="text-7xl mb-6">🎙️</div>
                         <h2 className="text-3xl font-black text-white mb-2">No Current Speaker</h2>
                         <p className="text-[#C4A882] mb-4 text-center">Add delegates below, then call the first speaker</p>

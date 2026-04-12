@@ -262,6 +262,25 @@ export async function clearCaucusList(committeeId: string): Promise<void> {
   if (error) console.error('Error clearing caucus list:', error);
 }
 
+export async function reorderSpeakersList(
+  committeeId: string,
+  entries: { delegateId: string; country: string }[],
+  listType: 'gsl' | 'caucus' = 'gsl',
+): Promise<void> {
+  await supabase.from('speakers_list').delete()
+    .eq('committee_id', committeeId).eq('list_type', listType);
+  if (entries.length === 0) return;
+  const rows = entries.map((e, i) => ({
+    committee_id: committeeId,
+    delegate_id: e.delegateId,
+    country: e.country,
+    position: i + 1,
+    list_type: listType,
+  }));
+  const { error } = await supabase.from('speakers_list').insert(rows);
+  if (error) console.error('Error reordering speakers list:', error);
+}
+
 // ============================================================
 // DELEGATES
 // ============================================================

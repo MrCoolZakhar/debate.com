@@ -11,15 +11,16 @@ import {
 } from '@/lib/committeeService';
 
 // ── FlagCircle ────────────────────────────────────────────────────────────────
-export function FlagCircle({ country, size = 'md' }: { country: string; size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' }) {
+export function FlagCircle({ country, size = 'md' }: { country: string; size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' | 'hero' }) {
   const found = getCountryByName(country);
   const flag = found ? getFlagEmoji(found.code) : '🌐';
   const dim: Record<string, { box: string; font: string }> = {
-    xs: { box: 'w-7 h-7',   font: '1.6rem' },
-    sm: { box: 'w-9 h-9',   font: '2rem'   },
-    md: { box: 'w-12 h-12', font: '2.8rem' },
-    lg: { box: 'w-14 h-14', font: '3.2rem' },
-    xl: { box: 'w-20 h-20', font: '4.5rem' },
+    xs:   { box: 'w-7 h-7',   font: '1.6rem' },
+    sm:   { box: 'w-9 h-9',   font: '2rem'   },
+    md:   { box: 'w-12 h-12', font: '2.8rem' },
+    lg:   { box: 'w-14 h-14', font: '3.2rem' },
+    xl:   { box: 'w-20 h-20', font: '4.5rem' },
+    hero: { box: 'w-60 h-60', font: '13rem'  },
   };
   const { box, font } = dim[size];
   return (
@@ -121,8 +122,6 @@ export default function RollCallPanel({
 
   const present = committee.delegates.filter((d) => d.status !== 'absent').length;
   const total = committee.delegates.length;
-  const quorum = Math.ceil(total / 4);
-  const hasQuorum = present >= quorum;
 
   const sorted = [...committee.delegates].sort((a, b) => a.country.localeCompare(b.country));
   const filtered = sorted.filter((d) => d.country.toLowerCase().includes(search.toLowerCase()));
@@ -169,13 +168,8 @@ export default function RollCallPanel({
             <button onClick={handleClear} className="text-xs text-[#C4A882] hover:text-red-500 transition-colors">Clear</button>
           </div>
         </div>
-        <div className="flex items-center justify-between mb-2">
-          <span className={`text-base font-bold ${hasQuorum ? 'text-green-400' : 'text-yellow-400'}`}>{present} / {total} present</span>
-          <span className="text-xs text-[#7A5A38]">{hasQuorum ? '✓ Quorum' : `Need ${quorum - present} more`}</span>
-        </div>
-        <div className="h-1.5 bg-[#2E1E0F] rounded-full overflow-hidden mb-3">
-          <div className={`h-full rounded-full transition-all ${hasQuorum ? 'bg-green-500' : 'bg-yellow-500'}`}
-            style={{ width: total > 0 ? `${(present / total) * 100}%` : '0%' }} />
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-base font-bold text-green-400">{present} / {total} present</span>
         </div>
         <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Filter…"
           className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-lg px-3 py-2 text-white text-sm placeholder-[#7A5A38] focus:outline-none focus:border-[#7B4A1E]" />
@@ -209,9 +203,9 @@ export default function RollCallPanel({
       <div className="border-t border-[#2E1E0F] px-3 py-3 space-y-2 shrink-0">
         <AddCountryInput committee={committee} onAdd={handleAddDelegate} />
         {(committee.phase === 'pre-session' || committee.phase === 'roll-call') && (
-          <button onClick={handleBeginSession} disabled={!hasQuorum}
+          <button onClick={handleBeginSession} disabled={present < 1}
             className="w-full bg-[#3D6B35] hover:bg-[#4A7C42] disabled:bg-[#2E1E0F] disabled:text-[#7A5A38] text-white py-3 rounded-xl text-sm font-bold transition-colors">
-            {hasQuorum ? 'Begin Session →' : `Need ${quorum - present} more for quorum`}
+            {present >= 1 ? 'Begin Session →' : 'Add at least 1 delegate'}
           </button>
         )}
       </div>
