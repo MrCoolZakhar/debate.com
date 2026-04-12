@@ -1,12 +1,14 @@
 'use client';
 
-import { use, useEffect, useState, useRef } from 'react';
+import { use, useEffect, useState, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { Committee, DelegateStatus } from '@/lib/types';
 import RollCallPanel, { FlagCircle } from '@/components/RollCallPanel';
 import MotionsModal from '@/components/MotionsModal';
 import DocumentsModal from '@/components/DocumentsModal';
 import { getFlagEmoji, getCountryByName } from '@/lib/countries';
+import { SettingsPanel } from '@/components/SettingsPanel';
+import { useSettingsStore } from '@/lib/settingsStore';
 import {
   getCommitteeByCode,
   subscribeToCommittee,
@@ -607,6 +609,14 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
   const [showDocuments, setShowDocuments] = useState(false);
   const [copied, setCopied] = useState(false);
   const [speakerTimeLimit, setSpeakerTimeLimitLocal] = useState(90);
+  const [showSettings, setShowSettings] = useState(false);
+  const [extraTimeOpen, setExtraTimeOpen] = useState(false);
+  const [extraTimeSecs, setExtraTimeSecs] = useState(30);
+  const [extraTimeAdded, setExtraTimeAdded] = useState(false);
+  const [rightToReplyOpen, setRightToReplyOpen] = useState(false);
+  const [rtrCountry, setRtrCountry] = useState('');
+  const [rtrSeconds, setRtrSeconds] = useState(30);
+  const [rtrOverrideTime, setRtrOverrideTime] = useState<number | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   // Refs let intervals read latest values without restarting when state changes
   const timerRunningRef = useRef(false);
@@ -713,14 +723,38 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
 
   const handleNextSpeaker = () => {
     setTimerRunning(false);
+    setExtraTimeAdded(false);
     const [next, ...rest] = committee.speakersList;
+    const timeToUse = rtrOverrideTime ?? speakerTimeLimit;
+    setRtrOverrideTime(null);
     updateLocal(setCommittee, (c) => ({
       ...c,
       currentSpeaker: next ?? null,
       speakersList: rest,
-      speakerTimeRemaining: speakerTimeLimit,
+      speakerTimeRemaining: timeToUse,
     }));
-    nextSpeakerInDB(committee.id, speakerTimeLimit);
+    nextSpeakerInDB(committee.id, timeToUse);
+  };
+
+  const handleAddExtraTime = () => {
+    const secs = extraTimeSecs;
+    updateLocal(setCommittee, (c) => ({ ...c, speakerTimeRemaining: c.speakerTimeRemaining + secs }));
+    setExtraTimeAdded(true);
+    setExtraTimeOpen(false);
+  };
+
+  const handleRightToReply = () => {
+    if (!rtrCountry) return;
+    const delegate = committee.delegates.find((d) => d.country === rtrCountry && d.status !== 'absent');
+    if (!delegate) return;
+    const entry = { delegateId: delegate.id, country: rtrCountry };
+    updateLocal(setCommittee, (c) => ({
+      ...c,
+      speakersList: [entry, ...c.speakersList.filter((s) => s.delegateId !== delegate.id)],
+    }));
+    setRtrOverrideTime(rtrSeconds);
+    setRtrCountry('');
+    setRightToReplyOpen(false);
   };
 
   const handleSetSpeakerTimeLimit = (seconds: number) => {
@@ -794,6 +828,11 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
           className="text-xs font-mono bg-[#2E1E0F] hover:bg-[#3D2A15] text-white px-2.5 py-1 rounded-lg transition-colors shrink-0">
           {copied ? '✓' : committee.code}
         </button>
+        <button onClick={() => setShowSettings(true)}
+          className="text-[#7A5A38] hover:text-white transition-colors shrink-0 text-lg leading-none px-1"
+          title="Session Settings">
+          ⚙️
+        </button>
       </header>
 
 
@@ -860,8 +899,13 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
                         )}
                         <FlagCircle country={committee.currentSpeaker.country} size="hero" />
                         <h1 className="text-5xl font-black text-white mt-5 mb-2 text-center">{committee.currentSpeaker.country}</h1>
-                        <div className={`text-7xl font-black font-mono mt-3 mb-4 tabular-nums ${committee.speakerTimeRemaining <= 10 ? 'text-red-500' : committee.speakerTimeRemaining <= 30 ? 'text-yellow-600' : 'text-white'}`}>
+                        <div className={`text-7xl font-black font-mono mt-3 mb-4 tabular-nums ${
+                          extraTimeAdded ? 'text-emerald-400' :
+                          committee.speakerTimeRemaining <= 10 ? 'text-red-500' :
+                          committee.speakerTimeRemaining <= 30 ? 'text-yellow-600' : 'text-white'
+                        }`}>
                           {formatTime(committee.speakerTimeRemaining)}
+                          {extraTimeAdded && <span className="text-base ml-2 font-normal text-emerald-500">+ext</span>}
                         </div>
                         <div className="w-full max-w-md h-2 bg-[#2E1E0F] rounded-full overflow-hidden mb-4">
                           <div className={`h-full rounded-full transition-all ${progress > 50 ? 'bg-[#B8844A]' : progress > 20 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{ width: `${progress}%` }} />
@@ -871,7 +915,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
                             Add at least one more delegate before advancing — advancing now ends the speakers list.
                           </div>
                         )}
-                        <div className="flex gap-3 w-full max-w-sm mt-2">
+                        <div className="flex gap-2 w-full max-w-sm mt-2 flex-wrap justify-center">
                           <button onClick={() => setTimerRunning((r) => !r)}
                             className={`flex-1 py-3 rounded-xl font-bold text-base transition-colors ${timerRunning ? 'bg-yellow-600 hover:bg-yellow-500 text-white' : 'bg-[#3D6B35] hover:bg-[#4A7C42] text-white'}`}>
                             {timerRunning ? '⏸ Pause' : '▶ Start'}
@@ -880,7 +924,48 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
                             className="flex-1 bg-[#2E1E0F] hover:bg-[#3D2A15] disabled:opacity-40 disabled:cursor-not-allowed border border-[#2E1E0F] text-white py-3 rounded-xl font-bold text-base transition-colors">
                             Next →
                           </button>
+                          <button onClick={() => setExtraTimeOpen(true)}
+                            title="Add extra time to current speaker"
+                            className="px-3 py-3 bg-[#2E1E0F] hover:bg-emerald-950/50 hover:border-emerald-700/50 border border-[#2E1E0F] text-emerald-400 rounded-xl font-bold text-sm transition-colors">
+                            +⏱
+                          </button>
+                          <button onClick={() => setRightToReplyOpen(true)}
+                            title="Right to Reply"
+                            className="px-3 py-3 bg-[#2E1E0F] hover:bg-amber-950/50 hover:border-amber-700/50 border border-[#2E1E0F] text-amber-400 rounded-xl font-bold text-sm transition-colors">
+                            ↩
+                          </button>
                         </div>
+                        {/* Extra time popover */}
+                        {extraTimeOpen && (
+                          <div className="mt-3 flex items-center gap-2 bg-[#1A1209] border border-emerald-700/40 rounded-xl px-4 py-2.5 w-full max-w-sm">
+                            <span className="text-xs text-emerald-400 font-semibold shrink-0">Add time:</span>
+                            <input type="number" min={5} max={300} value={extraTimeSecs}
+                              onChange={(e) => setExtraTimeSecs(parseInt(e.target.value) || 30)}
+                              className="w-16 bg-[#150F09] border border-[#2E1E0F] rounded-lg px-2 py-1 text-white text-xs text-center focus:outline-none" />
+                            <span className="text-xs text-[#7A5A38]">sec</span>
+                            <button onClick={handleAddExtraTime} className="ml-auto px-3 py-1 bg-emerald-800/50 hover:bg-emerald-700/60 text-emerald-300 rounded-lg text-xs font-bold">Add</button>
+                            <button onClick={() => setExtraTimeOpen(false)} className="text-[#7A5A38] hover:text-white text-xs">✕</button>
+                          </div>
+                        )}
+                        {/* Right to reply popover */}
+                        {rightToReplyOpen && (
+                          <div className="mt-3 flex items-center gap-2 bg-[#1A1209] border border-amber-700/40 rounded-xl px-4 py-2.5 w-full max-w-sm flex-wrap">
+                            <span className="text-xs text-amber-400 font-semibold shrink-0 w-full mb-1">Right to Reply</span>
+                            <select value={rtrCountry} onChange={(e) => setRtrCountry(e.target.value)}
+                              className="flex-1 bg-[#150F09] border border-[#2E1E0F] rounded-lg px-2 py-1.5 text-white text-xs focus:outline-none min-w-0">
+                              <option value="">Select country…</option>
+                              {committee.delegates.filter((d) => d.status !== 'absent').sort((a,b) => a.country.localeCompare(b.country)).map((d) => (
+                                <option key={d.id} value={d.country}>{d.country}</option>
+                              ))}
+                            </select>
+                            <input type="number" min={10} max={180} value={rtrSeconds}
+                              onChange={(e) => setRtrSeconds(parseInt(e.target.value) || 30)}
+                              className="w-14 bg-[#150F09] border border-[#2E1E0F] rounded-lg px-2 py-1 text-white text-xs text-center focus:outline-none" />
+                            <span className="text-xs text-[#7A5A38]">sec</span>
+                            <button onClick={handleRightToReply} disabled={!rtrCountry} className="px-3 py-1 bg-amber-800/50 hover:bg-amber-700/60 disabled:opacity-40 text-amber-300 rounded-lg text-xs font-bold">Grant</button>
+                            <button onClick={() => setRightToReplyOpen(false)} className="text-[#7A5A38] hover:text-white text-xs">✕</button>
+                          </div>
+                        )}
                       </>
                     ) : (
                       <>
@@ -943,6 +1028,12 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
           committee={committee}
           onClose={() => setShowDocuments(false)}
           onCommitteeUpdate={(updater) => updateLocal(setCommittee, updater)}
+        />
+      )}
+      {showSettings && (
+        <SettingsPanel
+          committee={committee}
+          onClose={() => setShowSettings(false)}
         />
       )}
     </div>

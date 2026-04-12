@@ -55,12 +55,17 @@ function CommitteeNameInput({ value, onChange, onPresetSelect }: {
         p.name.toLowerCase().includes(value.toLowerCase()) ||
         p.acronym.toLowerCase().includes(value.toLowerCase()))
     : [];
+  const topMatch = matches[0] ?? null;
   return (
     <div className="relative">
       <input ref={inputRef} type="text" value={value}
         onChange={(e) => { onChange(e.target.value); setOpen(true); }}
         onFocus={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && topMatch) { e.preventDefault(); onPresetSelect(topMatch); setOpen(false); }
+          if (e.key === 'Escape') setOpen(false);
+        }}
         placeholder="e.g. Human Rights Council or HRC"
         className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-xl px-4 py-3 text-white placeholder-[#7A5A38] focus:outline-none focus:border-[#7B4A1E] transition-colors" />
       {open && matches.length > 0 && (
@@ -71,6 +76,7 @@ function CommitteeNameInput({ value, onChange, onPresetSelect }: {
               <span className="text-lg">{p.icon}</span>
               <span className="text-sm flex-1">{p.name}</span>
               <span className="text-xs text-[#7A5A38] shrink-0">{p.acronym}</span>
+              {i === 0 && <span className="text-xs text-[#7A5A38] shrink-0">↵</span>}
             </button>
           ))}
         </div>
@@ -90,12 +96,13 @@ function CreatePageInner() {
   const [pasteText, setPasteText] = useState('');
   const [pasteError, setPasteError] = useState('');
   const [creating, setCreating] = useState(false);
+  const [isUNSC, setIsUNSC] = useState(false);
 
   const handleCreate = async () => {
     const names = chairNames.map((n) => n.trim()).filter(Boolean);
-    if (!committeeName.trim() || !topic.trim() || names.length === 0) return;
+    if (!committeeName.trim() || !topic.trim()) return;
     setCreating(true);
-    const code = await createCommitteeInDB(committeeName.trim(), topic.trim(), names, delegates);
+    const code = await createCommitteeInDB(committeeName.trim(), topic.trim(), names.length > 0 ? names : ['Chair'], delegates);
     if (code) {
       router.push(`/chair/${code}`);
     } else {
@@ -104,7 +111,7 @@ function CreatePageInner() {
     }
   };
 
-  const canProceed = committeeName.trim() && topic.trim() && chairNames.some((n) => n.trim());
+  const canProceed = committeeName.trim() && topic.trim();
 
   const available = UN_COUNTRIES.filter(
     (c) => !delegates.includes(c.name) && c.name.toLowerCase().includes(search.toLowerCase())
@@ -137,6 +144,7 @@ function CreatePageInner() {
   const handleCommitteePreset = (preset: typeof COMMITTEE_PRESETS[0]) => {
     setCommitteeName(preset.name);
     if (preset.members !== null) setDelegates(preset.members);
+    setIsUNSC(preset.acronym === 'UNSC');
   };
 
   return (
@@ -153,24 +161,24 @@ function CreatePageInner() {
             <h1 className="text-2xl font-black text-white mb-2">Choose Committee Type</h1>
             <p className="text-[#C4A882] text-sm mb-8">Select the type of committee you want to run.</p>
             <div className="flex flex-row gap-4 w-full max-w-4xl">
-              <div className="flex-1 flex flex-col items-center justify-center bg-[#1A1209] border border-[#2E1E0F] rounded-3xl p-8 min-h-[300px] opacity-60 cursor-not-allowed relative">
-                <span className="text-5xl mb-4">🗣️</span>
+              <div className="flex-1 flex flex-col items-center justify-center bg-[#1A1209] border border-[#2E1E0F] rounded-3xl p-8 min-h-[300px] opacity-50 cursor-not-allowed relative transition-all hover:scale-[1.02]">
+                <span className="text-6xl mb-4">🗣️</span>
                 <h2 className="text-xl font-black text-white mb-2">Regular Debate</h2>
                 <p className="text-[#C4A882] text-sm text-center mb-4">Traditional parliamentary debate</p>
                 <span className="px-3 py-1 bg-[#2E1E0F] border border-[#3D2A15] text-[#7A5A38] rounded-full text-xs font-semibold">Coming Soon</span>
               </div>
               <div onClick={() => setCommitteeMode('build')}
-                className="flex-1 flex flex-col items-center justify-center bg-[#1A1209] border-2 border-[#7B4A1E] rounded-3xl p-8 min-h-[300px] cursor-pointer hover:bg-[#2E1E0F] hover:border-[#C4A882] transition-all group">
-                <span className="text-5xl mb-4">🌍</span>
+                className="flex-1 flex flex-col items-center justify-center bg-[#1A1209] border-2 border-[#7B4A1E] rounded-3xl p-8 min-h-[300px] cursor-pointer hover:bg-[#2E1E0F] hover:border-[#C4A882] hover:scale-[1.04] transition-all group">
+                <span className="text-6xl mb-4">🌍</span>
                 <h2 className="text-xl font-black text-white mb-2">Model United Nations</h2>
                 <p className="text-[#C4A882] text-sm text-center mb-4">United Nations committee simulation</p>
                 <span className="px-4 py-2 bg-[#7B4A1E] group-hover:bg-[#8B5A2B] text-white rounded-xl text-sm font-bold transition-colors">Start →</span>
               </div>
-              <div className="flex-1 flex flex-col items-center justify-center bg-[#1A1209] border border-[#2E1E0F] rounded-3xl p-8 min-h-[300px] opacity-60 cursor-not-allowed relative">
-                <span className="text-5xl mb-4">⚡</span>
+              <div className="flex-1 flex flex-col items-center justify-center bg-[#1A1209] border border-[#2E1E0F] rounded-3xl p-8 min-h-[300px] opacity-50 cursor-not-allowed relative transition-all hover:scale-[1.02]">
+                <span className="text-6xl mb-4">⚡</span>
                 <h2 className="text-xl font-black text-white mb-2">Crisis Committee</h2>
                 <p className="text-[#C4A882] text-sm text-center mb-4">Fast-paced crisis scenarios</p>
-                <span className="px-3 py-1 bg-[#2E1E0F] border border-[#3D2A15] text-[#7A5A38] rounded-full text-xs font-semibold">Coming Soon</span>
+                <span className="px-3 py-1 bg-[#2E1E0F] border border-[#3D2A15] text-[#7A5A38] rounded-full text-xs font-semibold">Coming H2 2026</span>
               </div>
             </div>
           </div>
@@ -184,13 +192,15 @@ function CreatePageInner() {
               <h1 className="text-2xl font-black text-white">New Committee</h1>
             </div>
 
-            <div className="grid grid-cols-3 gap-4 mb-5 shrink-0">
+            <div className="grid grid-cols-3 gap-4 mb-3 shrink-0">
               <div>
                 <label className="block text-xs font-semibold text-[#C4A882] mb-1.5">Committee Name</label>
-                <CommitteeNameInput value={committeeName} onChange={setCommitteeName} onPresetSelect={handleCommitteePreset} />
+                <CommitteeNameInput value={committeeName} onChange={(v) => { setCommitteeName(v); setIsUNSC(false); }} onPresetSelect={handleCommitteePreset} />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-[#C4A882] mb-1.5">Chair Name</label>
+                <label className="block text-xs font-semibold text-[#C4A882] mb-1.5">
+                  Chair Name <span className="text-[#7A5A38] font-normal">(optional)</span>
+                </label>
                 <input type="text" value={chairNames[0]} onChange={(e) => setChairNames([e.target.value])}
                   placeholder="e.g. John Smith"
                   className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-xl px-4 py-3 text-white placeholder-[#7A5A38] focus:outline-none focus:border-[#7B4A1E] transition-colors" />
@@ -202,6 +212,11 @@ function CreatePageInner() {
                   className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-xl px-4 py-3 text-white placeholder-[#7A5A38] focus:outline-none focus:border-[#7B4A1E] transition-colors" />
               </div>
             </div>
+            {isUNSC && (
+              <div className="mb-3 px-4 py-2.5 bg-amber-900/20 border border-amber-700/40 rounded-xl text-amber-300 text-xs shrink-0">
+                🛡️ <strong>UNSC detected:</strong> P5 nations (China, France, Russia, UK, USA) will have veto voting power. You can configure this in <strong>Settings</strong> after the session starts.
+              </div>
+            )}
 
             <div className="flex-1 grid grid-cols-2 gap-6 min-h-0">
               <div className="flex flex-col gap-4 min-h-0">
