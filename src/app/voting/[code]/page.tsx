@@ -5,8 +5,9 @@ import Link from 'next/link';
 import { Committee } from '@/lib/types';
 import { getCountryByName, getFlagEmoji } from '@/lib/countries';
 import { getCommitteeByCode } from '@/lib/committeeService';
+import { useSettingsStore } from '@/lib/settingsStore';
 
-type VoteChoice = 'for' | 'against' | 'for-rights' | 'against-rights';
+type VoteChoice = 'for' | 'against' | 'for-rights' | 'against-rights' | 'abstain';
 interface DelegateVote {
   delegateId: string;
   country: string;
@@ -97,12 +98,25 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     .filter((d) => d.status !== 'absent')
     .sort((a, b) => a.country.localeCompare(b.country));
 
+  const settings = useSettingsStore((s) => s.getSettings)(committee?.code ?? '');
+
   const forCount = votes.filter((v) => v.choice === 'for' || v.choice === 'for-rights').length;
   const againstCount = votes.filter((v) => v.choice === 'against' || v.choice === 'against-rights').length;
+  const abstainCount = votes.filter((v) => v.choice === 'abstain').length;
   const withRights = votes
     .filter((v) => v.choice === 'for-rights' || v.choice === 'against-rights')
     .sort((a, b) => a.country.localeCompare(b.country));
-  const passed = forCount > againstCount;
+
+  // Veto check
+  const p5Veto = settings.vetoMode === 'p5'
+    && votes.some((v) => settings.p5Delegations.includes(v.country) && (v.choice === 'against' || v.choice === 'against-rights'));
+  const unanimousRequired = settings.vetoMode === 'unanimous';
+  const pvDelegates = committee?.delegates.filter((d) => d.status === 'present-voting') ?? [];
+  const unanimousFail = unanimousRequired && pvDelegates.some((d) => {
+    const vote = votes.find((v) => v.delegateId === d.id);
+    return !vote || vote.choice === 'against' || vote.choice === 'against-rights' || vote.choice === 'abstain';
+  });
+  const passed = !p5Veto && !unanimousFail && forCount > againstCount;
 
   const startNewVote = (docId: string) => {
     setSelectedDocId(docId);
@@ -247,6 +261,14 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             >
               In Favour<br />with Rights
             </button>
+            {currentDelegate.status === 'present' && (
+              <button
+                onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'abstain')}
+                className="flex-1 bg-[#2E1E0F]/60 hover:bg-[#3D2A15]/80 border border-[#7A5A38]/50 text-[#C4A882] font-black text-base py-6 rounded-2xl transition-colors"
+              >
+                Abstain
+              </button>
+            )}
             <button
               onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'against-rights')}
               className="flex-1 bg-orange-900/30 hover:bg-orange-800/50 border border-orange-600/40 text-orange-300 font-black text-sm py-6 rounded-2xl transition-colors leading-snug"
@@ -305,6 +327,12 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
               <div className="text-4xl font-black text-red-400">{againstCount}</div>
               <div className="text-[#C4A882] text-sm mt-1">Against</div>
             </div>
+            {abstainCount > 0 && (
+              <div>
+                <div className="text-4xl font-black text-[#C4A882]">{abstainCount}</div>
+                <div className="text-[#7A5A38] text-sm mt-1">Abstain</div>
+              </div>
+            )}
             {withRights.length > 0 && (
               <div>
                 <div className="text-4xl font-black text-amber-400">{withRights.length}</div>
@@ -406,6 +434,12 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                 <div className="text-4xl font-black text-red-400">{againstCount}</div>
                 <div className="text-[#C4A882] mt-1">Against</div>
               </div>
+              {abstainCount > 0 && (
+                <div className="text-center">
+                  <div className="text-4xl font-black text-[#C4A882]">{abstainCount}</div>
+                  <div className="text-[#7A5A38] mt-1">Abstain</div>
+                </div>
+              )}
               {withRights.length > 0 && (
                 <div className="text-center">
                   <div className="text-4xl font-black text-amber-400">{withRights.length}</div>
