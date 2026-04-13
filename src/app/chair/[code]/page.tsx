@@ -841,11 +841,13 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
           <div className="flex-1 flex items-center justify-center px-6 py-8">
             <div className="w-full max-w-lg bg-[#1A1209] border border-[#2E1E0F] rounded-2xl overflow-hidden shadow-lg" style={{ height: '80vh', maxHeight: '640px' }}>
               <RollCallPanel committee={committee}
-                onAddToList={handleAddToSpeakersList}
-                onListIds={new Set(committee.speakersList.map((s) => s.delegateId))}
-                onStatusChange={handleStatusChange}
-                onPhaseChange={handlePhaseChange}
-                onDelegateAdd={handleDelegateAdd} />
+                  onAddToList={handleAddToSpeakersList}
+                  onListIds={new Set(committee.speakersList.map((s) => s.delegateId))}
+                  onRemoveFromList={handleRemoveFromSpeakersList}
+                  onStatusChange={handleStatusChange}
+                  onPhaseChange={handlePhaseChange}
+                  onDelegateAdd={handleDelegateAdd}
+                  isRollCallPhase={true} />
             </div>
           </div>
         )}
@@ -857,9 +859,11 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
                 <RollCallPanel committee={committee}
                   onAddToList={handleAddToSpeakersList}
                   onListIds={new Set(committee.speakersList.map((s) => s.delegateId))}
+                  onRemoveFromList={handleRemoveFromSpeakersList}
                   onStatusChange={handleStatusChange}
                   onPhaseChange={handlePhaseChange}
-                  onDelegateAdd={handleDelegateAdd} />
+                  onDelegateAdd={handleDelegateAdd}
+                  isRollCallPhase={false} />
               </aside>
             )}
 
