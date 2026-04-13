@@ -50,6 +50,9 @@ function VoteScale({ forCount, againstCount, totalVoted }: {
 
 export default function VotingPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = use(params);
+
+  // ── ALL hooks must be called before any early returns ──────────────────────
+  const getSettings = useSettingsStore((s) => s.getSettings);
   const [committee, setCommittee] = useState<Committee | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
@@ -90,6 +93,9 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     );
   }
 
+  // ── committee is guaranteed non-null from here ─────────────────────────────
+  const settings = getSettings(committee.code);
+
   const introducedDRs = (committee.documents ?? []).filter(
     (d) => d.type === 'draft-resolution' && d.status === 'introduced'
   );
@@ -97,8 +103,6 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   const presentDelegates = committee.delegates
     .filter((d) => d.status !== 'absent')
     .sort((a, b) => a.country.localeCompare(b.country));
-
-  const settings = useSettingsStore((s) => s.getSettings)(committee?.code ?? '');
 
   const forCount = votes.filter((v) => v.choice === 'for' || v.choice === 'for-rights').length;
   const againstCount = votes.filter((v) => v.choice === 'against' || v.choice === 'against-rights').length;
@@ -111,7 +115,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   const p5Veto = settings.vetoMode === 'p5'
     && votes.some((v) => settings.p5Delegations.includes(v.country) && (v.choice === 'against' || v.choice === 'against-rights'));
   const unanimousRequired = settings.vetoMode === 'unanimous';
-  const pvDelegates = committee?.delegates.filter((d) => d.status === 'present-voting') ?? [];
+  const pvDelegates = committee.delegates.filter((d) => d.status === 'present-voting');
   const unanimousFail = unanimousRequired && pvDelegates.some((d) => {
     const vote = votes.find((v) => v.delegateId === d.id);
     return !vote || vote.choice === 'against' || vote.choice === 'against-rights' || vote.choice === 'abstain';
@@ -447,6 +451,12 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                 </div>
               )}
             </div>
+            {p5Veto && (
+              <p className="text-red-400 text-sm mt-4 font-semibold">🛡️ P5 veto exercised</p>
+            )}
+            {unanimousFail && (
+              <p className="text-red-400 text-sm mt-4 font-semibold">⚠️ Unanimous vote required — failed</p>
+            )}
           </div>
           <VoteScale forCount={forCount} againstCount={againstCount} totalVoted={votes.length} />
           <div className="flex gap-3">
