@@ -50,7 +50,7 @@ function CommitteeNameInput({ value, onChange, onPresetSelect }: {
 }) {
   const [open, setOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
- 
+
   // Always compute matches from value — not gated on `open`
   const matches = value.trim()
     ? COMMITTEE_PRESETS.filter((p) =>
@@ -58,7 +58,7 @@ function CommitteeNameInput({ value, onChange, onPresetSelect }: {
         p.acronym.toLowerCase().includes(value.toLowerCase()))
     : [];
   const topMatch = matches[0] ?? null;
- 
+
   return (
     <div className="relative">
       <input
@@ -69,7 +69,6 @@ function CommitteeNameInput({ value, onChange, onPresetSelect }: {
         onFocus={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
         onKeyDown={(e) => {
-          // Fix #3: Enter selects top match regardless of whether dropdown is visually open
           if (e.key === 'Enter' && topMatch) {
             e.preventDefault();
             onPresetSelect(topMatch);
@@ -243,16 +242,22 @@ function CreatePageInner() {
                     <div className="flex items-center bg-[#150F09] border border-[#2E1E0F] focus-within:border-[#7B4A1E] rounded-xl overflow-visible transition-colors">
                       <input type="text" value={search} onChange={(e) => setSearch(e.target.value)}
                         onKeyDown={(e) => {
-                          if (e.key === 'Enter') { e.preventDefault(); const top = available[0]; if (top) { addDelegate(top.name); setSearch(''); } }
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            if (available[0]) { addDelegate(available[0].name); setSearch(''); }
+                            else if (search.trim() && !delegates.includes(search.trim())) { addDelegate(search.trim()); setSearch(''); }
+                          }
                           if (e.key === 'Escape') setSearch('');
                         }}
-                        placeholder="Search countries..."
+                        placeholder="Search countries or add custom…"
                         className="flex-1 bg-transparent px-4 py-3 text-white placeholder-[#7A5A38] focus:outline-none text-sm" />
-                      {available[0] && search && <span className="text-xs text-[#7A5A38] px-3 shrink-0">↵ {available[0].name}</span>}
+                      {search && (available[0] || search.trim()) && (
+                        <span className="text-xs text-[#7A5A38] px-3 shrink-0">↵ {available[0]?.name ?? search.trim()}</span>
+                      )}
                     </div>
-                    {search && available.length > 0 && (
+                    {search && (available.length > 0 || search.trim()) && (
                       <div className="absolute top-full left-0 right-0 mt-1 bg-[#150F09] border border-[#2E1E0F] rounded-xl overflow-hidden z-20 shadow-xl">
-                        {available.slice(0, 6).map((c, i) => (
+                        {available.slice(0, 5).map((c, i) => (
                           <button key={c.code} onMouseDown={(e) => { e.preventDefault(); addDelegate(c.name); setSearch(''); }}
                             className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${i === 0 ? 'bg-[#7B4A1E]/20 text-white' : 'text-[#E8D5B7] hover:bg-[#2E1E0F]'}`}>
                             <span className="text-xl">{getFlagEmoji(c.code)}</span>
@@ -260,6 +265,14 @@ function CreatePageInner() {
                             {i === 0 && <span className="ml-auto text-xs text-[#7A5A38]">Enter ↵</span>}
                           </button>
                         ))}
+                        {search.trim() && !delegates.includes(search.trim()) && !available.some((c) => c.name.toLowerCase() === search.trim().toLowerCase()) && (
+                          <button onMouseDown={(e) => { e.preventDefault(); addDelegate(search.trim()); setSearch(''); }}
+                            className="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors text-[#E8D5B7] hover:bg-[#2E1E0F] border-t border-[#2E1E0F]">
+                            <span className="text-xl">🌐</span>
+                            <span className="text-sm flex-1">{search.trim()}</span>
+                            <span className="text-[10px] text-[#7B4A1E] shrink-0 font-semibold">Add custom</span>
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>

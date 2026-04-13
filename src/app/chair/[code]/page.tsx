@@ -30,13 +30,8 @@ function formatTime(seconds: number) {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-// ── Optimistic helper ─────────────────────────────────────────────────────────
-// Updates local committee state instantly while Supabase syncs in background.
-// Also stamps localUpdateTime so the real-time subscription knows to pause
-// for 2 seconds — preventing DB roundtrips from overwriting instant UI changes.
 type CommitteeSetter = React.Dispatch<React.SetStateAction<Committee | null>>;
 
-// Module-level so it persists across renders without causing re-renders
 const localUpdateTime = { current: 0 };
 
 function updateLocal(setCommittee: CommitteeSetter, updater: (c: Committee) => Committee) {
@@ -272,7 +267,6 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd }: {
 function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee; setCommittee: CommitteeSetter }) {
   const [speakerRunning, setSpeakerRunning] = useState(false);
   const speakerRef = useRef<NodeJS.Timeout | null>(null);
-  // Ref so the interval always reads latest caucus state without restarting
   const caucusRef = useRef(committee.caucus);
   caucusRef.current = committee.caucus;
   const caucus = committee.caucus!;
@@ -328,7 +322,6 @@ function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee
         ? [...c.caucus.spokenCountries, prev] : c.caucus.spokenCountries;
       return {
         ...c,
-        // caucusQueue shrinks — speakersList (GSL) is NEVER modified here
         caucusQueue: rest,
         caucus: { ...c.caucus, currentSpeaker: next?.country ?? null, speakerTimeRemaining: c.caucus.speakingTime, spokenCountries: newSpoken },
       };
@@ -352,7 +345,6 @@ function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee
     setSpeakerRunning(false);
     await updateCaucusInDB(committee.id, null);
     await setPhaseInDB(committee.id, 'speakers-list');
-    // Refetch to restore the GSL from Supabase (caucus list is separate)
     const updated = await getCommitteeByCode(committee.code);
     if (updated) { localUpdateTime.current = Date.now(); setCommittee(updated); }
     else { updateLocal(setCommittee, (c) => ({ ...c, caucus: null, phase: 'speakers-list', caucusQueue: [] })); }
@@ -398,7 +390,7 @@ function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee
                 <CaucusSpeakerQueue committee={{...committee, speakersList: committee.caucusQueue ?? []}} spokenCountries={spokenCountries} onRemove={handleRemoveFromQueue} onReorder={handleReorderCaucusQueue} />
               </div>
             )}
-            <FlagCircle country={caucus.currentSpeaker} size="hero" />
+            <FlagCircle country={caucus.currentSpeaker} size="xl" />
             <h1 className="text-3xl font-black text-white mt-3 mb-1 text-center">{caucus.currentSpeaker}</h1>
             <div className={`text-6xl font-black font-mono mt-2 mb-3 tabular-nums ${caucus.speakerTimeRemaining <= 5 ? 'text-red-500' : caucus.speakerTimeRemaining <= 15 ? 'text-yellow-600' : 'text-white'}`}>
               {formatTime(caucus.speakerTimeRemaining)}
@@ -462,7 +454,6 @@ function UnmoderatedCaucusView({ committee, setCommittee }: { committee: Committ
   const [running, setRunning] = useState(true);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const caucus = committee.caucus!;
-  // Ref so interval always reads latest time without restarting
   const remainingRef = useRef(caucus.remainingTime);
   remainingRef.current = caucus.remainingTime;
 
@@ -486,7 +477,6 @@ function UnmoderatedCaucusView({ committee, setCommittee }: { committee: Committ
     setRunning(false);
     await updateCaucusInDB(committee.id, null);
     await setPhaseInDB(committee.id, 'speakers-list');
-    // Refetch to restore the GSL from Supabase (caucus list is separate)
     const updated = await getCommitteeByCode(committee.code);
     if (updated) { localUpdateTime.current = Date.now(); setCommittee(updated); }
     else { updateLocal(setCommittee, (c) => ({ ...c, caucus: null, phase: 'speakers-list' })); }
@@ -618,12 +608,10 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
   const [rtrSeconds, setRtrSeconds] = useState(30);
   const [rtrOverrideTime, setRtrOverrideTime] = useState<number | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
-  // Refs let intervals read latest values without restarting when state changes
   const timerRunningRef = useRef(false);
   const committeeIdRef = useRef('');
   timerRunningRef.current = timerRunning;
 
-  // Load from Supabase + subscribe to real-time
   useEffect(() => {
     let unsubscribe: (() => void) | undefined;
     async function load() {
@@ -636,16 +624,11 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
       setLoading(false);
       if (found) {
         unsubscribe = subscribeToCommittee(found.id, async () => {
-          // Suppress real-time refetch for 2s after any local optimistic update.
-          // Prevents DB roundtrips from overwriting instant UI changes (roll call
-          // flicker, timer jumps, speakers list flicker, etc.)
           if (Date.now() - localUpdateTime.current < 2000) return;
           const updated = await getCommitteeByCode(code);
           if (updated) {
             setCommittee((prev) => {
               if (!prev) return updated;
-              // Never overwrite speakerTimeRemaining from DB while timer is
-              // running locally — the local countdown is authoritative
               return {
                 ...updated,
                 speakerTimeRemaining: timerRunningRef.current
@@ -661,9 +644,6 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
     return () => unsubscribe?.();
   }, [code]);
 
-  // Speaker timer — only restarts when timerRunning changes, NOT on every
-  // committee state update. Uses committeeIdRef so DB call never needs the
-  // interval to restart.
   useEffect(() => {
     if (timerRunning) {
       intervalRef.current = setInterval(() => {
@@ -784,7 +764,6 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
   };
 
   const handleDelegateAdd = async (country: string) => {
-    // Insert to DB first to get the real UUID — never use temp IDs
     const { addDelegate: addDelegateInDB } = await import('@/lib/committeeService');
     const realId = await addDelegateInDB(committee.id, country);
     if (realId) {
@@ -794,6 +773,9 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
       }));
     }
   };
+
+  // Fix 2: GSL can never run out — block Start when current speaker is the last one
+  const isLastGSLSpeaker = committee.speakersList.length === 0;
 
   return (
     <div className="h-screen bg-[#0D0906] flex flex-col overflow-hidden">
@@ -901,7 +883,8 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
                             onRemove={handleRemoveFromSpeakersList}
                           />
                         )}
-                        <FlagCircle country={committee.currentSpeaker.country} size="hero" />
+                        {/* Fix 1: size="xl" — was "hero" (240px) which buried the buttons */}
+                        <FlagCircle country={committee.currentSpeaker.country} size="xl" />
                         <h1 className="text-5xl font-black text-white mt-5 mb-2 text-center">{committee.currentSpeaker.country}</h1>
                         <div className={`text-7xl font-black font-mono mt-3 mb-4 tabular-nums ${
                           extraTimeAdded ? 'text-emerald-400' :
@@ -914,14 +897,23 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
                         <div className="w-full max-w-md h-2 bg-[#2E1E0F] rounded-full overflow-hidden mb-4">
                           <div className={`h-full rounded-full transition-all ${progress > 50 ? 'bg-[#B8844A]' : progress > 20 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{ width: `${progress}%` }} />
                         </div>
-                        {committee.speakersList.length === 0 && (
+                        {/* Fix 2: warn when this speaker is the last on the GSL */}
+                        {isLastGSLSpeaker && (
                           <div className="mb-4 px-4 py-2 bg-yellow-900/30 border border-yellow-700/40 rounded-xl text-yellow-400 text-sm text-center max-w-sm">
-                            Add at least one more delegate before advancing — advancing now ends the speakers list.
+                            Add at least one more delegate before starting — the GSL can never run out.
                           </div>
                         )}
                         <div className="flex gap-2 w-full max-w-sm mt-2 flex-wrap justify-center">
+                          {/* Fix 2: Start blocked when last GSL speaker */}
                           <button onClick={() => setTimerRunning((r) => !r)}
-                            className={`flex-1 py-3 rounded-xl font-bold text-base transition-colors ${timerRunning ? 'bg-yellow-600 hover:bg-yellow-500 text-white' : 'bg-[#3D6B35] hover:bg-[#4A7C42] text-white'}`}>
+                            disabled={isLastGSLSpeaker}
+                            className={`flex-1 py-3 rounded-xl font-bold text-base transition-colors ${
+                              timerRunning
+                                ? 'bg-yellow-600 hover:bg-yellow-500 text-white'
+                                : isLastGSLSpeaker
+                                ? 'bg-[#2E1E0F] text-[#7A5A38] cursor-not-allowed'
+                                : 'bg-[#3D6B35] hover:bg-[#4A7C42] text-white'
+                            }`}>
                             {timerRunning ? '⏸ Pause' : '▶ Start'}
                           </button>
                           <button onClick={handleNextSpeaker} disabled={committee.speakersList.length === 0}
