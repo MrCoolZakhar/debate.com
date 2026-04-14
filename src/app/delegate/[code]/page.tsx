@@ -500,13 +500,16 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<DelegateTab>('session');
   const [showChat, setShowChat] = useState(false);
+  const [chatReadCount, setChatReadCount] = useState(0);
 
   // Local timer countdown (smooth, doesn't wait for Supabase tick)
   const [localTime, setLocalTime] = useState(0);
+  const [localTimerActive, setLocalTimerActive] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const committeeIdRef = useRef('');
   // Track last seen speaker to only reset localTime when speaker changes
   const lastSpeakerIdRef = useRef<string | null>(null);
+  const prevServerTimeRef = useRef<number>(0);
 
   // Join request state
   const [joinRequesting, setJoinRequesting] = useState(false);
@@ -529,11 +532,17 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
           const updated = await getCommitteeByCode(code.toUpperCase());
           if (updated) {
             setCommittee(updated);
-            // Only reset localTime when a NEW speaker is called (avoids fighting the local interval)
             const newSpeakerId = updated.currentSpeaker?.delegateId ?? null;
             if (newSpeakerId !== lastSpeakerIdRef.current) {
               setLocalTime(updated.speakerTimeRemaining);
+              prevServerTimeRef.current = updated.speakerTimeRemaining;
+              setLocalTimerActive(false); // Reset on new speaker
               lastSpeakerIdRef.current = newSpeakerId;
+            } else if (updated.speakerTimeRemaining < prevServerTimeRef.current) {
+              // Server time decreased — chair's timer is running
+              setLocalTime(updated.speakerTimeRemaining); // Sync with server
+              setLocalTimerActive(true);
+              prevServerTimeRef.current = updated.speakerTimeRemaining;
             }
           }
         });
@@ -545,7 +554,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
 
   // Local timer tick — smooth countdown independent of Supabase round-trips
   useEffect(() => {
-    if (!committee?.currentSpeaker || committee.phase !== 'speakers-list') {
+    if (!committee?.currentSpeaker || committee.phase !== 'speakers-list' || !localTimerActive) {
       if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
       return;
     }
@@ -553,7 +562,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
       setLocalTime((prev) => Math.max(0, prev - 1));
     }, 1000);
     return () => { if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; } };
-  }, [committee?.currentSpeaker?.delegateId, committee?.phase]);
+  }, [committee?.currentSpeaker?.delegateId, committee?.phase, localTimerActive]);
 
   if (loading) {
     return (
@@ -695,15 +704,23 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
             }`}>{phaseDisplay}</div>
           </div>
           <button
-            onClick={() => setShowChat((v) => !v)}
+            onClick={() => {
+              const newShow = !showChat;
+              setShowChat(newShow);
+              if (newShow) setChatReadCount(committee.messages.filter(m => !m.content.startsWith('__log__:')).length);
+            }}
             className={`relative text-xs px-3 py-1.5 rounded-lg transition-colors font-semibold shrink-0 ${showChat ? 'bg-[#7B4A1E] text-white' : 'bg-[#2E1E0F] text-[#C4A882] hover:text-white'}`}
           >
             💬
-            {committee.messages.filter((m) => !m.content.startsWith('__log__:')).length > 0 && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#B8844A] rounded-full text-white text-[9px] flex items-center justify-center font-bold">
-                {Math.min(committee.messages.filter((m) => !m.content.startsWith('__log__:')).length, 99)}
-              </span>
-            )}
+            {!showChat && (() => {
+              const total = committee.messages.filter((m) => !m.content.startsWith('__log__:')).length;
+              const unread = total - chatReadCount;
+              return unread > 0 ? (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#B8844A] rounded-full text-white text-[9px] flex items-center justify-center font-bold">
+                  {Math.min(unread, 99)}
+                </span>
+              ) : null;
+            })()}
           </button>
         </div>
       </header>
@@ -951,7 +968,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
 
       {/* Chat sidebar */}
       {showChat && (
-        <aside className="w-72 border-l border-[#2E1E0F] bg-[#0D0906] flex flex-col overflow-hidden shrink-0">
+        <aside className="w-[36rem] border-l border-[#2E1E0F] bg-[#0D0906] flex flex-col overflow-hidden shrink-0">
           <ChatPanel committee={committee} senderName={country} isChair={false} />
         </aside>
       )}
