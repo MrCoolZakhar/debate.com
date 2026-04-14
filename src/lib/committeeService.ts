@@ -477,6 +477,25 @@ export async function suspendSession(committeeId: string): Promise<void> {
 }
 
 // ============================================================
+// CODE MANAGEMENT
+// ============================================================
+
+export async function updateCommitteeCode(committeeId: string, newCode: string): Promise<boolean> {
+  const upper = newCode.toUpperCase().trim();
+  if (!upper || upper.length < 4) return false;
+
+  // Check uniqueness
+  const { data: existing } = await supabase
+    .from('committees').select('id').eq('code', upper).maybeSingle();
+  if (existing) return false; // code already taken
+
+  const { error } = await supabase
+    .from('committees').update({ code: upper }).eq('id', committeeId);
+  if (error) { console.error('Error updating committee code:', error); return false; }
+  return true;
+}
+
+// ============================================================
 // REAL-TIME SUBSCRIPTIONS
 // ============================================================
 

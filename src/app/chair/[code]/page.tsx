@@ -1,6 +1,7 @@
 'use client';
 
 import { use, useEffect, useState, useRef, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Committee, DelegateStatus } from '@/lib/types';
 import RollCallPanel, { FlagCircle } from '@/components/RollCallPanel';
@@ -591,6 +592,7 @@ function VotingView({ committee, setCommittee }: { committee: Committee; setComm
 // ── Main Chair Session ────────────────────────────────────────────────────────
 export default function ChairSession({ params }: { params: Promise<{ code: string }> }) {
   const { code } = use(params);
+  const router = useRouter();
   const [committee, setCommittee] = useState<Committee | null>(null);
   const [loading, setLoading] = useState(true);
   const [timerRunning, setTimerRunning] = useState(false);
@@ -1030,6 +1032,10 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
         <SettingsPanel
           committee={committee}
           onClose={() => setShowSettings(false)}
+          onCodeChange={(newCode) => {
+            setShowSettings(false);
+            router.push(`/chair/${newCode}`);
+          }}
         />
       )}
     </div>

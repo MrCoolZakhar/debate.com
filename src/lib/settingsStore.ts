@@ -51,6 +51,7 @@ interface SettingsStore {
   getSettings: (code: string) => CommitteeSettings;
   updateSetting: <K extends keyof CommitteeSettings>(code: string, key: K, value: CommitteeSettings[K]) => void;
   initSettings: (code: string, partial?: Partial<CommitteeSettings>) => void;
+  migrateSettings: (oldCode: string, newCode: string) => void;
 }
 
 export const useSettingsStore = create<SettingsStore>()(
@@ -71,6 +72,14 @@ export const useSettingsStore = create<SettingsStore>()(
             ? s.settings
             : { ...s.settings, [code]: { ...DEFAULT_SETTINGS, ...partial } },
         })),
+      migrateSettings: (oldCode, newCode) =>
+        set((s) => {
+          const existing = s.settings[oldCode] ?? DEFAULT_SETTINGS;
+          const updated = { ...s.settings };
+          delete updated[oldCode];
+          updated[newCode] = { ...existing, customSessionId: newCode };
+          return { settings: updated };
+        }),
     }),
     { name: 'gavelling-settings' },
   ),

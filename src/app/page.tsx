@@ -17,7 +17,7 @@ export default function LandingPage() {
   const handleJoin = () => {
     const code = joinCode.trim().toUpperCase();
     if (code.length >= 4) {
-      router.push(`/join?code=${code}`);
+      router.push(`/join?code=${encodeURIComponent(code)}`);
     }
   };
 
@@ -96,11 +96,11 @@ export default function LandingPage() {
               <input
                 type="text"
                 value={joinCode}
-                onChange={(e) => setJoinCode(e.target.value.toUpperCase().slice(0, 6))}
+                onChange={(e) => setJoinCode(e.target.value.toUpperCase().slice(0, 20))}
                 onKeyDown={(e) => { if (e.key === 'Enter') handleJoin(); }}
                 placeholder="Session code"
                 className="flex-1 bg-[#150F09] border border-[#2E1E0F] focus:border-[#7B4A1E] rounded-xl px-4 py-3 text-white placeholder-[#7A5A38] focus:outline-none text-sm font-mono tracking-widest uppercase text-center transition-colors"
-                maxLength={6}
+                maxLength={20}
               />
               <button
                 onClick={handleJoin}

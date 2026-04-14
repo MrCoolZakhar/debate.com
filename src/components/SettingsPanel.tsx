@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSettingsStore, CommitteeSettings } from '@/lib/settingsStore';
 import { Committee } from '@/lib/types';
+import { updateCommitteeCode } from '@/lib/committeeService';
 
 type SettingsTab = 'voting' | 'motions' | 'access';
 
@@ -52,14 +53,53 @@ function SelectRow({ value, onChange, label, options, note }: {
   );
 }
 
-export function SettingsPanel({ committee, onClose }: {
-  committee: Committee; onClose: () => void;
+export function SettingsPanel({ committee, onClose, onCodeChange }: {
+  committee: Committee;
+  onClose: () => void;
+  onCodeChange?: (newCode: string) => void;
 }) {
   const [tab, setTab] = useState<SettingsTab>('voting');
-  const { getSettings, updateSetting } = useSettingsStore();
+  const { getSettings, updateSetting, migrateSettings } = useSettingsStore();
   const s = getSettings(committee.code);
   const upd = <K extends keyof CommitteeSettings>(key: K, value: CommitteeSettings[K]) =>
     updateSetting(committee.code, key, value);
+
+  // Custom session ID local state — allows full erase
+  const [customCodeInput, setCustomCodeInput] = useState(s.customSessionId || committee.code);
+  const [codeSaving, setCodeSaving] = useState(false);
+  const [codeError, setCodeError] = useState('');
+  const [codeSaved, setCodeSaved] = useState(false);
+
+  // Keep input in sync if the prop changes (e.g. after a redirect)
+  useEffect(() => {
+    setCustomCodeInput(s.customSessionId || committee.code);
+  }, [committee.code, s.customSessionId]);
+
+  const handleCodeSave = async () => {
+    const newCode = customCodeInput.trim().toUpperCase();
+    if (!newCode) {
+      setCodeError('Code cannot be empty.');
+      return;
+    }
+    if (newCode.length < 4) {
+      setCodeError('Code must be at least 4 characters.');
+      return;
+    }
+    if (newCode === committee.code) return; // no change
+
+    setCodeSaving(true);
+    setCodeError('');
+    const success = await updateCommitteeCode(committee.id, newCode);
+    if (success) {
+      migrateSettings(committee.code, newCode);
+      setCodeSaved(true);
+      setTimeout(() => setCodeSaved(false), 2000);
+      onCodeChange?.(newCode);
+    } else {
+      setCodeError('Code already taken or invalid. Try another.');
+    }
+    setCodeSaving(false);
+  };
 
   const tabs: { id: SettingsTab; label: string }[] = [
     { id: 'voting', label: 'Voting' },
@@ -220,14 +260,37 @@ export function SettingsPanel({ committee, onClose }: {
               <SectionLabel>SESSION ID & JOIN CODES</SectionLabel>
               <div className="py-3 border-b border-[#2E1E0F]">
                 <div className="text-sm font-semibold text-white mb-0.5">Custom session ID</div>
-                <div className="text-xs text-[#7A5A38] mb-2 leading-snug">Human-readable identifier (e.g. UNSC-2026). Delegates re-joining will need the new ID.</div>
-                <input
-                  type="text"
-                  value={s.customSessionId || committee.code}
-                  onChange={(e) => upd('customSessionId', e.target.value)}
-                  placeholder={committee.code}
-                  className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#7B4A1E] font-mono"
-                />
+                <div className="text-xs text-[#7A5A38] mb-2 leading-snug">
+                  Human-readable identifier (e.g. UNSC-2026). Delegates re-joining will need the new ID.
+                  Updates instantly — delegates can join with the new code right away.
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={customCodeInput}
+                    onChange={(e) => {
+                      setCustomCodeInput(e.target.value.toUpperCase());
+                      setCodeError('');
+                      setCodeSaved(false);
+                    }}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleCodeSave(); }}
+                    placeholder={committee.code}
+                    maxLength={20}
+                    className="flex-1 bg-[#150F09] border border-[#2E1E0F] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#7B4A1E] font-mono"
+                  />
+                  <button
+                    onClick={handleCodeSave}
+                    disabled={codeSaving || !customCodeInput.trim() || customCodeInput.trim().toUpperCase() === committee.code}
+                    className={`px-3 py-2 rounded-lg text-xs font-bold transition-colors shrink-0 ${
+                      codeSaved
+                        ? 'bg-green-800 text-green-200'
+                        : 'bg-[#7B4A1E] hover:bg-[#8B5A2B] disabled:bg-[#2E1E0F] disabled:text-[#7A5A38] text-white'
+                    }`}
+                  >
+                    {codeSaving ? '…' : codeSaved ? '✓ Saved' : 'Apply'}
+                  </button>
+                </div>
+                {codeError && <p className="text-red-400 text-xs mt-1.5">{codeError}</p>}
               </div>
               <Toggle
                 label="Separate delegate join code"

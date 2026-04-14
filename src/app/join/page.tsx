@@ -1,65 +1,108 @@
 'use client';
 
-import { useState, Suspense } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useCommitteeStore } from '@/lib/store';
+import { getCommitteeByCode } from '@/lib/committeeService';
+import { Committee } from '@/lib/types';
+import { useSettingsStore } from '@/lib/settingsStore';
 
 type JoinMode = 'delegate' | 'chair' | 'advisor';
 
 function JoinPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { joinCommittee, committees } = useCommitteeStore();
+  const { committees } = useCommitteeStore();
+  const { getSettings } = useSettingsStore();
 
   const [mode, setMode] = useState<JoinMode>('delegate');
   const [code, setCode] = useState(searchParams.get('code') ?? '');
   const [country, setCountry] = useState('');
   const [error, setError] = useState('');
-  const [foundCommittee, setFoundCommittee] = useState<{ name: string; topic: string; delegates: { country: string }[] } | null>(null);
+  const [lookingUp, setLookingUp] = useState(false);
+  const [foundCommittee, setFoundCommittee] = useState<Committee | null>(null);
 
-  const handleCodeChange = (val: string) => {
-    const upper = val.toUpperCase().slice(0, 6);
-    setCode(upper);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // On mount, if code was pre-filled from URL, trigger lookup immediately
+  useEffect(() => {
+    const initial = searchParams.get('code') ?? '';
+    if (initial.length >= 4) {
+      doLookup(initial.toUpperCase());
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function doLookup(upper: string) {
+    setLookingUp(true);
     setError('');
-    if (upper.length === 6) {
-      const c = Object.values(committees).find((c) => c.code === upper);
-      if (c) {
-        setFoundCommittee(c);
+    setFoundCommittee(null);
+
+    // 1. Check local store first (instant)
+    const local = Object.values(committees).find((c) => c.code === upper);
+    if (local) {
+      setFoundCommittee(local);
+      setLookingUp(false);
+      return;
+    }
+
+    // 2. Fall back to Supabase
+    getCommitteeByCode(upper).then((remote) => {
+      if (remote) {
+        setFoundCommittee(remote);
       } else {
         setFoundCommittee(null);
         setError('Committee not found. Check the code and try again.');
       }
-    } else {
-      setFoundCommittee(null);
+      setLookingUp(false);
+    });
+  }
+
+  const handleCodeChange = (val: string) => {
+    // Allow up to 20 chars for custom codes
+    const upper = val.toUpperCase().slice(0, 20);
+    setCode(upper);
+    setError('');
+    setFoundCommittee(null);
+    setLookingUp(false);
+
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    if (upper.length >= 4) {
+      setLookingUp(true);
+      debounceRef.current = setTimeout(() => doLookup(upper), 350);
     }
   };
 
   const handleJoin = () => {
+    if (!foundCommittee) { setError('Committee not found.'); return; }
     if (mode === 'chair') {
-      if (!foundCommittee) { setError('Committee not found.'); return; }
-      router.push(`/chair/${code}`);
+      router.push(`/chair/${foundCommittee.code}`);
       return;
     }
     if (mode === 'advisor') {
-      if (!foundCommittee) { setError('Committee not found.'); return; }
-      router.push(`/advisor/${code}`);
+      router.push(`/advisor/${foundCommittee.code}`);
       return;
     }
     // delegate
-    const committee = joinCommittee(code);
-    if (committee) {
-      const encoded = encodeURIComponent(country);
-      router.push(`/delegate/${committee.code}?country=${encoded}`);
-    } else {
-      setError('Committee not found.');
-    }
+    const encoded = encodeURIComponent(country);
+    router.push(`/delegate/${foundCommittee.code}?country=${encoded}`);
   };
 
-  const tabs: { key: JoinMode; label: string; icon: string; desc: string }[] = [
-    { key: 'delegate', label: 'Delegate', icon: '🌐', desc: 'Join as a country delegation' },
-    { key: 'chair', label: 'Re-join as Chair', icon: '🪑', desc: 'Access the chair panel' },
-    { key: 'advisor', label: 'Faculty Advisor', icon: '👁️', desc: 'Read-only observer view' },
+  const resetMode = (m: JoinMode) => {
+    setMode(m);
+    setError('');
+    setCode('');
+    setFoundCommittee(null);
+    setCountry('');
+    setLookingUp(false);
+  };
+
+  const tabs: { key: JoinMode; label: string; icon: string }[] = [
+    { key: 'delegate', label: 'Delegate', icon: '🌐' },
+    { key: 'chair', label: 'Re-join as Chair', icon: '🪑' },
+    { key: 'advisor', label: 'Faculty Advisor', icon: '👁️' },
   ];
 
   return (
@@ -81,7 +124,7 @@ function JoinPageInner() {
           {/* Mode tabs */}
           <div className="flex gap-2 mb-8">
             {tabs.map((t) => (
-              <button key={t.key} onClick={() => { setMode(t.key); setError(''); setCode(''); setFoundCommittee(null); setCountry(''); }}
+              <button key={t.key} onClick={() => resetMode(t.key)}
                 className={`flex-1 flex flex-col items-center gap-1 py-3 px-2 rounded-xl border transition-all text-center ${
                   mode === t.key
                     ? 'bg-[#2E1E0F] border-[#7B4A1E] text-white'
@@ -96,45 +139,60 @@ function JoinPageInner() {
           <div className="space-y-5">
             <div>
               <label className="block text-sm font-medium text-[#E8D5B7] mb-2">Session Code</label>
-              <input
-                type="text"
-                value={code}
-                onChange={(e) => handleCodeChange(e.target.value)}
-                placeholder="ABC123"
-                className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-lg px-4 py-3 text-white placeholder-[#7A5A38] focus:outline-none focus:border-[#7B4A1E] transition-colors font-mono text-xl tracking-widest text-center uppercase"
-                maxLength={6}
-              />
+              <div className="relative">
+                <input
+                  type="text"
+                  value={code}
+                  onChange={(e) => handleCodeChange(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && foundCommittee) handleJoin(); }}
+                  placeholder="ABC123 or UNSC-2026"
+                  className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-lg px-4 py-3 text-white placeholder-[#7A5A38] focus:outline-none focus:border-[#7B4A1E] transition-colors font-mono text-xl tracking-widest text-center uppercase"
+                  maxLength={20}
+                  autoFocus
+                />
+                {lookingUp && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <div className="w-4 h-4 border-2 border-[#7B4A1E] border-t-transparent rounded-full animate-spin" />
+                  </div>
+                )}
+              </div>
               {error && <p className="text-red-400 text-sm mt-2">{error}</p>}
             </div>
 
             {foundCommittee && (
-              <div className="bg-[#7B4A1E]/10 border border-[#2E1E0F] rounded-xl p-4">
-                <div className="text-[#7B4A1E] text-xs font-mono mb-2">COMMITTEE FOUND</div>
+              <div className="bg-[#7B4A1E]/10 border border-[#7B4A1E]/30 rounded-xl p-4">
+                <div className="text-[#7B4A1E] text-xs font-mono mb-2">✓ COMMITTEE FOUND</div>
                 <div className="text-white font-bold">{foundCommittee.name}</div>
                 <div className="text-[#C4A882] text-sm mt-1">{foundCommittee.topic}</div>
                 <div className="text-[#7A5A38] text-xs mt-2">{foundCommittee.delegates.length} delegates registered</div>
               </div>
             )}
 
-            {foundCommittee && mode === 'delegate' && (
-              <div>
-                <label className="block text-sm font-medium text-[#E8D5B7] mb-2">Your Country / Delegation</label>
-                <select
-                  value={country}
-                  onChange={(e) => setCountry(e.target.value)}
-                  className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-lg px-4 py-3 text-white focus:outline-none focus:border-[#7B4A1E] transition-colors"
-                >
-                  <option value="">Select your country...</option>
-                  {foundCommittee.delegates.map((d) => (
-                    <option key={d.country} value={d.country}>{d.country}</option>
-                  ))}
-                </select>
-              </div>
-            )}
+            {foundCommittee && mode === 'delegate' && (() => {
+              const requireName = getSettings(foundCommittee.code).requireDelegationName;
+              if (!requireName) return null;
+              return (
+                <div>
+                  <label className="block text-sm font-medium text-[#E8D5B7] mb-2">Your Country / Delegation</label>
+                  <select
+                    value={country}
+                    onChange={(e) => setCountry(e.target.value)}
+                    className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-lg px-4 py-3 text-white focus:outline-none focus:border-[#7B4A1E] transition-colors"
+                  >
+                    <option value="">Select your country...</option>
+                    {foundCommittee.delegates.map((d) => (
+                      <option key={d.country} value={d.country}>{d.country}</option>
+                    ))}
+                  </select>
+                </div>
+              );
+            })()}
 
             <button
               onClick={handleJoin}
-              disabled={mode === 'delegate' ? (!foundCommittee || !country) : !foundCommittee}
+              disabled={mode === 'delegate'
+                ? (!foundCommittee || (getSettings(foundCommittee?.code ?? '').requireDelegationName && !country))
+                : !foundCommittee}
               className="w-full bg-[#7B4A1E] hover:bg-[#8B5A2B] disabled:bg-[#2E1E0F] disabled:text-[#7A5A38] text-white py-3 rounded-lg font-semibold transition-colors"
             >
               {mode === 'delegate' ? 'Join Session →' : mode === 'chair' ? 'Open Chair Panel →' : 'Open Advisor View →'}

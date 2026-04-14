@@ -1,11 +1,18 @@
 'use client';
 
-import { use, useEffect, useState, useRef } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { use, useEffect, useState, useRef, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { useCommitteeStore } from '@/lib/store';
-import { Committee, CommitteeDocument, DocumentType } from '@/lib/types';
+import { Committee, CommitteeDocument, DocumentType, PendingMotionType } from '@/lib/types';
 import ChatPanel from '@/components/ChatPanel';
+import { useSettingsStore } from '@/lib/settingsStore';
+import {
+  getCommitteeByCode,
+  subscribeToCommittee,
+  addToSpeakersList as addToSpeakersListInDB,
+  addDocument as addDocumentInDB,
+  addPendingMotion as addPendingMotionInDB,
+} from '@/lib/committeeService';
 
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -21,16 +28,153 @@ function autoDocCode(type: DocumentType, existingDocs: { type: DocumentType }[])
   return `${prefix} 1${sep}${num}`;
 }
 
-type AddDocFn = (committeeId: string, doc: Omit<CommitteeDocument, 'id' | 'submittedAt'>) => void;
-
-function DelegateDocumentsTab({
+// ── Motion Request Form ───────────────────────────────────────────────────────
+function MotionRequestForm({
   committee,
   country,
-  addDocument,
+  enabledTypes,
 }: {
   committee: Committee;
   country: string;
-  addDocument: AddDocFn;
+  enabledTypes: { moderated: boolean; unmoderated: boolean; consultation: boolean; tour: boolean };
+}) {
+  const ALL_TYPES: { value: PendingMotionType; label: string; hasTime: boolean; hasSpeakingTime: boolean }[] = [
+    { value: 'moderated', label: 'Moderated Caucus', hasTime: true, hasSpeakingTime: true },
+    { value: 'unmoderated', label: 'Unmoderated Caucus', hasTime: true, hasSpeakingTime: false },
+    { value: 'consultation', label: 'Committee of the Whole (CoW)', hasTime: true, hasSpeakingTime: false },
+    { value: 'tour', label: 'Tour de Table', hasTime: false, hasSpeakingTime: false },
+  ];
+  const available = ALL_TYPES.filter((m) => {
+    if (m.value === 'moderated' && !enabledTypes.moderated) return false;
+    if (m.value === 'unmoderated' && !enabledTypes.unmoderated) return false;
+    if (m.value === 'consultation' && !enabledTypes.consultation) return false;
+    if (m.value === 'tour' && !enabledTypes.tour) return false;
+    return true;
+  });
+
+  const [type, setType] = useState<PendingMotionType>(available[0]?.value ?? 'moderated');
+  const [totalMins, setTotalMins] = useState('');
+  const [speakingSecs, setSpeakingSecs] = useState('');
+  const [topic, setTopic] = useState('');
+  const [submitted, setSubmitted] = useState(false);
+  const [sending, setSending] = useState(false);
+
+  const selected = available.find((a) => a.value === type);
+
+  const handleSubmit = async () => {
+    if (!selected || sending) return;
+    setSending(true);
+    const totalTime = selected.hasTime ? parseInt(totalMins || '0') * 60 : 0;
+    const speakingTime = selected.hasSpeakingTime ? parseInt(speakingSecs || '0') : 0;
+
+    await addPendingMotionInDB(committee.id, {
+      type,
+      proposedBy: country,
+      totalTime,
+      speakingTime,
+      topic: topic.trim(),
+      speakerList: [],
+      proposerPosition: null,
+    });
+    setTotalMins('');
+    setSpeakingSecs('');
+    setTopic('');
+    setSubmitted(true);
+    setSending(false);
+    setTimeout(() => setSubmitted(false), 3000);
+  };
+
+  if (available.length === 0) {
+    return (
+      <div className="bg-[#1A1209] border border-[#2E1E0F] rounded-xl p-4 text-center text-[#7A5A38] text-sm">
+        No motion types are currently enabled by the chair.
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-[#1A1209] border border-[#2E1E0F] rounded-xl p-4 space-y-3">
+      <div className="text-xs font-mono text-[#7A5A38] mb-1">REQUEST A MOTION</div>
+
+      {submitted && (
+        <div className="bg-green-900/30 border border-green-700/30 rounded-lg px-3 py-2 text-green-300 text-xs font-medium">
+          ✓ Motion submitted to chair
+        </div>
+      )}
+
+      <div>
+        <label className="text-xs text-[#C4A882] mb-1 block">Motion type</label>
+        <select
+          value={type}
+          onChange={(e) => setType(e.target.value as PendingMotionType)}
+          className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#7B4A1E]"
+        >
+          {available.map((a) => (
+            <option key={a.value} value={a.value}>{a.label}</option>
+          ))}
+        </select>
+      </div>
+
+      {selected?.hasTime && (
+        <div className="flex gap-3">
+          <div className="flex-1">
+            <label className="text-xs text-[#C4A882] mb-1 block">Total time (min)</label>
+            <input
+              type="number"
+              min="1"
+              max="60"
+              value={totalMins}
+              onChange={(e) => setTotalMins(e.target.value)}
+              placeholder="e.g. 10"
+              className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#7B4A1E]"
+            />
+          </div>
+          {selected.hasSpeakingTime && (
+            <div className="flex-1">
+              <label className="text-xs text-[#C4A882] mb-1 block">Per speaker (sec)</label>
+              <input
+                type="number"
+                min="10"
+                max="300"
+                value={speakingSecs}
+                onChange={(e) => setSpeakingSecs(e.target.value)}
+                placeholder="e.g. 60"
+                className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#7B4A1E]"
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      <div>
+        <label className="text-xs text-[#C4A882] mb-1 block">Topic / Purpose <span className="text-[#7A5A38]">(optional)</span></label>
+        <input
+          type="text"
+          value={topic}
+          onChange={(e) => setTopic(e.target.value)}
+          placeholder="e.g. Humanitarian aid access in conflict zones"
+          className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#7B4A1E]"
+        />
+      </div>
+
+      <button
+        onClick={handleSubmit}
+        disabled={sending || (selected?.hasTime ? !totalMins : false)}
+        className="w-full bg-[#7B4A1E] hover:bg-[#8B5A2B] disabled:bg-[#2E1E0F] disabled:text-[#7A5A38] text-white py-2 rounded-lg text-sm font-semibold transition-colors"
+      >
+        {sending ? 'Submitting…' : 'Submit Motion →'}
+      </button>
+    </div>
+  );
+}
+
+// ── Documents Tab ─────────────────────────────────────────────────────────────
+function DelegateDocumentsTab({
+  committee,
+  country,
+}: {
+  committee: Committee;
+  country: string;
 }) {
   const [title, setTitle] = useState('');
   const [docType, setDocType] = useState<DocumentType>('working-paper');
@@ -38,6 +182,7 @@ function DelegateDocumentsTab({
   const [fileName, setFileName] = useState<string | null>(null);
   const [fileUrl, setFileUrl] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const [sending, setSending] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const canSubmit = title.trim();
@@ -53,10 +198,11 @@ function DelegateDocumentsTab({
     reader.readAsDataURL(file);
   };
 
-  const handleSubmit = () => {
-    if (!canSubmit) return;
+  const handleSubmit = async () => {
+    if (!canSubmit || sending) return;
+    setSending(true);
     const sponsorList = sponsors.split(',').map((s) => s.trim()).filter(Boolean);
-    addDocument(committee.id, {
+    await addDocumentInDB(committee.id, {
       type: docType,
       docCode: autoDocCode(docType, committee.documents ?? []),
       title: title.trim(),
@@ -70,6 +216,7 @@ function DelegateDocumentsTab({
     setFileName(null);
     setFileUrl(null);
     setSubmitted(true);
+    setSending(false);
     setTimeout(() => setSubmitted(false), 3000);
   };
 
@@ -78,99 +225,97 @@ function DelegateDocumentsTab({
       <h2 className="text-lg font-bold text-white">Submit Document</h2>
 
       {submitted && (
-        <div className="bg-green-900/30 border border-green-700/40 rounded-xl px-4 py-3 text-green-400 text-sm font-semibold">
-          ✓ Document submitted successfully!
+        <div className="bg-green-900/30 border border-green-700/30 rounded-xl p-3 text-green-300 text-sm">
+          ✓ Document submitted to chair for review
         </div>
       )}
 
-      <div className="bg-[#1A1209] border border-[#2E1E0F] rounded-xl p-4 space-y-4">
+      <div className="bg-[#1A1209] border border-[#2E1E0F] rounded-xl p-4 space-y-3">
         <div>
-          <label className="block text-sm font-semibold text-[#C4A882] mb-1.5">Title *</label>
+          <label className="text-xs text-[#C4A882] mb-1 block">Document type</label>
+          <div className="flex gap-2">
+            {(['working-paper', 'draft-resolution'] as DocumentType[]).map((dt) => (
+              <button
+                key={dt}
+                onClick={() => setDocType(dt)}
+                className={`flex-1 py-2 rounded-lg text-xs font-semibold border transition-colors ${
+                  docType === dt
+                    ? 'bg-[#2E1E0F] border-[#7B4A1E] text-white'
+                    : 'bg-[#150F09] border-[#2E1E0F] text-[#C4A882] hover:border-[#7B4A1E]'
+                }`}
+              >
+                {dt === 'working-paper' ? 'Working Paper' : 'Draft Resolution'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <label className="text-xs text-[#C4A882] mb-1 block">Title</label>
           <input
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="Document title…"
-            className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-xl px-4 py-3 text-white placeholder-[#7A5A38] focus:outline-none focus:border-[#7B4A1E] transition-colors text-sm"
+            placeholder="e.g. WP on climate adaptation"
+            className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#7B4A1E]"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-semibold text-[#C4A882] mb-1.5">Type</label>
-          <select
-            value={docType}
-            onChange={(e) => setDocType(e.target.value as DocumentType)}
-            className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#7B4A1E] transition-colors text-sm"
-          >
-            <option value="working-paper">Working Paper</option>
-            <option value="draft-resolution">Draft Resolution</option>
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-sm font-semibold text-[#C4A882] mb-1.5">Sponsors <span className="text-[#7A5A38] font-normal">(comma-separated, defaults to your country)</span></label>
+          <label className="text-xs text-[#C4A882] mb-1 block">Sponsors <span className="text-[#7A5A38]">(comma-separated, optional)</span></label>
           <input
             type="text"
             value={sponsors}
             onChange={(e) => setSponsors(e.target.value)}
-            placeholder="e.g. Germany, France, Brazil"
-            className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-xl px-4 py-3 text-white placeholder-[#7A5A38] focus:outline-none focus:border-[#7B4A1E] transition-colors text-sm"
+            placeholder={`${country}, France, Germany`}
+            className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#7B4A1E]"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-semibold text-[#C4A882] mb-1.5">Attachment <span className="text-[#7A5A38] font-normal">(optional)</span></label>
-          {fileName ? (
-            <div className="flex items-center gap-2 bg-[#150F09] border border-[#2E1E0F] rounded-xl px-4 py-3">
-              <span className="text-sm text-white flex-1 truncate">📎 {fileName}</span>
-              <button
-                onClick={() => { setFileName(null); setFileUrl(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
-                className="text-[#7A5A38] hover:text-red-500 transition-colors text-sm"
-              >✕</button>
-            </div>
-          ) : (
+          <label className="text-xs text-[#C4A882] mb-1 block">Attach file <span className="text-[#7A5A38]">(optional)</span></label>
+          <div className="flex items-center gap-2">
             <button
-              type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="w-full bg-[#150F09] border border-dashed border-[#2E1E0F] hover:border-[#7B4A1E] rounded-xl px-4 py-3 text-[#7A5A38] hover:text-[#C4A882] text-sm transition-colors text-left"
+              className="text-xs bg-[#150F09] border border-[#2E1E0F] hover:border-[#7B4A1E] text-[#C4A882] px-3 py-2 rounded-lg transition-colors"
             >
-              + Upload file (.pdf, .doc, .docx, .txt)
+              {fileName ? `📎 ${fileName}` : '+ Attach file'}
             </button>
-          )}
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".pdf,.doc,.docx,.txt"
-            onChange={handleFileChange}
-            className="hidden"
-          />
+            {fileName && (
+              <button onClick={() => { setFileName(null); setFileUrl(null); }} className="text-xs text-[#7A5A38] hover:text-red-400">
+                Remove
+              </button>
+            )}
+          </div>
+          <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileChange} />
         </div>
 
         <button
           onClick={handleSubmit}
-          disabled={!canSubmit}
-          className="w-full bg-[#7B4A1E] hover:bg-[#8B5A2B] disabled:bg-[#2E1E0F] disabled:text-[#7A5A38] text-white py-3 rounded-xl font-bold transition-colors text-sm"
+          disabled={!canSubmit || sending}
+          className="w-full bg-[#7B4A1E] hover:bg-[#8B5A2B] disabled:bg-[#2E1E0F] disabled:text-[#7A5A38] text-white py-2 rounded-lg text-sm font-semibold transition-colors"
         >
-          Submit Document
+          {sending ? 'Submitting…' : 'Submit to Chair →'}
         </button>
       </div>
 
-      {/* Show submitted docs by this delegate */}
+      {/* Existing documents */}
       {(committee.documents ?? []).length > 0 && (
         <div>
-          <h3 className="text-sm font-semibold text-[#C4A882] mb-2">Committee Documents</h3>
+          <div className="text-xs font-mono text-[#7A5A38] mb-2">SUBMITTED DOCUMENTS</div>
           <div className="space-y-2">
             {(committee.documents ?? []).map((doc) => (
               <div key={doc.id} className="bg-[#1A1209] border border-[#2E1E0F] rounded-xl p-3">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-xs font-mono font-bold text-[#7B4A1E]">{doc.docCode}</span>
-                  <span className="text-xs text-[#7A5A38] capitalize">{doc.status}</span>
+                <div className="flex items-center justify-between">
+                  <div className="font-semibold text-white text-sm">{doc.docCode} — {doc.title}</div>
+                  <span className={`text-xs font-bold ml-2 ${
+                    doc.status === 'on-floor' ? 'text-[#B8844A]' :
+                    doc.status === 'passed' ? 'text-emerald-400' :
+                    doc.status === 'failed' ? 'text-red-400' : 'text-[#7A5A38]'
+                  }`}>{doc.status}</span>
                 </div>
-                <p className="text-sm font-semibold text-white">{doc.title}</p>
-                {doc.fileUrl && doc.fileName && (
-                  <a href={doc.fileUrl} download={doc.fileName} className="text-xs text-blue-400 hover:text-blue-300 transition-colors mt-1 block">
-                    📎 {doc.fileName}
-                  </a>
+                {doc.sponsors.length > 0 && (
+                  <div className="text-xs text-[#7A5A38] mt-1">Sponsors: {doc.sponsors.join(', ')}</div>
                 )}
               </div>
             ))}
@@ -181,18 +326,48 @@ function DelegateDocumentsTab({
   );
 }
 
-export default function DelegateSession({ params }: { params: Promise<{ code: string }> }) {
+// ── Main Delegate Session ─────────────────────────────────────────────────────
+function DelegateSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const { code } = use(params);
   const searchParams = useSearchParams();
   const country = searchParams.get('country') || '';
-  const { committees, addToSpeakersList, proposeMotion, addDocument } = useCommitteeStore();
+
   const [committee, setCommittee] = useState<Committee | null>(null);
+  const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'session' | 'motions' | 'resolutions' | 'documents' | 'chat'>('session');
 
+  const committeeIdRef = useRef('');
+
+  const { getSettings } = useSettingsStore();
+
   useEffect(() => {
-    const found = Object.values(committees).find((c) => c.code === code.toUpperCase());
-    if (found) setCommittee(found);
-  }, [committees, code]);
+    let unsubscribe: (() => void) | undefined;
+    async function load() {
+      const found = await getCommitteeByCode(code.toUpperCase());
+      setCommittee(found ?? null);
+      setLoading(false);
+      if (found) {
+        committeeIdRef.current = found.id;
+        unsubscribe = subscribeToCommittee(found.id, async () => {
+          const updated = await getCommitteeByCode(code.toUpperCase());
+          if (updated) setCommittee(updated);
+        });
+      }
+    }
+    load();
+    return () => unsubscribe?.();
+  }, [code]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#0D0906] flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-[#7B4A1E] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-[#C4A882] text-sm">Joining session…</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!committee) {
     return (
@@ -209,10 +384,18 @@ export default function DelegateSession({ params }: { params: Promise<{ code: st
     );
   }
 
+  const settings = getSettings(committee.code);
   const myDelegate = committee.delegates.find((d) => d.country === country);
   const isOnSpeakersList = committee.speakersList.some((s) => s.country === country);
   const isCurrentSpeaker = committee.currentSpeaker?.country === country;
   const progress = isCurrentSpeaker ? (committee.speakerTimeRemaining / committee.speakerTimeLimit) * 100 : 0;
+
+  const enabledMotionTypes = {
+    moderated: settings.motionModeratedCaucus,
+    unmoderated: settings.motionUnmoderatedCaucus,
+    consultation: settings.motionCoW,
+    tour: settings.motionTourDeTable,
+  };
 
   const phaseLabel: Record<string, string> = {
     'pre-session': 'Pre-Session',
@@ -222,6 +405,11 @@ export default function DelegateSession({ params }: { params: Promise<{ code: st
     'unmoderated-caucus': 'Unmoderated Caucus',
     'voting': 'Voting Procedure',
     'adjourned': 'Adjourned',
+  };
+
+  const handleAddMeToSpeakers = () => {
+    if (!myDelegate) return;
+    addToSpeakersListInDB(committee.id, myDelegate.id, myDelegate.country);
   };
 
   return (
@@ -257,6 +445,7 @@ export default function DelegateSession({ params }: { params: Promise<{ code: st
       </div>
 
       <div className="flex-1 overflow-y-auto">
+        {/* ── Session tab ── */}
         {tab === 'session' && (
           <div className="p-4 space-y-4 max-w-2xl mx-auto">
             {/* Status card */}
@@ -338,7 +527,7 @@ export default function DelegateSession({ params }: { params: Promise<{ code: st
                   <div className="text-xs text-[#7A5A38] font-mono">SPEAKERS LIST</div>
                   {!isOnSpeakersList && !isCurrentSpeaker && myDelegate?.status !== 'absent' && (
                     <button
-                      onClick={() => myDelegate && addToSpeakersList(committee.id, myDelegate.id)}
+                      onClick={handleAddMeToSpeakers}
                       className="text-xs bg-[#7B4A1E] hover:bg-[#8B5A2B] text-white px-3 py-1 rounded-lg font-medium transition-colors"
                     >
                       + Add Me
@@ -387,31 +576,47 @@ export default function DelegateSession({ params }: { params: Promise<{ code: st
           </div>
         )}
 
+        {/* ── Motions tab ── */}
         {tab === 'motions' && (
-          <div className="p-4 max-w-2xl mx-auto space-y-3">
-            <h2 className="text-lg font-bold text-white">Pending Motions</h2>
-            {committee.motions.filter((m) => m.status === 'pending').length === 0 ? (
-              <div className="text-center py-8 text-[#7A5A38]">No pending motions</div>
-            ) : (
-              committee.motions
-                .filter((m) => m.status === 'pending')
-                .map((motion) => (
-                  <div key={motion.id} className="bg-[#1A1209] border border-[#2E1E0F] rounded-xl p-4">
-                    <div className="font-semibold text-white text-sm capitalize">{motion.type.replace(/-/g, ' ')}</div>
-                    <div className="text-xs text-[#C4A882] mt-1">Proposed by {motion.proposedBy}</div>
-                    {motion.purpose && <div className="text-xs text-[#C4A882] italic mt-1">"{motion.purpose}"</div>}
-                    {motion.totalTime && (
-                      <div className="text-xs text-[#7A5A38] mt-1">
-                        {Math.floor(motion.totalTime / 60)}m total
-                        {motion.speakingTime && `, ${motion.speakingTime}s per speaker`}
-                      </div>
-                    )}
-                  </div>
-                ))
+          <div className="p-4 max-w-2xl mx-auto space-y-4">
+            <h2 className="text-lg font-bold text-white">Motions</h2>
+
+            {/* Motion request form */}
+            <MotionRequestForm
+              committee={committee}
+              country={country}
+              enabledTypes={enabledMotionTypes}
+            />
+
+            {/* Pending motions list */}
+            {(committee.pendingMotions ?? []).length > 0 && (
+              <div>
+                <div className="text-xs font-mono text-[#7A5A38] mb-2">PENDING MOTIONS</div>
+                <div className="space-y-2">
+                  {(committee.pendingMotions ?? []).map((motion) => (
+                    <div key={motion.id} className="bg-[#1A1209] border border-[#2E1E0F] rounded-xl p-4">
+                      <div className="font-semibold text-white text-sm capitalize">{motion.type.replace(/-/g, ' ')}</div>
+                      <div className="text-xs text-[#C4A882] mt-1">Proposed by {motion.proposedBy}</div>
+                      {motion.topic && <div className="text-xs text-[#C4A882] italic mt-1">"{motion.topic}"</div>}
+                      {motion.totalTime > 0 && (
+                        <div className="text-xs text-[#7A5A38] mt-1">
+                          {Math.floor(motion.totalTime / 60)}m total
+                          {motion.speakingTime > 0 && `, ${motion.speakingTime}s per speaker`}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {(committee.pendingMotions ?? []).length === 0 && (
+              <div className="text-center py-4 text-[#7A5A38] text-sm">No pending motions</div>
             )}
           </div>
         )}
 
+        {/* ── Resolutions tab ── */}
         {tab === 'resolutions' && (
           <div className="p-4 max-w-2xl mx-auto space-y-3">
             <h2 className="text-lg font-bold text-white">Resolutions</h2>
@@ -442,10 +647,12 @@ export default function DelegateSession({ params }: { params: Promise<{ code: st
           </div>
         )}
 
+        {/* ── Documents tab ── */}
         {tab === 'documents' && (
-          <DelegateDocumentsTab committee={committee} country={country} addDocument={addDocument} />
+          <DelegateDocumentsTab committee={committee} country={country} />
         )}
 
+        {/* ── Chat tab ── */}
         {tab === 'chat' && (
           <div className="h-[calc(100vh-120px)]">
             <ChatPanel committee={committee} senderName={country} />
@@ -453,5 +660,17 @@ export default function DelegateSession({ params }: { params: Promise<{ code: st
         )}
       </div>
     </div>
+  );
+}
+
+export default function DelegateSession({ params }: { params: Promise<{ code: string }> }) {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#0D0906] flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-[#7B4A1E] border-t-transparent rounded-full animate-spin" />
+      </div>
+    }>
+      <DelegateSessionInner params={params} />
+    </Suspense>
   );
 }
