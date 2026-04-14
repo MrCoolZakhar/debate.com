@@ -14,6 +14,7 @@ import {
   addDocument as addDocumentInDB,
   addPendingMotion as addPendingMotionInDB,
   requestJoinSession,
+  requestGslSpot,
   setDelegateStatus as setDelegateStatusInDB,
 } from '@/lib/committeeService';
 
@@ -601,7 +602,8 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   const settings = getSettings(committee.code);
   const myDelegate = committee.delegates.find((d) => d.country === country);
   const isAbsent = !myDelegate || myDelegate.status === 'absent';
-  const isOnSpeakersList = committee.speakersList.some((s) => s.country === country);
+  const myQueueIndex = committee.speakersList.findIndex((s) => s.country === country);
+  const isOnSpeakersList = myQueueIndex !== -1;
   const isCurrentSpeaker = committee.currentSpeaker?.country === country;
   const progress = isCurrentSpeaker ? (localTime / committee.speakerTimeLimit) * 100 : 0;
   const changesLeft = myDelegate ? statusChangesRemaining(committee.id, country) : 0;
@@ -640,10 +642,13 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     setJoinRequesting(false);
   };
 
-  // ── Add to speakers list
+  // ── Request to be added to speakers list (chair must approve)
+  const isGslRequestPending = (committee.pendingMotions ?? []).some(
+    (m) => (m.type as string) === 'gsl-request' && m.proposedBy === country
+  );
   const handleAddMeToSpeakers = () => {
     if (!myDelegate || isAbsent) return;
-    addToSpeakersListInDB(committee.id, myDelegate.id, myDelegate.country);
+    requestGslSpot(committee.id, myDelegate.id, myDelegate.country);
   };
 
   const tabs: { key: DelegateTab; label: string }[] = [
@@ -751,6 +756,10 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                 committee.phase === 'moderated-caucus' || committee.phase === 'unmoderated-caucus' ? 'bg-purple-900/20 border-purple-700/30' :
                 'bg-[#1A1209] border-[#2E1E0F]'
               }`}>
+                <div className="flex gap-4 items-start">
+                  {/* Big country flag */}
+                  <div className="text-6xl select-none shrink-0 leading-none">{flagFor(country)}</div>
+                  <div className="flex-1 min-w-0">
                 <div className="text-xs font-mono text-[#7A5A38] mb-2">SESSION STATUS</div>
                 <div className={`text-2xl font-black mb-1 ${isCurrentSpeaker ? 'text-[#B8844A]' : isAdjourned ? 'text-red-400' : 'text-white'}`}>
                   {isCurrentSpeaker ? '🎙️ You Have the Floor' : phaseDisplay}
@@ -810,6 +819,8 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                     )}
                   </div>
                 )}
+                  </div>{/* end flex-1 */}
+                </div>{/* end flex gap-4 */}
               </div>
 
               {/* Speakers list */}
@@ -818,12 +829,20 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                   <div className="flex items-center justify-between mb-3">
                     <div className="text-xs text-[#7A5A38] font-mono">SPEAKERS LIST</div>
                     {!isOnSpeakersList && !isCurrentSpeaker && myDelegate?.status !== 'absent' && (
-                      <button onClick={handleAddMeToSpeakers}
-                        className="text-xs bg-[#7B4A1E] hover:bg-[#8B5A2B] text-white px-3 py-1 rounded-lg font-medium transition-colors">
-                        + Add Me
-                      </button>
+                      isGslRequestPending ? (
+                        <span className="text-xs text-[#B8844A] font-medium">⏳ Awaiting approval</span>
+                      ) : (
+                        <button onClick={handleAddMeToSpeakers}
+                          className="text-xs bg-[#7B4A1E] hover:bg-[#8B5A2B] text-white px-3 py-1 rounded-lg font-medium transition-colors">
+                          + Request to Speak
+                        </button>
+                      )
                     )}
-                    {isOnSpeakersList && <span className="text-xs text-green-400 font-medium">✓ On list</span>}
+                    {isOnSpeakersList && (
+                      <span className="text-xs text-green-400 font-medium">
+                        {myQueueIndex === 0 ? '✓ Up next' : `✓ After ${myQueueIndex} speaker${myQueueIndex !== 1 ? 's' : ''}`}
+                      </span>
+                    )}
                   </div>
                   {committee.speakersList.length === 0 ? (
                     <p className="text-sm text-[#7A5A38]">No speakers queued</p>

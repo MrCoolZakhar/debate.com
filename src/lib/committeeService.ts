@@ -483,6 +483,43 @@ export async function denyJoinRequest(motionId: string): Promise<void> {
 }
 
 // ============================================================
+// GSL REQUESTS — delegate asks chair to add them to the GSL
+// ============================================================
+
+export async function requestGslSpot(committeeId: string, delegateId: string, country: string): Promise<void> {
+  // Idempotent — ignore if already pending
+  const { data: existing } = await supabase
+    .from('motions').select('id')
+    .eq('committee_id', committeeId).eq('type', 'gsl-request')
+    .eq('proposed_by', country).eq('status', 'pending').maybeSingle();
+  if (existing) return;
+  const { error } = await supabase.from('motions').insert({
+    committee_id: committeeId,
+    type: 'gsl-request',
+    proposed_by: country,
+    total_time: 0,
+    speaking_time: 0,
+    topic: JSON.stringify({ delegateId }),
+    status: 'pending',
+    disruptiveness: 98_000_000, // shown prominently, just below join-requests
+  });
+  if (error) console.error('Error requesting GSL spot:', error);
+}
+
+export async function approveGslRequest(
+  committeeId: string, motionId: string, delegateId: string, country: string,
+): Promise<void> {
+  await addToSpeakersList(committeeId, delegateId, country);
+  const { error } = await supabase.from('motions').delete().eq('id', motionId);
+  if (error) console.error('Error approving GSL request:', error);
+}
+
+export async function denyGslRequest(motionId: string): Promise<void> {
+  const { error } = await supabase.from('motions').delete().eq('id', motionId);
+  if (error) console.error('Error denying GSL request:', error);
+}
+
+// ============================================================
 // SPEAKING LOG  (stored as system messages, used for statistics)
 // ============================================================
 
