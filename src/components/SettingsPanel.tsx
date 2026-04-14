@@ -31,24 +31,29 @@ function Toggle({ value, onChange, label, note }: {
   );
 }
 
-function SelectRow({ value, onChange, label, options, note }: {
+function BubbleRow({ value, onChange, label, options, note }: {
   value: string; onChange: (v: string) => void; label: string;
   options: { value: string; label: string }[]; note?: string;
 }) {
   return (
     <div className="py-3 border-b border-[#2E1E0F] last:border-0">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex-1">
-          <div className="text-sm font-semibold text-white">{label}</div>
-          {note && <div className="text-xs text-[#7A5A38] mt-0.5 leading-snug">{note}</div>}
-        </div>
-        <select
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="bg-[#150F09] border border-[#2E1E0F] rounded-lg px-2.5 py-1.5 text-white text-xs focus:outline-none focus:border-[#7B4A1E] shrink-0 cursor-pointer max-w-[180px]"
-        >
-          {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
+      <div className="text-sm font-semibold text-white mb-1">{label}</div>
+      {note && <div className="text-xs text-[#7A5A38] mb-2 leading-snug">{note}</div>}
+      <div className="flex flex-wrap gap-2">
+        {options.map((o) => (
+          <button
+            key={o.value}
+            type="button"
+            onClick={() => onChange(o.value)}
+            className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${
+              value === o.value
+                ? 'bg-[#7B4A1E] border-[#8B5A2B] text-white'
+                : 'bg-[#150F09] border-[#2E1E0F] text-[#C4A882] hover:border-[#7B4A1E]'
+            }`}
+          >
+            {o.label}
+          </button>
+        ))}
       </div>
     </div>
   );
@@ -212,31 +217,31 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
           {tab === 'voting' && (
             <div>
               <SectionLabel>VOTING THRESHOLDS</SectionLabel>
-              <SelectRow
+              <BubbleRow
                 label="Procedural vote threshold"
                 value={s.proceduralThreshold}
                 onChange={(v) => upd('proceduralThreshold', v as CommitteeSettings['proceduralThreshold'])}
                 options={[
-                  { value: 'simple', label: 'Simple majority (1/2 + 1)' },
-                  { value: 'absolute', label: 'Absolute majority (1/2)' },
+                  { value: 'simple', label: 'Simple (1/2 + 1)' },
+                  { value: 'absolute', label: 'Absolute (1/2)' },
                 ]}
               />
-              <SelectRow
+              <BubbleRow
                 label="Substantive vote threshold"
                 value={s.substantiveThreshold}
                 onChange={(v) => upd('substantiveThreshold', v as CommitteeSettings['substantiveThreshold'])}
                 options={[
-                  { value: 'simple', label: 'Simple majority (1/2 + 1)' },
+                  { value: 'simple', label: 'Simple (1/2 + 1)' },
                   { value: 'supermajority-2-3', label: '2/3 Supermajority' },
                   { value: 'consensus', label: 'Consensus' },
                 ]}
               />
-              <SelectRow
+              <BubbleRow
                 label="Amendment vote threshold"
                 value={s.amendmentThreshold}
                 onChange={(v) => upd('amendmentThreshold', v as CommitteeSettings['amendmentThreshold'])}
                 options={[
-                  { value: 'simple', label: 'Simple majority (1/2 + 1)' },
+                  { value: 'simple', label: 'Simple (1/2 + 1)' },
                   { value: 'supermajority-2-3', label: '2/3 Supermajority' },
                 ]}
               />
@@ -277,16 +282,16 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
               )}
 
               <SectionLabel>QUORUM</SectionLabel>
-              <SelectRow
+              <BubbleRow
                 label="Quorum threshold"
                 note="Minimum delegates present for formal business (motions, voting) to proceed."
                 value={s.quorumThreshold}
                 onChange={(v) => upd('quorumThreshold', v as CommitteeSettings['quorumThreshold'])}
                 options={[
-                  { value: 'none', label: 'No quorum required' },
-                  { value: '1-4', label: '1/4 of total delegations' },
-                  { value: '1-3', label: '1/3 of total delegations' },
-                  { value: '1-2', label: '1/2 of total delegations' },
+                  { value: 'none', label: 'None' },
+                  { value: '1-4', label: '1/4' },
+                  { value: '1-3', label: '1/3' },
+                  { value: '1-2', label: '1/2' },
                 ]}
               />
             </div>

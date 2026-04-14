@@ -120,7 +120,20 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     const vote = votes.find((v) => v.delegateId === d.id);
     return !vote || vote.choice === 'against' || vote.choice === 'against-rights' || vote.choice === 'abstain';
   });
-  const passed = !p5Veto && !unanimousFail && forCount > againstCount;
+
+  // Threshold check (substantive votes)
+  const totalDecisive = forCount + againstCount; // abstentions excluded from denominator
+  let thresholdMet = false;
+  if (settings.substantiveThreshold === 'supermajority-2-3') {
+    thresholdMet = totalDecisive > 0 && forCount >= (2 / 3) * totalDecisive;
+  } else if (settings.substantiveThreshold === 'consensus') {
+    thresholdMet = againstCount === 0 && forCount > 0;
+  } else {
+    // simple majority: more for than against
+    thresholdMet = forCount > againstCount;
+  }
+
+  const passed = !p5Veto && !unanimousFail && thresholdMet;
 
   const startNewVote = (docId: string) => {
     setSelectedDocId(docId);
@@ -456,6 +469,16 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             )}
             {unanimousFail && (
               <p className="text-red-400 text-sm mt-4 font-semibold">⚠️ Unanimous vote required — failed</p>
+            )}
+            {!p5Veto && !unanimousFail && settings.substantiveThreshold === 'supermajority-2-3' && (
+              <p className={`text-sm mt-3 font-semibold ${thresholdMet ? 'text-green-400' : 'text-red-400'}`}>
+                2/3 supermajority required · {forCount}/{totalDecisive} ({totalDecisive > 0 ? Math.round(forCount / totalDecisive * 100) : 0}%)
+              </p>
+            )}
+            {!p5Veto && !unanimousFail && settings.substantiveThreshold === 'consensus' && (
+              <p className={`text-sm mt-3 font-semibold ${thresholdMet ? 'text-green-400' : 'text-red-400'}`}>
+                Consensus required · {againstCount} voted against
+              </p>
             )}
           </div>
           <VoteScale forCount={forCount} againstCount={againstCount} totalVoted={votes.length} />
