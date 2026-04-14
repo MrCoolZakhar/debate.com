@@ -99,7 +99,7 @@ function RaiseMotionForm({ committee, onBack, onRaised }: {
   onBack: () => void;
   onRaised: (motion: Omit<PendingMotion, 'id' | 'disruptiveness'>) => void;
 }) {
-  const [type, setType] = useState<PendingMotionType | null>(null);
+  const [type, setType] = useState<PendingMotionType | null>('moderated');
   const [proposer, setProposer] = useState('');
   const [totalMins, setTotalMins] = useState(10);
   const [totalSecs, setTotalSecs] = useState(0);
@@ -136,39 +136,25 @@ function RaiseMotionForm({ committee, onBack, onRaised }: {
     <div className="px-7 pb-7 space-y-5 overflow-y-auto">
       <div className="flex items-center gap-3">
         <button onClick={onBack} className="text-sm text-[#C4A882] hover:text-white transition-colors">← Back</button>
-        <h2 className="text-2xl font-black text-white">Raise a Motion</h2>
+        <h2 className="text-3xl font-black text-white">Raise a Motion</h2>
       </div>
 
-      {!type ? (
-        <div className="grid grid-cols-2 gap-3">
-          {TYPE_ORDER.map((t) => {
-            const m = TYPE_META[t];
-            return (
-              <button key={t} onClick={() => setType(t)}
-                className="flex flex-col items-start gap-2 bg-[#1A1209] hover:bg-[#2E1E0F] border border-[#2E1E0F] hover:border-[#7B4A1E] rounded-2xl p-5 text-left transition-all">
-                <span className="text-4xl">{m.icon}</span>
-                <div>
-                  <div className="text-base font-bold text-white leading-tight">{m.label}</div>
-                  <div className="text-xs text-[#C4A882] mt-1">{m.sub}</div>
-                </div>
-                <DisruptivenessBadge type={t} />
-              </button>
-            );
-          })}
-        </div>
-      ) : (
-        <>
-          <div className="flex items-center gap-3">
-            <span className="text-3xl">{TYPE_META[type].icon}</span>
-            <div>
-              <div className="text-lg font-bold text-white">{TYPE_META[type].label}</div>
-              <DisruptivenessBadge type={type} />
-            </div>
-            <button onClick={() => setType(null)} className="ml-auto text-xs text-[#7A5A38] hover:text-white">change</button>
-          </div>
+      {/* Type tabs — always shown */}
+      <div className="flex gap-1.5 flex-wrap">
+        {TYPE_ORDER.map((t) => (
+          <button key={t} type="button" onClick={() => setType(t)}
+            className={`px-3 py-2 rounded-xl border font-bold text-sm transition-all flex-1 min-w-[120px] ${
+              type === t ? 'bg-[#7B4A1E] border-[#8B5A2B] text-white' : 'bg-[#1A1209] border-[#2E1E0F] text-[#C4A882] hover:border-[#7B4A1E]'
+            }`}>
+            {TYPE_META[t].label}
+          </button>
+        ))}
+      </div>
 
+      {type && (
+        <>
           <div>
-            <label className="block text-sm font-semibold text-[#C4A882] mb-2">Proposed by</label>
+            <label className="block text-base font-semibold text-[#C4A882] mb-2">Proposed by</label>
             <ProposerInput candidates={presentCountries} value={proposer} onChange={setProposer} />
           </div>
 
@@ -220,7 +206,7 @@ function RaiseMotionForm({ committee, onBack, onRaised }: {
           {/* Unmoderated / Consultation — total time */}
           {(type === 'unmoderated' || type === 'consultation') && (
             <div>
-              <label className="block text-sm font-semibold text-[#C4A882] mb-2">Total time</label>
+              <label className="block text-base font-semibold text-[#C4A882] mb-2">Total time</label>
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-2 bg-[#150F09] border border-[#2E1E0F] rounded-xl px-3 py-2.5">
                   <input type="number" min={0} value={totalMins} onChange={(e) => setTotalMins(parseInt(e.target.value) || 0)}
@@ -248,7 +234,7 @@ function RaiseMotionForm({ committee, onBack, onRaised }: {
           {type === 'moderated' && (
             <>
               <div>
-                <label className="block text-sm font-semibold text-[#C4A882] mb-2">Total caucus time</label>
+                <label className="block text-base font-semibold text-[#C4A882] mb-2">Total caucus time</label>
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-2 bg-[#150F09] border border-[#2E1E0F] rounded-xl px-3 py-2.5">
                     <input type="number" min={0} value={totalMins} onChange={(e) => setTotalMins(parseInt(e.target.value) || 0)}
@@ -271,7 +257,7 @@ function RaiseMotionForm({ committee, onBack, onRaised }: {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-semibold text-[#C4A882] mb-2">Speaking time per delegate</label>
+                <label className="block text-base font-semibold text-[#C4A882] mb-2">Speaking time per delegate</label>
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-2 bg-[#150F09] border border-[#2E1E0F] rounded-xl px-3 py-2.5">
                     <input type="number" min={0} value={speakingTime} onChange={(e) => setSpeakingTime(parseInt(e.target.value) || 0)}
@@ -292,16 +278,16 @@ function RaiseMotionForm({ committee, onBack, onRaised }: {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-semibold text-[#C4A882] mb-2">Topic <span className="text-red-500">*</span></label>
+                <label className="block text-base font-semibold text-[#C4A882] mb-2">Topic <span className="text-red-500">*</span></label>
                 <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)}
                   placeholder="e.g. Humanitarian response in conflict zones"
-                  className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-xl px-4 py-3 text-white placeholder-[#7A5A38] focus:outline-none focus:border-[#7B4A1E] transition-colors" />
+                  className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-xl px-4 py-4 text-white placeholder-[#7A5A38] focus:outline-none focus:border-[#7B4A1E] transition-colors" />
               </div>
             </>
           )}
 
           <button onClick={submit} disabled={!canSubmit()}
-            className="w-full bg-[#7B4A1E] hover:bg-[#8B5A2B] disabled:bg-[#2E1E0F] disabled:text-[#7A5A38] text-white py-4 rounded-2xl text-base font-black transition-colors">
+            className="w-full bg-[#7B4A1E] hover:bg-[#8B5A2B] disabled:bg-[#2E1E0F] disabled:text-[#7A5A38] text-white py-5 rounded-2xl text-base font-black transition-colors">
             Raise Motion →
           </button>
         </>
@@ -431,8 +417,8 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
   onClose: () => void;
   onCommitteeUpdate?: (updater: (c: Committee) => Committee) => void;
 }) {
-  const [view, setView] = useState<ModalView>('list');
-  const pending = [...(committee.pendingMotions ?? [])].sort((a, b) => b.disruptiveness - a.disruptiveness);
+  const pending = [...(committee.pendingMotions ?? [])].filter((m) => m.type !== ('join-request' as string)).sort((a, b) => b.disruptiveness - a.disruptiveness);
+  const [view, setView] = useState<ModalView>(pending.length === 0 ? 'raise' : 'list');
   const update = (updater: (c: Committee) => Committee) => onCommitteeUpdate?.(updater);
 
   const handleRaised = (motion: Omit<PendingMotion, 'id' | 'disruptiveness'>) => {
@@ -525,7 +511,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background: 'rgba(5, 8, 20, 0.88)', backdropFilter: 'blur(4px)' }}
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className={`bg-[#1A1209] border border-[#2E1E0F] rounded-3xl w-full shadow-2xl overflow-hidden max-h-[92vh] flex flex-col ${view === 'vote' ? 'max-w-5xl' : 'max-w-2xl'}`}>
+      <div className={`bg-[#1A1209] border border-[#2E1E0F] rounded-3xl w-full shadow-2xl overflow-hidden max-h-[92vh] flex flex-col ${view === 'vote' ? 'max-w-5xl' : 'max-w-4xl'}`}>
         <div className="flex items-center justify-end px-7 pt-6 pb-0 shrink-0">
           <button onClick={onClose} className="text-[#7A5A38] hover:text-white transition-colors text-xl leading-none">✕</button>
         </div>

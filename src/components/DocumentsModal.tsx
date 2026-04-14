@@ -442,7 +442,8 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate }
 }) {
   const router = useRouter();
   const [tab, setTab] = useState<DocTab>('working-paper');
-  const [showForm, setShowForm] = useState(false);
+  const hasWPs = (committee.documents ?? []).filter((d) => d.type === 'working-paper').length > 0;
+  const [showForm, setShowForm] = useState(!hasWPs);
 
   // Fullscreen presentation state
   const [activeDoc, setActiveDoc] = useState<CommitteeDocument | null>(null);

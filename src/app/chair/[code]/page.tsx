@@ -33,6 +33,27 @@ function formatTime(seconds: number) {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
+const COUNTRY_ABBREV: Record<string, string> = {
+  'United Kingdom': 'UK',
+  'United States': 'USA',
+  'United Arab Emirates': 'UAE',
+  'South Korea': 'S. Korea',
+  'North Korea': 'N. Korea',
+  'Democratic Republic of Congo': 'DR Congo',
+  'Dominican Republic': 'D.R.',
+  'Central African Republic': 'CAR',
+  'Papua New Guinea': 'PNG',
+  'Trinidad and Tobago': 'T&T',
+  'Bosnia and Herzegovina': 'BiH',
+  'Saint Kitts and Nevis': 'St. Kitts',
+  'Saint Vincent and the Grenadines': 'St. Vincent',
+  'Antigua and Barbuda': 'Antigua',
+  'Equatorial Guinea': 'Eq. Guinea',
+};
+function abbrevCountry(name: string): string {
+  return COUNTRY_ABBREV[name] ?? (name.length > 14 ? name.slice(0, 12) + '…' : name);
+}
+
 type CommitteeSetter = React.Dispatch<React.SetStateAction<Committee | null>>;
 
 const localUpdateTime = { current: 0 };
@@ -172,7 +193,7 @@ function CaucusSpeakerQueue({ committee, spokenCountries, onRemove, onReorder }:
   const dragIndexRef = useRef<number | null>(null);
   if (committee.caucusQueue.length === 0) return null;
   const queueSize = committee.caucusQueue.length;
-  const flagSize: 'lg' | 'sm' = queueSize <= 8 ? 'lg' : 'sm';
+  const flagSize: 'xl' | 'md' = queueSize <= 8 ? 'xl' : 'md';
   const displayList = committee.caucusQueue.slice(0, 15);
   const overflow = queueSize > 15 ? queueSize - 15 : 0;
   return (
@@ -201,8 +222,8 @@ function CaucusSpeakerQueue({ committee, spokenCountries, onRemove, onReorder }:
                 </div>
               )}
             </div>
-            <span className={`text-[10px] text-center w-12 truncate ${alreadySpoke ? 'text-yellow-400' : 'text-[#C4A882]'}`}>{s.country}</span>
-            {i === 0 && !alreadySpoke && <span className="text-[9px] font-semibold text-[#B8844A]">Next</span>}
+            <span className={`text-sm font-semibold text-center w-16 ${alreadySpoke ? 'text-yellow-400' : 'text-[#C4A882]'}`}>{abbrevCountry(s.country)}</span>
+            {i === 0 && !alreadySpoke && <span className="text-sm font-bold text-[#B8844A]">Up next</span>}
             <button onClick={() => onRemove(s.delegateId)}
               className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full text-white text-[10px] hidden group-hover:flex items-center justify-center">✕</button>
           </div>
@@ -221,14 +242,15 @@ function CaucusSpeakerQueue({ committee, spokenCountries, onRemove, onReorder }:
 }
 
 // ── Draggable GSL Speakers Queue ──────────────────────────────────────────────
-function DraggableSpeakersQueue({ list, onReorder, onRemove }: {
+function DraggableSpeakersQueue({ list, onReorder, onRemove, rtrDelegateId }: {
   list: { delegateId: string; country: string }[];
   onReorder: (newList: { delegateId: string; country: string }[]) => void;
   onRemove: (delegateId: string) => void;
+  rtrDelegateId?: string | null;
 }) {
   const dragIndexRef = useRef<number | null>(null);
   const qLen = list.length;
-  const fSize: 'lg' | 'sm' = qLen <= 8 ? 'lg' : 'sm';
+  const fSize: 'xl' | 'md' = qLen <= 8 ? 'xl' : 'md';
   const displayItems = list.slice(0, 15);
   const overflow = qLen > 15 ? qLen - 15 : 0;
   return (
@@ -247,9 +269,11 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove }: {
             onReorder(newList);
             dragIndexRef.current = null;
           }}>
-          <FlagCircle country={s.country} size={fSize} />
-          <span className="text-xs text-[#C4A882] text-center w-14 truncate">{s.country}</span>
-          {i === 0 && <span className="text-[9px] font-semibold text-[#B8844A]">Up next...</span>}
+          <div className={`rounded-full ${s.delegateId === rtrDelegateId ? 'ring-2 ring-orange-500 ring-offset-1 ring-offset-[#0D0906]' : ''}`}>
+            <FlagCircle country={s.country} size={fSize} />
+          </div>
+          <span className="text-sm font-semibold text-[#C4A882] text-center w-16">{abbrevCountry(s.country)}</span>
+          {i === 0 && <span className="text-sm font-bold text-[#B8844A]">Up next</span>}
           <button onClick={() => onRemove(s.delegateId)}
             className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full text-white text-[10px] hidden group-hover:flex items-center justify-center">✕</button>
         </div>
@@ -649,6 +673,8 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
   const [rtrCountry, setRtrCountry] = useState('');
   const [rtrSeconds, setRtrSeconds] = useState(30);
   const [rtrOverrideTime, setRtrOverrideTime] = useState<number | null>(null);
+  const [rtrDelegateId, setRtrDelegateId] = useState<string | null>(null);
+  const [chatReadCount, setChatReadCount] = useState(0);
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const timerRunningRef = useRef(false);
@@ -784,6 +810,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
       speakersList: rest,
       speakerTimeRemaining: timeToUse,
     }));
+    setRtrDelegateId(null);
     nextSpeakerInDB(committee.id, timeToUse);
   };
 
@@ -802,9 +829,10 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
     // Insert at top of GSL but preserve existing position if already on list
     updateLocal(setCommittee, (c) => ({
       ...c,
-      speakersList: [entry, ...c.speakersList.filter((s) => s.delegateId !== delegate.id)],
+      speakersList: [entry, ...c.speakersList],
     }));
     setRtrOverrideTime(rtrSeconds);
+    setRtrDelegateId(delegate.id);
     setRtrCountry('');
     setActivePopover(null);
   };
@@ -888,6 +916,11 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
     if (isPreSession) return;
     setShowDocuments((v) => !v);
   };
+  const handleToggleChat = () => {
+    const newShow = !showChat;
+    setShowChat(newShow);
+    if (newShow) setChatReadCount(committee?.messages.filter(m => !m.content.startsWith('__log__:')).length ?? 0);
+  };
 
   return (
     <div className="h-screen bg-[#0D0906] flex flex-col overflow-hidden">
@@ -934,24 +967,28 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
         </button>
         {/* Chat — disabled during pre-session */}
         <button
-          onClick={() => { if (!isPreSession) setShowChat((v) => !v); }}
+          onClick={() => { if (!isPreSession) handleToggleChat(); }}
           title={isPreSession ? 'Complete roll call first' : undefined}
           className={`text-xs px-3 py-1 rounded-lg transition-colors shrink-0 relative ${
             isPreSession ? 'opacity-40 cursor-not-allowed bg-[#2E1E0F] text-[#7A5A38]' :
             showChat ? 'bg-[#7B4A1E] text-white' : 'bg-[#2E1E0F] text-[#C4A882] hover:text-white'
           }`}>
           💬 Chat
-          {committee.messages.filter((m) => !m.content.startsWith('__log__:')).length > 0 && (
-            <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#7B4A1E] rounded-full text-white text-[10px] flex items-center justify-center">
-              {committee.messages.filter((m) => !m.content.startsWith('__log__:')).length}
-            </span>
-          )}
+          {!isPreSession && (() => {
+            const total = committee.messages.filter((m) => !m.content.startsWith('__log__:')).length;
+            const unread = total - chatReadCount;
+            return unread > 0 && !showChat ? (
+              <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#7B4A1E] rounded-full text-white text-[10px] flex items-center justify-center">
+                {unread}
+              </span>
+            ) : null;
+          })()}
         </button>
         <button onClick={() => { navigator.clipboard.writeText(committee.code); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
           className="text-xs font-mono bg-[#2E1E0F] hover:bg-[#3D2A15] text-white px-2.5 py-1 rounded-lg transition-colors shrink-0">
           {copied ? '✓' : committee.code}
         </button>
-        <button onClick={() => setShowSettings(true)} className="text-[#7A5A38] hover:text-white transition-colors shrink-0 text-lg">⚙</button>
+        <button onClick={() => setShowSettings(true)} className="text-[#7A5A38] hover:text-white transition-colors shrink-0 text-3xl">⚙</button>
       </header>
       {/* Join request banner */}
       {(committee.pendingMotions ?? []).filter((m) => m.type === ('join-request' as string)).length > 0 && (
@@ -1008,6 +1045,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
                   onStatusChange={handleStatusChange}
                   onPhaseChange={handlePhaseChange}
                   onDelegateAdd={handleDelegateAdd}
+                  onReorderList={handleReorderSpeakersList}
                   isRollCallPhase={false} />
               </aside>
             )}
@@ -1040,6 +1078,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
                             list={committee.speakersList}
                             onReorder={handleReorderSpeakersList}
                             onRemove={handleRemoveFromSpeakersList}
+                            rtrDelegateId={rtrDelegateId}
                           />
                         )}
                         {/* ~50% bigger than xl — using inline style for precise sizing */}
@@ -1202,6 +1241,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
                             list={committee.speakersList}
                             onReorder={handleReorderSpeakersList}
                             onRemove={handleRemoveFromSpeakersList}
+                            rtrDelegateId={rtrDelegateId}
                           />
                         )}
                         <div className="text-7xl mb-6">🎙</div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { Committee, DelegateStatus } from '@/lib/types';
 import { getFlagEmoji, getCountryByName, UN_COUNTRIES } from '@/lib/countries';
 import {
@@ -215,6 +215,24 @@ function FullListPopup({
   );
 }
 
+// ── MajorityPie ───────────────────────────────────────────────────────────────
+function MajorityPie({ value, threshold, color, label }: { value: number; threshold: number; color: string; label: string }) {
+  const r = 10; const circ = 2 * Math.PI * r;
+  const frac = threshold > 0 ? Math.min(value / threshold, 1) : 0;
+  const met = value >= threshold;
+  return (
+    <div className="flex items-center gap-1" title={`${value}/${threshold}`}>
+      <svg width="26" height="26" viewBox="0 0 26 26">
+        <circle cx="13" cy="13" r={r} fill="none" stroke="#2E1E0F" strokeWidth="5" />
+        <circle cx="13" cy="13" r={r} fill="none" stroke={met ? color : '#7A5A38'} strokeWidth="5"
+          strokeDasharray={circ} strokeDashoffset={circ * (1 - frac)}
+          strokeLinecap="round" transform="rotate(-90 13 13)" style={{ transition: 'stroke-dashoffset 0.3s' }} />
+      </svg>
+      <span className={`text-xs font-bold ${met ? 'text-white' : 'text-[#7A5A38]'}`}>{label}</span>
+    </div>
+  );
+}
+
 // ── Roll Call Panel ───────────────────────────────────────────────────────────
 export default function RollCallPanel({
   committee,
@@ -224,6 +242,7 @@ export default function RollCallPanel({
   onStatusChange,
   onPhaseChange,
   onDelegateAdd,
+  onReorderList,
   isRollCallPhase = false,
 }: {
   committee: Committee;
@@ -233,11 +252,15 @@ export default function RollCallPanel({
   onStatusChange?: (delegateId: string, status: DelegateStatus) => void;
   onPhaseChange?: (phase: string) => void;
   onDelegateAdd?: (country: string) => void;
+  onReorderList?: (newList: { delegateId: string; country: string }[]) => void;
   isRollCallPhase?: boolean;
 }) {
   const [search, setSearch] = useState('');
   const [listView, setListView] = useState<'az' | 'queue'>('az');
   const [showFullList, setShowFullList] = useState(false);
+  const listRef = useRef<HTMLDivElement>(null);
+  const dragIndexRef = useRef<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
   const present = committee.delegates.filter((d) => d.status !== 'absent').length;
   const total = committee.delegates.length;
@@ -305,16 +328,32 @@ export default function RollCallPanel({
   // When searching: show all, but grey out non-matches so the filter is visible
   const filtered = baseList;
 
+  // Auto-scroll to first match when search changes
+  useEffect(() => {
+    if (!search || !listRef.current) return;
+    const firstMatch = listRef.current.querySelector('[data-matches="true"]') as HTMLElement | null;
+    firstMatch?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [search]);
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="px-4 pt-4 pb-3 border-b border-[#2E1E0F] shrink-0">
         <div className="flex items-center justify-between mb-3">
           <span className="text-sm font-bold text-white">Roll Call</span>
-          <div className="flex gap-1.5">
-            <button onClick={handleClear} className="text-[10px] font-semibold px-2 py-1 rounded-lg bg-[#2E1E0F] text-red-400 hover:bg-red-950/40 transition-colors">Clear</button>
-            <button onClick={handleAllPresent} className="text-[10px] font-semibold px-2 py-1 rounded-lg bg-[#2E1E0F] text-green-400 hover:bg-green-950/40 transition-colors">All P</button>
-            <button onClick={handleAllPresentVoting} className="text-[10px] font-semibold px-2 py-1 rounded-lg bg-[#2E1E0F] text-blue-400 hover:bg-blue-950/40 transition-colors">All PV</button>
-          </div>
+          {isRollCallPhase ? (
+            <div className="flex gap-1.5">
+              <button onClick={handleClear} className="text-[10px] font-semibold px-2 py-1 rounded-lg bg-[#2E1E0F] text-red-400 hover:bg-red-950/40 transition-colors">Clear</button>
+              <button onClick={handleAllPresent} className="text-[10px] font-semibold px-2 py-1 rounded-lg bg-[#2E1E0F] text-green-400 hover:bg-green-950/40 transition-colors">All P</button>
+              <button onClick={handleAllPresentVoting} className="text-[10px] font-semibold px-2 py-1 rounded-lg bg-[#2E1E0F] text-blue-400 hover:bg-blue-950/40 transition-colors">All PV</button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3">
+              {/* 2/3 majority pie */}
+              <MajorityPie value={present} threshold={Math.ceil((total * 2) / 3)} color="#7B4A1E" label={`${Math.ceil((total * 2) / 3)}`} />
+              {/* Simple majority pie */}
+              <MajorityPie value={present} threshold={Math.floor(total / 2) + 1} color="#3D6B35" label={`${Math.floor(total / 2) + 1}`} />
+            </div>
+          )}
         </div>
         <div className="flex items-center justify-between mb-1">
           <span className="text-base font-bold text-green-400">{present} / {total} present</span>
@@ -325,12 +364,13 @@ export default function RollCallPanel({
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
-        {filtered.map((d) => {
+      <div ref={listRef} className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
+        {filtered.map((d, idx) => {
           const isOnList = onListIds?.has(d.id) ?? false;
           const isAbsent = d.status === 'absent';
           const queuePos = queuePositionMap.get(d.id) ?? null;
           const matchesSearch = !search || d.country.toLowerCase().includes(search.toLowerCase());
+          const isDraggable = listView === 'queue' && !isRollCallPhase && queuePositionMap.has(d.id);
 
           const handleRowClick = () => {
             if (isRollCallPhase) {
@@ -342,42 +382,68 @@ export default function RollCallPanel({
           };
 
           return (
-            <div
-              key={d.id}
-              onClick={handleRowClick}
-              className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all ${
-                !matchesSearch
-                  ? 'border border-transparent opacity-25'
-                  : isAbsent
-                  ? 'border border-transparent opacity-40'
-                  : d.status === 'present'
-                  ? 'bg-green-950/30 border border-green-800/30'
-                  : 'bg-blue-950/30 border border-blue-800/30'
-              } ${
-                (!isRollCallPhase && onAddToList && !isAbsent) || isRollCallPhase
-                  ? 'cursor-pointer hover:bg-[#2E1E0F]/50'
-                  : isAbsent && !isRollCallPhase
-                  ? 'cursor-not-allowed'
-                  : ''
-              }`}
-            >
-              <div className="relative shrink-0">
-                <FlagCircle country={d.country} size="sm" />
-                {/* Queue position bubble — bigger than 20% over default */}
-                {queuePos !== null && (
-                  <div className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-0.5 bg-[#7B4A1E] rounded-full text-white text-[8px] flex items-center justify-center font-black leading-none">
-                    {queuePos <= 99 ? queuePos : '99+'}
-                  </div>
-                )}
-              </div>
-              <span className={`flex-1 text-base truncate ${!isAbsent ? 'text-white font-medium' : 'text-[#7A5A38]'}`}>
-                {d.country}
-              </span>
-              {isAbsent && !isRollCallPhase && (
-                <span className="text-[10px] text-[#7A5A38] shrink-0 font-mono">absent</span>
+            <div key={d.id}>
+              {dragOverIndex === idx && dragOverIndex !== dragIndexRef.current && (
+                <div className="h-0.5 bg-[#7B4A1E] rounded-full mx-2 -mb-0.5" />
               )}
-              <div onClick={(e) => e.stopPropagation()}>
-                <StatusSlider status={d.status} onCycle={() => cycleStatus(d.id, d.status)} />
+              <div
+                data-matches={matchesSearch ? 'true' : 'false'}
+                onClick={handleRowClick}
+                draggable={isDraggable}
+                onDragStart={() => { if (isDraggable) dragIndexRef.current = idx; }}
+                onDragOver={(e) => { e.preventDefault(); if (listView === 'queue' && !isRollCallPhase) setDragOverIndex(idx); }}
+                onDrop={() => {
+                  const from = dragIndexRef.current;
+                  const to = idx;
+                  if (from === null || from === to || !onReorderList) { setDragOverIndex(null); return; }
+                  const gslItems = (committee.speakersList ?? []);
+                  const fromDelegateId = filtered[from]?.id;
+                  const toDelegateId = d.id;
+                  const fromIdx = gslItems.findIndex(s => s.delegateId === fromDelegateId);
+                  const toIdx = gslItems.findIndex(s => s.delegateId === toDelegateId);
+                  if (fromIdx < 0 || toIdx < 0) { setDragOverIndex(null); return; }
+                  const newList = [...gslItems];
+                  const [moved] = newList.splice(fromIdx, 1);
+                  newList.splice(toIdx, 0, moved);
+                  onReorderList(newList);
+                  dragIndexRef.current = null;
+                  setDragOverIndex(null);
+                }}
+                onDragEnd={() => { dragIndexRef.current = null; setDragOverIndex(null); }}
+                className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all ${
+                  !matchesSearch
+                    ? 'border border-transparent opacity-25'
+                    : isAbsent
+                    ? 'border border-transparent opacity-40'
+                    : d.status === 'present'
+                    ? 'bg-green-950/30 border border-green-800/30'
+                    : 'bg-blue-950/30 border border-blue-800/30'
+                } ${
+                  (!isRollCallPhase && onAddToList && !isAbsent) || isRollCallPhase
+                    ? 'cursor-pointer hover:bg-[#2E1E0F]/50'
+                    : isAbsent && !isRollCallPhase
+                    ? 'cursor-not-allowed'
+                    : ''
+                } ${isDraggable ? 'cursor-grab' : ''}`}
+              >
+                <div className="relative shrink-0">
+                  <FlagCircle country={d.country} size="sm" />
+                  {/* Queue position bubble */}
+                  {queuePos !== null && (
+                    <div className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-0.5 bg-[#7B4A1E] rounded-full text-white text-[10px] flex items-center justify-center font-black leading-none">
+                      {queuePos <= 99 ? queuePos : '99+'}
+                    </div>
+                  )}
+                </div>
+                <span className={`flex-1 text-base truncate ${!isAbsent ? 'text-white font-medium' : 'text-[#7A5A38]'}`}>
+                  {d.country}
+                </span>
+                {isAbsent && !isRollCallPhase && (
+                  <span className="text-[10px] text-[#7A5A38] shrink-0 font-mono">absent</span>
+                )}
+                <div onClick={(e) => e.stopPropagation()}>
+                  <StatusSlider status={d.status} onCycle={() => cycleStatus(d.id, d.status)} />
+                </div>
               </div>
             </div>
           );
