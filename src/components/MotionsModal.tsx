@@ -317,7 +317,10 @@ function VotingView({ committee, onAccepted, onAllDone, onRemove }: {
   onAllDone: () => void;
   onRemove: (motionId: string) => void;
 }) {
-  const sorted = [...(committee.pendingMotions ?? [])].sort((a, b) => b.disruptiveness - a.disruptiveness);
+  // Filter out join-request pseudo-motions — those are handled in the chair banner, not here
+  const sorted = [...(committee.pendingMotions ?? [])]
+    .filter((m) => m.type !== ('join-request' as string))
+    .sort((a, b) => b.disruptiveness - a.disruptiveness);
   const present = committee.delegates.filter((d) => d.status !== 'absent').length;
 
   if (sorted.length === 0) {

@@ -126,39 +126,41 @@ function calcPoints(logs: SpeakingLogEntry[], committee: Committee, country: str
     total += timePts;
   }
 
-  // Documents
-  const myDocs = (committee.documents ?? []).filter((d) =>
-    d.sponsors.includes(country) || d.sponsors[0] === country
-  );
+  // Documents — 10pts per WP, 20pts per DR, per sponsor
+  const myDocs = (committee.documents ?? []).filter((d) => d.sponsors.includes(country));
   const wps = myDocs.filter((d) => d.type === 'working-paper');
   const drs = myDocs.filter((d) => d.type === 'draft-resolution');
   if (wps.length > 0) {
-    const pts = wps.length * 20;
-    breakdown.push({ label: `Working papers (×${wps.length})`, pts });
+    const pts = wps.length * 10;
+    breakdown.push({ label: `Working papers sponsored (×${wps.length})`, pts });
     total += pts;
   }
   if (drs.length > 0) {
-    const pts = drs.length * 50;
-    breakdown.push({ label: `Draft resolutions (×${drs.length})`, pts });
+    const pts = drs.length * 20;
+    breakdown.push({ label: `Draft resolutions sponsored (×${drs.length})`, pts });
     total += pts;
     const passedDrs = drs.filter((d) => d.status === 'passed').length;
     if (passedDrs > 0) {
-      breakdown.push({ label: `DR passed (×${passedDrs})`, pts: passedDrs * 30 });
-      total += passedDrs * 30;
+      const passPts = passedDrs * 10;
+      breakdown.push({ label: `DR passed (×${passedDrs})`, pts: passPts });
+      total += passPts;
     }
   }
 
-  // Consistency bonus
-  if (myLogs.length >= 3) {
-    breakdown.push({ label: 'Consistency bonus (3+ speeches)', pts: 5 });
-    total += 5;
+  // Motions raised (from system log)
+  const motionsRaised = logs.filter((l) => (l as unknown as Record<string,unknown>).type === 'motion-raised' && l.country === country).length;
+  if (motionsRaised > 0) {
+    const pts = motionsRaised * 5;
+    breakdown.push({ label: `Motions raised (×${motionsRaised})`, pts });
+    total += pts;
   }
 
-  // Diversity bonus
-  const uniqueTopics = new Set(myLogs.map((l) => l.topic)).size;
-  if (uniqueTopics >= 2) {
-    breakdown.push({ label: `Topic diversity (${uniqueTopics} topics)`, pts: 10 });
-    total += 10;
+  // Right of reply (from system log)
+  const rtrCount = logs.filter((l) => (l as unknown as Record<string,unknown>).type === 'right-of-reply' && l.country === country).length;
+  if (rtrCount > 0) {
+    const pts = rtrCount * 5;
+    breakdown.push({ label: `Right of reply (×${rtrCount})`, pts });
+    total += pts;
   }
 
   // Tier
@@ -169,14 +171,13 @@ function calcPoints(logs: SpeakingLogEntry[], committee: Committee, country: str
   else if (total >= 70) tier = 'Debater 💬';
   else if (total >= 30) tier = 'Participant';
 
-  // Tips
+  // Tips — no point amounts mentioned
   const tips: string[] = [];
-  if (gslSpeeches.length === 0) tips.push('📢 Get on the General Speakers\' List — GSL speeches are worth 10 pts each.');
-  else if (gslSpeeches.length < 3) tips.push('📢 Aim for at least 3 GSL speeches to unlock the consistency bonus.');
-  if (caucusSpeeches.length === 0) tips.push('💬 Request a moderated caucus and speak — 8 pts per speech.');
-  if (wps.length === 0 && drs.length === 0) tips.push('📄 Submit a working paper (20 pts) or draft resolution (50 pts).');
-  if (totalSeconds > 0 && totalSeconds < 60) tips.push('⏱ Use your full speaking time — you earn 1 pt per 10 seconds.');
-  if (uniqueTopics < 2 && myLogs.length > 0) tips.push('🗂 Speak on multiple topics across different caucuses for a 10-pt diversity bonus.');
+  if (gslSpeeches.length === 0) tips.push('📢 Get on the General Speakers\' List — each GSL speech boosts your score.');
+  if (caucusSpeeches.length === 0) tips.push('💬 Speak during a moderated caucus to show engagement on specific topics.');
+  if (wps.length === 0 && drs.length === 0) tips.push('📄 Submit or co-sponsor a working paper or draft resolution.');
+  if (totalSeconds > 0 && totalSeconds < 60) tips.push('⏱ Use your full speaking time — longer speeches earn more time bonus points.');
+  if (drs.length === 0 && wps.length > 0) tips.push('📜 Escalate your working paper into a draft resolution for bigger points.');
   if (myDocs.length === 0) tips.push('🤝 Co-sponsor a document to boost your score and signal cooperation.');
 
   return { total, breakdown, tier, tips };
@@ -488,7 +489,7 @@ function StatisticsTab({ committee, country }: { committee: Committee; country: 
 }
 
 // ── Main Delegate Session ─────────────────────────────────────────────────────
-type DelegateTab = 'session' | 'motions' | 'resolutions' | 'documents' | 'chat' | 'stats';
+type DelegateTab = 'session' | 'motions' | 'resolutions' | 'documents' | 'stats';
 
 function DelegateSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const { code } = use(params);
@@ -498,11 +499,14 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   const [committee, setCommittee] = useState<Committee | null>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<DelegateTab>('session');
+  const [showChat, setShowChat] = useState(false);
 
   // Local timer countdown (smooth, doesn't wait for Supabase tick)
   const [localTime, setLocalTime] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const committeeIdRef = useRef('');
+  // Track last seen speaker to only reset localTime when speaker changes
+  const lastSpeakerIdRef = useRef<string | null>(null);
 
   // Join request state
   const [joinRequesting, setJoinRequesting] = useState(false);
@@ -520,11 +524,17 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
       if (found) {
         committeeIdRef.current = found.id;
         setLocalTime(found.speakerTimeRemaining);
+        lastSpeakerIdRef.current = found.currentSpeaker?.delegateId ?? null;
         unsubscribe = subscribeToCommittee(found.id, async () => {
           const updated = await getCommitteeByCode(code.toUpperCase());
           if (updated) {
             setCommittee(updated);
-            setLocalTime(updated.speakerTimeRemaining);
+            // Only reset localTime when a NEW speaker is called (avoids fighting the local interval)
+            const newSpeakerId = updated.currentSpeaker?.delegateId ?? null;
+            if (newSpeakerId !== lastSpeakerIdRef.current) {
+              setLocalTime(updated.speakerTimeRemaining);
+              lastSpeakerIdRef.current = newSpeakerId;
+            }
           }
         });
       }
@@ -533,7 +543,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     return () => unsubscribe?.();
   }, [code]);
 
-  // Local timer tick — smooth countdown without waiting for Supabase
+  // Local timer tick — smooth countdown independent of Supabase round-trips
   useEffect(() => {
     if (!committee?.currentSpeaker || committee.phase !== 'speakers-list') {
       if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
@@ -617,7 +627,6 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     { key: 'motions', label: 'Motions' },
     { key: 'resolutions', label: 'Resolutions' },
     { key: 'documents', label: 'Documents' },
-    { key: 'chat', label: 'Chat' },
     { key: 'stats', label: 'Stats' },
   ];
 
@@ -648,7 +657,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   );
 
   return (
-    <div className="min-h-screen bg-[#0D0906] flex flex-col">
+    <div className="h-screen bg-[#0D0906] flex flex-col overflow-hidden">
       {/* Header */}
       <header className="border-b border-[#2E1E0F] bg-[#150F08] px-4 h-14 flex items-center gap-3 shrink-0">
         <Link href="/" className="flex items-center gap-2">
@@ -658,15 +667,28 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
           <div className="font-bold text-white text-sm truncate">{committee.name}</div>
           <div className="text-xs text-[#7A5A38] truncate">{committee.topic}</div>
         </div>
-        <div className="text-right shrink-0">
-          <div className="text-sm font-bold text-white flex items-center gap-1.5 justify-end">
-            <span className="text-lg">{flagFor(country)}</span>
-            {country}
+        <div className="flex items-center gap-3 shrink-0">
+          <div className="text-right">
+            <div className="text-sm font-bold text-white flex items-center gap-1.5 justify-end">
+              <span className="text-lg">{flagFor(country)}</span>
+              {country}
+            </div>
+            <div className={`text-xs font-medium ${
+              isAdjourned ? 'text-red-400' :
+              committee.phase === 'voting' ? 'text-[#B8844A]' : 'text-[#7A5A38]'
+            }`}>{phaseDisplay}</div>
           </div>
-          <div className={`text-xs font-medium ${
-            isAdjourned ? 'text-red-400' :
-            committee.phase === 'voting' ? 'text-[#B8844A]' : 'text-[#7A5A38]'
-          }`}>{phaseDisplay}</div>
+          <button
+            onClick={() => setShowChat((v) => !v)}
+            className={`relative text-xs px-3 py-1.5 rounded-lg transition-colors font-semibold shrink-0 ${showChat ? 'bg-[#7B4A1E] text-white' : 'bg-[#2E1E0F] text-[#C4A882] hover:text-white'}`}
+          >
+            💬
+            {committee.messages.filter((m) => !m.content.startsWith('__log__:')).length > 0 && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#B8844A] rounded-full text-white text-[9px] flex items-center justify-center font-bold">
+                {Math.min(committee.messages.filter((m) => !m.content.startsWith('__log__:')).length, 99)}
+              </span>
+            )}
+          </button>
         </div>
       </header>
 
@@ -682,6 +704,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
         ))}
       </div>
 
+      <div className="flex-1 flex overflow-hidden">
       <div className="flex-1 overflow-y-auto">
 
         {/* ── Session tab ── */}
@@ -904,17 +927,18 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
           </div>
         )}
 
-        {/* ── Chat tab ── */}
-        {tab === 'chat' && (
-          <div className="h-[calc(100vh-110px)]">
-            <ChatPanel committee={committee} senderName={country} />
-          </div>
-        )}
-
         {/* ── Stats tab ── */}
         {tab === 'stats' && (
           <StatisticsTab committee={committee} country={country} />
         )}
+      </div>
+
+      {/* Chat sidebar */}
+      {showChat && (
+        <aside className="w-72 border-l border-[#2E1E0F] bg-[#0D0906] flex flex-col overflow-hidden shrink-0">
+          <ChatPanel committee={committee} senderName={country} isChair={false} />
+        </aside>
+      )}
       </div>
     </div>
   );

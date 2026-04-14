@@ -773,7 +773,16 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
     updateLocal(setCommittee, (c) => ({
       ...c,
       delegates: c.delegates.map((d) => d.id === delegateId ? { ...d, status } : d),
+      // Auto-remove from both lists when marking absent
+      ...(status === 'absent' ? {
+        speakersList: c.speakersList.filter((s) => s.delegateId !== delegateId),
+        caucusQueue: (c.caucusQueue ?? []).filter((s) => s.delegateId !== delegateId),
+      } : {}),
     }));
+    if (status === 'absent') {
+      removeFromSpeakersListInDB(committee.id, delegateId);
+      removeFromCaucusListInDB(committee.id, delegateId);
+    }
   };
 
   const handlePhaseChange = (phase: string) => {
@@ -828,8 +837,8 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
         <button onClick={() => setShowMotions((v) => !v)}
           className={`text-xs px-3 py-1 rounded-lg transition-colors shrink-0 relative ${showMotions ? 'bg-[#7B4A1E] text-white' : 'bg-[#2E1E0F] text-[#C4A882] hover:text-white'}`}>
           Motions
-          {(committee.pendingMotions ?? []).length > 0 && (
-            <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#7B4A1E] rounded-full text-white text-[10px] flex items-center justify-center font-bold">{committee.pendingMotions.length}</span>
+          {(committee.pendingMotions ?? []).filter((m) => m.type !== ('join-request' as string)).length > 0 && (
+            <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#7B4A1E] rounded-full text-white text-[10px] flex items-center justify-center font-bold">{(committee.pendingMotions ?? []).filter((m) => m.type !== ('join-request' as string)).length}</span>
           )}
         </button>
         <button onClick={() => setShowDocuments((v) => !v)}

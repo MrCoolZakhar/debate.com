@@ -6,6 +6,7 @@ import { getFlagEmoji, getCountryByName, UN_COUNTRIES } from '@/lib/countries';
 import {
   setDelegateStatus as setDelegateStatusInDB,
   setPhase as setPhaseInDB,
+  removeFromSpeakersList as removeFromSpeakersListInDB,
 } from '@/lib/committeeService';
 
 // ── FlagCircle ────────────────────────────────────────────────────────────────
@@ -50,15 +51,30 @@ function StatusSlider({ status, onCycle }: { status: DelegateStatus; onCycle: ()
   );
 }
 
+// ── A-Z / QUEUE view toggle slider ────────────────────────────────────────────
+function ViewToggle({ view, onChange }: { view: 'az' | 'queue'; onChange: (v: 'az' | 'queue') => void }) {
+  const isQueue = view === 'queue';
+  return (
+    <button
+      onClick={() => onChange(isQueue ? 'az' : 'queue')}
+      className="relative w-[72px] h-[24px] rounded-full bg-[#1A1209] border border-[#2E1E0F] cursor-pointer select-none shrink-0"
+      title="Toggle A-Z / Queue view"
+    >
+      <div className="absolute inset-0 grid grid-cols-2 items-center pointer-events-none">
+        <span className={`text-[10px] font-bold text-center ${!isQueue ? 'text-white' : 'text-[#7A5A38]'}`}>A-Z</span>
+        <span className={`text-[10px] font-bold text-center ${isQueue ? 'text-[#B8844A]' : 'text-[#7A5A38]'}`}>Q</span>
+      </div>
+      <div className={`absolute top-[2px] w-[32px] h-[20px] rounded-full transition-all duration-200 ${isQueue ? 'left-[38px] bg-[#7B4A1E]' : 'left-[2px] bg-[#2E1E0F]'}`} />
+    </button>
+  );
+}
+
 // ── Add country input ─────────────────────────────────────────────────────────
-// Fix #8: Allows ANY free-text country name — not just UN_COUNTRIES.
-// If it matches a known country, use it. If not, allow it as a custom entity.
 function AddCountryInput({ committee, onAdd }: { committee: Committee; onAdd: (country: string) => void }) {
   const [query, setQuery] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const existingNames = new Set(committee.delegates.map((d) => d.country.toLowerCase()));
 
-  // Known country matches
   const knownMatches = query.trim()
     ? UN_COUNTRIES.filter((c) => c.name.toLowerCase().startsWith(query.toLowerCase()))
         .concat(UN_COUNTRIES.filter((c) =>
@@ -66,13 +82,9 @@ function AddCountryInput({ committee, onAdd }: { committee: Committee; onAdd: (c
           c.name.toLowerCase().includes(query.toLowerCase())))
     : [];
 
-  // The best known match that isn't already added
   const topKnown = knownMatches.find((c) => !existingNames.has(c.name.toLowerCase())) ?? null;
-
-  // Custom entry: anything typed that isn't already in the committee
   const trimmed = query.trim();
   const isCustom = trimmed.length > 0 && !existingNames.has(trimmed.toLowerCase());
-  // Show custom option only if it doesn't already exactly match a known result
   const showCustomOption = isCustom && (!topKnown || topKnown.name.toLowerCase() !== trimmed.toLowerCase());
 
   const commit = (name: string) => {
@@ -94,7 +106,6 @@ function AddCountryInput({ committee, onAdd }: { committee: Committee; onAdd: (c
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               e.preventDefault();
-              // Enter uses top known match first; if none, use the raw typed text
               if (topKnown) commit(topKnown.name);
               else if (trimmed) commit(trimmed);
             }
@@ -136,8 +147,6 @@ function AddCountryInput({ committee, onAdd }: { committee: Committee; onAdd: (c
               </button>
             );
           })}
-
-          {/* Fix #8: Custom / observer entry */}
           {showCustomOption && (
             <button
               onMouseDown={(e) => { e.preventDefault(); commit(trimmed); }}
@@ -155,7 +164,6 @@ function AddCountryInput({ committee, onAdd }: { committee: Committee; onAdd: (c
 }
 
 // ── Full speakers list popup ──────────────────────────────────────────────────
-// Fix #5: Shows the complete GSL in order when the "+N more" overflow is clicked
 function FullListPopup({
   list,
   title,
@@ -194,10 +202,7 @@ function FullListPopup({
                   <button
                     onClick={() => onRemove(s.delegateId)}
                     className="text-[#7A5A38] hover:text-red-500 transition-colors text-xs opacity-0 group-hover:opacity-100 shrink-0"
-                    title="Remove from list"
-                  >
-                    ✕
-                  </button>
+                  >✕</button>
                 )}
               </div>
             ))
@@ -213,35 +218,44 @@ export default function RollCallPanel({
   committee,
   onAddToList,
   onListIds,
-  onRemoveFromList,   // Fix #6: new prop to remove from GSL via left panel
+  onRemoveFromList,
   onStatusChange,
   onPhaseChange,
   onDelegateAdd,
-  isRollCallPhase = false,  // Fix #2: when true, clicking a row cycles status only (no GSL add)
+  isRollCallPhase = false,
 }: {
   committee: Committee;
   onAddToList?: (delegateId: string) => void;
   onListIds?: Set<string>;
-  onRemoveFromList?: (delegateId: string) => void;  // Fix #6
+  onRemoveFromList?: (delegateId: string) => void;
   onStatusChange?: (delegateId: string, status: DelegateStatus) => void;
   onPhaseChange?: (phase: string) => void;
   onDelegateAdd?: (country: string) => void;
-  isRollCallPhase?: boolean;  // Fix #2
+  isRollCallPhase?: boolean;
 }) {
   const [search, setSearch] = useState('');
-  const [showFullList, setShowFullList] = useState(false);  // Fix #5
+  const [listView, setListView] = useState<'az' | 'queue'>('az');
+  const [showFullList, setShowFullList] = useState(false);
 
   const present = committee.delegates.filter((d) => d.status !== 'absent').length;
   const total = committee.delegates.length;
 
-  const sorted = [...committee.delegates].sort((a, b) => a.country.localeCompare(b.country));
-  const filtered = sorted.filter((d) => d.country.toLowerCase().includes(search.toLowerCase()));
+  // Build a map: delegateId → position in GSL (1-indexed)
+  const queuePositionMap = new Map<string, number>();
+  (committee.speakersList ?? []).forEach((s, i) => {
+    queuePositionMap.set(s.delegateId, i + 1);
+  });
 
   const cycleStatus = (id: string, current: DelegateStatus) => {
     const next: DelegateStatus =
       current === 'absent' ? 'present' : current === 'present' ? 'present-voting' : 'absent';
     onStatusChange?.(id, next);
     setDelegateStatusInDB(id, next);
+    // Auto-remove from GSL when going absent
+    if (next === 'absent' && queuePositionMap.has(id)) {
+      onRemoveFromList?.(id);
+      removeFromSpeakersListInDB(committee.id, id);
+    }
   };
 
   const handleAllPresent = () => {
@@ -263,13 +277,23 @@ export default function RollCallPanel({
     setPhaseInDB(committee.id, 'speakers-list');
   };
 
-  // Fix #7 + #1: delegate add goes ONLY through onDelegateAdd prop (chair page handles DB insert
-  // and gets the real UUID back). RollCallPanel no longer calls addDelegateInDB directly —
-  // that was the duplicate insert bug.
   const handleAddDelegate = (country: string) => {
     onDelegateAdd?.(country);
-    // Previously also called addDelegateInDB here — removed to fix duplicate insert bug (#1)
   };
+
+  // Sorted lists
+  const alphabetical = [...committee.delegates].sort((a, b) => a.country.localeCompare(b.country));
+
+  // Queue view: GSL delegates first (in order), then the rest alphabetically
+  const inQueue = (committee.speakersList ?? [])
+    .map((s) => committee.delegates.find((d) => d.id === s.delegateId))
+    .filter(Boolean) as typeof committee.delegates;
+  const inQueueIds = new Set(inQueue.map((d) => d.id));
+  const notInQueue = alphabetical.filter((d) => !inQueueIds.has(d.id));
+  const queueOrdered = [...inQueue, ...notInQueue];
+
+  const baseList = listView === 'queue' ? queueOrdered : alphabetical;
+  const filtered = baseList.filter((d) => d.country.toLowerCase().includes(search.toLowerCase()));
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -277,20 +301,15 @@ export default function RollCallPanel({
         <div className="flex items-center justify-between mb-3">
           <span className="text-sm font-bold text-white">Roll Call</span>
           <div className="flex gap-3">
-            <button onClick={handleAllPresent} className="text-xs text-[#C4A882] hover:text-green-600 transition-colors">All Present</button>
+            <button onClick={handleAllPresent} className="text-xs text-[#C4A882] hover:text-green-600 transition-colors">All P</button>
             <button onClick={handleClear} className="text-xs text-[#C4A882] hover:text-red-500 transition-colors">Clear</button>
           </div>
         </div>
         <div className="flex items-center justify-between mb-3">
           <span className="text-base font-bold text-green-400">{present} / {total} present</span>
-          {/* Fix #5: click to open full GSL popup */}
-          {onListIds && onListIds.size > 0 && (
-            <button
-              onClick={() => setShowFullList(true)}
-              className="text-xs text-[#7B4A1E] hover:text-[#C4A882] font-semibold transition-colors"
-            >
-              GSL: {onListIds.size} →
-            </button>
+          {/* A-Z / QUEUE toggle — replaces the old "GSL: X →" button */}
+          {!isRollCallPhase && (
+            <ViewToggle view={listView} onChange={setListView} />
           )}
         </div>
         <input
@@ -306,16 +325,14 @@ export default function RollCallPanel({
         {filtered.map((d) => {
           const isOnList = onListIds?.has(d.id) ?? false;
           const isAbsent = d.status === 'absent';
+          const queuePos = queuePositionMap.get(d.id) ?? null;
 
-          // Fix #2: in roll-call phase, row click cycles status.
-          // In session phase, row click adds to GSL — but ONLY if not absent (#4).
           const handleRowClick = () => {
             if (isRollCallPhase) {
               cycleStatus(d.id, d.status);
             } else if (onAddToList && !isAbsent) {
-              // Fix #4: absent delegates cannot be added to GSL
               if (!isOnList) onAddToList(d.id);
-              else if (onRemoveFromList) onRemoveFromList(d.id); // Fix #6: click again to remove
+              else if (onRemoveFromList) onRemoveFromList(d.id);
             }
           };
 
@@ -324,14 +341,12 @@ export default function RollCallPanel({
               key={d.id}
               onClick={handleRowClick}
               className={`flex items-center gap-2 px-2.5 py-2 rounded-xl transition-all ${
-                // Fix #4: absent delegates are visually dimmed
                 isAbsent
                   ? 'border border-transparent opacity-40'
                   : d.status === 'present'
                   ? 'bg-green-950/30 border border-green-800/30'
                   : 'bg-blue-950/30 border border-blue-800/30'
               } ${
-                // Only show pointer/hover when the click will do something useful
                 (!isRollCallPhase && onAddToList && !isAbsent) || isRollCallPhase
                   ? 'cursor-pointer hover:bg-[#2E1E0F]/50'
                   : isAbsent && !isRollCallPhase
@@ -341,18 +356,19 @@ export default function RollCallPanel({
             >
               <div className="relative shrink-0">
                 <FlagCircle country={d.country} size="xs" />
-                {isOnList && (
-                  <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full text-white text-[7px] flex items-center justify-center font-bold">✓</div>
+                {/* Queue position bubble (number) or absent indicator */}
+                {queuePos !== null && (
+                  <div className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] px-0.5 bg-[#7B4A1E] rounded-full text-white text-[7px] flex items-center justify-center font-black leading-none">
+                    {queuePos <= 99 ? queuePos : '99+'}
+                  </div>
                 )}
               </div>
               <span className={`flex-1 text-sm truncate ${!isAbsent ? 'text-white font-medium' : 'text-[#7A5A38]'}`}>
                 {d.country}
               </span>
-              {/* Fix #4: show "Absent" label so it's clear they can't be added */}
               {isAbsent && !isRollCallPhase && (
                 <span className="text-[10px] text-[#7A5A38] shrink-0 font-mono">absent</span>
               )}
-              {/* Slider stops propagation internally so row click won't double-fire */}
               <div onClick={(e) => e.stopPropagation()}>
                 <StatusSlider status={d.status} onCycle={() => cycleStatus(d.id, d.status)} />
               </div>
@@ -362,7 +378,6 @@ export default function RollCallPanel({
       </div>
 
       <div className="border-t border-[#2E1E0F] px-3 py-3 space-y-2 shrink-0">
-        {/* Fix #7 + #8: custom AddCountryInput */}
         <AddCountryInput committee={committee} onAdd={handleAddDelegate} />
         {(committee.phase === 'pre-session' || committee.phase === 'roll-call') && (
           <button
@@ -375,15 +390,12 @@ export default function RollCallPanel({
         )}
       </div>
 
-      {/* Fix #5: Full GSL popup */}
       {showFullList && (
         <FullListPopup
           list={committee.speakersList}
           title="General Speakers List"
           onClose={() => setShowFullList(false)}
-          onRemove={onRemoveFromList ? (id) => {
-            onRemoveFromList(id);
-          } : undefined}
+          onRemove={onRemoveFromList ? (id) => { onRemoveFromList(id); } : undefined}
         />
       )}
     </div>
