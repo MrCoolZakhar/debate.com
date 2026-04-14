@@ -33,12 +33,12 @@ export function FlagCircle({ country, size = 'md' }: { country: string; size?: '
 
 // ── 3-state slider ────────────────────────────────────────────────────────────
 function StatusSlider({ status, onCycle }: { status: DelegateStatus; onCycle: () => void }) {
-  const thumbPos = status === 'absent' ? 'left-[2px]' : status === 'present' ? 'left-[27px]' : 'left-[52px]';
+  const thumbPos = status === 'absent' ? 'left-[2px]' : status === 'present' ? 'left-[31px]' : 'left-[60px]';
   const thumbColor = status === 'absent' ? 'bg-red-300' : status === 'present' ? 'bg-green-500' : 'bg-blue-500';
   return (
     <button
       onClick={(e) => { e.stopPropagation(); onCycle(); }}
-      className="relative w-[76px] h-[26px] rounded-full bg-[#1A1209] border border-[#2E1E0F] cursor-pointer shrink-0 select-none"
+      className="relative w-[90px] h-[30px] rounded-full bg-[#1A1209] border border-[#2E1E0F] cursor-pointer shrink-0 select-none"
       title="Tap to cycle: Absent → Present → PV"
     >
       <div className="absolute inset-0 grid grid-cols-3 items-center pointer-events-none">
@@ -46,7 +46,7 @@ function StatusSlider({ status, onCycle }: { status: DelegateStatus; onCycle: ()
         <span className={`text-[10px] font-bold text-center ${status === 'present' ? 'text-white' : 'text-[#7A5A38]'}`}>P</span>
         <span className={`text-[10px] font-bold text-center ${status === 'present-voting' ? 'text-white' : 'text-[#7A5A38]'}`}>PV</span>
       </div>
-      <div className={`absolute top-[3px] w-[22px] h-[20px] rounded-full transition-all duration-200 ${thumbPos} ${thumbColor}`} />
+      <div className={`absolute top-[3px] w-[26px] h-[24px] rounded-full transition-all duration-200 ${thumbPos} ${thumbColor}`} />
     </button>
   );
 }
@@ -57,23 +57,25 @@ function ViewToggle({ view, onChange }: { view: 'az' | 'queue'; onChange: (v: 'a
   return (
     <button
       onClick={() => onChange(isQueue ? 'az' : 'queue')}
-      className="relative w-[72px] h-[24px] rounded-full bg-[#1A1209] border border-[#2E1E0F] cursor-pointer select-none shrink-0"
+      className="relative w-[104px] h-[28px] rounded-full bg-[#1A1209] border border-[#2E1E0F] cursor-pointer select-none shrink-0"
       title="Toggle A-Z / Queue view"
     >
-      <div className="absolute inset-0 grid grid-cols-2 items-center pointer-events-none">
+      <div className="absolute inset-0 grid grid-cols-2 items-center pointer-events-none z-10">
         <span className={`text-[10px] font-bold text-center ${!isQueue ? 'text-white' : 'text-[#7A5A38]'}`}>A-Z</span>
-        <span className={`text-[10px] font-bold text-center ${isQueue ? 'text-[#B8844A]' : 'text-[#7A5A38]'}`}>Q</span>
+        <span className={`text-[10px] font-bold text-center ${isQueue ? 'text-[#B8844A]' : 'text-[#7A5A38]'}`}>QUEUE</span>
       </div>
-      <div className={`absolute top-[2px] w-[32px] h-[20px] rounded-full transition-all duration-200 ${isQueue ? 'left-[38px] bg-[#7B4A1E]' : 'left-[2px] bg-[#2E1E0F]'}`} />
+      <div className={`absolute top-[2px] w-[50px] h-[24px] rounded-full transition-all duration-200 ${isQueue ? 'left-[52px] bg-[#7B4A1E]' : 'left-[2px] bg-[#2E1E0F]'}`} />
     </button>
   );
 }
 
 // ── Add country input ─────────────────────────────────────────────────────────
-function AddCountryInput({ committee, onAdd }: { committee: Committee; onAdd: (country: string) => void }) {
+function AddCountryInput({ committee, onAdd, onQueryChange }: { committee: Committee; onAdd: (country: string) => void; onQueryChange?: (q: string) => void }) {
   const [query, setQuery] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const existingNames = new Set(committee.delegates.map((d) => d.country.toLowerCase()));
+
+  const updateQuery = (q: string) => { setQuery(q); onQueryChange?.(q); };
 
   const knownMatches = query.trim()
     ? UN_COUNTRIES.filter((c) => c.name.toLowerCase().startsWith(query.toLowerCase()))
@@ -91,7 +93,7 @@ function AddCountryInput({ committee, onAdd }: { committee: Committee; onAdd: (c
     const normalised = name.trim();
     if (!normalised || existingNames.has(normalised.toLowerCase())) return;
     onAdd(normalised);
-    setQuery('');
+    updateQuery('');
     inputRef.current?.focus();
   };
 
@@ -102,16 +104,16 @@ function AddCountryInput({ committee, onAdd }: { committee: Committee; onAdd: (c
           ref={inputRef}
           type="text"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => updateQuery(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               e.preventDefault();
               if (topKnown) commit(topKnown.name);
               else if (trimmed) commit(trimmed);
             }
-            if (e.key === 'Escape') setQuery('');
+            if (e.key === 'Escape') updateQuery('');
           }}
-          placeholder="Add country or observer…"
+          placeholder="Filter or add country / observer…"
           className="flex-1 bg-transparent px-3 py-2.5 text-white text-sm placeholder-[#7A5A38] focus:outline-none"
         />
         {query && (topKnown || trimmed) && (
@@ -265,6 +267,13 @@ export default function RollCallPanel({
     });
   };
 
+  const handleAllPresentVoting = () => {
+    committee.delegates.forEach((d) => {
+      onStatusChange?.(d.id, 'present-voting');
+      setDelegateStatusInDB(d.id, 'present-voting');
+    });
+  };
+
   const handleClear = () => {
     committee.delegates.forEach((d) => {
       onStatusChange?.(d.id, 'absent');
@@ -293,32 +302,27 @@ export default function RollCallPanel({
   const queueOrdered = [...inQueue, ...notInQueue];
 
   const baseList = listView === 'queue' ? queueOrdered : alphabetical;
-  const filtered = baseList.filter((d) => d.country.toLowerCase().includes(search.toLowerCase()));
+  // When searching: show all, but grey out non-matches so the filter is visible
+  const filtered = baseList;
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="px-4 pt-4 pb-3 border-b border-[#2E1E0F] shrink-0">
         <div className="flex items-center justify-between mb-3">
           <span className="text-sm font-bold text-white">Roll Call</span>
-          <div className="flex gap-3">
-            <button onClick={handleAllPresent} className="text-xs text-[#C4A882] hover:text-green-600 transition-colors">All P</button>
-            <button onClick={handleClear} className="text-xs text-[#C4A882] hover:text-red-500 transition-colors">Clear</button>
+          <div className="flex gap-1.5">
+            <button onClick={handleClear} className="text-[10px] font-semibold px-2 py-1 rounded-lg bg-[#2E1E0F] text-red-400 hover:bg-red-950/40 transition-colors">Clear</button>
+            <button onClick={handleAllPresent} className="text-[10px] font-semibold px-2 py-1 rounded-lg bg-[#2E1E0F] text-green-400 hover:bg-green-950/40 transition-colors">All P</button>
+            <button onClick={handleAllPresentVoting} className="text-[10px] font-semibold px-2 py-1 rounded-lg bg-[#2E1E0F] text-blue-400 hover:bg-blue-950/40 transition-colors">All PV</button>
           </div>
         </div>
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between mb-1">
           <span className="text-base font-bold text-green-400">{present} / {total} present</span>
-          {/* A-Z / QUEUE toggle — replaces the old "GSL: X →" button */}
+          {/* A-Z / QUEUE toggle */}
           {!isRollCallPhase && (
             <ViewToggle view={listView} onChange={setListView} />
           )}
         </div>
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Filter…"
-          className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-lg px-3 py-2 text-white text-sm placeholder-[#7A5A38] focus:outline-none focus:border-[#7B4A1E]"
-        />
       </div>
 
       <div className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
@@ -326,6 +330,7 @@ export default function RollCallPanel({
           const isOnList = onListIds?.has(d.id) ?? false;
           const isAbsent = d.status === 'absent';
           const queuePos = queuePositionMap.get(d.id) ?? null;
+          const matchesSearch = !search || d.country.toLowerCase().includes(search.toLowerCase());
 
           const handleRowClick = () => {
             if (isRollCallPhase) {
@@ -340,8 +345,10 @@ export default function RollCallPanel({
             <div
               key={d.id}
               onClick={handleRowClick}
-              className={`flex items-center gap-2 px-2.5 py-2 rounded-xl transition-all ${
-                isAbsent
+              className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all ${
+                !matchesSearch
+                  ? 'border border-transparent opacity-25'
+                  : isAbsent
                   ? 'border border-transparent opacity-40'
                   : d.status === 'present'
                   ? 'bg-green-950/30 border border-green-800/30'
@@ -355,15 +362,15 @@ export default function RollCallPanel({
               }`}
             >
               <div className="relative shrink-0">
-                <FlagCircle country={d.country} size="xs" />
-                {/* Queue position bubble (number) or absent indicator */}
+                <FlagCircle country={d.country} size="sm" />
+                {/* Queue position bubble — bigger than 20% over default */}
                 {queuePos !== null && (
-                  <div className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] px-0.5 bg-[#7B4A1E] rounded-full text-white text-[7px] flex items-center justify-center font-black leading-none">
+                  <div className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-0.5 bg-[#7B4A1E] rounded-full text-white text-[8px] flex items-center justify-center font-black leading-none">
                     {queuePos <= 99 ? queuePos : '99+'}
                   </div>
                 )}
               </div>
-              <span className={`flex-1 text-sm truncate ${!isAbsent ? 'text-white font-medium' : 'text-[#7A5A38]'}`}>
+              <span className={`flex-1 text-base truncate ${!isAbsent ? 'text-white font-medium' : 'text-[#7A5A38]'}`}>
                 {d.country}
               </span>
               {isAbsent && !isRollCallPhase && (
@@ -378,7 +385,7 @@ export default function RollCallPanel({
       </div>
 
       <div className="border-t border-[#2E1E0F] px-3 py-3 space-y-2 shrink-0">
-        <AddCountryInput committee={committee} onAdd={handleAddDelegate} />
+        <AddCountryInput committee={committee} onAdd={handleAddDelegate} onQueryChange={setSearch} />
         {(committee.phase === 'pre-session' || committee.phase === 'roll-call') && (
           <button
             onClick={handleBeginSession}
