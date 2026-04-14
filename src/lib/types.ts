@@ -108,6 +108,16 @@ export interface ChatMessage {
   timestamp: Date;
   isPrivate: boolean;
   recipient?: string;
+  messageType?: 'general' | 'speech-comment'; // 'speech-comment' = refers to current speech
+}
+
+// Speaking log — stored as system messages, used for statistics
+export interface SpeakingLogEntry {
+  country: string;
+  seconds: number; // actual seconds spoken (time_limit - time_remaining at stop)
+  context: 'speakers-list' | 'moderated-caucus' | 'unmoderated-caucus' | 'tour-de-table';
+  topic: string;   // caucus purpose or committee topic
+  timestamp: string;
 }
 
 export interface Committee {

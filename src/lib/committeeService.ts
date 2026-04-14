@@ -426,11 +426,83 @@ export async function removeDocument(docId: string): Promise<void> {
 export async function sendMessage(
   committeeId: string, sender: string, content: string,
   isPrivate: boolean = false, recipient?: string,
+  messageType?: 'general' | 'speech-comment',
 ): Promise<void> {
+  // Encode messageType as a prefix so it survives without a schema change
+  const encoded = messageType === 'speech-comment' ? `[🎙️] ${content}` : content;
   const { error } = await supabase.from('messages').insert({
-    committee_id: committeeId, sender, content, is_private: isPrivate, recipient: recipient ?? null,
+    committee_id: committeeId, sender, content: encoded, is_private: isPrivate, recipient: recipient ?? null,
   });
   if (error) console.error('Error sending message:', error);
+}
+
+// ============================================================
+// JOIN REQUESTS  (stored as motions with type='join-request')
+// ============================================================
+
+export async function requestJoinSession(
+  committeeId: string, delegateId: string, country: string,
+  desiredStatus: 'present' | 'present-voting',
+): Promise<void> {
+  // Check if there's already a pending join-request from this country
+  const { data: existing } = await supabase
+    .from('motions')
+    .select('id')
+    .eq('committee_id', committeeId)
+    .eq('type', 'join-request')
+    .eq('proposed_by', country)
+    .eq('status', 'pending')
+    .maybeSingle();
+  if (existing) return; // already pending
+
+  const { error } = await supabase.from('motions').insert({
+    committee_id: committeeId,
+    type: 'join-request',
+    proposed_by: country,
+    total_time: 0,
+    speaking_time: 0,
+    topic: JSON.stringify({ delegateId, desiredStatus }),
+    status: 'pending',
+    disruptiveness: 99_000_000, // shown at very top
+  });
+  if (error) console.error('Error requesting join:', error);
+}
+
+export async function approveJoinRequest(
+  committeeId: string, motionId: string, delegateId: string,
+  desiredStatus: 'present' | 'present-voting',
+): Promise<void> {
+  await setDelegateStatus(delegateId, desiredStatus);
+  const { error } = await supabase.from('motions').delete().eq('id', motionId);
+  if (error) console.error('Error approving join request:', error);
+}
+
+export async function denyJoinRequest(motionId: string): Promise<void> {
+  const { error } = await supabase.from('motions').delete().eq('id', motionId);
+  if (error) console.error('Error denying join request:', error);
+}
+
+// ============================================================
+// SPEAKING LOG  (stored as system messages, used for statistics)
+// ============================================================
+
+export async function logSpeakingTime(
+  committeeId: string,
+  country: string,
+  seconds: number,
+  context: 'speakers-list' | 'moderated-caucus' | 'unmoderated-caucus' | 'tour-de-table',
+  topic: string,
+): Promise<void> {
+  if (seconds <= 0) return;
+  const payload = JSON.stringify({ country, seconds, context, topic, timestamp: new Date().toISOString() });
+  const { error } = await supabase.from('messages').insert({
+    committee_id: committeeId,
+    sender: '__system__',
+    content: `__log__:${payload}`,
+    is_private: true,
+    recipient: '__log__',
+  });
+  if (error) console.error('Error logging speaking time:', error);
 }
 
 // ============================================================

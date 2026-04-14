@@ -10,6 +10,7 @@ import DocumentsModal from '@/components/DocumentsModal';
 import { getFlagEmoji, getCountryByName } from '@/lib/countries';
 import { SettingsPanel } from '@/components/SettingsPanel';
 import { useSettingsStore } from '@/lib/settingsStore';
+import ChatPanel from '@/components/ChatPanel';
 import {
   getCommitteeByCode,
   subscribeToCommittee,
@@ -22,6 +23,9 @@ import {
   nextSpeaker as nextSpeakerInDB,
   tickSpeakerTimer as tickSpeakerTimerInDB,
   updateCaucus as updateCaucusInDB,
+  approveJoinRequest,
+  denyJoinRequest,
+  logSpeakingTime,
 } from '@/lib/committeeService';
 
 
@@ -602,6 +606,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
   const [copied, setCopied] = useState(false);
   const [speakerTimeLimit, setSpeakerTimeLimitLocal] = useState(90);
   const [showSettings, setShowSettings] = useState(false);
+  const [showChat, setShowChat] = useState(false);
   const [extraTimeOpen, setExtraTimeOpen] = useState(false);
   const [extraTimeSecs, setExtraTimeSecs] = useState(30);
   const [extraTimeAdded, setExtraTimeAdded] = useState(false);
@@ -706,6 +711,16 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
   const handleNextSpeaker = () => {
     setTimerRunning(false);
     setExtraTimeAdded(false);
+    // Log speaking time for the delegate whose turn is ending
+    if (committee.currentSpeaker) {
+      const secondsSpoken = committee.speakerTimeLimit - committee.speakerTimeRemaining;
+      if (secondsSpoken > 0) {
+        const ctx = committee.phase === 'moderated-caucus' ? 'moderated-caucus'
+          : committee.phase === 'unmoderated-caucus' ? 'unmoderated-caucus'
+          : 'speakers-list';
+        logSpeakingTime(committee.id, committee.currentSpeaker.country, secondsSpoken, ctx, committee.topic);
+      }
+    }
     const [next, ...rest] = committee.speakersList;
     const timeToUse = rtrOverrideTime ?? speakerTimeLimit;
     setRtrOverrideTime(null);
@@ -776,6 +791,23 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
     }
   };
 
+  const handleApproveJoinRequest = async (motionId: string, delegateId: string, desiredStatus: 'present' | 'present-voting') => {
+    await approveJoinRequest(committee.id, motionId, delegateId, desiredStatus);
+    updateLocal(setCommittee, (c) => ({
+      ...c,
+      delegates: c.delegates.map((d) => d.id === delegateId ? { ...d, status: desiredStatus } : d),
+      pendingMotions: c.pendingMotions.filter((m) => m.id !== motionId),
+    }));
+  };
+
+  const handleDenyJoinRequest = async (motionId: string) => {
+    await denyJoinRequest(motionId);
+    updateLocal(setCommittee, (c) => ({
+      ...c,
+      pendingMotions: c.pendingMotions.filter((m) => m.id !== motionId),
+    }));
+  };
+
   // Fix 2: GSL can never run out — block Start when current speaker is the last one
   const isLastGSLSpeaker = committee.speakersList.length === 0;
 
@@ -808,6 +840,15 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
             return activeCount > 0 ? <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#7B4A1E] rounded-full text-white text-[10px] flex items-center justify-center font-bold">{activeCount}</span> : null;
           })()}
         </button>
+        <button onClick={() => setShowChat((v) => !v)}
+          className={`text-xs px-3 py-1 rounded-lg transition-colors shrink-0 relative ${showChat ? 'bg-[#7B4A1E] text-white' : 'bg-[#2E1E0F] text-[#C4A882] hover:text-white'}`}>
+          💬 Chat
+          {committee.messages.filter((m) => !m.content.startsWith('__log__:')).length > 0 && (
+            <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#7B4A1E] rounded-full text-white text-[10px] flex items-center justify-center font-bold">
+              {committee.messages.filter((m) => !m.content.startsWith('__log__:')).length}
+            </span>
+          )}
+        </button>
         <button onClick={() => { navigator.clipboard.writeText(committee.code); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
           className="text-xs font-mono bg-[#2E1E0F] hover:bg-[#3D2A15] text-white px-2.5 py-1 rounded-lg transition-colors shrink-0">
           {copied ? '✓' : committee.code}
@@ -819,6 +860,46 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
         </button>
       </header>
 
+
+      {/* Join request banner */}
+      {(committee.pendingMotions ?? []).filter((m) => m.type === ('join-request' as string)).length > 0 && (
+        <div className="shrink-0 bg-[#1A0E06] border-b border-[#7B4A1E]/40 px-4 py-2 flex flex-col gap-1.5">
+          {(committee.pendingMotions ?? [])
+            .filter((m) => m.type === ('join-request' as string))
+            .map((m) => {
+              let delegateId = '';
+              let desiredStatus: 'present' | 'present-voting' = 'present';
+              try {
+                const parsed = JSON.parse(m.topic);
+                delegateId = parsed.delegateId;
+                desiredStatus = parsed.desiredStatus;
+              } catch { /* ignore */ }
+              const found = getCountryByName(m.proposedBy);
+              const flag = found ? getFlagEmoji(found.code) : '🌐';
+              return (
+                <div key={m.id} className="flex items-center gap-3 text-sm">
+                  <span className="text-[#B8844A] font-bold shrink-0">🚪 Join Request</span>
+                  <span className="font-mono text-lg">{flag}</span>
+                  <span className="text-white font-semibold">{m.proposedBy}</span>
+                  <span className="text-[#C4A882] text-xs">wants to join as</span>
+                  <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${desiredStatus === 'present-voting' ? 'bg-blue-900/50 text-blue-300 border border-blue-700/40' : 'bg-green-900/50 text-green-300 border border-green-700/40'}`}>
+                    {desiredStatus === 'present-voting' ? 'P+V' : 'P'}
+                  </span>
+                  <button
+                    onClick={() => handleApproveJoinRequest(m.id, delegateId, desiredStatus)}
+                    className="ml-2 px-3 py-1 bg-green-800/50 hover:bg-green-700/60 border border-green-700/40 text-green-300 rounded-lg text-xs font-bold transition-colors">
+                    ✓ Approve
+                  </button>
+                  <button
+                    onClick={() => handleDenyJoinRequest(m.id)}
+                    className="px-3 py-1 bg-red-950/50 hover:bg-red-900/60 border border-red-800/40 text-red-400 rounded-lg text-xs font-bold transition-colors">
+                    ✕ Deny
+                  </button>
+                </div>
+              );
+            })}
+        </div>
+      )}
 
       <div className="flex-1 flex overflow-hidden">
         {committee.phase === 'pre-session' && (
@@ -1010,6 +1091,12 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
                 </div>
               )}
             </main>
+
+            {showChat && (
+              <aside className="w-72 border-l border-[#2E1E0F] bg-[#0D0906] flex flex-col overflow-hidden shrink-0">
+                <ChatPanel committee={committee} senderName={committee.chairName} isChair={true} />
+              </aside>
+            )}
           </>
         )}
       </div>
