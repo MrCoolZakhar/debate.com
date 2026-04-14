@@ -30,7 +30,7 @@ function formatTime(ts: Date): string {
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type ConvKey = 'everyone' | 'chairs' | string; // string = countryName
+type ConvKey = 'everyone' | 'chairs' | string;
 
 interface Conversation {
   key: ConvKey;
@@ -51,41 +51,33 @@ export default function ChatPanel({
   isChair?: boolean;
 }) {
   const [activeConv, setActiveConv] = useState<ConvKey>('everyone');
-  const [showThread, setShowThread] = useState(false); // mobile: false=list, true=thread
   const [msg, setMsg] = useState('');
   const [sending, setSending] = useState(false);
-  const [showNewDM, setShowNewDM] = useState(false);
+  // For chairs: DM search
+  const [dmSearch, setDmSearch] = useState('');
+  const [showDmSearch, setShowDmSearch] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const { chairNames } = committee;
+  const { chairNames, currentSpeaker } = committee;
 
   // ── Build conversations ───────────────────────────────────────────────────
 
   const conversations = useMemo<Conversation[]>(() => {
     const allMsgs = committee.messages.filter((m) => !isSystemLog(m.content));
-
-    // --- Everyone: public messages ---
     const everyoneMsgs = allMsgs.filter((m) => !m.isPrivate);
 
-    // --- Chairs conversation (delegate view only) ---
     const chairsMsgs = isChair
       ? []
       : allMsgs.filter((m) => {
           if (!m.isPrivate) return false;
-          // My messages to Chairs
           if (m.sender === senderName && m.recipient === 'Chairs') return true;
-          // Chair messages back to me
           if (chairNames.includes(m.sender) && m.recipient === senderName) return true;
           return false;
         });
 
-    // --- Per-country private threads ---
-    // Collect all countries that have exchanged private messages with senderName
     const privatePartners = new Set<string>();
-
     if (isChair) {
-      // Chairs see per-delegate threads: delegate->Chairs plus any chair->delegate
       allMsgs.forEach((m) => {
         if (!m.isPrivate) return;
         if (m.recipient === 'Chairs' && !chairNames.includes(m.sender)) {
@@ -96,7 +88,6 @@ export default function ChatPanel({
         }
       });
     } else {
-      // Delegates see threads with other delegates (not chairs, that's the Chairs conv)
       allMsgs.forEach((m) => {
         if (!m.isPrivate) return;
         if (m.sender === senderName && m.recipient && m.recipient !== 'Chairs') {
@@ -127,22 +118,15 @@ export default function ChatPanel({
                 (m.sender === country && m.recipient === senderName))
           );
         }
-        return {
-          key: country,
-          label: country,
-          emoji: flagFor(country),
-          messages: msgs,
-        };
+        return { key: country, label: country, emoji: flagFor(country), messages: msgs };
       });
 
     const result: Conversation[] = [
       { key: 'everyone', label: 'Everyone', emoji: '📢', messages: everyoneMsgs },
     ];
-
     if (!isChair) {
       result.push({ key: 'chairs', label: 'Chairs', emoji: '🪑', messages: chairsMsgs });
     }
-
     result.push(...countryConvs);
     return result;
   }, [committee.messages, senderName, isChair, chairNames]);
@@ -154,11 +138,17 @@ export default function ChatPanel({
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [activeConvObj?.messages.length]);
 
+  // Suggest current speaker when opening a new compose (chairs only)
+  useEffect(() => {
+    if (isChair && currentSpeaker && !msg && activeConv === 'everyone') {
+      // Don't auto-fill; just a placeholder hint — handled in placeholder
+    }
+  }, [currentSpeaker, isChair, activeConv, msg]);
+
   // ── Send ──────────────────────────────────────────────────────────────────
   const handleSend = async () => {
     const content = msg.trim();
     if (!content || sending) return;
-
     setSending(true);
 
     let isPrivate = false;
@@ -182,141 +172,150 @@ export default function ChatPanel({
 
   const selectConv = (key: ConvKey) => {
     setActiveConv(key);
-    setShowThread(true);
-    setShowNewDM(false);
+    setShowDmSearch(false);
+    setDmSearch('');
+    inputRef.current?.focus();
   };
 
-  const goBack = () => {
-    setShowThread(false);
-    setShowNewDM(false);
-  };
+  // Delegates available for new DM (chairs can DM anyone; delegates see peers)
+  const dmCandidates = isChair
+    ? committee.delegates
+        .filter((d) => d.country !== senderName)
+        .sort((a, b) => a.country.localeCompare(b.country))
+    : committee.delegates
+        .filter((d) => d.country !== senderName && !chairNames.includes(d.country))
+        .sort((a, b) => a.country.localeCompare(b.country));
 
-  // Delegates available for new DM
-  const dmCandidates = committee.delegates
-    .filter((d) => d.country !== senderName && !chairNames.includes(d.country))
-    .sort((a, b) => a.country.localeCompare(b.country));
+  const filteredDmCandidates = dmSearch.trim()
+    ? dmCandidates.filter((d) => d.country.toLowerCase().includes(dmSearch.toLowerCase()))
+    : dmCandidates;
+
+  const compose = (
+    <div className="shrink-0 border-t border-[#2E1E0F] px-3 py-3">
+      {/* Suggest current speaker for chairs */}
+      {isChair && currentSpeaker && activeConv === 'everyone' && (
+        <button
+          onClick={() => selectConv(currentSpeaker.country)}
+          className="w-full mb-2 text-left px-3 py-2 bg-[#7B4A1E]/10 border border-[#7B4A1E]/30 rounded-lg text-xs text-[#B8844A] hover:bg-[#7B4A1E]/20 transition-colors flex items-center gap-2"
+        >
+          <span className="shrink-0">🎙️</span>
+          <span className="truncate">Message current speaker: <strong>{currentSpeaker.country}</strong></span>
+        </button>
+      )}
+      <div className="flex gap-2">
+        <input
+          ref={inputRef}
+          type="text"
+          value={msg}
+          onChange={(e) => setMsg(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') handleSend(); }}
+          placeholder={
+            activeConv === 'everyone'
+              ? isChair ? 'Announce to committee…' : 'Message the committee…'
+              : activeConv === 'chairs'
+              ? 'Message to chairs…'
+              : `Message to ${activeConv}…`
+          }
+          className="flex-1 bg-[#150F09] border border-[#2E1E0F] rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-[#7B4A1E] placeholder-[#7A5A38] transition-colors"
+        />
+        <button
+          onClick={handleSend}
+          disabled={!msg.trim() || sending}
+          className="bg-[#7B4A1E] hover:bg-[#8B5A2B] disabled:bg-[#2E1E0F] disabled:text-[#7A5A38] text-white px-4 py-2 rounded-xl text-sm font-semibold transition-colors shrink-0"
+        >
+          {sending ? '…' : '→'}
+        </button>
+      </div>
+    </div>
+  );
 
   // ── Render ────────────────────────────────────────────────────────────────
+  // Layout: LEFT = conversation list + compose | RIGHT = message thread
 
   return (
     <div className="flex h-full bg-[#0D0906] overflow-hidden">
-      {/* ── Left pane: conversation list ─────────────────────────────────── */}
-      <div
-        className={`
-          flex flex-col shrink-0 border-r border-[#2E1E0F] bg-[#0D0906]
-          w-full sm:w-60
-          ${showThread ? 'hidden sm:flex' : 'flex'}
-        `}
-      >
-        {/* List header */}
-        <div className="px-4 py-3 border-b border-[#2E1E0F] shrink-0">
+
+      {/* ── Left pane: conversation list + compose ─────────────────────── */}
+      <div className="flex flex-col w-52 shrink-0 border-r border-[#2E1E0F] bg-[#0D0906]">
+
+        {/* Header */}
+        <div className="px-3 py-3 border-b border-[#2E1E0F] shrink-0 flex items-center justify-between">
           <h3 className="font-bold text-white text-sm">Messages</h3>
+          <button
+            onClick={() => { setShowDmSearch((v) => !v); setDmSearch(''); }}
+            className="text-[#7A5A38] hover:text-[#C4A882] text-xs transition-colors"
+            title="New DM"
+          >
+            ✏️
+          </button>
         </div>
+
+        {/* DM search (chairs: start new thread to any delegate) */}
+        {showDmSearch && (
+          <div className="px-3 py-2 border-b border-[#2E1E0F] shrink-0">
+            <input
+              type="text"
+              value={dmSearch}
+              onChange={(e) => setDmSearch(e.target.value)}
+              placeholder="Search delegate…"
+              autoFocus
+              className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-lg px-2 py-1.5 text-white text-xs focus:outline-none focus:border-[#7B4A1E] placeholder-[#7A5A38]"
+            />
+            <div className="mt-1 max-h-28 overflow-y-auto space-y-0.5">
+              {filteredDmCandidates.slice(0, 8).map((d) => (
+                <button
+                  key={d.id}
+                  onClick={() => selectConv(d.country)}
+                  className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-[#3D2A15] text-xs text-[#E8D5B7] flex items-center gap-1.5 transition-colors"
+                >
+                  <span>{flagFor(d.country)}</span>
+                  <span className="truncate">{d.country}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Conversation rows */}
         <div className="flex-1 overflow-y-auto min-h-0">
           {conversations.map((conv) => {
             const lastMsg = conv.messages[conv.messages.length - 1];
             const isActive = conv.key === activeConv;
-            const count = conv.messages.length;
-
+            const unread = conv.messages.length;
             return (
               <button
                 key={conv.key}
                 onClick={() => selectConv(conv.key)}
-                className={`
-                  w-full text-left px-4 py-3 border-b border-[#2E1E0F] transition-colors
-                  ${isActive
-                    ? 'bg-[#3D2A15] border-l-2 border-l-[#7B4A1E]'
-                    : 'hover:bg-[#1A1209]'
-                  }
-                `}
+                className={`w-full text-left px-3 py-2.5 border-b border-[#2E1E0F] transition-colors ${
+                  isActive ? 'bg-[#3D2A15] border-l-2 border-l-[#7B4A1E]' : 'hover:bg-[#1A1209]'
+                }`}
               >
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-base shrink-0">{conv.emoji}</span>
-                    <span className="text-sm font-semibold text-white truncate">{conv.label}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    {count > 0 && (
-                      <span className="text-[10px] bg-[#7B4A1E] text-white rounded-full px-1.5 py-0.5 font-bold leading-none">
-                        {count}
-                      </span>
-                    )}
-                  </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm shrink-0">{conv.emoji}</span>
+                  <span className="text-xs font-semibold text-white truncate flex-1">{conv.label}</span>
+                  {unread > 0 && (
+                    <span className="text-[9px] bg-[#7B4A1E] text-white rounded-full px-1.5 py-0.5 font-bold shrink-0">{unread}</span>
+                  )}
                 </div>
                 {lastMsg && (
-                  <div className="mt-0.5 flex items-center justify-between gap-2">
-                    <p className="text-xs text-[#C4A882] truncate">
-                      {lastMsg.sender === senderName ? 'You: ' : `${lastMsg.sender}: `}
-                      {displayContent(lastMsg.content)}
-                    </p>
-                    <span className="text-[10px] text-[#7A5A38] shrink-0">
-                      {formatTime(lastMsg.timestamp)}
-                    </span>
-                  </div>
+                  <p className="text-[10px] text-[#7A5A38] truncate mt-0.5 pl-5">
+                    {displayContent(lastMsg.content)}
+                  </p>
                 )}
               </button>
             );
           })}
         </div>
 
-        {/* New private message (delegate only) */}
-        {!isChair && (
-          <div className="px-3 py-3 border-t border-[#2E1E0F] shrink-0">
-            {showNewDM ? (
-              <div className="space-y-1">
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xs text-[#C4A882] font-semibold">New message to…</span>
-                  <button
-                    onClick={() => setShowNewDM(false)}
-                    className="text-[#7A5A38] hover:text-white text-xs"
-                  >
-                    ✕
-                  </button>
-                </div>
-                <div className="max-h-36 overflow-y-auto space-y-0.5">
-                  {dmCandidates.map((d) => (
-                    <button
-                      key={d.id}
-                      onClick={() => selectConv(d.country)}
-                      className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-[#3D2A15] text-sm text-[#E8D5B7] flex items-center gap-2 transition-colors"
-                    >
-                      <span>{flagFor(d.country)}</span>
-                      <span className="truncate">{d.country}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <button
-                onClick={() => setShowNewDM(true)}
-                className="w-full text-xs text-[#C4A882] border border-[#2E1E0F] rounded-lg py-2 hover:border-[#7B4A1E] hover:text-white transition-colors"
-              >
-                + New private message
-              </button>
-            )}
-          </div>
-        )}
+        {/* Compose — bottom of left pane */}
+        {compose}
       </div>
 
-      {/* ── Right pane: thread ────────────────────────────────────────────── */}
-      <div
-        className={`
-          flex-1 flex flex-col min-w-0
-          ${showThread ? 'flex' : 'hidden sm:flex'}
-        `}
-      >
+      {/* ── Right pane: message thread only ──────────────────────────────── */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+
         {/* Thread header */}
-        <div className="px-4 py-3 border-b border-[#2E1E0F] shrink-0 flex items-center gap-3">
-          {/* Back button (mobile) */}
-          <button
-            onClick={goBack}
-            className="sm:hidden text-[#C4A882] hover:text-white text-lg leading-none"
-            aria-label="Back to conversations"
-          >
-            ←
-          </button>
+        <div className="px-4 py-3 border-b border-[#2E1E0F] shrink-0 flex items-center gap-2">
           <span className="text-base">{activeConvObj.emoji}</span>
           <div className="min-w-0">
             <h3 className="font-bold text-white text-sm truncate">{activeConvObj.label}</h3>
@@ -339,37 +338,25 @@ export default function ChatPanel({
               const isChairMsg = chairNames.includes(m.sender);
               const speechRef = isSpeechComment(m.content);
               const text = displayContent(m.content);
-
               return (
                 <div key={m.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[82%] flex flex-col gap-0.5 ${isMe ? 'items-end' : 'items-start'}`}>
-                    {/* Sender + meta */}
+                  <div className={`max-w-[90%] flex flex-col gap-0.5 ${isMe ? 'items-end' : 'items-start'}`}>
                     <div className={`flex items-center gap-1.5 text-[10px] flex-wrap ${isMe ? 'justify-end' : 'justify-start'}`}>
-                      {!isMe && (
-                        <span className="font-mono">{flagFor(m.sender)}</span>
-                      )}
-                      <span className={`font-bold ${isChairMsg ? 'text-[#B8844A]' : isMe ? 'text-[#C4A882]' : 'text-[#C4A882]'}`}>
+                      {!isMe && <span className="font-mono">{flagFor(m.sender)}</span>}
+                      <span className={`font-bold ${isChairMsg ? 'text-[#B8844A]' : 'text-[#C4A882]'}`}>
                         {isMe ? 'You' : m.sender}
                         {isChairMsg && !isMe && ' · Chair'}
                       </span>
-                      {speechRef && (
-                        <span className="text-[#7B4A1E] flex items-center gap-0.5">
-                          🎙️ <span className="text-[#7A5A38]">re: speech</span>
-                        </span>
-                      )}
+                      {speechRef && <span className="text-[#7B4A1E]">🎙️ <span className="text-[#7A5A38]">re: speech</span></span>}
                       <span className="text-[#7A5A38]">{formatTime(m.timestamp)}</span>
                     </div>
-
-                    {/* Bubble */}
-                    <div
-                      className={`rounded-2xl px-3 py-2 text-sm leading-snug break-words ${
-                        isMe
-                          ? 'bg-[#7B4A1E] text-white rounded-br-sm'
-                          : isChairMsg
-                          ? 'bg-[#3D2A15]/60 border border-[#7B4A1E]/30 text-[#E8D5B7] rounded-bl-sm'
-                          : 'bg-[#1A1209] border border-[#2E1E0F] text-[#E8D5B7] rounded-bl-sm'
-                      }`}
-                    >
+                    <div className={`rounded-2xl px-3 py-2 text-sm leading-snug break-words ${
+                      isMe
+                        ? 'bg-[#7B4A1E] text-white rounded-br-sm'
+                        : isChairMsg
+                        ? 'bg-[#3D2A15]/60 border border-[#7B4A1E]/30 text-[#E8D5B7] rounded-bl-sm'
+                        : 'bg-[#1A1209] border border-[#2E1E0F] text-[#E8D5B7] rounded-bl-sm'
+                    }`}>
                       {text}
                     </div>
                   </div>
@@ -378,34 +365,6 @@ export default function ChatPanel({
             })
           )}
           <div ref={bottomRef} />
-        </div>
-
-        {/* Compose */}
-        <div className="px-3 pb-3 pt-2 border-t border-[#2E1E0F] shrink-0">
-          <div className="flex gap-2">
-            <input
-              ref={inputRef}
-              type="text"
-              value={msg}
-              onChange={(e) => setMsg(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') handleSend(); }}
-              placeholder={
-                activeConv === 'everyone'
-                  ? 'Message the committee…'
-                  : activeConv === 'chairs'
-                  ? 'Message to chairs…'
-                  : `Message to ${activeConv}…`
-              }
-              className="flex-1 bg-[#150F09] border border-[#2E1E0F] rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-[#7B4A1E] placeholder-[#7A5A38] transition-colors"
-            />
-            <button
-              onClick={handleSend}
-              disabled={!msg.trim() || sending}
-              className="bg-[#7B4A1E] hover:bg-[#8B5A2B] disabled:bg-[#2E1E0F] disabled:text-[#7A5A38] text-white px-4 py-2 rounded-xl text-sm font-semibold transition-colors"
-            >
-              {sending ? '…' : '→'}
-            </button>
-          </div>
         </div>
       </div>
     </div>

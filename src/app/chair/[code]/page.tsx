@@ -932,9 +932,14 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
             return activeCount > 0 ? <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#7B4A1E] rounded-full text-white text-[10px] flex items-center justify-center">{activeCount}</span> : null;
           })()}
         </button>
-        {/* Chat */}
-        <button onClick={() => setShowChat((v) => !v)}
-          className={`text-xs px-3 py-1 rounded-lg transition-colors shrink-0 relative ${showChat ? 'bg-[#7B4A1E] text-white' : 'bg-[#2E1E0F] text-[#C4A882] hover:text-white'}`}>
+        {/* Chat — disabled during pre-session */}
+        <button
+          onClick={() => { if (!isPreSession) setShowChat((v) => !v); }}
+          title={isPreSession ? 'Complete roll call first' : undefined}
+          className={`text-xs px-3 py-1 rounded-lg transition-colors shrink-0 relative ${
+            isPreSession ? 'opacity-40 cursor-not-allowed bg-[#2E1E0F] text-[#7A5A38]' :
+            showChat ? 'bg-[#7B4A1E] text-white' : 'bg-[#2E1E0F] text-[#C4A882] hover:text-white'
+          }`}>
           💬 Chat
           {committee.messages.filter((m) => !m.content.startsWith('__log__:')).length > 0 && (
             <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#7B4A1E] rounded-full text-white text-[10px] flex items-center justify-center">
@@ -980,7 +985,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
       <div className="flex-1 flex overflow-hidden">
         {committee.phase === 'pre-session' && (
           <div className="flex-1 flex items-center justify-center px-6 py-8">
-            <div className="w-full max-w-lg bg-[#1A1209] border border-[#2E1E0F] rounded-2xl overflow-hidden">
+            <div className="w-full max-w-md bg-[#1A1209] border border-[#2E1E0F] rounded-2xl overflow-hidden" style={{ maxHeight: '88vh', display: 'flex', flexDirection: 'column' }}>
               <RollCallPanel committee={committee}
                 onAddToList={handleAddToSpeakersList}
                 onListIds={new Set(committee.speakersList.map((s) => s.delegateId))}
@@ -995,7 +1000,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
         {committee.phase !== 'pre-session' && (
           <>
             {showRollCall && (
-              <aside className="w-72 border-r border-[#2E1E0F] bg-[#0D0906] flex flex-col overflow-hidden shrink-0">
+              <aside className="w-[22rem] border-r border-[#2E1E0F] bg-[#0D0906] flex flex-col overflow-hidden shrink-0">
                 <RollCallPanel committee={committee}
                   onAddToList={handleAddToSpeakersList}
                   onListIds={new Set(committee.speakersList.map((s) => s.delegateId))}

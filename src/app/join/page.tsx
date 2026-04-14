@@ -22,6 +22,10 @@ function JoinPageInner() {
   const [error, setError] = useState('');
   const [lookingUp, setLookingUp] = useState(false);
   const [foundCommittee, setFoundCommittee] = useState<Committee | null>(null);
+  // Chair name selection — after committee found in chair mode
+  const [chairName, setChairName] = useState('');
+  const [chairNameMode, setChairNameMode] = useState<'select' | 'new'>('select');
+  const [newChairName, setNewChairName] = useState('');
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -38,17 +42,29 @@ function JoinPageInner() {
     setLookingUp(true);
     setError('');
     setFoundCommittee(null);
+    setChairName('');
+    setChairNameMode('select');
+    setNewChairName('');
+
+    // For chair codes with suffix (e.g. "ABC123-1234"), try stripping the suffix first
+    const tryBase = upper.includes('-') ? upper.slice(0, upper.lastIndexOf('-')) : null;
 
     // 1. Check local store first (instant)
-    const local = Object.values(committees).find((c) => c.code === upper);
+    const local = Object.values(committees).find((c) => c.code === upper || (tryBase && c.code === tryBase));
     if (local) {
       setFoundCommittee(local);
       setLookingUp(false);
       return;
     }
 
-    // 2. Fall back to Supabase
-    getCommitteeByCode(upper).then((remote) => {
+    // 2. Fall back to DB — try base code first if there's a suffix
+    const lookupCode = tryBase ?? upper;
+    getCommitteeByCode(lookupCode).then(async (remote) => {
+      if (!remote && tryBase) {
+        // Also try the full code in case it's literally the committee code
+        const fallback = await getCommitteeByCode(upper);
+        if (fallback) { setFoundCommittee(fallback); setLookingUp(false); return; }
+      }
       if (remote) {
         setFoundCommittee(remote);
       } else {
@@ -78,7 +94,9 @@ function JoinPageInner() {
   const handleJoin = () => {
     if (!foundCommittee) { setError('Committee not found.'); return; }
     if (mode === 'chair') {
-      router.push(`/chair/${foundCommittee.code}`);
+      const name = chairNameMode === 'new' ? newChairName.trim() : chairName;
+      if (!name) { setError('Please select or enter your chair name.'); return; }
+      router.push(`/chair/${foundCommittee.code}?chairName=${encodeURIComponent(name)}`);
       return;
     }
     if (mode === 'advisor') {
@@ -97,6 +115,9 @@ function JoinPageInner() {
     setFoundCommittee(null);
     setCountry('');
     setLookingUp(false);
+    setChairName('');
+    setChairNameMode('select');
+    setNewChairName('');
   };
 
   const tabs: { key: JoinMode; label: string; icon: string }[] = [
@@ -188,11 +209,59 @@ function JoinPageInner() {
               );
             })()}
 
+            {/* Chair name selection — shown when committee found in chair mode */}
+            {foundCommittee && mode === 'chair' && (
+              <div>
+                <label className="block text-sm font-medium text-[#E8D5B7] mb-2">Which chair are you?</label>
+                {foundCommittee.chairNames.length > 0 && (
+                  <div className="space-y-2 mb-3">
+                    {foundCommittee.chairNames.map((n) => (
+                      <button
+                        key={n}
+                        onClick={() => { setChairNameMode('select'); setChairName(n); }}
+                        className={`w-full text-left px-4 py-2.5 rounded-lg border text-sm font-semibold transition-colors ${
+                          chairNameMode === 'select' && chairName === n
+                            ? 'bg-[#7B4A1E] border-[#8B5A2B] text-white'
+                            : 'bg-[#150F09] border-[#2E1E0F] text-[#C4A882] hover:border-[#7B4A1E]'
+                        }`}
+                      >
+                        🪑 {n}
+                      </button>
+                    ))}
+                    <button
+                      onClick={() => { setChairNameMode('new'); setChairName(''); }}
+                      className={`w-full text-left px-4 py-2.5 rounded-lg border text-sm font-semibold transition-colors ${
+                        chairNameMode === 'new'
+                          ? 'bg-[#2E1E0F] border-[#7B4A1E] text-white'
+                          : 'bg-[#150F09] border-[#2E1E0F] text-[#7A5A38] hover:border-[#7B4A1E]'
+                      }`}
+                    >
+                      + New name
+                    </button>
+                  </div>
+                )}
+                {(chairNameMode === 'new' || foundCommittee.chairNames.length === 0) && (
+                  <input
+                    type="text"
+                    value={newChairName}
+                    onChange={(e) => setNewChairName(e.target.value)}
+                    placeholder="Enter your name…"
+                    autoFocus={chairNameMode === 'new'}
+                    className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-lg px-4 py-3 text-white placeholder-[#7A5A38] focus:outline-none focus:border-[#7B4A1E] transition-colors"
+                  />
+                )}
+              </div>
+            )}
+
             <button
               onClick={handleJoin}
-              disabled={mode === 'delegate'
-                ? (!foundCommittee || (getSettings(foundCommittee?.code ?? '').requireDelegationName && !country))
-                : !foundCommittee}
+              disabled={
+                mode === 'delegate'
+                  ? (!foundCommittee || (getSettings(foundCommittee?.code ?? '').requireDelegationName && !country))
+                  : mode === 'chair'
+                  ? (!foundCommittee || (chairNameMode === 'select' ? !chairName : !newChairName.trim()))
+                  : !foundCommittee
+              }
               className="w-full bg-[#7B4A1E] hover:bg-[#8B5A2B] disabled:bg-[#2E1E0F] disabled:text-[#7A5A38] text-white py-3 rounded-lg font-semibold transition-colors"
             >
               {mode === 'delegate' ? 'Join Session →' : mode === 'chair' ? 'Open Chair Panel →' : 'Open Advisor View →'}

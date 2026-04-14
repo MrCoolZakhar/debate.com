@@ -559,7 +559,17 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     return (
       <div className="min-h-screen bg-[#0D0906] flex items-center justify-center">
         <div className="text-center">
-          <div className="w-8 h-8 border-2 border-[#7B4A1E] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <img
+            src="/loading.gif"
+            alt="Loading…"
+            className="w-20 h-20 mx-auto mb-4 object-contain"
+            onError={(e) => {
+              (e.target as HTMLImageElement).style.display = 'none';
+              const s = document.createElement('div');
+              s.className = 'w-8 h-8 border-2 border-[#7B4A1E] border-t-transparent rounded-full animate-spin mx-auto mb-4';
+              (e.target as HTMLImageElement).parentElement?.prepend(s);
+            }}
+          />
           <p className="text-[#C4A882] text-sm">Joining session…</p>
         </div>
       </div>
@@ -598,12 +608,17 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
 
   const isAdjourned = committee.phase === 'adjourned';
 
-  // ── Status change handler
+  // ── Status change handler — optimistic update to avoid visible lag
   const handleStatusChange = async (newStatus: DelegateStatus) => {
     if (!myDelegate) return;
     if (changesLeft <= 0) return;
+    // Apply immediately in local state (no waiting for DB round-trip)
+    setCommittee((prev) => prev ? {
+      ...prev,
+      delegates: prev.delegates.map((d) => d.id === myDelegate.id ? { ...d, status: newStatus } : d),
+    } : prev);
     recordStatusChange(committee.id, country);
-    await setDelegateStatusInDB(myDelegate.id, newStatus);
+    setDelegateStatusInDB(myDelegate.id, newStatus);
   };
 
   // ── Join request handler (absent → P or PV)
@@ -672,6 +687,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
             <div className="text-sm font-bold text-white flex items-center gap-1.5 justify-end">
               <span className="text-lg">{flagFor(country)}</span>
               {country}
+              <span className="ml-1 text-xs font-mono text-[#7B4A1E] bg-[#2E1E0F] px-1.5 py-0.5 rounded">{committee.code}</span>
             </div>
             <div className={`text-xs font-medium ${
               isAdjourned ? 'text-red-400' :
@@ -693,10 +709,10 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
       </header>
 
       {/* Tab nav */}
-      <div className="flex border-b border-[#2E1E0F] bg-[#150F08] overflow-x-auto shrink-0">
+      <div className="flex border-b border-[#2E1E0F] bg-[#150F08] shrink-0">
         {tabs.map((t) => (
           <button key={t.key} onClick={() => setTab(t.key)}
-            className={`shrink-0 flex-1 min-w-0 py-3 text-xs font-semibold capitalize transition-colors ${
+            className={`flex-1 py-3 text-sm font-bold capitalize transition-colors ${
               tab === t.key ? 'text-white border-b-2 border-[#7B4A1E]' : 'text-[#7A5A38] hover:text-[#C4A882]'
             }`}>
             {t.label}

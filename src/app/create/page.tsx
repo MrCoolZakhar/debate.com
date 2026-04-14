@@ -174,6 +174,14 @@ function CreatePageInner() {
       <div className="flex-1 flex overflow-hidden">
         {committeeMode === 'select' && (
           <div className="flex-1 flex flex-col items-center justify-center px-8 py-6">
+            {/* Gavelling logo — large, above card selection */}
+            <img
+              src="/gavelling-logo.png"
+              alt="Gavelling"
+              className="mb-6 object-contain"
+              style={{ width: 'min(320px, 40vw)', height: 'auto' }}
+              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+            />
             <h1 className="text-2xl font-black text-white mb-2">Choose Committee Type</h1>
             <p className="text-[#C4A882] text-sm mb-8">Select the type of committee you want to run.</p>
             <div className="flex flex-row gap-4 w-full max-w-4xl">
