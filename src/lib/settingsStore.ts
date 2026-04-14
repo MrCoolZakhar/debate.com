@@ -17,7 +17,8 @@ export interface CommitteeSettings {
   motionTourDeTable: boolean;
   // Tab 3 — Access & Identity
   customSessionId: string;
-  separateDelegateCode: boolean;
+  separateChairCode: boolean;
+  chairJoinSuffix: string;
   requireChairApproval: boolean;
   allowMultipleCoChairs: boolean;
   chairSessionPersistence: boolean;
@@ -38,7 +39,8 @@ export const DEFAULT_SETTINGS: CommitteeSettings = {
   motionCoW: true,
   motionTourDeTable: true,
   customSessionId: '',
-  separateDelegateCode: true,
+  separateChairCode: true,
+  chairJoinSuffix: '',
   requireChairApproval: false,
   allowMultipleCoChairs: true,
   chairSessionPersistence: true,

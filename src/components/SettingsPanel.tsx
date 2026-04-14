@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSettingsStore, CommitteeSettings } from '@/lib/settingsStore';
 import { Committee } from '@/lib/types';
+import { getFlagEmoji, getCountryByName } from '@/lib/countries';
 
-type SettingsTab = 'voting' | 'motions' | 'access';
+type SettingsTab = 'voting' | 'motions' | 'access' | 'points';
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return <p className="text-[10px] font-mono text-[#7A5A38] tracking-widest mb-1 mt-5 first:mt-0">{children}</p>;
@@ -61,11 +62,69 @@ export function SettingsPanel({ committee, onClose }: {
   const upd = <K extends keyof CommitteeSettings>(key: K, value: CommitteeSettings[K]) =>
     updateSetting(committee.code, key, value);
 
+  // Points tab — expanded delegate
+  const [expandedDelegate, setExpandedDelegate] = useState<string | null>(null);
+
+  // Auto-generate chairJoinSuffix when separateChairCode is enabled and suffix is empty
+  useEffect(() => {
+    if (s.separateChairCode && s.chairJoinSuffix === '') {
+      upd('chairJoinSuffix', Math.floor(1000 + Math.random() * 9000).toString());
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [s.separateChairCode, s.chairJoinSuffix]);
+
+  // ── Points scoring helpers ──
+  function computeScore(country: string) {
+    const delegate = committee.delegates.find((d) => d.country === country);
+    const isPresent = delegate ? delegate.status !== 'absent' : false;
+
+    const attendancePoints = isPresent ? 5 : 0;
+
+    const wpPoints = committee.documents
+      .filter((doc) => doc.type === 'working-paper' && doc.sponsors.includes(country))
+      .length * 10;
+
+    const drPoints = committee.documents
+      .filter((doc) => doc.type === 'draft-resolution' && doc.sponsors.includes(country))
+      .length * 20;
+
+    const logs = committee.messages
+      .filter((m) => m.sender === '__system__' && m.content.startsWith('__log__:'))
+      .map((m) => {
+        try { return JSON.parse(m.content.slice('__log__:'.length)); } catch { return null; }
+      })
+      .filter((entry): entry is { country: string; seconds: number; context: string; topic: string; timestamp: string } => entry !== null && entry.country === country);
+
+    const speakingPoints = Math.floor(logs.reduce((sum, e) => sum + (e.seconds || 0), 0) / 10);
+
+    const gslSpeeches = logs.filter((e) => e.context === 'speakers-list').length;
+    const caucusSpeeches = logs.filter((e) => e.context === 'moderated-caucus' || e.context === 'unmoderated-caucus' || e.context === 'tour-de-table').length;
+
+    const gslPoints = gslSpeeches * 10;
+    const caucusPoints = caucusSpeeches * 8;
+
+    return {
+      total: attendancePoints + wpPoints + drPoints + speakingPoints + gslPoints + caucusPoints,
+      attendancePoints,
+      wpPoints,
+      drPoints,
+      speakingPoints,
+      gslSpeeches,
+      caucusSpeeches,
+      gslPoints,
+      caucusPoints,
+      logs,
+    };
+  }
+
   const tabs: { id: SettingsTab; label: string }[] = [
     { id: 'voting', label: 'Voting' },
     { id: 'motions', label: 'Motions' },
     { id: 'access', label: 'Access' },
+    { id: 'points', label: 'Points' },
   ];
+
+  const chairCode = `${committee.code}-${s.chairJoinSuffix || '????'}`;
 
   return (
     <div
@@ -75,7 +134,14 @@ export function SettingsPanel({ committee, onClose }: {
       <div className="w-full max-w-md bg-[#120D07] border-l border-[#2E1E0F] flex flex-col h-full shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-[#2E1E0F] shrink-0">
-          <div>
+          <div className="flex flex-col">
+            <img
+              src="/gavelling-logo.png"
+              alt=""
+              className="w-24 h-auto object-contain mb-1"
+              style={{ filter: 'grayscale(1) brightness(0.6)' }}
+              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+            />
             <h2 className="text-base font-black text-white">Session Settings</h2>
             <p className="text-xs text-[#7A5A38] mt-0.5">{committee.name} · {committee.code}</p>
           </div>
@@ -230,11 +296,27 @@ export function SettingsPanel({ committee, onClose }: {
                 />
               </div>
               <Toggle
-                label="Separate delegate join code"
-                note="Delegates use a different code from the chair. Disabling makes a single shared code for everyone."
-                value={s.separateDelegateCode}
-                onChange={(v) => upd('separateDelegateCode', v)}
+                label="Separate chair join code"
+                note="Chairs join with a unique code separate from delegates. The chair code is shown below."
+                value={s.separateChairCode}
+                onChange={(v) => upd('separateChairCode', v)}
               />
+              {s.separateChairCode && (
+                <div className="py-3 border-b border-[#2E1E0F]">
+                  <div className="text-xs text-[#7A5A38] mb-1.5">Chair join code</div>
+                  <div className="flex items-center gap-2">
+                    <span className="flex-1 bg-[#150F09] border border-[#2E1E0F] rounded-lg px-3 py-2 text-white text-sm font-mono tracking-wider">
+                      {chairCode}
+                    </span>
+                    <button
+                      onClick={() => navigator.clipboard.writeText(chairCode)}
+                      className="px-3 py-2 rounded-lg text-xs font-bold bg-[#2E1E0F] hover:bg-[#3D2A15] text-[#C4A882] transition-colors shrink-0"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                </div>
+              )}
               <Toggle
                 label="Chair must approve delegate entry"
                 note="Joining delegates are held in a waiting room and the chair must admit them individually."
@@ -269,6 +351,115 @@ export function SettingsPanel({ committee, onClose }: {
                 value={s.requireDelegationName}
                 onChange={(v) => upd('requireDelegationName', v)}
               />
+            </div>
+          )}
+
+          {/* ── Points ── */}
+          {tab === 'points' && (
+            <div>
+              <SectionLabel>DELEGATE LEADERBOARD</SectionLabel>
+              <p className="text-xs text-[#7A5A38] mb-3 leading-snug">
+                Scores: +5 attendance · +10 per WP sponsored · +20 per DR sponsored · +1 per 10s speaking · +10 per GSL speech · +8 per caucus speech
+              </p>
+              {committee.delegates.length === 0 && (
+                <p className="text-xs text-[#7A5A38]">No delegates in this session yet.</p>
+              )}
+              {[...committee.delegates]
+                .map((d) => ({ delegate: d, score: computeScore(d.country) }))
+                .sort((a, b) => b.score.total - a.score.total)
+                .map(({ delegate: d, score }, idx) => {
+                  const flag = getFlagEmoji(getCountryByName(d.country)?.code ?? '') || '🌐';
+                  const isExpanded = expandedDelegate === d.id;
+                  return (
+                    <div key={d.id} className="border-b border-[#2E1E0F] last:border-0">
+                      <button
+                        className="w-full flex items-center gap-3 py-3 text-left hover:bg-[#1A1209] transition-colors rounded-lg px-1"
+                        onClick={() => setExpandedDelegate(isExpanded ? null : d.id)}
+                      >
+                        <span className="text-xs text-[#7A5A38] w-5 text-right shrink-0">{idx + 1}</span>
+                        <span className="text-lg leading-none shrink-0">{flag}</span>
+                        <span className="flex-1 text-sm font-semibold text-white truncate">{d.country}</span>
+                        <span className={`text-xs font-mono px-2 py-0.5 rounded-full shrink-0 ${d.status === 'absent' ? 'text-[#7A5A38]' : 'text-[#C4A882]'}`}>
+                          {score.total} pts
+                        </span>
+                        <span className="text-[#7A5A38] text-xs shrink-0">{isExpanded ? '▲' : '▼'}</span>
+                      </button>
+
+                      {isExpanded && (
+                        <div className="mx-1 mb-3 p-3 bg-[#1A1209] border border-[#2E1E0F] rounded-xl space-y-3">
+                          {/* Breakdown */}
+                          <div>
+                            <p className="text-[10px] font-mono text-[#7A5A38] tracking-widest mb-1.5">SCORE BREAKDOWN</p>
+                            <div className="space-y-1">
+                              <div className="flex justify-between text-xs">
+                                <span className="text-[#C4A882]">Attendance</span>
+                                <span className="text-white font-mono">+{score.attendancePoints}</span>
+                              </div>
+                              <div className="flex justify-between text-xs">
+                                <span className="text-[#C4A882]">Working papers sponsored</span>
+                                <span className="text-white font-mono">+{score.wpPoints}</span>
+                              </div>
+                              <div className="flex justify-between text-xs">
+                                <span className="text-[#C4A882]">Draft resolutions sponsored</span>
+                                <span className="text-white font-mono">+{score.drPoints}</span>
+                              </div>
+                              <div className="flex justify-between text-xs">
+                                <span className="text-[#C4A882]">Speaking time</span>
+                                <span className="text-white font-mono">+{score.speakingPoints}</span>
+                              </div>
+                              <div className="flex justify-between text-xs">
+                                <span className="text-[#C4A882]">GSL speeches ({score.gslSpeeches}×)</span>
+                                <span className="text-white font-mono">+{score.gslPoints}</span>
+                              </div>
+                              <div className="flex justify-between text-xs">
+                                <span className="text-[#C4A882]">Caucus speeches ({score.caucusSpeeches}×)</span>
+                                <span className="text-white font-mono">+{score.caucusPoints}</span>
+                              </div>
+                              <div className="flex justify-between text-xs border-t border-[#2E1E0F] pt-1 mt-1">
+                                <span className="text-white font-semibold">Total</span>
+                                <span className="text-white font-mono font-bold">+{score.total}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Speaking history */}
+                          {score.logs.length > 0 && (
+                            <div>
+                              <p className="text-[10px] font-mono text-[#7A5A38] tracking-widest mb-1.5">SPEAKING HISTORY</p>
+                              <div className="space-y-1">
+                                {score.logs.map((entry, i) => (
+                                  <div key={i} className="text-xs text-[#C4A882]">
+                                    <span className="text-white">{entry.topic || '—'}</span>
+                                    <span className="text-[#7A5A38]"> · {entry.context} · {entry.seconds}s</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Tips */}
+                          <div>
+                            <p className="text-[10px] font-mono text-[#7A5A38] tracking-widest mb-1.5">TIPS</p>
+                            <div className="space-y-1">
+                              {score.gslSpeeches === 0 && (
+                                <p className="text-xs text-[#C4A882]">• Get on the General Speakers&apos; List</p>
+                              )}
+                              {score.caucusSpeeches === 0 && (
+                                <p className="text-xs text-[#C4A882]">• Request a moderated caucus and speak</p>
+                              )}
+                              {score.wpPoints === 0 && score.drPoints === 0 && (
+                                <p className="text-xs text-[#C4A882]">• Submit a working paper or draft resolution</p>
+                              )}
+                              {score.gslSpeeches > 0 && score.caucusSpeeches > 0 && (score.wpPoints > 0 || score.drPoints > 0) && (
+                                <p className="text-xs text-[#7A5A38]">Great engagement — keep it up!</p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
             </div>
           )}
         </div>
