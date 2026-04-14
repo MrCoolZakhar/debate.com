@@ -124,6 +124,7 @@ export const useCommitteeStore = create<CommitteeStore>()(
           delegates,
           phase: 'pre-session',
           speakersList: [],
+          caucusQueue: [],
           currentSpeaker: null,
           speakerTimeLimit: 90,
           speakerTimeRemaining: 90,
