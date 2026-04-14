@@ -229,15 +229,15 @@ export default function ChatPanel({ committee, senderName, isChair = false }: {
                   <div className={`max-w-[85%] flex flex-col gap-1 ${isMe ? 'items-end' : 'items-start'}`}>
                     {/* Sender + flag + time */}
                     <div className={`flex items-center gap-2 flex-wrap ${isMe ? 'justify-end' : 'justify-start'}`}>
-                      {!isMe && <span className="text-xl">{flagFor(m.sender)}</span>}
-                      <span className={`text-sm font-black ${isChairMsg ? 'text-[#B8844A]' : isMe ? 'text-[#C4A882]' : 'text-white'}`}>
+                      {!isMe && <span className="text-2xl">{flagFor(m.sender)}</span>}
+                      <span className={`text-base font-black ${isChairMsg ? 'text-[#B8844A]' : isMe ? 'text-[#C4A882]' : 'text-white'}`}>
                         {isMe ? 'You' : m.sender}{isChairMsg && !isMe && ' · Chair'}
                       </span>
                       <span className="text-xs text-[#7A5A38]">{fmtTime(m.timestamp)}</span>
                       {isOptimistic && <span className="text-[10px] text-[#7A5A38]">sending…</span>}
                     </div>
                     {/* Bubble */}
-                    <div className={`rounded-2xl px-4 py-2.5 text-sm leading-relaxed break-words ${
+                    <div className={`rounded-2xl px-4 py-3 text-base leading-relaxed break-words ${
                       isMe
                         ? 'bg-[#7B4A1E] text-white rounded-br-sm'
                         : isChairMsg

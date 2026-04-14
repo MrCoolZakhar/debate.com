@@ -24,6 +24,8 @@ import {
   updateCaucus as updateCaucusInDB,
   approveJoinRequest,
   denyJoinRequest,
+  approveGslRequest,
+  denyGslRequest,
   logSpeakingTime,
 } from '@/lib/committeeService';
 
@@ -905,6 +907,25 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
     }));
   };
 
+  const handleApproveGslRequest = async (motionId: string, delegateId: string, country: string) => {
+    await approveGslRequest(committee.id, motionId, delegateId, country);
+    const delegate = committee.delegates.find((d) => d.id === delegateId);
+    if (!delegate) return;
+    updateLocal(setCommittee, (c) => ({
+      ...c,
+      speakersList: [...c.speakersList, { delegateId, country }],
+      pendingMotions: c.pendingMotions.filter((m) => m.id !== motionId),
+    }));
+  };
+
+  const handleDenyGslRequest = async (motionId: string) => {
+    await denyGslRequest(motionId);
+    updateLocal(setCommittee, (c) => ({
+      ...c,
+      pendingMotions: c.pendingMotions.filter((m) => m.id !== motionId),
+    }));
+  };
+
   const isLastGSLSpeaker = committee.speakersList.length === 0;
 
   // Blocked modal handler — only allow after roll call
@@ -945,9 +966,9 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
             showMotions ? 'bg-[#7B4A1E] text-white' : 'bg-[#2E1E0F] text-[#C4A882] hover:text-white'
           }`}>
           Motions
-          {!isPreSession && (committee.pendingMotions ?? []).filter((m) => m.type !== ('join-request' as string)).length > 0 && (
+          {!isPreSession && (committee.pendingMotions ?? []).filter((m) => m.type !== ('join-request' as string) && (m.type as string) !== 'gsl-request').length > 0 && (
             <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#7B4A1E] rounded-full text-white text-[10px] flex items-center justify-center">
-              {(committee.pendingMotions ?? []).filter((m) => m.type !== ('join-request' as string)).length}
+              {(committee.pendingMotions ?? []).filter((m) => m.type !== ('join-request' as string) && (m.type as string) !== 'gsl-request').length}
             </span>
           )}
         </button>
@@ -1013,6 +1034,31 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
                   <button onClick={() => handleApproveJoinRequest(m.id, delegateId, desiredStatus)}
                     className="ml-2 px-3 py-1 bg-green-800/50 hover:bg-green-700/60 border border-green-700/50 text-green-300 text-xs rounded-lg font-semibold transition-colors">Approve</button>
                   <button onClick={() => handleDenyJoinRequest(m.id)}
+                    className="px-3 py-1 bg-red-950/50 hover:bg-red-900/60 border border-red-900/50 text-red-400 text-xs rounded-lg font-semibold transition-colors">Deny</button>
+                </div>
+              );
+            })}
+        </div>
+      )}
+      {/* GSL speak request banner */}
+      {(committee.pendingMotions ?? []).filter((m) => (m.type as string) === 'gsl-request').length > 0 && (
+        <div className="shrink-0 bg-[#0E1A0E] border-b border-green-800/40 px-4 py-2 flex flex-wrap gap-4">
+          {(committee.pendingMotions ?? [])
+            .filter((m) => (m.type as string) === 'gsl-request')
+            .map((m) => {
+              let delegateId = '';
+              try { const parsed = JSON.parse(m.topic); delegateId = parsed.delegateId; } catch {}
+              const found = getCountryByName(m.proposedBy);
+              const flag = found ? getFlagEmoji(found.code) : '🌐';
+              return (
+                <div key={m.id} className="flex items-center gap-3 text-sm">
+                  <span className="text-green-400 font-bold shrink-0">🎙️ GSL Request</span>
+                  <span className="font-mono text-lg">{flag}</span>
+                  <span className="text-white font-semibold">{m.proposedBy}</span>
+                  <span className="text-[#C4A882] text-xs">wants to speak</span>
+                  <button onClick={() => handleApproveGslRequest(m.id, delegateId, m.proposedBy)}
+                    className="ml-2 px-3 py-1 bg-green-800/50 hover:bg-green-700/60 border border-green-700/50 text-green-300 text-xs rounded-lg font-semibold transition-colors">Add to GSL</button>
+                  <button onClick={() => handleDenyGslRequest(m.id)}
                     className="px-3 py-1 bg-red-950/50 hover:bg-red-900/60 border border-red-900/50 text-red-400 text-xs rounded-lg font-semibold transition-colors">Deny</button>
                 </div>
               );
