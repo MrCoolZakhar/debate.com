@@ -197,6 +197,12 @@ export async function setDelegateStatus(delegateId: string, status: DelegateStat
   if (error) console.error('Error setting delegate status:', error);
 }
 
+export async function batchSetDelegateStatuses(
+  updates: { id: string; status: DelegateStatus }[]
+): Promise<void> {
+  await Promise.all(updates.map(({ id, status }) => setDelegateStatus(id, status)));
+}
+
 // ============================================================
 // GSL — General Speakers List (list_type = 'gsl')
 // Never touched by caucuses or motions

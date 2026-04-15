@@ -1,5 +1,5 @@
 'use client';
-import { use, useEffect, useState, useRef, useCallback } from 'react';
+import { use, useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Committee, DelegateStatus } from '@/lib/types';
@@ -14,6 +14,7 @@ import {
   getCommitteeByCode,
   subscribeToCommittee,
   setPhase as setPhaseInDB,
+  setDelegateStatus as setDelegateStatusInDB,
   addToSpeakersList as addToSpeakersListInDB,
   removeFromSpeakersList as removeFromSpeakersListInDB,
   addToCaucusList as addToCaucusListInDB,
@@ -1020,6 +1021,16 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
     return () => { if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; } };
   }, [timerRunning]);
 
+  // Stable Set references — prevents RollCallPanel re-renders when only timer ticks
+  const gslListIds = useMemo(
+    () => new Set((committee?.speakersList ?? []).map((s) => s.delegateId)),
+    [committee?.speakersList]
+  );
+  const caucusQueueIds = useMemo(
+    () => new Set((committee?.caucusQueue ?? []).map((s) => s.delegateId)),
+    [committee?.caucusQueue]
+  );
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0D0906] flex items-center justify-center">
@@ -1060,19 +1071,19 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
 
   // ── Optimistic action handlers ──────────────────────────────────────────────
 
-  const handleAddToSpeakersList = (delegateId: string) => {
+  const handleAddToSpeakersList = useCallback((delegateId: string) => {
     const delegate = committee.delegates.find((d) => d.id === delegateId);
     if (!delegate) return;
     const alreadyOn = committee.speakersList.some((s) => s.delegateId === delegateId);
     if (alreadyOn) return;
     updateLocal(setCommittee, (c) => ({ ...c, speakersList: [...c.speakersList, { delegateId, country: delegate.country }] }), true);
     addToSpeakersListInDB(committee.id, delegateId, delegate.country);
-  };
+  }, [committee.id, committee.delegates, committee.speakersList]);
 
-  const handleRemoveFromSpeakersList = (delegateId: string) => {
+  const handleRemoveFromSpeakersList = useCallback((delegateId: string) => {
     updateLocal(setCommittee, (c) => ({ ...c, speakersList: c.speakersList.filter((s) => s.delegateId !== delegateId) }), true);
     removeFromSpeakersListInDB(committee.id, delegateId);
-  };
+  }, [committee.id]);
 
   const handleNextSpeaker = () => {
     setTimerRunning(false);
@@ -1148,12 +1159,12 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
     setPhaseInDB(committee.id, 'speakers-list');
   };
 
-  const handleReorderSpeakersList = (newList: { delegateId: string; country: string }[]) => {
+  const handleReorderSpeakersList = useCallback((newList: { delegateId: string; country: string }[]) => {
     updateLocal(setCommittee, (c) => ({ ...c, speakersList: newList }), true);
     reorderSpeakersListInDB(committee.id, newList, 'gsl');
-  };
+  }, [committee.id]);
 
-  const handleStatusChange = (delegateId: string, status: DelegateStatus) => {
+  const handleStatusChange = useCallback((delegateId: string, status: DelegateStatus) => {
     updateLocal(setCommittee, (c) => ({
       ...c,
       delegates: c.delegates.map((d) => d.id === delegateId ? { ...d, status } : d),
@@ -1162,17 +1173,18 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
         caucusQueue: (c.caucusQueue ?? []).filter((s) => s.delegateId !== delegateId),
       } : {}),
     }), true);
+    setDelegateStatusInDB(delegateId, status);
     if (status === 'absent') {
       removeFromSpeakersListInDB(committee.id, delegateId);
       removeFromCaucusListInDB(committee.id, delegateId);
     }
-  };
+  }, [committee.id]);
 
   const handlePhaseChange = (phase: string) => {
     updateLocal(setCommittee, (c) => ({ ...c, phase: phase as Committee['phase'] }), true);
   };
 
-  const handleDelegateAdd = async (country: string) => {
+  const handleDelegateAdd = useCallback(async (country: string) => {
     const { addDelegate: addDelegateInDB } = await import('@/lib/committeeService');
     const realId = await addDelegateInDB(committee.id, country);
     if (realId) {
@@ -1181,7 +1193,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
         delegates: [...c.delegates, { id: realId, country, status: 'absent' }],
       }));
     }
-  };
+  }, [committee.id]);
 
   const handleApproveJoinRequest = async (motionId: string, delegateId: string, desiredStatus: 'present' | 'present-voting') => {
     await approveJoinRequest(committee.id, motionId, delegateId, desiredStatus);
@@ -1372,7 +1384,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
             <div className="w-full max-w-md bg-[#1A1209] border border-[#2E1E0F] rounded-2xl overflow-hidden" style={{ maxHeight: '88vh', display: 'flex', flexDirection: 'column' }}>
               <RollCallPanel committee={committee}
                 onAddToList={handleAddToSpeakersList}
-                onListIds={new Set(committee.speakersList.map((s) => s.delegateId))}
+                onListIds={gslListIds}
                 onRemoveFromList={handleRemoveFromSpeakersList}
                 onStatusChange={handleStatusChange}
                 onPhaseChange={handlePhaseChange}
@@ -1399,7 +1411,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
                       updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: [...(c.caucusQueue ?? []), { delegateId, country: delegate.country }] }));
                       addToCaucusListInDB(committee.id, delegateId, delegate.country);
                     }}
-                    onListIds={new Set((committee.caucusQueue ?? []).map((s) => s.delegateId))}
+                    onListIds={caucusQueueIds}
                     onRemoveFromList={(delegateId) => {
                       updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: (c.caucusQueue ?? []).filter((s) => s.delegateId !== delegateId) }));
                       removeFromCaucusListInDB(committee.id, delegateId);
@@ -1419,7 +1431,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
                 ) : (
                   <RollCallPanel committee={committee}
                     onAddToList={handleAddToSpeakersList}
-                    onListIds={new Set(committee.speakersList.map((s) => s.delegateId))}
+                    onListIds={gslListIds}
                     onRemoveFromList={handleRemoveFromSpeakersList}
                     onStatusChange={handleStatusChange}
                     onPhaseChange={handlePhaseChange}

@@ -1,13 +1,9 @@
 'use client';
 
-import { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { Committee, DelegateStatus } from '@/lib/types';
 import { getFlagEmoji, getCountryByName, UN_COUNTRIES } from '@/lib/countries';
-import {
-  setDelegateStatus as setDelegateStatusInDB,
-  setPhase as setPhaseInDB,
-  removeFromSpeakersList as removeFromSpeakersListInDB,
-} from '@/lib/committeeService';
+import { setPhase as setPhaseInDB } from '@/lib/committeeService';
 
 // ── FlagCircle ────────────────────────────────────────────────────────────────
 export function FlagCircle({ country, size = 'md' }: { country: string; size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' | 'hero' }) {
@@ -239,7 +235,7 @@ function MajorityPie({ value, threshold, color, label, staticFill }: {
 }
 
 // ── Roll Call Panel ───────────────────────────────────────────────────────────
-export default function RollCallPanel({
+function RollCallPanelInner({
   committee,
   onAddToList,
   onListIds,
@@ -279,34 +275,29 @@ export default function RollCallPanel({
   const cycleStatus = (id: string, current: DelegateStatus) => {
     const next: DelegateStatus =
       current === 'absent' ? 'present' : current === 'present' ? 'present-voting' : 'absent';
-    onStatusChange?.(id, next);
-    setDelegateStatusInDB(id, next);
-    // Auto-remove from GSL when going absent
+    // Auto-remove from GSL when going absent — parent handles DB write via onStatusChange
     if (next === 'absent' && queuePositionMap.has(id)) {
       onRemoveFromList?.(id);
-      removeFromSpeakersListInDB(committee.id, id);
     }
+    onStatusChange?.(id, next);
   };
 
   const handleAllPresent = () => {
-    committee.delegates.forEach((d) => {
-      onStatusChange?.(d.id, 'present');
-      setDelegateStatusInDB(d.id, 'present');
-    });
+    const updates = committee.delegates.map((d) => ({ id: d.id, status: 'present' as DelegateStatus }));
+    updates.forEach(({ id }) => onStatusChange?.(id, 'present'));
+    import('@/lib/committeeService').then(({ batchSetDelegateStatuses }) => batchSetDelegateStatuses(updates));
   };
 
   const handleAllPresentVoting = () => {
-    committee.delegates.forEach((d) => {
-      onStatusChange?.(d.id, 'present-voting');
-      setDelegateStatusInDB(d.id, 'present-voting');
-    });
+    const updates = committee.delegates.map((d) => ({ id: d.id, status: 'present-voting' as DelegateStatus }));
+    updates.forEach(({ id }) => onStatusChange?.(id, 'present-voting'));
+    import('@/lib/committeeService').then(({ batchSetDelegateStatuses }) => batchSetDelegateStatuses(updates));
   };
 
   const handleClear = () => {
-    committee.delegates.forEach((d) => {
-      onStatusChange?.(d.id, 'absent');
-      setDelegateStatusInDB(d.id, 'absent');
-    });
+    const updates = committee.delegates.map((d) => ({ id: d.id, status: 'absent' as DelegateStatus }));
+    updates.forEach(({ id }) => onStatusChange?.(id, 'absent'));
+    import('@/lib/committeeService').then(({ batchSetDelegateStatuses }) => batchSetDelegateStatuses(updates));
   };
 
   const handleBeginSession = () => {
@@ -353,12 +344,12 @@ export default function RollCallPanel({
             </div>
           ) : (
             <div className="flex items-center gap-2">
-              {/* Total pie — always 100% filled, shows present count */}
-              <MajorityPie value={present} threshold={total} color="#4A90D9" label={`${present}`} staticFill={1} />
-              {/* 2/3 majority pie — always 66% arc, shows 2/3 threshold */}
-              <MajorityPie value={present} threshold={Math.ceil((total * 2) / 3)} color="#E8A94A" label={`${Math.ceil((total * 2) / 3)}`} staticFill={2/3} />
-              {/* 1/2+1 simple majority pie — always 50% arc */}
-              <MajorityPie value={present} threshold={Math.floor(total / 2) + 1} color="#3D6B35" label={`${Math.floor(total / 2) + 1}`} staticFill={0.5} />
+              {/* Total pie — fills based on present/total */}
+              <MajorityPie value={present} threshold={total} color="#4A90D9" label={`${present}`} />
+              {/* 2/3 majority pie — fills based on present vs 2/3 threshold */}
+              <MajorityPie value={present} threshold={Math.ceil((total * 2) / 3)} color="#E8A94A" label={`${Math.ceil((total * 2) / 3)}`} />
+              {/* Simple majority pie — fills based on present vs 1/2+1 threshold */}
+              <MajorityPie value={present} threshold={Math.floor(total / 2) + 1} color="#3D6B35" label={`${Math.floor(total / 2) + 1}`} />
             </div>
           )}
         </div>
@@ -486,3 +477,17 @@ export default function RollCallPanel({
     </div>
   );
 }
+
+const RollCallPanel = React.memo(RollCallPanelInner, (prev, next) => {
+  return (
+    prev.committee.delegates === next.committee.delegates &&
+    prev.committee.speakersList === next.committee.speakersList &&
+    prev.committee.phase === next.committee.phase &&
+    prev.committee.currentSpeaker === next.committee.currentSpeaker &&
+    prev.committee.caucusQueue === next.committee.caucusQueue &&
+    prev.isRollCallPhase === next.isRollCallPhase &&
+    prev.onListIds === next.onListIds
+  );
+});
+
+export default RollCallPanel;
