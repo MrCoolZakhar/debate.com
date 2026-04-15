@@ -22,7 +22,10 @@ function generateCode(): string {
 }
 
 function calcDisruptiveness(type: PendingMotionType, totalTime: number): number {
-  const base = { consultation: 4_000_000, tour: 3_000_000, unmoderated: 2_000_000, moderated: 1_000_000 };
+  const base = {
+    'end-debate': 6_000_000, 'suspend-debate': 5_000_000,
+    consultation: 4_000_000, tour: 3_000_000, unmoderated: 2_000_000, moderated: 1_000_000,
+  };
   return base[type] + totalTime;
 }
 
@@ -38,6 +41,7 @@ function rowToCommittee(
   pendingMotions: PendingMotion[] = [],
   documents: CommitteeDocument[] = [],
   messages: Committee['messages'] = [],
+  speakerStartedAt: string | null = null,
 ): Committee {
   return {
     id: row.id as string,
@@ -53,6 +57,7 @@ function rowToCommittee(
     currentSpeaker,
     speakerTimeLimit: row.speaker_time_limit as number,
     speakerTimeRemaining,
+    speakerStartedAt,
     motions: [],
     pendingMotions,
     resolutions: [],
@@ -137,6 +142,7 @@ export async function getCommitteeByCode(code: string): Promise<Committee | null
     ? { delegateId: speakerRow.delegate_id as string, country: speakerRow.country as string }
     : null;
   const speakerTimeRemaining = (speakerRow?.time_remaining as number) ?? 0;
+  const speakerStartedAt = (speakerRow?.started_at as string | null) ?? null;
 
   const { data: motionRows } = await supabase
     .from('motions').select('*')
@@ -170,7 +176,7 @@ export async function getCommitteeByCode(code: string): Promise<Committee | null
     recipient: m.recipient as string | undefined,
   }));
 
-  return rowToCommittee(committeeRow, delegates, speakersList, caucusQueue, currentSpeaker, speakerTimeRemaining, pendingMotions, documents, messages);
+  return rowToCommittee(committeeRow, delegates, speakersList, caucusQueue, currentSpeaker, speakerTimeRemaining, pendingMotions, documents, messages, speakerStartedAt);
 }
 
 // ============================================================
@@ -324,6 +330,18 @@ export async function tickSpeakerTimer(committeeId: string): Promise<void> {
     .update({ time_remaining: row.time_remaining - 1 }).eq('committee_id', committeeId);
 }
 
+export async function startSpeakerTimer(committeeId: string): Promise<void> {
+  await supabase.from('current_speaker')
+    .update({ started_at: new Date().toISOString() })
+    .eq('committee_id', committeeId);
+}
+
+export async function stopSpeakerTimer(committeeId: string): Promise<void> {
+  await supabase.from('current_speaker')
+    .update({ started_at: null })
+    .eq('committee_id', committeeId);
+}
+
 // ============================================================
 // MOTIONS
 // ============================================================
@@ -412,6 +430,17 @@ export async function updateDocumentTimings(
     status,
   }).eq('id', docId);
   if (error) console.error('Error updating document timings:', error);
+}
+
+export async function deleteDocumentsByType(
+  committeeId: string,
+  type: 'working-paper' | 'draft-resolution',
+): Promise<void> {
+  const { error } = await supabase.from('documents')
+    .delete()
+    .eq('committee_id', committeeId)
+    .eq('type', type);
+  if (error) console.error('Error deleting documents by type:', error);
 }
 
 export async function removeDocument(docId: string): Promise<void> {
@@ -583,6 +612,21 @@ export async function suspendSession(committeeId: string): Promise<void> {
   const { error } = await supabase.from('committees')
     .update({ expires_at: expiresAt, phase: 'adjourned' }).eq('id', committeeId);
   if (error) console.error('Error suspending session:', error);
+}
+
+export async function suspendDebate(committeeId: string): Promise<void> {
+  const { error } = await supabase.from('committees')
+    .update({ suspended_at: new Date().toISOString(), phase: 'adjourned' })
+    .eq('id', committeeId);
+  if (error) console.error('Error suspending debate:', error);
+}
+
+export async function endDebate(committeeId: string): Promise<void> {
+  const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString();
+  const { error } = await supabase.from('committees')
+    .update({ ended_at: new Date().toISOString(), expires_at: expiresAt, phase: 'adjourned' })
+    .eq('id', committeeId);
+  if (error) console.error('Error ending debate:', error);
 }
 
 // ============================================================

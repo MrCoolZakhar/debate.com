@@ -4,11 +4,13 @@ import { useState, useRef, useEffect, KeyboardEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { Committee, CommitteeDocument, DocumentType, DocumentStatus } from '@/lib/types';
 import { getCountryByName, getFlagEmoji } from '@/lib/countries';
+import { useSettingsStore } from '@/lib/settingsStore';
 import {
   addDocument as addDocumentInDB,
   updateDocumentStatus as updateDocumentStatusInDB,
   updateDocumentTimings as updateDocumentTimingsInDB,
   removeDocument as removeDocumentInDB,
+  suspendDebate as suspendDebateInDB,
 } from '@/lib/committeeService';
 
 type DocTab = 'working-paper' | 'draft-resolution';
@@ -101,7 +103,8 @@ function StageTimer({
   onComplete: () => void; onToggleDocument: () => void;
 }) {
   const [remaining, setRemaining] = useState(totalSeconds);
-  const [running, setRunning] = useState(true);
+  const [running, setRunning] = useState(false);
+  const [started, setStarted] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const remainingRef = useRef(totalSeconds);
   remainingRef.current = remaining;
@@ -139,9 +142,9 @@ function StageTimer({
               style={{ width: `${progress}%` }} />
           </div>
           <div className="flex gap-3 flex-wrap justify-center">
-            <button onClick={() => setRunning((r) => !r)}
+            <button onClick={() => { setRunning((r) => !r); setStarted(true); }}
               className={`px-8 py-3 rounded-xl font-bold transition-colors ${running ? 'bg-yellow-600 hover:bg-yellow-500 text-white' : 'bg-green-600 hover:bg-green-500 text-white'}`}>
-              {running ? '⏸ Pause' : '▶ Resume'}
+              {running ? '⏸ Pause' : started ? '▶ Resume' : '▶ Start'}
             </button>
             <button onClick={onToggleDocument}
               className={`px-6 py-3 rounded-xl font-bold transition-colors ${showDocument ? 'bg-[#7B4A1E] text-white' : 'bg-[#2E1E0F] hover:bg-[#3D2A15] text-[#C4A882] border border-[#2E1E0F]'}`}>
@@ -190,12 +193,24 @@ function DocumentVote({ doc, committee, onDone, onStatusChange }: {
   doc: CommitteeDocument; committee: Committee;
   onDone: () => void; onStatusChange: (docId: string, status: DocumentStatus) => void;
 }) {
+  const router = useRouter();
   const present = committee.delegates.filter((d) => d.status !== 'absent').length;
   const [forVotes, setFor] = useState(0);
   const [against, setAgainst] = useState(0);
   const [abstain, setAbstain] = useState(0);
   const [result, setResult] = useState<'passed' | 'failed' | null>(null);
+  const [showProceedPanel, setShowProceedPanel] = useState(false);
+  const [suspendProposer, setSuspendProposer] = useState('');
+  const [showSuspendVote, setShowSuspendVote] = useState(false);
+  const [showSuspended, setShowSuspended] = useState(false);
   const needed = Math.floor(present / 2) + 1;
+
+  useEffect(() => {
+    if (!showSuspended) return;
+    const handler = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape') router.push('/'); };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [showSuspended, router]);
 
   const finalize = () => {
     const r = forVotes > against ? 'passed' : 'failed';
@@ -203,17 +218,98 @@ function DocumentVote({ doc, committee, onDone, onStatusChange }: {
     onStatusChange(doc.id, r);
   };
 
+  // Suspend vote prompt
+  if (showSuspendVote && !showSuspended) {
+    return (
+      <div className="fixed inset-0 z-[70] bg-[#0D0906] flex flex-col items-center justify-center text-center px-8">
+        <p className="text-xs font-mono tracking-widest text-[#7A5A38] mb-6">MOTION TO SUSPEND DEBATE · {suspendProposer}</p>
+        <h1 className="text-5xl font-black text-white mb-14">Does this motion pass?</h1>
+        <div className="flex gap-8">
+          <button
+            onClick={async () => {
+              await suspendDebateInDB(committee.id);
+              setShowSuspended(true);
+            }}
+            className="px-16 py-8 rounded-3xl bg-green-700 hover:bg-green-600 text-white text-2xl font-black transition-colors">
+            Yes
+          </button>
+          <button
+            onClick={() => { setShowSuspendVote(false); setShowProceedPanel(false); }}
+            className="px-16 py-8 rounded-3xl bg-red-800 hover:bg-red-700 text-white text-2xl font-black transition-colors">
+            No
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (showSuspended) {
+    return (
+      <div className="fixed inset-0 z-[70] bg-[#0D0906] flex flex-col items-center justify-center text-center px-8">
+        <h1 className="text-6xl font-black text-white mb-4">Session is now suspended.</h1>
+        <p className="text-4xl font-black text-white mb-16">See you again soon!</p>
+        <p className="text-lg text-white/40">— Press ESC to go back to main menu</p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex-1 flex flex-col items-center justify-center px-8 py-12 text-center">
       <p className="text-xs font-mono tracking-widest mb-2 text-[#7A5A38]">{doc.docCode} · VOTE</p>
       <h2 className="text-2xl font-black text-white mb-1">{doc.title}</h2>
       <p className="text-sm text-[#C4A882] mb-8">Needs {needed} of {present} in favour to pass</p>
       {result ? (
-        <div className={`w-full max-w-sm px-8 py-10 rounded-2xl ${result === 'passed' ? 'bg-green-950/40 border border-green-800/40' : 'bg-red-950/40 border border-red-800/40'}`}>
-          <p className={`text-4xl font-black mb-2 ${result === 'passed' ? 'text-green-400' : 'text-red-400'}`}>{result === 'passed' ? '✓ PASSED' : '✗ FAILED'}</p>
-          <p className="text-sm text-[#C4A882]">{forVotes} for · {against} against · {abstain} abstain</p>
-          <button onClick={onDone} className="mt-6 px-8 py-3 rounded-xl font-bold bg-[#2E1E0F] hover:bg-[#3D2A15] text-white transition-colors">← Back to Documents</button>
-        </div>
+        <>
+          <div className={`w-full max-w-sm px-8 py-10 rounded-2xl ${result === 'passed' ? 'bg-green-950/40 border border-green-800/40' : 'bg-red-950/40 border border-red-800/40'}`}>
+            <p className={`text-4xl font-black mb-2 ${result === 'passed' ? 'text-green-400' : 'text-red-400'}`}>{result === 'passed' ? '✓ PASSED' : '✗ FAILED'}</p>
+            <p className="text-sm text-[#C4A882]">{forVotes} for · {against} against · {abstain} abstain</p>
+            <button onClick={onDone} className="mt-6 px-8 py-3 rounded-xl font-bold bg-[#2E1E0F] hover:bg-[#3D2A15] text-white transition-colors">← Back to Documents</button>
+          </div>
+          <button
+            onClick={() => setShowProceedPanel(true)}
+            className="mt-6 text-sm text-white/40 hover:text-white/70 transition-colors">
+            Click to proceed with Session.
+          </button>
+
+          {/* Proceed with Session panel */}
+          {showProceedPanel && (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center p-4"
+              style={{ background: 'rgba(5, 8, 20, 0.88)', backdropFilter: 'blur(4px)' }}>
+              <div className="bg-[#1A1209] border border-[#2E1E0F] rounded-3xl w-full max-w-md shadow-2xl p-8 space-y-6">
+                <h2 className="text-2xl font-black text-white">Proceed with Session</h2>
+
+                <div className="bg-[#150F09] border border-[#2E1E0F] rounded-2xl p-5 space-y-4">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">⏸️</span>
+                    <span className="text-base font-bold text-white">Motion to Suspend Debate</span>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-[#C4A882] mb-2">Proposed by</label>
+                    <input
+                      type="text"
+                      value={suspendProposer}
+                      onChange={(e) => setSuspendProposer(e.target.value)}
+                      placeholder="Country name…"
+                      className="w-full bg-[#0D0906] border border-[#2E1E0F] focus:border-[#7B4A1E] rounded-xl px-4 py-3 text-white placeholder-[#7A5A38] focus:outline-none text-sm transition-colors"
+                    />
+                  </div>
+                  <button
+                    onClick={() => { if (suspendProposer.trim()) setShowSuspendVote(true); }}
+                    disabled={!suspendProposer.trim()}
+                    className="w-full bg-[#7B4A1E] hover:bg-[#8B5A2B] disabled:bg-[#2E1E0F] disabled:text-[#7A5A38] text-white py-3 rounded-xl font-bold transition-colors">
+                    Raise Motion →
+                  </button>
+                </div>
+
+                <button
+                  onClick={() => setShowProceedPanel(false)}
+                  className="w-full py-3 rounded-xl font-bold text-[#C4A882] hover:text-white border border-[#2E1E0F] hover:border-[#7B4A1E] transition-colors">
+                  Go back to Session
+                </button>
+              </div>
+            </div>
+          )}
+        </>
       ) : (
         <div className="w-full max-w-sm space-y-4">
           {[
@@ -242,6 +338,12 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
   committee: Committee; type: DocumentType; onDone: () => void;
   onDocumentAdded: (doc: CommitteeDocument) => void;
 }) {
+  const { getSettings } = useSettingsStore();
+  const settings = getSettings(committee.code);
+  const existingCount = (committee.documents ?? []).filter((d) => d.type === type).length;
+  const limit = type === 'working-paper' ? settings.wpSubmissionLimit : settings.drSubmissionLimit;
+  const limitReached = limit !== null && existingCount >= limit;
+
   const presentCountries = committee.delegates.filter((d) => d.status !== 'absent').map((d) => d.country);
   const [title, setTitle] = useState('');
   const [sponsors, setSponsors] = useState<string[]>([]);
@@ -250,7 +352,7 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
   const [fileUrl, setFileUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const docCode = autoDocCode(type, committee.documents ?? []);
-  const canSubmit = title.trim() && sponsors.length > 0;
+  const canSubmit = !limitReached && title.trim() && sponsors.length > 0;
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return;
@@ -307,14 +409,19 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
         ) : (
           <button type="button" onClick={() => fileInputRef.current?.click()}
             className="w-full bg-[#150F09] border border-dashed border-[#2E1E0F] hover:border-[#7B4A1E] rounded-xl px-4 py-3 text-[#7A5A38] hover:text-[#C4A882] text-sm transition-colors text-left">
-            + Upload file (.pdf, .doc, .docx, .txt)
+            + Upload PDF
           </button>
         )}
-        <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx,.txt" onChange={handleFileChange} className="hidden" />
+        <input ref={fileInputRef} type="file" accept=".pdf" onChange={handleFileChange} className="hidden" />
       </div>
+      {limitReached && (
+        <p className="text-xs text-red-400 text-center">
+          Limit reached ({existingCount}/{limit}) — no more {type === 'working-paper' ? 'working papers' : 'draft resolutions'} can be submitted.
+        </p>
+      )}
       <button onClick={handleSubmit} disabled={!canSubmit}
         className="w-full bg-[#7B4A1E] hover:bg-[#8B5A2B] disabled:bg-[#2E1E0F] disabled:text-[#7A5A38] text-white py-3.5 rounded-xl font-bold transition-colors">
-        Submit Document
+        {limitReached ? `Limit reached (${existingCount}/${limit})` : 'Submit Document'}
       </button>
     </div>
   );
@@ -381,6 +488,7 @@ function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation
   onStartPresentation: (doc: CommitteeDocument) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [showPdf, setShowPdf] = useState(false);
   const nextStatus = STATUS_NEXT[doc.status];
   const needsPresentation = nextStatus === 'introduced';
 
@@ -405,8 +513,13 @@ function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation
       <div className="text-xs text-[#C4A882]"><span className="font-semibold">Sponsors: </span>{doc.sponsors.join(', ') || '—'}</div>
       {doc.readingMinutes && <div className="text-xs text-[#B8844A]">📖 {doc.readingMinutes}m reading{doc.presentationMinutes ? ` · 🎤 ${doc.presentationMinutes}m presentation` : ''}{doc.qaMinutes ? ` · ❓ ${doc.qaMinutes}m Q&A` : ''}</div>}
       {doc.fileUrl && doc.fileName && (
-        <div className="text-xs">
-          <a href={doc.fileUrl} download={doc.fileName} className="text-blue-400 hover:text-blue-300 transition-colors">📎 {doc.fileName}</a>
+        <div className="text-xs space-y-2">
+          <button onClick={() => setShowPdf((v) => !v)} className="text-blue-400 hover:text-blue-300 transition-colors">
+            📎 {doc.fileName} {showPdf ? '▲' : '▼'}
+          </button>
+          {showPdf && (
+            <iframe src={doc.fileUrl} title={doc.fileName} className="w-full rounded-lg border border-[#2E1E0F]" style={{ height: '480px' }} />
+          )}
         </div>
       )}
       {doc.content && (
@@ -443,7 +556,7 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate }
   const router = useRouter();
   const [tab, setTab] = useState<DocTab>('working-paper');
   const hasWPs = (committee.documents ?? []).filter((d) => d.type === 'working-paper').length > 0;
-  const [showForm, setShowForm] = useState(!hasWPs);
+  const [showForm, setShowForm] = useState(false);
 
   // Fullscreen presentation state
   const [activeDoc, setActiveDoc] = useState<CommitteeDocument | null>(null);

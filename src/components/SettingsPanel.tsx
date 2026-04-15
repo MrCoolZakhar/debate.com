@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useSettingsStore, CommitteeSettings } from '@/lib/settingsStore';
+import { useSettingsStore, CommitteeSettings, DEFAULT_MOTION_NAMES } from '@/lib/settingsStore';
 import { Committee } from '@/lib/types';
-import { updateCommitteeCode } from '@/lib/committeeService';
+import { updateCommitteeCode, deleteDocumentsByType } from '@/lib/committeeService';
 import { getFlagEmoji, getCountryByName } from '@/lib/countries';
 
 type SettingsTab = 'voting' | 'motions' | 'access' | 'points';
@@ -79,6 +79,9 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
 
   // Points tab — expanded delegate
   const [expandedDelegate, setExpandedDelegate] = useState<string | null>(null);
+
+  // Document reset confirmation
+  const [resetConfirm, setResetConfirm] = useState<'working-paper' | 'draft-resolution' | null>(null);
 
   // Keep input in sync if the prop changes (e.g. after a redirect)
   useEffect(() => {
@@ -303,26 +306,129 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
             <div>
               <SectionLabel>ENABLED MOTION TYPES</SectionLabel>
               <p className="text-xs text-[#7A5A38] mb-3 leading-snug">Disabled motion types are hidden from the delegate motion-request interface immediately.</p>
-              <Toggle
-                label="Moderated caucus"
-                value={s.motionModeratedCaucus}
-                onChange={(v) => upd('motionModeratedCaucus', v)}
-              />
-              <Toggle
-                label="Unmoderated caucus"
-                value={s.motionUnmoderatedCaucus}
-                onChange={(v) => upd('motionUnmoderatedCaucus', v)}
-              />
-              <Toggle
-                label="Committee of the Whole (CoW)"
-                value={s.motionCoW}
-                onChange={(v) => upd('motionCoW', v)}
-              />
-              <Toggle
-                label="Tour de Table"
-                value={s.motionTourDeTable}
-                onChange={(v) => upd('motionTourDeTable', v)}
-              />
+              <Toggle label="Moderated caucus" value={s.motionModeratedCaucus} onChange={(v) => upd('motionModeratedCaucus', v)} />
+              <Toggle label="Unmoderated caucus" value={s.motionUnmoderatedCaucus} onChange={(v) => upd('motionUnmoderatedCaucus', v)} />
+              <Toggle label="Committee of the Whole (CoW)" value={s.motionCoW} onChange={(v) => upd('motionCoW', v)} />
+              <Toggle label="Tour de Table" value={s.motionTourDeTable} onChange={(v) => upd('motionTourDeTable', v)} />
+
+              <SectionLabel>MOTION NAMES</SectionLabel>
+              <p className="text-xs text-[#7A5A38] mb-3 leading-snug">Rename motion types to match your committee's rules of procedure.</p>
+              {(
+                [
+                  { key: 'moderated',     defaultName: DEFAULT_MOTION_NAMES.moderated },
+                  { key: 'unmoderated',   defaultName: DEFAULT_MOTION_NAMES.unmoderated },
+                  { key: 'consultation',  defaultName: DEFAULT_MOTION_NAMES.consultation },
+                  { key: 'tour',          defaultName: DEFAULT_MOTION_NAMES.tour },
+                  { key: 'suspendDebate', defaultName: DEFAULT_MOTION_NAMES.suspendDebate },
+                  { key: 'endDebate',     defaultName: DEFAULT_MOTION_NAMES.endDebate },
+                ] as const
+              ).map(({ key, defaultName }) => (
+                <div key={key} className="py-2 border-b border-[#2E1E0F] last:border-0">
+                  <div className="text-xs text-[#7A5A38] mb-1">{defaultName}</div>
+                  <input
+                    type="text"
+                    value={s.motionNames?.[key] ?? defaultName}
+                    onChange={(e) => upd('motionNames', { ...(s.motionNames ?? DEFAULT_MOTION_NAMES), [key]: e.target.value })}
+                    placeholder={defaultName}
+                    className="w-full bg-[#150F09] border border-[#2E1E0F] focus:border-[#7B4A1E] rounded-lg px-3 py-1.5 text-white text-sm focus:outline-none transition-colors"
+                  />
+                </div>
+              ))}
+
+              <SectionLabel>DOCUMENT SUBMISSION LIMITS</SectionLabel>
+              <p className="text-xs text-[#7A5A38] mb-3 leading-snug">Set a cap on how many working papers or draft resolutions can be submitted per session.</p>
+
+              {/* WP limit */}
+              <div className="py-3 border-b border-[#2E1E0F]">
+                <div className="flex items-center justify-between gap-4 mb-2">
+                  <div className="text-sm font-semibold text-white">Working Paper limit</div>
+                  <button
+                    onClick={() => upd('wpSubmissionLimit', s.wpSubmissionLimit === null ? 5 : null)}
+                    className={`relative shrink-0 w-10 h-[22px] rounded-full transition-colors ${s.wpSubmissionLimit !== null ? 'bg-[#7B4A1E]' : 'bg-[#2E1E0F]'}`}
+                  >
+                    <span className={`absolute top-[2px] left-[2px] w-[18px] h-[18px] rounded-full bg-white transition-transform shadow-sm ${s.wpSubmissionLimit !== null ? 'translate-x-[18px]' : 'translate-x-0'}`} />
+                  </button>
+                </div>
+                {s.wpSubmissionLimit !== null && (
+                  <div className="flex items-center gap-2 mt-1">
+                    <input
+                      type="number"
+                      min={1}
+                      value={s.wpSubmissionLimit}
+                      onChange={(e) => upd('wpSubmissionLimit', Math.max(1, parseInt(e.target.value) || 1))}
+                      className="w-20 bg-[#150F09] border border-[#2E1E0F] focus:border-[#7B4A1E] rounded-lg px-3 py-1.5 text-white text-sm text-center focus:outline-none transition-colors"
+                    />
+                    <span className="text-xs text-[#7A5A38]">max WPs</span>
+                  </div>
+                )}
+                <button
+                  onClick={() => setResetConfirm('working-paper')}
+                  className="mt-2 text-xs text-[#7A5A38] hover:text-[#C4A882] transition-colors"
+                >
+                  Reset count for WPs →
+                </button>
+              </div>
+
+              {/* DR limit */}
+              <div className="py-3 border-b border-[#2E1E0F]">
+                <div className="flex items-center justify-between gap-4 mb-2">
+                  <div className="text-sm font-semibold text-white">Draft Resolution limit</div>
+                  <button
+                    onClick={() => upd('drSubmissionLimit', s.drSubmissionLimit === null ? 3 : null)}
+                    className={`relative shrink-0 w-10 h-[22px] rounded-full transition-colors ${s.drSubmissionLimit !== null ? 'bg-[#7B4A1E]' : 'bg-[#2E1E0F]'}`}
+                  >
+                    <span className={`absolute top-[2px] left-[2px] w-[18px] h-[18px] rounded-full bg-white transition-transform shadow-sm ${s.drSubmissionLimit !== null ? 'translate-x-[18px]' : 'translate-x-0'}`} />
+                  </button>
+                </div>
+                {s.drSubmissionLimit !== null && (
+                  <div className="flex items-center gap-2 mt-1">
+                    <input
+                      type="number"
+                      min={1}
+                      value={s.drSubmissionLimit}
+                      onChange={(e) => upd('drSubmissionLimit', Math.max(1, parseInt(e.target.value) || 1))}
+                      className="w-20 bg-[#150F09] border border-[#2E1E0F] focus:border-[#7B4A1E] rounded-lg px-3 py-1.5 text-white text-sm text-center focus:outline-none transition-colors"
+                    />
+                    <span className="text-xs text-[#7A5A38]">max DRs</span>
+                  </div>
+                )}
+                <button
+                  onClick={() => setResetConfirm('draft-resolution')}
+                  className="mt-2 text-xs text-[#7A5A38] hover:text-[#C4A882] transition-colors"
+                >
+                  Reset count for DRs →
+                </button>
+              </div>
+
+              {/* Reset confirmation panel */}
+              {resetConfirm && (() => {
+                const isWP = resetConfirm === 'working-paper';
+                const count = (committee.documents ?? []).filter((d) => d.type === resetConfirm).length;
+                return (
+                  <div className="mt-3 p-4 bg-red-950/30 border border-red-900/40 rounded-xl space-y-3">
+                    <p className="text-sm font-semibold text-white">
+                      This will delete all {count} submitted {isWP ? 'WP' : 'DR'}{count !== 1 ? 's' : ''} and reset the count. Continue?
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={async () => {
+                          await deleteDocumentsByType(committee.id, resetConfirm);
+                          setResetConfirm(null);
+                        }}
+                        className="flex-1 bg-red-700 hover:bg-red-600 text-white py-2 rounded-lg font-bold text-xs transition-colors"
+                      >
+                        Confirm
+                      </button>
+                      <button
+                        onClick={() => setResetConfirm(null)}
+                        className="flex-1 bg-[#2E1E0F] hover:bg-[#3D2A15] text-[#C4A882] py-2 rounded-lg font-bold text-xs transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           )}
 

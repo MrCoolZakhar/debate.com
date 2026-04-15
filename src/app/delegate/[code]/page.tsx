@@ -253,6 +253,45 @@ function SponsorsInput({
   );
 }
 
+// ── Inline PDF Viewer ─────────────────────────────────────────────────────────
+function InlinePdfViewer({ fileUrl, fileName }: { fileUrl: string; fileName: string }) {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="space-y-1.5">
+      <button onClick={() => setShow((v) => !v)} className="text-xs text-blue-400 hover:text-blue-300 transition-colors">
+        📎 {fileName} {show ? '▲' : '▼'}
+      </button>
+      {show && (
+        <iframe src={fileUrl} title={fileName} className="w-full rounded-lg border border-[#2E1E0F]" style={{ height: '400px' }} />
+      )}
+    </div>
+  );
+}
+
+// ── Delegate Doc Card (with inline PDF viewer) ────────────────────────────────
+function DelegateDocCard({ doc }: { doc: CommitteeDocument }) {
+  const statusColor = doc.status === 'passed' ? 'text-emerald-400' : doc.status === 'failed' ? 'text-red-400' : doc.status === 'introduced' ? 'text-purple-400' : doc.status === 'on-floor' ? 'text-[#B8844A]' : 'text-[#7A5A38]';
+  const statusLabel = doc.status === 'introduced' ? 'Being Presented' : doc.status === 'on-floor' ? 'On Floor' : doc.status === 'passed' ? 'Passed' : doc.status === 'failed' ? 'Failed' : 'Submitted';
+  return (
+    <div className="bg-[#1A1209] border border-[#2E1E0F] rounded-xl p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <div className="font-semibold text-white text-sm">{doc.docCode} — {doc.title}</div>
+        <span className={`text-xs font-bold ml-2 shrink-0 ${statusColor}`}>{statusLabel}</span>
+      </div>
+      <div className="text-xs text-[#7A5A38]">
+        {doc.sponsors.map((s, i) => (
+          <span key={s} className={i === 0 ? 'text-[#C4A882] font-medium' : ''}>
+            {i > 0 ? ', ' : ''}{flagFor(s)} {s}
+          </span>
+        ))}
+      </div>
+      {doc.fileUrl && doc.fileName && (
+        <InlinePdfViewer fileUrl={doc.fileUrl} fileName={doc.fileName} />
+      )}
+    </div>
+  );
+}
+
 // ── Documents Tab ─────────────────────────────────────────────────────────────
 function DelegateDocumentsTab({ committee, country }: { committee: Committee; country: string }) {
   const [title, setTitle] = useState('');
@@ -333,7 +372,7 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
             </button>
             {fileName && <button onClick={() => { setFileName(null); setFileUrl(null); }} className="text-xs text-[#7A5A38] hover:text-red-400">Remove</button>}
           </div>
-          <input ref={fileInputRef} type="file" className="hidden"
+          <input ref={fileInputRef} type="file" accept=".pdf" className="hidden"
             onChange={(e) => {
               const f = e.target.files?.[0];
               if (!f) return;
@@ -355,19 +394,7 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
           <div className="text-xs font-mono text-[#7A5A38] mb-2">SUBMITTED DOCUMENTS</div>
           <div className="space-y-2">
             {(committee.documents ?? []).map((doc) => (
-              <div key={doc.id} className="bg-[#1A1209] border border-[#2E1E0F] rounded-xl p-3">
-                <div className="flex items-center justify-between">
-                  <div className="font-semibold text-white text-sm">{doc.docCode} — {doc.title}</div>
-                  <span className={`text-xs font-bold ml-2 ${doc.status === 'on-floor' ? 'text-[#B8844A]' : doc.status === 'passed' ? 'text-emerald-400' : doc.status === 'failed' ? 'text-red-400' : 'text-[#7A5A38]'}`}>{doc.status}</span>
-                </div>
-                <div className="text-xs text-[#7A5A38] mt-1">
-                  {doc.sponsors.map((s, i) => (
-                    <span key={s} className={i === 0 ? 'text-[#C4A882] font-medium' : ''}>
-                      {i > 0 ? ', ' : ''}{flagFor(s)} {s}
-                    </span>
-                  ))}
-                </div>
-              </div>
+              <DelegateDocCard key={doc.id} doc={doc} />
             ))}
           </div>
         </div>
@@ -615,7 +642,12 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     tour: settings.motionTourDeTable,
   };
 
-  const phaseDisplay = PHASE_LABELS[committee.phase] || committee.phase;
+  const phaseDisplay = (() => {
+    const mn = settings.motionNames;
+    if (committee.phase === 'moderated-caucus') return mn?.moderated ?? PHASE_LABELS['moderated-caucus'];
+    if (committee.phase === 'unmoderated-caucus') return mn?.unmoderated ?? PHASE_LABELS['unmoderated-caucus'];
+    return PHASE_LABELS[committee.phase] || committee.phase;
+  })();
 
   const isAdjourned = committee.phase === 'adjourned';
 
@@ -965,23 +997,47 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
         {/* ── Resolutions tab ── */}
         {tab === 'resolutions' && (
           <div className="p-4 max-w-2xl mx-auto space-y-3">
-            <h2 className="text-lg font-bold text-white">Resolutions</h2>
-            {committee.resolutions.length === 0 ? (
-              <div className="text-center py-8 text-[#7A5A38]">No resolutions submitted</div>
-            ) : (
-              committee.resolutions.map((res) => (
-                <div key={res.id} className="bg-[#1A1209] border border-[#2E1E0F] rounded-xl p-4">
-                  <div className="flex items-start justify-between">
-                    <div className="font-semibold text-white text-sm">{res.title}</div>
-                    <span className={`text-xs font-bold ml-3 ${res.status === 'passed' ? 'text-emerald-400' : res.status === 'failed' ? 'text-red-400' : res.status === 'approved' ? 'text-green-400' : res.status === 'submitted' ? 'text-[#B8844A]' : 'text-yellow-400'}`}>{res.status}</span>
+            <h2 className="text-lg font-bold text-white">Draft Resolutions</h2>
+            {(() => {
+              const drs = (committee.documents ?? []).filter((d) => d.type === 'draft-resolution');
+              if (drs.length === 0) return <div className="text-center py-8 text-[#7A5A38]">No draft resolutions submitted</div>;
+              return drs.map((doc) => {
+                const isPresenting = doc.status === 'introduced';
+                const isPassed = doc.status === 'passed';
+                const isFailed = doc.status === 'failed';
+                const isPendingVote = doc.status === 'on-floor';
+                return (
+                  <div key={doc.id} className={`bg-[#1A1209] border rounded-xl p-4 space-y-2 ${isPassed ? 'border-emerald-800/40' : isFailed ? 'border-red-800/40' : isPresenting ? 'border-purple-800/40' : 'border-[#2E1E0F]'}`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <span className="text-xs font-mono font-bold text-[#7B4A1E] mr-2">{doc.docCode}</span>
+                        <span className="font-semibold text-white text-sm">{doc.title}</span>
+                      </div>
+                      {isPassed && <span className="shrink-0 text-xs font-bold text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 px-2 py-0.5 rounded-full">Passed</span>}
+                      {isFailed && <span className="shrink-0 text-xs font-bold text-red-400 bg-red-950/40 border border-red-800/40 px-2 py-0.5 rounded-full">Failed</span>}
+                      {isPresenting && <span className="shrink-0 text-xs font-bold text-purple-400 bg-purple-950/40 border border-purple-800/40 px-2 py-0.5 rounded-full animate-pulse">Now Presenting</span>}
+                      {isPendingVote && <span className="shrink-0 text-xs font-bold text-yellow-400 bg-yellow-950/40 border border-yellow-800/40 px-2 py-0.5 rounded-full">Pending Vote</span>}
+                      {doc.status === 'submitted' && <span className="shrink-0 text-xs font-bold text-[#7A5A38] px-2 py-0.5 rounded-full">Submitted</span>}
+                    </div>
+                    <div className="text-xs text-[#7A5A38]">
+                      {doc.sponsors.map((s, i) => (
+                        <span key={s} className={i === 0 ? 'text-[#C4A882] font-medium' : ''}>
+                          {i > 0 ? ', ' : ''}{flagFor(s)} {s}
+                        </span>
+                      ))}
+                    </div>
+                    {isPresenting && doc.readingMinutes && doc.readingMinutes > 0 && (
+                      <div className="text-xs text-purple-300 mt-1">
+                        📖 {doc.readingMinutes}m reading · 🎤 {doc.presentationMinutes ?? 0}m presentation{doc.qaMinutes ? ` · ❓ ${doc.qaMinutes}m Q&A` : ''}
+                      </div>
+                    )}
+                    {doc.fileUrl && doc.fileName && (
+                      <InlinePdfViewer fileUrl={doc.fileUrl} fileName={doc.fileName} />
+                    )}
                   </div>
-                  <div className="text-xs text-[#C4A882] mt-1">Sponsors: {res.sponsors.join(', ')}</div>
-                  {res.content && (
-                    <div className="mt-2 text-xs text-[#7A5A38] bg-[#150F09] border border-[#2E1E0F] rounded-lg p-2 max-h-24 overflow-y-auto whitespace-pre-wrap">{res.content}</div>
-                  )}
-                </div>
-              ))
-            )}
+                );
+              });
+            })()}
           </div>
         )}
 

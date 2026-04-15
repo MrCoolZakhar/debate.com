@@ -1,6 +1,15 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
+export interface MotionNames {
+  moderated: string;
+  unmoderated: string;
+  consultation: string;
+  tour: string;
+  suspendDebate: string;
+  endDebate: string;
+}
+
 export interface CommitteeSettings {
   // Tab 1 — Voting & Majorities
   proceduralThreshold: 'simple' | 'absolute';
@@ -15,6 +24,9 @@ export interface CommitteeSettings {
   motionUnmoderatedCaucus: boolean;
   motionCoW: boolean;
   motionTourDeTable: boolean;
+  motionNames: MotionNames;
+  wpSubmissionLimit: number | null;  // null = unlimited
+  drSubmissionLimit: number | null;
   // Tab 3 — Access & Identity
   customSessionId: string;
   separateChairCode: boolean;
@@ -25,6 +37,15 @@ export interface CommitteeSettings {
   chairTakeoverProtection: boolean;
   requireDelegationName: boolean;
 }
+
+export const DEFAULT_MOTION_NAMES: MotionNames = {
+  moderated: 'Moderated Caucus',
+  unmoderated: 'Unmoderated Caucus',
+  consultation: 'Consultation of the Whole',
+  tour: 'Tour de Table',
+  suspendDebate: 'Suspend Debate',
+  endDebate: 'End Debate',
+};
 
 export const DEFAULT_SETTINGS: CommitteeSettings = {
   proceduralThreshold: 'simple',
@@ -38,6 +59,9 @@ export const DEFAULT_SETTINGS: CommitteeSettings = {
   motionUnmoderatedCaucus: true,
   motionCoW: true,
   motionTourDeTable: true,
+  motionNames: { ...DEFAULT_MOTION_NAMES },
+  wpSubmissionLimit: null,
+  drSubmissionLimit: null,
   customSessionId: '',
   separateChairCode: true,
   chairJoinSuffix: '',
@@ -60,12 +84,12 @@ export const useSettingsStore = create<SettingsStore>()(
   persist(
     (set, get) => ({
       settings: {},
-      getSettings: (code) => get().settings[code] ?? { ...DEFAULT_SETTINGS },
+      getSettings: (code) => ({ ...DEFAULT_SETTINGS, ...(get().settings[code] ?? {}) }),
       updateSetting: (code, key, value) =>
         set((s) => ({
           settings: {
             ...s.settings,
-            [code]: { ...(s.settings[code] ?? DEFAULT_SETTINGS), [key]: value },
+            [code]: { ...DEFAULT_SETTINGS, ...(s.settings[code] ?? {}), [key]: value },
           },
         })),
       initSettings: (code, partial = {}) =>

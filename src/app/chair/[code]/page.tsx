@@ -21,6 +21,8 @@ import {
   reorderSpeakersList as reorderSpeakersListInDB,
   nextSpeaker as nextSpeakerInDB,
   tickSpeakerTimer as tickSpeakerTimerInDB,
+  startSpeakerTimer as startSpeakerTimerInDB,
+  stopSpeakerTimer as stopSpeakerTimerInDB,
   updateCaucus as updateCaucusInDB,
   approveJoinRequest,
   denyJoinRequest,
@@ -349,6 +351,8 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd }: {
 
 // ── Moderated Caucus View ─────────────────────────────────────────────────────
 function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee; setCommittee: CommitteeSetter }) {
+  const { getSettings } = useSettingsStore();
+  const moderatedName = getSettings(committee.code).motionNames?.moderated ?? 'Moderated Caucus';
   const [speakerRunning, setSpeakerRunning] = useState(false);
   const speakerRef = useRef<NodeJS.Timeout | null>(null);
   const caucusRef = useRef(committee.caucus);
@@ -458,7 +462,7 @@ function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee
     <div className="flex-1 flex flex-col overflow-hidden">
       <div className="flex-1 flex flex-col items-center justify-center px-8 py-4 min-h-0">
         <div className="text-center mb-3">
-          <p className="text-xs text-[#B8844A] font-mono tracking-widest">MODERATED CAUCUS</p>
+          <p className="text-xs text-[#B8844A] font-mono tracking-widest">{moderatedName.toUpperCase()}</p>
           {caucus.purpose && <p className="text-[#C4A882] text-sm mt-0.5">{caucus.purpose}</p>}
           {spokenCountries.length > 0 && (
             <p className="text-xs text-yellow-500 mt-0.5">{spokenCountries.length} delegate{spokenCountries.length !== 1 ? 's' : ''} spoke</p>
@@ -527,6 +531,8 @@ function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee
 
 // ── Unmoderated Caucus View ───────────────────────────────────────────────────
 function UnmoderatedCaucusView({ committee, setCommittee }: { committee: Committee; setCommittee: CommitteeSetter }) {
+  const { getSettings } = useSettingsStore();
+  const unmoderatedName = getSettings(committee.code).motionNames?.unmoderated ?? 'Unmoderated Caucus';
   const [running, setRunning] = useState(true);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const caucus = committee.caucus!;
@@ -560,7 +566,7 @@ function UnmoderatedCaucusView({ committee, setCommittee }: { committee: Committ
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center px-8 py-12">
-      <p className="text-xs text-purple-400 font-mono mb-4">UNMODERATED CAUCUS</p>
+      <p className="text-xs text-purple-400 font-mono mb-4">{unmoderatedName.toUpperCase()}</p>
       {caucus.purpose && <p className="text-[#C4A882] mb-6">{caucus.purpose}</p>}
       <div className={`text-9xl font-black font-mono tabular-nums mb-8 ${caucus.remainingTime <= 30 ? 'text-red-500' : 'text-white'}`}>
         {formatTime(caucus.remainingTime)}
@@ -702,6 +708,13 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
           if (updated) {
             setCommittee((prev) => {
               if (!prev) return updated;
+              // Co-chair timer sync: if remote has started_at and local timer is not running,
+              // compute elapsed time and snap to the correct remaining time
+              if (updated.speakerStartedAt && !timerRunningRef.current) {
+                const elapsed = Math.round((Date.now() - new Date(updated.speakerStartedAt).getTime()) / 1000);
+                const snapped = Math.max(0, updated.speakerTimeLimit - elapsed);
+                return { ...updated, speakerTimeRemaining: snapped };
+              }
               return {
                 ...updated,
                 speakerTimeRemaining: timerRunningRef.current
@@ -795,6 +808,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
 
   const handleNextSpeaker = () => {
     setTimerRunning(false);
+    stopSpeakerTimerInDB(committeeIdRef.current);
     setExtraTimeAdded(false);
     if (committee.currentSpeaker) {
       const secondsSpoken = committee.speakerTimeLimit - committee.speakerTimeRemaining;
@@ -839,8 +853,19 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
     setActivePopover(null);
   };
 
+  const handleToggleTimer = () => {
+    const starting = !timerRunning;
+    setTimerRunning(starting);
+    if (starting) {
+      startSpeakerTimerInDB(committeeIdRef.current);
+    } else {
+      stopSpeakerTimerInDB(committeeIdRef.current);
+    }
+  };
+
   const handleRestartTime = () => {
     setTimerRunning(false);
+    stopSpeakerTimerInDB(committeeIdRef.current);
     setExtraTimeAdded(false);
     updateLocal(setCommittee, (c) => ({ ...c, speakerTimeRemaining: speakerTimeLimit }));
   };
@@ -1166,7 +1191,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
                             ↺
                           </button>
                           {/* Start/Pause — FIX: disabled when last speaker */}
-                          <button onClick={() => setTimerRunning((r) => !r)}
+                          <button onClick={handleToggleTimer}
                             disabled={isLastGSLSpeaker}
                             className={`flex-1 py-3 rounded-xl font-bold text-base transition-colors ${
                               timerRunning ? 'bg-yellow-600 hover:bg-yellow-500 text-white' :
