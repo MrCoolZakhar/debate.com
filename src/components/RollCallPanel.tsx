@@ -347,10 +347,12 @@ export default function RollCallPanel({
               <button onClick={handleAllPresentVoting} className="text-[10px] font-semibold px-2 py-1 rounded-lg bg-[#2E1E0F] text-blue-400 hover:bg-blue-950/40 transition-colors">All PV</button>
             </div>
           ) : (
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              {/* Total pie — present/total */}
+              <MajorityPie value={present} threshold={total} color="#4A90D9" label={`${present}`} />
               {/* 2/3 majority pie */}
               <MajorityPie value={present} threshold={Math.ceil((total * 2) / 3)} color="#7B4A1E" label={`${Math.ceil((total * 2) / 3)}`} />
-              {/* Simple majority pie */}
+              {/* 1/2+1 simple majority pie */}
               <MajorityPie value={present} threshold={Math.floor(total / 2) + 1} color="#3D6B35" label={`${Math.floor(total / 2) + 1}`} />
             </div>
           )}
@@ -371,6 +373,9 @@ export default function RollCallPanel({
           const queuePos = queuePositionMap.get(d.id) ?? null;
           const matchesSearch = !search || d.country.toLowerCase().includes(search.toLowerCase());
           const isDraggable = listView === 'queue' && !isRollCallPhase && queuePositionMap.has(d.id);
+          const isCurrentSpeaker = committee.currentSpeaker?.delegateId === d.id;
+          // "Up next" = first in queue, not currently speaking
+          const isUpNext = !isCurrentSpeaker && listView === 'queue' && queuePos === 1;
 
           const handleRowClick = () => {
             if (isRollCallPhase) {
@@ -413,6 +418,8 @@ export default function RollCallPanel({
                 className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all ${
                   !matchesSearch
                     ? 'border border-transparent opacity-25'
+                    : isCurrentSpeaker
+                    ? 'bg-[#7B4A1E]/20 border-2 border-[#7B4A1E]'
                     : isAbsent
                     ? 'border border-transparent opacity-40'
                     : d.status === 'present'
@@ -427,15 +434,15 @@ export default function RollCallPanel({
                 } ${isDraggable ? 'cursor-grab' : ''}`}
               >
                 <div className="relative shrink-0">
-                  <FlagCircle country={d.country} size="sm" />
+                  <FlagCircle country={d.country} size={isUpNext ? 'md' : 'sm'} />
                   {/* Queue position bubble */}
                   {queuePos !== null && (
-                    <div className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-0.5 bg-[#7B4A1E] rounded-full text-white text-[10px] flex items-center justify-center font-black leading-none">
+                    <div className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-0.5 bg-[#7B4A1E] rounded-full text-white text-[13px] flex items-center justify-center font-black leading-none">
                       {queuePos <= 99 ? queuePos : '99+'}
                     </div>
                   )}
                 </div>
-                <span className={`flex-1 text-base truncate ${!isAbsent ? 'text-white font-medium' : 'text-[#7A5A38]'}`}>
+                <span className={`flex-1 truncate max-w-[100px] ${isUpNext ? 'text-lg font-bold' : 'text-base'} ${!isAbsent ? 'text-white font-medium' : 'text-[#7A5A38]'}`}>
                   {d.country}
                 </span>
                 {isAbsent && !isRollCallPhase && (

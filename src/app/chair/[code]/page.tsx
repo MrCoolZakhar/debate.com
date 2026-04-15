@@ -355,6 +355,8 @@ function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee
   caucusRef.current = committee.caucus;
   const caucus = committee.caucus!;
   const spokenCountries = caucus.spokenCountries ?? [];
+  const [showExtend, setShowExtend] = useState(false);
+  const [extendMins, setExtendMins] = useState(5);
 
   useEffect(() => {
     if (speakerRunning) {
@@ -392,8 +394,22 @@ function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee
   const handleAddToQueue = (delegateId: string) => {
     const delegate = committee.delegates.find((d) => d.id === delegateId);
     if (!delegate) return;
+    // Don't re-add current speaker
+    if (committee.caucus?.currentSpeaker === delegate.country) return;
     updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: [...(c.caucusQueue ?? []), { delegateId, country: delegate.country }] }));
     addToCaucusListInDB(committee.id, delegateId, delegate.country);
+  };
+
+  const handleExtendCaucus = (extraSecs: number) => {
+    updateLocal(setCommittee, (c) => {
+      if (!c.caucus) return c;
+      const newRemaining = c.caucus.remainingTime + extraSecs;
+      const newTotal = c.caucus.totalTime + extraSecs;
+      const updated = { ...c.caucus, remainingTime: newRemaining, totalTime: newTotal };
+      updateCaucusInDB(committee.id, updated);
+      return { ...c, caucus: updated };
+    });
+    setShowExtend(false);
   };
 
   const handleNext = () => {
@@ -458,8 +474,8 @@ function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee
     <div className="flex-1 flex flex-col overflow-hidden">
       <div className="flex-1 flex flex-col items-center justify-center px-8 py-4 min-h-0">
         <div className="text-center mb-3">
-          <p className="text-xs text-[#B8844A] font-mono tracking-widest">MODERATED CAUCUS</p>
-          {caucus.purpose && <p className="text-[#C4A882] text-sm mt-0.5">{caucus.purpose}</p>}
+          <p className="text-5xl font-black text-[#B8844A] tracking-tight">MODERATED CAUCUS</p>
+          {caucus.purpose && <p className="text-4xl font-bold text-[#C4A882] mt-1">{caucus.purpose}</p>}
           {spokenCountries.length > 0 && (
             <p className="text-xs text-yellow-500 mt-0.5">{spokenCountries.length} delegate{spokenCountries.length !== 1 ? 's' : ''} spoke</p>
           )}
@@ -515,10 +531,30 @@ function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee
             <div className="h-full bg-[#B8844A]/60 rounded-full transition-all" style={{ width: `${totalProgress}%` }} />
           </div>
           <span className="text-xs text-[#7A5A38]">ticks with speaker</span>
+          <button onClick={() => setShowExtend((v) => !v)} className="px-3 py-1.5 rounded-lg font-bold text-xs bg-[#2E1E0F] hover:bg-emerald-950/50 text-[#C4A882] hover:text-emerald-400 transition-colors border border-[#2E1E0F] hover:border-emerald-900/50">
+            Extend
+          </button>
           <button onClick={handleEndCaucus} className="px-3 py-1.5 rounded-lg font-bold text-xs bg-[#2E1E0F] hover:bg-red-950/50 text-[#C4A882] hover:text-red-400 transition-colors border border-[#2E1E0F] hover:border-red-900/50">
             End Caucus
           </button>
         </div>
+        {showExtend && (
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-xs text-emerald-400 font-semibold shrink-0">Extend by</span>
+            {[1, 2, 5, 10].map((m) => (
+              <button key={m} onClick={() => handleExtendCaucus(m * 60)}
+                className="px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-900/30 hover:bg-emerald-800/40 border border-emerald-700/30 text-emerald-300 transition-colors">
+                {m}m
+              </button>
+            ))}
+            <input type="number" min={1} value={extendMins} onChange={(e) => setExtendMins(parseInt(e.target.value) || 1)}
+              className="w-12 bg-[#150F09] border border-[#2E1E0F] rounded-lg px-2 py-1 text-white text-xs focus:outline-none" />
+            <button onClick={() => handleExtendCaucus(extendMins * 60)}
+              className="px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-900/30 hover:bg-emerald-800/40 border border-emerald-700/30 text-emerald-300 transition-colors">
+              + custom
+            </button>
+          </div>
+        )}
         <CaucusAddSpeakerInput committee={committee} spokenCountries={spokenCountries} onAdd={handleAddToQueue} />
       </div>
     </div>
@@ -828,10 +864,10 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
     const delegate = committee.delegates.find((d) => d.country === rtrCountry && d.status !== 'absent');
     if (!delegate) return;
     const entry = { delegateId: delegate.id, country: rtrCountry };
-    // Insert at top of GSL but preserve existing position if already on list
+    // Insert at top of GSL, removing any existing slot to avoid duplicates
     updateLocal(setCommittee, (c) => ({
       ...c,
-      speakersList: [entry, ...c.speakersList],
+      speakersList: [entry, ...c.speakersList.filter((s) => s.delegateId !== delegate.id)],
     }));
     setRtrOverrideTime(rtrSeconds);
     setRtrDelegateId(delegate.id);
@@ -1082,7 +1118,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
         )}
         {committee.phase !== 'pre-session' && (
           <>
-            {showRollCall && (
+            {showRollCall && committee.phase !== 'moderated-caucus' && (
               <aside className="w-[22rem] border-r border-[#2E1E0F] bg-[#0D0906] flex flex-col overflow-hidden shrink-0">
                 <RollCallPanel committee={committee}
                   onAddToList={handleAddToSpeakersList}
