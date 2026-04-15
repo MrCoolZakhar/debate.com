@@ -110,9 +110,7 @@ function JoinPageInner() {
     if (mode === 'chair') {
       const name = chairNameMode === 'new' ? newChairName.trim() : chairName;
       if (!name) { setError('Please select or enter your chair name.'); return; }
-      if (!foundCommittee.chairNames.includes(name)) {
-        addChairName(foundCommittee.id, name);
-      }
+      addChairName(foundCommittee.id, name);
       router.push(`/chair/${foundCommittee.code}?chairName=${encodeURIComponent(name)}`);
       return;
     }
