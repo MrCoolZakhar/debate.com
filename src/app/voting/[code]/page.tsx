@@ -2,10 +2,22 @@
 
 import { use, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Committee } from '@/lib/types';
+import { useRouter } from 'next/navigation';
+import { Committee, DelegateStatus } from '@/lib/types';
 import { getCountryByName, getFlagEmoji } from '@/lib/countries';
-import { getCommitteeByCode } from '@/lib/committeeService';
+import { getCommitteeByCode, setPhase as setPhaseInDB, setDelegateStatus as setDelegateStatusInDB } from '@/lib/committeeService';
 import { useSettingsStore } from '@/lib/settingsStore';
+import { SettingsPanel } from '@/components/SettingsPanel';
+
+function abbreviateCommitteeName(name: string): string {
+  return name
+    .replace(/United Nations Security Council/gi, 'UNSC')
+    .replace(/Security Council/gi, 'UNSC')
+    .replace(/United Nations General Assembly/gi, 'UNGA')
+    .replace(/General Assembly/gi, 'UNGA')
+    .replace(/United Nations Human Rights Council/gi, 'UNHRC')
+    .replace(/Human Rights Council/gi, 'HRC');
+}
 
 type VoteChoice = 'for' | 'against' | 'for-rights' | 'against-rights' | 'abstain';
 interface DelegateVote {
@@ -50,6 +62,7 @@ function VoteScale({ forCount, againstCount, totalVoted }: {
 
 export default function VotingPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = use(params);
+  const router = useRouter();
 
   // ── ALL hooks must be called before any early returns ──────────────────────
   const getSettings = useSettingsStore((s) => s.getSettings);
@@ -63,15 +76,29 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   const [rightsSpeakerTime, setRightsSpeakerTime] = useState(60);
   const [rightsRunning, setRightsRunning] = useState(false);
   const rightsTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [rollCallDone, setRollCallDone] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  // Local delegate statuses for roll call modal (mirrors committee.delegates)
+  const [rollCallStatuses, setRollCallStatuses] = useState<Record<string, DelegateStatus>>({});
 
   useEffect(() => {
     async function load() {
       const found = await getCommitteeByCode(code);
       setCommittee(found ?? null);
+      if (found) {
+        const statuses: Record<string, DelegateStatus> = {};
+        found.delegates.forEach((d) => { statuses[d.id] = d.status; });
+        setRollCallStatuses(statuses);
+      }
       setLoading(false);
     }
     load();
   }, [code]);
+
+  useEffect(() => {
+    if (committee) document.title = `${abbreviateCommitteeName(committee.name)} — Voting`;
+    return () => { document.title = 'Gavelling'; };
+  }, [committee?.name]);
 
   // Rights speaker countdown timer
   useEffect(() => {
@@ -124,8 +151,9 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     (d) => d.type === 'draft-resolution' && d.status === 'introduced'
   );
   const selectedDoc = introducedDRs.find((d) => d.id === selectedDocId) ?? null;
+  // Use roll call statuses (local) if roll call is done, else use DB status
   const presentDelegates = committee.delegates
-    .filter((d) => d.status !== 'absent')
+    .filter((d) => (rollCallDone ? rollCallStatuses[d.id] ?? d.status : d.status) !== 'absent')
     .sort((a, b) => a.country.localeCompare(b.country));
 
   const forCount = votes.filter((v) => v.choice === 'for' || v.choice === 'for-rights').length;
@@ -136,9 +164,12 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     .sort((a, b) => a.country.localeCompare(b.country));
   const withRights = withRightsAll.slice(0, 10);
 
-  // Veto check
+  // Veto check (2c: use vetoCountries if set, else fall back to p5Delegations then hardcoded P5)
+  const vetoList = settings.vetoCountries?.length
+    ? settings.vetoCountries
+    : (settings.p5Delegations?.length ? settings.p5Delegations : ["China","France","Russia","United Kingdom","United States"]);
   const p5Veto = settings.vetoMode === 'p5'
-    && votes.some((v) => settings.p5Delegations.includes(v.country) && (v.choice === 'against' || v.choice === 'against-rights'));
+    && votes.some((v) => vetoList.includes(v.country) && (v.choice === 'against' || v.choice === 'against-rights'));
   const unanimousRequired = settings.vetoMode === 'unanimous';
   const pvDelegates = committee.delegates.filter((d) => d.status === 'present-voting');
   const unanimousFail = unanimousRequired && pvDelegates.some((d) => {
@@ -194,6 +225,15 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     }
   };
 
+  const handleBackToSession = async () => {
+    await setPhaseInDB(committee.id, 'speakers-list');
+    router.push(`/chair/${committee.code}`);
+  };
+  const handleEndDebate = async () => {
+    await setPhaseInDB(committee.id, 'adjourned');
+    router.push('/');
+  };
+
   const Header = ({ children }: { children?: React.ReactNode }) => (
     <header className="border-b border-[#2E1E0F] bg-[#150F08] px-6 h-12 flex items-center gap-4 shrink-0">
       <Link href="/">
@@ -205,17 +245,95 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
         />
       </Link>
       <div className="flex-1 min-w-0 flex items-center gap-2">
-        <span className="text-sm font-bold text-white truncate">{committee.name}</span>
+        <span className="text-sm font-bold text-white truncate">{abbreviateCommitteeName(committee.name)}</span>
       </div>
+      <button
+        onClick={handleBackToSession}
+        className="text-xs px-3 py-1 rounded-lg bg-[#2E1E0F] text-[#C4A882] hover:text-white transition-colors shrink-0"
+      >
+        ← Back to Session
+      </button>
+      <button
+        onClick={handleEndDebate}
+        className="text-xs px-3 py-1 rounded-lg bg-red-950/50 text-red-400 hover:bg-red-900/60 border border-red-900/50 transition-colors shrink-0"
+      >
+        End Debate
+      </button>
+      <button onClick={() => setShowSettings(true)} className="text-[#7A5A38] hover:text-white transition-colors shrink-0 text-2xl">⚙</button>
       {children}
     </header>
   );
+
+  // ── Roll call modal (blocks until dismissed) ─────────────────────────────
+  const RollCallModal = () => {
+    const sorted = [...committee.delegates].sort((a, b) => a.country.localeCompare(b.country));
+    const cycleStatus = (id: string) => {
+      setRollCallStatuses((prev) => {
+        const cur = prev[id] ?? 'absent';
+        const next: DelegateStatus = cur === 'absent' ? 'present' : cur === 'present' ? 'present-voting' : 'absent';
+        setDelegateStatusInDB(id, next);
+        return { ...prev, [id]: next };
+      });
+    };
+    const thumbPos = (status: DelegateStatus) =>
+      status === 'absent' ? 'left-[2px]' : status === 'present' ? 'left-[31px]' : 'left-[60px]';
+    const thumbColor = (status: DelegateStatus) =>
+      status === 'absent' ? 'bg-red-300' : status === 'present' ? 'bg-green-500' : 'bg-blue-500';
+    const presentCount = Object.values(rollCallStatuses).filter((s) => s !== 'absent').length;
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(5, 4, 3, 0.92)', backdropFilter: 'blur(4px)' }}>
+        <div className="bg-[#1A1209] border border-[#2E1E0F] rounded-2xl w-full max-w-md shadow-2xl flex flex-col" style={{ maxHeight: '85vh' }}>
+          <div className="px-5 py-4 border-b border-[#2E1E0F] shrink-0">
+            <h2 className="text-base font-black text-white">Roll Call</h2>
+            <p className="text-xs text-[#7A5A38] mt-0.5">{presentCount} of {committee.delegates.length} delegates present — confirm before voting</p>
+          </div>
+          <div className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
+            {sorted.map((d) => {
+              const status = rollCallStatuses[d.id] ?? d.status;
+              return (
+                <div key={d.id} className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all ${
+                  status === 'absent' ? 'opacity-40 border border-transparent' :
+                  status === 'present' ? 'bg-green-950/30 border border-green-800/30' :
+                  'bg-blue-950/30 border border-blue-800/30'
+                }`}>
+                  <span className="text-base">{(() => { const f = getCountryByName(d.country); return f ? getFlagEmoji(f.code) : '🌐'; })()}</span>
+                  <span className="flex-1 text-sm text-white truncate">{d.country}</span>
+                  <button
+                    onClick={() => cycleStatus(d.id)}
+                    className={`relative w-[90px] h-[30px] rounded-full bg-[#1A1209] border border-[#2E1E0F] cursor-pointer shrink-0 select-none`}
+                  >
+                    <div className="absolute inset-0 grid grid-cols-3 items-center pointer-events-none">
+                      <span className={`text-[10px] font-bold text-center ${status === 'absent' ? 'text-red-900' : 'text-[#7A5A38]'}`}>A</span>
+                      <span className={`text-[10px] font-bold text-center ${status === 'present' ? 'text-white' : 'text-[#7A5A38]'}`}>P</span>
+                      <span className={`text-[10px] font-bold text-center ${status === 'present-voting' ? 'text-white' : 'text-[#7A5A38]'}`}>PV</span>
+                    </div>
+                    <div className={`absolute top-[3px] w-[26px] h-[24px] rounded-full transition-all duration-200 ${thumbPos(status)} ${thumbColor(status)}`} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+          <div className="px-4 py-4 border-t border-[#2E1E0F] shrink-0">
+            <button
+              onClick={() => setRollCallDone(true)}
+              disabled={presentCount === 0}
+              className="w-full bg-[#7B4A1E] hover:bg-[#8B5A2B] disabled:bg-[#2E1E0F] disabled:text-[#7A5A38] text-white py-3 rounded-xl font-black text-sm transition-colors"
+            >
+              {presentCount > 0 ? `Start Voting with ${presentCount} delegates →` : 'Mark at least 1 delegate present'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   // ── Doc selection screen ──────────────────────────────────────────────────
   if (!selectedDoc) {
     return (
       <div className="min-h-screen bg-[#0D0906] flex flex-col">
         <Header />
+        {!rollCallDone && <RollCallModal />}
+        {showSettings && <SettingsPanel committee={committee} onClose={() => setShowSettings(false)} />}
         <div className="flex-1 flex items-center justify-center">
           <div className="w-96 space-y-3">
             <p className="text-xs font-mono text-[#7A5A38] text-center mb-5 tracking-widest">
@@ -535,6 +653,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
           </div>
         </div>
       )}
+      {showSettings && <SettingsPanel committee={committee} onClose={() => setShowSettings(false)} />}
     </div>
   );
 }

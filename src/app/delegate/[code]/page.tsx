@@ -19,6 +19,16 @@ import {
 } from '@/lib/committeeService';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+function abbreviateCommitteeName(name: string): string {
+  return name
+    .replace(/United Nations Security Council/gi, 'UNSC')
+    .replace(/Security Council/gi, 'UNSC')
+    .replace(/United Nations General Assembly/gi, 'UNGA')
+    .replace(/General Assembly/gi, 'UNGA')
+    .replace(/United Nations Human Rights Council/gi, 'UNHRC')
+    .replace(/Human Rights Council/gi, 'HRC');
+}
+
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
@@ -558,6 +568,12 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     load();
     return () => unsubscribe?.();
   }, [code]);
+
+  // Browser title abbreviation
+  useEffect(() => {
+    if (committee) document.title = `${abbreviateCommitteeName(committee.name)} — ${country || 'Delegate'}`;
+    return () => { document.title = 'Gavelling'; };
+  }, [committee?.name, country]);
 
   // Local timer tick — smooth countdown independent of Supabase round-trips
   useEffect(() => {
