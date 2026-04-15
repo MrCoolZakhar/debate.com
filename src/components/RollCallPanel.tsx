@@ -216,17 +216,21 @@ function FullListPopup({
 }
 
 // ── MajorityPie ───────────────────────────────────────────────────────────────
-function MajorityPie({ value, threshold, color, label }: { value: number; threshold: number; color: string; label: string }) {
-  const r = 10; const circ = 2 * Math.PI * r;
-  const frac = threshold > 0 ? Math.min(value / threshold, 1) : 0;
+// staticFill: fixed arc fraction (0–1) to display regardless of data.
+// value/threshold: used only to determine color (met = active color vs grey).
+function MajorityPie({ value, threshold, color, label, staticFill }: {
+  value: number; threshold: number; color: string; label: string; staticFill?: number;
+}) {
+  const r = 13; const circ = 2 * Math.PI * r;
+  const fill = staticFill !== undefined ? staticFill : (threshold > 0 ? Math.min(value / threshold, 1) : 0);
   const met = value >= threshold;
   return (
     <div className="flex items-center gap-1" title={`${value}/${threshold}`}>
-      <svg width="26" height="26" viewBox="0 0 26 26">
-        <circle cx="13" cy="13" r={r} fill="none" stroke="#2E1E0F" strokeWidth="5" />
-        <circle cx="13" cy="13" r={r} fill="none" stroke={met ? color : '#7A5A38'} strokeWidth="5"
-          strokeDasharray={circ} strokeDashoffset={circ * (1 - frac)}
-          strokeLinecap="round" transform="rotate(-90 13 13)" style={{ transition: 'stroke-dashoffset 0.3s' }} />
+      <svg width="32" height="32" viewBox="0 0 32 32">
+        <circle cx="16" cy="16" r={r} fill="none" stroke="#2E1E0F" strokeWidth="5" />
+        <circle cx="16" cy="16" r={r} fill="none" stroke={met ? color : '#7A5A38'} strokeWidth="5"
+          strokeDasharray={circ} strokeDashoffset={circ * (1 - fill)}
+          strokeLinecap="round" transform="rotate(-90 16 16)" style={{ transition: 'stroke-dashoffset 0.3s' }} />
       </svg>
       <span className={`text-xs font-bold ${met ? 'text-white' : 'text-[#7A5A38]'}`}>{label}</span>
     </div>
@@ -348,12 +352,12 @@ export default function RollCallPanel({
             </div>
           ) : (
             <div className="flex items-center gap-2">
-              {/* Total pie — present/total */}
-              <MajorityPie value={present} threshold={total} color="#4A90D9" label={`${present}`} />
-              {/* 2/3 majority pie */}
-              <MajorityPie value={present} threshold={Math.ceil((total * 2) / 3)} color="#7B4A1E" label={`${Math.ceil((total * 2) / 3)}`} />
-              {/* 1/2+1 simple majority pie */}
-              <MajorityPie value={present} threshold={Math.floor(total / 2) + 1} color="#3D6B35" label={`${Math.floor(total / 2) + 1}`} />
+              {/* Total pie — always 100% filled, shows present/total */}
+              <MajorityPie value={present} threshold={total} color="#4A90D9" label={`${present}/${total}`} staticFill={1} />
+              {/* 2/3 majority pie — always 66% arc, shows present vs threshold */}
+              <MajorityPie value={present} threshold={Math.ceil((total * 2) / 3)} color="#E8A94A" label={`${present}/${Math.ceil((total * 2) / 3)}`} staticFill={2/3} />
+              {/* 1/2+1 simple majority pie — always 50% arc */}
+              <MajorityPie value={present} threshold={Math.floor(total / 2) + 1} color="#3D6B35" label={`${present}/${Math.floor(total / 2) + 1}`} staticFill={0.5} />
             </div>
           )}
         </div>
