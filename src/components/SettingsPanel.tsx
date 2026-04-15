@@ -75,6 +75,7 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
   const [codeSaving, setCodeSaving] = useState(false);
   const [codeError, setCodeError] = useState('');
   const [codeSaved, setCodeSaved] = useState(false);
+  const [copiedChairCode, setCopiedChairCode] = useState(false);
 
   // Points tab — expanded delegate
   const [expandedDelegate, setExpandedDelegate] = useState<string | null>(null);
@@ -372,17 +373,20 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
               {s.separateChairCode && (
                 <div className="py-3 border-b border-[#2E1E0F]">
                   <div className="text-xs text-[#7A5A38] mb-1.5">Chair join code</div>
-                  <div className="flex items-center gap-2">
-                    <span className="flex-1 bg-[#150F09] border border-[#2E1E0F] rounded-lg px-3 py-2 text-white text-sm font-mono tracking-wider">
-                      {chairCode}
-                    </span>
-                    <button
-                      onClick={() => navigator.clipboard.writeText(chairCode)}
-                      className="px-3 py-2 rounded-lg text-xs font-bold bg-[#2E1E0F] hover:bg-[#3D2A15] text-[#C4A882] transition-colors shrink-0"
-                    >
-                      Copy
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(chairCode);
+                      setCopiedChairCode(true);
+                      setTimeout(() => setCopiedChairCode(false), 2000);
+                    }}
+                    className="w-full bg-[#150F09] border border-[#2E1E0F] hover:border-[#7B4A1E] hover:bg-[#1A1209] rounded-lg px-3 py-2 text-sm font-mono tracking-wider transition-colors cursor-pointer text-left"
+                  >
+                    {copiedChairCode
+                      ? <span className="text-green-400 font-bold">✓ Copied</span>
+                      : <span className="text-white">{chairCode}</span>
+                    }
+                  </button>
                 </div>
               )}
               <Toggle

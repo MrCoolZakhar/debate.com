@@ -178,6 +178,9 @@ function JoinPageInner() {
                 )}
               </div>
               {error && <p className="text-red-400 text-sm mt-2">{error}</p>}
+              {mode === 'chair' && (
+                <p className="text-[#7A5A38] text-xs mt-2">Enter full chair code including -XXXX suffix</p>
+              )}
             </div>
 
             {foundCommittee && (
@@ -259,7 +262,9 @@ function JoinPageInner() {
                 mode === 'delegate'
                   ? (!foundCommittee || (getSettings(foundCommittee?.code ?? '').requireDelegationName && !country))
                   : mode === 'chair'
-                  ? (!foundCommittee || (chairNameMode === 'select' ? !chairName : !newChairName.trim()))
+                  ? (!foundCommittee ||
+                      (getSettings(foundCommittee.code).separateChairCode && !code.includes('-')) ||
+                      (chairNameMode === 'select' ? !chairName : !newChairName.trim()))
                   : !foundCommittee
               }
               className="w-full bg-[#7B4A1E] hover:bg-[#8B5A2B] disabled:bg-[#2E1E0F] disabled:text-[#7A5A38] text-white py-3 rounded-lg font-semibold transition-colors"
