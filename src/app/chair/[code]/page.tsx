@@ -1066,7 +1066,15 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
         </div>
       )}
       <div className="flex-1 flex overflow-hidden">
-        {committee.phase === 'pre-session' && (
+        {showChat && (
+          <ChatPanel
+            committee={committee}
+            senderName={committee.chairNames[0] ?? 'Chair'}
+            isChair={true}
+            onClose={() => setShowChat(false)}
+          />
+        )}
+        {!showChat && committee.phase === 'pre-session' && (
           <div className="flex-1 flex items-center justify-center px-6 py-8">
             <div className="w-full max-w-md bg-[#1A1209] border border-[#2E1E0F] rounded-2xl overflow-hidden" style={{ maxHeight: '88vh', display: 'flex', flexDirection: 'column' }}>
               <RollCallPanel committee={committee}
@@ -1080,7 +1088,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
             </div>
           </div>
         )}
-        {committee.phase !== 'pre-session' && (
+        {!showChat && committee.phase !== 'pre-session' && (
           <>
             {showRollCall && (
               <aside className="w-[22rem] border-r border-[#2E1E0F] bg-[#0D0906] flex flex-col overflow-hidden shrink-0">
@@ -1325,12 +1333,6 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
                 </div>
               )}
             </main>
-            {/* Chat sidebar — right side, full height */}
-            {showChat && (
-              <aside className="w-80 border-l border-[#2E1E0F] bg-[#0D0906] flex flex-col overflow-hidden shrink-0">
-                <ChatPanel committee={committee} senderName={committee.chairNames[0] ?? 'Chair'} isChair={true} />
-              </aside>
-            )}
           </>
         )}
       </div>

@@ -743,7 +743,23 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
       </div>
 
       <div className="flex-1 flex overflow-hidden">
-      <div className="flex-1 overflow-y-auto">
+      {showChat && (
+        <ChatPanel
+          committee={committee}
+          senderName={country}
+          isChair={false}
+          onClose={() => setShowChat(false)}
+          speakerCard={isCurrentSpeaker ? (
+            <div className="bg-[#7B4A1E]/20 border border-[#7B4A1E]/40 rounded-xl px-3 py-2.5">
+              <div className="text-[10px] font-mono text-[#7A5A38] mb-1">YOU HAVE THE FLOOR</div>
+              <div className={`text-2xl font-black font-mono ${localTime <= 10 ? 'text-red-400' : 'text-[#B8844A]'}`}>
+                {formatTime(localTime)}
+              </div>
+            </div>
+          ) : undefined}
+        />
+      )}
+      {!showChat && <div className="flex-1 overflow-y-auto">
 
         {/* ── Session tab ── */}
         {tab === 'session' && (
@@ -983,14 +999,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
         {tab === 'stats' && (
           <StatisticsTab committee={committee} country={country} />
         )}
-      </div>
-
-      {/* Chat sidebar */}
-      {showChat && (
-        <aside className="w-[36rem] border-l border-[#2E1E0F] bg-[#0D0906] flex flex-col overflow-hidden shrink-0">
-          <ChatPanel committee={committee} senderName={country} isChair={false} />
-        </aside>
-      )}
+      </div>}
       </div>
     </div>
   );
