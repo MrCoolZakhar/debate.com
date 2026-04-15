@@ -352,12 +352,12 @@ export default function RollCallPanel({
             </div>
           ) : (
             <div className="flex items-center gap-2">
-              {/* Total pie — always 100% filled, shows present/total */}
-              <MajorityPie value={present} threshold={total} color="#4A90D9" label={`${present}/${total}`} staticFill={1} />
-              {/* 2/3 majority pie — always 66% arc, shows present vs threshold */}
-              <MajorityPie value={present} threshold={Math.ceil((total * 2) / 3)} color="#E8A94A" label={`${present}/${Math.ceil((total * 2) / 3)}`} staticFill={2/3} />
+              {/* Total pie — always 100% filled, shows present count */}
+              <MajorityPie value={present} threshold={total} color="#4A90D9" label={`${present}`} staticFill={1} />
+              {/* 2/3 majority pie — always 66% arc, shows 2/3 threshold */}
+              <MajorityPie value={present} threshold={Math.ceil((total * 2) / 3)} color="#E8A94A" label={`${Math.ceil((total * 2) / 3)}`} staticFill={2/3} />
               {/* 1/2+1 simple majority pie — always 50% arc */}
-              <MajorityPie value={present} threshold={Math.floor(total / 2) + 1} color="#3D6B35" label={`${present}/${Math.floor(total / 2) + 1}`} staticFill={0.5} />
+              <MajorityPie value={present} threshold={Math.floor(total / 2) + 1} color="#3D6B35" label={`${Math.floor(total / 2) + 1}`} staticFill={0.5} />
             </div>
           )}
         </div>

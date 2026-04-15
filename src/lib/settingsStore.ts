@@ -18,6 +18,7 @@ export interface CommitteeSettings {
   allowAbstentions: boolean;
   vetoMode: 'none' | 'p5' | 'unanimous';
   p5Delegations: string[];
+  vetoCountries: string[];
   quorumThreshold: 'none' | '1-4' | '1-3' | '1-2';
   // Tab 2 — Motions
   motionModeratedCaucus: boolean;
@@ -54,6 +55,7 @@ export const DEFAULT_SETTINGS: CommitteeSettings = {
   allowAbstentions: true,
   vetoMode: 'none',
   p5Delegations: ['China', 'France', 'Russia', 'United Kingdom', 'United States'],
+  vetoCountries: ['China', 'France', 'Russia', 'United Kingdom', 'United States'],
   quorumThreshold: 'none',
   motionModeratedCaucus: true,
   motionUnmoderatedCaucus: true,
