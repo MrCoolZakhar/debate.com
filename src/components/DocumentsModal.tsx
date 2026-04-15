@@ -563,6 +563,7 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate }
   const [stage, setStage] = useState<PresentationStage>(null);
   const [timings, setTimings] = useState({ reading: 0, presentation: 0, qa: 0 });
   const [showDocContent, setShowDocContent] = useState(false);
+  const [presentationComplete, setPresentationComplete] = useState(false);
 
   const update = (updater: (c: Committee) => Committee) => onCommitteeUpdate?.(updater);
   const docs = (committee.documents ?? []).filter((d) => d.type === tab);
@@ -618,11 +619,10 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate }
       setStage(null);
       setActiveDoc(null);
     } else {
-      // DR goes to voting page
+      // DR: presentation complete — stay on documents page, chair navigates to voting manually
       setStage(null);
       setActiveDoc(null);
-      onClose();
-      router.push(`/voting/${committee.code}`);
+      setPresentationComplete(true);
     }
   };
 
@@ -633,12 +633,11 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate }
       setStage(null);
       setActiveDoc(null);
     } else {
-      // Mark as introduced then go to voting page
+      // Mark as introduced, stay on documents page — chair navigates to voting manually
       handleStatusChange(activeDoc.id, 'introduced');
       setStage(null);
       setActiveDoc(null);
-      onClose();
-      router.push(`/voting/${committee.code}`);
+      setPresentationComplete(true);
     }
   };
 
@@ -734,6 +733,12 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate }
             <SubmitForm committee={committee} type={tab} onDone={() => setShowForm(false)} onDocumentAdded={handleDocumentAdded} />
           ) : (
             <div className="px-7 pb-7 space-y-3">
+              {presentationComplete && (
+                <div className="flex items-center justify-between bg-purple-950/30 border border-purple-700/40 rounded-xl px-4 py-3">
+                  <span className="text-sm text-purple-300 font-semibold">Presentation complete. Return to voting when ready.</span>
+                  <button onClick={() => setPresentationComplete(false)} className="text-[#7A5A38] hover:text-white text-sm ml-4">✕</button>
+                </div>
+              )}
               {docs.length === 0 ? (
                 <div className="text-center py-10">
                   <div className="text-4xl mb-3">{tab === 'working-paper' ? '📄' : '📜'}</div>

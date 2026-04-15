@@ -77,11 +77,12 @@ function AddCountryInput({ committee, onAdd, onQueryChange }: { committee: Commi
 
   const updateQuery = (q: string) => { setQuery(q); onQueryChange?.(q); };
 
-  const knownMatches = query.trim()
-    ? UN_COUNTRIES.filter((c) => c.name.toLowerCase().startsWith(query.toLowerCase()))
+  const rq = query.trim().toLowerCase();
+  const knownMatches = rq
+    ? UN_COUNTRIES.filter((c) => c.name.trim().toLowerCase().startsWith(rq))
         .concat(UN_COUNTRIES.filter((c) =>
-          !c.name.toLowerCase().startsWith(query.toLowerCase()) &&
-          c.name.toLowerCase().includes(query.toLowerCase())))
+          !c.name.trim().toLowerCase().startsWith(rq) &&
+          c.name.trim().toLowerCase().includes(rq)))
     : [];
 
   const topKnown = knownMatches.find((c) => !existingNames.has(c.name.toLowerCase())) ?? null;
@@ -446,7 +447,7 @@ export default function RollCallPanel({
                     </div>
                   )}
                 </div>
-                <span className={`flex-1 truncate max-w-[100px] ${isUpNext ? 'text-lg font-bold' : 'text-base'} ${!isAbsent ? 'text-white font-medium' : 'text-[#7A5A38]'}`}>
+                <span className={`flex-1 line-clamp-2 break-words whitespace-normal leading-tight max-w-[100px] ${isUpNext ? 'text-lg font-bold' : 'text-base'} ${!isAbsent ? 'text-white font-medium' : 'text-[#7A5A38]'}`}>
                   {d.country}
                 </span>
                 {isAbsent && !isRollCallPhase && (

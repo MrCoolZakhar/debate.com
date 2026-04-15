@@ -21,12 +21,16 @@ import {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function abbreviateCommitteeName(name: string): string {
   return name
+    .replace(/\bUN\s+Security\s+Council\b/gi, 'UNSC')
+    .replace(/\bUN\s+General\s+Assembly\b/gi, 'UNGA')
+    .replace(/\bUN\s+Human\s+Rights\s+Council\b/gi, 'UNHRC')
     .replace(/United Nations Security Council/gi, 'UNSC')
     .replace(/Security Council/gi, 'UNSC')
     .replace(/United Nations General Assembly/gi, 'UNGA')
     .replace(/General Assembly/gi, 'UNGA')
     .replace(/United Nations Human Rights Council/gi, 'UNHRC')
-    .replace(/Human Rights Council/gi, 'HRC');
+    .replace(/Human Rights Council/gi, 'HRC')
+    .replace(/^UN\s+/i, '');
 }
 
 function formatTime(seconds: number): string {

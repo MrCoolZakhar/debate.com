@@ -39,12 +39,16 @@ function formatTime(seconds: number) {
 
 function abbreviateCommitteeName(name: string): string {
   return name
+    .replace(/\bUN\s+Security\s+Council\b/gi, 'UNSC')
+    .replace(/\bUN\s+General\s+Assembly\b/gi, 'UNGA')
+    .replace(/\bUN\s+Human\s+Rights\s+Council\b/gi, 'UNHRC')
     .replace(/United Nations Security Council/gi, 'UNSC')
     .replace(/Security Council/gi, 'UNSC')
     .replace(/United Nations General Assembly/gi, 'UNGA')
     .replace(/General Assembly/gi, 'UNGA')
     .replace(/United Nations Human Rights Council/gi, 'UNHRC')
-    .replace(/Human Rights Council/gi, 'HRC');
+    .replace(/Human Rights Council/gi, 'HRC')
+    .replace(/^UN\s+/i, '');
 }
 
 const COUNTRY_ABBREV: Record<string, string> = {
@@ -65,15 +69,15 @@ const COUNTRY_ABBREV: Record<string, string> = {
   'Equatorial Guinea': 'Eq. Guinea',
 };
 function abbrevCountry(name: string): string {
-  return COUNTRY_ABBREV[name] ?? (name.length > 14 ? name.slice(0, 12) + '…' : name);
+  return COUNTRY_ABBREV[name] ?? name;
 }
 
 type CommitteeSetter = React.Dispatch<React.SetStateAction<Committee | null>>;
 
 const localUpdateTime = { current: 0 };
 
-function updateLocal(setCommittee: CommitteeSetter, updater: (c: Committee) => Committee) {
-  localUpdateTime.current = Date.now();
+function updateLocal(setCommittee: CommitteeSetter, updater: (c: Committee) => Committee, structural = false) {
+  if (structural) localUpdateTime.current = Date.now();
   setCommittee((prev) => prev ? updater(prev) : prev);
 }
 
@@ -85,9 +89,10 @@ function AddSpeakerInput({ committee, onAdd }: { committee: Committee; onAdd: (i
   const eligible = committee.delegates.filter(
     (d) => d.status !== 'absent' && d.id !== committee.currentSpeaker?.delegateId
   );
-  const matches = query.trim()
-    ? eligible.filter((d) => d.country.toLowerCase().startsWith(query.toLowerCase()))
-        .concat(eligible.filter((d) => !d.country.toLowerCase().startsWith(query.toLowerCase()) && d.country.toLowerCase().includes(query.toLowerCase())))
+  const q = query.trim().toLowerCase();
+  const matches = q
+    ? eligible.filter((d) => d.country.trim().toLowerCase().startsWith(q))
+        .concat(eligible.filter((d) => !d.country.trim().toLowerCase().startsWith(q) && d.country.trim().toLowerCase().includes(q)))
     : [];
   const topNotOnList = matches.find((d) => !onList.has(d.id)) ?? null;
   const commit = (d: typeof topNotOnList) => { if (!d || onList.has(d.id)) return; onAdd(d.id); setQuery(''); };
@@ -143,13 +148,13 @@ function RtrCountryInput({
   const [query, setQuery] = useState(value);
   const inputRef = useRef<HTMLInputElement>(null);
   const eligible = committee.delegates.filter((d) => d.status !== 'absent');
-
-  const matches = query.trim()
+  const q = query.trim().toLowerCase();
+  const matches = q
     ? eligible
-        .filter((d) => d.country.toLowerCase().startsWith(query.toLowerCase()))
+        .filter((d) => d.country.trim().toLowerCase().startsWith(q))
         .concat(eligible.filter((d) =>
-          !d.country.toLowerCase().startsWith(query.toLowerCase()) &&
-          d.country.toLowerCase().includes(query.toLowerCase())
+          !d.country.trim().toLowerCase().startsWith(q) &&
+          d.country.trim().toLowerCase().includes(q)
         ))
     : [];
   const topMatch = matches[0] ?? null;
@@ -248,7 +253,7 @@ function CaucusSpeakerQueue({ committee, spokenCountries, onRemove, onReorder, c
                 </div>
               )}
             </div>
-            <span className={`truncate max-w-[80px] text-xs font-semibold text-center ${alreadySpoke ? 'text-yellow-400' : 'text-[#C4A882]'}`}>
+            <span className={`line-clamp-2 break-words whitespace-normal leading-tight max-w-[80px] text-xs font-semibold text-center ${alreadySpoke ? 'text-yellow-400' : 'text-[#C4A882]'}`}>
               {showMasked ? `Speaker ${speakerNum}` : abbrevCountry(s.country)}
             </span>
             {i === 0 && !alreadySpoke && <span className="text-sm font-bold text-[#B8844A]">Up next</span>}
@@ -278,7 +283,6 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, rtrDelegateId }: {
 }) {
   const dragIndexRef = useRef<number | null>(null);
   const qLen = list.length;
-  const fSize: 'xl' | 'md' = qLen <= 8 ? 'xl' : 'md';
   const displayItems = list.slice(0, 7);
   const overflow = qLen > 7 ? qLen - 7 : 0;
   return (
@@ -299,9 +303,9 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, rtrDelegateId }: {
               dragIndexRef.current = null;
             }}>
             <div className={`rounded-full ${s.delegateId === rtrDelegateId ? 'ring-2 ring-orange-500 ring-offset-1 ring-offset-[#0D0906]' : ''}`}>
-              <FlagCircle country={s.country} size={fSize} />
+              <FlagCircle country={s.country} size="xl" />
             </div>
-            <span className="truncate max-w-[80px] text-xs font-semibold text-[#C4A882] text-center">{abbrevCountry(s.country)}</span>
+            <span className="line-clamp-2 break-words whitespace-normal leading-tight max-w-[80px] text-xs font-semibold text-[#C4A882] text-center">{abbrevCountry(s.country)}</span>
             {i === 0 && <span className="text-sm font-bold text-[#B8844A]">Up next</span>}
             <button onClick={() => onRemove(s.delegateId)}
               className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full text-white text-[10px] hidden group-hover:flex items-center justify-center">✕</button>
@@ -354,7 +358,7 @@ function CaucusQueueSidebar({ committee, onRemove, onReorder }: {
               >
                 <span className="text-xs text-[#7A5A38] font-mono w-5 text-right shrink-0">{i + 1}</span>
                 <span className="text-lg shrink-0">{found ? getFlagEmoji(found.code) : '🌐'}</span>
-                <span className="flex-1 text-sm text-white truncate">{s.country}</span>
+                <span className="flex-1 text-sm text-white line-clamp-2 break-words whitespace-normal leading-tight">{s.country}</span>
                 <button
                   onClick={() => onRemove(s.delegateId)}
                   className="text-[#7A5A38] hover:text-red-500 transition-colors text-xs opacity-0 group-hover:opacity-100 shrink-0"
@@ -369,27 +373,36 @@ function CaucusQueueSidebar({ committee, onRemove, onReorder }: {
 }
 
 // ── Caucus Add Speaker Input ──────────────────────────────────────────────────
-function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd }: {
+function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, maxSpeakers, currentQueueLength }: {
   committee: Committee; spokenCountries: string[]; onAdd: (id: string) => void;
+  maxSpeakers?: number; currentQueueLength?: number;
 }) {
   const [query, setQuery] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const onList = new Set((committee.caucusQueue ?? committee.speakersList).map((s) => s.delegateId));
   const eligible = committee.delegates.filter((d) => d.status !== 'absent');
-  const matches = query.trim()
-    ? eligible.filter((d) => d.country.toLowerCase().startsWith(query.toLowerCase()))
-        .concat(eligible.filter((d) => !d.country.toLowerCase().startsWith(query.toLowerCase()) && d.country.toLowerCase().includes(query.toLowerCase())))
+  const isFull = maxSpeakers !== undefined && currentQueueLength !== undefined && currentQueueLength >= maxSpeakers;
+  const cq = query.trim().toLowerCase();
+  const matches = cq
+    ? eligible.filter((d) => d.country.trim().toLowerCase().startsWith(cq))
+        .concat(eligible.filter((d) => !d.country.trim().toLowerCase().startsWith(cq) && d.country.trim().toLowerCase().includes(cq)))
     : [];
   const topNotOnList = matches.find((d) => !onList.has(d.id)) ?? null;
-  const commit = (d: typeof topNotOnList) => { if (!d || onList.has(d.id)) return; onAdd(d.id); setQuery(''); };
+  const commit = (d: typeof topNotOnList) => { if (!d || onList.has(d.id) || isFull) return; onAdd(d.id); setQuery(''); };
   return (
     <div className="relative">
-      <div className="flex items-center bg-[#150F09] border border-[#2E1E0F] focus-within:border-[#7B4A1E] rounded-xl transition-colors">
+      {isFull && (
+        <div className="mb-2 text-xs text-yellow-500 text-center px-2">
+          Queue full — {maxSpeakers} speaker{maxSpeakers !== 1 ? 's' : ''} fit in remaining time
+        </div>
+      )}
+      <div className={`flex items-center bg-[#150F09] border rounded-xl transition-colors ${isFull ? 'border-yellow-700/40 opacity-60' : 'border-[#2E1E0F] focus-within:border-[#7B4A1E]'}`}>
         <input ref={inputRef} type="text" value={query} onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(topNotOnList); } if (e.key === 'Escape') setQuery(''); }}
-          placeholder="Add to speakers list…"
-          className="flex-1 bg-transparent px-4 py-3 text-white placeholder-[#7A5A38] focus:outline-none text-sm" />
-        {topNotOnList && query && <span className="text-xs text-[#7A5A38] px-3 truncate max-w-[120px]">↵ {topNotOnList.country}</span>}
+          placeholder={isFull ? 'Queue full' : 'Add to speakers list…'}
+          disabled={isFull}
+          className="flex-1 bg-transparent px-4 py-3 text-white placeholder-[#7A5A38] focus:outline-none text-sm disabled:cursor-not-allowed" />
+        {topNotOnList && query && !isFull && <span className="text-xs text-[#7A5A38] px-3 truncate max-w-[120px]">↵ {topNotOnList.country}</span>}
       </div>
       {query && matches.length > 0 && (
         <div className="absolute bottom-full left-0 right-0 mb-1 bg-[#150F09] border border-[#2E1E0F] rounded-xl overflow-hidden shadow-xl z-10 max-h-48 overflow-y-auto">
@@ -442,7 +455,7 @@ function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee
 
   useEffect(() => {
     if (speakerRunning) {
-      speakerRef.current = setInterval(() => {
+      const tick = () => {
         const c = caucusRef.current;
         if (!c || c.remainingTime <= 0) { setSpeakerRunning(false); return; }
         updateLocal(setCommittee, (prev) => {
@@ -458,7 +471,9 @@ function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee
             caucus: newTotal === 0 ? null : { ...prev.caucus, remainingTime: newTotal, speakerTimeRemaining: newSpeaker },
           };
         });
-      }, 1000);
+      };
+      tick();
+      speakerRef.current = setInterval(tick, 1000);
     } else {
       if (speakerRef.current) clearInterval(speakerRef.current);
     }
@@ -480,6 +495,9 @@ function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee
     if (!delegate) return;
     // Don't re-add current speaker
     if (committee.caucus?.currentSpeaker === delegate.country) return;
+    // Cap queue to fit within remaining total time
+    const maxSpeakers = caucus.speakingTime > 0 ? Math.floor(caucus.remainingTime / caucus.speakingTime) : 0;
+    if ((committee.caucusQueue ?? []).length >= maxSpeakers) return;
     updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: [...(c.caucusQueue ?? []), { delegateId, country: delegate.country }] }));
     addToCaucusListInDB(committee.id, delegateId, delegate.country);
   };
@@ -528,9 +546,9 @@ function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee
 
   const handleEndCaucus = () => {
     setSpeakerRunning(false);
-    updateLocal(setCommittee, (c) => ({ ...c, caucus: null, phase: 'speakers-list', caucusQueue: [] }));
-    updateCaucusInDB(committee.id, null);
     setPhaseInDB(committee.id, 'speakers-list');
+    updateCaucusInDB(committee.id, null);
+    updateLocal(setCommittee, (c) => ({ ...c, caucus: null, phase: 'speakers-list', caucusQueue: [] }), true);
   };
 
   const handleCaucusRtr = () => {
@@ -541,7 +559,7 @@ function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee
     updateLocal(setCommittee, (c) => ({
       ...c,
       caucusQueue: [rtrEntry, ...(c.caucusQueue ?? [])],
-      caucus: c.caucus ? { ...c.caucus, speakerTimeRemaining: 30 } : c.caucus,
+      caucus: c.caucus ? { ...c.caucus, speakerTimeRemaining: Math.min(30, c.caucus.remainingTime) } : c.caucus,
     }));
     addToCaucusListInDB(committee.id, delegate.id, caucusRtrCountry);
     setRtrCaucusId(delegate.id);
@@ -622,7 +640,8 @@ function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee
                   setSpeakerRunning(false);
                   updateLocal(setCommittee, (c) => {
                     if (!c.caucus) return c;
-                    return { ...c, caucus: { ...c.caucus, speakerTimeRemaining: c.caucus.speakingTime } };
+                    const resetTo = Math.min(c.caucus.speakingTime, c.caucus.remainingTime);
+                    return { ...c, caucus: { ...c.caucus, speakerTimeRemaining: resetTo } };
                   });
                 }}
                 className="px-3 py-2.5 rounded-xl font-bold text-xs bg-[#2E1E0F] hover:bg-[#3D2A15] text-[#C4A882] transition-colors border border-[#2E1E0F]"
@@ -721,7 +740,13 @@ function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee
             </button>
           </div>
         )}
-        <CaucusAddSpeakerInput committee={committee} spokenCountries={spokenCountries} onAdd={handleAddToQueue} />
+        <CaucusAddSpeakerInput
+          committee={committee}
+          spokenCountries={spokenCountries}
+          onAdd={handleAddToQueue}
+          maxSpeakers={caucus.speakingTime > 0 ? Math.floor(caucus.remainingTime / caucus.speakingTime) : 0}
+          currentQueueLength={(committee.caucusQueue ?? []).length}
+        />
       </div>
     </div>
   );
@@ -741,14 +766,16 @@ function UnmoderatedCaucusView({ committee, setCommittee }: { committee: Committ
 
   useEffect(() => {
     if (running) {
-      intervalRef.current = setInterval(() => {
+      const tick = () => {
         if (remainingRef.current <= 0) { setRunning(false); return; }
         updateLocal(setCommittee, (c) => {
           if (!c.caucus) return c;
           const newTotal = Math.max(0, c.caucus.remainingTime - 1);
           return { ...c, caucus: newTotal === 0 ? null : { ...c.caucus, remainingTime: newTotal } };
         });
-      }, 1000);
+      };
+      tick();
+      intervalRef.current = setInterval(tick, 1000);
     } else {
       if (intervalRef.current) clearInterval(intervalRef.current);
     }
@@ -757,9 +784,9 @@ function UnmoderatedCaucusView({ committee, setCommittee }: { committee: Committ
 
   const handleEndCaucus = () => {
     setRunning(false);
-    updateLocal(setCommittee, (c) => ({ ...c, caucus: null, phase: 'speakers-list', caucusQueue: [] }));
-    updateCaucusInDB(committee.id, null);
     setPhaseInDB(committee.id, 'speakers-list');
+    updateCaucusInDB(committee.id, null);
+    updateLocal(setCommittee, (c) => ({ ...c, caucus: null, phase: 'speakers-list', caucusQueue: [] }), true);
   };
 
   return (
@@ -944,7 +971,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
       setLoading(false);
       if (found) {
         unsubscribe = subscribeToCommittee(found.id, async () => {
-          if (Date.now() - localUpdateTime.current < 2000) return;
+          if (Date.now() - localUpdateTime.current < 500) return;
           const updated = await getCommitteeByCode(code);
           if (updated) {
             setCommittee((prev) => {
@@ -1038,12 +1065,12 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
     if (!delegate) return;
     const alreadyOn = committee.speakersList.some((s) => s.delegateId === delegateId);
     if (alreadyOn) return;
-    updateLocal(setCommittee, (c) => ({ ...c, speakersList: [...c.speakersList, { delegateId, country: delegate.country }] }));
+    updateLocal(setCommittee, (c) => ({ ...c, speakersList: [...c.speakersList, { delegateId, country: delegate.country }] }), true);
     addToSpeakersListInDB(committee.id, delegateId, delegate.country);
   };
 
   const handleRemoveFromSpeakersList = (delegateId: string) => {
-    updateLocal(setCommittee, (c) => ({ ...c, speakersList: c.speakersList.filter((s) => s.delegateId !== delegateId) }));
+    updateLocal(setCommittee, (c) => ({ ...c, speakersList: c.speakersList.filter((s) => s.delegateId !== delegateId) }), true);
     removeFromSpeakersListInDB(committee.id, delegateId);
   };
 
@@ -1066,7 +1093,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
       currentSpeaker: next ?? null,
       speakersList: rest,
       speakerTimeRemaining: timeToUse,
-    }));
+    }), true);
     setRtrDelegateId(null);
     nextSpeakerInDB(committee.id, timeToUse);
   };
@@ -1087,7 +1114,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
     updateLocal(setCommittee, (c) => ({
       ...c,
       speakersList: [entry, ...c.speakersList],
-    }));
+    }), true);
     setRtrOverrideTime(rtrSeconds);
     setRtrDelegateId(delegate.id);
     setRtrCountry('');
@@ -1122,7 +1149,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
   };
 
   const handleReorderSpeakersList = (newList: { delegateId: string; country: string }[]) => {
-    updateLocal(setCommittee, (c) => ({ ...c, speakersList: newList }));
+    updateLocal(setCommittee, (c) => ({ ...c, speakersList: newList }), true);
     reorderSpeakersListInDB(committee.id, newList, 'gsl');
   };
 
@@ -1134,7 +1161,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
         speakersList: c.speakersList.filter((s) => s.delegateId !== delegateId),
         caucusQueue: (c.caucusQueue ?? []).filter((s) => s.delegateId !== delegateId),
       } : {}),
-    }));
+    }), true);
     if (status === 'absent') {
       removeFromSpeakersListInDB(committee.id, delegateId);
       removeFromCaucusListInDB(committee.id, delegateId);
@@ -1142,7 +1169,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
   };
 
   const handlePhaseChange = (phase: string) => {
-    updateLocal(setCommittee, (c) => ({ ...c, phase: phase as Committee['phase'] }));
+    updateLocal(setCommittee, (c) => ({ ...c, phase: phase as Committee['phase'] }), true);
   };
 
   const handleDelegateAdd = async (country: string) => {
@@ -1218,7 +1245,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
         <span className="font-bold text-white text-sm truncate">{committee.name}</span>
         <span className="text-[#7A5A38] text-xs hidden sm:block truncate flex-1">{committee.topic}</span>
         {committee.phase !== 'pre-session' && (
-          <button onClick={() => setShowRollCall((v) => !v)}
+          <button onClick={() => setShowRollCall(true)}
             className={`text-xs px-3 py-1 rounded-lg transition-colors shrink-0 ${showRollCall ? 'bg-[#7B4A1E] text-white' : 'bg-[#2E1E0F] text-[#C4A882] hover:text-white'}`}>
             Roll Call {present}/{committee.delegates.length}
           </button>
@@ -1357,7 +1384,12 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
         {!showChat && committee.phase !== 'pre-session' && (
           <>
             {showRollCall && (
-              <aside className="w-[22rem] border-r border-[#2E1E0F] bg-[#0D0906] flex flex-col overflow-hidden shrink-0">
+              <aside className="w-[22rem] border-r border-[#2E1E0F] bg-[#0D0906] flex flex-col overflow-hidden shrink-0 relative">
+                <button
+                  onClick={() => setShowRollCall(false)}
+                  className="absolute top-2 right-2 z-10 w-6 h-6 flex items-center justify-center text-[#7A5A38] hover:text-white text-sm leading-none bg-[#2E1E0F] rounded-full"
+                  title="Close panel"
+                >✕</button>
                 {committee.phase === 'moderated-caucus' ? (
                   <RollCallPanel committee={{ ...committee, speakersList: committee.caucusQueue ?? [] }}
                     onAddToList={(delegateId) => {

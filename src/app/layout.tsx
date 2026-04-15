@@ -11,6 +11,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className="h-full">
       <head>
         <link rel="icon" href="/favicon.jpg" type="image/jpeg" />
+        <link rel="apple-touch-icon" href="/favicon.jpg" />
       </head>
       <body className="min-h-full bg-[#0D0906] text-[#E8D5B7] antialiased">
         {children}

@@ -11,12 +11,16 @@ import { SettingsPanel } from '@/components/SettingsPanel';
 
 function abbreviateCommitteeName(name: string): string {
   return name
+    .replace(/\bUN\s+Security\s+Council\b/gi, 'UNSC')
+    .replace(/\bUN\s+General\s+Assembly\b/gi, 'UNGA')
+    .replace(/\bUN\s+Human\s+Rights\s+Council\b/gi, 'UNHRC')
     .replace(/United Nations Security Council/gi, 'UNSC')
     .replace(/Security Council/gi, 'UNSC')
     .replace(/United Nations General Assembly/gi, 'UNGA')
     .replace(/General Assembly/gi, 'UNGA')
     .replace(/United Nations Human Rights Council/gi, 'UNHRC')
-    .replace(/Human Rights Council/gi, 'HRC');
+    .replace(/Human Rights Council/gi, 'HRC')
+    .replace(/^UN\s+/i, '');
 }
 
 type VoteChoice = 'for' | 'against' | 'for-rights' | 'against-rights' | 'abstain';
@@ -421,7 +425,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             >
               In Favour<br />with Rights
             </button>
-            {currentDelegate.status === 'present' ? (
+            {(rollCallStatuses[currentDelegate.id] ?? currentDelegate.status) === 'present' ? (
               <button
                 onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'abstain')}
                 className="flex-1 bg-[#2E1E0F]/60 hover:bg-[#3D2A15]/80 border border-[#7A5A38]/50 text-[#C4A882] font-black text-base py-6 rounded-2xl transition-colors"
@@ -652,7 +656,13 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
               onClick={() => setSelectedDocId(null)}
               className="bg-[#2E1E0F] hover:bg-[#3E2A1A] border border-[#2E1E0F] text-[#C4A882] py-3 px-6 rounded-xl font-bold transition-colors"
             >
-              ← Back to DRs
+              Move to Next DR →
+            </button>
+            <button
+              onClick={handleEndDebate}
+              className="bg-red-950/50 hover:bg-red-900/60 border border-red-900/50 text-red-400 py-3 px-6 rounded-xl font-bold transition-colors"
+            >
+              End Debate
             </button>
           </div>
         </div>
