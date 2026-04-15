@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Committee, PendingMotion, PendingMotionType } from '@/lib/types';
 import { getCountryByName, getFlagEmoji } from '@/lib/countries';
 import {
@@ -23,7 +23,7 @@ const TYPE_META: Record<PendingMotionType, { icon: string; label: string; sub: s
   moderated:    { icon: '🎙️', label: 'Moderated Caucus',           sub: 'Structured speeches, blank slate to fill' },
 };
 
-const TYPE_ORDER: PendingMotionType[] = ['consultation', 'tour', 'unmoderated', 'moderated'];
+const TYPE_ORDER: PendingMotionType[] = ['moderated', 'unmoderated', 'tour', 'consultation'];
 
 function requiredVotes(type: PendingMotionType, present: number): { needed: number; fraction: string } {
   if (type === 'consultation' || type === 'tour') return { needed: Math.ceil((present * 2) / 3), fraction: '2/3 majority' };
@@ -141,22 +141,36 @@ function RaiseMotionForm({ committee, onBack, onRaised }: {
 
       {/* Type tabs — always shown */}
       <div className="flex gap-1.5 flex-wrap">
-        {TYPE_ORDER.map((t) => (
-          <button key={t} type="button" onClick={() => setType(t)}
-            className={`px-3 py-2 rounded-xl border font-bold text-sm transition-all flex-1 min-w-[120px] ${
-              type === t ? 'bg-[#7B4A1E] border-[#8B5A2B] text-white' : 'bg-[#1A1209] border-[#2E1E0F] text-[#C4A882] hover:border-[#7B4A1E]'
-            }`}>
-            {TYPE_META[t].label}
+        <div className="flex gap-1.5 flex-1 flex-wrap">
+          {TYPE_ORDER.map((t) => (
+            <button key={t} type="button" onClick={() => setType(t)}
+              className={`px-3 py-2 rounded-xl border font-bold text-base transition-all flex-1 min-w-[120px] ${
+                type === t ? 'bg-[#7B4A1E] border-[#8B5A2B] text-white' : 'bg-[#1A1209] border-[#2E1E0F] text-[#C4A882] hover:border-[#7B4A1E]'
+              }`}>
+              {TYPE_META[t].label}
+            </button>
+          ))}
+        </div>
+        {/* Special debate control buttons — half size, red, stacked */}
+        <div className="flex flex-col gap-1">
+          <button type="button" title="Coming soon" className="px-2 py-1 rounded-lg border border-red-900/50 bg-red-950/30 text-red-400 text-xs font-bold cursor-default opacity-70">
+            Suspend
           </button>
-        ))}
+          <button type="button" title="Coming soon" className="px-2 py-1 rounded-lg border border-red-900/50 bg-red-950/30 text-red-400 text-xs font-bold cursor-default opacity-70">
+            End Debate
+          </button>
+        </div>
       </div>
 
       {type && (
         <>
-          <div>
-            <label className="block text-base font-semibold text-[#C4A882] mb-2">Proposed by</label>
-            <ProposerInput candidates={presentCountries} value={proposer} onChange={setProposer} />
-          </div>
+          {/* For moderated caucus: Topic first, then Proposed By */}
+          {type !== 'moderated' && (
+            <div>
+              <label className="block text-lg font-semibold text-[#C4A882] mb-2">Proposed by</label>
+              <ProposerInput candidates={presentCountries} value={proposer} onChange={setProposer} />
+            </div>
+          )}
 
           {/* Tour de Table — speaking time per delegate + order */}
           {type === 'tour' && (
@@ -166,7 +180,7 @@ function RaiseMotionForm({ committee, onBack, onRaised }: {
                   All {presentCountries.length} present delegates will speak once each.
                 </p>
                 <div>
-                  <label className="block text-xs font-semibold text-[#C4A882] mb-2">Speaking time per delegate</label>
+                  <label className="block text-lg font-semibold text-[#C4A882] mb-2">Speaking time per delegate</label>
                   <div className="flex items-center gap-3">
                     <div className="flex items-center gap-2 bg-[#150F09] border border-[#2E1E0F] rounded-xl px-3 py-2">
                       <input type="number" min={10} value={speakingTime} onChange={(e) => setSpeakingTime(parseInt(e.target.value) || 60)}
@@ -187,7 +201,7 @@ function RaiseMotionForm({ committee, onBack, onRaised }: {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-[#C4A882] mb-2">Speaking order</label>
+                  <label className="block text-lg font-semibold text-[#C4A882] mb-2">Speaking order</label>
                   <div className="flex gap-3">
                     <button onClick={() => setTourOrder('asc')}
                       className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-colors ${tourOrder === 'asc' ? 'bg-[#7B4A1E] text-white' : 'bg-[#1A1209] border border-[#2E1E0F] text-[#C4A882] hover:text-white'}`}>
@@ -206,7 +220,7 @@ function RaiseMotionForm({ committee, onBack, onRaised }: {
           {/* Unmoderated / Consultation — total time */}
           {(type === 'unmoderated' || type === 'consultation') && (
             <div>
-              <label className="block text-base font-semibold text-[#C4A882] mb-2">Total time</label>
+              <label className="block text-lg font-semibold text-[#C4A882] mb-2">Total time</label>
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-2 bg-[#150F09] border border-[#2E1E0F] rounded-xl px-3 py-2.5">
                   <input type="number" min={0} value={totalMins} onChange={(e) => setTotalMins(parseInt(e.target.value) || 0)}
@@ -230,11 +244,21 @@ function RaiseMotionForm({ committee, onBack, onRaised }: {
             </div>
           )}
 
-          {/* Moderated caucus */}
+          {/* Moderated caucus — Topic first, then Proposed By */}
           {type === 'moderated' && (
             <>
               <div>
-                <label className="block text-base font-semibold text-[#C4A882] mb-2">Total caucus time</label>
+                <label className="block text-lg font-semibold text-[#C4A882] mb-2">Topic <span className="text-red-500">*</span></label>
+                <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)}
+                  placeholder="e.g. Humanitarian response in conflict zones"
+                  className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-xl px-4 py-4 text-white placeholder-[#7A5A38] focus:outline-none focus:border-[#7B4A1E] transition-colors" />
+              </div>
+              <div>
+                <label className="block text-lg font-semibold text-[#C4A882] mb-2">Proposed by</label>
+                <ProposerInput candidates={presentCountries} value={proposer} onChange={setProposer} />
+              </div>
+              <div>
+                <label className="block text-lg font-semibold text-[#C4A882] mb-2">Total caucus time</label>
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-2 bg-[#150F09] border border-[#2E1E0F] rounded-xl px-3 py-2.5">
                     <input type="number" min={0} value={totalMins} onChange={(e) => setTotalMins(parseInt(e.target.value) || 0)}
@@ -257,7 +281,7 @@ function RaiseMotionForm({ committee, onBack, onRaised }: {
                 </div>
               </div>
               <div>
-                <label className="block text-base font-semibold text-[#C4A882] mb-2">Speaking time per delegate</label>
+                <label className="block text-lg font-semibold text-[#C4A882] mb-2">Speaking time per delegate</label>
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-2 bg-[#150F09] border border-[#2E1E0F] rounded-xl px-3 py-2.5">
                     <input type="number" min={0} value={speakingTime} onChange={(e) => setSpeakingTime(parseInt(e.target.value) || 0)}
@@ -277,12 +301,6 @@ function RaiseMotionForm({ committee, onBack, onRaised }: {
                   ))}
                 </div>
               </div>
-              <div>
-                <label className="block text-base font-semibold text-[#C4A882] mb-2">Topic <span className="text-red-500">*</span></label>
-                <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)}
-                  placeholder="e.g. Humanitarian response in conflict zones"
-                  className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-xl px-4 py-4 text-white placeholder-[#7A5A38] focus:outline-none focus:border-[#7B4A1E] transition-colors" />
-              </div>
             </>
           )}
 
@@ -297,19 +315,40 @@ function RaiseMotionForm({ committee, onBack, onRaised }: {
 }
 
 // ── Voting View ───────────────────────────────────────────────────────────────
-function VotingView({ committee, onAccepted, onAllDone, onRemove }: {
+function VotingView({ committee, onAccepted, onAllDone, onRemove, onBack }: {
   committee: Committee;
   onAccepted: (motion: PendingMotion) => void;
   onAllDone: () => void;
   onRemove: (motionId: string) => void;
+  onBack: () => void;
 }) {
   // Filter out join-request pseudo-motions — those are handled in the chair banner, not here
-  const sorted = [...(committee.pendingMotions ?? [])]
+  const initialSorted = [...(committee.pendingMotions ?? [])]
     .filter((m) => m.type !== ('join-request' as string))
     .sort((a, b) => b.disruptiveness - a.disruptiveness);
+
+  const [order, setOrder] = useState<PendingMotion[]>(initialSorted);
+  const dragIndexRef = useRef<number | null>(null);
+
+  // Keep order in sync when motions are removed externally
+  const pendingIds = (committee.pendingMotions ?? []).map((m) => m.id).join(',');
+  useEffect(() => {
+    const current = (committee.pendingMotions ?? []).filter((m) => m.type !== ('join-request' as string));
+    setOrder((prev) => {
+      // Remove any motions that are no longer pending, preserve custom order
+      const currentIds = new Set(current.map((m) => m.id));
+      const filtered = prev.filter((m) => currentIds.has(m.id));
+      // Add any new motions not yet in order
+      const prevIds = new Set(filtered.map((m) => m.id));
+      const newOnes = current.filter((m) => !prevIds.has(m.id));
+      return [...filtered, ...newOnes];
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingIds]);
+
   const present = committee.delegates.filter((d) => d.status !== 'absent').length;
 
-  if (sorted.length === 0) {
+  if (order.length === 0) {
     return (
       <div className="px-7 pb-7 text-center py-8">
         <p className="text-[#C4A882]">No motions to vote on.</p>
@@ -318,33 +357,51 @@ function VotingView({ committee, onAccepted, onAllDone, onRemove }: {
     );
   }
 
-  const primary = sorted[0];
-  const rest = sorted.slice(1, 4);
+  const primary = order[0];
+  const rest = order.slice(1, 4);
 
-  const renderCard = (m: PendingMotion, large: boolean) => {
+  const renderCard = (m: PendingMotion, large: boolean, idx: number) => {
     const meta = TYPE_META[m.type];
     const { needed, fraction } = requiredVotes(m.type, present);
     const mins = Math.floor(m.totalTime / 60);
     const secs = m.totalTime % 60;
+    const isPrimary = idx === 0;
     return (
-      <div key={m.id} className={`bg-[#1A1209] border border-[#2E1E0F] rounded-2xl flex flex-col ${large ? 'p-6 space-y-4 flex-1 min-w-0' : 'p-4 space-y-3'}`}>
+      <div
+        key={m.id}
+        draggable
+        onDragStart={() => { dragIndexRef.current = idx; }}
+        onDragOver={(e) => { e.preventDefault(); }}
+        onDrop={() => {
+          const from = dragIndexRef.current;
+          if (from === null || from === idx) return;
+          const newOrder = [...order];
+          const [moved] = newOrder.splice(from, 1);
+          newOrder.splice(idx, 0, moved);
+          setOrder(newOrder);
+          dragIndexRef.current = null;
+        }}
+        onDragEnd={() => { dragIndexRef.current = null; }}
+        className={`bg-[#1A1209] rounded-2xl flex flex-col cursor-grab ${
+          large
+            ? `p-6 space-y-4 flex-1 min-w-0 border-2 ${isPrimary ? 'border-[#7B4A1E]' : 'border-[#2E1E0F]'}`
+            : 'p-4 space-y-3 border border-[#2E1E0F]'
+        }`}>
         <div className="flex items-start gap-3">
           <span className={large ? 'text-5xl' : 'text-2xl'}>{meta.icon}</span>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap mb-1">
               <span className={`font-black text-white ${large ? 'text-xl' : 'text-sm'}`}>{meta.label}</span>
-              <DisruptivenessBadge type={m.type} />
             </div>
             {(() => { const f = getCountryByName(m.proposedBy); return (
               <div className="flex items-center gap-2 mt-1">
-                <span className={large ? 'text-xl' : 'text-base'}>{f ? getFlagEmoji(f.code) : '🌐'}</span>
-                <span className={`font-semibold text-white ${large ? 'text-base' : 'text-xs'}`}>{m.proposedBy}</span>
+                <span className={large ? 'text-4xl' : 'text-2xl'}>{f ? getFlagEmoji(f.code) : '🌐'}</span>
               </div>
             ); })()}
             {large && m.topic && (
               <div className="mt-2 px-3 py-1.5 bg-[#150F09] border border-[#2E1E0F] rounded-lg">
                 <span className="text-xs font-mono text-[#7A5A38] uppercase tracking-wide">Topic</span>
-                <p className="text-sm font-semibold text-white mt-0.5">"{m.topic}"</p>
+                <p className="text-2xl font-semibold text-white mt-0.5">"{m.topic}"</p>
               </div>
             )}
             {!large && m.topic && <p className="text-xs text-[#C4A882] mt-1 truncate">"{m.topic}"</p>}
@@ -394,19 +451,20 @@ function VotingView({ committee, onAccepted, onAllDone, onRemove }: {
     <div className="px-7 pb-7 space-y-4 min-h-[70vh] flex flex-col">
       <div className="flex items-center justify-between shrink-0">
         <h2 className="text-2xl font-black text-white">Vote on Motions</h2>
-        <span className="text-xs text-[#7A5A38] font-mono">MOST DISRUPTIVE FIRST</span>
+        <button onClick={onBack}
+          className="w-9 h-9 rounded-full bg-[#7B4A1E] hover:bg-[#8B5A2B] text-white font-black text-xl flex items-center justify-center transition-colors"
+          title="Raise another motion">
+          +
+        </button>
       </div>
-      {sorted.length === 1 ? (
-        <div className="flex-1 flex flex-col">{renderCard(primary, true)}</div>
+      {order.length === 1 ? (
+        <div className="flex-1 flex flex-col">{renderCard(primary, true, 0)}</div>
       ) : (
         <div className="flex gap-4 flex-1 min-h-0">
-          {renderCard(primary, true)}
-          <div className="w-72 flex flex-col gap-3">{rest.map((m) => renderCard(m, false))}</div>
+          {renderCard(primary, true, 0)}
+          <div className="w-72 flex flex-col gap-3">{rest.map((m, i) => renderCard(m, false, i + 1))}</div>
         </div>
       )}
-      <button onClick={onAllDone} className="w-full text-sm text-[#7A5A38] hover:text-white transition-colors py-2 shrink-0">
-        Close floor (no motion passes)
-      </button>
     </div>
   );
 }
@@ -418,16 +476,24 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
   onCommitteeUpdate?: (updater: (c: Committee) => Committee) => void;
 }) {
   const pending = [...(committee.pendingMotions ?? [])].filter((m) => m.type !== ('join-request' as string)).sort((a, b) => b.disruptiveness - a.disruptiveness);
-  const [view, setView] = useState<ModalView>(pending.length === 0 ? 'raise' : 'list');
+  const [view, setView] = useState<ModalView>(pending.length === 0 ? 'raise' : 'vote');
   const update = (updater: (c: Committee) => Committee) => onCommitteeUpdate?.(updater);
 
   const handleRaised = (motion: Omit<PendingMotion, 'id' | 'disruptiveness'>) => {
+    // One motion per proposer — reject duplicates
+    if (committee.pendingMotions?.some(
+      (m) => m.proposedBy === motion.proposedBy &&
+        m.type !== ('join-request' as string) &&
+        (m.type as string) !== 'gsl-request'
+    )) {
+      return;
+    }
     const tempId = `temp-${Date.now()}`;
     const base = { consultation: 4_000_000, tour: 3_000_000, unmoderated: 2_000_000, moderated: 1_000_000 };
     const disruptiveness = base[motion.type] + motion.totalTime;
     update((c) => ({ ...c, pendingMotions: [...(c.pendingMotions ?? []), { ...motion, id: tempId, disruptiveness }] }));
     addPendingMotionInDB(committee.id, motion);
-    setView('list');
+    setView('vote');
   };
 
   const handleRemove = (motionId: string) => {
@@ -516,13 +582,14 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
           <button onClick={onClose} className="text-[#7A5A38] hover:text-white transition-colors text-xl leading-none">✕</button>
         </div>
         <div className="overflow-y-auto flex-1 pt-2">
-          {view === 'raise' && <RaiseMotionForm committee={committee} onBack={() => setView('list')} onRaised={handleRaised} />}
+          {view === 'raise' && <RaiseMotionForm committee={committee} onBack={() => setView(pending.length > 0 ? 'vote' : 'list')} onRaised={handleRaised} />}
           {view === 'vote' && (
             <VotingView
               committee={committee}
               onAccepted={handleMotionAccepted}
               onAllDone={() => { setView('list'); onClose(); }}
               onRemove={handleRemove}
+              onBack={() => setView('raise')}
             />
           )}
           {view === 'list' && (

@@ -255,22 +255,48 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
               />
 
               <SectionLabel>VETO POWER</SectionLabel>
-              <div className="space-y-3 py-3 border-b border-[#2E1E0F]">
-                {([
-                  { id: 'none', label: 'No veto power', desc: 'Standard majority rules apply' },
-                  { id: 'p5', label: 'P5 veto power', desc: 'China, France, Russia, UK, USA each hold an individual veto. A single No defeats any resolution.' },
-                  { id: 'unanimous', label: 'Unanimous decision required', desc: 'All present-and-voting delegations must vote Yes for a resolution to pass.' },
-                ] as const).map((option) => (
-                  <label key={option.id} className="flex items-start gap-3 cursor-pointer" onClick={() => upd('vetoMode', option.id)}>
-                    <div className={`mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${s.vetoMode === option.id ? 'border-[#7B4A1E] bg-[#7B4A1E]' : 'border-[#3D2A15]'}`}>
-                      {s.vetoMode === option.id && <div className="w-2 h-2 rounded-full bg-white" />}
+              {/* Vertical slider — 3 positions, active highlighted with moving indicator */}
+              <div className="py-3 border-b border-[#2E1E0F]">
+                {(() => {
+                  const vetoOptions = [
+                    { id: 'none' as const, label: 'No veto power', desc: 'Standard majority rules apply' },
+                    { id: 'p5' as const, label: 'P5 veto power', desc: 'China, France, Russia, UK, USA each hold an individual veto.' },
+                    { id: 'unanimous' as const, label: 'Unanimous required', desc: 'All present-and-voting delegations must vote Yes.' },
+                  ];
+                  const activeIdx = vetoOptions.findIndex((o) => o.id === s.vetoMode);
+                  return (
+                    <div className="relative flex gap-3">
+                      {/* Left indicator track */}
+                      <div className="relative w-1 rounded-full bg-[#2E1E0F] shrink-0" style={{ minHeight: '120px' }}>
+                        <div
+                          className="absolute left-0 w-1 rounded-full bg-[#7B4A1E] transition-all duration-300"
+                          style={{
+                            top: `${(activeIdx / (vetoOptions.length - 1)) * 100 * ((vetoOptions.length - 1) / vetoOptions.length)}%`,
+                            height: `${100 / vetoOptions.length}%`,
+                          }}
+                        />
+                      </div>
+                      {/* Options */}
+                      <div className="flex-1 flex flex-col gap-1">
+                        {vetoOptions.map((option) => (
+                          <button
+                            key={option.id}
+                            type="button"
+                            onClick={() => upd('vetoMode', option.id)}
+                            className={`w-full text-left px-3 py-2.5 rounded-xl transition-colors ${
+                              s.vetoMode === option.id
+                                ? 'bg-[#7B4A1E]/20 border border-[#7B4A1E]/50'
+                                : 'bg-transparent border border-transparent hover:bg-[#1A1209]'
+                            }`}
+                          >
+                            <div className={`text-sm font-semibold ${s.vetoMode === option.id ? 'text-white' : 'text-[#C4A882]'}`}>{option.label}</div>
+                            <div className="text-xs text-[#7A5A38] mt-0.5 leading-snug">{option.desc}</div>
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                    <div>
-                      <div className="text-sm font-semibold text-white">{option.label}</div>
-                      <div className="text-xs text-[#7A5A38] mt-0.5 leading-snug">{option.desc}</div>
-                    </div>
-                  </label>
-                ))}
+                  );
+                })()}
               </div>
 
               {s.vetoMode === 'p5' && (

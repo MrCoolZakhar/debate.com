@@ -565,6 +565,15 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     return () => { if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; } };
   }, [committee?.currentSpeaker?.delegateId, committee?.phase, localTimerActive]);
 
+  // Guard: if this delegate is NOT the current speaker but localTimerActive is true, reset it
+  useEffect(() => {
+    if (!committee) return;
+    const isCurrentSpeakerNow = committee.currentSpeaker?.country === country;
+    if (localTimerActive && !isCurrentSpeakerNow) {
+      setLocalTimerActive(false);
+    }
+  }, [committee?.currentSpeaker?.delegateId, localTimerActive, country]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0D0906] flex items-center justify-center">
@@ -734,7 +743,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
       <div className="flex border-b border-[#2E1E0F] bg-[#150F08] shrink-0">
         {tabs.map((t) => (
           <button key={t.key} onClick={() => setTab(t.key)}
-            className={`flex-1 py-3 text-sm font-bold capitalize transition-colors ${
+            className={`flex-1 py-3 text-xl font-bold capitalize transition-colors ${
               tab === t.key ? 'text-white border-b-2 border-[#7B4A1E]' : 'text-[#7A5A38] hover:text-[#C4A882]'
             }`}>
             {t.label}
@@ -749,16 +758,67 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
         {tab === 'session' && (
           <div>
             {isAbsent && <AbsentBanner />}
+
+            {/* Moderated caucus special view */}
+            {committee.phase === 'moderated-caucus' && committee.caucus && (
+              <div className="p-4 max-w-2xl mx-auto space-y-4">
+                {/* Big flag outside card */}
+                <div className="text-8xl select-none text-center leading-none">{flagFor(country)}</div>
+                <div className="bg-purple-900/20 border border-purple-700/30 rounded-xl p-5 text-center">
+                  <p className="text-5xl font-black text-[#B8844A] tracking-tight">MODERATED CAUCUS</p>
+                  <p className="text-3xl text-[#C4A882] mt-2">{committee.caucus.purpose}</p>
+                  {committee.caucus.currentSpeaker && (
+                    <div className="mt-4">
+                      <div className="text-xs text-[#7A5A38] mb-2 font-mono">NOW SPEAKING</div>
+                      <div className="text-6xl">{flagFor(committee.caucus.currentSpeaker)}</div>
+                      <div className={`text-xl font-bold mt-1 ${committee.caucus.currentSpeaker === country ? 'text-[#B8844A]' : 'text-white'}`}>
+                        {committee.caucus.currentSpeaker}{committee.caucus.currentSpeaker === country && ' (You)'}
+                      </div>
+                    </div>
+                  )}
+                  <div className="text-3xl font-black font-mono text-white mt-4">
+                    {formatTime(committee.caucus.remainingTime)}
+                  </div>
+                  <div className="h-2 bg-[#2E1E0F] rounded-full overflow-hidden mt-2">
+                    <div className="h-full bg-purple-500 rounded-full transition-all"
+                      style={{ width: `${committee.caucus.totalTime > 0 ? (committee.caucus.remainingTime / committee.caucus.totalTime) * 100 : 0}%` }} />
+                  </div>
+                </div>
+                {/* Upcoming speakers in caucus queue */}
+                {(committee.caucusQueue ?? []).length > 0 && (
+                  <div className="bg-[#1A1209] border border-[#2E1E0F] rounded-xl p-4">
+                    <div className="text-xs text-[#7A5A38] font-mono mb-2">UPCOMING SPEAKERS</div>
+                    <div className="space-y-1.5">
+                      {committee.caucusQueue.slice(0, 8).map((s, i) => (
+                        <div key={s.delegateId} className={`flex items-center gap-3 py-1.5 px-2 rounded-lg text-sm ${s.country === country ? 'bg-[#7B4A1E]/20 border border-[#7B4A1E]/30' : ''}`}>
+                          <span className="text-[#7A5A38] text-xs w-4 font-mono shrink-0">{i + 1}</span>
+                          <span className="text-lg shrink-0">{flagFor(s.country)}</span>
+                          <span className={s.country === country ? 'text-[#B8844A] font-bold' : 'text-[#C4A882]'}>
+                            {s.country}{s.country === country && ' (You)'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {committee.phase !== 'moderated-caucus' && (
             <div className={`p-4 space-y-4 max-w-2xl mx-auto ${isAbsent ? 'opacity-60 pointer-events-none select-none' : ''}`}>
+              {/* Big flag OUTSIDE the status card */}
+              <div className="text-8xl select-none text-center leading-none">{flagFor(country)}</div>
               {/* Status card */}
               <div className={`rounded-xl p-5 border ${
                 isCurrentSpeaker ? 'bg-[#7B4A1E]/20 border-[#7B4A1E]/50' :
-                committee.phase === 'moderated-caucus' || committee.phase === 'unmoderated-caucus' ? 'bg-purple-900/20 border-purple-700/30' :
+                committee.phase === 'unmoderated-caucus' ? 'bg-purple-900/20 border-purple-700/30' :
                 'bg-[#1A1209] border-[#2E1E0F]'
               }`}>
                 <div className="flex gap-4 items-start">
-                  {/* Big country flag */}
-                  <div className="text-6xl select-none shrink-0 leading-none">{flagFor(country)}</div>
+                  {/* Current speaker's flag inside card (replaces own flag) */}
+                  <div className="text-4xl select-none shrink-0 leading-none">
+                    {committee.currentSpeaker ? flagFor(committee.currentSpeaker.country) : ''}
+                  </div>
                   <div className="flex-1 min-w-0">
                 <div className="text-xs font-mono text-[#7A5A38] mb-2">SESSION STATUS</div>
                 <div className={`text-2xl font-black mb-1 ${isCurrentSpeaker ? 'text-[#B8844A]' : isAdjourned ? 'text-red-400' : 'text-white'}`}>
@@ -916,6 +976,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                 )}
               </div>
             </div>
+            )}{/* end committee.phase !== 'moderated-caucus' */}
           </div>
         )}
 
