@@ -78,7 +78,7 @@ export default function LandingPage() {
           </h1>
 
           <p className="text-[#C4A882] text-lg max-w-md text-center mb-12 leading-relaxed">
-            Gavelling gives chairs everything they need — from roll call to final voting.
+            Gavelling. gives chairs everything they need — from roll call to final voting.
           </p>
 
           {/* Start committee — primary CTA */}
