@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useCommitteeStore } from '@/lib/store';
-import { getCommitteeByCode } from '@/lib/committeeService';
+import { getCommitteeByCode, addChairName } from '@/lib/committeeService';
 import { Committee } from '@/lib/types';
 import { useSettingsStore } from '@/lib/settingsStore';
 
@@ -49,10 +49,24 @@ function JoinPageInner() {
     // For chair codes with suffix (e.g. "ABC123-1234"), try stripping the suffix first
     const tryBase = upper.includes('-') ? upper.slice(0, upper.lastIndexOf('-')) : null;
 
+    // Validate chair suffix and conditionally set the found committee
+    const trySetCommittee = (found: Committee) => {
+      if (mode === 'chair' && upper.includes('-')) {
+        const suffix = upper.slice(upper.lastIndexOf('-') + 1);
+        const expectedSuffix = getSettings(found.code).chairJoinSuffix;
+        if (suffix !== expectedSuffix) {
+          setError('Invalid chair code — check the code provided by your co-chair.');
+          return false;
+        }
+      }
+      setFoundCommittee(found);
+      return true;
+    };
+
     // 1. Check local store first (instant)
     const local = Object.values(committees).find((c) => c.code === upper || (tryBase && c.code === tryBase));
     if (local) {
-      setFoundCommittee(local);
+      trySetCommittee(local);
       setLookingUp(false);
       return;
     }
@@ -63,10 +77,10 @@ function JoinPageInner() {
       if (!remote && tryBase) {
         // Also try the full code in case it's literally the committee code
         const fallback = await getCommitteeByCode(upper);
-        if (fallback) { setFoundCommittee(fallback); setLookingUp(false); return; }
+        if (fallback) { trySetCommittee(fallback); setLookingUp(false); return; }
       }
       if (remote) {
-        setFoundCommittee(remote);
+        trySetCommittee(remote);
       } else {
         setFoundCommittee(null);
         setError('Committee not found. Check the code and try again.');
@@ -96,6 +110,7 @@ function JoinPageInner() {
     if (mode === 'chair') {
       const name = chairNameMode === 'new' ? newChairName.trim() : chairName;
       if (!name) { setError('Please select or enter your chair name.'); return; }
+      addChairName(foundCommittee.id, name);
       router.push(`/chair/${foundCommittee.code}?chairName=${encodeURIComponent(name)}`);
       return;
     }

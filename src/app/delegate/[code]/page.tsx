@@ -860,6 +860,23 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
 
             {committee.phase !== 'moderated-caucus' && (
             <div className={`p-4 space-y-4 max-w-2xl mx-auto ${isAbsent ? 'opacity-60 pointer-events-none select-none' : ''}`}>
+              {(() => {
+                type C = { bg: string; border: string; text: string; msg: string };
+                const v: C = isCurrentSpeaker
+                  ? { bg: 'bg-amber-900/30', border: 'border-amber-700/40', text: 'text-amber-300', msg: 'You have the floor!' }
+                  : !isOnSpeakersList
+                  ? { bg: 'bg-gray-800/30', border: 'border-gray-600/30', text: 'text-gray-400', msg: 'Not on any speaker list' }
+                  : myQueueIndex === 0
+                  ? { bg: 'bg-amber-900/30', border: 'border-amber-700/40', text: 'text-amber-300', msg: "You're up next!" }
+                  : myQueueIndex <= 5
+                  ? { bg: 'bg-yellow-500/20', border: 'border-yellow-500/40', text: 'text-yellow-300', msg: `${myQueueIndex} speaker${myQueueIndex !== 1 ? 's' : ''} until your speech` }
+                  : { bg: 'bg-green-900/30', border: 'border-green-700/30', text: 'text-green-300', msg: `${myQueueIndex} speakers until your speech` };
+                return (
+                  <div className={`${v.bg} border ${v.border} rounded-xl p-4 text-center`}>
+                    <div className={`${v.text} font-bold text-lg`}>{v.msg}</div>
+                  </div>
+                );
+              })()}
               {/* Big flag OUTSIDE the status card */}
               <div className="text-8xl select-none text-center leading-none">{flagFor(country)}</div>
               {/* Status card */}
