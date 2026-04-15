@@ -649,6 +649,25 @@ export async function updateCommitteeCode(committeeId: string, newCode: string):
 }
 
 // ============================================================
+// CHAIR NAMES
+// ============================================================
+
+export async function addChairName(committeeId: string, name: string): Promise<void> {
+  const { data } = await supabase
+    .from('committees')
+    .select('chair_names')
+    .eq('id', committeeId)
+    .single();
+  const current: string[] = data?.chair_names ?? [];
+  if (current.includes(name)) return;
+  const { error } = await supabase
+    .from('committees')
+    .update({ chair_names: [...current, name] })
+    .eq('id', committeeId);
+  if (error) console.error('Error adding chair name:', error);
+}
+
+// ============================================================
 // REAL-TIME SUBSCRIPTIONS
 // ============================================================
 

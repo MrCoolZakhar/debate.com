@@ -854,6 +854,42 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
 
             {committee.phase !== 'moderated-caucus' && (
             <div className={`p-4 space-y-4 max-w-2xl mx-auto ${isAbsent ? 'opacity-60 pointer-events-none select-none' : ''}`}>
+              {/* Floor position card */}
+              {(() => {
+                if (isCurrentSpeaker) {
+                  return (
+                    <div className="bg-amber-900/30 border border-amber-700/40 rounded-xl p-4 text-center">
+                      <div className="text-amber-300 font-bold text-lg">You have the floor!</div>
+                    </div>
+                  );
+                }
+                if (!isOnSpeakersList) {
+                  return (
+                    <div className="bg-gray-800/30 border border-gray-600/30 rounded-xl p-4 text-center">
+                      <div className="text-gray-400 font-bold text-lg">Not on any speaker list</div>
+                    </div>
+                  );
+                }
+                if (myQueueIndex === 0) {
+                  return (
+                    <div className="bg-amber-900/30 border border-amber-700/40 rounded-xl p-4 text-center">
+                      <div className="text-amber-300 font-bold text-lg">You&apos;re up next!</div>
+                    </div>
+                  );
+                }
+                if (myQueueIndex <= 5) {
+                  return (
+                    <div className="bg-yellow-500/20 border border-yellow-500/40 rounded-xl p-4 text-center">
+                      <div className="text-yellow-300 font-bold text-lg">{myQueueIndex} speaker{myQueueIndex !== 1 ? 's' : ''} until your speech</div>
+                    </div>
+                  );
+                }
+                return (
+                  <div className="bg-green-900/30 border border-green-700/30 rounded-xl p-4 text-center">
+                    <div className="text-green-300 font-bold text-lg">{myQueueIndex} speakers until your speech</div>
+                  </div>
+                );
+              })()}
               {/* Big flag OUTSIDE the status card */}
               <div className="text-8xl select-none text-center leading-none">{flagFor(country)}</div>
               {/* Status card */}
