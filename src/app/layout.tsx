@@ -10,7 +10,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className="h-full">
       <head>
-        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+        <link rel="icon" href="/favicon.jpg" type="image/jpeg" />
       </head>
       <body className="min-h-full bg-[#0D0906] text-[#E8D5B7] antialiased">
         {children}
