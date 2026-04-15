@@ -40,7 +40,7 @@ export interface Motion {
 }
 
 // ── Pending motions (floor entertainment + voting) ──
-export type PendingMotionType = 'moderated' | 'unmoderated' | 'consultation' | 'tour';
+export type PendingMotionType = 'moderated' | 'unmoderated' | 'consultation' | 'tour' | 'suspend-debate' | 'end-debate';
 
 export interface PendingMotion {
   id: string;
@@ -134,6 +134,7 @@ export interface Committee {
   currentSpeaker: SpeakerEntry | null;
   speakerTimeLimit: number;
   speakerTimeRemaining: number;
+  speakerStartedAt: string | null;
   motions: Motion[];
   pendingMotions: PendingMotion[];
   resolutions: Resolution[];

@@ -18,7 +18,10 @@ import {
 } from './types';
 
 function calcDisruptiveness(type: PendingMotionType, totalTime: number): number {
-  const base = { consultation: 4_000_000, tour: 3_000_000, unmoderated: 2_000_000, moderated: 1_000_000 };
+  const base: Record<PendingMotionType, number> = {
+    'end-debate': 6_000_000, 'suspend-debate': 5_000_000,
+    consultation: 4_000_000, tour: 3_000_000, unmoderated: 2_000_000, moderated: 1_000_000,
+  };
   return base[type] + totalTime;
 }
 
@@ -128,6 +131,7 @@ export const useCommitteeStore = create<CommitteeStore>()(
           currentSpeaker: null,
           speakerTimeLimit: 90,
           speakerTimeRemaining: 90,
+          speakerStartedAt: null,
           motions: [],
           pendingMotions: [],
           resolutions: [],

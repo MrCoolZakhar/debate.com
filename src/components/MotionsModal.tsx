@@ -1,8 +1,10 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Committee, PendingMotion, PendingMotionType } from '@/lib/types';
 import { getCountryByName, getFlagEmoji } from '@/lib/countries';
+import { useSettingsStore, DEFAULT_MOTION_NAMES, MotionNames } from '@/lib/settingsStore';
 import {
   addPendingMotion as addPendingMotionInDB,
   removePendingMotion as removePendingMotionInDB,
@@ -12,17 +14,34 @@ import {
   addToCaucusList as addToCaucusListInDB,
   batchAddToCaucusList as batchAddToCaucusListInDB,
   clearCaucusList as clearCaucusListInDB,
+  suspendDebate as suspendDebateInDB,
+  endDebate as endDebateInDB,
 } from '@/lib/committeeService';
 
 type ModalView = 'list' | 'raise' | 'vote';
+type TypeMeta = Record<PendingMotionType, { icon: string; label: string; sub: string }>;
 
-const TYPE_META: Record<PendingMotionType, { icon: string; label: string; sub: string }> = {
-  consultation: { icon: '🤝', label: 'Consultation of the Whole', sub: 'Informal session, all together' },
-  tour:         { icon: '🔄', label: 'Tour de Table',              sub: 'Everyone speaks once, alphabetical order' },
-  unmoderated:  { icon: '💬', label: 'Unmoderated Caucus',         sub: 'Free time for delegates to talk' },
-  moderated:    { icon: '🎙️', label: 'Moderated Caucus',           sub: 'Structured speeches, blank slate to fill' },
+const TYPE_STATIC: Record<PendingMotionType, { icon: string; sub: string }> = {
+  'end-debate':     { icon: '🏁', sub: 'Formally close the session' },
+  'suspend-debate': { icon: '⏸️', sub: 'Suspend the session temporarily' },
+  consultation:     { icon: '🤝', sub: 'Informal session, all together' },
+  tour:             { icon: '🔄', sub: 'Everyone speaks once, alphabetical order' },
+  unmoderated:      { icon: '💬', sub: 'Free time for delegates to talk' },
+  moderated:        { icon: '🎙️', sub: 'Structured speeches, blank slate to fill' },
 };
 
+function buildTypeMeta(motionNames: MotionNames): TypeMeta {
+  return {
+    'end-debate':     { ...TYPE_STATIC['end-debate'],     label: motionNames.endDebate },
+    'suspend-debate': { ...TYPE_STATIC['suspend-debate'], label: motionNames.suspendDebate },
+    consultation:     { ...TYPE_STATIC.consultation,      label: motionNames.consultation },
+    tour:             { ...TYPE_STATIC.tour,              label: motionNames.tour },
+    unmoderated:      { ...TYPE_STATIC.unmoderated,       label: motionNames.unmoderated },
+    moderated:        { ...TYPE_STATIC.moderated,         label: motionNames.moderated },
+  };
+}
+
+// Regular motion types (moderated first per design spec)
 const TYPE_ORDER: PendingMotionType[] = ['moderated', 'unmoderated', 'tour', 'consultation'];
 
 function requiredVotes(type: PendingMotionType, present: number): { needed: number; fraction: string } {
@@ -32,10 +51,13 @@ function requiredVotes(type: PendingMotionType, present: number): { needed: numb
 
 function DisruptivenessBadge({ type }: { type: PendingMotionType }) {
   const labels: Record<PendingMotionType, string> = {
+    'end-debate': 'Ends session', 'suspend-debate': 'Suspends session',
     consultation: 'Most disruptive', tour: 'Very disruptive',
     unmoderated: 'Disruptive', moderated: 'Least disruptive',
   };
   const colors: Record<PendingMotionType, string> = {
+    'end-debate': 'bg-red-900/40 text-red-400 border-red-800/40',
+    'suspend-debate': 'bg-orange-900/40 text-orange-400 border-orange-800/40',
     consultation: 'bg-red-900/40 text-red-400 border-red-800/40',
     tour: 'bg-orange-900/40 text-orange-400 border-orange-800/40',
     unmoderated: 'bg-yellow-900/40 text-yellow-400 border-yellow-800/40',
@@ -94,8 +116,9 @@ function ProposerInput({ candidates, value, onChange }: {
 }
 
 // ── Raise Motion Form ─────────────────────────────────────────────────────────
-function RaiseMotionForm({ committee, onBack, onRaised }: {
+function RaiseMotionForm({ committee, typeMeta, onBack, onRaised }: {
   committee: Committee;
+  typeMeta: TypeMeta;
   onBack: () => void;
   onRaised: (motion: Omit<PendingMotion, 'id' | 'disruptiveness'>) => void;
 }) {
@@ -112,6 +135,7 @@ function RaiseMotionForm({ committee, onBack, onRaised }: {
 
   const canSubmit = () => {
     if (!type || !proposer) return false;
+    if (type === 'suspend-debate' || type === 'end-debate') return true;
     if (type === 'moderated' && !topic.trim()) return false;
     if (type !== 'tour' && type !== 'consultation' && totalTime <= 0) return false;
     return true;
@@ -119,11 +143,12 @@ function RaiseMotionForm({ committee, onBack, onRaised }: {
 
   const submit = () => {
     if (!type || !canSubmit()) return;
+    const isSuspendOrEnd = type === 'suspend-debate' || type === 'end-debate';
     const motion: Omit<PendingMotion, 'id' | 'disruptiveness'> = {
       type,
       proposedBy: proposer,
-      totalTime: type === 'tour' ? presentCountries.length * speakingTime : totalTime,
-      speakingTime,
+      totalTime: isSuspendOrEnd ? 0 : (type === 'tour' ? presentCountries.length * speakingTime : totalTime),
+      speakingTime: isSuspendOrEnd ? 0 : speakingTime,
       topic: topic.trim(),
       speakerList: [],
       proposerPosition: null,
@@ -147,16 +172,18 @@ function RaiseMotionForm({ committee, onBack, onRaised }: {
               className={`px-3 py-2 rounded-xl border font-bold text-base transition-all flex-1 min-w-[120px] ${
                 type === t ? 'bg-[#7B4A1E] border-[#8B5A2B] text-white' : 'bg-[#1A1209] border-[#2E1E0F] text-[#C4A882] hover:border-[#7B4A1E]'
               }`}>
-              {TYPE_META[t].label}
+              {typeMeta[t].label}
             </button>
           ))}
         </div>
         {/* Special debate control buttons — half size, red, stacked */}
         <div className="flex flex-col gap-1">
-          <button type="button" title="Coming soon" className="px-2 py-1 rounded-lg border border-red-900/50 bg-red-950/30 text-red-400 text-xs font-bold cursor-default opacity-70">
+          <button type="button" onClick={() => setType('suspend-debate')}
+            className={`px-2 py-1 rounded-lg border text-xs font-bold transition-colors ${type === 'suspend-debate' ? 'bg-red-800 border-red-700 text-white' : 'border-red-900/50 bg-red-950/30 text-red-400 hover:bg-red-900/40'}`}>
             Suspend
           </button>
-          <button type="button" title="Coming soon" className="px-2 py-1 rounded-lg border border-red-900/50 bg-red-950/30 text-red-400 text-xs font-bold cursor-default opacity-70">
+          <button type="button" onClick={() => setType('end-debate')}
+            className={`px-2 py-1 rounded-lg border text-xs font-bold transition-colors ${type === 'end-debate' ? 'bg-red-800 border-red-700 text-white' : 'border-red-900/50 bg-red-950/30 text-red-400 hover:bg-red-900/40'}`}>
             End Debate
           </button>
         </div>
@@ -315,8 +342,9 @@ function RaiseMotionForm({ committee, onBack, onRaised }: {
 }
 
 // ── Voting View ───────────────────────────────────────────────────────────────
-function VotingView({ committee, onAccepted, onAllDone, onRemove, onBack }: {
+function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBack }: {
   committee: Committee;
+  typeMeta: TypeMeta;
   onAccepted: (motion: PendingMotion) => void;
   onAllDone: () => void;
   onRemove: (motionId: string) => void;
@@ -361,7 +389,7 @@ function VotingView({ committee, onAccepted, onAllDone, onRemove, onBack }: {
   const rest = order.slice(1, 4);
 
   const renderCard = (m: PendingMotion, large: boolean, idx: number) => {
-    const meta = TYPE_META[m.type];
+    const meta = typeMeta[m.type];
     const { needed, fraction } = requiredVotes(m.type, present);
     const mins = Math.floor(m.totalTime / 60);
     const secs = m.totalTime % 60;
@@ -475,9 +503,22 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
   onClose: () => void;
   onCommitteeUpdate?: (updater: (c: Committee) => Committee) => void;
 }) {
+  const router = useRouter();
+  const { getSettings } = useSettingsStore();
+  const motionNames = { ...DEFAULT_MOTION_NAMES, ...(getSettings(committee.code).motionNames ?? {}) };
+  const typeMeta = buildTypeMeta(motionNames);
   const pending = [...(committee.pendingMotions ?? [])].filter((m) => m.type !== ('join-request' as string)).sort((a, b) => b.disruptiveness - a.disruptiveness);
   const [view, setView] = useState<ModalView>(pending.length === 0 ? 'raise' : 'vote');
+  const [specialVoteMotion, setSpecialVoteMotion] = useState<PendingMotion | null>(null);
+  const [sessionResult, setSessionResult] = useState<'suspended' | 'ended' | null>(null);
   const update = (updater: (c: Committee) => Committee) => onCommitteeUpdate?.(updater);
+
+  useEffect(() => {
+    if (!sessionResult) return;
+    const handler = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape') router.push('/'); };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [sessionResult, router]);
 
   const handleRaised = (motion: Omit<PendingMotion, 'id' | 'disruptiveness'>) => {
     // One motion per proposer — reject duplicates
@@ -489,7 +530,10 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
       return;
     }
     const tempId = `temp-${Date.now()}`;
-    const base = { consultation: 4_000_000, tour: 3_000_000, unmoderated: 2_000_000, moderated: 1_000_000 };
+    const base = {
+      'end-debate': 6_000_000, 'suspend-debate': 5_000_000,
+      consultation: 4_000_000, tour: 3_000_000, unmoderated: 2_000_000, moderated: 1_000_000,
+    };
     const disruptiveness = base[motion.type] + motion.totalTime;
     update((c) => ({ ...c, pendingMotions: [...(c.pendingMotions ?? []), { ...motion, id: tempId, disruptiveness }] }));
     addPendingMotionInDB(committee.id, motion);
@@ -504,6 +548,11 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
   const handleMotionAccepted = async (motion: PendingMotion) => {
     // Clear ALL other pending motions — only the accepted one proceeds
     // GSL (speakersList) is NEVER modified here
+
+    if (motion.type === 'suspend-debate' || motion.type === 'end-debate') {
+      setSpecialVoteMotion(motion);
+      return;
+    }
 
     if (motion.type === 'unmoderated' || motion.type === 'consultation') {
       const caucus = {
@@ -573,6 +622,61 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
     }
   };
 
+  // ── Special vote: "Does this motion pass?" ──────────────────────────────────
+  if (specialVoteMotion && !sessionResult) {
+    const isSuspend = specialVoteMotion.type === 'suspend-debate';
+    return (
+      <div className="fixed inset-0 z-[60] bg-[#0D0906] flex flex-col items-center justify-center text-center px-8">
+        <p className="text-xs font-mono tracking-widest text-[#7A5A38] mb-6">
+          {typeMeta[specialVoteMotion.type].label.toUpperCase()} · {specialVoteMotion.proposedBy}
+        </p>
+        <h1 className="text-5xl font-black text-white mb-14">Does this motion pass?</h1>
+        <div className="flex gap-8">
+          <button
+            onClick={async () => {
+              if (isSuspend) {
+                await suspendDebateInDB(committee.id);
+                setSessionResult('suspended');
+              } else {
+                await endDebateInDB(committee.id);
+                setSessionResult('ended');
+              }
+            }}
+            className="px-16 py-8 rounded-3xl bg-green-700 hover:bg-green-600 text-white text-2xl font-black transition-colors">
+            Yes
+          </button>
+          <button
+            onClick={() => { setSpecialVoteMotion(null); onClose(); }}
+            className="px-16 py-8 rounded-3xl bg-red-800 hover:bg-red-700 text-white text-2xl font-black transition-colors">
+            No
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Session suspended screen ────────────────────────────────────────────────
+  if (sessionResult === 'suspended') {
+    return (
+      <div className="fixed inset-0 z-[60] bg-[#0D0906] flex flex-col items-center justify-center text-center px-8">
+        <h1 className="text-6xl font-black text-white mb-4">Session is now suspended.</h1>
+        <p className="text-4xl font-black text-white mb-16">See you again soon!</p>
+        <p className="text-lg text-white/40">— Press ESC to go back to main menu</p>
+      </div>
+    );
+  }
+
+  // ── Session ended screen ─────────────────────────────────────────────────────
+  if (sessionResult === 'ended') {
+    return (
+      <div className="fixed inset-0 z-[60] bg-[#0D0906] flex flex-col items-center justify-center text-center px-8">
+        <h1 className="text-5xl font-black text-white mb-10">Congratulations! This session has now ended.</h1>
+        <p className="text-xl text-white/40 mb-4">Session will be available for an additional 72 hours for review.</p>
+        <p className="text-lg text-white/30">— Press ESC to go back to main menu</p>
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background: 'rgba(5, 8, 20, 0.88)', backdropFilter: 'blur(4px)' }}
@@ -582,10 +686,11 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
           <button onClick={onClose} className="text-[#7A5A38] hover:text-white transition-colors text-xl leading-none">✕</button>
         </div>
         <div className="overflow-y-auto flex-1 pt-2">
-          {view === 'raise' && <RaiseMotionForm committee={committee} onBack={() => setView(pending.length > 0 ? 'vote' : 'list')} onRaised={handleRaised} />}
+          {view === 'raise' && <RaiseMotionForm committee={committee} typeMeta={typeMeta} onBack={() => setView(pending.length > 0 ? 'vote' : 'list')} onRaised={handleRaised} />}
           {view === 'vote' && (
             <VotingView
               committee={committee}
+              typeMeta={typeMeta}
               onAccepted={handleMotionAccepted}
               onAllDone={() => { setView('list'); onClose(); }}
               onRemove={handleRemove}
@@ -605,7 +710,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
                 <div className="space-y-2">
                   <p className="text-xs text-[#7A5A38] font-mono">RANKED — MOST DISRUPTIVE FIRST</p>
                   {pending.map((m, i) => {
-                    const meta = TYPE_META[m.type];
+                    const meta = typeMeta[m.type];
                     const mins = Math.floor(m.totalTime / 60);
                     const secs = m.totalTime % 60;
                     const proposerFlag = getCountryByName(m.proposedBy);

@@ -3,6 +3,7 @@
 import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useCommitteeStore } from '@/lib/store';
+import { useSettingsStore, DEFAULT_MOTION_NAMES } from '@/lib/settingsStore';
 import { Committee } from '@/lib/types';
 import { FlagCircle } from '@/components/RollCallPanel';
 import { getFlagEmoji, getCountryByName } from '@/lib/countries';
@@ -31,6 +32,8 @@ function ExpandedDelegateCard({
   onClose: () => void;
 }) {
   const { sendMessage } = useCommitteeStore();
+  const { getSettings } = useSettingsStore();
+  const mn = { ...DEFAULT_MOTION_NAMES, ...(getSettings(committee.code).motionNames ?? {}) };
   const [nudgeSent, setNudgeSent] = useState<string | null>(null);
 
   const queueIndex = committee.speakersList.findIndex((s) => s.delegateId === delegate.id);
@@ -71,10 +74,12 @@ function ExpandedDelegateCard({
   let motionDisplay: string;
   if (lastMotion) {
     const typeLabel: Record<string, string> = {
-      moderated: 'Moderated Caucus',
-      unmoderated: 'Unmoderated Caucus',
-      consultation: 'Consultation',
-      tour: 'Tour de Table',
+      moderated: mn.moderated,
+      unmoderated: mn.unmoderated,
+      consultation: mn.consultation,
+      tour: mn.tour,
+      'suspend-debate': mn.suspendDebate,
+      'end-debate': mn.endDebate,
     };
     motionDisplay = typeLabel[lastMotion.type] || lastMotion.type;
     if (lastMotion.topic) motionDisplay += ` — ${lastMotion.topic}`;
@@ -201,6 +206,7 @@ function NormalDelegateCard({ delegate, committee, onSelect }: { delegate: Commi
 export default function AdvisorPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = use(params);
   const { committees } = useCommitteeStore();
+  const { getSettings } = useSettingsStore();
   const [committee, setCommittee] = useState<Committee | null>(null);
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
 
@@ -224,6 +230,12 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
   const progress = committee.currentSpeaker
     ? (committee.speakerTimeRemaining / committee.speakerTimeLimit) * 100
     : 100;
+  const advisorMotionNames = { ...DEFAULT_MOTION_NAMES, ...(getSettings(committee.code).motionNames ?? {}) };
+  const advisorPhaseDisplay = (() => {
+    if (committee.phase === 'moderated-caucus') return advisorMotionNames.moderated;
+    if (committee.phase === 'unmoderated-caucus') return advisorMotionNames.unmoderated;
+    return committee.phase.replace(/-/g, ' ');
+  })();
 
   const sortedDelegates = [...committee.delegates].sort((a, b) => a.country.localeCompare(b.country));
   const selectedDelegate = selectedCountry
@@ -249,7 +261,7 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
       {/* Stats bar */}
       <div className="border-b border-[#2E1E0F] bg-[#150F08] px-4 py-1.5 flex items-center gap-6 shrink-0">
         <span className="text-xs text-[#C4A882] font-mono">{present} / {committee.delegates.length} present</span>
-        <span className="text-xs text-[#C4A882]">Phase: <span className="text-white font-semibold capitalize">{committee.phase.replace('-', ' ')}</span></span>
+        <span className="text-xs text-[#C4A882]">Phase: <span className="text-white font-semibold capitalize">{advisorPhaseDisplay}</span></span>
         {committee.speakersList.length > 0 && (
           <span className="text-xs text-[#C4A882]">{committee.speakersList.length} in queue</span>
         )}
