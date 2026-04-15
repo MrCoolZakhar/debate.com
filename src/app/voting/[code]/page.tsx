@@ -421,12 +421,16 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             >
               In Favour<br />with Rights
             </button>
-            {currentDelegate.status === 'present' && (
+            {currentDelegate.status === 'present' ? (
               <button
                 onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'abstain')}
                 className="flex-1 bg-[#2E1E0F]/60 hover:bg-[#3D2A15]/80 border border-[#7A5A38]/50 text-[#C4A882] font-black text-base py-6 rounded-2xl transition-colors"
               >
                 Abstain
+              </button>
+            ) : (
+              <button disabled className="flex-1 bg-[#2E1E0F]/30 border border-[#7A5A38]/20 text-[#7A5A38] font-black text-base py-6 rounded-2xl opacity-40 cursor-not-allowed">
+                Abstain (P+V)
               </button>
             )}
             <button

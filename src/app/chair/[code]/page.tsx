@@ -298,10 +298,10 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, rtrDelegateId }: {
               onReorder(newList);
               dragIndexRef.current = null;
             }}>
-            <div className={`rounded-full ${s.delegateId === rtrDelegateId ? 'ring-2 ring-orange-500 ring-offset-1 ring-offset-[#0D0906]' : ''} ${i === 0 ? 'scale-[1.3] origin-center' : ''}`}>
+            <div className={`rounded-full ${s.delegateId === rtrDelegateId ? 'ring-2 ring-orange-500 ring-offset-1 ring-offset-[#0D0906]' : ''}`}>
               <FlagCircle country={s.country} size={fSize} />
             </div>
-            <span className={`truncate max-w-[80px] text-xs font-semibold text-[#C4A882] text-center ${i === 0 ? 'text-sm' : ''}`}>{abbrevCountry(s.country)}</span>
+            <span className="truncate max-w-[80px] text-xs font-semibold text-[#C4A882] text-center">{abbrevCountry(s.country)}</span>
             {i === 0 && <span className="text-sm font-bold text-[#B8844A]">Up next</span>}
             <button onClick={() => onRemove(s.delegateId)}
               className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full text-white text-[10px] hidden group-hover:flex items-center justify-center">✕</button>
@@ -438,6 +438,7 @@ function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee
   const [showCaucusRtr, setShowCaucusRtr] = useState(false);
   const [caucusRtrCountry, setCaucusRtrCountry] = useState('');
   const [rtrCaucusId, setRtrCaucusId] = useState<string | null>(null);
+  const isRtrActiveRef = useRef(false);
 
   useEffect(() => {
     if (speakerRunning) {
@@ -446,7 +447,9 @@ function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee
         if (!c || c.remainingTime <= 0) { setSpeakerRunning(false); return; }
         updateLocal(setCommittee, (prev) => {
           if (!prev.caucus) return prev;
-          const newTotal = Math.max(0, prev.caucus.remainingTime - 1);
+          const newTotal = isRtrActiveRef.current
+            ? prev.caucus.remainingTime
+            : Math.max(0, prev.caucus.remainingTime - 1);
           const newSpeaker = Math.max(0, prev.caucus.speakerTimeRemaining - 1);
           if (newSpeaker === 0) setSpeakerRunning(false);
           return {
@@ -495,6 +498,7 @@ function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee
 
   const handleNext = () => {
     setSpeakerRunning(false);
+    isRtrActiveRef.current = false;
     const [next, ...rest] = committee.caucusQueue ?? [];
     const prev = caucus.currentSpeaker;
     updateLocal(setCommittee, (c) => {
@@ -541,6 +545,7 @@ function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee
     }));
     addToCaucusListInDB(committee.id, delegate.id, caucusRtrCountry);
     setRtrCaucusId(delegate.id);
+    isRtrActiveRef.current = true;
     setCaucusRtrCountry('');
     setShowCaucusRtr(false);
   };
@@ -596,8 +601,15 @@ function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee
                 />
               </div>
             )}
-            <FlagCircle country={caucus.currentSpeaker} size="xl" />
-            <h1 className="text-3xl font-black text-white mt-3 mb-1 text-center">{caucus.currentSpeaker}</h1>
+            {isCustomTdT && spokenCountries.length > 0
+              ? <div className="text-6xl">🌐</div>
+              : <FlagCircle country={caucus.currentSpeaker} size="xl" />
+            }
+            <h1 className="text-3xl font-black text-white mt-3 mb-1 text-center">
+              {isCustomTdT && spokenCountries.length > 0
+                ? `Speaker ${spokenCountries.length + 1}`
+                : caucus.currentSpeaker}
+            </h1>
             <div className={`text-6xl font-black font-mono mt-2 mb-3 tabular-nums ${caucus.speakerTimeRemaining <= 10 ? 'text-red-500' : caucus.speakerTimeRemaining <= 30 ? 'text-yellow-500' : 'text-white'}`}>
               {formatTime(caucus.speakerTimeRemaining)}
             </div>
@@ -605,20 +617,33 @@ function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee
               <div className={`h-full rounded-full transition-all ${speakerProgress > 50 ? 'bg-[#B8844A]' : speakerProgress > 20 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{ width: `${speakerProgress}%` }} />
             </div>
             <div className="flex gap-3 w-full max-w-sm flex-wrap justify-center">
+              <button
+                onClick={() => {
+                  setSpeakerRunning(false);
+                  updateLocal(setCommittee, (c) => {
+                    if (!c.caucus) return c;
+                    return { ...c, caucus: { ...c.caucus, speakerTimeRemaining: c.caucus.speakingTime } };
+                  });
+                }}
+                className="px-3 py-2.5 rounded-xl font-bold text-xs bg-[#2E1E0F] hover:bg-[#3D2A15] text-[#C4A882] transition-colors border border-[#2E1E0F]"
+                title="Restart speaker time"
+              >↺</button>
               <button onClick={() => setSpeakerRunning((r) => !r)} className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-colors ${speakerRunning ? 'bg-yellow-600 hover:bg-yellow-500 text-white' : 'bg-[#3D6B35] hover:bg-[#4A7C42] text-white'}`}>
                 {speakerRunning ? '⏸ Pause' : '▶ Start'}
               </button>
               <button onClick={handleNext} className="flex-1 bg-[#2E1E0F] hover:bg-[#3D2A15] text-white py-2.5 rounded-xl font-bold text-sm transition-colors">
                 Next →
               </button>
-              <button
-                onClick={() => setShowCaucusRtr((v) => !v)}
-                className={`px-3 py-2.5 rounded-xl font-bold text-xs transition-colors ${showCaucusRtr ? 'bg-orange-600 border-orange-500 text-white' : 'bg-orange-900/40 hover:bg-orange-800/50 border border-orange-700/40 text-orange-300'}`}
-              >
-                Right of Reply
-              </button>
+              {!caucus.purpose?.startsWith('Tour de Table') && (
+                <button
+                  onClick={() => setShowCaucusRtr((v) => !v)}
+                  className={`px-3 py-2.5 rounded-xl font-bold text-xs transition-colors ${showCaucusRtr ? 'bg-orange-600 border-orange-500 text-white' : 'bg-orange-900/40 hover:bg-orange-800/50 border border-orange-700/40 text-orange-300'}`}
+                >
+                  Right of Reply
+                </button>
+              )}
             </div>
-            {showCaucusRtr && (
+            {!caucus.purpose?.startsWith('Tour de Table') && showCaucusRtr && (
               <div className="mt-3 bg-[#1A1209] border border-orange-700/40 rounded-xl p-3 w-full max-w-sm">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs text-orange-400 font-semibold">Right of Reply (30s)</span>
@@ -1333,7 +1358,28 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
           <>
             {showRollCall && (
               <aside className="w-[22rem] border-r border-[#2E1E0F] bg-[#0D0906] flex flex-col overflow-hidden shrink-0">
-                {(committee.phase === 'moderated-caucus' || committee.phase === 'unmoderated-caucus') ? (
+                {committee.phase === 'moderated-caucus' ? (
+                  <RollCallPanel committee={{ ...committee, speakersList: committee.caucusQueue ?? [] }}
+                    onAddToList={(delegateId) => {
+                      const delegate = committee.delegates.find((d) => d.id === delegateId);
+                      if (!delegate) return;
+                      if (committee.caucus?.currentSpeaker === delegate.country) return;
+                      updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: [...(c.caucusQueue ?? []), { delegateId, country: delegate.country }] }));
+                      addToCaucusListInDB(committee.id, delegateId, delegate.country);
+                    }}
+                    onListIds={new Set((committee.caucusQueue ?? []).map((s) => s.delegateId))}
+                    onRemoveFromList={(delegateId) => {
+                      updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: (c.caucusQueue ?? []).filter((s) => s.delegateId !== delegateId) }));
+                      removeFromCaucusListInDB(committee.id, delegateId);
+                    }}
+                    onReorderList={(newList) => {
+                      updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: newList }));
+                      reorderSpeakersListInDB(committee.id, newList, 'caucus');
+                    }}
+                    onStatusChange={handleStatusChange}
+                    onDelegateAdd={handleDelegateAdd}
+                    isRollCallPhase={false} />
+                ) : committee.phase === 'unmoderated-caucus' ? (
                   <RollCallPanel committee={committee}
                     onStatusChange={handleStatusChange}
                     onDelegateAdd={handleDelegateAdd}
@@ -1349,21 +1395,6 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
                     onReorderList={handleReorderSpeakersList}
                     isRollCallPhase={false} />
                 )}
-              </aside>
-            )}
-            {showRollCall && committee.phase === 'moderated-caucus' && committee.caucus && (
-              <aside className="w-[18rem] border-r border-[#2E1E0F] bg-[#0D0906] flex flex-col overflow-hidden shrink-0">
-                <CaucusQueueSidebar
-                  committee={committee}
-                  onRemove={(delegateId) => {
-                    updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: (c.caucusQueue ?? []).filter((s) => s.delegateId !== delegateId) }));
-                    removeFromCaucusListInDB(committee.id, delegateId);
-                  }}
-                  onReorder={(newList) => {
-                    updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: newList }));
-                    reorderSpeakersListInDB(committee.id, newList, 'caucus');
-                  }}
-                />
               </aside>
             )}
             <main className="flex-1 overflow-hidden flex flex-col min-w-0">
