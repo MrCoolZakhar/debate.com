@@ -105,7 +105,7 @@ function RaiseMotionForm({ committee, onBack, onRaised }: {
   const [totalSecs, setTotalSecs] = useState(0);
   const [speakingTime, setSpeakingTime] = useState(60);
   const [topic, setTopic] = useState('');
-  const [tourOrder, setTourOrder] = useState<'asc' | 'desc'>('asc');
+  const [tourOrder, setTourOrder] = useState<'asc' | 'desc' | 'custom'>('asc');
 
   const presentCountries = committee.delegates.filter((d) => d.status !== 'absent').map((d) => d.country);
   const totalTime = totalMins * 60 + totalSecs;
@@ -211,7 +211,14 @@ function RaiseMotionForm({ committee, onBack, onRaised }: {
                       className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-colors ${tourOrder === 'desc' ? 'bg-[#7B4A1E] text-white' : 'bg-[#1A1209] border border-[#2E1E0F] text-[#C4A882] hover:text-white'}`}>
                       Z → A
                     </button>
+                    <button onClick={() => setTourOrder('custom')}
+                      className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-colors ${tourOrder === 'custom' ? 'bg-[#7B4A1E] text-white' : 'bg-[#1A1209] border border-[#2E1E0F] text-[#C4A882] hover:text-white'}`}>
+                      Custom
+                    </button>
                   </div>
+                  {tourOrder === 'custom' && (
+                    <p className="text-xs text-[#7A5A38] mt-1">Starts/ends at proposed country and proceeds through all delegates.</p>
+                  )}
                 </div>
               </div>
             </>
@@ -423,7 +430,7 @@ function VotingView({ committee, onAccepted, onAllDone, onRemove, onBack }: {
                   {m.speakingTime}s / delegate
                 </span>
                 <span className="px-3 py-1 bg-[#150F09] border border-[#2E1E0F] rounded-lg text-sm font-bold text-[#C4A882]">
-                  Order: {m.tourOrder === 'desc' ? 'Z → A' : 'A → Z'}
+                  Order: {m.tourOrder === 'desc' ? 'Z → A' : m.tourOrder === 'custom' ? 'Custom' : 'A → Z'}
                 </span>
               </div>
             )}
@@ -539,18 +546,30 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
       return;
 
     } else if (motion.type === 'tour') {
-      // Tour de Table — all present delegates in alphabetical order (A→Z or Z→A)
+      // Tour de Table — all present delegates ordered by tourOrder
       // GSL is NEVER touched — tour uses caucusQueue exclusively
-      const presentDelegates = committee.delegates
+      const alphabetical = committee.delegates
         .filter((d) => d.status !== 'absent')
-        .sort((a, b) => motion.tourOrder === 'desc'
-          ? b.country.localeCompare(a.country)
-          : a.country.localeCompare(b.country));
+        .sort((a, b) => a.country.localeCompare(b.country));
+      let presentDelegates: typeof alphabetical;
+      if (motion.tourOrder === 'custom' && motion.proposedBy) {
+        // Start from proposer's alphabetical position and wrap around
+        const proposerIdx = alphabetical.findIndex((d) => d.country === motion.proposedBy);
+        if (proposerIdx !== -1) {
+          presentDelegates = [...alphabetical.slice(proposerIdx), ...alphabetical.slice(0, proposerIdx)];
+        } else {
+          presentDelegates = alphabetical;
+        }
+      } else {
+        presentDelegates = motion.tourOrder === 'desc'
+          ? [...alphabetical].reverse()
+          : alphabetical;
+      }
 
       const totalTourTime = presentDelegates.length * motion.speakingTime;
       const caucus = {
         active: true, type: 'moderated' as const,
-        purpose: `Tour de Table (${motion.tourOrder === 'desc' ? 'Z→A' : 'A→Z'})`,
+        purpose: `Tour de Table (${motion.tourOrder === 'desc' ? 'Z→A' : motion.tourOrder === 'custom' ? 'Custom' : 'A→Z'})`,
         proposedBy: motion.proposedBy, totalTime: totalTourTime, remainingTime: totalTourTime,
         speakingTime: motion.speakingTime, speakerTimeRemaining: motion.speakingTime,
         currentSpeaker: null, proposerPosition: null, spokenCountries: [],

@@ -52,7 +52,7 @@ export interface PendingMotion {
   speakerList: string[];
   proposerPosition: 'first' | 'last' | null;
   disruptiveness: number;
-  tourOrder?: 'asc' | 'desc'; // Tour de Table only: 'asc' = A→Z, 'desc' = Z→A
+  tourOrder?: 'asc' | 'desc' | 'custom'; // Tour de Table only: 'asc' = A→Z, 'desc' = Z→A, 'custom' = from proposer
 }
 
 export type ResolutionStatus = 'draft' | 'submitted' | 'approved' | 'rejected' | 'passed' | 'failed';

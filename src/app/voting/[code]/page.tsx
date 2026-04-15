@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useEffect, useState } from 'react';
+import { use, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Committee } from '@/lib/types';
 import { getCountryByName, getFlagEmoji } from '@/lib/countries';
@@ -60,6 +60,9 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   const [phase, setPhase] = useState<VotingPhase>('voting');
   const [currentVoterIndex, setCurrentVoterIndex] = useState(0);
   const [rightsIndex, setRightsIndex] = useState(0);
+  const [rightsSpeakerTime, setRightsSpeakerTime] = useState(60);
+  const [rightsRunning, setRightsRunning] = useState(false);
+  const rightsTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -69,6 +72,27 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     }
     load();
   }, [code]);
+
+  // Rights speaker countdown timer
+  useEffect(() => {
+    if (rightsRunning) {
+      rightsTimerRef.current = setInterval(() => {
+        setRightsSpeakerTime((prev) => {
+          if (prev <= 1) { setRightsRunning(false); return 0; }
+          return prev - 1;
+        });
+      }, 1000);
+    } else {
+      if (rightsTimerRef.current) { clearInterval(rightsTimerRef.current); rightsTimerRef.current = null; }
+    }
+    return () => { if (rightsTimerRef.current) { clearInterval(rightsTimerRef.current); rightsTimerRef.current = null; } };
+  }, [rightsRunning]);
+
+  // Reset rights timer when speaker index changes
+  useEffect(() => {
+    setRightsSpeakerTime(60);
+    setRightsRunning(false);
+  }, [rightsIndex]);
 
   if (loading) {
     return (
@@ -107,9 +131,10 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   const forCount = votes.filter((v) => v.choice === 'for' || v.choice === 'for-rights').length;
   const againstCount = votes.filter((v) => v.choice === 'against' || v.choice === 'against-rights').length;
   const abstainCount = votes.filter((v) => v.choice === 'abstain').length;
-  const withRights = votes
+  const withRightsAll = votes
     .filter((v) => v.choice === 'for-rights' || v.choice === 'against-rights')
     .sort((a, b) => a.country.localeCompare(b.country));
+  const withRights = withRightsAll.slice(0, 10);
 
   // Veto check
   const p5Veto = settings.vetoMode === 'p5'
@@ -314,7 +339,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                     className="flex flex-col items-center gap-1"
                     style={{ opacity: Math.max(0.2, 1 - i * 0.18) }}
                   >
-                    <span style={{ fontSize: `${Math.max(1.2, 2 - i * 0.2)}rem`, lineHeight: '1' }}>
+                    <span style={{ fontSize: i === 0 ? '4rem' : `${Math.max(1.2, 2.8 - i * 0.2)}rem`, lineHeight: '1' }}>
                       {getFlag(d.country)}
                     </span>
                     <span className="text-[9px] text-[#7A5A38] text-center max-w-[52px] truncate">
@@ -391,6 +416,18 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             <p className="text-amber-400 font-semibold">
               {withRights[rightsIndex].choice === 'for-rights' ? '★ In Favour with Rights' : '★ Against with Rights'}
             </p>
+            {/* Rights speaker countdown timer */}
+            <div className={`text-6xl font-black font-mono mt-4 tabular-nums ${rightsSpeakerTime <= 10 ? 'text-red-500' : rightsSpeakerTime <= 20 ? 'text-yellow-500' : 'text-white'}`}>
+              {Math.floor(rightsSpeakerTime / 60)}:{String(rightsSpeakerTime % 60).padStart(2, '0')}
+            </div>
+            <div className="flex gap-3 mt-3">
+              <button
+                onClick={() => setRightsRunning((r) => !r)}
+                className={`px-6 py-2.5 rounded-xl font-bold text-sm transition-colors ${rightsRunning ? 'bg-yellow-600 hover:bg-yellow-500 text-white' : 'bg-[#3D6B35] hover:bg-[#4A7C42] text-white'}`}
+              >
+                {rightsRunning ? '⏸ Pause' : '▶ Start'}
+              </button>
+            </div>
           </div>
 
           <div className="w-full max-w-md space-y-1 mb-4">
@@ -421,7 +458,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
           </div>
 
           <button
-            onClick={handleNextRightsSpeaker}
+            onClick={() => { setRightsRunning(false); handleNextRightsSpeaker(); }}
             className="w-full max-w-md bg-[#7B4A1E] hover:bg-[#8B5A2B] text-white py-4 rounded-2xl font-black text-lg transition-colors"
           >
             {rightsIndex + 1 < withRights.length ? 'Next Rights Speaker →' : 'See Final Result →'}

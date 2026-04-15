@@ -539,10 +539,16 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
               prevServerTimeRef.current = updated.speakerTimeRemaining;
               setLocalTimerActive(false); // Reset on new speaker
               lastSpeakerIdRef.current = newSpeakerId;
-            } else if (updated.speakerTimeRemaining < prevServerTimeRef.current) {
-              // Server time decreased — chair's timer is running
-              setLocalTime(updated.speakerTimeRemaining); // Sync with server
-              setLocalTimerActive(true);
+            } else if (updated.speakerTimeRemaining !== prevServerTimeRef.current) {
+              // Server time changed — sync if chair's timer is running for this delegate
+              if (updated.currentSpeaker?.country === country &&
+                  updated.speakerTimeRemaining < prevServerTimeRef.current) {
+                setLocalTime(updated.speakerTimeRemaining);
+                setLocalTimerActive(true);
+              } else if (updated.speakerTimeRemaining < prevServerTimeRef.current) {
+                // Timer running for another speaker — just sync time
+                setLocalTime(updated.speakerTimeRemaining);
+              }
               prevServerTimeRef.current = updated.speakerTimeRemaining;
             }
           }
@@ -815,8 +821,8 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                 'bg-[#1A1209] border-[#2E1E0F]'
               }`}>
                 <div className="flex gap-4 items-start">
-                  {/* Current speaker's flag inside card (replaces own flag) */}
-                  <div className="text-4xl select-none shrink-0 leading-none">
+                  {/* Current speaker's flag inside card with thick ring */}
+                  <div className={`text-4xl select-none shrink-0 leading-none ${committee.currentSpeaker ? 'ring-4 ring-[#7B4A1E] rounded-full p-1' : ''}`}>
                     {committee.currentSpeaker ? flagFor(committee.currentSpeaker.country) : ''}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -847,11 +853,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                       <span className="text-2xl">{flagFor(committee.currentSpeaker.country)}</span>
                       <span className="font-bold text-white">{committee.currentSpeaker.country}</span>
                     </div>
-                    {/* Progress bar only (no time number for non-speakers) */}
-                    <div className="mt-2 h-2 bg-[#2E1E0F] rounded-full overflow-hidden">
-                      <div className={`h-full rounded-full transition-all ${progress > 50 ? 'bg-[#B8844A]' : progress > 20 ? 'bg-yellow-500' : 'bg-red-500'}`}
-                        style={{ width: `${(localTime / committee.speakerTimeLimit) * 100}%` }} />
-                    </div>
+                    {/* No progress bar here — only shown when isCurrentSpeaker above */}
                   </div>
                 )}
 
