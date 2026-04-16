@@ -240,6 +240,7 @@ function RollCallPanelInner({
   onAddToList,
   onListIds,
   onRemoveFromList,
+  onCycleStatus,
   onStatusChange,
   onPhaseChange,
   onDelegateAdd,
@@ -250,6 +251,8 @@ function RollCallPanelInner({
   onAddToList?: (delegateId: string) => void;
   onListIds?: Set<string>;
   onRemoveFromList?: (delegateId: string) => void;
+  /** Preferred over onStatusChange for toggle clicks — parent reads from a ref for rapid-click safety */
+  onCycleStatus?: (delegateId: string) => void;
   onStatusChange?: (delegateId: string, status: DelegateStatus) => void;
   onPhaseChange?: (phase: string) => void;
   onDelegateAdd?: (country: string) => void;
@@ -273,12 +276,15 @@ function RollCallPanelInner({
   });
 
   const cycleStatus = (id: string, current: DelegateStatus) => {
+    if (onCycleStatus) {
+      // Parent owns cycling — reads from a mutable ref so rapid clicks are always correct
+      onCycleStatus(id);
+      return;
+    }
+    // Fallback (no parent cycle handler): compute next locally
     const next: DelegateStatus =
       current === 'absent' ? 'present' : current === 'present' ? 'present-voting' : 'absent';
-    // Auto-remove from GSL when going absent — parent handles DB write via onStatusChange
-    if (next === 'absent' && queuePositionMap.has(id)) {
-      onRemoveFromList?.(id);
-    }
+    if (next === 'absent' && queuePositionMap.has(id)) onRemoveFromList?.(id);
     onStatusChange?.(id, next);
   };
 

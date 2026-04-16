@@ -499,8 +499,9 @@ function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee
     // Cap queue to fit within remaining total time
     const maxSpeakers = caucus.speakingTime > 0 ? Math.floor(caucus.remainingTime / caucus.speakingTime) : 0;
     if ((committee.caucusQueue ?? []).length >= maxSpeakers) return;
+    const caucusNextPos = (committee.caucusQueue ?? []).length + 1;
     updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: [...(c.caucusQueue ?? []), { delegateId, country: delegate.country }] }));
-    addToCaucusListInDB(committee.id, delegateId, delegate.country);
+    addToCaucusListInDB(committee.id, delegateId, delegate.country, caucusNextPos);
   };
 
   const handleExtendCaucus = (extraSecs: number) => {
@@ -562,7 +563,8 @@ function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee
       caucusQueue: [rtrEntry, ...(c.caucusQueue ?? [])],
       caucus: c.caucus ? { ...c.caucus, speakerTimeRemaining: Math.min(30, c.caucus.remainingTime) } : c.caucus,
     }));
-    addToCaucusListInDB(committee.id, delegate.id, caucusRtrCountry);
+    // RTR inserted at front — position 0 (other entries will shift on next reorder)
+    addToCaucusListInDB(committee.id, delegate.id, caucusRtrCountry, 0);
     setRtrCaucusId(delegate.id);
     isRtrActiveRef.current = true;
     setCaucusRtrCountry('');
@@ -956,6 +958,9 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
   const timerRunningRef = useRef(false);
   const committeeIdRef = useRef('');
   const speakerTimeLimitRef = useRef(speakerTimeLimit);
+  // Mutable map of delegateId → current status — updated immediately on each cycle
+  // so rapid clicks read the post-click status, not the pre-re-render (stale) status.
+  const delegateStatusRef = useRef<Map<string, DelegateStatus>>(new Map());
   timerRunningRef.current = timerRunning;
   speakerTimeLimitRef.current = speakerTimeLimit;
 
@@ -977,7 +982,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
       setLoading(false);
       if (found) {
         unsubscribe = subscribeToCommittee(found.id, async () => {
-          if (Date.now() - localUpdateTime.current < 500) return;
+          if (Date.now() - localUpdateTime.current < 1500) return;
           const updated = await getCommitteeByCode(code);
           if (updated) {
             setCommittee(updated);
@@ -1019,6 +1024,16 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
     return () => { if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; } };
   }, [timerRunning]);
 
+  // Keep delegateStatusRef in sync with DB truth (realtime events, initial load).
+  // Cycles update the ref immediately; this effect reconciles external changes.
+  useEffect(() => {
+    if (!committee?.delegates) return;
+    const incoming = new Map(committee.delegates.map((d) => [d.id, d.status]));
+    // Only overwrite entries that have NOT been dirtied by a pending cycle
+    // (i.e. entries not currently "in flight"). Simplest safe approach: full replace.
+    delegateStatusRef.current = incoming;
+  }, [committee?.delegates]);
+
   // Stable Set references — prevents RollCallPanel re-renders when only timer ticks
   const gslListIds = useMemo(
     () => new Set((committee?.speakersList ?? []).map((s) => s.delegateId)),
@@ -1030,14 +1045,42 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
   );
 
   // ── Stable callbacks (must be before early returns — Rules of Hooks) ──────────
+
+  // Cycle a delegate's roll-call status using a mutable ref so rapid clicks always
+  // read the post-previous-click status, not a stale render closure.
+  const handleCycleStatus = useCallback((delegateId: string) => {
+    const current = delegateStatusRef.current.get(delegateId);
+    if (current === undefined) return;
+    const next: DelegateStatus =
+      current === 'absent' ? 'present' : current === 'present' ? 'present-voting' : 'absent';
+    delegateStatusRef.current.set(delegateId, next); // Update ref immediately before re-render
+    updateLocal(setCommittee, (c) => ({
+      ...c,
+      delegates: c.delegates.map((d) => d.id === delegateId ? { ...d, status: next } : d),
+      ...(next === 'absent' ? {
+        speakersList: c.speakersList.filter((s) => s.delegateId !== delegateId),
+        caucusQueue: (c.caucusQueue ?? []).filter((s) => s.delegateId !== delegateId),
+      } : {}),
+    }), true);
+    setDelegateStatusInDB(delegateId, next);
+    if (next === 'absent') {
+      removeFromSpeakersListInDB(committeeIdRef.current, delegateId);
+      removeFromCaucusListInDB(committeeIdRef.current, delegateId);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleAddToSpeakersList = useCallback((delegateId: string) => {
     if (!committee) return;
     const delegate = committee.delegates.find((d) => d.id === delegateId);
     if (!delegate) return;
     const alreadyOn = committee.speakersList.some((s) => s.delegateId === delegateId);
     if (alreadyOn) return;
+    // Pass position from local state to skip the SELECT round-trip in the DB function,
+    // keeping the write under the debounce window (Bug 1 fix)
+    const nextPosition = committee.speakersList.length + 1;
     updateLocal(setCommittee, (c) => ({ ...c, speakersList: [...c.speakersList, { delegateId, country: delegate.country }] }), true);
-    addToSpeakersListInDB(committee.id, delegateId, delegate.country);
+    addToSpeakersListInDB(committee.id, delegateId, delegate.country, nextPosition);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [committee?.id, committee?.delegates, committee?.speakersList]);
 
@@ -1402,6 +1445,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
                 onAddToList={handleAddToSpeakersList}
                 onListIds={gslListIds}
                 onRemoveFromList={handleRemoveFromSpeakersList}
+                onCycleStatus={handleCycleStatus}
                 onStatusChange={handleStatusChange}
                 onPhaseChange={handlePhaseChange}
                 onDelegateAdd={handleDelegateAdd}
@@ -1424,8 +1468,9 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
                       const delegate = committee.delegates.find((d) => d.id === delegateId);
                       if (!delegate) return;
                       if (committee.caucus?.currentSpeaker === delegate.country) return;
+                      const inlinePos = (committee.caucusQueue ?? []).length + 1;
                       updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: [...(c.caucusQueue ?? []), { delegateId, country: delegate.country }] }));
-                      addToCaucusListInDB(committee.id, delegateId, delegate.country);
+                      addToCaucusListInDB(committee.id, delegateId, delegate.country, inlinePos);
                     }}
                     onListIds={caucusQueueIds}
                     onRemoveFromList={(delegateId) => {
@@ -1436,11 +1481,13 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
                       updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: newList }));
                       reorderSpeakersListInDB(committee.id, newList, 'caucus');
                     }}
+                    onCycleStatus={handleCycleStatus}
                     onStatusChange={handleStatusChange}
                     onDelegateAdd={handleDelegateAdd}
                     isRollCallPhase={false} />
                 ) : committee.phase === 'unmoderated-caucus' ? (
                   <RollCallPanel committee={committee}
+                    onCycleStatus={handleCycleStatus}
                     onStatusChange={handleStatusChange}
                     onDelegateAdd={handleDelegateAdd}
                     isRollCallPhase={false} />
@@ -1449,6 +1496,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
                     onAddToList={handleAddToSpeakersList}
                     onListIds={gslListIds}
                     onRemoveFromList={handleRemoveFromSpeakersList}
+                    onCycleStatus={handleCycleStatus}
                     onStatusChange={handleStatusChange}
                     onPhaseChange={handlePhaseChange}
                     onDelegateAdd={handleDelegateAdd}

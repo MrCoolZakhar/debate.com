@@ -205,12 +205,15 @@ export async function batchSetDelegateStatuses(
 // Never touched by caucuses or motions
 // ============================================================
 
-export async function addToSpeakersList(committeeId: string, delegateId: string, country: string): Promise<void> {
-  const { data: existing } = await supabase
-    .from('speakers_list').select('position')
-    .eq('committee_id', committeeId).eq('list_type', 'gsl')
-    .order('position', { ascending: false }).limit(1);
-  const nextPosition = existing && existing.length > 0 ? (existing[0].position as number) + 1 : 1;
+export async function addToSpeakersList(committeeId: string, delegateId: string, country: string, position?: number): Promise<void> {
+  let nextPosition = position;
+  if (nextPosition === undefined) {
+    const { data: existing } = await supabase
+      .from('speakers_list').select('position')
+      .eq('committee_id', committeeId).eq('list_type', 'gsl')
+      .order('position', { ascending: false }).limit(1);
+    nextPosition = existing && existing.length > 0 ? (existing[0].position as number) + 1 : 1;
+  }
   const { error } = await supabase.from('speakers_list').insert({
     committee_id: committeeId, delegate_id: delegateId, country,
     position: nextPosition, list_type: 'gsl',
@@ -229,12 +232,15 @@ export async function removeFromSpeakersList(committeeId: string, delegateId: st
 // Temporary — per-motion, wiped when caucus ends, GSL untouched
 // ============================================================
 
-export async function addToCaucusList(committeeId: string, delegateId: string, country: string): Promise<void> {
-  const { data: existing } = await supabase
-    .from('speakers_list').select('position')
-    .eq('committee_id', committeeId).eq('list_type', 'caucus')
-    .order('position', { ascending: false }).limit(1);
-  const nextPosition = existing && existing.length > 0 ? (existing[0].position as number) + 1 : 1;
+export async function addToCaucusList(committeeId: string, delegateId: string, country: string, position?: number): Promise<void> {
+  let nextPosition = position;
+  if (nextPosition === undefined) {
+    const { data: existing } = await supabase
+      .from('speakers_list').select('position')
+      .eq('committee_id', committeeId).eq('list_type', 'caucus')
+      .order('position', { ascending: false }).limit(1);
+    nextPosition = existing && existing.length > 0 ? (existing[0].position as number) + 1 : 1;
+  }
   const { error } = await supabase.from('speakers_list').insert({
     committee_id: committeeId, delegate_id: delegateId, country,
     position: nextPosition, list_type: 'caucus',
