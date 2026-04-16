@@ -110,44 +110,45 @@ export async function getCommitteeByCode(code: string): Promise<Committee | null
     .from('committees').select('*').eq('code', upperCode).single();
   if (committeeError || !committeeRow) return null;
 
-  const { data: delegateRows } = await supabase
-    .from('delegates').select('*').eq('committee_id', committeeRow.id).order('country', { ascending: true });
+  // Run all sub-queries in parallel (S8) — was 7 sequential round-trips (~700ms–2s total)
+  const [
+    { data: delegateRows },
+    { data: speakersRows },
+    { data: caucusRows },
+    { data: speakerRow },
+    { data: motionRows },
+    { data: docRows },
+    { data: messageRows },
+  ] = await Promise.all([
+    supabase.from('delegates').select('*').eq('committee_id', committeeRow.id).order('country', { ascending: true }),
+    supabase.from('speakers_list').select('*').eq('committee_id', committeeRow.id).eq('list_type', 'gsl').order('position', { ascending: true }),
+    supabase.from('speakers_list').select('*').eq('committee_id', committeeRow.id).eq('list_type', 'caucus').order('position', { ascending: true }),
+    supabase.from('current_speaker').select('*').eq('committee_id', committeeRow.id).maybeSingle(),
+    supabase.from('motions').select('*').eq('committee_id', committeeRow.id).eq('status', 'pending').order('disruptiveness', { ascending: false }),
+    supabase.from('documents').select('*').eq('committee_id', committeeRow.id).order('created_at', { ascending: true }),
+    supabase.from('messages').select('*').eq('committee_id', committeeRow.id).order('created_at', { ascending: true }),
+  ]);
+
   const delegates: Delegate[] = (delegateRows ?? []).map((d: DbRow) => ({
     id: d.id as string, country: d.country as string, status: d.status as DelegateStatus,
   }));
 
   // GSL only — caucus list is never loaded into speakersList
-  const { data: speakersRows } = await supabase
-    .from('speakers_list').select('*')
-    .eq('committee_id', committeeRow.id)
-    .eq('list_type', 'gsl')
-    .order('position', { ascending: true });
   const speakersList: SpeakerEntry[] = (speakersRows ?? []).map((s: DbRow) => ({
     delegateId: s.delegate_id as string, country: s.country as string,
   }));
 
   // Caucus queue — separate from GSL
-  const { data: caucusRows } = await supabase
-    .from('speakers_list').select('*')
-    .eq('committee_id', committeeRow.id)
-    .eq('list_type', 'caucus')
-    .order('position', { ascending: true });
   const caucusQueue: SpeakerEntry[] = (caucusRows ?? []).map((s: DbRow) => ({
     delegateId: s.delegate_id as string, country: s.country as string,
   }));
 
-  const { data: speakerRow } = await supabase
-    .from('current_speaker').select('*').eq('committee_id', committeeRow.id).single();
-  const currentSpeaker: SpeakerEntry | null = speakerRow?.country
-    ? { delegateId: speakerRow.delegate_id as string, country: speakerRow.country as string }
+  const currentSpeaker: SpeakerEntry | null = (speakerRow as DbRow | null)?.country
+    ? { delegateId: (speakerRow as DbRow).delegate_id as string, country: (speakerRow as DbRow).country as string }
     : null;
-  const speakerTimeRemaining = (speakerRow?.time_remaining as number) ?? 0;
-  const speakerStartedAt = (speakerRow?.started_at as string | null) ?? null;
+  const speakerTimeRemaining = ((speakerRow as DbRow | null)?.time_remaining as number) ?? 0;
+  const speakerStartedAt = ((speakerRow as DbRow | null)?.started_at as string | null) ?? null;
 
-  const { data: motionRows } = await supabase
-    .from('motions').select('*')
-    .eq('committee_id', committeeRow.id).eq('status', 'pending')
-    .order('disruptiveness', { ascending: false });
   const pendingMotions: PendingMotion[] = (motionRows ?? []).map((m: DbRow) => ({
     id: m.id as string, type: m.type as PendingMotionType, proposedBy: m.proposed_by as string,
     totalTime: m.total_time as number, speakingTime: m.speaking_time as number,
@@ -155,8 +156,6 @@ export async function getCommitteeByCode(code: string): Promise<Committee | null
     disruptiveness: m.disruptiveness as number,
   }));
 
-  const { data: docRows } = await supabase
-    .from('documents').select('*').eq('committee_id', committeeRow.id).order('created_at', { ascending: true });
   const documents: CommitteeDocument[] = (docRows ?? []).map((d: DbRow) => ({
     id: d.id as string, type: d.type as CommitteeDocument['type'],
     docCode: d.doc_code as string, title: d.title as string,
@@ -168,8 +167,6 @@ export async function getCommitteeByCode(code: string): Promise<Committee | null
     readingMinutes: d.reading_minutes as number | undefined,
   }));
 
-  const { data: messageRows } = await supabase
-    .from('messages').select('*').eq('committee_id', committeeRow.id).order('created_at', { ascending: true });
   const messages: Committee['messages'] = (messageRows ?? []).map((m: DbRow) => ({
     id: m.id as string, sender: m.sender as string, content: m.content as string,
     timestamp: new Date(m.created_at as string), isPrivate: m.is_private as boolean,
@@ -209,14 +206,10 @@ export async function batchSetDelegateStatuses(
 // ============================================================
 
 export async function addToSpeakersList(committeeId: string, delegateId: string, country: string): Promise<void> {
-  const { data: existing } = await supabase
-    .from('speakers_list').select('position')
-    .eq('committee_id', committeeId).eq('list_type', 'gsl')
-    .order('position', { ascending: false }).limit(1);
-  const nextPosition = existing && existing.length > 0 ? (existing[0].position as number) + 1 : 1;
+  // Use Date.now() as position — monotonically increasing, no SELECT needed (S9)
   const { error } = await supabase.from('speakers_list').insert({
     committee_id: committeeId, delegate_id: delegateId, country,
-    position: nextPosition, list_type: 'gsl',
+    position: Date.now(), list_type: 'gsl',
   });
   if (error) console.error('Error adding to GSL:', error);
 }
@@ -233,14 +226,10 @@ export async function removeFromSpeakersList(committeeId: string, delegateId: st
 // ============================================================
 
 export async function addToCaucusList(committeeId: string, delegateId: string, country: string): Promise<void> {
-  const { data: existing } = await supabase
-    .from('speakers_list').select('position')
-    .eq('committee_id', committeeId).eq('list_type', 'caucus')
-    .order('position', { ascending: false }).limit(1);
-  const nextPosition = existing && existing.length > 0 ? (existing[0].position as number) + 1 : 1;
+  // Use Date.now() as position — monotonically increasing, no SELECT needed (S9)
   const { error } = await supabase.from('speakers_list').insert({
     committee_id: committeeId, delegate_id: delegateId, country,
-    position: nextPosition, list_type: 'caucus',
+    position: Date.now(), list_type: 'caucus',
   });
   if (error) console.error('Error adding to caucus list:', error);
 }
@@ -279,18 +268,18 @@ export async function reorderSpeakersList(
   entries: { delegateId: string; country: string }[],
   listType: 'gsl' | 'caucus' = 'gsl',
 ): Promise<void> {
-  await supabase.from('speakers_list').delete()
-    .eq('committee_id', committeeId).eq('list_type', listType);
   if (entries.length === 0) return;
-  const rows = entries.map((e, i) => ({
-    committee_id: committeeId,
-    delegate_id: e.delegateId,
-    country: e.country,
-    position: i + 1,
-    list_type: listType,
-  }));
-  const { error } = await supabase.from('speakers_list').insert(rows);
-  if (error) console.error('Error reordering speakers list:', error);
+  // Parallel in-place position updates — avoids DELETE+INSERT which fires a
+  // DELETE realtime event causing the delegate view to briefly flash an empty list.
+  await Promise.all(
+    entries.map((e, i) =>
+      supabase.from('speakers_list')
+        .update({ position: i + 1 })
+        .eq('committee_id', committeeId)
+        .eq('delegate_id', e.delegateId)
+        .eq('list_type', listType),
+    ),
+  );
 }
 
 // ============================================================
@@ -328,12 +317,12 @@ export async function nextSpeaker(committeeId: string, speakerTimeLimit: number)
     .eq('committee_id', committeeId);
 }
 
-export async function tickSpeakerTimer(committeeId: string): Promise<void> {
-  const { data: row } = await supabase
-    .from('current_speaker').select('time_remaining').eq('committee_id', committeeId).single();
-  if (!row || row.time_remaining <= 0) return;
+// Sync time_remaining to DB at structural moments (pause, expire).
+// tickSpeakerTimer removed — per-second DB writes caused excessive realtime events.
+export async function syncSpeakerTime(committeeId: string, timeRemaining: number): Promise<void> {
   await supabase.from('current_speaker')
-    .update({ time_remaining: row.time_remaining - 1 }).eq('committee_id', committeeId);
+    .update({ time_remaining: timeRemaining })
+    .eq('committee_id', committeeId);
 }
 
 export async function startSpeakerTimer(committeeId: string): Promise<void> {

@@ -21,7 +21,7 @@ import {
   removeFromCaucusList as removeFromCaucusListInDB,
   reorderSpeakersList as reorderSpeakersListInDB,
   nextSpeaker as nextSpeakerInDB,
-  tickSpeakerTimer as tickSpeakerTimerInDB,
+  syncSpeakerTime as syncSpeakerTimeInDB,
   startSpeakerTimer as startSpeakerTimerInDB,
   stopSpeakerTimer as stopSpeakerTimerInDB,
   updateCaucus as updateCaucusInDB,
@@ -948,6 +948,10 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
   const [rtrDelegateId, setRtrDelegateId] = useState<string | null>(null);
   const [chatReadCount, setChatReadCount] = useState(0);
 
+  // Isolated timer atom — ticks never touch the `committee` object, preventing
+  // whole-tree re-renders every second.
+  const [speakerTimeRemaining, setSpeakerTimeRemaining] = useState(90);
+
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const timerRunningRef = useRef(false);
   const committeeIdRef = useRef('');
@@ -967,6 +971,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
       setCommittee(found ?? null);
       if (found) {
         setSpeakerTimeLimitLocal(found.speakerTimeLimit);
+        setSpeakerTimeRemaining(found.speakerTimeRemaining);
         committeeIdRef.current = found.id;
       }
       setLoading(false);
@@ -975,22 +980,16 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
           if (Date.now() - localUpdateTime.current < 500) return;
           const updated = await getCommitteeByCode(code);
           if (updated) {
-            setCommittee((prev) => {
-              if (!prev) return updated;
-              // Co-chair timer sync: if remote has started_at and local timer is not running,
-              // compute elapsed time and snap to the correct remaining time
-              if (updated.speakerStartedAt && !timerRunningRef.current) {
+            setCommittee(updated);
+            // Sync isolated timer atom only when local timer is not running
+            if (!timerRunningRef.current) {
+              if (updated.speakerStartedAt) {
                 const elapsed = Math.round((Date.now() - new Date(updated.speakerStartedAt).getTime()) / 1000);
-                const snapped = Math.max(0, updated.speakerTimeLimit - elapsed);
-                return { ...updated, speakerTimeRemaining: snapped };
+                setSpeakerTimeRemaining(Math.max(0, updated.speakerTimeLimit - elapsed));
+              } else {
+                setSpeakerTimeRemaining(updated.speakerTimeRemaining);
               }
-              return {
-                ...updated,
-                speakerTimeRemaining: timerRunningRef.current
-                  ? prev.speakerTimeRemaining
-                  : updated.speakerTimeRemaining,
-              };
-            });
+            }
           }
         });
       }
@@ -999,20 +998,19 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
     return () => unsubscribe?.();
   }, [code]);
 
-  // Timer — FIX: runs immediately on mount when timerRunning becomes true
-  // Using a ref-based tick so setInterval fires right away without stale closure issues
+  // Timer — isolated: only updates the speakerTimeRemaining atom, never the committee object.
+  // This prevents whole-tree re-renders every second (S1).
+  // tickSpeakerTimerInDB removed — DB is synced only at pause/next/expire (S2).
   useEffect(() => {
     if (timerRunning) {
-      // Tick immediately on first render after start (fixes 1-second delay bug)
       const tick = () => {
-        updateLocal(setCommittee, (c) => {
-          const newTime = Math.max(0, c.speakerTimeRemaining - 1);
-          if (newTime === 0) setTimerRunning(false);
-          return { ...c, speakerTimeRemaining: newTime };
+        setSpeakerTimeRemaining((prev) => {
+          const next = Math.max(0, prev - 1);
+          if (next === 0) setTimerRunning(false);
+          return next;
         });
-        if (committeeIdRef.current) tickSpeakerTimerInDB(committeeIdRef.current);
       };
-      // Fire once immediately, then every 1000ms
+      // Fire once immediately (fixes 1-second delay), then every 1000ms
       tick();
       intervalRef.current = setInterval(tick, 1000);
     } else {
@@ -1123,7 +1121,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
   }
 
   const present = committee.delegates.filter((d) => d.status !== 'absent').length;
-  const progress = committee.currentSpeaker ? (committee.speakerTimeRemaining / committee.speakerTimeLimit) * 100 : 0;
+  const progress = committee.currentSpeaker ? (speakerTimeRemaining / committee.speakerTimeLimit) * 100 : 0;
   const isPreSession = committee.phase === 'pre-session';
 
   // ── Optimistic action handlers ──────────────────────────────────────────────
@@ -1133,15 +1131,19 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
     stopSpeakerTimerInDB(committeeIdRef.current);
     setExtraTimeAdded(false);
     if (committee.currentSpeaker) {
-      const secondsSpoken = committee.speakerTimeLimit - committee.speakerTimeRemaining;
+      const secondsSpoken = committee.speakerTimeLimit - speakerTimeRemaining;
       if (secondsSpoken > 0) {
         const ctx = committee.phase === 'moderated-caucus' ? 'moderated-caucus' : 'speakers-list';
-        logSpeakingTime(committee.id, committee.currentSpeaker.country, secondsSpoken, ctx, committee.currentSpeaker.delegateId);
+        const topic = committee.phase === 'moderated-caucus'
+          ? (committee.caucus?.purpose ?? committee.topic)
+          : committee.topic;
+        logSpeakingTime(committee.id, committee.currentSpeaker.country, secondsSpoken, ctx, topic);
       }
     }
     const [next, ...rest] = committee.speakersList;
     const timeToUse = rtrOverrideTime ?? speakerTimeLimit;
     setRtrOverrideTime(null);
+    setSpeakerTimeRemaining(timeToUse);
     updateLocal(setCommittee, (c) => ({
       ...c,
       currentSpeaker: next ?? null,
@@ -1153,7 +1155,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
   };
 
   const handleAddExtraTime = (secs: number) => {
-    updateLocal(setCommittee, (c) => ({ ...c, speakerTimeRemaining: c.speakerTimeRemaining + secs }));
+    setSpeakerTimeRemaining((prev) => prev + secs);
     setExtraTimeAdded(true);
     setActivePopover(null);
     setExtraTimeSecs('');
@@ -1181,7 +1183,9 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
     if (starting) {
       startSpeakerTimerInDB(committeeIdRef.current);
     } else {
+      // Sync current remaining time to DB on pause (S2 — no per-second writes)
       stopSpeakerTimerInDB(committeeIdRef.current);
+      syncSpeakerTimeInDB(committeeIdRef.current, speakerTimeRemaining);
     }
   };
 
@@ -1189,11 +1193,12 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
     setTimerRunning(false);
     stopSpeakerTimerInDB(committeeIdRef.current);
     setExtraTimeAdded(false);
-    updateLocal(setCommittee, (c) => ({ ...c, speakerTimeRemaining: speakerTimeLimit }));
+    setSpeakerTimeRemaining(speakerTimeLimit);
   };
 
   const handleSetSpeakerTimeLimit = (seconds: number) => {
     setSpeakerTimeLimitLocal(seconds);
+    setSpeakerTimeRemaining(seconds);
     updateLocal(setCommittee, (c) => ({ ...c, speakerTimeLimit: seconds, speakerTimeRemaining: seconds }));
   };
 
@@ -1495,10 +1500,10 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
                         <h1 className="text-5xl font-black text-white mt-5 mb-2 text-center">{committee.currentSpeaker.country}</h1>
                         <div className={`text-8xl font-black font-mono mt-3 mb-4 tabular-nums ${
                           extraTimeAdded ? 'text-emerald-400' :
-                          committee.speakerTimeRemaining <= 10 ? 'text-red-500' :
-                          committee.speakerTimeRemaining <= 30 ? 'text-yellow-600' : 'text-white'
+                          speakerTimeRemaining <= 10 ? 'text-red-500' :
+                          speakerTimeRemaining <= 30 ? 'text-yellow-600' : 'text-white'
                         }`}>
-                          {formatTime(committee.speakerTimeRemaining)}
+                          {formatTime(speakerTimeRemaining)}
                           {extraTimeAdded && <span className="text-base ml-2 font-normal text-emerald-400">+time</span>}
                         </div>
                         <div className="w-full max-w-md h-2 bg-[#2E1E0F] rounded-full overflow-hidden mb-4">
