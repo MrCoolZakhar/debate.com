@@ -206,10 +206,14 @@ export async function batchSetDelegateStatuses(
 // ============================================================
 
 export async function addToSpeakersList(committeeId: string, delegateId: string, country: string): Promise<void> {
-  // Use Date.now() as position — monotonically increasing, no SELECT needed (S9)
+  const { data: existing } = await supabase
+    .from('speakers_list').select('position')
+    .eq('committee_id', committeeId).eq('list_type', 'gsl')
+    .order('position', { ascending: false }).limit(1);
+  const nextPosition = existing && existing.length > 0 ? (existing[0].position as number) + 1 : 1;
   const { error } = await supabase.from('speakers_list').insert({
     committee_id: committeeId, delegate_id: delegateId, country,
-    position: Date.now(), list_type: 'gsl',
+    position: nextPosition, list_type: 'gsl',
   });
   if (error) console.error('Error adding to GSL:', error);
 }
@@ -226,10 +230,14 @@ export async function removeFromSpeakersList(committeeId: string, delegateId: st
 // ============================================================
 
 export async function addToCaucusList(committeeId: string, delegateId: string, country: string): Promise<void> {
-  // Use Date.now() as position — monotonically increasing, no SELECT needed (S9)
+  const { data: existing } = await supabase
+    .from('speakers_list').select('position')
+    .eq('committee_id', committeeId).eq('list_type', 'caucus')
+    .order('position', { ascending: false }).limit(1);
+  const nextPosition = existing && existing.length > 0 ? (existing[0].position as number) + 1 : 1;
   const { error } = await supabase.from('speakers_list').insert({
     committee_id: committeeId, delegate_id: delegateId, country,
-    position: Date.now(), list_type: 'caucus',
+    position: nextPosition, list_type: 'caucus',
   });
   if (error) console.error('Error adding to caucus list:', error);
 }
