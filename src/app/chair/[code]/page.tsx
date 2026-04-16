@@ -538,6 +538,9 @@ function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee
     const delegate = committee.delegates.find((d) => d.country === proposer);
     if (!delegate) return;
     const entry = { delegateId: delegate.id, country: proposer };
+    // Persist proposerPosition to DB immediately so realtime refetch won't re-show the prompt
+    const updatedCaucus = { ...caucus, proposerPosition: position };
+    updateCaucusInDB(committee.id, updatedCaucus);
     updateLocal(setCommittee, (c) => {
       if (!c.caucus) return c;
       const without = (c.caucusQueue ?? []).filter((s) => s.delegateId !== delegate.id);
