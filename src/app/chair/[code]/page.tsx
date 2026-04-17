@@ -945,6 +945,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
   const [speakerTimeLimit, setSpeakerTimeLimitLocal] = useState(90);
   const [showSettings, setShowSettings] = useState(false);
   const [showChat, setShowChat] = useState(false);
+  const [chatReadCount, setChatReadCount] = useState(0);
   // Only one of these can be open at a time
   const [activePopover, setActivePopover] = useState<'extraTime' | 'rightToReply' | null>(null);
   const [extraTimeSecs, setExtraTimeSecs] = useState('');
