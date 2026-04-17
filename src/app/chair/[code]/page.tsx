@@ -1529,7 +1529,8 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
                 </div>
               )}
               {committee.phase === 'speakers-list' && (
-                <div className="flex-1 flex flex-col overflow-hidden">
+                <>
+                <div className="flex-1 flex flex-row overflow-hidden">
                   <div className="flex-1 flex flex-col items-center justify-center px-8 py-6 overflow-y-auto">
                     {committee.currentSpeaker ? (
                       <>
@@ -1644,111 +1645,6 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
                             </div>
                           </div>
                         )}
-                        {/* Right of Reply popover */}
-                        {activePopover === 'rightToReply' && (
-                          <div className="mt-3 bg-[#1A1209] border border-orange-700/40 rounded-xl p-3 w-full max-w-sm">
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-xs text-orange-400 font-semibold">Right of Reply</span>
-                              <button onClick={() => {
-                                setActivePopover(null);
-                                setRtrOpen(false);
-                                setRtrTimerActive(false);
-                                setRtrCountry('');
-                                setRtrTimeRemaining(rtrSeconds);
-                              }} className="text-[#7A5A38] hover:text-white text-sm">✕</button>
-                            </div>
-                            {!rtrOpen ? (
-                              // ── Setup view ────────────────────────────────────
-                              <>
-                                <RtrCountryInput
-                                  committee={committee}
-                                  value={rtrCountry}
-                                  onChange={(v) => setRtrCountry(v)}
-                                />
-                                <div className="flex gap-2 mt-2 mb-2">
-                                  {[15, 20, 30].map((s) => (
-                                    <button
-                                      key={s}
-                                      onClick={() => setRtrSeconds(s)}
-                                      className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-colors border ${
-                                        rtrSeconds === s
-                                          ? 'bg-orange-600 border-orange-500 text-white'
-                                          : 'bg-[#2E1E0F] border-[#2E1E0F] text-[#C4A882] hover:border-orange-700/50'
-                                      }`}
-                                    >
-                                      {s}s
-                                    </button>
-                                  ))}
-                                  <div className="flex items-center gap-1">
-                                    <input
-                                      type="number"
-                                      min={5} max={300}
-                                      value={rtrSeconds}
-                                      onChange={(e) => setRtrSeconds(parseInt(e.target.value) || 30)}
-                                      style={{ MozAppearance: 'textfield' } as React.CSSProperties}
-                                      className="w-14 bg-[#150F09] border border-[#2E1E0F] rounded-lg px-2 py-1.5 text-white text-xs focus:outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                                    />
-                                    <span className="text-xs text-[#7A5A38]">s</span>
-                                  </div>
-                                </div>
-                                <button
-                                  onClick={() => {
-                                    if (!rtrCountry) return;
-                                    setRtrTimeRemaining(rtrSeconds);
-                                    setRtrTimerActive(false);
-                                    setRtrOpen(true);
-                                  }}
-                                  disabled={!rtrCountry}
-                                  className="w-full py-2 bg-orange-600 hover:bg-orange-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs rounded-lg font-bold transition-colors"
-                                >
-                                  Grant Right of Reply
-                                </button>
-                              </>
-                            ) : (
-                              // ── Active timer view ──────────────────────────────
-                              <>
-                                <div className="flex items-center gap-2 mb-3 px-1">
-                                  <span className="text-xl">{(() => { const f = getCountryByName(rtrCountry); return f ? getFlagEmoji(f.code) : '🌐'; })()}</span>
-                                  <span className="text-sm text-white font-bold flex-1">{rtrCountry}</span>
-                                  <span className="text-xs text-orange-400 font-mono">Right of Reply</span>
-                                </div>
-                                <div className={`text-5xl font-black font-mono text-center mb-3 tabular-nums ${
-                                  rtrTimeRemaining <= 5 ? 'text-red-500' : rtrTimeRemaining <= 10 ? 'text-yellow-500' : 'text-orange-300'
-                                }`}>
-                                  {Math.floor(rtrTimeRemaining / 60)}:{String(rtrTimeRemaining % 60).padStart(2, '0')}
-                                </div>
-                                <div className="w-full h-1.5 bg-[#2E1E0F] rounded-full overflow-hidden mb-3">
-                                  <div
-                                    className={`h-full rounded-full transition-all ${rtrTimeRemaining / rtrSeconds > 0.5 ? 'bg-orange-500' : rtrTimeRemaining / rtrSeconds > 0.2 ? 'bg-yellow-500' : 'bg-red-500'}`}
-                                    style={{ width: `${(rtrTimeRemaining / rtrSeconds) * 100}%` }}
-                                  />
-                                </div>
-                                <div className="flex gap-2">
-                                  <button
-                                    onClick={() => setRtrTimerActive((r) => !r)}
-                                    className={`flex-1 py-2 rounded-lg font-bold text-xs transition-colors ${
-                                      rtrTimerActive ? 'bg-yellow-600 hover:bg-yellow-500 text-white' : 'bg-[#3D6B35] hover:bg-[#4A7C42] text-white'
-                                    }`}
-                                  >
-                                    {rtrTimerActive ? '⏸ Pause' : '▶ Start'}
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      setRtrTimerActive(false);
-                                      setRtrOpen(false);
-                                      setRtrCountry('');
-                                      setRtrTimeRemaining(rtrSeconds);
-                                      setActivePopover(null);
-                                    }}
-                                    className="px-3 py-2 rounded-lg font-bold text-xs bg-[#2E1E0F] hover:bg-[#3D2A15] text-[#C4A882] transition-colors"
-                                  >
-                                    Done
-                                  </button>
-                                </div>
-                              </>
-                            )}
-                          </div>
-                        )}
                       </>
                     ) : (
                       <>
@@ -1774,24 +1670,132 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
                       </>
                     )}
                   </div>
-                  <div className="border-t border-[#2E1E0F] bg-[#0D0906] px-6 py-4">
-                    <div className="flex items-center gap-3 mb-4">
-                      <span className="text-xs text-[#7A5A38] font-mono shrink-0">TIME</span>
-                      <div className="flex gap-1.5">
-                        {[30, 60, 90, 120, 180].map((t) => (
-                          <button key={t} onClick={() => handleSetSpeakerTimeLimit(t)}
-                            className={`text-xs px-2.5 py-1 rounded-lg transition-colors font-semibold ${speakerTimeLimit === t ? 'bg-[#7B4A1E] text-white' : 'bg-[#2E1E0F] text-[#C4A882] hover:text-white'}`}>
-                            {t}s
-                          </button>
-                        ))}
-                        <input type="number" value={speakerTimeLimit}
-                          onChange={(e) => handleSetSpeakerTimeLimit(parseInt(e.target.value) || 90)}
-                          className="w-14 bg-[#150F09] border border-[#2E1E0F] rounded-lg px-2 py-1 text-white text-xs focus:outline-none" />
+                  {/* RTR panel — right sibling, only rendered when open */}
+                  {activePopover === 'rightToReply' && (
+                    <div className="w-80 shrink-0 border-l border-[#2E1E0F] bg-[#0D0906] flex items-center justify-center p-6">
+                      <div className="bg-[#1A1209] border border-orange-700/40 rounded-xl p-4 w-full">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs text-orange-400 font-semibold">Right of Reply</span>
+                          <button onClick={() => {
+                            setActivePopover(null);
+                            setRtrOpen(false);
+                            setRtrTimerActive(false);
+                            setRtrCountry('');
+                            setRtrTimeRemaining(rtrSeconds);
+                          }} className="text-[#7A5A38] hover:text-white text-sm">✕</button>
+                        </div>
+                        {!rtrOpen ? (
+                          // ── Setup view ────────────────────────────────────
+                          <>
+                            <RtrCountryInput
+                              committee={committee}
+                              value={rtrCountry}
+                              onChange={(v) => setRtrCountry(v)}
+                            />
+                            <div className="flex gap-2 mt-2 mb-2">
+                              {[15, 20, 30].map((s) => (
+                                <button
+                                  key={s}
+                                  onClick={() => setRtrSeconds(s)}
+                                  className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-colors border ${
+                                    rtrSeconds === s
+                                      ? 'bg-orange-600 border-orange-500 text-white'
+                                      : 'bg-[#2E1E0F] border-[#2E1E0F] text-[#C4A882] hover:border-orange-700/50'
+                                  }`}
+                                >
+                                  {s}s
+                                </button>
+                              ))}
+                              <div className="flex items-center gap-1">
+                                <input
+                                  type="number"
+                                  min={5} max={300}
+                                  value={rtrSeconds}
+                                  onChange={(e) => setRtrSeconds(parseInt(e.target.value) || 30)}
+                                  style={{ MozAppearance: 'textfield' } as React.CSSProperties}
+                                  className="w-14 bg-[#150F09] border border-[#2E1E0F] rounded-lg px-2 py-1.5 text-white text-xs focus:outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                                />
+                                <span className="text-xs text-[#7A5A38]">s</span>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => {
+                                if (!rtrCountry) return;
+                                setRtrTimeRemaining(rtrSeconds);
+                                setRtrTimerActive(false);
+                                setRtrOpen(true);
+                              }}
+                              disabled={!rtrCountry}
+                              className="w-full py-2 bg-orange-600 hover:bg-orange-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs rounded-lg font-bold transition-colors"
+                            >
+                              Grant Right of Reply
+                            </button>
+                          </>
+                        ) : (
+                          // ── Active timer view ──────────────────────────────
+                          <>
+                            <div className="flex items-center gap-2 mb-3 px-1">
+                              <span className="text-xl">{(() => { const f = getCountryByName(rtrCountry); return f ? getFlagEmoji(f.code) : '🌐'; })()}</span>
+                              <span className="text-sm text-white font-bold flex-1">{rtrCountry}</span>
+                              <span className="text-xs text-orange-400 font-mono">Right of Reply</span>
+                            </div>
+                            <div className={`text-5xl font-black font-mono text-center mb-3 tabular-nums ${
+                              rtrTimeRemaining <= 5 ? 'text-red-500' : rtrTimeRemaining <= 10 ? 'text-yellow-500' : 'text-orange-300'
+                            }`}>
+                              {Math.floor(rtrTimeRemaining / 60)}:{String(rtrTimeRemaining % 60).padStart(2, '0')}
+                            </div>
+                            <div className="w-full h-1.5 bg-[#2E1E0F] rounded-full overflow-hidden mb-3">
+                              <div
+                                className={`h-full rounded-full transition-all ${rtrTimeRemaining / rtrSeconds > 0.5 ? 'bg-orange-500' : rtrTimeRemaining / rtrSeconds > 0.2 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                                style={{ width: `${(rtrTimeRemaining / rtrSeconds) * 100}%` }}
+                              />
+                            </div>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => setRtrTimerActive((r) => !r)}
+                                className={`flex-1 py-2 rounded-lg font-bold text-xs transition-colors ${
+                                  rtrTimerActive ? 'bg-yellow-600 hover:bg-yellow-500 text-white' : 'bg-[#3D6B35] hover:bg-[#4A7C42] text-white'
+                                }`}
+                              >
+                                {rtrTimerActive ? '⏸ Pause' : '▶ Start'}
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setRtrTimerActive(false);
+                                  setRtrOpen(false);
+                                  setRtrCountry('');
+                                  setRtrTimeRemaining(rtrSeconds);
+                                  setActivePopover(null);
+                                }}
+                                className="px-3 py-2 rounded-lg font-bold text-xs bg-[#2E1E0F] hover:bg-[#3D2A15] text-[#C4A882] transition-colors"
+                              >
+                                Done
+                              </button>
+                            </div>
+                          </>
+                        )}
                       </div>
                     </div>
-                    <AddSpeakerInput committee={committee} onAdd={handleAddToSpeakersList} />
+                  )}
+                </div>{/* end flex-row */}
+                <div className="border-t border-[#2E1E0F] bg-[#0D0906] px-6 py-4">
+                  <div className="flex items-center gap-3 mb-4">
+                    <span className="text-xs text-[#7A5A38] font-mono shrink-0">TIME</span>
+                    <div className="flex gap-1.5">
+                      {[30, 60, 90, 120, 180].map((t) => (
+                        <button key={t} onClick={() => handleSetSpeakerTimeLimit(t)}
+                          className={`text-xs px-2.5 py-1 rounded-lg transition-colors font-semibold ${speakerTimeLimit === t ? 'bg-[#7B4A1E] text-white' : 'bg-[#2E1E0F] text-[#C4A882] hover:text-white'}`}>
+                          {t}s
+                        </button>
+                      ))}
+                      <input type="number" value={speakerTimeLimit}
+                        onChange={(e) => handleSetSpeakerTimeLimit(parseInt(e.target.value) || 90)}
+                        className="w-14 bg-[#150F09] border border-[#2E1E0F] rounded-lg px-2 py-1 text-white text-xs focus:outline-none" />
+                    </div>
                   </div>
+                  <AddSpeakerInput committee={committee} onAdd={handleAddToSpeakersList} />
                 </div>
+                </>{/* end speakers-list fragment */}
               )}
             </main>
           </>
