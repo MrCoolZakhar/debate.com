@@ -310,12 +310,10 @@ function RollCallPanelInner({
     onDelegateAdd?.(country);
   };
 
-  // Sorted lists — absent delegates always sink to the bottom
-  const allAlpha = [...committee.delegates].sort((a, b) => a.country.localeCompare(b.country));
-  const alphabetical = [
-    ...allAlpha.filter((d) => d.status !== 'absent'),
-    ...allAlpha.filter((d) => d.status === 'absent'),
-  ];
+  // A-Z view: pure alphabetical, no status separation
+  const alphabetical = [...committee.delegates].sort((a, b) => a.country.localeCompare(b.country));
+  // allAlpha shared base for queueOrdered (alphabetical among non-queue delegates)
+  const allAlpha = alphabetical;
 
   // Queue view: GSL delegates first (in order), then present/PV alphabetically, then absent
   const inQueue = (committee.speakersList ?? [])
