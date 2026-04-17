@@ -1338,7 +1338,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
         <span className="font-bold text-white text-sm truncate">{committee.name}</span>
         <span className="text-[#7A5A38] text-xs hidden sm:block truncate flex-1">{committee.topic}</span>
         {committee.phase !== 'pre-session' && (
-          <button onClick={() => setShowRollCall(true)}
+          <button onClick={() => setShowRollCall((v) => !v)}
             className={`text-xs px-3 py-1 rounded-lg transition-colors shrink-0 ${showRollCall ? 'bg-[#7B4A1E] text-white' : 'bg-[#2E1E0F] text-[#C4A882] hover:text-white'}`}>
             Roll Call {present}/{committee.delegates.length}
           </button>
@@ -1481,12 +1481,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
         {!showChat && committee.phase !== 'pre-session' && (
           <>
             {showRollCall && (
-              <aside className="w-[22rem] border-r border-[#2E1E0F] bg-[#0D0906] flex flex-col overflow-hidden shrink-0 relative">
-                <button
-                  onClick={() => setShowRollCall(false)}
-                  className="absolute top-2 right-2 z-10 w-6 h-6 flex items-center justify-center text-[#7A5A38] hover:text-white text-sm leading-none bg-[#2E1E0F] rounded-full"
-                  title="Close panel"
-                >✕</button>
+              <aside className="w-[22rem] border-r border-[#2E1E0F] bg-[#0D0906] flex flex-col overflow-hidden shrink-0">
                 {committee.phase === 'moderated-caucus' ? (
                   <RollCallPanel committee={{ ...committee, speakersList: committee.caucusQueue ?? [] }}
                     onAddToList={(delegateId) => {
