@@ -14,12 +14,14 @@ type ConvKey = 'everyone' | string;
 interface Conversation { key: ConvKey; label: string; emoji: string; messages: ChatMessage[]; }
 interface DmOption { id: string; key: string; label: string; emoji: string; }
 
-export default function ChatPanel({ committee, senderName, isChair = false, onClose, speakerCard }: {
+export default function ChatPanel({ committee, senderName, isChair = false, onClose, speakerCard, initialReadCounts, onReadCountsChange }: {
   committee: Committee;
   senderName: string;
   isChair?: boolean;
   onClose: () => void;
   speakerCard?: ReactNode;
+  initialReadCounts?: Record<string, number>;
+  onReadCountsChange?: (counts: Record<string, number>) => void;
 }) {
   const [activeConv, setActiveConv] = useState<ConvKey>('everyone');
   const [msg, setMsg] = useState('');
@@ -28,7 +30,14 @@ export default function ChatPanel({ committee, senderName, isChair = false, onCl
   const [dmHighlight, setDmHighlight] = useState(0);
   const [localMessages, setLocalMessages] = useState<ChatMessage[]>([]);
   // convKey → count of received (not sent by me) messages that have been seen
-  const [readCounts, setReadCounts] = useState<Record<string, number>>({});
+  const [readCounts, setReadCounts] = useState<Record<string, number>>(initialReadCounts ?? {});
+  const updateReadCounts = (updater: (prev: Record<string, number>) => Record<string, number>) => {
+    setReadCounts((prev) => {
+      const next = updater(prev);
+      onReadCountsChange?.(next);
+      return next;
+    });
+  };
   // Ephemeral draft thread: created when DM picker selects a new conversation with no messages yet.
   // Disappears if user navigates away without sending; persists once a message is sent.
   const [draftThread, setDraftThread] = useState<{ key: string; label: string; emoji: string } | null>(null);
@@ -142,9 +151,15 @@ export default function ChatPanel({ committee, senderName, isChair = false, onCl
   // Optimistic messages: clear when real data arrives
   // ---------------------------------------------------------------------------
   useEffect(() => {
-    if (localMessages.length > 0) setLocalMessages([]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [committee.messages.length]);
+    if (localMessages.length === 0) return;
+    setLocalMessages((prev) => prev.filter((local) => {
+      return !committee.messages.some((real) =>
+        real.sender === local.sender &&
+        real.content === local.content &&
+        real.recipient === local.recipient
+      );
+    }));
+  }, [committee.messages]);
 
   // Merge real + local optimistic messages for display in the active thread
   const displayMessages = useMemo(() => {
@@ -166,8 +181,15 @@ export default function ChatPanel({ committee, senderName, isChair = false, onCl
     const conv = displayedConversations.find((c) => c.key === activeConv);
     if (!conv) return;
     const received = conv.messages.filter((m) => m.sender !== senderName).length;
-    setReadCounts((prev) => ({ ...prev, [activeConv]: received }));
+    updateReadCounts((prev) => ({ ...prev, [activeConv]: received }));
   }, [activeConv, committee.messages, senderName]);
+
+  // Clear draft thread automatically once the real conversation appears
+  useEffect(() => {
+    if (!draftThread) return;
+    const exists = conversations.some((c) => c.key === draftThread.key);
+    if (exists) setDraftThread(null);
+  }, [conversations, draftThread]);
 
   // ---------------------------------------------------------------------------
   // Unread count per conversation
@@ -197,7 +219,6 @@ export default function ChatPanel({ committee, senderName, isChair = false, onCl
     };
     setLocalMessages((prev) => [...prev, optMsg]);
     sendMessageToDB(committee.id, senderName, content, isPrivate, recipient);
-    if (draftThread?.key === activeConv) setDraftThread(null);
     inputRef.current?.focus();
   };
 
@@ -209,7 +230,7 @@ export default function ChatPanel({ committee, senderName, isChair = false, onCl
     const conv = displayedConversations.find((c) => c.key === key);
     if (conv) {
       const received = conv.messages.filter((m) => m.sender !== senderName).length;
-      setReadCounts((prev) => ({ ...prev, [key]: received }));
+      updateReadCounts((prev) => ({ ...prev, [key]: received }));
     }
     // Discard draft thread if navigating away without having sent
     if (draftThread && draftThread.key !== key) setDraftThread(null);

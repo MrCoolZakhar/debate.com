@@ -954,6 +954,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
   const [rtrOverrideTime, setRtrOverrideTime] = useState<number | null>(null);
   const [rtrDelegateId, setRtrDelegateId] = useState<string | null>(null);
   const [chatReadCount, setChatReadCount] = useState(0);
+  const [chatReadCounts, setChatReadCounts] = useState<Record<string, number>>({});
 
   // Isolated timer atom — ticks never touch the `committee` object, preventing
   // whole-tree re-renders every second.
@@ -1442,6 +1443,8 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
             senderName={myChairName || committee.chairNames[0] || 'Chair'}
             isChair={true}
             onClose={() => setShowChat(false)}
+            initialReadCounts={chatReadCounts}
+            onReadCountsChange={setChatReadCounts}
           />
         )}
         {!showChat && committee.phase === 'pre-session' && (

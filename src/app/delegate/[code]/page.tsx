@@ -543,6 +543,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   const [tab, setTab] = useState<DelegateTab>('session');
   const [showChat, setShowChat] = useState(false);
   const [chatReadCount, setChatReadCount] = useState(0);
+  const [chatReadCounts, setChatReadCounts] = useState<Record<string, number>>({});
 
   // Local timer countdown (smooth, doesn't wait for Supabase tick)
   const [localTime, setLocalTime] = useState(0);
@@ -816,6 +817,8 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
           senderName={country}
           isChair={false}
           onClose={() => setShowChat(false)}
+          initialReadCounts={chatReadCounts}
+          onReadCountsChange={setChatReadCounts}
           speakerCard={isCurrentSpeaker ? (
             <div className="bg-[#7B4A1E]/20 border border-[#7B4A1E]/40 rounded-xl px-3 py-2.5">
               <div className="text-[10px] font-mono text-[#7A5A38] mb-1">YOU HAVE THE FLOOR</div>
