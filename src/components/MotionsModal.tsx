@@ -643,10 +643,22 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
         <div className="flex gap-8">
           <button
             onClick={async () => {
+              const motionId = specialVoteMotion.id;
               if (isSuspend) {
                 await suspendDebateInDB(committee.id);
+                update((c) => ({
+                  ...c,
+                  suspendedAt: new Date().toISOString(),
+                  pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== motionId),
+                }));
               } else {
                 await endDebateInDB(committee.id);
+                update((c) => ({
+                  ...c,
+                  endedAt: new Date().toISOString(),
+                  expiresAt: new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString(),
+                  pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== motionId),
+                }));
               }
               onClose();
             }}
@@ -654,7 +666,13 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
             Yes
           </button>
           <button
-            onClick={() => { setSpecialVoteMotion(null); onClose(); }}
+            onClick={() => {
+              const motionId = specialVoteMotion.id;
+              removePendingMotionInDB(motionId);
+              update((c) => ({ ...c, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== motionId) }));
+              setSpecialVoteMotion(null);
+              onClose();
+            }}
             className="px-16 py-8 rounded-3xl bg-red-800 hover:bg-red-700 text-white text-2xl font-black transition-colors">
             No
           </button>

@@ -932,8 +932,8 @@ function VotingView({ committee, setCommittee }: { committee: Committee; setComm
   );
 }
 
-// ── Session Ended Overlay ─────────────────────────────────────────────────────
-function SessionEndedOverlay({ committee }: { committee: Committee }) {
+// ── Session Ended Content ─────────────────────────────────────────────────────
+function SessionEndedContent({ committee }: { committee: Committee }) {
   const [hoursLeft, setHoursLeft] = useState<number | null>(null);
 
   useEffect(() => {
@@ -948,7 +948,7 @@ function SessionEndedOverlay({ committee }: { committee: Committee }) {
   }, [committee.expiresAt]);
 
   return (
-    <div className="fixed inset-0 z-[70] bg-[#0D0906] flex flex-col items-center justify-center text-center px-8">
+    <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
       <div className="text-5xl mb-6">🏁</div>
       <h1 className="text-5xl font-black text-white mb-4">This committee has ended.</h1>
       <p className="text-xl text-[#C4A882] mb-2">{committee.name}</p>
@@ -956,6 +956,7 @@ function SessionEndedOverlay({ committee }: { committee: Committee }) {
       {hoursLeft !== null && (
         <p className="text-base text-[#7A5A38]">{hoursLeft} hour{hoursLeft !== 1 ? 's' : ''} until committee is deleted</p>
       )}
+      <p className="text-xs text-[#7A5A38] mt-8">Press ESC to return to main menu</p>
     </div>
   );
 }
@@ -968,6 +969,8 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
   const [loading, setLoading] = useState(true);
   const [sessionSuspended, setSessionSuspended] = useState(false);
   const [sessionEnded, setSessionEnded] = useState(false);
+  const [suspendTab, setSuspendTab] = useState<'suspend' | 'session'>('suspend');
+  const [endedTab, setEndedTab] = useState<'ended' | 'session'>('ended');
   const [timerRunning, setTimerRunning] = useState(false);
   const [showRollCall, setShowRollCall] = useState(true);
   const [showMotions, setShowMotions] = useState(false);
@@ -1037,6 +1040,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
             } else if (updated.suspendedAt) {
               setSessionSuspended(true);
             } else {
+              setSessionEnded(false);
               setSessionSuspended(false);
             }
             setCommittee(updated);
@@ -1203,6 +1207,13 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [committee?.id]);
 
+  useEffect(() => {
+    if (!sessionEnded && !sessionSuspended) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') router.push('/'); };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [sessionEnded, sessionSuspended, router]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0D0906] flex items-center justify-center">
@@ -1363,29 +1374,8 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
     if (newShow) setChatReadCount(committee?.messages.filter(m => !m.content.startsWith('__log__:')).length ?? 0);
   };
 
-  if (sessionEnded && committee) {
-    return (
-      <SessionEndedOverlay committee={committee} />
-    );
-  }
-
   return (
     <div className="h-screen bg-[#0D0906] flex flex-col overflow-hidden">
-      {sessionSuspended && committee && (
-        <div className="fixed inset-0 z-[70] bg-[#0D0906] flex flex-col items-center justify-center text-center px-8">
-          <div className="text-5xl mb-6">⏸️</div>
-          <h1 className="text-5xl font-black text-white mb-4">Session Adjourned</h1>
-          <p className="text-xl text-[#C4A882] mb-12">This session has been temporarily suspended.</p>
-          <button
-            onClick={async () => {
-              await resumeSessionInDB(committee.id);
-              setSessionSuspended(false);
-            }}
-            className="px-12 py-5 bg-[#7B4A1E] hover:bg-[#8B5A2B] text-white text-xl font-black rounded-2xl transition-colors">
-            Resume Session
-          </button>
-        </div>
-      )}
       <header className="border-b border-[#2E1E0F] bg-[#150F08] px-4 h-11 flex items-center gap-2">
         <Link href="/">
           <img src="/gavelling-logo.png" alt="Gavelling" className="w-[16vw] h-auto max-h-9 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
@@ -1398,21 +1388,23 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
             Roll Call {present}/{committee.delegates.length}
           </button>
         )}
-        {/* Motions — disabled during pre-session */}
-        <button
-          onClick={handleMotionsClick}
-          title={isPreSession ? 'Complete roll call first' : undefined}
-          className={`text-xs px-3 py-1 rounded-lg transition-colors shrink-0 relative ${
-            isPreSession ? 'opacity-40 cursor-not-allowed bg-[#2E1E0F] text-[#7A5A38]' :
-            showMotions ? 'bg-[#7B4A1E] text-white' : 'bg-[#2E1E0F] text-[#C4A882] hover:text-white'
-          }`}>
-          Motions
-          {!isPreSession && (committee.pendingMotions ?? []).filter((m) => m.type !== ('join-request' as string) && (m.type as string) !== 'gsl-request').length > 0 && (
-            <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#7B4A1E] rounded-full text-white text-[10px] flex items-center justify-center">
-              {(committee.pendingMotions ?? []).filter((m) => m.type !== ('join-request' as string) && (m.type as string) !== 'gsl-request').length}
-            </span>
-          )}
-        </button>
+        {/* Motions — disabled during pre-session or when ended */}
+        {!sessionEnded && (
+          <button
+            onClick={handleMotionsClick}
+            title={isPreSession ? 'Complete roll call first' : undefined}
+            className={`text-xs px-3 py-1 rounded-lg transition-colors shrink-0 relative ${
+              isPreSession ? 'opacity-40 cursor-not-allowed bg-[#2E1E0F] text-[#7A5A38]' :
+              showMotions ? 'bg-[#7B4A1E] text-white' : 'bg-[#2E1E0F] text-[#C4A882] hover:text-white'
+            }`}>
+            Motions
+            {!isPreSession && (committee.pendingMotions ?? []).filter((m) => m.type !== ('join-request' as string) && (m.type as string) !== 'gsl-request').length > 0 && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#7B4A1E] rounded-full text-white text-[10px] flex items-center justify-center">
+                {(committee.pendingMotions ?? []).filter((m) => m.type !== ('join-request' as string) && (m.type as string) !== 'gsl-request').length}
+              </span>
+            )}
+          </button>
+        )}
         {/* Documents — disabled during pre-session */}
         <button
           onClick={handleDocumentsClick}
@@ -1452,6 +1444,42 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
         </button>
         <button onClick={() => setShowSettings(true)} className="text-[#7A5A38] hover:text-white transition-colors shrink-0 text-3xl">⚙</button>
       </header>
+      {/* Ended tab bar */}
+      {sessionEnded && (
+        <div className="flex border-b border-[#2E1E0F] bg-[#150F08] shrink-0">
+          <button onClick={() => setEndedTab('ended')}
+            className={`flex-1 py-2.5 text-sm font-bold transition-colors border-b-2 ${endedTab === 'ended' ? 'text-white border-[#7B4A1E]' : 'text-[#7A5A38] border-transparent hover:text-[#C4A882]'}`}>
+            🏁 End View
+          </button>
+          <button onClick={() => setEndedTab('session')}
+            className={`flex-1 py-2.5 text-sm font-bold transition-colors border-b-2 ${endedTab === 'session' ? 'text-white border-[#7B4A1E]' : 'text-[#7A5A38] border-transparent hover:text-[#C4A882]'}`}>
+            👁 Session View
+          </button>
+        </div>
+      )}
+      {/* Suspend tab bar */}
+      {!sessionEnded && sessionSuspended && (
+        <div className="flex border-b border-[#2E1E0F] bg-[#150F08] shrink-0">
+          <button onClick={() => setSuspendTab('suspend')}
+            className={`flex-1 py-2.5 text-sm font-bold transition-colors border-b-2 ${suspendTab === 'suspend' ? 'text-white border-[#7B4A1E]' : 'text-[#7A5A38] border-transparent hover:text-[#C4A882]'}`}>
+            ⏸ Suspend View
+          </button>
+          <button onClick={() => setSuspendTab('session')}
+            className={`flex-1 py-2.5 text-sm font-bold transition-colors border-b-2 ${suspendTab === 'session' ? 'text-white border-[#7B4A1E]' : 'text-[#7A5A38] border-transparent hover:text-[#C4A882]'}`}>
+            🪑 Session View
+          </button>
+        </div>
+      )}
+      {sessionEnded && endedTab === 'session' && (
+        <div className="shrink-0 bg-amber-900/20 border-b border-amber-700/40 px-4 py-2 text-center text-amber-300 text-sm font-semibold">
+          Session has ended — view only
+        </div>
+      )}
+      {!sessionEnded && sessionSuspended && suspendTab === 'session' && (
+        <div className="shrink-0 bg-amber-900/20 border-b border-amber-700/40 px-4 py-2 text-center text-amber-300 text-sm font-semibold">
+          Session is suspended — delegates cannot see this view
+        </div>
+      )}
       {/* Join request banner */}
       {(committee.pendingMotions ?? []).filter((m) => m.type === ('join-request' as string)).length > 0 && (
         <div className="shrink-0 bg-[#1A0E06] border-b border-[#7B4A1E]/40 px-4 py-2 flex flex-wrap gap-4">
@@ -1506,6 +1534,25 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
             })}
         </div>
       )}
+      {sessionEnded && endedTab === 'ended' ? (
+        <SessionEndedContent committee={committee} />
+      ) : (!sessionEnded && sessionSuspended && suspendTab === 'suspend') ? (
+        <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
+          <div className="text-5xl mb-6">⏸️</div>
+          <h1 className="text-5xl font-black text-white mb-4">Session Adjourned</h1>
+          <p className="text-xl text-[#C4A882] mb-12">This session has been temporarily suspended.</p>
+          <button
+            onClick={async () => {
+              await resumeSessionInDB(committee.id);
+              setSessionSuspended(false);
+              setSuspendTab('suspend');
+            }}
+            className="px-12 py-5 bg-[#7B4A1E] hover:bg-[#8B5A2B] text-white text-xl font-black rounded-2xl transition-colors">
+            Resume Session
+          </button>
+          <p className="text-xs text-[#7A5A38] mt-8">Press ESC to return to main menu</p>
+        </div>
+      ) : (
       <div className="flex-1 flex overflow-hidden">
         {showChat && (
           <ChatPanel
@@ -1636,6 +1683,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
                             Add at least one more delegate before starting — the GSL can never be empty.
                           </div>
                         )}
+                        {!sessionEnded && (
                         <div className="flex gap-2 w-full max-w-sm mt-2 flex-wrap justify-center">
                           {/* Restart button */}
                           <button onClick={handleRestartTime}
@@ -1679,8 +1727,9 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
                             Right of Reply
                           </button>
                         </div>
+                        )}
                         {/* Extra time popover */}
-                        {activePopover === 'extraTime' && (
+                        {!sessionEnded && activePopover === 'extraTime' && (
                           <div className="mt-3 bg-[#1A1209] border border-emerald-700/40 rounded-xl p-3 w-full max-w-sm">
                             <div className="flex items-center justify-between mb-2">
                               <span className="text-xs text-emerald-400 font-semibold">Add time</span>
@@ -1731,10 +1780,12 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
                             Only 1 delegate on the list — add more before starting.
                           </div>
                         )}
-                        <button onClick={handleNextSpeaker} disabled={committee.speakersList.length < 2}
-                          className="bg-[#7B4A1E] hover:bg-[#8B5A2B] disabled:bg-[#2E1E0F] disabled:text-[#7A5A38] text-white px-8 py-3 rounded-xl font-bold transition-colors">
-                          Call First Speaker
-                        </button>
+                        {!sessionEnded && (
+                          <button onClick={handleNextSpeaker} disabled={committee.speakersList.length < 2}
+                            className="bg-[#7B4A1E] hover:bg-[#8B5A2B] disabled:bg-[#2E1E0F] disabled:text-[#7A5A38] text-white px-8 py-3 rounded-xl font-bold transition-colors">
+                            Call First Speaker
+                          </button>
+                        )}
                       </>
                     )}
                   </div>
@@ -1846,6 +1897,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
                     </div>
                   )}
                 </div>{/* end flex-row */}
+                {!sessionEnded && (
                 <div className="border-t border-[#2E1E0F] bg-[#0D0906] px-6 py-4">
                   <div className="flex items-center gap-3 mb-4">
                     <span className="text-xs text-[#7A5A38] font-mono shrink-0">TIME</span>
@@ -1863,12 +1915,14 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
                   </div>
                   <AddSpeakerInput committee={committee} onAdd={handleAddToSpeakersList} />
                 </div>
+                )}
                 </>
               )}
             </main>
           </>
         )}
       </div>
+      )}
       {showMotions && !isPreSession && (
         <MotionsModal
           committee={committee}

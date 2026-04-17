@@ -1,7 +1,7 @@
 'use client';
 
 import { use, useEffect, useState, useRef, useCallback, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Committee, CommitteeDocument, DocumentType, PendingMotionType, SpeakingLogEntry, DelegateStatus } from '@/lib/types';
 import ChatPanel from '@/components/ChatPanel';
@@ -535,6 +535,7 @@ type DelegateTab = 'session' | 'motions' | 'resolutions' | 'documents' | 'stats'
 
 function DelegateSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const { code } = use(params);
+  const router = useRouter();
   const searchParams = useSearchParams();
   const country = searchParams.get('country') || '';
 
@@ -543,6 +544,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   const [tab, setTab] = useState<DelegateTab>('session');
   const [sessionSuspended, setSessionSuspended] = useState(false);
   const [sessionEnded, setSessionEnded] = useState(false);
+  const [endedTab, setEndedTab] = useState<'ended' | 'session'>('ended');
   const [showChat, setShowChat] = useState(false);
   const [chatReadCounts, setChatReadCounts] = useState<Record<string, number>>({});
 
@@ -582,6 +584,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
             } else if (updated.suspendedAt) {
               setSessionSuspended(true);
             } else {
+              setSessionEnded(false);
               setSessionSuspended(false);
             }
             setCommittee(updated);
@@ -647,6 +650,13 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
       setLocalTimerActive(false);
     }
   }, [committee?.currentSpeaker?.delegateId, localTimerActive, country]);
+
+  useEffect(() => {
+    if (!sessionEnded && !sessionSuspended) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') router.push('/'); };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [sessionEnded, sessionSuspended, router]);
 
   if (loading) {
     return (
@@ -780,25 +790,13 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
         <div className="text-5xl mb-6">⏸️</div>
         <h1 className="text-3xl font-black text-white mb-4">Session is currently adjourned.</h1>
         <p className="text-lg text-[#C4A882]">Please wait until the chair reopens the session.</p>
+        <p className="text-xs text-[#7A5A38] mt-8">Press ESC to return to main menu</p>
       </div>
     );
   }
 
   return (
     <div className="h-screen bg-[#0D0906] flex flex-col overflow-hidden">
-      {sessionEnded && (
-        <div className="fixed inset-0 z-[70] bg-[#0D0906] flex flex-col items-center justify-center text-center px-8">
-          <div className="text-5xl mb-6">🏁</div>
-          <h1 className="text-4xl font-black text-white mb-4">This committee has ended.</h1>
-          <p className="text-xl text-[#C4A882] mb-2">{committee.name}</p>
-          <p className="text-base text-[#7A5A38] mb-8">{committee.topic}</p>
-          {committee.expiresAt && (() => {
-            const ms = new Date(committee.expiresAt).getTime() - Date.now();
-            const hrs = Math.max(0, Math.floor(ms / (1000 * 60 * 60)));
-            return <p className="text-sm text-[#7A5A38]">{hrs} hour{hrs !== 1 ? 's' : ''} until committee is deleted</p>;
-          })()}
-        </div>
-      )}
       {/* Header */}
       <header className="border-b border-[#2E1E0F] bg-[#150F08] px-4 h-14 flex items-center gap-3 shrink-0">
         <Link href="/" className="flex items-center gap-2">
@@ -847,6 +845,40 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
         </div>
       </header>
 
+      {/* Ended tab bar */}
+      {sessionEnded && (
+        <div className="flex border-b border-[#2E1E0F] bg-[#150F08] shrink-0">
+          <button onClick={() => setEndedTab('ended')}
+            className={`flex-1 py-2.5 text-sm font-bold transition-colors border-b-2 ${endedTab === 'ended' ? 'text-white border-[#7B4A1E]' : 'text-[#7A5A38] border-transparent hover:text-[#C4A882]'}`}>
+            🏁 End View
+          </button>
+          <button onClick={() => setEndedTab('session')}
+            className={`flex-1 py-2.5 text-sm font-bold transition-colors border-b-2 ${endedTab === 'session' ? 'text-white border-[#7B4A1E]' : 'text-[#7A5A38] border-transparent hover:text-[#C4A882]'}`}>
+            👁 Session View
+          </button>
+        </div>
+      )}
+
+      {sessionEnded && endedTab === 'ended' ? (
+        <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
+          <div className="text-5xl mb-6">🏁</div>
+          <h1 className="text-4xl font-black text-white mb-4">This committee has ended.</h1>
+          <p className="text-xl text-[#C4A882] mb-2">{committee.name}</p>
+          <p className="text-base text-[#7A5A38] mb-8">{committee.topic}</p>
+          {committee.expiresAt && (() => {
+            const ms = new Date(committee.expiresAt).getTime() - Date.now();
+            const hrs = Math.max(0, Math.floor(ms / (1000 * 60 * 60)));
+            return <p className="text-sm text-[#7A5A38]">{hrs} hour{hrs !== 1 ? 's' : ''} until committee is deleted</p>;
+          })()}
+          <p className="text-xs text-[#7A5A38] mt-8">Press ESC to return to main menu</p>
+        </div>
+      ) : (
+      <>
+      {sessionEnded && endedTab === 'session' && (
+        <div className="shrink-0 bg-amber-900/20 border-b border-amber-700/40 px-4 py-2 text-center text-amber-300 text-sm font-semibold">
+          Session has ended — view only
+        </div>
+      )}
       {/* Tab nav */}
       <div className="flex border-b border-[#2E1E0F] bg-[#150F08] shrink-0">
         {tabs.map((t) => (
@@ -1209,6 +1241,8 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
         )}
       </div>}
       </div>
+      </>
+      )}
     </div>
   );
 }
