@@ -122,30 +122,22 @@ function AddCountryInput({ committee, onAdd, onQueryChange }: { committee: Commi
 
       {query && (knownMatches.length > 0 || showCustomOption) && (
         <div className="absolute bottom-full left-0 right-0 mb-1 bg-[#150F09] border border-[#2E1E0F] rounded-xl overflow-hidden z-30 shadow-xl max-h-52 overflow-y-auto">
-          {knownMatches.slice(0, showCustomOption ? 5 : 8).map((c, i) => {
-            const alreadyAdded = existingNames.has(c.name.toLowerCase());
-            return (
+          {knownMatches
+            .filter((c) => !existingNames.has(c.name.toLowerCase()))
+            .slice(0, showCustomOption ? 5 : 8)
+            .map((c, i) => (
               <button
                 key={c.code}
-                onMouseDown={(e) => { e.preventDefault(); if (!alreadyAdded) commit(c.name); }}
-                disabled={alreadyAdded}
+                onMouseDown={(e) => { e.preventDefault(); commit(c.name); }}
                 className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-left transition-colors ${
-                  alreadyAdded
-                    ? 'opacity-50 cursor-default bg-[#2E1E0F]'
-                    : i === 0
-                    ? 'bg-[#7B4A1E]/20 text-white'
-                    : 'text-[#E8D5B7] hover:bg-[#2E1E0F]'
+                  i === 0 ? 'bg-[#7B4A1E]/20 text-white' : 'text-[#E8D5B7] hover:bg-[#2E1E0F]'
                 }`}
               >
                 <span className="text-base">{getFlagEmoji(c.code)}</span>
                 <span className="text-sm flex-1">{c.name}</span>
-                {alreadyAdded
-                  ? <span className="text-[10px] text-yellow-500 shrink-0">Already added</span>
-                  : i === 0 ? <span className="text-[10px] text-[#7A5A38] shrink-0">Enter ↵</span>
-                  : null}
+                {i === 0 && <span className="text-[10px] text-[#7A5A38] shrink-0">Enter ↵</span>}
               </button>
-            );
-          })}
+            ))}
           {showCustomOption && (
             <button
               onMouseDown={(e) => { e.preventDefault(); commit(trimmed); }}
@@ -318,16 +310,22 @@ function RollCallPanelInner({
     onDelegateAdd?.(country);
   };
 
-  // Sorted lists
-  const alphabetical = [...committee.delegates].sort((a, b) => a.country.localeCompare(b.country));
+  // Sorted lists — absent delegates always sink to the bottom
+  const allAlpha = [...committee.delegates].sort((a, b) => a.country.localeCompare(b.country));
+  const alphabetical = [
+    ...allAlpha.filter((d) => d.status !== 'absent'),
+    ...allAlpha.filter((d) => d.status === 'absent'),
+  ];
 
-  // Queue view: GSL delegates first (in order), then the rest alphabetically
+  // Queue view: GSL delegates first (in order), then present/PV alphabetically, then absent
   const inQueue = (committee.speakersList ?? [])
     .map((s) => committee.delegates.find((d) => d.id === s.delegateId))
     .filter(Boolean) as typeof committee.delegates;
   const inQueueIds = new Set(inQueue.map((d) => d.id));
-  const notInQueue = alphabetical.filter((d) => !inQueueIds.has(d.id));
-  const queueOrdered = [...inQueue, ...notInQueue];
+  const notInQueue = allAlpha.filter((d) => !inQueueIds.has(d.id));
+  const notInQueuePresent = notInQueue.filter((d) => d.status !== 'absent');
+  const notInQueueAbsent = notInQueue.filter((d) => d.status === 'absent');
+  const queueOrdered = [...inQueue, ...notInQueuePresent, ...notInQueueAbsent];
 
   const baseList = listView === 'queue' ? queueOrdered : alphabetical;
   // When searching: show all, but grey out non-matches so the filter is visible
@@ -462,7 +460,7 @@ function RollCallPanelInner({
         })}
       </div>
 
-      <div className="border-t border-[#2E1E0F] px-3 py-3 space-y-2 shrink-0">
+      <div className="border-t border-[#2E1E0F] px-3 py-3 space-y-2 shrink-0 overflow-visible">
         <AddCountryInput committee={committee} onAdd={handleAddDelegate} onQueryChange={setSearch} />
         {(committee.phase === 'pre-session' || committee.phase === 'roll-call') && (
           <button
