@@ -1,6 +1,6 @@
 'use client';
 import { use, useEffect, useState, useRef, useCallback, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Committee, DelegateStatus } from '@/lib/types';
 import RollCallPanel, { FlagCircle } from '@/components/RollCallPanel';
@@ -933,7 +933,9 @@ function VotingView({ committee, setCommittee }: { committee: Committee; setComm
 export default function ChairSession({ params }: { params: Promise<{ code: string }> }) {
   const { code } = use(params);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [committee, setCommittee] = useState<Committee | null>(null);
+  const [myChairName, setMyChairName] = useState('');
   const [loading, setLoading] = useState(true);
   const [timerRunning, setTimerRunning] = useState(false);
   const [showRollCall, setShowRollCall] = useState(true);
@@ -981,6 +983,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
         setSpeakerTimeLimitLocal(found.speakerTimeLimit);
         setSpeakerTimeRemaining(found.speakerTimeRemaining);
         committeeIdRef.current = found.id;
+        setMyChairName(searchParams.get('chairName') || found.chairNames[0] || 'Chair');
       }
       setLoading(false);
       if (found) {
@@ -1436,7 +1439,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
         {showChat && (
           <ChatPanel
             committee={committee}
-            senderName={committee.chairNames[0] ?? 'Chair'}
+            senderName={myChairName || committee.chairNames[0] || 'Chair'}
             isChair={true}
             onClose={() => setShowChat(false)}
           />
