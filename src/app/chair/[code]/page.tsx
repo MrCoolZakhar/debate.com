@@ -86,7 +86,10 @@ function updateLocal(setCommittee: CommitteeSetter, updater: (c: Committee) => C
 function AddSpeakerInput({ committee, onAdd }: { committee: Committee; onAdd: (id: string) => void }) {
   const [query, setQuery] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
-  const onList = new Set(committee.speakersList.map((s) => s.delegateId));
+  const onList = new Set([
+    ...committee.speakersList.map((s) => s.delegateId),
+    ...(committee.currentSpeaker ? [committee.currentSpeaker.delegateId] : []),
+  ]);
   const eligible = committee.delegates.filter(
     (d) => d.status !== 'absent' && d.id !== committee.currentSpeaker?.delegateId
   );
@@ -1052,8 +1055,12 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
 
   // Stable Set references — prevents RollCallPanel re-renders when only timer ticks
   const gslListIds = useMemo(
-    () => new Set((committee?.speakersList ?? []).map((s) => s.delegateId)),
-    [committee?.speakersList]
+    () => {
+      const ids = new Set((committee?.speakersList ?? []).map((s) => s.delegateId));
+      if (committee?.currentSpeaker?.delegateId) ids.add(committee.currentSpeaker.delegateId);
+      return ids;
+    },
+    [committee?.speakersList, committee?.currentSpeaker]
   );
   const caucusQueueIds = useMemo(
     () => new Set((committee?.caucusQueue ?? []).map((s) => s.delegateId)),
@@ -1092,13 +1099,14 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
     if (!delegate) return;
     const alreadyOn = committee.speakersList.some((s) => s.delegateId === delegateId);
     if (alreadyOn) return;
+    if (committee.currentSpeaker?.delegateId === delegateId) return;
     // Pass position from local state to skip the SELECT round-trip in the DB function,
     // keeping the write under the debounce window (Bug 1 fix)
     const nextPosition = committee.speakersList.length + 1;
     updateLocal(setCommittee, (c) => ({ ...c, speakersList: [...c.speakersList, { delegateId, country: delegate.country }] }), true);
     addToSpeakersListInDB(committee.id, delegateId, delegate.country, nextPosition);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [committee?.id, committee?.delegates, committee?.speakersList]);
+  }, [committee?.id, committee?.delegates, committee?.speakersList, committee?.currentSpeaker]);
 
   const handleRemoveFromSpeakersList = useCallback((delegateId: string) => {
     if (!committee) return;
