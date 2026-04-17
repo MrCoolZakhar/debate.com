@@ -287,18 +287,22 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, rtrDelegateId }: {
 }) {
   const dragIndexRef = useRef<number | null>(null);
 
-  // While an RTR is active, the country has two entries (RTR at index 0 + original slot).
-  // Suppress the duplicate so they only appear once in the visual queue.
-  const displayList = rtrDelegateId
-    ? list.filter((s, i) => {
-        if (s.delegateId !== rtrDelegateId) return true;
-        // Keep only the first occurrence (the RTR entry prepended at index 0)
-        return i === list.findIndex((x) => x.delegateId === rtrDelegateId);
-      })
+  // When an RTR is active, hide the duplicate original-slot entry for the RTR country.
+  // The RTR entry (index 0) is preserved; its original GSL slot stays in the DB
+  // but is suppressed from display until the RTR speech is done.
+  const dedupedList = rtrDelegateId
+    ? (() => {
+        let seen = false;
+        return list.filter((s) => {
+          if (s.delegateId !== rtrDelegateId) return true;
+          if (!seen) { seen = true; return true; } // keep first occurrence (RTR entry)
+          return false; // drop subsequent occurrences (original slot)
+        });
+      })()
     : list;
 
-  const qLen = displayList.length;
-  const displayItems = displayList.slice(0, 7);
+  const qLen = dedupedList.length;
+  const displayItems = dedupedList.slice(0, 7);
   const overflow = qLen > 7 ? qLen - 7 : 0;
   return (
     <div className="flex flex-col items-center w-full mb-8">
@@ -311,7 +315,7 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, rtrDelegateId }: {
             onDrop={() => {
               const from = dragIndexRef.current;
               if (from === null || from === i) return;
-              const newList = [...list];
+              const newList = [...dedupedList];
               const [moved] = newList.splice(from, 1);
               newList.splice(i, 0, moved);
               onReorder(newList);
