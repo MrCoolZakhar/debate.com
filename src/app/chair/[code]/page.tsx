@@ -286,8 +286,19 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, rtrDelegateId }: {
   rtrDelegateId?: string | null;
 }) {
   const dragIndexRef = useRef<number | null>(null);
-  const qLen = list.length;
-  const displayItems = list.slice(0, 7);
+
+  // While an RTR is active, the country has two entries (RTR at index 0 + original slot).
+  // Suppress the duplicate so they only appear once in the visual queue.
+  const displayList = rtrDelegateId
+    ? list.filter((s, i) => {
+        if (s.delegateId !== rtrDelegateId) return true;
+        // Keep only the first occurrence (the RTR entry prepended at index 0)
+        return i === list.findIndex((x) => x.delegateId === rtrDelegateId);
+      })
+    : list;
+
+  const qLen = displayList.length;
+  const displayItems = displayList.slice(0, 7);
   const overflow = qLen > 7 ? qLen - 7 : 0;
   return (
     <div className="flex flex-col items-center w-full mb-8">
@@ -956,6 +967,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
   const [rtrSeconds, setRtrSeconds] = useState(30);
   const [rtrOverrideTime, setRtrOverrideTime] = useState<number | null>(null);
   const [rtrDelegateId, setRtrDelegateId] = useState<string | null>(null);
+  const [rtrIsForExistingSlot, setRtrIsForExistingSlot] = useState(false);
   const [chatReadCounts, setChatReadCounts] = useState<Record<string, number>>({});
 
   // Isolated timer atom — ticks never touch the `committee` object, preventing
@@ -1209,6 +1221,16 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
     }
     const [next, ...rest] = committee.speakersList;
     const timeToUse = rtrOverrideTime ?? speakerTimeLimit;
+
+    // Clear RTR state only when the RTR speaker has just finished speaking
+    // (i.e. they are currentSpeaker now). When advancing TO the RTR speaker,
+    // keep rtrDelegateId so DraggableSpeakersQueue continues to suppress the duplicate.
+    const isFinishingRtr = rtrDelegateId !== null && committee.currentSpeaker?.delegateId === rtrDelegateId;
+    if (isFinishingRtr) {
+      setRtrDelegateId(null);
+      setRtrIsForExistingSlot(false);
+    }
+
     setRtrOverrideTime(null);
     setSpeakerTimeRemaining(timeToUse);
     updateLocal(setCommittee, (c) => ({
@@ -1217,7 +1239,6 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
       speakersList: rest,
       speakerTimeRemaining: timeToUse,
     }), true);
-    setRtrDelegateId(null);
     nextSpeakerInDB(committee.id, timeToUse);
   };
 
@@ -1233,11 +1254,16 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
     const delegate = committee.delegates.find((d) => d.country === rtrCountry && d.status !== 'absent');
     if (!delegate) return;
     const entry = { delegateId: delegate.id, country: rtrCountry };
-    // Insert at top of GSL — do NOT filter out existing slot
+    // Track whether this country already has a slot (original slot must survive)
+    const alreadyOnList = committee.speakersList.some((s) => s.delegateId === delegate.id);
+    setRtrIsForExistingSlot(alreadyOnList);
+    // Prepend RTR entry at front of GSL — original slot stays untouched
     updateLocal(setCommittee, (c) => ({
       ...c,
       speakersList: [entry, ...c.speakersList],
     }), true);
+    // Write RTR entry to DB at position -1 so it sorts before all existing entries
+    addToSpeakersListInDB(committee.id, delegate.id, rtrCountry, -1);
     setRtrOverrideTime(rtrSeconds);
     setRtrDelegateId(delegate.id);
     setRtrCountry('');
