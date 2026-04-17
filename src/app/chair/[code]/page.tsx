@@ -953,7 +953,6 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
   const [rtrSeconds, setRtrSeconds] = useState(30);
   const [rtrOverrideTime, setRtrOverrideTime] = useState<number | null>(null);
   const [rtrDelegateId, setRtrDelegateId] = useState<string | null>(null);
-  const [chatReadCount, setChatReadCount] = useState(0);
   const [chatReadCounts, setChatReadCounts] = useState<Record<string, number>>({});
 
   // Isolated timer atom — ticks never touch the `committee` object, preventing
@@ -974,6 +973,16 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
     if (committee) document.title = `${abbreviateCommitteeName(committee.name)} — Gavelling Session`;
     return () => { document.title = 'Gavelling'; };
   }, [committee?.name]);
+
+  useEffect(() => {
+    if (!committee) return;
+    try { const stored = localStorage.getItem(`chat-read-${committee.code}`); if (stored) setChatReadCounts(JSON.parse(stored)); } catch {}
+  }, [committee?.code]);
+
+  useEffect(() => {
+    if (!committee) return;
+    try { localStorage.setItem(`chat-read-${committee.code}`, JSON.stringify(chatReadCounts)); } catch {}
+  }, [chatReadCounts, committee?.code]);
 
   useEffect(() => {
     let unsubscribe: (() => void) | undefined;
@@ -1311,7 +1320,13 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
   const handleToggleChat = () => {
     const newShow = !showChat;
     setShowChat(newShow);
-    if (newShow) setChatReadCount(committee?.messages.filter(m => !m.content.startsWith('__log__:')).length ?? 0);
+    if (newShow) {
+      const myName = myChairName || committee?.chairNames[0];
+      setChatReadCounts((prev) => ({
+        ...prev,
+        everyone: committee?.messages.filter((m) => !m.content.startsWith('__log__:') && !m.isPrivate && m.sender !== myName).length ?? 0,
+      }));
+    }
   };
 
   return (
@@ -1367,8 +1382,9 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
           }`}>
           💬 Chat
           {!isPreSession && (() => {
-            const total = committee.messages.filter((m) => !m.content.startsWith('__log__:')).length;
-            const unread = total - chatReadCount;
+            const myName = myChairName || committee.chairNames[0];
+            const total = committee.messages.filter((m) => m.sender !== myName && !m.content.startsWith('__log__:') && !m.isPrivate).length;
+            const unread = total - (chatReadCounts['everyone'] ?? 0);
             return unread > 0 && !showChat ? (
               <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#7B4A1E] rounded-full text-white text-[10px] flex items-center justify-center">
                 {unread}

@@ -249,7 +249,7 @@ export default function ChatPanel({ committee, senderName, isChair = false, onCl
     : chairNames.map((n) => ({ id: `chair-${n}`, key: n, label: n, emoji: '🪑' }));
 
   const delegateDmOptions: DmOption[] = committee.delegates
-    .filter((d) => d.country !== senderName && !chairNames.includes(d.country))
+    .filter((d) => d.country !== senderName && !chairNames.includes(d.country) && d.status !== 'absent')
     .sort((a, b) => a.country.localeCompare(b.country))
     .map((d) => ({ id: d.id, key: d.country, label: d.country, emoji: flagFor(d.country) }));
 
@@ -355,8 +355,8 @@ export default function ChatPanel({ committee, senderName, isChair = false, onCl
               autoFocus
               className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:border-[#7B4A1E] placeholder-[#7A5A38] mb-1"
             />
-            <div className="max-h-40 overflow-y-auto space-y-0.5">
-              {filteredDm.slice(0, 12).map((o, i) => (
+            <div className="max-h-64 overflow-y-auto space-y-0.5">
+              {filteredDm.map((o, i) => (
                 <button
                   key={o.id}
                   type="button"

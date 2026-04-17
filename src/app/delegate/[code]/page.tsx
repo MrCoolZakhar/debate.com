@@ -542,7 +542,6 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<DelegateTab>('session');
   const [showChat, setShowChat] = useState(false);
-  const [chatReadCount, setChatReadCount] = useState(0);
   const [chatReadCounts, setChatReadCounts] = useState<Record<string, number>>({});
 
   // Local timer countdown (smooth, doesn't wait for Supabase tick)
@@ -606,6 +605,16 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     if (committee) document.title = `${abbreviateCommitteeName(committee.name)} — ${country || 'Delegate'}`;
     return () => { document.title = 'Gavelling'; };
   }, [committee?.name, country]);
+
+  useEffect(() => {
+    if (!committee) return;
+    try { const stored = localStorage.getItem(`chat-read-${committee.code}`); if (stored) setChatReadCounts(JSON.parse(stored)); } catch {}
+  }, [committee?.code]);
+
+  useEffect(() => {
+    if (!committee) return;
+    try { localStorage.setItem(`chat-read-${committee.code}`, JSON.stringify(chatReadCounts)); } catch {}
+  }, [chatReadCounts, committee?.code]);
 
   // Local timer tick — smooth countdown independent of Supabase round-trips
   useEffect(() => {
@@ -780,14 +789,19 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
             onClick={() => {
               const newShow = !showChat;
               setShowChat(newShow);
-              if (newShow) setChatReadCount(committee.messages.filter(m => !m.content.startsWith('__log__:')).length);
+              if (newShow) {
+                setChatReadCounts((prev) => ({
+                  ...prev,
+                  everyone: committee.messages.filter((m) => !m.content.startsWith('__log__:') && !m.isPrivate && m.sender !== country).length,
+                }));
+              }
             }}
             className={`relative text-xs px-3 py-1.5 rounded-lg transition-colors font-semibold shrink-0 ${showChat ? 'bg-[#7B4A1E] text-white' : 'bg-[#2E1E0F] text-[#C4A882] hover:text-white'}`}
           >
             💬
             {!showChat && (() => {
-              const total = committee.messages.filter((m) => !m.content.startsWith('__log__:')).length;
-              const unread = total - chatReadCount;
+              const total = committee.messages.filter((m) => m.sender !== country && !m.content.startsWith('__log__:') && !m.isPrivate).length;
+              const unread = total - (chatReadCounts['everyone'] ?? 0);
               return unread > 0 ? (
                 <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#B8844A] rounded-full text-white text-[9px] flex items-center justify-center font-bold">
                   {Math.min(unread, 99)}
