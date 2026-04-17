@@ -289,8 +289,8 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove }: {
   const displayItems = list.slice(0, 7);
   const overflow = qLen > 7 ? qLen - 7 : 0;
   return (
-    <div className="flex flex-col items-center w-full mb-8">
-      <div className="flex flex-nowrap overflow-x-auto items-start gap-4 pt-2 pb-1 max-w-full justify-center">
+    <div className="flex flex-col items-center mb-8" style={{ width: '100vw', marginLeft: 'calc(-50vw + 50%)', marginRight: 'calc(-50vw + 50%)' }}>
+      <div className="flex flex-nowrap items-start gap-4 pt-2 pb-1 justify-center">
         {displayItems.map((s, i) => (
           <div key={s.delegateId} className="flex flex-col items-center gap-1 relative group cursor-grab shrink-0"
             draggable
