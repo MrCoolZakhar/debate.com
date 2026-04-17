@@ -1796,7 +1796,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
                   </div>
                   <AddSpeakerInput committee={committee} onAdd={handleAddToSpeakersList} />
                 </div>
-                </>{/* end speakers-list fragment */}
+                </>
               )}
             </main>
           </>
