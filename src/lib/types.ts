@@ -142,4 +142,7 @@ export interface Committee {
   caucus: CaucusState | null;
   messages: ChatMessage[];
   createdAt: Date;
+  suspendedAt?: string | null;
+  endedAt?: string | null;
+  expiresAt?: string | null;
 }

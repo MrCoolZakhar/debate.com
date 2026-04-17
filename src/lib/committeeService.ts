@@ -65,6 +65,9 @@ function rowToCommittee(
     caucus: (row.caucus as CaucusState) ?? null,
     messages,
     createdAt: new Date(row.created_at as string),
+    suspendedAt: (row.suspended_at as string | null) ?? null,
+    endedAt: (row.ended_at as string | null) ?? null,
+    expiresAt: (row.expires_at as string | null) ?? null,
   };
 }
 
@@ -621,6 +624,12 @@ export async function suspendSession(committeeId: string): Promise<void> {
   const { error } = await supabase.from('committees')
     .update({ expires_at: expiresAt, phase: 'adjourned' }).eq('id', committeeId);
   if (error) console.error('Error suspending session:', error);
+}
+
+export async function resumeSession(committeeId: string): Promise<void> {
+  const { error } = await supabase.from('committees')
+    .update({ suspended_at: null, phase: 'speakers-list' }).eq('id', committeeId);
+  if (error) console.error('Error resuming session:', error);
 }
 
 export async function suspendDebate(committeeId: string): Promise<void> {

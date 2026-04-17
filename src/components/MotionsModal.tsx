@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import { Committee, PendingMotion, PendingMotionType } from '@/lib/types';
 import { getCountryByName, getFlagEmoji } from '@/lib/countries';
 import { useSettingsStore, DEFAULT_MOTION_NAMES, MotionNames } from '@/lib/settingsStore';
@@ -510,22 +509,13 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
   onClose: () => void;
   onCommitteeUpdate?: (updater: (c: Committee) => Committee) => void;
 }) {
-  const router = useRouter();
   const { getSettings } = useSettingsStore();
   const motionNames = { ...DEFAULT_MOTION_NAMES, ...(getSettings(committee.code).motionNames ?? {}) };
   const typeMeta = buildTypeMeta(motionNames);
   const pending = [...(committee.pendingMotions ?? [])].filter((m) => m.type !== ('join-request' as string)).sort((a, b) => b.disruptiveness - a.disruptiveness);
   const [view, setView] = useState<ModalView>(pending.length === 0 ? 'raise' : 'vote');
   const [specialVoteMotion, setSpecialVoteMotion] = useState<PendingMotion | null>(null);
-  const [sessionResult, setSessionResult] = useState<'suspended' | 'ended' | null>(null);
   const update = (updater: (c: Committee) => Committee) => onCommitteeUpdate?.(updater);
-
-  useEffect(() => {
-    if (!sessionResult) return;
-    const handler = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape') router.push('/'); };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [sessionResult, router]);
 
   const handleRaised = (motion: Omit<PendingMotion, 'id' | 'disruptiveness'>) => {
     // One motion per proposer — reject duplicates
@@ -642,7 +632,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
   };
 
   // ── Special vote: "Does this motion pass?" ──────────────────────────────────
-  if (specialVoteMotion && !sessionResult) {
+  if (specialVoteMotion) {
     const isSuspend = specialVoteMotion.type === 'suspend-debate';
     return (
       <div className="fixed inset-0 z-[60] bg-[#0D0906] flex flex-col items-center justify-center text-center px-8">
@@ -655,11 +645,10 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
             onClick={async () => {
               if (isSuspend) {
                 await suspendDebateInDB(committee.id);
-                setSessionResult('suspended');
               } else {
                 await endDebateInDB(committee.id);
-                setSessionResult('ended');
               }
+              onClose();
             }}
             className="px-16 py-8 rounded-3xl bg-green-700 hover:bg-green-600 text-white text-2xl font-black transition-colors">
             Yes
@@ -670,28 +659,6 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
             No
           </button>
         </div>
-      </div>
-    );
-  }
-
-  // ── Session suspended screen ────────────────────────────────────────────────
-  if (sessionResult === 'suspended') {
-    return (
-      <div className="fixed inset-0 z-[60] bg-[#0D0906] flex flex-col items-center justify-center text-center px-8">
-        <h1 className="text-6xl font-black text-white mb-4">Session is now suspended.</h1>
-        <p className="text-4xl font-black text-white mb-16">See you again soon!</p>
-        <p className="text-lg text-white/40">— Press ESC to go back to main menu</p>
-      </div>
-    );
-  }
-
-  // ── Session ended screen ─────────────────────────────────────────────────────
-  if (sessionResult === 'ended') {
-    return (
-      <div className="fixed inset-0 z-[60] bg-[#0D0906] flex flex-col items-center justify-center text-center px-8">
-        <h1 className="text-5xl font-black text-white mb-10">Congratulations! This session has now ended.</h1>
-        <p className="text-xl text-white/40 mb-4">Session will be available for an additional 72 hours for review.</p>
-        <p className="text-lg text-white/30">— Press ESC to go back to main menu</p>
       </div>
     );
   }

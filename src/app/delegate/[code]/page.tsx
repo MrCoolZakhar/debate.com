@@ -541,6 +541,8 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   const [committee, setCommittee] = useState<Committee | null>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<DelegateTab>('session');
+  const [sessionSuspended, setSessionSuspended] = useState(false);
+  const [sessionEnded, setSessionEnded] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [chatReadCounts, setChatReadCounts] = useState<Record<string, number>>({});
 
@@ -567,12 +569,21 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
       setCommittee(found ?? null);
       setLoading(false);
       if (found) {
+        if (found.endedAt) setSessionEnded(true);
+        else if (found.suspendedAt) setSessionSuspended(true);
         committeeIdRef.current = found.id;
         setLocalTime(found.speakerTimeRemaining);
         lastSpeakerIdRef.current = found.currentSpeaker?.delegateId ?? null;
         unsubscribe = subscribeToCommittee(found.id, async () => {
           const updated = await getCommitteeByCode(code.toUpperCase());
           if (updated) {
+            if (updated.endedAt) {
+              setSessionEnded(true);
+            } else if (updated.suspendedAt) {
+              setSessionSuspended(true);
+            } else {
+              setSessionSuspended(false);
+            }
             setCommittee(updated);
             const newSpeakerId = updated.currentSpeaker?.delegateId ?? null;
             if (newSpeakerId !== lastSpeakerIdRef.current) {
@@ -762,8 +773,32 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     </div>
   );
 
+  if (sessionSuspended) {
+    return (
+      <div className="min-h-screen bg-[#0D0906] flex flex-col items-center justify-center text-center px-8">
+        <div className="text-sm font-mono text-[#7A5A38] mb-2">{committee.name} · {committee.code}</div>
+        <div className="text-5xl mb-6">⏸️</div>
+        <h1 className="text-3xl font-black text-white mb-4">Session is currently adjourned.</h1>
+        <p className="text-lg text-[#C4A882]">Please wait until the chair reopens the session.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="h-screen bg-[#0D0906] flex flex-col overflow-hidden">
+      {sessionEnded && (
+        <div className="fixed inset-0 z-[70] bg-[#0D0906] flex flex-col items-center justify-center text-center px-8">
+          <div className="text-5xl mb-6">🏁</div>
+          <h1 className="text-4xl font-black text-white mb-4">This committee has ended.</h1>
+          <p className="text-xl text-[#C4A882] mb-2">{committee.name}</p>
+          <p className="text-base text-[#7A5A38] mb-8">{committee.topic}</p>
+          {committee.expiresAt && (() => {
+            const ms = new Date(committee.expiresAt).getTime() - Date.now();
+            const hrs = Math.max(0, Math.floor(ms / (1000 * 60 * 60)));
+            return <p className="text-sm text-[#7A5A38]">{hrs} hour{hrs !== 1 ? 's' : ''} until committee is deleted</p>;
+          })()}
+        </div>
+      )}
       {/* Header */}
       <header className="border-b border-[#2E1E0F] bg-[#150F08] px-4 h-14 flex items-center gap-3 shrink-0">
         <Link href="/" className="flex items-center gap-2">
@@ -848,7 +883,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
         {/* ── Session tab ── */}
         {tab === 'session' && (
           <div>
-            {isAbsent && <AbsentBanner />}
+            {isAbsent && !sessionEnded && <AbsentBanner />}
 
             {/* Moderated caucus special view */}
             {committee.phase === 'moderated-caucus' && committee.caucus && (
@@ -992,7 +1027,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                 <div className="bg-[#1A1209] border border-[#2E1E0F] rounded-xl p-4">
                   <div className="flex items-center justify-between mb-3">
                     <div className="text-xs text-[#7A5A38] font-mono">SPEAKERS LIST</div>
-                    {!isOnSpeakersList && !isCurrentSpeaker && myDelegate?.status !== 'absent' && (
+                    {!isOnSpeakersList && !isCurrentSpeaker && myDelegate?.status !== 'absent' && !sessionEnded && (
                       isGslRequestPending ? (
                         <span className="text-xs text-[#B8844A] font-medium">⏳ Awaiting approval</span>
                       ) : (
@@ -1042,8 +1077,8 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                     </div>
                   </div>
                 </div>
-                {/* Status toggle — only when already present/PV */}
-                {!isAbsent && (
+                {/* Status toggle — only when already present/PV and session not ended */}
+                {!isAbsent && !sessionEnded && (
                   <div>
                     <div className="flex gap-2">
                       <button
@@ -1161,8 +1196,8 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
         {/* ── Documents tab ── */}
         {tab === 'documents' && (
           <div>
-            {isAbsent && <AbsentBanner />}
-            <div className={isAbsent ? 'opacity-60 pointer-events-none select-none' : ''}>
+            {isAbsent && !sessionEnded && <AbsentBanner />}
+            <div className={(isAbsent || sessionEnded) ? 'opacity-60 pointer-events-none select-none' : ''}>
               <DelegateDocumentsTab committee={committee} country={country} />
             </div>
           </div>
