@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Committee, PendingMotion, PendingMotionType } from '@/lib/types';
 import { getCountryByName, getFlagEmoji } from '@/lib/countries';
 import { useSettingsStore, DEFAULT_MOTION_NAMES, MotionNames } from '@/lib/settingsStore';
+import { supabase } from '@/lib/supabase';
 import {
   addPendingMotion as addPendingMotionInDB,
   removePendingMotion as removePendingMotionInDB,
@@ -567,13 +568,35 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
     };
     const disruptiveness = base[motion.type] + motion.totalTime;
     update((c) => ({ ...c, pendingMotions: [...(c.pendingMotions ?? []), { ...motion, id: tempId, disruptiveness }] }));
-    addPendingMotionInDB(committee.id, motion);
+    addPendingMotionInDB(committee.id, motion).then((realId) => {
+      if (!realId) return;
+      update((c) => ({
+        ...c,
+        pendingMotions: (c.pendingMotions ?? []).map((m) =>
+          m.id === tempId ? { ...m, id: realId } : m
+        ),
+      }));
+    });
     setView('vote');
   };
 
   const handleRemove = (motionId: string) => {
     update((c) => ({ ...c, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== motionId) }));
-    removePendingMotionInDB(motionId);
+    if (motionId.startsWith('temp-')) {
+      // Real DB UUID not yet known — delete by proposer+type as fallback
+      const motion = committee.pendingMotions?.find((m) => m.id === motionId);
+      if (motion) {
+        supabase.from('motions')
+          .delete()
+          .eq('committee_id', committee.id)
+          .eq('proposed_by', motion.proposedBy)
+          .eq('type', motion.type)
+          .eq('status', 'pending')
+          .then();
+      }
+    } else {
+      removePendingMotionInDB(motionId);
+    }
   };
 
   const handleMotionAccepted = async (motion: PendingMotion) => {

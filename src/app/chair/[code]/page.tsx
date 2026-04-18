@@ -33,6 +33,7 @@ import {
   resumeSession as resumeSessionInDB,
   claimResumeSession as claimResumeSessionInDB,
   startResumeRollCall as startResumeRollCallInDB,
+  removePendingMotion as removePendingMotionInDB,
 } from '@/lib/committeeService';
 
 function formatTime(seconds: number) {
@@ -1014,6 +1015,18 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           setSessionSuspended(true);
         } else if (found.endedAt) {
           setSessionEnded(true);
+        }
+      }
+      if (found) {
+        // Clean up orphaned suspend/end-debate motions left from cycles where the delete silently failed
+        const staleMotions = (found.pendingMotions ?? []).filter(
+          (m) => m.type === 'suspend-debate' || m.type === 'end-debate'
+        );
+        if (staleMotions.length > 0) {
+          staleMotions.forEach((m) => removePendingMotionInDB(m.id));
+          found.pendingMotions = (found.pendingMotions ?? []).filter(
+            (m) => m.type !== 'suspend-debate' && m.type !== 'end-debate'
+          );
         }
       }
       setCommittee(found ?? null);
