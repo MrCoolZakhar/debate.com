@@ -290,7 +290,7 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove }: {
   const displayItems = list.slice(0, 7);
   const overflow = qLen > 7 ? qLen - 7 : 0;
   return (
-    <div className="flex flex-col items-center w-full mb-8">
+    <div className="flex flex-col items-center w-full mb-4">
       <div className="flex flex-nowrap items-start gap-4 pt-2 pb-1 justify-center">
         {displayItems.map((s, i) => (
           <div key={s.delegateId} className="flex flex-col items-center gap-1 relative group cursor-grab shrink-0"
@@ -1648,7 +1648,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
                   {/* GSL content area — overflow-hidden is intentional. Never use overflow-y-auto here:
                       it creates a scroll context that causes browser scrollbars to appear, cutting off
                       the flag queue at top and the Right of Reply button at bottom. */}
-                  <div className="flex-1 flex flex-col items-center justify-center px-8 py-6 overflow-hidden">
+                  <div className="flex-1 flex flex-col items-center justify-center px-4 py-4 overflow-hidden">
                     {committee.currentSpeaker ? (
                       <>
                         {committee.speakersList.length > 0 && (
@@ -1667,8 +1667,8 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
                               </span>
                             </div>
                           </div>
-                          <h1 className="text-5xl font-black text-white mt-5 mb-2 text-center">{committee.currentSpeaker.country}</h1>
-                          <div className={`text-8xl font-black font-mono mt-3 mb-4 tabular-nums ${
+                          <h1 className="text-5xl font-black text-white mt-2 mb-1 text-center">{committee.currentSpeaker.country}</h1>
+                          <div className={`text-8xl font-black font-mono mt-2 mb-3 tabular-nums ${
                             extraTimeAdded ? 'text-emerald-400' :
                             speakerTimeRemaining <= 10 ? 'text-red-500' :
                             speakerTimeRemaining <= 30 ? 'text-yellow-600' : 'text-white'
@@ -1676,17 +1676,17 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
                             {formatTime(speakerTimeRemaining)}
                             {extraTimeAdded && <span className="text-base ml-2 font-normal text-emerald-400">+time</span>}
                           </div>
-                          <div className="w-full max-w-md h-2 bg-[#2E1E0F] rounded-full overflow-hidden mb-4">
+                          <div className="w-full max-w-md h-2 bg-[#2E1E0F] rounded-full overflow-hidden mb-3">
                             <div className={`h-full rounded-full transition-all ${progress > 50 ? 'bg-[#B8844A]' : progress > 20 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{ width: `${progress}%` }} />
                           </div>
                         </div>
                         {isLastGSLSpeaker && (
-                          <div className="mb-4 px-4 py-2 bg-yellow-900/30 border border-yellow-700/40 rounded-lg text-yellow-400 text-xs text-center">
+                          <div className="mb-2 px-4 py-2 bg-yellow-900/30 border border-yellow-700/40 rounded-lg text-yellow-400 text-xs text-center">
                             Add at least one more delegate before starting — the GSL can never be empty.
                           </div>
                         )}
                         {!sessionEnded && (
-                        <div className="flex gap-2 w-full max-w-sm mt-2 flex-wrap justify-center">
+                        <div className="flex gap-2 w-full max-w-sm mt-1 flex-wrap justify-center">
                           {/* Restart button */}
                           <button onClick={handleRestartTime}
                             title="Restart time"
@@ -1844,7 +1844,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
       {activePopover === 'rightToReply' && (
         <div
           className="fixed z-50"
-          style={{ top: '50%', left: 'calc(50% + 220px)', transform: 'translateY(-50%)' }}
+          style={{ top: '50%', right: '2rem', transform: 'translateY(-50%)' }}
         >
           <div className="bg-[#1A1209] border border-orange-700/40 rounded-xl p-4 w-72 shadow-2xl">
             <div className="flex items-center justify-between mb-2">
