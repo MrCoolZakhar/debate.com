@@ -1023,27 +1023,42 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       setLoading(false);
       if (found) {
         unsubscribe = subscribeToCommittee(found.id, async () => {
-          if (Date.now() - localUpdateTime.current < 3000) return;
+          const withinDebounce = Date.now() - localUpdateTime.current < 3000;
           const updated = await getCommitteeByCode(code);
-          if (Date.now() - localUpdateTime.current < 3000) return;
-          if (updated) {
-            if (updated.endedAt) {
-              setSessionEnded(true);
-            } else if (updated.suspendedAt) {
-              setSessionSuspended(true);
+          if (!updated) return;
+
+          if (withinDebounce) {
+            // During debounce: only sync pendingMotions and session state — never touch timer or structural state
+            setCommittee((prev) => {
+              if (!prev) return prev;
+              let next = { ...prev, pendingMotions: updated.pendingMotions };
+              if (updated.endedAt) next = { ...next, endedAt: updated.endedAt, expiresAt: updated.expiresAt };
+              if (updated.suspendedAt !== prev.suspendedAt) next = { ...next, suspendedAt: updated.suspendedAt, resumingChair: updated.resumingChair, phase: updated.phase };
+              return next;
+            });
+            if (updated.endedAt) { setSessionEnded(true); setSessionSuspended(false); }
+            else if (updated.suspendedAt) { setSessionSuspended(true); }
+            else { setSessionSuspended(false); }
+            return;
+          }
+
+          // Outside debounce: full update
+          if (updated.endedAt) {
+            setSessionEnded(true);
+          } else if (updated.suspendedAt) {
+            setSessionSuspended(true);
+          } else {
+            setSessionEnded(false);
+            setSessionSuspended(false);
+          }
+          setCommittee(updated);
+          // Sync isolated timer atom only when local timer is not running
+          if (!timerRunningRef.current) {
+            if (updated.speakerStartedAt) {
+              const elapsed = Math.round((Date.now() - new Date(updated.speakerStartedAt).getTime()) / 1000);
+              setSpeakerTimeRemaining(Math.max(0, updated.speakerTimeLimit - elapsed));
             } else {
-              setSessionEnded(false);
-              setSessionSuspended(false);
-            }
-            setCommittee(updated);
-            // Sync isolated timer atom only when local timer is not running
-            if (!timerRunningRef.current) {
-              if (updated.speakerStartedAt) {
-                const elapsed = Math.round((Date.now() - new Date(updated.speakerStartedAt).getTime()) / 1000);
-                setSpeakerTimeRemaining(Math.max(0, updated.speakerTimeLimit - elapsed));
-              } else {
-                setSpeakerTimeRemaining(updated.speakerTimeRemaining);
-              }
+              setSpeakerTimeRemaining(updated.speakerTimeRemaining);
             }
           }
         });
