@@ -587,23 +587,6 @@ function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee
   const speakerProgress = caucus.speakingTime > 0 ? (caucus.speakerTimeRemaining / caucus.speakingTime) * 100 : 0;
   const totalProgress = caucus.totalTime > 0 ? (caucus.remainingTime / caucus.totalTime) * 100 : 0;
 
-  if (caucus.proposerPosition === null) {
-    return (
-      <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
-        <p className="text-xs text-[#7B4A1E] font-mono tracking-widest mb-4">MODERATED CAUCUS PROPOSED</p>
-        <div className="mb-4"><FlagCircle country={caucus.proposedBy} size="xl" /></div>
-        <h2 className="text-3xl font-black text-white mb-2">{caucus.proposedBy}</h2>
-        <p className="text-[#C4A882] text-lg mb-8">
-          proposed this caucus. Would they like to speak <span className="text-white font-semibold">first</span> or <span className="text-white font-semibold">last</span>?
-        </p>
-        <div className="flex gap-4 w-full max-w-sm">
-          <button onClick={() => handleSetProposerPosition('first')} className="flex-1 py-5 rounded-2xl font-black text-xl bg-[#7B4A1E] hover:bg-[#8B5A2B] text-white transition-colors">First</button>
-          <button onClick={() => handleSetProposerPosition('last')} className="flex-1 py-5 rounded-2xl font-black text-xl bg-[#2E1E0F] hover:bg-[#3D2A15] text-white transition-colors">Last</button>
-        </div>
-      </div>
-    );
-  }
-
   // ── Tour de Table — dedicated view, never shares Mod Caucus UI ──────────────
   const isTdT = caucus.purpose?.startsWith('Tour de Table') ?? false;
   if (isTdT) {
