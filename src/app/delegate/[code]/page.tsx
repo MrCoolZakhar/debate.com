@@ -995,11 +995,6 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                   {isCurrentSpeaker ? '🎙️ You Have the Floor' : phaseDisplay}
                 </div>
 
-                {isCurrentSpeaker && (
-                  <div className="mt-4 py-3 px-4 bg-[#7B4A1E]/20 border border-[#7B4A1E]/40 rounded-xl text-center">
-                    <p className="text-[#B8844A] font-black text-lg">🎙️ You Have the Floor</p>
-                  </div>
-                )}
 
                 {!isCurrentSpeaker && committee.currentSpeaker && committee.phase === 'speakers-list' && (
                   <div className="mt-3">
