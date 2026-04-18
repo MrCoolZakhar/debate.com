@@ -16,7 +16,8 @@ function JoinPageInner() {
   const { committees } = useCommitteeStore();
   const { getSettings } = useSettingsStore();
 
-  const [mode, setMode] = useState<JoinMode>('delegate');
+  const initialMode = (searchParams.get('mode') as JoinMode) ?? 'delegate';
+  const [mode, setMode] = useState<JoinMode>(initialMode);
   const [code, setCode] = useState(searchParams.get('code') ?? '');
   const [country, setCountry] = useState('');
   const [error, setError] = useState('');

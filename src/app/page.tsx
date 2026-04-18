@@ -17,7 +17,12 @@ export default function LandingPage() {
   const handleJoin = () => {
     const code = joinCode.trim().toUpperCase();
     if (code.length >= 4) {
-      router.push(`/join?code=${encodeURIComponent(code)}`);
+      const isChairCode = code.includes('-') && code.split('-').pop()?.length === 4;
+      if (isChairCode) {
+        router.push(`/join?code=${encodeURIComponent(code)}&mode=chair`);
+      } else {
+        router.push(`/join?code=${encodeURIComponent(code)}`);
+      }
     }
   };
 
