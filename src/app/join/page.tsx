@@ -211,7 +211,7 @@ function JoinPageInner() {
                 )}
                 {!foundCommittee.endedAt && foundCommittee.suspendedAt && mode === 'delegate' && (
                   <div className="mt-3 text-xs text-orange-400 bg-orange-950/20 border border-orange-800/30 rounded-lg px-3 py-2">
-                    This session is currently adjourned — the chair must reopen it before delegates can join.
+                    This session is currently adjourned — you will see a waiting screen.
                   </div>
                 )}
               </div>
@@ -285,7 +285,7 @@ function JoinPageInner() {
               onClick={handleJoin}
               disabled={
                 mode === 'delegate'
-                  ? (!foundCommittee || (getSettings(foundCommittee?.code ?? '').requireDelegationName && !country) || (!foundCommittee?.endedAt && !!foundCommittee?.suspendedAt))
+                  ? (!foundCommittee || (getSettings(foundCommittee?.code ?? '').requireDelegationName && !country))
                   : mode === 'chair'
                   ? (!foundCommittee ||
                       (getSettings(foundCommittee.code).separateChairCode && !code.includes('-')) ||

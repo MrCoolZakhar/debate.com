@@ -933,28 +933,15 @@ function VotingView({ committee, setCommittee }: { committee: Committee; setComm
 }
 
 // ── Session Ended Content ─────────────────────────────────────────────────────
-function SessionEndedContent({ committee }: { committee: Committee }) {
-  const [hoursLeft, setHoursLeft] = useState<number | null>(null);
-
-  useEffect(() => {
-    function calc() {
-      if (!committee.expiresAt) { setHoursLeft(null); return; }
-      const ms = new Date(committee.expiresAt).getTime() - Date.now();
-      setHoursLeft(Math.max(0, Math.floor(ms / (1000 * 60 * 60))));
-    }
-    calc();
-    const id = setInterval(calc, 60_000);
-    return () => clearInterval(id);
-  }, [committee.expiresAt]);
-
+function SessionEndedContent({ committee, hoursRemaining }: { committee: Committee; hoursRemaining: number | null }) {
   return (
     <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
       <div className="text-5xl mb-6">🏁</div>
       <h1 className="text-5xl font-black text-white mb-4">This committee has ended.</h1>
       <p className="text-xl text-[#C4A882] mb-2">{committee.name}</p>
       <p className="text-lg text-[#7A5A38] mb-8">{committee.topic}</p>
-      {hoursLeft !== null && (
-        <p className="text-base text-[#7A5A38]">{hoursLeft} hour{hoursLeft !== 1 ? 's' : ''} until committee is deleted</p>
+      {hoursRemaining !== null && (
+        <p className="text-base text-[#7A5A38]">{hoursRemaining} hour{hoursRemaining !== 1 ? 's' : ''} until committee is deleted</p>
       )}
       <p className="text-xs text-[#7A5A38] mt-8">Press ESC to return to main menu</p>
     </div>
@@ -971,6 +958,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
   const [sessionEnded, setSessionEnded] = useState(false);
   const [suspendTab, setSuspendTab] = useState<'suspend' | 'session'>('suspend');
   const [endedTab, setEndedTab] = useState<'ended' | 'session'>('ended');
+  const [hoursRemaining, setHoursRemaining] = useState<number | null>(null);
   const [timerRunning, setTimerRunning] = useState(false);
   const [showRollCall, setShowRollCall] = useState(true);
   const [showMotions, setShowMotions] = useState(false);
@@ -1016,9 +1004,8 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
     async function load() {
       const found = await getCommitteeByCode(code);
       if (found) {
-        // Chair auto-resumes a suspended session on page load
         if (found.suspendedAt) {
-          await resumeSessionInDB(found.id);
+          setSessionSuspended(true);
         } else if (found.endedAt) {
           setSessionEnded(true);
         }
@@ -1213,6 +1200,27 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [sessionEnded, sessionSuspended, router]);
+
+  useEffect(() => {
+    if (committee?.endedAt) {
+      setSessionEnded(true);
+      setSessionSuspended(false);
+    } else if (committee?.suspendedAt) {
+      setSessionSuspended(true);
+      setSessionEnded(false);
+    }
+  }, [committee?.endedAt, committee?.suspendedAt]);
+
+  useEffect(() => {
+    if (!committee?.expiresAt) { setHoursRemaining(null); return; }
+    function calc() {
+      const ms = new Date(committee!.expiresAt!).getTime() - Date.now();
+      setHoursRemaining(Math.max(0, Math.floor(ms / (1000 * 60 * 60))));
+    }
+    calc();
+    const id = setInterval(calc, 60_000);
+    return () => clearInterval(id);
+  }, [committee?.expiresAt]);
 
   if (loading) {
     return (
@@ -1535,7 +1543,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
         </div>
       )}
       {sessionEnded && endedTab === 'ended' ? (
-        <SessionEndedContent committee={committee} />
+        <SessionEndedContent committee={committee} hoursRemaining={hoursRemaining} />
       ) : (!sessionEnded && sessionSuspended && suspendTab === 'suspend') ? (
         <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
           <div className="text-5xl mb-6">⏸️</div>
@@ -1634,16 +1642,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
               {committee.phase === 'voting' && (
                 <VotingView committee={committee} setCommittee={setCommittee} />
               )}
-              {committee.phase === 'adjourned' && !committee.endedAt && !sessionSuspended && (
-                <div className="flex-1 flex items-center justify-center">
-                  <div className="text-center">
-                    <div className="text-5xl mb-4">🔨</div>
-                    <h2 className="text-2xl font-black text-white mb-6">Session Adjourned</h2>
-                    <button onClick={handleResumeSession} className="bg-[#7B4A1E] hover:bg-[#8B5A2B] text-white px-8 py-3 rounded-xl font-bold transition-colors">Resume Session</button>
-                  </div>
-                </div>
-              )}
-              {committee.phase === 'speakers-list' && (
+{committee.phase === 'speakers-list' && (
                 <>
                 <div className="flex-1 flex flex-row overflow-hidden">
                   <div className="flex-1 flex flex-col items-center justify-center px-8 py-6 overflow-y-auto">

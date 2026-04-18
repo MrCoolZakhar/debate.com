@@ -545,6 +545,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   const [sessionSuspended, setSessionSuspended] = useState(false);
   const [sessionEnded, setSessionEnded] = useState(false);
   const [endedTab, setEndedTab] = useState<'ended' | 'session'>('ended');
+  const [hoursRemaining, setHoursRemaining] = useState<number | null>(null);
   const [showChat, setShowChat] = useState(false);
   const [chatReadCounts, setChatReadCounts] = useState<Record<string, number>>({});
 
@@ -657,6 +658,27 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [sessionEnded, sessionSuspended, router]);
+
+  useEffect(() => {
+    if (committee?.endedAt) {
+      setSessionEnded(true);
+      setSessionSuspended(false);
+    } else if (committee?.suspendedAt) {
+      setSessionSuspended(true);
+      setSessionEnded(false);
+    }
+  }, [committee?.endedAt, committee?.suspendedAt]);
+
+  useEffect(() => {
+    if (!committee?.expiresAt) { setHoursRemaining(null); return; }
+    function calc() {
+      const ms = new Date(committee!.expiresAt!).getTime() - Date.now();
+      setHoursRemaining(Math.max(0, Math.floor(ms / (1000 * 60 * 60))));
+    }
+    calc();
+    const id = setInterval(calc, 60_000);
+    return () => clearInterval(id);
+  }, [committee?.expiresAt]);
 
   if (loading) {
     return (
@@ -865,11 +887,9 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
           <h1 className="text-4xl font-black text-white mb-4">This committee has ended.</h1>
           <p className="text-xl text-[#C4A882] mb-2">{committee.name}</p>
           <p className="text-base text-[#7A5A38] mb-8">{committee.topic}</p>
-          {committee.expiresAt && (() => {
-            const ms = new Date(committee.expiresAt).getTime() - Date.now();
-            const hrs = Math.max(0, Math.floor(ms / (1000 * 60 * 60)));
-            return <p className="text-sm text-[#7A5A38]">{hrs} hour{hrs !== 1 ? 's' : ''} until committee is deleted</p>;
-          })()}
+          {hoursRemaining !== null && (
+            <p className="text-sm text-[#7A5A38]">{hoursRemaining} hour{hoursRemaining !== 1 ? 's' : ''} until committee is deleted</p>
+          )}
           <p className="text-xs text-[#7A5A38] mt-8">Press ESC to return to main menu</p>
         </div>
       ) : (
