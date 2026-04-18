@@ -182,7 +182,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised }: {
       </div>
 
       {/* Type tabs — always shown */}
-      <div className="flex gap-1.5 flex-wrap">
+      <div className="flex gap-1.5 flex-wrap items-stretch">
         <div className="flex gap-1.5 flex-1 flex-wrap">
           {TYPE_ORDER.map((t) => (
             <button key={t} type="button" onClick={() => setType(t)}
@@ -194,13 +194,13 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised }: {
           ))}
         </div>
         {/* Special debate control buttons — half size, red, stacked */}
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-1 self-stretch">
           <button type="button" onClick={() => setType('suspend-debate')}
-            className={`px-2 py-1 rounded-lg border text-xs font-bold transition-colors ${type === 'suspend-debate' ? 'bg-red-800 border-red-700 text-white' : 'border-red-900/50 bg-red-950/30 text-red-400 hover:bg-red-900/40'}`}>
+            className={`px-2 flex-1 rounded-lg border text-xs font-bold transition-colors ${type === 'suspend-debate' ? 'bg-red-800 border-red-700 text-white' : 'border-red-900/50 bg-red-950/30 text-red-400 hover:bg-red-900/40'}`}>
             Suspend
           </button>
           <button type="button" onClick={() => setType('end-debate')}
-            className={`px-2 py-1 rounded-lg border text-xs font-bold transition-colors ${type === 'end-debate' ? 'bg-red-800 border-red-700 text-white' : 'border-red-900/50 bg-red-950/30 text-red-400 hover:bg-red-900/40'}`}>
+            className={`px-2 flex-1 rounded-lg border text-xs font-bold transition-colors ${type === 'end-debate' ? 'bg-red-800 border-red-700 text-white' : 'border-red-900/50 bg-red-950/30 text-red-400 hover:bg-red-900/40'}`}>
             End Debate
           </button>
         </div>
@@ -393,13 +393,16 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
   useEffect(() => {
     const current = (committee.pendingMotions ?? []).filter((m) => m.type !== ('join-request' as string));
     setOrder((prev) => {
-      // Remove any motions that are no longer pending, preserve custom order
-      const currentIds = new Set(current.map((m) => m.id));
-      const filtered = prev.filter((m) => currentIds.has(m.id));
-      // Add any new motions not yet in order
-      const prevIds = new Set(filtered.map((m) => m.id));
-      const newOnes = current.filter((m) => !prevIds.has(m.id));
-      return [...filtered, ...newOnes];
+      // Match by proposer+type so temp ID → real UUID swaps don't create duplicates
+      const currentMap = new Map(current.map((m) => [`${m.proposedBy}|${m.type}`, m]));
+      const merged = prev
+        .map((p) => currentMap.get(`${p.proposedBy}|${p.type}`) ?? null)
+        .filter((m): m is PendingMotion => m !== null);
+      const mergedKeys = new Set(merged.map((m) => `${m.proposedBy}|${m.type}`));
+      const newOnes = current
+        .filter((m) => !mergedKeys.has(`${m.proposedBy}|${m.type}`))
+        .sort((a, b) => b.disruptiveness - a.disruptiveness);
+      return [...merged, ...newOnes].sort((a, b) => b.disruptiveness - a.disruptiveness);
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingIds]);
@@ -455,13 +458,13 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
         {/* Header: icon + type label + flag in top-right */}
         <div className="flex items-center gap-2">
           <span className={large ? 'text-3xl' : 'text-xl'}>{meta.icon}</span>
-          <span className={`font-black text-white flex-1 ${large ? 'text-lg' : 'text-sm'}`}>{meta.label}</span>
+          <span className={`font-black text-white flex-1 ${large ? 'text-2xl' : 'text-base'}`}>{meta.label}</span>
           <span className={large ? 'text-3xl' : 'text-xl'}>{f ? getFlagEmoji(f.code) : '🌐'}</span>
         </div>
 
         {/* Topic inline */}
         {m.topic && (
-          <p className={`${large ? 'text-sm' : 'text-xs'} text-[#C4A882]`}>
+          <p className={`${large ? 'text-xl' : 'text-sm'} text-[#C4A882]`}>
             <span className="text-[#7A5A38] font-semibold">Topic: </span>{m.topic}
           </p>
         )}
@@ -512,7 +515,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
   };
 
   return (
-    <div className={`px-7 pb-7 space-y-4 flex flex-col ${order.length > 4 ? 'overflow-y-auto' : 'overflow-hidden'}`}>
+    <div className="px-7 pb-7 space-y-4 flex flex-col h-full overflow-hidden">
       <div className="flex items-center justify-between shrink-0">
         <h2 className="text-2xl font-black text-white">Vote on Motions</h2>
         <button onClick={onBack}
@@ -530,7 +533,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
       ) : (
         <div className="flex gap-4 flex-1 min-h-0">
           {renderCard(primary, true, 0)}
-          <div className="w-72 flex flex-col gap-3">{rest.map((m, i) => renderCard(m, false, i + 1))}</div>
+          <div className="w-72 flex flex-col gap-3 overflow-y-auto">{rest.map((m, i) => renderCard(m, false, i + 1))}</div>
         </div>
       )}
     </div>
@@ -713,7 +716,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background: 'rgba(5, 8, 20, 0.88)', backdropFilter: 'blur(4px)' }}
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="bg-[#1A1209] border border-[#2E1E0F] rounded-3xl w-full shadow-2xl overflow-hidden max-h-[92vh] flex flex-col max-w-5xl">
+      <div className="bg-[#1A1209] border border-[#2E1E0F] rounded-3xl w-full shadow-2xl overflow-hidden flex flex-col max-w-5xl" style={{ height: '88vh' }}>
         <div className="flex items-center justify-end px-7 pt-6 pb-0 shrink-0">
           <button onClick={onClose} className="text-[#7A5A38] hover:text-white transition-colors text-xl leading-none">✕</button>
         </div>
