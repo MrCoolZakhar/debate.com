@@ -601,10 +601,10 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
   };
 
   const handleRemove = (motionId: string) => {
+    // Capture motion reference BEFORE update() removes it from parent state
+    const motion = (committee.pendingMotions ?? []).find((m) => m.id === motionId);
     update((c) => ({ ...c, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== motionId) }));
     if (motionId.startsWith('temp-')) {
-      // Real DB UUID not yet known — delete by proposer+type as fallback
-      const motion = committee.pendingMotions?.find((m) => m.id === motionId);
       if (motion) {
         supabase.from('motions')
           .delete()
