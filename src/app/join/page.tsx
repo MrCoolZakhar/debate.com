@@ -204,6 +204,16 @@ function JoinPageInner() {
                 <div className="text-white font-bold">{foundCommittee.name}</div>
                 <div className="text-[#C4A882] text-sm mt-1">{foundCommittee.topic}</div>
                 <div className="text-[#7A5A38] text-xs mt-2">{foundCommittee.delegates.length} delegates registered</div>
+                {foundCommittee.endedAt && (
+                  <div className="mt-3 text-xs text-[#B8844A] bg-[#7B4A1E]/20 border border-[#7B4A1E]/30 rounded-lg px-3 py-2">
+                    This session has ended — view only access.
+                  </div>
+                )}
+                {!foundCommittee.endedAt && foundCommittee.suspendedAt && mode === 'delegate' && (
+                  <div className="mt-3 text-xs text-orange-400 bg-orange-950/20 border border-orange-800/30 rounded-lg px-3 py-2">
+                    This session is currently adjourned — you will see a waiting screen.
+                  </div>
+                )}
               </div>
             )}
 
@@ -284,7 +294,9 @@ function JoinPageInner() {
               }
               className="w-full bg-[#7B4A1E] hover:bg-[#8B5A2B] disabled:bg-[#2E1E0F] disabled:text-[#7A5A38] text-white py-3 rounded-lg font-semibold transition-colors"
             >
-              {mode === 'delegate' ? 'Join Session →' : mode === 'chair' ? 'Open Chair Panel →' : 'Open Advisor View →'}
+              {mode === 'delegate'
+                ? (foundCommittee?.endedAt ? 'View Session →' : 'Join Session →')
+                : mode === 'chair' ? 'Open Chair Panel →' : 'Open Advisor View →'}
             </button>
           </div>
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { use, useEffect, useState, useRef, useCallback, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Committee, CommitteeDocument, DocumentType, PendingMotionType, SpeakingLogEntry, DelegateStatus } from '@/lib/types';
 import ChatPanel from '@/components/ChatPanel';
@@ -535,12 +535,17 @@ type DelegateTab = 'session' | 'motions' | 'resolutions' | 'documents' | 'stats'
 
 function DelegateSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const { code } = use(params);
+  const router = useRouter();
   const searchParams = useSearchParams();
   const country = searchParams.get('country') || '';
 
   const [committee, setCommittee] = useState<Committee | null>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<DelegateTab>('session');
+  const [sessionSuspended, setSessionSuspended] = useState(false);
+  const [sessionEnded, setSessionEnded] = useState(false);
+  const [endedTab, setEndedTab] = useState<'ended' | 'session'>('ended');
+  const [hoursRemaining, setHoursRemaining] = useState<number | null>(null);
   const [showChat, setShowChat] = useState(false);
   const [chatReadCounts, setChatReadCounts] = useState<Record<string, number>>({});
 
@@ -567,12 +572,22 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
       setCommittee(found ?? null);
       setLoading(false);
       if (found) {
+        if (found.endedAt) setSessionEnded(true);
+        else if (found.suspendedAt) setSessionSuspended(true);
         committeeIdRef.current = found.id;
         setLocalTime(found.speakerTimeRemaining);
         lastSpeakerIdRef.current = found.currentSpeaker?.delegateId ?? null;
         unsubscribe = subscribeToCommittee(found.id, async () => {
           const updated = await getCommitteeByCode(code.toUpperCase());
           if (updated) {
+            if (updated.endedAt) {
+              setSessionEnded(true);
+            } else if (updated.suspendedAt) {
+              setSessionSuspended(true);
+            } else {
+              setSessionEnded(false);
+              setSessionSuspended(false);
+            }
             setCommittee(updated);
             const newSpeakerId = updated.currentSpeaker?.delegateId ?? null;
             if (newSpeakerId !== lastSpeakerIdRef.current) {
@@ -636,6 +651,34 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
       setLocalTimerActive(false);
     }
   }, [committee?.currentSpeaker?.delegateId, localTimerActive, country]);
+
+  useEffect(() => {
+    if (!sessionEnded && !sessionSuspended) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') router.push('/'); };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [sessionEnded, sessionSuspended, router]);
+
+  useEffect(() => {
+    if (committee?.endedAt) {
+      setSessionEnded(true);
+      setSessionSuspended(false);
+    } else if (committee?.suspendedAt) {
+      setSessionSuspended(true);
+      setSessionEnded(false);
+    }
+  }, [committee?.endedAt, committee?.suspendedAt]);
+
+  useEffect(() => {
+    if (!committee?.expiresAt) { setHoursRemaining(null); return; }
+    function calc() {
+      const ms = new Date(committee!.expiresAt!).getTime() - Date.now();
+      setHoursRemaining(Math.max(0, Math.floor(ms / (1000 * 60 * 60))));
+    }
+    calc();
+    const id = setInterval(calc, 60_000);
+    return () => clearInterval(id);
+  }, [committee?.expiresAt]);
 
   if (loading) {
     return (
@@ -762,6 +805,18 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     </div>
   );
 
+  if (sessionSuspended) {
+    return (
+      <div className="min-h-screen bg-[#0D0906] flex flex-col items-center justify-center text-center px-8">
+        <div className="text-sm font-mono text-[#7A5A38] mb-2">{committee.name} · {committee.code}</div>
+        <div className="text-5xl mb-6">⏸️</div>
+        <h1 className="text-3xl font-black text-white mb-4">Session is currently adjourned.</h1>
+        <p className="text-lg text-[#C4A882]">Please wait until the chair reopens the session.</p>
+        <p className="text-xs text-[#7A5A38] mt-8">Press ESC to return to main menu</p>
+      </div>
+    );
+  }
+
   return (
     <div className="h-screen bg-[#0D0906] flex flex-col overflow-hidden">
       {/* Header */}
@@ -812,6 +867,38 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
         </div>
       </header>
 
+      {/* Ended tab bar */}
+      {sessionEnded && (
+        <div className="flex border-b border-[#2E1E0F] bg-[#150F08] shrink-0">
+          <button onClick={() => setEndedTab('ended')}
+            className={`flex-1 py-2.5 text-sm font-bold transition-colors border-b-2 ${endedTab === 'ended' ? 'text-white border-[#7B4A1E]' : 'text-[#7A5A38] border-transparent hover:text-[#C4A882]'}`}>
+            🏁 End View
+          </button>
+          <button onClick={() => setEndedTab('session')}
+            className={`flex-1 py-2.5 text-sm font-bold transition-colors border-b-2 ${endedTab === 'session' ? 'text-white border-[#7B4A1E]' : 'text-[#7A5A38] border-transparent hover:text-[#C4A882]'}`}>
+            👁 Session View
+          </button>
+        </div>
+      )}
+
+      {sessionEnded && endedTab === 'ended' ? (
+        <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
+          <div className="text-5xl mb-6">🏁</div>
+          <h1 className="text-4xl font-black text-white mb-4">This committee has ended.</h1>
+          <p className="text-xl text-[#C4A882] mb-2">{committee.name}</p>
+          <p className="text-base text-[#7A5A38] mb-8">{committee.topic}</p>
+          {hoursRemaining !== null && (
+            <p className="text-sm text-[#7A5A38]">{hoursRemaining} hour{hoursRemaining !== 1 ? 's' : ''} until committee is deleted</p>
+          )}
+          <p className="text-xs text-[#7A5A38] mt-8">Press ESC to return to main menu</p>
+        </div>
+      ) : (
+      <>
+      {sessionEnded && endedTab === 'session' && (
+        <div className="shrink-0 bg-amber-900/20 border-b border-amber-700/40 px-4 py-2 text-center text-amber-300 text-sm font-semibold">
+          Session has ended — view only
+        </div>
+      )}
       {/* Tab nav */}
       <div className="flex border-b border-[#2E1E0F] bg-[#150F08] shrink-0">
         {tabs.map((t) => (
@@ -848,7 +935,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
         {/* ── Session tab ── */}
         {tab === 'session' && (
           <div>
-            {isAbsent && <AbsentBanner />}
+            {isAbsent && !sessionEnded && <AbsentBanner />}
 
             {/* Moderated caucus special view */}
             {committee.phase === 'moderated-caucus' && committee.caucus && (
@@ -992,7 +1079,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                 <div className="bg-[#1A1209] border border-[#2E1E0F] rounded-xl p-4">
                   <div className="flex items-center justify-between mb-3">
                     <div className="text-xs text-[#7A5A38] font-mono">SPEAKERS LIST</div>
-                    {!isOnSpeakersList && !isCurrentSpeaker && myDelegate?.status !== 'absent' && (
+                    {!isOnSpeakersList && !isCurrentSpeaker && myDelegate?.status !== 'absent' && !sessionEnded && (
                       isGslRequestPending ? (
                         <span className="text-xs text-[#B8844A] font-medium">⏳ Awaiting approval</span>
                       ) : (
@@ -1042,8 +1129,8 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                     </div>
                   </div>
                 </div>
-                {/* Status toggle — only when already present/PV */}
-                {!isAbsent && (
+                {/* Status toggle — only when already present/PV and session not ended */}
+                {!isAbsent && !sessionEnded && (
                   <div>
                     <div className="flex gap-2">
                       <button
@@ -1161,8 +1248,8 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
         {/* ── Documents tab ── */}
         {tab === 'documents' && (
           <div>
-            {isAbsent && <AbsentBanner />}
-            <div className={isAbsent ? 'opacity-60 pointer-events-none select-none' : ''}>
+            {isAbsent && !sessionEnded && <AbsentBanner />}
+            <div className={(isAbsent || sessionEnded) ? 'opacity-60 pointer-events-none select-none' : ''}>
               <DelegateDocumentsTab committee={committee} country={country} />
             </div>
           </div>
@@ -1174,6 +1261,8 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
         )}
       </div>}
       </div>
+      </>
+      )}
     </div>
   );
 }

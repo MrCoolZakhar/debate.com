@@ -30,6 +30,7 @@ import {
   approveGslRequest,
   denyGslRequest,
   logSpeakingTime,
+  resumeSession as resumeSessionInDB,
 } from '@/lib/committeeService';
 
 function formatTime(seconds: number) {
@@ -931,12 +932,33 @@ function VotingView({ committee, setCommittee }: { committee: Committee; setComm
   );
 }
 
+// ── Session Ended Content ─────────────────────────────────────────────────────
+function SessionEndedContent({ committee, hoursRemaining }: { committee: Committee; hoursRemaining: number | null }) {
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
+      <div className="text-5xl mb-6">🏁</div>
+      <h1 className="text-5xl font-black text-white mb-4">This committee has ended.</h1>
+      <p className="text-xl text-[#C4A882] mb-2">{committee.name}</p>
+      <p className="text-lg text-[#7A5A38] mb-8">{committee.topic}</p>
+      {hoursRemaining !== null && (
+        <p className="text-base text-[#7A5A38]">{hoursRemaining} hour{hoursRemaining !== 1 ? 's' : ''} until committee is deleted</p>
+      )}
+      <p className="text-xs text-[#7A5A38] mt-8">Press ESC to return to main menu</p>
+    </div>
+  );
+}
+
 // ── Main Chair Session ────────────────────────────────────────────────────────
 export default function ChairSession({ params }: { params: Promise<{ code: string }> }) {
   const { code } = use(params);
   const router = useRouter();
   const [committee, setCommittee] = useState<Committee | null>(null);
   const [loading, setLoading] = useState(true);
+  const [sessionSuspended, setSessionSuspended] = useState(false);
+  const [sessionEnded, setSessionEnded] = useState(false);
+  const [suspendTab, setSuspendTab] = useState<'suspend' | 'session'>('suspend');
+  const [endedTab, setEndedTab] = useState<'ended' | 'session'>('ended');
+  const [hoursRemaining, setHoursRemaining] = useState<number | null>(null);
   const [timerRunning, setTimerRunning] = useState(false);
   const [showRollCall, setShowRollCall] = useState(true);
   const [showMotions, setShowMotions] = useState(false);
@@ -981,6 +1003,13 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
     let unsubscribe: (() => void) | undefined;
     async function load() {
       const found = await getCommitteeByCode(code);
+      if (found) {
+        if (found.suspendedAt) {
+          setSessionSuspended(true);
+        } else if (found.endedAt) {
+          setSessionEnded(true);
+        }
+      }
       setCommittee(found ?? null);
       if (found) {
         setSpeakerTimeLimitLocal(found.speakerTimeLimit);
@@ -993,6 +1022,14 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
           if (Date.now() - localUpdateTime.current < 1500) return;
           const updated = await getCommitteeByCode(code);
           if (updated) {
+            if (updated.endedAt) {
+              setSessionEnded(true);
+            } else if (updated.suspendedAt) {
+              setSessionSuspended(true);
+            } else {
+              setSessionEnded(false);
+              setSessionSuspended(false);
+            }
             setCommittee(updated);
             // Sync isolated timer atom only when local timer is not running
             if (!timerRunningRef.current) {
@@ -1156,6 +1193,34 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [committee?.id]);
+
+  useEffect(() => {
+    if (!sessionEnded && !sessionSuspended) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') router.push('/'); };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [sessionEnded, sessionSuspended, router]);
+
+  useEffect(() => {
+    if (committee?.endedAt) {
+      setSessionEnded(true);
+      setSessionSuspended(false);
+    } else if (committee?.suspendedAt) {
+      setSessionSuspended(true);
+      setSessionEnded(false);
+    }
+  }, [committee?.endedAt, committee?.suspendedAt]);
+
+  useEffect(() => {
+    if (!committee?.expiresAt) { setHoursRemaining(null); return; }
+    function calc() {
+      const ms = new Date(committee!.expiresAt!).getTime() - Date.now();
+      setHoursRemaining(Math.max(0, Math.floor(ms / (1000 * 60 * 60))));
+    }
+    calc();
+    const id = setInterval(calc, 60_000);
+    return () => clearInterval(id);
+  }, [committee?.expiresAt]);
 
   if (loading) {
     return (
@@ -1331,21 +1396,23 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
             Roll Call {present}/{committee.delegates.length}
           </button>
         )}
-        {/* Motions — disabled during pre-session */}
-        <button
-          onClick={handleMotionsClick}
-          title={isPreSession ? 'Complete roll call first' : undefined}
-          className={`text-xs px-3 py-1 rounded-lg transition-colors shrink-0 relative ${
-            isPreSession ? 'opacity-40 cursor-not-allowed bg-[#2E1E0F] text-[#7A5A38]' :
-            showMotions ? 'bg-[#7B4A1E] text-white' : 'bg-[#2E1E0F] text-[#C4A882] hover:text-white'
-          }`}>
-          Motions
-          {!isPreSession && (committee.pendingMotions ?? []).filter((m) => m.type !== ('join-request' as string) && (m.type as string) !== 'gsl-request').length > 0 && (
-            <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#7B4A1E] rounded-full text-white text-[10px] flex items-center justify-center">
-              {(committee.pendingMotions ?? []).filter((m) => m.type !== ('join-request' as string) && (m.type as string) !== 'gsl-request').length}
-            </span>
-          )}
-        </button>
+        {/* Motions — disabled during pre-session or when ended */}
+        {!sessionEnded && (
+          <button
+            onClick={handleMotionsClick}
+            title={isPreSession ? 'Complete roll call first' : undefined}
+            className={`text-xs px-3 py-1 rounded-lg transition-colors shrink-0 relative ${
+              isPreSession ? 'opacity-40 cursor-not-allowed bg-[#2E1E0F] text-[#7A5A38]' :
+              showMotions ? 'bg-[#7B4A1E] text-white' : 'bg-[#2E1E0F] text-[#C4A882] hover:text-white'
+            }`}>
+            Motions
+            {!isPreSession && (committee.pendingMotions ?? []).filter((m) => m.type !== ('join-request' as string) && (m.type as string) !== 'gsl-request').length > 0 && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#7B4A1E] rounded-full text-white text-[10px] flex items-center justify-center">
+                {(committee.pendingMotions ?? []).filter((m) => m.type !== ('join-request' as string) && (m.type as string) !== 'gsl-request').length}
+              </span>
+            )}
+          </button>
+        )}
         {/* Documents — disabled during pre-session */}
         <button
           onClick={handleDocumentsClick}
@@ -1385,6 +1452,42 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
         </button>
         <button onClick={() => setShowSettings(true)} className="text-[#7A5A38] hover:text-white transition-colors shrink-0 text-3xl">⚙</button>
       </header>
+      {/* Ended tab bar */}
+      {sessionEnded && (
+        <div className="flex border-b border-[#2E1E0F] bg-[#150F08] shrink-0">
+          <button onClick={() => setEndedTab('ended')}
+            className={`flex-1 py-2.5 text-sm font-bold transition-colors border-b-2 ${endedTab === 'ended' ? 'text-white border-[#7B4A1E]' : 'text-[#7A5A38] border-transparent hover:text-[#C4A882]'}`}>
+            🏁 End View
+          </button>
+          <button onClick={() => setEndedTab('session')}
+            className={`flex-1 py-2.5 text-sm font-bold transition-colors border-b-2 ${endedTab === 'session' ? 'text-white border-[#7B4A1E]' : 'text-[#7A5A38] border-transparent hover:text-[#C4A882]'}`}>
+            👁 Session View
+          </button>
+        </div>
+      )}
+      {/* Suspend tab bar */}
+      {!sessionEnded && sessionSuspended && (
+        <div className="flex border-b border-[#2E1E0F] bg-[#150F08] shrink-0">
+          <button onClick={() => setSuspendTab('suspend')}
+            className={`flex-1 py-2.5 text-sm font-bold transition-colors border-b-2 ${suspendTab === 'suspend' ? 'text-white border-[#7B4A1E]' : 'text-[#7A5A38] border-transparent hover:text-[#C4A882]'}`}>
+            ⏸ Suspend View
+          </button>
+          <button onClick={() => setSuspendTab('session')}
+            className={`flex-1 py-2.5 text-sm font-bold transition-colors border-b-2 ${suspendTab === 'session' ? 'text-white border-[#7B4A1E]' : 'text-[#7A5A38] border-transparent hover:text-[#C4A882]'}`}>
+            🪑 Session View
+          </button>
+        </div>
+      )}
+      {sessionEnded && endedTab === 'session' && (
+        <div className="shrink-0 bg-amber-900/20 border-b border-amber-700/40 px-4 py-2 text-center text-amber-300 text-sm font-semibold">
+          Session has ended — view only
+        </div>
+      )}
+      {!sessionEnded && sessionSuspended && suspendTab === 'session' && (
+        <div className="shrink-0 bg-amber-900/20 border-b border-amber-700/40 px-4 py-2 text-center text-amber-300 text-sm font-semibold">
+          Session is suspended — delegates cannot see this view
+        </div>
+      )}
       {/* Join request banner */}
       {(committee.pendingMotions ?? []).filter((m) => m.type === ('join-request' as string)).length > 0 && (
         <div className="shrink-0 bg-[#1A0E06] border-b border-[#7B4A1E]/40 px-4 py-2 flex flex-wrap gap-4">
@@ -1439,6 +1542,25 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
             })}
         </div>
       )}
+      {sessionEnded && endedTab === 'ended' ? (
+        <SessionEndedContent committee={committee} hoursRemaining={hoursRemaining} />
+      ) : (!sessionEnded && sessionSuspended && suspendTab === 'suspend') ? (
+        <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
+          <div className="text-5xl mb-6">⏸️</div>
+          <h1 className="text-5xl font-black text-white mb-4">Session Adjourned</h1>
+          <p className="text-xl text-[#C4A882] mb-12">This session has been temporarily suspended.</p>
+          <button
+            onClick={async () => {
+              await resumeSessionInDB(committee.id);
+              setSessionSuspended(false);
+              setSuspendTab('suspend');
+            }}
+            className="px-12 py-5 bg-[#7B4A1E] hover:bg-[#8B5A2B] text-white text-xl font-black rounded-2xl transition-colors">
+            Resume Session
+          </button>
+          <p className="text-xs text-[#7A5A38] mt-8">Press ESC to return to main menu</p>
+        </div>
+      ) : (
       <div className="flex-1 flex overflow-hidden">
         {showChat && (
           <ChatPanel
@@ -1520,16 +1642,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
               {committee.phase === 'voting' && (
                 <VotingView committee={committee} setCommittee={setCommittee} />
               )}
-              {committee.phase === 'adjourned' && (
-                <div className="flex-1 flex items-center justify-center">
-                  <div className="text-center">
-                    <div className="text-5xl mb-4">🔨</div>
-                    <h2 className="text-2xl font-black text-white mb-6">Session Adjourned</h2>
-                    <button onClick={handleResumeSession} className="bg-[#7B4A1E] hover:bg-[#8B5A2B] text-white px-8 py-3 rounded-xl font-bold transition-colors">Resume Session</button>
-                  </div>
-                </div>
-              )}
-              {committee.phase === 'speakers-list' && (
+{committee.phase === 'speakers-list' && (
                 <>
                 <div className="flex-1 flex flex-row overflow-hidden">
                   {/* GSL content area — overflow-hidden is intentional. Never use overflow-y-auto here:
@@ -1572,6 +1685,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
                             Add at least one more delegate before starting — the GSL can never be empty.
                           </div>
                         )}
+                        {!sessionEnded && (
                         <div className="flex gap-2 w-full max-w-sm mt-2 flex-wrap justify-center">
                           {/* Restart button */}
                           <button onClick={handleRestartTime}
@@ -1615,8 +1729,9 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
                             Right of Reply
                           </button>
                         </div>
+                        )}
                         {/* Extra time popover */}
-                        {activePopover === 'extraTime' && (
+                        {!sessionEnded && activePopover === 'extraTime' && (
                           <div className="mt-3 bg-[#1A1209] border border-emerald-700/40 rounded-xl p-3 w-full max-w-sm">
                             <div className="flex items-center justify-between mb-2">
                               <span className="text-xs text-emerald-400 font-semibold">Add time</span>
@@ -1667,14 +1782,17 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
                             Only 1 delegate on the list — add more before starting.
                           </div>
                         )}
-                        <button onClick={handleNextSpeaker} disabled={committee.speakersList.length < 2}
-                          className="bg-[#7B4A1E] hover:bg-[#8B5A2B] disabled:bg-[#2E1E0F] disabled:text-[#7A5A38] text-white px-8 py-3 rounded-xl font-bold transition-colors">
-                          Call First Speaker
-                        </button>
+                        {!sessionEnded && (
+                          <button onClick={handleNextSpeaker} disabled={committee.speakersList.length < 2}
+                            className="bg-[#7B4A1E] hover:bg-[#8B5A2B] disabled:bg-[#2E1E0F] disabled:text-[#7A5A38] text-white px-8 py-3 rounded-xl font-bold transition-colors">
+                            Call First Speaker
+                          </button>
+                        )}
                       </>
                     )}
                   </div>
                 </div>{/* end flex-row */}
+                {!sessionEnded && (
                 <div className="border-t border-[#2E1E0F] bg-[#0D0906] px-6 py-4">
                   <div className="flex items-center gap-3 mb-4">
                     <span className="text-xs text-[#7A5A38] font-mono shrink-0">TIME</span>
@@ -1692,12 +1810,14 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
                   </div>
                   <AddSpeakerInput committee={committee} onAdd={handleAddToSpeakersList} />
                 </div>
+                )}
                 </>
               )}
             </main>
           </>
         )}
       </div>
+      )}
       {showMotions && !isPreSession && (
         <MotionsModal
           committee={committee}
