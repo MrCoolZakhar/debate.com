@@ -549,17 +549,8 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   const [showChat, setShowChat] = useState(false);
   const [chatReadCounts, setChatReadCounts] = useState<Record<string, number>>({});
 
-  // Local timer countdown (smooth, doesn't wait for Supabase tick)
-  const [localTime, setLocalTime] = useState(0);
-  const [localTimerActive, setLocalTimerActive] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const committeeIdRef = useRef('');
   const wasEverSuspended = useRef(false);
-  // Track last seen speaker to only reset localTime when speaker changes
-  const lastSpeakerIdRef = useRef<string | null>(null);
-  const prevServerTimeRef = useRef<number>(0);
-  const prevStartedAtRef = useRef<string | null>(null);
-  const prevTimeLimitRef = useRef<number>(0);
 
   // Join request state
   const [joinRequesting, setJoinRequesting] = useState(false);
@@ -582,9 +573,6 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
         if (found.endedAt) setSessionEnded(true);
         else if (found.suspendedAt) { wasEverSuspended.current = true; setSessionSuspended(true); }
         committeeIdRef.current = found.id;
-        setLocalTime(found.speakerTimeRemaining);
-        prevTimeLimitRef.current = found.speakerTimeLimit;
-        lastSpeakerIdRef.current = found.currentSpeaker?.delegateId ?? null;
         unsubscribe = subscribeToCommittee(found.id, async () => {
           const updated = await getCommitteeByCode(code.toUpperCase());
           if (updated) {
@@ -603,57 +591,6 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
               setSessionSuspended(false);
             }
             setCommittee(updated);
-            const newSpeakerId = updated.currentSpeaker?.delegateId ?? null;
-            if (newSpeakerId !== lastSpeakerIdRef.current) {
-              let initialTime = updated.speakerTimeRemaining;
-              if (updated.speakerStartedAt) {
-                const elapsed = Math.round((Date.now() - new Date(updated.speakerStartedAt).getTime()) / 1000);
-                initialTime = Math.max(0, updated.speakerTimeLimit - elapsed);
-                setLocalTimerActive(true);
-              } else {
-                setLocalTimerActive(false);
-              }
-              setLocalTime(initialTime);
-              prevServerTimeRef.current = initialTime;
-              prevStartedAtRef.current = updated.speakerStartedAt ?? null;
-              lastSpeakerIdRef.current = newSpeakerId;
-            } else {
-              // Chair changed the time limit — recalculate from new limit
-              if (updated.speakerTimeLimit !== prevTimeLimitRef.current) {
-                prevTimeLimitRef.current = updated.speakerTimeLimit;
-                if (updated.speakerStartedAt) {
-                  const elapsed = Math.round((Date.now() - new Date(updated.speakerStartedAt).getTime()) / 1000);
-                  const newTime = Math.max(0, updated.speakerTimeLimit - elapsed);
-                  setLocalTime(newTime);
-                  prevServerTimeRef.current = newTime;
-                } else {
-                  setLocalTime(updated.speakerTimeRemaining);
-                  prevServerTimeRef.current = updated.speakerTimeRemaining;
-                }
-              } else if (updated.speakerStartedAt !== prevStartedAtRef.current) {
-                // Same speaker — check if speakerStartedAt changed (chair started/paused timer)
-                prevStartedAtRef.current = updated.speakerStartedAt ?? null;
-                if (updated.speakerStartedAt) {
-                  const elapsed = Math.round((Date.now() - new Date(updated.speakerStartedAt).getTime()) / 1000);
-                  const remaining = Math.max(0, updated.speakerTimeLimit - elapsed);
-                  setLocalTime(remaining);
-                  prevServerTimeRef.current = remaining;
-                  setLocalTimerActive(true);
-                } else {
-                  setLocalTimerActive(false);
-                }
-              } else if (updated.speakerTimeRemaining !== prevServerTimeRef.current) {
-                // Chair reset timer (time increased, timer stopped) — snap to new value
-                if (updated.speakerTimeRemaining > prevServerTimeRef.current && !updated.speakerStartedAt) {
-                  setLocalTime(updated.speakerTimeRemaining);
-                  setLocalTimerActive(false);
-                } else if (updated.speakerTimeRemaining < prevServerTimeRef.current) {
-                  // Periodic server tick — sync time
-                  setLocalTime(updated.speakerTimeRemaining);
-                }
-                prevServerTimeRef.current = updated.speakerTimeRemaining;
-              }
-            }
           }
         });
       }
@@ -677,27 +614,6 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     if (!committee) return;
     try { localStorage.setItem(`chat-read-${committee.code}`, JSON.stringify(chatReadCounts)); } catch {}
   }, [chatReadCounts, committee?.code]);
-
-  // Local timer tick — smooth countdown independent of Supabase round-trips
-  useEffect(() => {
-    if (!committee?.currentSpeaker || committee.phase !== 'speakers-list' || !localTimerActive) {
-      if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-      return;
-    }
-    timerRef.current = setInterval(() => {
-      setLocalTime((prev) => Math.max(0, prev - 1));
-    }, 1000);
-    return () => { if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; } };
-  }, [committee?.currentSpeaker?.delegateId, committee?.phase, localTimerActive]);
-
-  // Guard: if this delegate is NOT the current speaker but localTimerActive is true, reset it
-  useEffect(() => {
-    if (!committee) return;
-    const isCurrentSpeakerNow = committee.currentSpeaker?.country === country;
-    if (localTimerActive && !isCurrentSpeakerNow) {
-      setLocalTimerActive(false);
-    }
-  }, [committee?.currentSpeaker?.delegateId, localTimerActive, country]);
 
   useEffect(() => {
     if (!sessionEnded && !sessionSuspended) return;
@@ -784,7 +700,6 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   const myQueueIndex = committee.speakersList.findIndex((s) => s.country === country);
   const isOnSpeakersList = myQueueIndex !== -1;
   const isCurrentSpeaker = committee.currentSpeaker?.country === country;
-  const progress = isCurrentSpeaker ? (localTime / committee.speakerTimeLimit) * 100 : 0;
   const changesLeft = myDelegate ? statusChangesRemaining(committee.id, country) : 0;
 
   const enabledMotionTypes = {
@@ -987,14 +902,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
           initialReadCounts={chatReadCounts}
           onReadCountsChange={setChatReadCounts}
           readOnly={sessionEnded}
-          speakerCard={isCurrentSpeaker ? (
-            <div className="bg-[#7B4A1E]/20 border border-[#7B4A1E]/40 rounded-xl px-3 py-2.5">
-              <div className="text-[10px] font-mono text-[#7A5A38] mb-1">YOU HAVE THE FLOOR</div>
-              <div className={`text-2xl font-black font-mono ${localTime <= 10 ? 'text-red-400' : 'text-[#B8844A]'}`}>
-                {formatTime(localTime)}
-              </div>
-            </div>
-          ) : undefined}
+          speakerCard={null}
         />
       )}
       {!showChat && <div className="flex-1 overflow-y-auto">
@@ -1088,17 +996,8 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                 </div>
 
                 {isCurrentSpeaker && (
-                  <div className="mt-4">
-                    <div className="flex justify-between mb-1">
-                      <span className="text-sm text-[#C4A882]">Remaining time</span>
-                      <span className={`text-sm font-mono font-bold ${localTime <= 10 ? 'text-red-400' : 'text-white'}`}>
-                        {formatTime(localTime)}
-                      </span>
-                    </div>
-                    <div className="h-3 bg-[#2E1E0F] rounded-full overflow-hidden">
-                      <div className={`h-full rounded-full transition-all ${progress > 50 ? 'bg-[#B8844A]' : progress > 20 ? 'bg-yellow-500' : 'bg-red-500'}`}
-                        style={{ width: `${progress}%` }} />
-                    </div>
+                  <div className="mt-4 py-3 px-4 bg-[#7B4A1E]/20 border border-[#7B4A1E]/40 rounded-xl text-center">
+                    <p className="text-[#B8844A] font-black text-lg">🎙️ You Have the Floor</p>
                   </div>
                 )}
 
