@@ -3,7 +3,11 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Committee, DelegateStatus } from '@/lib/types';
 import { getFlagEmoji, getCountryByName, UN_COUNTRIES } from '@/lib/countries';
-import { setPhase as setPhaseInDB } from '@/lib/committeeService';
+import {
+  setPhase as setPhaseInDB,
+  setDelegateStatus as setDelegateStatusInDB,
+  removeFromSpeakersList as removeFromSpeakersListInDB,
+} from '@/lib/committeeService';
 
 // ── FlagCircle ────────────────────────────────────────────────────────────────
 export function FlagCircle({ country, size = 'md' }: { country: string; size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' | 'hero' }) {
@@ -259,11 +263,16 @@ function RollCallPanelInner({
   const [search, setSearch] = useState('');
   const [listView, setListView] = useState<'az' | 'queue'>('az');
   const [showFullList, setShowFullList] = useState(false);
+  const [localStatuses, setLocalStatuses] = useState<Record<string, DelegateStatus>>({});
   const listRef = useRef<HTMLDivElement>(null);
   const dragIndexRef = useRef<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
-  const present = committee.delegates.filter((d) => d.status !== 'absent').length;
+  useEffect(() => {
+    setLocalStatuses({});
+  }, [committee.id]);
+
+  const present = committee.delegates.filter((d) => (localStatuses[d.id] ?? d.status) !== 'absent').length;
   const total = committee.delegates.length;
 
   // Build a map: delegateId → position in GSL (1-indexed)
@@ -273,16 +282,15 @@ function RollCallPanelInner({
   });
 
   const cycleStatus = (id: string, current: DelegateStatus) => {
-    if (onCycleStatus) {
-      // Parent owns cycling — reads from a mutable ref so rapid clicks are always correct
-      onCycleStatus(id);
-      return;
-    }
-    // Fallback (no parent cycle handler): compute next locally
     const next: DelegateStatus =
       current === 'absent' ? 'present' : current === 'present' ? 'present-voting' : 'absent';
-    if (next === 'absent' && !isRollCallPhase && queuePositionMap.has(id)) onRemoveFromList?.(id);
+    setLocalStatuses((prev) => ({ ...prev, [id]: next }));
     onStatusChange?.(id, next);
+    setDelegateStatusInDB(id, next);
+    if (!isRollCallPhase && next === 'absent' && queuePositionMap.has(id)) {
+      onRemoveFromList?.(id);
+      removeFromSpeakersListInDB(committee.id, id);
+    }
   };
 
   const handleAllPresent = () => {
@@ -371,8 +379,9 @@ function RollCallPanelInner({
 
       <div ref={listRef} className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
         {filtered.map((d, idx) => {
+          const effectiveStatus = localStatuses[d.id] ?? d.status;
           const isOnList = onListIds?.has(d.id) ?? false;
-          const isAbsent = d.status === 'absent';
+          const isAbsent = effectiveStatus === 'absent';
           const queuePos = queuePositionMap.get(d.id) ?? null;
           const matchesSearch = !search || d.country.toLowerCase().includes(search.toLowerCase());
           const isDraggable = listView === 'queue' && !isRollCallPhase && queuePositionMap.has(d.id);
@@ -382,7 +391,7 @@ function RollCallPanelInner({
 
           const handleRowClick = () => {
             if (isRollCallPhase) {
-              cycleStatus(d.id, d.status);
+              cycleStatus(d.id, effectiveStatus);
             } else if (onAddToList && !isAbsent) {
               if (!isOnList) onAddToList(d.id);
               else if (onRemoveFromList) onRemoveFromList(d.id);
@@ -425,7 +434,7 @@ function RollCallPanelInner({
                     ? 'bg-[#7B4A1E]/20 border-2 border-[#7B4A1E]'
                     : isAbsent
                     ? 'border border-transparent opacity-40'
-                    : d.status === 'present'
+                    : effectiveStatus === 'present'
                     ? 'bg-green-950/30 border border-green-800/30'
                     : 'bg-blue-950/30 border border-blue-800/30'
                 } ${
@@ -452,7 +461,7 @@ function RollCallPanelInner({
                   <span className="text-[10px] text-[#7A5A38] shrink-0 font-mono">absent</span>
                 )}
                 <div onClick={(e) => e.stopPropagation()} className={isReadOnly ? 'pointer-events-none opacity-50' : ''}>
-                  <StatusSlider status={d.status} onCycle={() => cycleStatus(d.id, d.status)} />
+                  <StatusSlider status={effectiveStatus} onCycle={() => cycleStatus(d.id, effectiveStatus)} />
                 </div>
               </div>
             </div>

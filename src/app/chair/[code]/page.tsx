@@ -1234,6 +1234,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   }, [committee?.endedAt, committee?.suspendedAt]);
 
   useEffect(() => {
+    if (sessionSuspended) setSuspendTab('suspend');
+  }, [sessionSuspended]);
+
+  useEffect(() => {
     if (!committee?.expiresAt) { setHoursRemaining(null); return; }
     function calc() {
       const ms = new Date(committee!.expiresAt!).getTime() - Date.now();
