@@ -339,29 +339,38 @@ function RollCallPanelInner({
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="px-4 pt-4 pb-3 border-b border-[#2E1E0F] shrink-0">
-        {/* Committee name + topic */}
-        <p className="text-sm font-bold text-white line-clamp-1 mb-0.5">{committee.name}</p>
-        <p className="text-xs text-[#7A5A38] line-clamp-2 mb-3 leading-tight">{committee.topic}</p>
-        {/* Pie charts + action row */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            {/* Chart 1: full arc — total present/PV count */}
-            <MajorityPie arcFill={1} color="#4A90D9" label={`${present}`} />
-            {/* Chart 2: 2/3 arc — votes needed for 2/3 majority */}
-            <MajorityPie arcFill={2 / 3} color="#E8A94A" label={`${Math.ceil(present * 2 / 3)}`} />
-            {/* Chart 3: 1/2 arc — votes needed for simple majority */}
-            <MajorityPie arcFill={0.5} color="#3D6B35" label={`${Math.floor(present / 2) + 1}`} />
-          </div>
-          {isRollCallPhase ? (
-            <div className="flex gap-1.5">
-              <button onClick={handleClear} className="text-[10px] font-semibold px-2 py-1 rounded-lg bg-[#2E1E0F] text-red-400 hover:bg-red-950/40 transition-colors">Clear</button>
-              <button onClick={handleAllPresent} className="text-[10px] font-semibold px-2 py-1 rounded-lg bg-[#2E1E0F] text-green-400 hover:bg-green-950/40 transition-colors">All P</button>
-              <button onClick={handleAllPresentVoting} className="text-[10px] font-semibold px-2 py-1 rounded-lg bg-[#2E1E0F] text-blue-400 hover:bg-blue-950/40 transition-colors">All PV</button>
+        {isRollCallPhase ? (
+          // ── Pre-session roll call: original layout ──────────────────────────
+          <>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-bold text-white">Roll Call</span>
+              <div className="flex gap-1.5">
+                <button onClick={handleClear} className="text-[10px] font-semibold px-2 py-1 rounded-lg bg-[#2E1E0F] text-red-400 hover:bg-red-950/40 transition-colors">Clear</button>
+                <button onClick={handleAllPresent} className="text-[10px] font-semibold px-2 py-1 rounded-lg bg-[#2E1E0F] text-green-400 hover:bg-green-950/40 transition-colors">All P</button>
+                <button onClick={handleAllPresentVoting} className="text-[10px] font-semibold px-2 py-1 rounded-lg bg-[#2E1E0F] text-blue-400 hover:bg-blue-950/40 transition-colors">All PV</button>
+              </div>
             </div>
-          ) : (
-            <ViewToggle view={listView} onChange={setListView} />
-          )}
-        </div>
+            <span className="text-base font-bold text-green-400">{present} / {total} present</span>
+          </>
+        ) : (
+          // ── Session sidebar: committee name + topic + pie charts ────────────
+          <>
+            <p className="text-lg font-black text-white leading-tight truncate mb-0.5">{committee.name}</p>
+            {committee.topic && (
+              <p className="text-xs text-[#C4A882] leading-snug line-clamp-2 mb-2">
+                <span className="text-[#7A5A38] font-semibold">Topic: </span>{committee.topic}
+              </p>
+            )}
+            <div className="flex items-center justify-between">
+              <div className="flex gap-1.5">
+                <MajorityPie arcFill={1} color="#4A90D9" label={`${present}`} />
+                <MajorityPie arcFill={2 / 3} color="#E8A94A" label={`${Math.ceil(present * 2 / 3)}`} />
+                <MajorityPie arcFill={0.5} color="#3D6B35" label={`${Math.floor(present / 2) + 1}`} />
+              </div>
+              <ViewToggle view={listView} onChange={setListView} />
+            </div>
+          </>
+        )}
       </div>
 
       <div ref={listRef} className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
@@ -446,7 +455,7 @@ function RollCallPanelInner({
                 {isAbsent && !isRollCallPhase && (
                   <span className="text-[10px] text-[#7A5A38] shrink-0 font-mono ml-auto">absent</span>
                 )}
-                <div onClick={(e) => e.stopPropagation()}>
+                <div onClick={(e) => e.stopPropagation()} className="ml-auto shrink-0">
                   <StatusSlider status={d.status} onCycle={() => cycleStatus(d.id, d.status)} />
                 </div>
               </div>
