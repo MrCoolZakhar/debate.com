@@ -882,7 +882,7 @@ function SessionEndedContent({ committee, hoursRemaining }: { committee: Committ
 function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const { code } = use(params);
   const router = useRouter();
-  const { updateSetting } = useSettingsStore();
+  const { updateSetting, getSettings } = useSettingsStore();
   const searchParams = useSearchParams();
   const myChairName = searchParams.get('chairName') ?? '';
   const [committee, setCommittee] = useState<Committee | null>(null);
@@ -1458,10 +1458,18 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           })()}
         </button>
         )}
-        <button onClick={() => { navigator.clipboard.writeText(committee.code); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
-          className="text-xs font-mono bg-[#2E1E0F] hover:bg-[#3D2A15] text-white px-2.5 py-1 rounded-lg transition-colors shrink-0">
-          {copied ? '✓' : committee.code}
-        </button>
+        {(() => {
+          const s = getSettings(committee.code);
+          const fullChairCode = (s.separateChairCode && s.chairJoinSuffix)
+            ? `${committee.code}-${s.chairJoinSuffix}`
+            : committee.code;
+          return (
+            <button onClick={() => { navigator.clipboard.writeText(fullChairCode); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
+              className="text-xs font-mono bg-[#2E1E0F] hover:bg-[#3D2A15] text-white px-2.5 py-1 rounded-lg transition-colors shrink-0">
+              {copied ? '✓' : fullChairCode}
+            </button>
+          );
+        })()}
         <button onClick={() => setShowSettings(true)} className="text-[#7A5A38] hover:text-white transition-colors shrink-0 text-3xl">⚙</button>
       </header>
       {/* Ended tab bar */}

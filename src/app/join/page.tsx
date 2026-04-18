@@ -34,12 +34,12 @@ function JoinPageInner() {
   useEffect(() => {
     const initial = searchParams.get('code') ?? '';
     if (initial.length >= 4) {
-      doLookup(initial.toUpperCase());
+      doLookup(initial.toUpperCase(), initialMode);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function doLookup(upper: string) {
+  function doLookup(upper: string, currentMode: JoinMode = mode) {
     setLookingUp(true);
     setError('');
     setFoundCommittee(null);
@@ -52,7 +52,7 @@ function JoinPageInner() {
 
     // Validate chair suffix and conditionally set the found committee
     const trySetCommittee = (found: Committee) => {
-      if (mode === 'chair' && upper.includes('-')) {
+      if (currentMode === 'chair' && upper.includes('-')) {
         const suffix = upper.slice(upper.lastIndexOf('-') + 1);
         const expectedSuffix = found.dbChairJoinSuffix ?? getSettings(found.code).chairJoinSuffix;
         if (suffix !== expectedSuffix) {
@@ -102,7 +102,7 @@ function JoinPageInner() {
 
     if (upper.length >= 4) {
       setLookingUp(true);
-      debounceRef.current = setTimeout(() => doLookup(upper), 350);
+      debounceRef.current = setTimeout(() => doLookup(upper, mode), 350);
     }
   };
 
