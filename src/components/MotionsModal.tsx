@@ -713,11 +713,11 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background: 'rgba(5, 8, 20, 0.88)', backdropFilter: 'blur(4px)' }}
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className={`bg-[#1A1209] border border-[#2E1E0F] rounded-3xl w-full shadow-2xl overflow-hidden max-h-[92vh] flex flex-col ${view === 'vote' ? 'max-w-5xl' : 'max-w-4xl'}`}>
+      <div className="bg-[#1A1209] border border-[#2E1E0F] rounded-3xl w-full shadow-2xl overflow-hidden max-h-[92vh] flex flex-col max-w-5xl">
         <div className="flex items-center justify-end px-7 pt-6 pb-0 shrink-0">
           <button onClick={onClose} className="text-[#7A5A38] hover:text-white transition-colors text-xl leading-none">✕</button>
         </div>
-        <div className="overflow-y-auto flex-1 pt-2">
+        <div className="flex-1 min-h-0 pt-2 flex flex-col">
           {view === 'raise' && <RaiseMotionForm committee={committee} typeMeta={typeMeta} onBack={() => setView(pending.length > 0 ? 'vote' : 'list')} onRaised={handleRaised} />}
           {view === 'vote' && (
             <VotingView
