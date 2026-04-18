@@ -4,7 +4,6 @@ import { useState, useRef, useEffect } from 'react';
 import { Committee, PendingMotion, PendingMotionType } from '@/lib/types';
 import { getCountryByName, getFlagEmoji } from '@/lib/countries';
 import { useSettingsStore, DEFAULT_MOTION_NAMES, MotionNames } from '@/lib/settingsStore';
-import { supabase } from '@/lib/supabase';
 import {
   addPendingMotion as addPendingMotionInDB,
   removePendingMotion as removePendingMotionInDB,
@@ -385,13 +384,14 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised }: {
 }
 
 // ── Voting View ───────────────────────────────────────────────────────────────
-function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBack }: {
+function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBack, pendingIds }: {
   committee: Committee;
   typeMeta: TypeMeta;
   onAccepted: (motion: PendingMotion) => void;
   onAllDone: () => void;
   onRemove: (motionId: string) => void;
   onBack: () => void;
+  pendingIds: Set<string>;
 }) {
   // Filter out join-request pseudo-motions — those are handled in the chair banner, not here
   const initialSorted = [...(committee.pendingMotions ?? [])]
@@ -407,7 +407,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
   const dragIndexRef = useRef<number | null>(null);
 
   // Keep order in sync when motions are removed externally
-  const pendingIds = (committee.pendingMotions ?? []).map((m) => m.id).join(',');
+  const motionIdKey = (committee.pendingMotions ?? []).map((m) => m.id).join(',');
   useEffect(() => {
     const current = (committee.pendingMotions ?? []).filter((m) => m.type !== ('join-request' as string));
     setOrder((prev) => {
@@ -423,7 +423,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
       return [...merged, ...newOnes].sort((a, b) => b.disruptiveness - a.disruptiveness);
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingIds]);
+  }, [motionIdKey]);
 
   const present = committee.delegates.filter((d) => d.status !== 'absent').length;
 
@@ -523,7 +523,8 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
               ✓ Accept
             </button>
             <button onClick={() => onRemove(m.id)}
-              className="flex-1 bg-[#2E1E0F] hover:bg-red-950/40 hover:text-red-500 text-[#C4A882] border border-[#2E1E0F] hover:border-red-800/40 py-2.5 rounded-xl font-bold text-sm transition-colors">
+              disabled={pendingIds.has(m.id)}
+              className={`flex-1 bg-[#2E1E0F] hover:bg-red-950/40 hover:text-red-500 text-[#C4A882] border border-[#2E1E0F] hover:border-red-800/40 py-2.5 rounded-xl font-bold text-sm transition-colors ${pendingIds.has(m.id) ? 'opacity-40 cursor-not-allowed' : ''}`}>
               ✗ Reject
             </button>
           </div>
@@ -570,24 +571,26 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
   const pending = [...(committee.pendingMotions ?? [])].filter((m) => m.type !== ('join-request' as string)).sort((a, b) => b.disruptiveness - a.disruptiveness);
   const [view, setView] = useState<ModalView>(pending.length === 0 ? 'raise' : 'vote');
   const [specialVoteMotion, setSpecialVoteMotion] = useState<PendingMotion | null>(null);
+  const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const update = (updater: (c: Committee) => Committee) => onCommitteeUpdate?.(updater);
 
   const handleRaised = (motion: Omit<PendingMotion, 'id' | 'disruptiveness'>) => {
-    // One motion per proposer — reject duplicates
     if (committee.pendingMotions?.some(
       (m) => m.proposedBy === motion.proposedBy &&
         m.type !== ('join-request' as string) &&
         (m.type as string) !== 'gsl-request'
-    )) {
-      return;
-    }
+    )) return;
+
     const tempId = `temp-${Date.now()}`;
     const base = {
       'end-debate': 6_000_000, 'suspend-debate': 5_000_000,
       consultation: 4_000_000, tour: 3_000_000, unmoderated: 2_000_000, moderated: 1_000_000,
     };
     const disruptiveness = base[motion.type] + motion.totalTime;
+
+    setPendingIds((prev) => new Set([...prev, tempId]));
     update((c) => ({ ...c, pendingMotions: [...(c.pendingMotions ?? []), { ...motion, id: tempId, disruptiveness }] }));
+
     addPendingMotionInDB(committee.id, motion).then((realId) => {
       if (!realId) return;
       update((c) => ({
@@ -596,27 +599,15 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
           m.id === tempId ? { ...m, id: realId } : m
         ),
       }));
+      setPendingIds((prev) => { const next = new Set(prev); next.delete(tempId); return next; });
     });
+
     setView('vote');
   };
 
   const handleRemove = (motionId: string) => {
-    // Capture motion reference BEFORE update() removes it from parent state
-    const motion = (committee.pendingMotions ?? []).find((m) => m.id === motionId);
     update((c) => ({ ...c, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== motionId) }));
-    if (motionId.startsWith('temp-')) {
-      if (motion) {
-        supabase.from('motions')
-          .delete()
-          .eq('committee_id', committee.id)
-          .eq('proposed_by', motion.proposedBy)
-          .eq('type', motion.type)
-          .eq('status', 'pending')
-          .then();
-      }
-    } else {
-      removePendingMotionInDB(motionId);
-    }
+    removePendingMotionInDB(motionId);
   };
 
   const handleMotionAccepted = async (motion: PendingMotion) => {
@@ -784,6 +775,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
               onAllDone={() => { setView('list'); onClose(); }}
               onRemove={handleRemove}
               onBack={() => setView('raise')}
+              pendingIds={pendingIds}
             />
           )}
           {view === 'list' && (
