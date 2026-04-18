@@ -559,6 +559,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   const lastSpeakerIdRef = useRef<string | null>(null);
   const prevServerTimeRef = useRef<number>(0);
   const prevStartedAtRef = useRef<string | null>(null);
+  const prevTimeLimitRef = useRef<number>(0);
 
   // Join request state
   const [joinRequesting, setJoinRequesting] = useState(false);
@@ -582,6 +583,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
         else if (found.suspendedAt) { wasEverSuspended.current = true; setSessionSuspended(true); }
         committeeIdRef.current = found.id;
         setLocalTime(found.speakerTimeRemaining);
+        prevTimeLimitRef.current = found.speakerTimeLimit;
         lastSpeakerIdRef.current = found.currentSpeaker?.delegateId ?? null;
         unsubscribe = subscribeToCommittee(found.id, async () => {
           const updated = await getCommitteeByCode(code.toUpperCase());
@@ -616,8 +618,20 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
               prevStartedAtRef.current = updated.speakerStartedAt ?? null;
               lastSpeakerIdRef.current = newSpeakerId;
             } else {
-              // Same speaker — check if speakerStartedAt changed (chair started/paused timer)
-              if (updated.speakerStartedAt !== prevStartedAtRef.current) {
+              // Chair changed the time limit — recalculate from new limit
+              if (updated.speakerTimeLimit !== prevTimeLimitRef.current) {
+                prevTimeLimitRef.current = updated.speakerTimeLimit;
+                if (updated.speakerStartedAt) {
+                  const elapsed = Math.round((Date.now() - new Date(updated.speakerStartedAt).getTime()) / 1000);
+                  const newTime = Math.max(0, updated.speakerTimeLimit - elapsed);
+                  setLocalTime(newTime);
+                  prevServerTimeRef.current = newTime;
+                } else {
+                  setLocalTime(updated.speakerTimeRemaining);
+                  prevServerTimeRef.current = updated.speakerTimeRemaining;
+                }
+              } else if (updated.speakerStartedAt !== prevStartedAtRef.current) {
+                // Same speaker — check if speakerStartedAt changed (chair started/paused timer)
                 prevStartedAtRef.current = updated.speakerStartedAt ?? null;
                 if (updated.speakerStartedAt) {
                   const elapsed = Math.round((Date.now() - new Date(updated.speakerStartedAt).getTime()) / 1000);
@@ -629,8 +643,12 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                   setLocalTimerActive(false);
                 }
               } else if (updated.speakerTimeRemaining !== prevServerTimeRef.current) {
-                // Periodic server tick — sync time
-                if (updated.speakerTimeRemaining < prevServerTimeRef.current) {
+                // Chair reset timer (time increased, timer stopped) — snap to new value
+                if (updated.speakerTimeRemaining > prevServerTimeRef.current && !updated.speakerStartedAt) {
+                  setLocalTime(updated.speakerTimeRemaining);
+                  setLocalTimerActive(false);
+                } else if (updated.speakerTimeRemaining < prevServerTimeRef.current) {
+                  // Periodic server tick — sync time
                   setLocalTime(updated.speakerTimeRemaining);
                 }
                 prevServerTimeRef.current = updated.speakerTimeRemaining;
