@@ -213,10 +213,10 @@ function RtrCountryInput({
 }
 
 // ── Caucus Speaker Queue ──────────────────────────────────────────────────────
-function CaucusSpeakerQueue({ committee, spokenCountries, onRemove, onReorder, proposerLastCountry, currentSpeakerCountry }: {
+function CaucusSpeakerQueue({ committee, spokenCountries, onRemove, onReorder, lastSpeakerDelegateId, currentSpeakerCountry }: {
   committee: Committee; spokenCountries: string[]; onRemove: (delegateId: string) => void;
   onReorder?: (newList: { delegateId: string; country: string }[]) => void;
-  proposerLastCountry?: string; currentSpeakerCountry?: string | null;
+  lastSpeakerDelegateId?: string | null; currentSpeakerCountry?: string | null;
 }) {
   const dragIndexRef = useRef<number | null>(null);
   if (committee.caucusQueue.length === 0) return null;
@@ -253,10 +253,10 @@ function CaucusSpeakerQueue({ committee, spokenCountries, onRemove, onReorder, p
             <span className={`line-clamp-2 break-words whitespace-normal leading-tight max-w-[80px] text-xs font-semibold text-center ${alreadySpoke ? 'text-yellow-400' : 'text-[#C4A882]'}`}>
               {abbrevCountry(s.country)}
             </span>
-            {s.country === proposerLastCountry && (
-              <span className="text-[9px] text-orange-400 font-bold">speaks last</span>
-            )}
             {i === 0 && !alreadySpoke && <span className="text-sm font-bold text-[#B8844A]">Up next</span>}
+            {lastSpeakerDelegateId && s.delegateId === lastSpeakerDelegateId && i !== 0 && (
+              <span className="text-xs font-bold text-[#7A5A38] bg-[#2E1E0F] px-1.5 py-0.5 rounded">Last</span>
+            )}
             <button onClick={() => onRemove(s.delegateId)}
               className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full text-white text-[10px] hidden group-hover:flex items-center justify-center">✕</button>
           </div>
@@ -319,11 +319,11 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove }: {
 }
 
 // ── Caucus Queue Sidebar (numbered list view for sidebar) ─────────────────────
-function CaucusQueueSidebar({ committee, onRemove, onReorder, proposerLastCountry }: {
+function CaucusQueueSidebar({ committee, onRemove, onReorder, lastSpeakerDelegateId }: {
   committee: Committee;
   onRemove: (delegateId: string) => void;
   onReorder: (newList: { delegateId: string; country: string }[]) => void;
-  proposerLastCountry?: string;
+  lastSpeakerDelegateId?: string | null;
 }) {
   const dragIndexRef = useRef<number | null>(null);
   const queue = committee.caucusQueue ?? [];
@@ -359,8 +359,8 @@ function CaucusQueueSidebar({ committee, onRemove, onReorder, proposerLastCountr
                 <span className="text-xs text-[#7A5A38] font-mono w-5 text-right shrink-0">{i + 1}</span>
                 <span className="text-lg shrink-0">{found ? getFlagEmoji(found.code) : '🌐'}</span>
                 <span className="flex-1 text-sm text-white line-clamp-2 break-words whitespace-normal leading-tight">{s.country}</span>
-                {s.country === proposerLastCountry && (
-                  <span className="text-[9px] text-orange-400 font-bold shrink-0">speaks last</span>
+                {lastSpeakerDelegateId && s.delegateId === lastSpeakerDelegateId && (
+                  <span className="text-xs font-bold text-[#7A5A38] bg-[#2E1E0F] px-1.5 py-0.5 rounded shrink-0">Last</span>
                 )}
                 <button
                   onClick={() => onRemove(s.delegateId)}
@@ -499,22 +499,19 @@ function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee
     if (committee.caucus?.currentSpeaker === delegate.country) return;
     const maxSpeakers = caucus.speakingTime > 0 ? Math.floor(caucus.remainingTime / caucus.speakingTime) : 0;
     if ((committee.caucusQueue ?? []).length >= maxSpeakers) return;
-
-    updateLocal(setCommittee, (c) => {
-      if (!c.caucus) return c;
-      const current = c.caucusQueue ?? [];
-      if (c.caucus.proposerPosition === 'last') {
-        const proposerCountry = c.caucus.proposedBy;
-        const proposerIdx = current.findIndex((s) => s.country === proposerCountry);
-        if (proposerIdx !== -1) {
-          const newList = [...current];
-          newList.splice(proposerIdx, 0, { delegateId, country: delegate.country });
-          return { ...c, caucusQueue: newList };
-        }
-      }
-      return { ...c, caucusQueue: [...current, { delegateId, country: delegate.country }] };
-    });
-    addToCaucusListInDB(committee.id, delegateId, delegate.country, Date.now());
+    const queue = committee.caucusQueue ?? [];
+    const proposerDelegate = caucus.proposedBy
+      ? committee.delegates.find((d) => d.country === caucus.proposedBy)
+      : null;
+    const lastPinnedId = caucus.proposerPosition === 'last' && proposerDelegate
+      ? proposerDelegate.id : null;
+    const lastIdx = lastPinnedId ? queue.findIndex((s) => s.delegateId === lastPinnedId) : -1;
+    const entry = { delegateId, country: delegate.country };
+    const newList = lastIdx !== -1
+      ? [...queue.slice(0, lastIdx), entry, ...queue.slice(lastIdx)]
+      : [...queue, entry];
+    updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: newList }));
+    reorderSpeakersListInDB(committee.id, newList, 'caucus');
   };
 
   const handleExtendCaucus = (extraSecs: number) => {
@@ -546,24 +543,20 @@ function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee
     });
   };
 
-  const handleSetProposerPosition = async (position: 'first' | 'last') => {
+  const handleSetProposerPosition = (position: 'first' | 'last') => {
     const proposer = caucus.proposedBy;
     const delegate = committee.delegates.find((d) => d.country === proposer);
     if (!delegate) return;
     const entry = { delegateId: delegate.id, country: proposer };
+    const without = (committee.caucusQueue ?? []).filter((s) => s.delegateId !== delegate.id);
+    const newList = position === 'first' ? [entry, ...without] : [...without, entry];
     const updatedCaucus = { ...caucus, proposerPosition: position };
-
-    localUpdateTime.current = Date.now();
-
+    updateCaucusInDB(committee.id, updatedCaucus);
     updateLocal(setCommittee, (c) => {
       if (!c.caucus) return c;
-      const without = (c.caucusQueue ?? []).filter((s) => s.delegateId !== delegate.id);
-      const newList = position === 'first' ? [entry, ...without] : [...without, entry];
       return { ...c, caucusQueue: newList, caucus: { ...c.caucus, proposerPosition: position } };
-    });
-
-    await updateCaucusInDB(committee.id, updatedCaucus);
-    localUpdateTime.current = Date.now();
+    }, true);
+    reorderSpeakersListInDB(committee.id, newList, 'caucus');
   };
 
   const handleEndCaucus = () => {
@@ -681,7 +674,11 @@ function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee
   }
   // ── End Tour de Table view ────────────────────────────────────────────────────
 
-  const proposerLastCountry = caucus.proposerPosition === 'last' ? caucus.proposedBy : undefined;
+  const proposerDelegate = caucus.proposedBy
+    ? committee.delegates.find((d) => d.country === caucus.proposedBy)
+    : null;
+  const lastSpeakerDelegateId = caucus.proposerPosition === 'last' && proposerDelegate
+    ? proposerDelegate.id : null;
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -702,7 +699,7 @@ function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee
                   spokenCountries={spokenCountries}
                   onRemove={handleRemoveFromQueue}
                   onReorder={handleReorderCaucusQueue}
-                  proposerLastCountry={proposerLastCountry}
+                  lastSpeakerDelegateId={lastSpeakerDelegateId}
                   currentSpeakerCountry={caucus.currentSpeaker}
                 />
               </div>
@@ -769,7 +766,7 @@ function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee
                   spokenCountries={spokenCountries}
                   onRemove={handleRemoveFromQueue}
                   onReorder={handleReorderCaucusQueue}
-                  proposerLastCountry={proposerLastCountry}
+                  lastSpeakerDelegateId={lastSpeakerDelegateId}
                   currentSpeakerCountry={null}
                 />
               </div>
