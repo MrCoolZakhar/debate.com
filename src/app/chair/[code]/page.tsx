@@ -1758,7 +1758,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
                             {formatTime(speakerTimeRemaining)}
                             {extraTimeAdded && <span className="text-base ml-2 font-normal text-emerald-400">+time</span>}
                           </div>
-                          <div className="w-full max-w-md h-2 bg-[#2E1E0F] rounded-full overflow-hidden mb-3">
+                          <div className="w-full max-w-2xl h-2 bg-[#2E1E0F] rounded-full overflow-hidden mb-3">
                             <div className={`h-full rounded-full transition-all ${progress > 50 ? 'bg-[#B8844A]' : progress > 20 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{ width: `${progress}%` }} />
                           </div>
                         </div>
@@ -1811,40 +1811,6 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
                             Right of Reply
                           </button>
                         </div>
-                        )}
-                        {/* Extra time popover */}
-                        {!sessionEnded && activePopover === 'extraTime' && (
-                          <div className="mt-3 bg-[#1A1209] border border-emerald-700/40 rounded-xl p-3 w-full max-w-sm">
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-xs text-emerald-400 font-semibold">Add time</span>
-                              <button onClick={() => setActivePopover(null)} className="text-[#7A5A38] hover:text-white text-sm">✕</button>
-                            </div>
-                            <div className="flex gap-2 mb-2">
-                              {[15, 30, 60].map((s) => (
-                                <button key={s} onClick={() => handleAddExtraTime(s)}
-                                  className="flex-1 py-2 bg-emerald-900/30 hover:bg-emerald-800/40 border border-emerald-700/30 text-emerald-300 text-xs rounded-lg font-bold transition-colors">
-                                  {s === 60 ? '1m' : `${s}s`}
-                                </button>
-                              ))}
-                            </div>
-                            <div className="flex gap-2 items-center">
-                              <input
-                                type="number"
-                                value={extraTimeSecs}
-                                onChange={(e) => setExtraTimeSecs(e.target.value)}
-                                onKeyDown={(e) => { if (e.key === 'Enter') { const n = parseInt(extraTimeSecs); if (n > 0) handleAddExtraTime(n); } }}
-                                placeholder="Custom sec…"
-                                style={{ MozAppearance: 'textfield' } as React.CSSProperties}
-                                className="flex-1 bg-[#150F09] border border-[#2E1E0F] rounded-lg px-2 py-1.5 text-white text-xs focus:outline-none focus:border-emerald-700/50 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                              />
-                              <button
-                                onClick={() => { const n = parseInt(extraTimeSecs); if (n > 0) handleAddExtraTime(n); }}
-                                disabled={!extraTimeSecs || parseInt(extraTimeSecs) <= 0}
-                                className="px-3 py-1.5 bg-emerald-800/50 hover:bg-emerald-700/60 disabled:opacity-40 text-emerald-300 text-xs rounded-lg font-semibold transition-colors">
-                                Add ↵
-                              </button>
-                            </div>
-                          </div>
                         )}
                       </>
                     ) : (
@@ -1919,6 +1885,45 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
           committee={committee}
           onClose={() => setShowSettings(false)}
         />
+      )}
+      {/* EXTRA TIME OVERLAY — fixed position, same anchor as RTR overlay */}
+      {!sessionEnded && activePopover === 'extraTime' && (
+        <div
+          className="fixed z-50"
+          style={{ top: '50%', right: '2rem', transform: 'translateY(-50%)' }}
+        >
+          <div className="bg-[#1A1209] border border-emerald-700/40 rounded-xl p-3 w-72 shadow-2xl">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs text-emerald-400 font-semibold">Add time</span>
+              <button onClick={() => setActivePopover(null)} className="text-[#7A5A38] hover:text-white text-sm">✕</button>
+            </div>
+            <div className="flex gap-2 mb-2">
+              {[15, 30, 60].map((s) => (
+                <button key={s} onClick={() => handleAddExtraTime(s)}
+                  className="flex-1 py-2 bg-emerald-900/30 hover:bg-emerald-800/40 border border-emerald-700/30 text-emerald-300 text-xs rounded-lg font-bold transition-colors">
+                  {s === 60 ? '1m' : `${s}s`}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2 items-center">
+              <input
+                type="number"
+                value={extraTimeSecs}
+                onChange={(e) => setExtraTimeSecs(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { const n = parseInt(extraTimeSecs); if (n > 0) handleAddExtraTime(n); } }}
+                placeholder="Custom sec…"
+                style={{ MozAppearance: 'textfield' } as React.CSSProperties}
+                className="flex-1 bg-[#150F09] border border-[#2E1E0F] rounded-lg px-2 py-1.5 text-white text-xs focus:outline-none focus:border-emerald-700/50 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              />
+              <button
+                onClick={() => { const n = parseInt(extraTimeSecs); if (n > 0) handleAddExtraTime(n); }}
+                disabled={!extraTimeSecs || parseInt(extraTimeSecs) <= 0}
+                className="px-3 py-1.5 bg-emerald-800/50 hover:bg-emerald-700/60 disabled:opacity-40 text-emerald-300 text-xs rounded-lg font-semibold transition-colors">
+                Add ↵
+              </button>
+            </div>
+          </div>
+        </div>
       )}
       {/* RTR OVERLAY — fixed position, completely outside document flow.
           Never render this inside any flex/grid container — it must not
