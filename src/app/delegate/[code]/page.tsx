@@ -564,6 +564,10 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   const [joinStatus, setJoinStatus] = useState<DelegateStatus | null>(null);
   const [joinDenied, setJoinDenied] = useState(false);
 
+  // GSL denial state
+  const [gslDenied, setGslDenied] = useState(false);
+  const prevPendingRef = useRef<Committee['pendingMotions']>([]);
+
   const { getSettings } = useSettingsStore();
 
   useEffect(() => {
@@ -686,6 +690,23 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     const id = setInterval(calc, 60_000);
     return () => clearInterval(id);
   }, [committee?.expiresAt]);
+
+  // Detect GSL request denial
+  useEffect(() => {
+    if (!committee) return;
+    const isOnSpeakersListNow = committee.speakersList.some((s) => s.country === country);
+    const isCurrentSpeakerNow = committee.currentSpeaker?.country === country;
+    const prev = prevPendingRef.current;
+    const hadRequest = (prev ?? []).some((m) => (m.type as string) === 'gsl-request' && m.proposedBy === country);
+    const hasRequest = (committee.pendingMotions ?? []).some((m) => (m.type as string) === 'gsl-request' && m.proposedBy === country);
+    if (hadRequest && !hasRequest && !isOnSpeakersListNow && !isCurrentSpeakerNow) {
+      setGslDenied(true);
+    }
+    if (isOnSpeakersListNow || isCurrentSpeakerNow) {
+      setGslDenied(false);
+    }
+    prevPendingRef.current = committee.pendingMotions;
+  }, [committee?.pendingMotions, committee?.speakersList, committee?.currentSpeaker, country]);
 
   if (loading) {
     return (
@@ -1092,6 +1113,14 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                     {!isOnSpeakersList && !isCurrentSpeaker && myDelegate?.status !== 'absent' && !sessionEnded && (
                       isGslRequestPending ? (
                         <span className="text-xs text-[#B8844A] font-medium">⏳ Awaiting approval</span>
+                      ) : gslDenied ? (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-red-400">Your request was denied</span>
+                          <button onClick={() => setGslDenied(false)}
+                            className="text-xs bg-[#2E1E0F] hover:bg-[#3D2A15] border border-[#7B4A1E]/30 text-[#C4A882] px-2 py-1 rounded-lg font-medium transition-colors">
+                            Request Again
+                          </button>
+                        </div>
                       ) : (
                         <button onClick={handleAddMeToSpeakers}
                           className="text-xs bg-[#7B4A1E] hover:bg-[#8B5A2B] text-white px-3 py-1 rounded-lg font-medium transition-colors">
