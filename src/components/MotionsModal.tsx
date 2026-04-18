@@ -65,8 +65,8 @@ function DisruptivenessBadge({ type }: { type: PendingMotionType }) {
   return <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${colors[type]}`}>{labels[type]}</span>;
 }
 
-function ProposerInput({ candidates, value, onChange }: {
-  candidates: string[]; value: string; onChange: (v: string) => void;
+function ProposerInput({ candidates, value, onChange, blockedCountries }: {
+  candidates: string[]; value: string; onChange: (v: string) => void; blockedCountries?: Set<string>;
 }) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
@@ -76,7 +76,10 @@ function ProposerInput({ candidates, value, onChange }: {
         .concat(candidates.filter((c) => !c.toLowerCase().startsWith(query.toLowerCase()) && c.toLowerCase().includes(query.toLowerCase())))
     : [];
   const top = matches[0] ?? null;
-  const commit = (country: string) => { onChange(country); setQuery(country); setOpen(false); };
+  const commit = (country: string) => {
+    if (blockedCountries?.has(country)) return;
+    onChange(country); setQuery(country); setOpen(false);
+  };
   return (
     <div className="relative">
       {value && !open ? (
@@ -99,12 +102,20 @@ function ProposerInput({ candidates, value, onChange }: {
         <div className="absolute bottom-full left-0 right-0 mb-1 bg-[#150F09] border border-[#2E1E0F] rounded-xl overflow-hidden z-30 shadow-xl max-h-48 overflow-y-auto">
           {matches.slice(0, 6).map((country, i) => {
             const found = getCountryByName(country);
+            const isBlocked = blockedCountries?.has(country) ?? false;
             return (
-              <button key={country} onMouseDown={(e) => { e.preventDefault(); commit(country); }}
-                className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${i === 0 ? 'bg-[#7B4A1E]/20 text-white' : 'text-[#E8D5B7] hover:bg-[#2E1E0F]'}`}>
+              <button key={country}
+                onMouseDown={(e) => { e.preventDefault(); if (!isBlocked) commit(country); }}
+                disabled={isBlocked}
+                className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
+                  isBlocked ? 'opacity-50 cursor-not-allowed bg-[#150F09]' :
+                  i === 0 ? 'bg-[#7B4A1E]/20 text-white' : 'text-[#E8D5B7] hover:bg-[#2E1E0F]'
+                }`}>
                 <span className="text-lg">{found ? getFlagEmoji(found.code) : '🌐'}</span>
-                <span className="text-sm">{country}</span>
-                {i === 0 && <span className="ml-auto text-xs text-[#7A5A38]">Enter ↵</span>}
+                <span className="text-sm flex-1">{country}</span>
+                {isBlocked
+                  ? <span className="text-xs text-orange-400 shrink-0 font-semibold">Motion on floor</span>
+                  : i === 0 && <span className="ml-auto text-xs text-[#7A5A38]">Enter ↵</span>}
               </button>
             );
           })}
@@ -131,6 +142,11 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised }: {
 
   const presentCountries = committee.delegates.filter((d) => d.status !== 'absent').map((d) => d.country);
   const totalTime = totalMins * 60 + totalSecs;
+  const countriesWithMotions = new Set(
+    (committee.pendingMotions ?? [])
+      .filter((m) => m.type !== ('join-request' as string) && (m.type as string) !== 'gsl-request')
+      .map((m) => m.proposedBy)
+  );
 
   const canSubmit = () => {
     if (!type || !proposer) return false;
@@ -157,7 +173,9 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised }: {
   };
 
   return (
-    <div className="px-7 pb-7 space-y-5 overflow-y-auto">
+    <div className="px-7 pb-7 space-y-4">
+      {/* PERMANENT NOTE: No scroll in raise motion form. If content doesn't fit, reduce spacing
+          or lay fields side-by-side — never re-add overflow-y-auto here. */}
       <div className="flex items-center gap-3">
         <button onClick={onBack} className="text-sm text-[#C4A882] hover:text-white transition-colors">← Back</button>
         <h2 className="text-3xl font-black text-white">Raise a Motion</h2>
@@ -194,7 +212,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised }: {
           {type !== 'moderated' && (
             <div>
               <label className="block text-lg font-semibold text-[#C4A882] mb-2">Proposed by</label>
-              <ProposerInput candidates={presentCountries} value={proposer} onChange={setProposer} />
+              <ProposerInput candidates={presentCountries} value={proposer} onChange={setProposer} blockedCountries={countriesWithMotions} />
             </div>
           )}
 
@@ -288,50 +306,51 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised }: {
               </div>
               <div>
                 <label className="block text-lg font-semibold text-[#C4A882] mb-2">Proposed by</label>
-                <ProposerInput candidates={presentCountries} value={proposer} onChange={setProposer} />
+                <ProposerInput candidates={presentCountries} value={proposer} onChange={setProposer} blockedCountries={countriesWithMotions} />
               </div>
-              <div>
-                <label className="block text-lg font-semibold text-[#C4A882] mb-2">Total caucus time</label>
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2 bg-[#150F09] border border-[#2E1E0F] rounded-xl px-3 py-2.5">
-                    <input type="number" min={0} value={totalMins} onChange={(e) => setTotalMins(parseInt(e.target.value) || 0)}
-                      className="w-12 bg-transparent text-white text-xl font-bold text-center focus:outline-none" />
-                    <span className="text-[#C4A882] text-sm">min</span>
+              {/* Total time + speaking time — side by side to avoid scroll */}
+              <div className="flex gap-4 items-start">
+                <div className="flex-1">
+                  <label className="block text-sm font-semibold text-[#C4A882] mb-2">Total time</label>
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 bg-[#150F09] border border-[#2E1E0F] rounded-xl px-3 py-2">
+                      <input type="number" min={0} value={totalMins} onChange={(e) => setTotalMins(parseInt(e.target.value) || 0)}
+                        className="w-10 bg-transparent text-white text-lg font-bold text-center focus:outline-none" />
+                      <span className="text-[#C4A882] text-xs">min</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 bg-[#150F09] border border-[#2E1E0F] rounded-xl px-3 py-2">
+                      <input type="number" min={0} max={59} value={totalSecs} onChange={(e) => setTotalSecs(Math.min(59, parseInt(e.target.value) || 0))}
+                        className="w-10 bg-transparent text-white text-lg font-bold text-center focus:outline-none" />
+                      <span className="text-[#C4A882] text-xs">sec</span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 bg-[#150F09] border border-[#2E1E0F] rounded-xl px-3 py-2.5">
-                    <input type="number" min={0} max={59} value={totalSecs} onChange={(e) => setTotalSecs(Math.min(59, parseInt(e.target.value) || 0))}
-                      className="w-12 bg-transparent text-white text-xl font-bold text-center focus:outline-none" />
-                    <span className="text-[#C4A882] text-sm">sec</span>
+                  <div className="flex gap-1.5 mt-2 flex-wrap">
+                    {[2, 5, 10, 15, 20].map((m) => (
+                      <button key={m} onClick={() => { setTotalMins(m); setTotalSecs(0); }}
+                        className={`text-xs px-2 py-1 rounded-lg transition-colors ${totalMins === m && totalSecs === 0 ? 'bg-[#7B4A1E] text-white font-bold' : 'bg-[#1A1209] border border-[#2E1E0F] text-[#C4A882] hover:text-white'}`}>
+                        {m}m
+                      </button>
+                    ))}
                   </div>
                 </div>
-                <div className="flex gap-2 mt-2">
-                  {[2, 5, 10, 15, 20].map((m) => (
-                    <button key={m} onClick={() => { setTotalMins(m); setTotalSecs(0); }}
-                      className={`text-xs px-2.5 py-1.5 rounded-lg transition-colors ${totalMins === m && totalSecs === 0 ? 'bg-[#7B4A1E] text-white font-bold' : 'bg-[#1A1209] border border-[#2E1E0F] text-[#C4A882] hover:text-white'}`}>
-                      {m}m
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label className="block text-lg font-semibold text-[#C4A882] mb-2">Speaking time per delegate</label>
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2 bg-[#150F09] border border-[#2E1E0F] rounded-xl px-3 py-2.5">
+                <div className="flex-1">
+                  <label className="block text-sm font-semibold text-[#C4A882] mb-2">Per delegate</label>
+                  <div className="flex items-center gap-1.5 bg-[#150F09] border border-[#2E1E0F] rounded-xl px-3 py-2 w-fit">
                     <input type="number" min={0} value={speakingTime} onChange={(e) => setSpeakingTime(parseInt(e.target.value) || 0)}
-                      className="w-16 bg-transparent text-white text-xl font-bold text-center focus:outline-none" />
-                    <span className="text-[#C4A882] text-sm">sec</span>
+                      className="w-12 bg-transparent text-white text-lg font-bold text-center focus:outline-none" />
+                    <span className="text-[#C4A882] text-xs">sec</span>
                   </div>
                   {speakingTime > 0 && totalTime > 0 && (
-                    <span className="text-[#7B4A1E] text-sm">≈ {Math.floor(totalTime / speakingTime)} speakers max</span>
+                    <p className="text-xs text-[#7B4A1E] mt-1">≈ {Math.floor(totalTime / speakingTime)} speakers</p>
                   )}
-                </div>
-                <div className="flex gap-2 mt-2">
-                  {[30, 45, 60, 90, 120].map((t) => (
-                    <button key={t} onClick={() => setSpeakingTime(t)}
-                      className={`text-xs px-2.5 py-1.5 rounded-lg transition-colors ${speakingTime === t ? 'bg-[#7B4A1E] text-white font-bold' : 'bg-[#1A1209] border border-[#2E1E0F] text-[#C4A882] hover:text-white'}`}>
-                      {t}s
-                    </button>
-                  ))}
+                  <div className="flex gap-1.5 mt-2 flex-wrap">
+                    {[30, 45, 60, 90, 120].map((t) => (
+                      <button key={t} onClick={() => setSpeakingTime(t)}
+                        className={`text-xs px-2 py-1 rounded-lg transition-colors ${speakingTime === t ? 'bg-[#7B4A1E] text-white font-bold' : 'bg-[#1A1209] border border-[#2E1E0F] text-[#C4A882] hover:text-white'}`}>
+                        {t}s
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             </>
@@ -359,7 +378,12 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
   // Filter out join-request pseudo-motions — those are handled in the chair banner, not here
   const initialSorted = [...(committee.pendingMotions ?? [])]
     .filter((m) => m.type !== ('join-request' as string))
-    .sort((a, b) => b.disruptiveness - a.disruptiveness);
+    .sort((a, b) => {
+      if (b.disruptiveness !== a.disruptiveness) return b.disruptiveness - a.disruptiveness;
+      const aIdx = (committee.pendingMotions ?? []).findIndex((m) => m.id === a.id);
+      const bIdx = (committee.pendingMotions ?? []).findIndex((m) => m.id === b.id);
+      return aIdx - bIdx;
+    });
 
   const [order, setOrder] = useState<PendingMotion[]>(initialSorted);
   const dragIndexRef = useRef<number | null>(null);
@@ -397,15 +421,21 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
   const renderCard = (m: PendingMotion, large: boolean, idx: number) => {
     const meta = typeMeta[m.type];
     const { needed, fraction } = requiredVotes(m.type, present);
-    const mins = Math.floor(m.totalTime / 60);
-    const secs = m.totalTime % 60;
+    const totalMins = Math.floor(m.totalTime / 60);
+    const totalSecs = m.totalTime % 60;
+    const speakMins = Math.floor(m.speakingTime / 60);
+    const speakSecs = m.speakingTime % 60;
+    const fmtTime = (mins: number, secs: number) =>
+      mins > 0 ? (secs > 0 ? `${mins}m ${secs}s` : `${mins}m`) : `${secs}s`;
     const isPrimary = idx === 0;
+    const f = getCountryByName(m.proposedBy);
+
     return (
       <div
         key={m.id}
         draggable
         onDragStart={() => { dragIndexRef.current = idx; }}
-        onDragOver={(e) => { e.preventDefault(); }}
+        onDragOver={(e) => e.preventDefault()}
         onDrop={() => {
           const from = dragIndexRef.current;
           if (from === null || from === idx) return;
@@ -418,71 +448,71 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
         onDragEnd={() => { dragIndexRef.current = null; }}
         className={`bg-[#1A1209] rounded-2xl flex flex-col cursor-grab ${
           large
-            ? `p-6 space-y-4 flex-1 min-w-0 border-2 ${isPrimary ? 'border-[#7B4A1E]' : 'border-[#2E1E0F]'}`
-            : 'p-4 space-y-3 border border-[#2E1E0F]'
-        }`}>
-        <div className="flex items-start gap-3">
-          <span className={large ? 'text-5xl' : 'text-2xl'}>{meta.icon}</span>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap mb-1">
-              <span className={`font-black text-white ${large ? 'text-xl' : 'text-sm'}`}>{meta.label}</span>
-            </div>
-            {(() => { const f = getCountryByName(m.proposedBy); return (
-              <div className="flex items-center gap-2 mt-1">
-                <span className={large ? 'text-4xl' : 'text-2xl'}>{f ? getFlagEmoji(f.code) : '🌐'}</span>
-              </div>
-            ); })()}
-            {large && m.topic && (
-              <div className="mt-2 px-3 py-1.5 bg-[#150F09] border border-[#2E1E0F] rounded-lg">
-                <span className="text-xs font-mono text-[#7A5A38] uppercase tracking-wide">Topic</span>
-                <p className="text-2xl font-semibold text-white mt-0.5">"{m.topic}"</p>
-              </div>
-            )}
-            {!large && m.topic && <p className="text-xs text-[#C4A882] mt-1 truncate">"{m.topic}"</p>}
-            {large && m.type !== 'tour' && m.totalTime > 0 && (
-              <div className="flex items-center gap-3 mt-2">
-                <div className="px-3 py-1 bg-[#150F09] border border-[#2E1E0F] rounded-lg text-sm font-bold text-[#7B4A1E]">
-                  {mins > 0 ? `${mins}m` : ''}{secs > 0 ? ` ${secs}s` : ''} total
-                </div>
-                {m.type === 'moderated' && m.speakingTime > 0 && (
-                  <div className="px-3 py-1 bg-[#150F09] border border-[#2E1E0F] rounded-lg text-sm font-bold text-[#3D6B35]">
-                    {m.speakingTime}s / speaker
-                  </div>
-                )}
-              </div>
-            )}
-            {large && m.type === 'tour' && (
-              <div className="mt-2 flex items-center gap-2">
-                <span className="px-3 py-1 bg-[#150F09] border border-[#2E1E0F] rounded-lg text-sm font-bold text-[#7B4A1E]">
-                  {m.speakingTime}s / delegate
-                </span>
-                <span className="px-3 py-1 bg-[#150F09] border border-[#2E1E0F] rounded-lg text-sm font-bold text-[#C4A882]">
-                  Order: {m.tourOrder === 'desc' ? 'Z → A' : m.tourOrder === 'custom' ? 'Custom' : 'A → Z'}
-                </span>
-              </div>
-            )}
-          </div>
+            ? `p-6 space-y-3 flex-1 min-w-0 border-2 ${isPrimary ? 'border-[#7B4A1E]' : 'border-[#2E1E0F]'}`
+            : 'p-4 space-y-2 border border-[#2E1E0F]'
+        }`}
+      >
+        {/* Header: icon + type label + flag in top-right */}
+        <div className="flex items-center gap-2">
+          <span className={large ? 'text-3xl' : 'text-xl'}>{meta.icon}</span>
+          <span className={`font-black text-white flex-1 ${large ? 'text-lg' : 'text-sm'}`}>{meta.label}</span>
+          <span className={large ? 'text-3xl' : 'text-xl'}>{f ? getFlagEmoji(f.code) : '🌐'}</span>
         </div>
-        <div className="flex items-center gap-2 bg-[#150F09] border border-[#2E1E0F] rounded-xl px-3 py-2">
+
+        {/* Topic inline */}
+        {m.topic && (
+          <p className={`${large ? 'text-sm' : 'text-xs'} text-[#C4A882]`}>
+            <span className="text-[#7A5A38] font-semibold">Topic: </span>{m.topic}
+          </p>
+        )}
+
+        {/* Timings — emphasised */}
+        {m.type !== 'tour' && m.totalTime > 0 && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className={`font-black ${large ? 'text-base text-white' : 'text-xs text-[#C4A882]'}`}>
+              {fmtTime(totalMins, totalSecs)}
+              {m.type === 'moderated' && m.speakingTime > 0 && (
+                <span className="text-[#7B4A1E]"> — {fmtTime(speakMins, speakSecs)}</span>
+              )}
+            </span>
+          </div>
+        )}
+        {m.type === 'tour' && (
+          <div className="flex items-center gap-2">
+            <span className={`font-black ${large ? 'text-base text-white' : 'text-xs text-[#C4A882]'}`}>
+              {fmtTime(0, m.speakingTime)} / delegate
+            </span>
+            <span className={`${large ? 'text-sm' : 'text-xs'} text-[#7A5A38]`}>
+              {m.tourOrder === 'desc' ? 'Z→A' : m.tourOrder === 'custom' ? 'Custom' : 'A→Z'}
+            </span>
+          </div>
+        )}
+
+        {/* Required votes */}
+        <div className="flex items-center gap-2 bg-[#150F09] border border-[#2E1E0F] rounded-xl px-3 py-1.5">
           <span className="text-xs text-[#7A5A38]">{fraction}</span>
           <span className="text-xs text-white font-bold ml-auto">Needs {needed} of {present}</span>
         </div>
-        <div className="flex gap-2 mt-auto">
-          <button onClick={() => onAccepted(m)}
-            className="flex-1 bg-green-700 hover:bg-green-600 text-white py-2.5 rounded-xl font-bold text-sm transition-colors">
-            ✓ Accept
-          </button>
-          <button onClick={() => onRemove(m.id)}
-            className="flex-1 bg-[#2E1E0F] hover:bg-red-950/40 hover:text-red-500 text-[#C4A882] border border-[#2E1E0F] hover:border-red-800/40 py-2.5 rounded-xl font-bold text-sm transition-colors">
-            ✗ Reject
-          </button>
-        </div>
+
+        {/* Accept/Reject — ONLY on the primary (idx===0) card being voted upon */}
+        {isPrimary && (
+          <div className="flex gap-2 mt-auto">
+            <button onClick={() => onAccepted(m)}
+              className="flex-1 bg-green-700 hover:bg-green-600 text-white py-2.5 rounded-xl font-bold text-sm transition-colors">
+              ✓ Accept
+            </button>
+            <button onClick={() => onRemove(m.id)}
+              className="flex-1 bg-[#2E1E0F] hover:bg-red-950/40 hover:text-red-500 text-[#C4A882] border border-[#2E1E0F] hover:border-red-800/40 py-2.5 rounded-xl font-bold text-sm transition-colors">
+              ✗ Reject
+            </button>
+          </div>
+        )}
       </div>
     );
   };
 
   return (
-    <div className="px-7 pb-7 space-y-4 min-h-[70vh] flex flex-col">
+    <div className={`px-7 pb-7 space-y-4 flex flex-col ${order.length > 4 ? 'overflow-y-auto' : 'overflow-hidden'}`}>
       <div className="flex items-center justify-between shrink-0">
         <h2 className="text-2xl font-black text-white">Vote on Motions</h2>
         <button onClick={onBack}
@@ -490,6 +520,10 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
           title="Raise another motion">
           +
         </button>
+      </div>
+      <div className="flex items-center gap-2 px-3 py-2 bg-[#150F09] border border-[#2E1E0F] rounded-xl text-xs text-[#7A5A38] mb-1 shrink-0">
+        <span>💡</span>
+        <span>Drag motions to reorder them. Most disruptive is voted on first by default.</span>
       </div>
       {order.length === 1 ? (
         <div className="flex-1 flex flex-col">{renderCard(primary, true, 0)}</div>
