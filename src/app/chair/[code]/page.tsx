@@ -1458,7 +1458,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
             )}
           </button>
         )}
-        {/* Documents — disabled during pre-session */}
+        {/* Documents — disabled during pre-session or when ended */}
+        {!sessionEnded && (
         <button
           onClick={handleDocumentsClick}
           title={isPreSession ? 'Complete roll call first' : undefined}
@@ -1472,7 +1473,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
             return activeCount > 0 ? <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#7B4A1E] rounded-full text-white text-[10px] flex items-center justify-center">{activeCount}</span> : null;
           })()}
         </button>
-        {/* Chat — disabled during pre-session */}
+        )}
+        {/* Chat — disabled during pre-session or when ended */}
+        {!sessionEnded && (
         <button
           onClick={() => { if (!isPreSession) handleToggleChat(); }}
           title={isPreSession ? 'Complete roll call first' : undefined}
@@ -1491,6 +1494,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
             ) : null;
           })()}
         </button>
+        )}
         <button onClick={() => { navigator.clipboard.writeText(committee.code); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
           className="text-xs font-mono bg-[#2E1E0F] hover:bg-[#3D2A15] text-white px-2.5 py-1 rounded-lg transition-colors shrink-0">
           {copied ? '✓' : committee.code}
@@ -1619,12 +1623,13 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         </div>
       ) : (
       <div className="flex-1 flex overflow-hidden">
-        {showChat && (
+        {showChat && !sessionEnded && (
           <ChatPanel
             committee={committee}
             senderName={committee.chairNames[0] ?? 'Chair'}
             isChair={true}
             onClose={() => setShowChat(false)}
+            readOnly={sessionEnded}
           />
         )}
         {!showChat && committee.phase === 'pre-session' && (
@@ -1638,7 +1643,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 onStatusChange={handleStatusChange}
                 onPhaseChange={handlePhaseChange}
                 onDelegateAdd={handleDelegateAdd}
-                isRollCallPhase={true} />
+                isRollCallPhase={true}
+                isReadOnly={sessionEnded} />
             </div>
           </div>
         )}
@@ -1668,13 +1674,15 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                     onCycleStatus={handleCycleStatus}
                     onStatusChange={handleStatusChange}
                     onDelegateAdd={handleDelegateAdd}
-                    isRollCallPhase={false} />
+                    isRollCallPhase={false}
+                    isReadOnly={sessionEnded} />
                 ) : committee.phase === 'unmoderated-caucus' ? (
                   <RollCallPanel committee={committee}
                     onCycleStatus={handleCycleStatus}
                     onStatusChange={handleStatusChange}
                     onDelegateAdd={handleDelegateAdd}
-                    isRollCallPhase={false} />
+                    isRollCallPhase={false}
+                    isReadOnly={sessionEnded} />
                 ) : (
                   <RollCallPanel committee={committee}
                     onAddToList={handleAddToSpeakersList}
@@ -1685,7 +1693,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                     onPhaseChange={handlePhaseChange}
                     onDelegateAdd={handleDelegateAdd}
                     onReorderList={handleReorderSpeakersList}
-                    isRollCallPhase={false} />
+                    isRollCallPhase={false}
+                    isReadOnly={sessionEnded} />
                 )}
               </aside>
             )}
@@ -1875,14 +1884,14 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         )}
       </div>
       )}
-      {showMotions && !isPreSession && (
+      {showMotions && !isPreSession && !sessionEnded && (
         <MotionsModal
           committee={committee}
           onClose={() => setShowMotions(false)}
           onCommitteeUpdate={(updater) => updateLocal(setCommittee, updater)}
         />
       )}
-      {showDocuments && !isPreSession && (
+      {showDocuments && !isPreSession && !sessionEnded && (
         <DocumentsModal
           committee={committee}
           onClose={() => setShowDocuments(false)}

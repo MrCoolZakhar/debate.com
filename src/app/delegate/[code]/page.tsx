@@ -847,6 +847,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
               committee.phase === 'voting' ? 'text-[#B8844A]' : 'text-[#7A5A38]'
             }`}>{phaseDisplay}</div>
           </div>
+          {!sessionEnded && (
           <button
             onClick={() => {
               const newShow = !showChat;
@@ -871,6 +872,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
               ) : null;
             })()}
           </button>
+          )}
         </div>
       </header>
 
@@ -919,7 +921,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
       </div>
 
       <div className="flex-1 flex overflow-hidden">
-      {showChat && (
+      {showChat && !sessionEnded && (
         <ChatPanel
           committee={committee}
           senderName={country}
@@ -927,6 +929,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
           onClose={() => setShowChat(false)}
           initialReadCounts={chatReadCounts}
           onReadCountsChange={setChatReadCounts}
+          readOnly={sessionEnded}
           speakerCard={isCurrentSpeaker ? (
             <div className="bg-[#7B4A1E]/20 border border-[#7B4A1E]/40 rounded-xl px-3 py-2.5">
               <div className="text-[10px] font-mono text-[#7A5A38] mb-1">YOU HAVE THE FLOOR</div>
@@ -1256,9 +1259,13 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
         {tab === 'documents' && (
           <div>
             {isAbsent && !sessionEnded && <AbsentBanner />}
-            <div className={(isAbsent || sessionEnded) ? 'opacity-60 pointer-events-none select-none' : ''}>
-              <DelegateDocumentsTab committee={committee} country={country} />
-            </div>
+            {!sessionEnded ? (
+              <div className={isAbsent ? 'opacity-60 pointer-events-none select-none' : ''}>
+                <DelegateDocumentsTab committee={committee} country={country} />
+              </div>
+            ) : (
+              <div className="p-8 text-center text-[#7A5A38]">Document submission is closed — session has ended.</div>
+            )}
           </div>
         )}
 

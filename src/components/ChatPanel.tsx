@@ -14,7 +14,7 @@ type ConvKey = 'everyone' | string;
 interface Conversation { key: ConvKey; label: string; emoji: string; messages: ChatMessage[]; }
 interface DmOption { id: string; key: string; label: string; emoji: string; }
 
-export default function ChatPanel({ committee, senderName, isChair = false, onClose, speakerCard, initialReadCounts, onReadCountsChange }: {
+export default function ChatPanel({ committee, senderName, isChair = false, onClose, speakerCard, initialReadCounts, onReadCountsChange, readOnly }: {
   committee: Committee;
   senderName: string;
   isChair?: boolean;
@@ -22,6 +22,7 @@ export default function ChatPanel({ committee, senderName, isChair = false, onCl
   speakerCard?: ReactNode;
   initialReadCounts?: Record<string, number>;
   onReadCountsChange?: (counts: Record<string, number>) => void;
+  readOnly?: boolean;
 }) {
   const [activeConv, setActiveConv] = useState<ConvKey>('everyone');
   const [msg, setMsg] = useState('');
@@ -459,6 +460,9 @@ export default function ChatPanel({ committee, senderName, isChair = false, onCl
         </div>
 
         {/* Compose */}
+        {readOnly ? (
+          <div className="px-4 py-3 text-xs text-[#7A5A38] text-center border-t border-[#2E1E0F]">Chat is view-only — session has ended.</div>
+        ) : (
         <div className="px-4 pb-4 pt-3 shrink-0 border-t border-[#2E1E0F]">
           <div className="flex gap-2">
             <input
@@ -480,6 +484,7 @@ export default function ChatPanel({ committee, senderName, isChair = false, onCl
             </button>
           </div>
         </div>
+        )}
       </div>
     </div>
   );

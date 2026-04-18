@@ -241,6 +241,7 @@ function RollCallPanelInner({
   onDelegateAdd,
   onReorderList,
   isRollCallPhase = false,
+  isReadOnly = false,
 }: {
   committee: Committee;
   onAddToList?: (delegateId: string) => void;
@@ -253,6 +254,7 @@ function RollCallPanelInner({
   onDelegateAdd?: (country: string) => void;
   onReorderList?: (newList: { delegateId: string; country: string }[]) => void;
   isRollCallPhase?: boolean;
+  isReadOnly?: boolean;
 }) {
   const [search, setSearch] = useState('');
   const [listView, setListView] = useState<'az' | 'queue'>('az');
@@ -449,7 +451,7 @@ function RollCallPanelInner({
                 {isAbsent && !isRollCallPhase && (
                   <span className="text-[10px] text-[#7A5A38] shrink-0 font-mono">absent</span>
                 )}
-                <div onClick={(e) => e.stopPropagation()}>
+                <div onClick={(e) => e.stopPropagation()} className={isReadOnly ? 'pointer-events-none opacity-50' : ''}>
                   <StatusSlider status={d.status} onCycle={() => cycleStatus(d.id, d.status)} />
                 </div>
               </div>
@@ -491,6 +493,7 @@ const RollCallPanel = React.memo(RollCallPanelInner, (prev, next) => {
     prev.committee.currentSpeaker === next.committee.currentSpeaker &&
     prev.committee.caucusQueue === next.committee.caucusQueue &&
     prev.isRollCallPhase === next.isRollCallPhase &&
+    prev.isReadOnly === next.isReadOnly &&
     prev.onListIds === next.onListIds
   );
 });
