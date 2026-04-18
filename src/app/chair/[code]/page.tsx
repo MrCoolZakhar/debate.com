@@ -888,6 +888,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
   const [hoursRemaining, setHoursRemaining] = useState<number | null>(null);
   const [timerRunning, setTimerRunning] = useState(false);
   const [showRollCall, setShowRollCall] = useState(true);
+  const [showSliders, setShowSliders] = useState(false);
   const [showMotions, setShowMotions] = useState(false);
   const [showDocuments, setShowDocuments] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -1330,66 +1331,57 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
     <div className="h-screen bg-[#0D0906] flex flex-col overflow-hidden">
       <header className="border-b border-[#2E1E0F] bg-[#150F08] px-4 h-11 flex items-center gap-2">
         <Link href="/">
-          <img src="/gavelling-logo.png" alt="Gavelling" className="w-[16vw] h-auto max-h-9 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+          <img src="/gavelling-logo.png" alt="Gavelling" className="w-[14vw] h-auto max-h-8 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
         </Link>
-        <span className="font-bold text-white text-sm truncate">{committee.name}</span>
-        <span className="text-[#7A5A38] text-xs hidden sm:block truncate flex-1">{committee.topic}</span>
-        {committee.phase !== 'pre-session' && (
-          <button onClick={() => setShowRollCall((v) => !v)}
-            className={`text-xs px-3 py-1 rounded-lg transition-colors shrink-0 ${showRollCall ? 'bg-[#7B4A1E] text-white' : 'bg-[#2E1E0F] text-[#C4A882] hover:text-white'}`}>
-            Roll Call {present}/{committee.delegates.length}
-          </button>
+
+        {/* 4 equal nav tabs — appear once past pre-session */}
+        {committee.phase !== 'pre-session' && !sessionEnded && (
+          <div className="flex flex-1 min-w-0">
+            <button
+              onClick={() => setShowSliders((v) => !v)}
+              className={`flex-1 py-1.5 text-xs font-bold capitalize transition-colors border-b-2 ${showSliders ? 'text-white border-[#7B4A1E]' : 'text-[#7A5A38] border-transparent hover:text-[#C4A882]'}`}>
+              Roll Call
+            </button>
+            <button
+              onClick={handleMotionsClick}
+              title={isPreSession ? 'Complete roll call first' : undefined}
+              className={`flex-1 py-1.5 text-xs font-bold capitalize transition-colors border-b-2 relative ${showMotions ? 'text-white border-[#7B4A1E]' : 'text-[#7A5A38] border-transparent hover:text-[#C4A882]'}`}>
+              Motions
+              {(committee.pendingMotions ?? []).filter((m) => m.type !== ('join-request' as string) && (m.type as string) !== 'gsl-request').length > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-[#7B4A1E] rounded-full text-white text-[10px] flex items-center justify-center">
+                  {(committee.pendingMotions ?? []).filter((m) => m.type !== ('join-request' as string) && (m.type as string) !== 'gsl-request').length}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={handleDocumentsClick}
+              title={isPreSession ? 'Complete roll call first' : undefined}
+              className={`flex-1 py-1.5 text-xs font-bold capitalize transition-colors border-b-2 relative ${showDocuments ? 'text-white border-[#7B4A1E]' : 'text-[#7A5A38] border-transparent hover:text-[#C4A882]'}`}>
+              Documents
+              {(() => {
+                const n = (committee.documents ?? []).filter((d) => d.status === 'submitted').length;
+                return n > 0 ? <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-[#7B4A1E] rounded-full text-white text-[10px] flex items-center justify-center">{n}</span> : null;
+              })()}
+            </button>
+            <button
+              onClick={() => { if (!isPreSession) handleToggleChat(); }}
+              title={isPreSession ? 'Complete roll call first' : undefined}
+              className={`flex-1 py-1.5 text-xs font-bold capitalize transition-colors border-b-2 relative ${showChat ? 'text-white border-[#7B4A1E]' : 'text-[#7A5A38] border-transparent hover:text-[#C4A882]'}`}>
+              Chat
+              {(() => {
+                const total = committee.messages.filter((m) => !m.content.startsWith('__log__:')).length;
+                const unread = total - chatReadCount;
+                return unread > 0 && !showChat ? <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-[#7B4A1E] rounded-full text-white text-[10px] flex items-center justify-center">{unread}</span> : null;
+              })()}
+            </button>
+          </div>
         )}
-        {/* Motions — disabled during pre-session or when ended */}
-        {!sessionEnded && (
-          <button
-            onClick={handleMotionsClick}
-            title={isPreSession ? 'Complete roll call first' : undefined}
-            className={`text-xs px-3 py-1 rounded-lg transition-colors shrink-0 relative ${
-              isPreSession ? 'opacity-40 cursor-not-allowed bg-[#2E1E0F] text-[#7A5A38]' :
-              showMotions ? 'bg-[#7B4A1E] text-white' : 'bg-[#2E1E0F] text-[#C4A882] hover:text-white'
-            }`}>
-            Motions
-            {!isPreSession && (committee.pendingMotions ?? []).filter((m) => m.type !== ('join-request' as string) && (m.type as string) !== 'gsl-request').length > 0 && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#7B4A1E] rounded-full text-white text-[10px] flex items-center justify-center">
-                {(committee.pendingMotions ?? []).filter((m) => m.type !== ('join-request' as string) && (m.type as string) !== 'gsl-request').length}
-              </span>
-            )}
-          </button>
+
+        {/* Pre-session: topic in header since sidebar has no name yet */}
+        {committee.phase === 'pre-session' && (
+          <span className="text-[#7A5A38] text-xs hidden sm:block truncate flex-1">{committee.name} — {committee.topic}</span>
         )}
-        {/* Documents — disabled during pre-session */}
-        <button
-          onClick={handleDocumentsClick}
-          title={isPreSession ? 'Complete roll call first' : undefined}
-          className={`text-xs px-3 py-1 rounded-lg transition-colors shrink-0 relative ${
-            isPreSession ? 'opacity-40 cursor-not-allowed bg-[#2E1E0F] text-[#7A5A38]' :
-            showDocuments ? 'bg-[#7B4A1E] text-white' : 'bg-[#2E1E0F] text-[#C4A882] hover:text-white'
-          }`}>
-          Documents
-          {!isPreSession && (() => {
-            const activeCount = (committee.documents ?? []).filter((d) => d.status === 'submitted').length;
-            return activeCount > 0 ? <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#7B4A1E] rounded-full text-white text-[10px] flex items-center justify-center">{activeCount}</span> : null;
-          })()}
-        </button>
-        {/* Chat — disabled during pre-session */}
-        <button
-          onClick={() => { if (!isPreSession) handleToggleChat(); }}
-          title={isPreSession ? 'Complete roll call first' : undefined}
-          className={`text-xs px-3 py-1 rounded-lg transition-colors shrink-0 relative ${
-            isPreSession ? 'opacity-40 cursor-not-allowed bg-[#2E1E0F] text-[#7A5A38]' :
-            showChat ? 'bg-[#7B4A1E] text-white' : 'bg-[#2E1E0F] text-[#C4A882] hover:text-white'
-          }`}>
-          💬 Chat
-          {!isPreSession && (() => {
-            const total = committee.messages.filter((m) => !m.content.startsWith('__log__:')).length;
-            const unread = total - chatReadCount;
-            return unread > 0 && !showChat ? (
-              <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#7B4A1E] rounded-full text-white text-[10px] flex items-center justify-center">
-                {unread}
-              </span>
-            ) : null;
-          })()}
-        </button>
+
         <button onClick={() => { navigator.clipboard.writeText(committee.code); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
           className="text-xs font-mono bg-[#2E1E0F] hover:bg-[#3D2A15] text-white px-2.5 py-1 rounded-lg transition-colors shrink-0">
           {copied ? '✓' : committee.code}
@@ -1555,13 +1547,13 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
                     onCycleStatus={handleCycleStatus}
                     onStatusChange={handleStatusChange}
                     onDelegateAdd={handleDelegateAdd}
-                    isRollCallPhase={false} />
+                    isRollCallPhase={showSliders} />
                 ) : committee.phase === 'unmoderated-caucus' ? (
                   <RollCallPanel committee={committee}
                     onCycleStatus={handleCycleStatus}
                     onStatusChange={handleStatusChange}
                     onDelegateAdd={handleDelegateAdd}
-                    isRollCallPhase={false} />
+                    isRollCallPhase={showSliders} />
                 ) : (
                   <RollCallPanel committee={committee}
                     onAddToList={handleAddToSpeakersList}
@@ -1572,7 +1564,7 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
                     onPhaseChange={handlePhaseChange}
                     onDelegateAdd={handleDelegateAdd}
                     onReorderList={handleReorderSpeakersList}
-                    isRollCallPhase={false} />
+                    isRollCallPhase={showSliders} />
                 )}
               </aside>
             )}
