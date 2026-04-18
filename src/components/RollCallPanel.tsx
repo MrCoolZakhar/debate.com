@@ -466,9 +466,11 @@ function RollCallPanelInner({
                 {isAbsent && !isRollCallPhase && (
                   <span className="text-[10px] text-[#7A5A38] shrink-0 font-mono ml-auto">absent</span>
                 )}
-                <div onClick={(e) => e.stopPropagation()} className={`ml-auto shrink-0 ${isReadOnly ? 'pointer-events-none opacity-50' : ''}`}>
-                  <StatusSlider status={effectiveStatus} onCycle={() => cycleStatus(d.id, effectiveStatus)} />
-                </div>
+                {isRollCallPhase && (
+                  <div onClick={(e) => e.stopPropagation()} className={`ml-auto shrink-0 ${isReadOnly ? 'pointer-events-none opacity-50' : ''}`}>
+                    <StatusSlider status={effectiveStatus} onCycle={() => cycleStatus(d.id, effectiveStatus)} />
+                  </div>
+                )}
               </div>
             </div>
           );
