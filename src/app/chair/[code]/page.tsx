@@ -1445,19 +1445,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         {committee.phase === 'pre-session' && (
           <span className="text-[#7A5A38] text-xs hidden sm:block truncate flex-1">{committee.name} — {committee.topic}</span>
         )}
-
-        {(() => {
-          const s = getSettings(committee.code);
-          const fullChairCode = (s.separateChairCode && s.chairJoinSuffix)
-            ? `${committee.code}-${s.chairJoinSuffix}`
-            : committee.code;
-          return (
-            <button onClick={() => { navigator.clipboard.writeText(fullChairCode); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
-              className="text-xs font-mono bg-[#2E1E0F] hover:bg-[#3D2A15] text-white px-2.5 py-1 rounded-lg transition-colors shrink-0">
-              {copied ? '✓' : fullChairCode}
-            </button>
-          );
-        })()}
+        <button onClick={() => { navigator.clipboard.writeText(committee.code); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
+          className="text-xs font-mono bg-[#2E1E0F] hover:bg-[#3D2A15] text-white px-2.5 py-1 rounded-lg transition-colors shrink-0">
+          {copied ? '✓' : committee.code}
+        </button>
         <button onClick={() => setShowSettings(true)} className="text-[#7A5A38] hover:text-white transition-colors shrink-0 text-3xl">⚙</button>
       </header>
       {/* Ended tab bar */}
