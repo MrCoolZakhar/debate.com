@@ -973,7 +973,11 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       }
       setLoading(false);
       if (found) {
-        unsubscribe = subscribeToCommittee(found.id, async () => {
+        unsubscribe = subscribeToCommittee(found.id, async (table) => {
+          // The timer writes current_speaker.time_remaining every second.
+          // Never re-fetch for it — the chair manages that entirely via local setInterval.
+          if (table === 'current_speaker') return;
+
           const withinDebounce = Date.now() - localUpdateTime.current < 3000;
           const updated = await getCommitteeByCode(code);
           if (!updated) return;
