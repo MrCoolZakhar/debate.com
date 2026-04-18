@@ -571,13 +571,23 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
     };
     const disruptiveness = base[motion.type] + motion.totalTime;
     update((c) => ({ ...c, pendingMotions: [...(c.pendingMotions ?? []), { ...motion, id: tempId, disruptiveness }] }));
-    addPendingMotionInDB(committee.id, motion);
+    addPendingMotionInDB(committee.id, motion).then((realId) => {
+      if (realId) {
+        update((c) => ({
+          ...c,
+          pendingMotions: (c.pendingMotions ?? []).map((m) => m.id === tempId ? { ...m, id: realId } : m),
+        }));
+      }
+    });
     setView('vote');
   };
 
   const handleRemove = (motionId: string) => {
     update((c) => ({ ...c, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== motionId) }));
-    removePendingMotionInDB(motionId);
+    // Only call DB if this is a real UUID (not a temp optimistic ID)
+    if (!motionId.startsWith('temp-')) {
+      removePendingMotionInDB(motionId);
+    }
   };
 
   const handleMotionAccepted = async (motion: PendingMotion) => {

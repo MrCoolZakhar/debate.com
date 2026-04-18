@@ -352,14 +352,15 @@ export async function stopSpeakerTimer(committeeId: string): Promise<void> {
 
 export async function addPendingMotion(
   committeeId: string, motion: Omit<PendingMotion, 'id' | 'disruptiveness'>,
-): Promise<void> {
+): Promise<string | null> {
   const disruptiveness = calcDisruptiveness(motion.type, motion.totalTime);
-  const { error } = await supabase.from('motions').insert({
+  const { data, error } = await supabase.from('motions').insert({
     committee_id: committeeId, type: motion.type, proposed_by: motion.proposedBy,
     total_time: motion.totalTime, speaking_time: motion.speakingTime, topic: motion.topic,
     status: 'pending', disruptiveness,
-  });
-  if (error) console.error('Error adding motion:', error);
+  }).select('id').single();
+  if (error) { console.error('Error adding motion:', error); return null; }
+  return data.id as string;
 }
 
 export async function removePendingMotion(motionId: string): Promise<void> {
