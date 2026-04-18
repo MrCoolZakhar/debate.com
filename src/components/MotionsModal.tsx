@@ -676,7 +676,10 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
         <h1 className="text-5xl font-black text-white mb-14">Does this motion pass?</h1>
         <div className="flex gap-8">
           <button
-            onClick={() => {
+            onClick={async () => {
+              const motionId = specialVoteMotion!.id;
+              await removePendingMotionInDB(motionId);
+              update((c) => ({ ...c, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== motionId) }));
               if (isSuspend) {
                 onCommitteeUpdate?.((c) => ({ ...c, suspendedAt: new Date().toISOString(), phase: 'adjourned' as const }));
                 suspendDebateInDB(committee.id);
@@ -686,8 +689,6 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
                 onCommitteeUpdate?.((c) => ({ ...c, endedAt: now.toISOString(), expiresAt: expires.toISOString(), phase: 'adjourned' as const }));
                 endDebateInDB(committee.id);
               }
-              removePendingMotionInDB(specialVoteMotion!.id);
-              update((c) => ({ ...c, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== specialVoteMotion!.id) }));
               setSpecialVoteMotion(null);
               onClose();
             }}

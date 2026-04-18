@@ -991,12 +991,14 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const timerRunningRef = useRef(false);
   const committeeIdRef = useRef('');
+  const committeePhaseRef = useRef('');
   const speakerTimeLimitRef = useRef(speakerTimeLimit);
   // Mutable map of delegateId → current status — updated immediately on each cycle
   // so rapid clicks read the post-click status, not the pre-re-render (stale) status.
   const delegateStatusRef = useRef<Map<string, DelegateStatus>>(new Map());
   timerRunningRef.current = timerRunning;
   speakerTimeLimitRef.current = speakerTimeLimit;
+  committeePhaseRef.current = committee?.phase ?? '';
 
   useEffect(() => {
     if (committee) document.title = `${abbreviateCommitteeName(committee.name)} — Gavelling Session`;
@@ -1141,13 +1143,13 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     updateLocal(setCommittee, (c) => ({
       ...c,
       delegates: c.delegates.map((d) => d.id === delegateId ? { ...d, status: next } : d),
-      ...(next === 'absent' ? {
+      ...(next === 'absent' && c.phase !== 'pre-session' ? {
         speakersList: c.speakersList.filter((s) => s.delegateId !== delegateId),
         caucusQueue: (c.caucusQueue ?? []).filter((s) => s.delegateId !== delegateId),
       } : {}),
     }), true);
     setDelegateStatusInDB(delegateId, next);
-    if (next === 'absent') {
+    if (next === 'absent' && committeePhaseRef.current !== 'pre-session') {
       removeFromSpeakersListInDB(committeeIdRef.current, delegateId);
       removeFromCaucusListInDB(committeeIdRef.current, delegateId);
     }
@@ -1188,18 +1190,18 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     updateLocal(setCommittee, (c) => ({
       ...c,
       delegates: c.delegates.map((d) => d.id === delegateId ? { ...d, status } : d),
-      ...(status === 'absent' ? {
+      ...(status === 'absent' && c.phase !== 'pre-session' ? {
         speakersList: c.speakersList.filter((s) => s.delegateId !== delegateId),
         caucusQueue: (c.caucusQueue ?? []).filter((s) => s.delegateId !== delegateId),
       } : {}),
     }), true);
     setDelegateStatusInDB(delegateId, status);
-    if (status === 'absent') {
+    if (status === 'absent' && committee.phase !== 'pre-session') {
       removeFromSpeakersListInDB(committee.id, delegateId);
       removeFromCaucusListInDB(committee.id, delegateId);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [committee?.id]);
+  }, [committee?.id, committee?.phase]);
 
   const handleDelegateAdd = useCallback(async (country: string) => {
     if (!committee) return;
@@ -1371,7 +1373,16 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   };
 
   const handlePhaseChange = (phase: string) => {
-    updateLocal(setCommittee, (c) => ({ ...c, phase: phase as Committee['phase'] }), true);
+    updateLocal(setCommittee, (c) => {
+      let updated = { ...c, phase: phase as Committee['phase'] };
+      if (phase === 'speakers-list' && c.phase === 'pre-session') {
+        const absentIds = new Set(c.delegates.filter((d) => d.status === 'absent').map((d) => d.id));
+        const toRemove = c.speakersList.filter((s) => absentIds.has(s.delegateId));
+        updated.speakersList = c.speakersList.filter((s) => !absentIds.has(s.delegateId));
+        toRemove.forEach((s) => removeFromSpeakersListInDB(c.id, s.delegateId));
+      }
+      return updated;
+    }, true);
   };
 
   const handleApproveJoinRequest = async (motionId: string, delegateId: string, desiredStatus: 'present' | 'present-voting') => {

@@ -281,7 +281,7 @@ function RollCallPanelInner({
     // Fallback (no parent cycle handler): compute next locally
     const next: DelegateStatus =
       current === 'absent' ? 'present' : current === 'present' ? 'present-voting' : 'absent';
-    if (next === 'absent' && queuePositionMap.has(id)) onRemoveFromList?.(id);
+    if (next === 'absent' && !isRollCallPhase && queuePositionMap.has(id)) onRemoveFromList?.(id);
     onStatusChange?.(id, next);
   };
 
