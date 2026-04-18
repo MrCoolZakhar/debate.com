@@ -134,7 +134,6 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised }: {
 }) {
   const [type, setType] = useState<PendingMotionType | null>('moderated');
   const [proposer, setProposer] = useState('');
-  const [proposerPosition, setProposerPosition] = useState<'first' | 'last' | null>(null);
   const [totalMins, setTotalMins] = useState(10);
   const [totalSecs, setTotalSecs] = useState(0);
   const [speakingTime, setSpeakingTime] = useState(60);
@@ -153,7 +152,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised }: {
     if (!type || !proposer) return false;
     if (type === 'suspend-debate' || type === 'end-debate') return true;
     if (type === 'moderated' && !topic.trim()) return false;
-    if (type === 'moderated' && !proposerPosition) return false;
+
     if (type !== 'tour' && type !== 'consultation' && totalTime <= 0) return false;
     return true;
   };
@@ -168,7 +167,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised }: {
       speakingTime: isSuspendOrEnd ? 0 : speakingTime,
       topic: topic.trim(),
       speakerList: [],
-      proposerPosition: type === 'moderated' ? proposerPosition : null,
+      proposerPosition: null,
       ...(type === 'tour' ? { tourOrder } : {}),
     };
     onRaised(motion);
@@ -214,7 +213,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised }: {
           {type !== 'moderated' && (
             <div>
               <label className="block text-lg font-semibold text-[#C4A882] mb-2">Proposed by</label>
-              <ProposerInput candidates={presentCountries} value={proposer} onChange={(v) => { setProposer(v); setProposerPosition(null); }} blockedCountries={countriesWithMotions} />
+              <ProposerInput candidates={presentCountries} value={proposer} onChange={setProposer} blockedCountries={countriesWithMotions} />
             </div>
           )}
 
@@ -308,23 +307,8 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised }: {
               </div>
               <div>
                 <label className="block text-lg font-semibold text-[#C4A882] mb-2">Proposed by</label>
-                <ProposerInput candidates={presentCountries} value={proposer} onChange={(v) => { setProposer(v); setProposerPosition(null); }} blockedCountries={countriesWithMotions} />
+                <ProposerInput candidates={presentCountries} value={proposer} onChange={setProposer} blockedCountries={countriesWithMotions} />
               </div>
-              {proposer && (
-                <div>
-                  <label className="block text-lg font-semibold text-[#C4A882] mb-2">{proposer} speaks</label>
-                  <div className="flex gap-3">
-                    <button type="button" onClick={() => setProposerPosition('first')}
-                      className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-colors ${proposerPosition === 'first' ? 'bg-[#7B4A1E] text-white' : 'bg-[#1A1209] border border-[#2E1E0F] text-[#C4A882] hover:text-white'}`}>
-                      First
-                    </button>
-                    <button type="button" onClick={() => setProposerPosition('last')}
-                      className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-colors ${proposerPosition === 'last' ? 'bg-[#7B4A1E] text-white' : 'bg-[#1A1209] border border-[#2E1E0F] text-[#C4A882] hover:text-white'}`}>
-                      Last
-                    </button>
-                  </div>
-                </div>
-              )}
               {/* Total time + speaking time — side by side to avoid scroll */}
               <div className="flex gap-4 items-start">
                 <div className="flex-1">
@@ -636,31 +620,17 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
       return;
 
     } else if (motion.type === 'moderated') {
-      const proposerPosition = motion.proposerPosition ?? 'first';
-      const proposerDelegate = motion.proposedBy
-        ? committee.delegates.find((d) => d.country === motion.proposedBy)
-        : null;
-      const proposerEntry = proposerDelegate
-        ? { delegateId: proposerDelegate.id, country: proposerDelegate.country }
-        : null;
-      const caucusQueue = proposerEntry
-        ? (proposerPosition === 'first' ? [proposerEntry] : [proposerEntry])
-        : [];
       const caucus = {
         active: true, type: 'moderated' as const, purpose: motion.topic || '',
         proposedBy: motion.proposedBy, totalTime: motion.totalTime, remainingTime: motion.totalTime,
         speakingTime: motion.speakingTime, speakerTimeRemaining: motion.speakingTime,
-        currentSpeaker: null, proposerPosition, spokenCountries: [],
+        currentSpeaker: null, proposerPosition: null, spokenCountries: [],
       };
-      update((c) => ({ ...c, phase: 'moderated-caucus', caucus, pendingMotions: [], caucusQueue }));
+      update((c) => ({ ...c, phase: 'moderated-caucus', caucus, pendingMotions: [], caucusQueue: [] }));
       onClose();
       clearPendingMotionsInDB(committee.id);
       clearCaucusListInDB(committee.id);
       updateCaucusInDB(committee.id, caucus);
-      if (proposerEntry) {
-        const pos = proposerPosition === 'first' ? 1 : Date.now();
-        addToCaucusListInDB(committee.id, proposerEntry.delegateId, proposerEntry.country, pos);
-      }
       setPhaseInDB(committee.id, 'moderated-caucus');
       return;
 
