@@ -558,6 +558,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   // Track last seen speaker to only reset localTime when speaker changes
   const lastSpeakerIdRef = useRef<string | null>(null);
   const prevServerTimeRef = useRef<number>(0);
+  const prevStartedAtRef = useRef<string | null>(null);
 
   // Join request state
   const [joinRequesting, setJoinRequesting] = useState(false);
@@ -602,21 +603,38 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
             setCommittee(updated);
             const newSpeakerId = updated.currentSpeaker?.delegateId ?? null;
             if (newSpeakerId !== lastSpeakerIdRef.current) {
-              setLocalTime(updated.speakerTimeRemaining);
-              prevServerTimeRef.current = updated.speakerTimeRemaining;
-              setLocalTimerActive(false); // Reset on new speaker
-              lastSpeakerIdRef.current = newSpeakerId;
-            } else if (updated.speakerTimeRemaining !== prevServerTimeRef.current) {
-              // Server time changed — sync if chair's timer is running for this delegate
-              if (updated.currentSpeaker?.country === country &&
-                  updated.speakerTimeRemaining < prevServerTimeRef.current) {
-                setLocalTime(updated.speakerTimeRemaining);
+              let initialTime = updated.speakerTimeRemaining;
+              if (updated.speakerStartedAt) {
+                const elapsed = Math.round((Date.now() - new Date(updated.speakerStartedAt).getTime()) / 1000);
+                initialTime = Math.max(0, updated.speakerTimeLimit - elapsed);
                 setLocalTimerActive(true);
-              } else if (updated.speakerTimeRemaining < prevServerTimeRef.current) {
-                // Timer running for another speaker — just sync time
-                setLocalTime(updated.speakerTimeRemaining);
+              } else {
+                setLocalTimerActive(false);
               }
-              prevServerTimeRef.current = updated.speakerTimeRemaining;
+              setLocalTime(initialTime);
+              prevServerTimeRef.current = initialTime;
+              prevStartedAtRef.current = updated.speakerStartedAt ?? null;
+              lastSpeakerIdRef.current = newSpeakerId;
+            } else {
+              // Same speaker — check if speakerStartedAt changed (chair started/paused timer)
+              if (updated.speakerStartedAt !== prevStartedAtRef.current) {
+                prevStartedAtRef.current = updated.speakerStartedAt ?? null;
+                if (updated.speakerStartedAt) {
+                  const elapsed = Math.round((Date.now() - new Date(updated.speakerStartedAt).getTime()) / 1000);
+                  const remaining = Math.max(0, updated.speakerTimeLimit - elapsed);
+                  setLocalTime(remaining);
+                  prevServerTimeRef.current = remaining;
+                  setLocalTimerActive(true);
+                } else {
+                  setLocalTimerActive(false);
+                }
+              } else if (updated.speakerTimeRemaining !== prevServerTimeRef.current) {
+                // Periodic server tick — sync time
+                if (updated.speakerTimeRemaining < prevServerTimeRef.current) {
+                  setLocalTime(updated.speakerTimeRemaining);
+                }
+                prevServerTimeRef.current = updated.speakerTimeRemaining;
+              }
             }
           }
         });
