@@ -1019,8 +1019,9 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
       setLoading(false);
       if (found) {
         unsubscribe = subscribeToCommittee(found.id, async () => {
-          if (Date.now() - localUpdateTime.current < 1500) return;
+          if (Date.now() - localUpdateTime.current < 3000) return;
           const updated = await getCommitteeByCode(code);
+          if (Date.now() - localUpdateTime.current < 3000) return;
           if (updated) {
             if (updated.endedAt) {
               setSessionEnded(true);
@@ -1262,10 +1263,11 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
 
   // ── Optimistic action handlers ──────────────────────────────────────────────
 
-  const handleNextSpeaker = () => {
+  const handleNextSpeaker = async () => {
     setTimerRunning(false);
     stopSpeakerTimerInDB(committeeIdRef.current);
     setExtraTimeAdded(false);
+
     if (committee.currentSpeaker) {
       const secondsSpoken = committee.speakerTimeLimit - speakerTimeRemaining;
       if (secondsSpoken > 0) {
@@ -1276,16 +1278,30 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
         logSpeakingTime(committee.id, committee.currentSpeaker.country, secondsSpoken, ctx, topic);
       }
     }
+
+    const removeDelegateId = committee.speakersList[0]?.delegateId ?? null;
     const [next, ...rest] = committee.speakersList;
     const timeToUse = speakerTimeLimit;
+
     setSpeakerTimeRemaining(timeToUse);
+
+    localUpdateTime.current = Date.now();
+
     updateLocal(setCommittee, (c) => ({
       ...c,
       currentSpeaker: next ?? null,
       speakersList: rest,
       speakerTimeRemaining: timeToUse,
-    }), true);
-    nextSpeakerInDB(committee.id, timeToUse);
+    }));
+
+    await nextSpeakerInDB(
+      committee.id,
+      timeToUse,
+      next?.delegateId ?? null,
+      next?.country ?? null,
+      removeDelegateId,
+    );
+    localUpdateTime.current = Date.now();
   };
 
   const handleAddExtraTime = (secs: number) => {
