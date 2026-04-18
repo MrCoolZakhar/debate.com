@@ -591,7 +591,10 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
 
   const handleRemove = (motionId: string) => {
     update((c) => ({ ...c, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== motionId) }));
-    removePendingMotionInDB(motionId);
+    // Only call DB if this is a real UUID (not a temp optimistic ID)
+    if (!motionId.startsWith('temp-')) {
+      removePendingMotionInDB(motionId);
+    }
   };
 
   const handleMotionAccepted = async (motion: PendingMotion) => {
