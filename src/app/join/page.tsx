@@ -54,7 +54,7 @@ function JoinPageInner() {
     const trySetCommittee = (found: Committee) => {
       if (mode === 'chair' && upper.includes('-')) {
         const suffix = upper.slice(upper.lastIndexOf('-') + 1);
-        const expectedSuffix = getSettings(found.code).chairJoinSuffix;
+        const expectedSuffix = found.dbChairJoinSuffix ?? getSettings(found.code).chairJoinSuffix;
         if (suffix !== expectedSuffix) {
           setError('Invalid chair code — check the code provided by your co-chair.');
           return false;
@@ -289,7 +289,7 @@ function JoinPageInner() {
                   ? (!foundCommittee || (getSettings(foundCommittee?.code ?? '').requireDelegationName && !country))
                   : mode === 'chair'
                   ? (!foundCommittee ||
-                      (getSettings(foundCommittee.code).separateChairCode && !code.includes('-')) ||
+                      ((foundCommittee.dbSeparateChairCode ?? getSettings(foundCommittee.code).separateChairCode) && !code.includes('-')) ||
                       (chairNameMode === 'select' ? !chairName : !newChairName.trim()))
                   : !foundCommittee
               }

@@ -882,6 +882,7 @@ function SessionEndedContent({ committee, hoursRemaining }: { committee: Committ
 function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const { code } = use(params);
   const router = useRouter();
+  const { updateSetting } = useSettingsStore();
   const searchParams = useSearchParams();
   const myChairName = searchParams.get('chairName') ?? '';
   const [committee, setCommittee] = useState<Committee | null>(null);
@@ -962,6 +963,12 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         setSpeakerTimeLimitLocal(found.speakerTimeLimit);
         setSpeakerTimeRemaining(found.speakerTimeRemaining);
         committeeIdRef.current = found.id;
+        if (found.dbChairJoinSuffix) {
+          updateSetting(found.code, 'chairJoinSuffix', found.dbChairJoinSuffix);
+        }
+        if (found.dbSeparateChairCode !== undefined) {
+          updateSetting(found.code, 'separateChairCode', found.dbSeparateChairCode);
+        }
       }
       setLoading(false);
       if (found) {

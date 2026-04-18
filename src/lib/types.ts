@@ -146,4 +146,6 @@ export interface Committee {
   endedAt?: string | null;
   expiresAt?: string | null;
   resumingChair?: string | null;
+  dbChairJoinSuffix?: string | null;
+  dbSeparateChairCode?: boolean;
 }

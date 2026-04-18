@@ -69,6 +69,8 @@ function rowToCommittee(
     endedAt: (row.ended_at as string | null) ?? null,
     expiresAt: (row.expires_at as string | null) ?? null,
     resumingChair: (row.resuming_chair as string | null) ?? null,
+    dbChairJoinSuffix: ((row.settings as Record<string, unknown>)?.chairJoinSuffix as string) ?? null,
+    dbSeparateChairCode: ((row.settings as Record<string, unknown>)?.separateChairCode as boolean) ?? false,
   };
 }
 
@@ -81,12 +83,16 @@ export async function createCommittee(
   topic: string,
   chairNames: string[],
   delegateNames: string[],
-): Promise<string | null> {
+): Promise<{ code: string; chairJoinSuffix: string } | null> {
   const code = generateCode();
+  const chairJoinSuffix = Math.floor(1000 + Math.random() * 9000).toString();
 
   const { data: committeeRow, error: committeeError } = await supabase
     .from('committees')
-    .insert({ code, name, topic, chair_names: chairNames, phase: 'pre-session', speaker_time_limit: 90 })
+    .insert({
+      code, name, topic, chair_names: chairNames, phase: 'pre-session', speaker_time_limit: 90,
+      settings: { chairJoinSuffix, separateChairCode: true },
+    })
     .select()
     .single();
 
@@ -104,7 +110,7 @@ export async function createCommittee(
   await supabase.from('current_speaker').insert({
     committee_id: committeeRow.id, delegate_id: null, country: null, time_remaining: 90,
   });
-  return code;
+  return { code, chairJoinSuffix };
 }
 
 export async function getCommitteeByCode(code: string): Promise<Committee | null> {

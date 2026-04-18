@@ -4,6 +4,7 @@ import { useState, useRef, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createCommittee as createCommitteeInDB } from '@/lib/committeeService';
+import { useSettingsStore } from '@/lib/settingsStore';
 import { UN_COUNTRIES, getFlagEmoji, getCountryByName } from '@/lib/countries';
 import { UNSC_MEMBERS } from '@/lib/presets';
 
@@ -103,6 +104,7 @@ function CommitteeNameInput({ value, onChange, onPresetSelect }: {
 
 function CreatePageInner() {
   const router = useRouter();
+  const { updateSetting } = useSettingsStore();
   const [chairNames, setChairNames] = useState<string[]>(['']);
   const [committeeMode, setCommitteeMode] = useState<'select' | 'build'>('select');
   const [committeeName, setCommitteeName] = useState('');
@@ -118,9 +120,11 @@ function CreatePageInner() {
     const names = chairNames.map((n) => n.trim()).filter(Boolean);
     if (!committeeName.trim() || !topic.trim()) return;
     setCreating(true);
-    const code = await createCommitteeInDB(committeeName.trim(), topic.trim(), names.length > 0 ? names : ['Chair'], delegates);
-    if (code) {
-      router.push(`/chair/${code}`);
+    const result = await createCommitteeInDB(committeeName.trim(), topic.trim(), names.length > 0 ? names : ['Chair'], delegates);
+    if (result) {
+      updateSetting(result.code, 'chairJoinSuffix', result.chairJoinSuffix);
+      updateSetting(result.code, 'separateChairCode', true);
+      router.push(`/chair/${result.code}`);
     } else {
       alert('Something went wrong creating the committee. Please try again.');
       setCreating(false);
