@@ -1,6 +1,6 @@
 'use client';
-import { use, useEffect, useState, useRef, useCallback, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { use, useEffect, useState, useRef, useCallback, useMemo, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Committee, DelegateStatus } from '@/lib/types';
 import RollCallPanel, { FlagCircle } from '@/components/RollCallPanel';
@@ -31,6 +31,8 @@ import {
   denyGslRequest,
   logSpeakingTime,
   resumeSession as resumeSessionInDB,
+  claimResumeSession as claimResumeSessionInDB,
+  startResumeRollCall as startResumeRollCallInDB,
 } from '@/lib/committeeService';
 
 function formatTime(seconds: number) {
@@ -949,9 +951,11 @@ function SessionEndedContent({ committee, hoursRemaining }: { committee: Committ
 }
 
 // ── Main Chair Session ────────────────────────────────────────────────────────
-export default function ChairSession({ params }: { params: Promise<{ code: string }> }) {
+function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const { code } = use(params);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const myChairName = searchParams.get('chairName') ?? '';
   const [committee, setCommittee] = useState<Committee | null>(null);
   const [loading, setLoading] = useState(true);
   const [sessionSuspended, setSessionSuspended] = useState(false);
@@ -1341,6 +1345,16 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
     setPhaseInDB(committee.id, 'speakers-list');
   };
 
+  const handleResumeClick = async () => {
+    if (!committee) return;
+    const claimedName = myChairName || committee.chairNames[0] || 'Chair';
+    const claimed = await claimResumeSessionInDB(committee.id, claimedName);
+    if (!claimed) return;
+    updateLocal(setCommittee, (c) => ({ ...c, phase: 'pre-session', suspendedAt: null }));
+    setSessionSuspended(false);
+    await startResumeRollCallInDB(committee.id);
+  };
+
   const handlePhaseChange = (phase: string) => {
     updateLocal(setCommittee, (c) => ({ ...c, phase: phase as Committee['phase'] }), true);
   };
@@ -1562,19 +1576,31 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
         <SessionEndedContent committee={committee} hoursRemaining={hoursRemaining} />
       ) : (!sessionEnded && sessionSuspended && suspendTab === 'suspend') ? (
         <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
-          <div className="text-5xl mb-6">⏸️</div>
-          <h1 className="text-5xl font-black text-white mb-4">Session Adjourned</h1>
-          <p className="text-xl text-[#C4A882] mb-12">This session has been temporarily suspended.</p>
-          <button
-            onClick={async () => {
-              await resumeSessionInDB(committee.id);
-              setSessionSuspended(false);
-              setSuspendTab('suspend');
-            }}
-            className="px-12 py-5 bg-[#7B4A1E] hover:bg-[#8B5A2B] text-white text-xl font-black rounded-2xl transition-colors">
-            Resume Session
-          </button>
-          <p className="text-xs text-[#7A5A38] mt-8">Press ESC to return to main menu</p>
+          {(() => {
+            const anotherChairResuming = committee.resumingChair && committee.resumingChair !== (myChairName || committee.chairNames[0]);
+            return (
+              <>
+                <div className="text-5xl mb-6">⏸️</div>
+                <h1 className="text-5xl font-black text-white mb-4">Session Adjourned</h1>
+                <p className="text-xl text-[#C4A882] mb-12">This session has been temporarily suspended.</p>
+                {anotherChairResuming ? (
+                  <>
+                    <button disabled className="px-12 py-5 bg-[#2E1E0F] text-[#7A5A38] text-xl font-black rounded-2xl cursor-not-allowed">
+                      Resume Session
+                    </button>
+                    <p className="text-sm text-[#B8844A] mt-4">{committee.resumingChair} is resuming the session…</p>
+                  </>
+                ) : (
+                  <button
+                    onClick={handleResumeClick}
+                    className="px-12 py-5 bg-[#7B4A1E] hover:bg-[#8B5A2B] text-white text-xl font-black rounded-2xl transition-colors">
+                    Resume Session
+                  </button>
+                )}
+                <p className="text-xs text-[#7A5A38] mt-8">Press ESC to return to main menu</p>
+              </>
+            );
+          })()}
         </div>
       ) : (
       <div className="flex-1 flex overflow-hidden">
@@ -1967,5 +1993,17 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
         </div>
       )}
     </div>
+  );
+}
+
+export default function ChairSession({ params }: { params: Promise<{ code: string }> }) {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#0D0906] flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-[#7B4A1E] border-t-transparent rounded-full animate-spin" />
+      </div>
+    }>
+      <ChairSessionInner params={params} />
+    </Suspense>
   );
 }

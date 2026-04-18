@@ -652,6 +652,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
                 onCommitteeUpdate?.((c) => ({ ...c, endedAt: now.toISOString(), expiresAt: expires.toISOString(), phase: 'adjourned' as const }));
                 endDebateInDB(committee.id);
               }
+              removePendingMotionInDB(specialVoteMotion!.id);
               update((c) => ({ ...c, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== specialVoteMotion!.id) }));
               setSpecialVoteMotion(null);
               onClose();

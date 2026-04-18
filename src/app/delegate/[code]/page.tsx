@@ -554,6 +554,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   const [localTimerActive, setLocalTimerActive] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const committeeIdRef = useRef('');
+  const wasEverSuspended = useRef(false);
   // Track last seen speaker to only reset localTime when speaker changes
   const lastSpeakerIdRef = useRef<string | null>(null);
   const prevServerTimeRef = useRef<number>(0);
@@ -573,7 +574,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
       setLoading(false);
       if (found) {
         if (found.endedAt) setSessionEnded(true);
-        else if (found.suspendedAt) setSessionSuspended(true);
+        else if (found.suspendedAt) { wasEverSuspended.current = true; setSessionSuspended(true); }
         committeeIdRef.current = found.id;
         setLocalTime(found.speakerTimeRemaining);
         lastSpeakerIdRef.current = found.currentSpeaker?.delegateId ?? null;
@@ -582,8 +583,14 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
           if (updated) {
             if (updated.endedAt) {
               setSessionEnded(true);
+              setSessionSuspended(false);
             } else if (updated.suspendedAt) {
+              wasEverSuspended.current = true;
               setSessionSuspended(true);
+              setSessionEnded(false);
+            } else if (updated.phase === 'pre-session' && wasEverSuspended.current) {
+              setSessionSuspended(true);
+              setSessionEnded(false);
             } else {
               setSessionEnded(false);
               setSessionSuspended(false);
@@ -805,7 +812,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     </div>
   );
 
-  if (sessionSuspended) {
+  if (sessionSuspended && (committee.suspendedAt || wasEverSuspended.current)) {
     return (
       <div className="min-h-screen bg-[#0D0906] flex flex-col items-center justify-center text-center px-8">
         <div className="text-sm font-mono text-[#7A5A38] mb-2">{committee.name} · {committee.code}</div>

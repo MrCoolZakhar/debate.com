@@ -145,4 +145,5 @@ export interface Committee {
   suspendedAt?: string | null;
   endedAt?: string | null;
   expiresAt?: string | null;
+  resumingChair?: string | null;
 }

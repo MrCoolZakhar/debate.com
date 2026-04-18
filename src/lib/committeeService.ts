@@ -68,6 +68,7 @@ function rowToCommittee(
     suspendedAt: (row.suspended_at as string | null) ?? null,
     endedAt: (row.ended_at as string | null) ?? null,
     expiresAt: (row.expires_at as string | null) ?? null,
+    resumingChair: (row.resuming_chair as string | null) ?? null,
   };
 }
 
@@ -622,6 +623,26 @@ export async function resumeSession(committeeId: string): Promise<void> {
   const { error } = await supabase.from('committees')
     .update({ suspended_at: null, phase: 'speakers-list' }).eq('id', committeeId);
   if (error) console.error('Error resuming session:', error);
+}
+
+export async function claimResumeSession(committeeId: string, chairName: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('committees')
+    .update({ resuming_chair: chairName })
+    .eq('id', committeeId)
+    .is('resuming_chair', null)
+    .select('id')
+    .single();
+  return !error && !!data;
+}
+
+export async function startResumeRollCall(committeeId: string): Promise<void> {
+  const { error } = await supabase.from('committees').update({
+    suspended_at: null,
+    resuming_chair: null,
+    phase: 'pre-session',
+  }).eq('id', committeeId);
+  if (error) console.error('Error starting resume roll call:', error);
 }
 
 export async function suspendDebate(committeeId: string): Promise<void> {
