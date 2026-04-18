@@ -272,10 +272,11 @@ function CaucusSpeakerQueue({ committee, spokenCountries, onRemove, onReorder, l
 }
 
 // ── Draggable GSL Speakers Queue ──────────────────────────────────────────────
-function DraggableSpeakersQueue({ list, onReorder, onRemove }: {
+function DraggableSpeakersQueue({ list, onReorder, onRemove, lastSpeakerDelegateId }: {
   list: { delegateId: string; country: string }[];
   onReorder: (newList: { delegateId: string; country: string }[]) => void;
   onRemove: (delegateId: string) => void;
+  lastSpeakerDelegateId?: string | null;
 }) {
   const dragIndexRef = useRef<number | null>(null);
   const qLen = list.length;
@@ -303,6 +304,9 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove }: {
             </div>
             <span className="line-clamp-2 break-words whitespace-normal leading-tight max-w-[80px] text-xs font-semibold text-[#C4A882] text-center">{abbrevCountry(s.country)}</span>
             {i === 0 && <span className="text-sm font-bold text-[#B8844A]">Up next</span>}
+            {lastSpeakerDelegateId && s.delegateId === lastSpeakerDelegateId && i !== 0 && (
+              <span className="text-xs font-bold text-[#7A5A38] bg-[#2E1E0F] px-1.5 py-0.5 rounded">Last</span>
+            )}
             <button onClick={() => onRemove(s.delegateId)}
               className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full text-white text-[10px] hidden group-hover:flex items-center justify-center">✕</button>
           </div>
@@ -437,7 +441,16 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, maxSpeakers,
 }
 
 // ── Moderated Caucus View ─────────────────────────────────────────────────────
-function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee; setCommittee: CommitteeSetter }) {
+function ModeratedCaucusView({ committee, setCommittee, caucusActivePopover, setCaucusActivePopover, caucusExtraTimeSecs, setCaucusExtraTimeSecs, caucusRtrCountry, setCaucusRtrCountry }: {
+  committee: Committee;
+  setCommittee: CommitteeSetter;
+  caucusActivePopover: 'extraTime' | 'rightToReply' | null;
+  setCaucusActivePopover: (v: 'extraTime' | 'rightToReply' | null) => void;
+  caucusExtraTimeSecs: string;
+  setCaucusExtraTimeSecs: (v: string) => void;
+  caucusRtrCountry: string;
+  setCaucusRtrCountry: (v: string) => void;
+}) {
   const { getSettings } = useSettingsStore();
   const moderatedName = getSettings(committee.code).motionNames?.moderated ?? 'Moderated Caucus';
   const [speakerRunning, setSpeakerRunning] = useState(false);
@@ -448,9 +461,6 @@ function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee
   const spokenCountries = caucus.spokenCountries ?? [];
   const [showExtend, setShowExtend] = useState(false);
   const [extendMins, setExtendMins] = useState(5);
-  const [showCaucusRtr, setShowCaucusRtr] = useState(false);
-  const [caucusRtrCountry, setCaucusRtrCountry] = useState('');
-  const [rtrCaucusId, setRtrCaucusId] = useState<string | null>(null);
   const isRtrActiveRef = useRef(false);
 
   useEffect(() => {
@@ -494,14 +504,15 @@ function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee
     const delegate = committee.delegates.find((d) => d.id === delegateId);
     if (!delegate) return;
     if (committee.caucus?.currentSpeaker === delegate.country) return;
-    const maxSpeakers = caucus.speakingTime > 0 ? Math.floor(caucus.remainingTime / caucus.speakingTime) : 0;
-    if ((committee.caucusQueue ?? []).length >= maxSpeakers) return;
     const queue = committee.caucusQueue ?? [];
     const proposerDelegate = caucus.proposedBy
       ? committee.delegates.find((d) => d.country === caucus.proposedBy)
       : null;
     const lastPinnedId = caucus.proposerPosition === 'last' && proposerDelegate
       ? proposerDelegate.id : null;
+    const speakTime = caucus.speakingTime > 0 ? caucus.speakingTime : 1;
+    const maxByTime = Math.floor(caucus.remainingTime / speakTime);
+    if (queue.length >= maxByTime) return;
     const lastIdx = lastPinnedId ? queue.findIndex((s) => s.delegateId === lastPinnedId) : -1;
     const entry = { delegateId, country: delegate.country };
     const newList = lastIdx !== -1
@@ -514,9 +525,7 @@ function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee
   const handleExtendCaucus = (extraSecs: number) => {
     updateLocal(setCommittee, (c) => {
       if (!c.caucus) return c;
-      const newRemaining = c.caucus.remainingTime + extraSecs;
-      const newTotal = c.caucus.totalTime + extraSecs;
-      const updated = { ...c.caucus, remainingTime: newRemaining, totalTime: newTotal };
+      const updated = { ...c.caucus, remainingTime: c.caucus.remainingTime + extraSecs, totalTime: c.caucus.totalTime + extraSecs };
       updateCaucusInDB(committee.id, updated);
       return { ...c, caucus: updated };
     });
@@ -563,26 +572,47 @@ function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee
     updateLocal(setCommittee, (c) => ({ ...c, caucus: null, phase: 'speakers-list', caucusQueue: [] }), true);
   };
 
+  const handleRestartSpeakerTime = () => {
+    setSpeakerRunning(false);
+    updateLocal(setCommittee, (c) => {
+      if (!c.caucus) return c;
+      const alreadyUsed = c.caucus.speakingTime - c.caucus.speakerTimeRemaining;
+      const newRemaining = Math.min(c.caucus.remainingTime + alreadyUsed, c.caucus.totalTime);
+      const updated = { ...c.caucus, speakerTimeRemaining: c.caucus.speakingTime, remainingTime: newRemaining };
+      updateCaucusInDB(committee.id, updated);
+      return { ...c, caucus: updated };
+    });
+  };
+
   const handleCaucusRtr = () => {
     if (!caucusRtrCountry) return;
     const delegate = committee.delegates.find((d) => d.country === caucusRtrCountry && d.status !== 'absent');
     if (!delegate) return;
     const rtrEntry = { delegateId: delegate.id, country: caucusRtrCountry };
+    const newQueue = [rtrEntry, ...(committee.caucusQueue ?? [])];
     updateLocal(setCommittee, (c) => ({
       ...c,
-      caucusQueue: [rtrEntry, ...(c.caucusQueue ?? [])],
+      caucusQueue: newQueue,
       caucus: c.caucus ? { ...c.caucus, speakerTimeRemaining: Math.min(30, c.caucus.remainingTime) } : c.caucus,
     }));
-    // RTR inserted at front — position 0 (other entries will shift on next reorder)
-    addToCaucusListInDB(committee.id, delegate.id, caucusRtrCountry, 0);
-    setRtrCaucusId(delegate.id);
+    reorderSpeakersListInDB(committee.id, newQueue, 'caucus');
     isRtrActiveRef.current = true;
     setCaucusRtrCountry('');
-    setShowCaucusRtr(false);
+    setCaucusActivePopover(null);
   };
 
   const speakerProgress = caucus.speakingTime > 0 ? (caucus.speakerTimeRemaining / caucus.speakingTime) * 100 : 0;
-  const totalProgress = caucus.totalTime > 0 ? (caucus.remainingTime / caucus.totalTime) * 100 : 0;
+
+  const proposerDelegate = caucus.proposedBy
+    ? committee.delegates.find((d) => d.country === caucus.proposedBy)
+    : null;
+  const lastSpeakerDelegateId = caucus.proposerPosition === 'last' && proposerDelegate
+    ? proposerDelegate.id : null;
+
+  const speakTime = caucus.speakingTime > 0 ? caucus.speakingTime : 1;
+  const maxByTime = Math.floor(caucus.remainingTime / speakTime);
+  const currentQueueLength = (committee.caucusQueue ?? []).length;
+  const isCustomTdT = !!(caucus.purpose?.includes('Custom') && caucus.purpose?.startsWith('Tour de Table'));
 
   // ── Tour de Table — dedicated view, never shares Mod Caucus UI ──────────────
   const isTdT = caucus.purpose?.startsWith('Tour de Table') ?? false;
@@ -654,106 +684,76 @@ function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee
   }
   // ── End Tour de Table view ────────────────────────────────────────────────────
 
-  const proposerDelegate = caucus.proposedBy
-    ? committee.delegates.find((d) => d.country === caucus.proposedBy)
-    : null;
-  const lastSpeakerDelegateId = caucus.proposerPosition === 'last' && proposerDelegate
-    ? proposerDelegate.id : null;
-
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <div className="flex-1 flex flex-col items-center justify-center px-8 py-4 min-h-0">
-        <div className="text-center mb-3">
-          <p className="text-5xl font-black text-[#B8844A] tracking-tight">{moderatedName.toUpperCase()}</p>
-          {caucus.purpose && <p className="text-4xl font-bold text-[#C4A882] mt-1">{caucus.purpose}</p>}
-          {spokenCountries.length > 0 && (
-            <p className="text-xs text-yellow-500 mt-0.5">{spokenCountries.length} delegate{spokenCountries.length !== 1 ? 's' : ''} spoke</p>
-          )}
-        </div>
+      <div className="flex-1 flex flex-col items-center justify-center px-4 py-4 overflow-hidden">
         {caucus.currentSpeaker ? (
           <>
-            {committee.caucusQueue.length > 0 && (
-              <div className="mb-4 w-full flex justify-center">
-                <CaucusSpeakerQueue
-                  committee={{...committee, caucusQueue: committee.caucusQueue.slice(1)}}
-                  spokenCountries={spokenCountries}
-                  onRemove={handleRemoveFromQueue}
-                  onReorder={handleReorderCaucusQueue}
-                  lastSpeakerDelegateId={lastSpeakerDelegateId}
-                  currentSpeakerCountry={caucus.currentSpeaker}
-                />
-              </div>
+            {(committee.caucusQueue ?? []).length > 0 && (
+              <DraggableSpeakersQueue
+                list={committee.caucusQueue}
+                onReorder={handleReorderCaucusQueue}
+                onRemove={handleRemoveFromQueue}
+                lastSpeakerDelegateId={lastSpeakerDelegateId}
+              />
             )}
-            <FlagCircle country={caucus.currentSpeaker} size="xl" />
-            <h1 className="text-3xl font-black text-white mt-3 mb-1 text-center">{caucus.currentSpeaker}</h1>
-            <div className={`text-6xl font-black font-mono mt-2 mb-3 tabular-nums ${caucus.speakerTimeRemaining <= 10 ? 'text-red-500' : caucus.speakerTimeRemaining <= 30 ? 'text-yellow-500' : 'text-white'}`}>
-              {formatTime(caucus.speakerTimeRemaining)}
+            <div className="flex flex-col items-center">
+              <div className="ring-4 ring-[#7B4A1E] rounded-full">
+                <div className="relative w-36 h-36 rounded-full overflow-hidden bg-[#2E1E0F] shrink-0">
+                  <span style={{ fontSize: '8rem', lineHeight: '1', position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>
+                    {(() => { const f = getCountryByName(caucus.currentSpeaker); return f ? getFlagEmoji(f.code) : '🌐'; })()}
+                  </span>
+                </div>
+              </div>
+              <h1 className="text-5xl font-black text-white mt-2 mb-1 text-center">{caucus.currentSpeaker}</h1>
+              <div className={`text-8xl font-black font-mono mt-2 mb-3 tabular-nums ${caucus.speakerTimeRemaining <= 10 ? 'text-red-500' : caucus.speakerTimeRemaining <= 30 ? 'text-yellow-600' : 'text-white'}`}>
+                {formatTime(caucus.speakerTimeRemaining)}
+              </div>
+              <div className="w-full max-w-2xl h-2 bg-[#2E1E0F] rounded-full overflow-hidden mb-3">
+                <div className={`h-full rounded-full transition-all ${speakerProgress > 50 ? 'bg-[#B8844A]' : speakerProgress > 20 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{ width: `${speakerProgress}%` }} />
+              </div>
             </div>
-            <div className="w-full max-w-md h-2 bg-[#2E1E0F] rounded-full overflow-hidden mb-4">
-              <div className={`h-full rounded-full transition-all ${speakerProgress > 50 ? 'bg-[#B8844A]' : speakerProgress > 20 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{ width: `${speakerProgress}%` }} />
-            </div>
-            <div className="flex gap-3 w-full max-w-sm flex-wrap justify-center">
-              <button
-                onClick={() => {
-                  setSpeakerRunning(false);
-                  updateLocal(setCommittee, (c) => {
-                    if (!c.caucus) return c;
-                    const resetTo = Math.min(c.caucus.speakingTime, c.caucus.remainingTime);
-                    return { ...c, caucus: { ...c.caucus, speakerTimeRemaining: resetTo } };
-                  });
-                }}
-                className="px-3 py-2.5 rounded-xl font-bold text-xs bg-[#2E1E0F] hover:bg-[#3D2A15] text-[#C4A882] transition-colors border border-[#2E1E0F]"
-                title="Restart speaker time"
-              >↺</button>
-              <button onClick={() => setSpeakerRunning((r) => !r)} className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-colors ${speakerRunning ? 'bg-yellow-600 hover:bg-yellow-500 text-white' : 'bg-[#3D6B35] hover:bg-[#4A7C42] text-white'}`}>
+            <div className="flex gap-2 w-full max-w-sm mt-1 flex-wrap justify-center">
+              <button onClick={handleRestartSpeakerTime} title="Restart speaker time"
+                className="px-3 py-3 bg-[#2E1E0F] hover:bg-[#3D2A15] border border-[#3D2A15] hover:border-[#7B4A1E] rounded-xl font-bold text-sm text-[#C4A882] transition-colors">
+                ↺
+              </button>
+              <button onClick={() => setSpeakerRunning((r) => !r)}
+                className={`flex-1 py-3 px-6 rounded-xl font-bold text-base transition-colors ${speakerRunning ? 'bg-yellow-600 hover:bg-yellow-500 text-white' : 'bg-[#3D6B35] hover:bg-[#4A7C42] text-white'}`}>
                 {speakerRunning ? '⏸ Pause' : '▶ Start'}
               </button>
-              <button onClick={handleNext} className="flex-1 bg-[#2E1E0F] hover:bg-[#3D2A15] text-white py-2.5 rounded-xl font-bold text-sm transition-colors">
+              <button onClick={handleNext} disabled={(committee.caucusQueue ?? []).length === 0}
+                className="flex-1 bg-[#2E1E0F] hover:bg-[#3D2A15] disabled:opacity-40 text-white py-3 px-6 rounded-xl font-bold text-base transition-colors">
                 Next →
               </button>
               <button
-                onClick={() => setShowCaucusRtr((v) => !v)}
-                className={`px-3 py-2.5 rounded-xl font-bold text-xs transition-colors ${showCaucusRtr ? 'bg-orange-600 border-orange-500 text-white' : 'bg-orange-900/40 hover:bg-orange-800/50 border border-orange-700/40 text-orange-300'}`}
-              >
-                Right of Reply
+                onClick={() => setCaucusActivePopover(caucusActivePopover === 'extraTime' ? null : 'extraTime')}
+                title="Add time"
+                className={`px-3 py-3 border rounded-xl font-bold text-sm transition-colors ${caucusActivePopover === 'extraTime' ? 'bg-emerald-900/40 border-emerald-700/50 text-emerald-300' : 'bg-[#2E1E0F] hover:bg-emerald-950/50 hover:border-emerald-800/50 border-[#3D2A15] text-[#C4A882]'}`}>
+                +⏱
               </button>
-            </div>
-            {showCaucusRtr && (
-              <div className="mt-3 bg-[#1A1209] border border-orange-700/40 rounded-xl p-3 w-full max-w-sm">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs text-orange-400 font-semibold">Right of Reply (30s)</span>
-                  <button onClick={() => setShowCaucusRtr(false)} className="text-[#7A5A38] hover:text-white text-sm">✕</button>
-                </div>
-                <div className="flex gap-2 items-center mb-2">
-                  <RtrCountryInput committee={committee} value={caucusRtrCountry} onChange={setCaucusRtrCountry} />
-                </div>
+              {!isCustomTdT && (
                 <button
-                  onClick={handleCaucusRtr}
-                  disabled={!caucusRtrCountry}
-                  className="w-full py-2 bg-orange-600 hover:bg-orange-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs rounded-lg font-bold transition-colors"
-                >
-                  Grant Right of Reply
+                  onClick={() => setCaucusActivePopover(caucusActivePopover === 'rightToReply' ? null : 'rightToReply')}
+                  className={`px-3 py-3 border rounded-xl font-bold text-xs transition-colors ${caucusActivePopover === 'rightToReply' ? 'bg-orange-600 border-orange-500 text-white' : 'bg-orange-900/40 hover:bg-orange-800/50 border-orange-700/40 text-orange-300'}`}>
+                  Right of Reply
                 </button>
-              </div>
-            )}
+              )}
+            </div>
           </>
         ) : (
           <>
-            {committee.caucusQueue.length > 0 && (
-              <div className="mb-4 w-full flex justify-center">
-                <CaucusSpeakerQueue
-                  committee={committee}
-                  spokenCountries={spokenCountries}
-                  onRemove={handleRemoveFromQueue}
-                  onReorder={handleReorderCaucusQueue}
-                  lastSpeakerDelegateId={lastSpeakerDelegateId}
-                  currentSpeakerCountry={null}
-                />
-              </div>
+            {(committee.caucusQueue ?? []).length > 0 && (
+              <DraggableSpeakersQueue
+                list={committee.caucusQueue}
+                onReorder={handleReorderCaucusQueue}
+                onRemove={handleRemoveFromQueue}
+                lastSpeakerDelegateId={lastSpeakerDelegateId}
+              />
             )}
-            <div className="text-5xl mb-3">🎙</div>
-            <h2 className="text-2xl font-black text-white mb-1">No Current Speaker</h2>
-            <p className="text-[#C4A882] mb-4 text-center text-sm">Add delegates below, then call the first speaker.</p>
+            <div className="text-7xl mb-6">🎙</div>
+            <h2 className="text-3xl font-black text-white mb-2">No Current Speaker</h2>
+            <p className="text-[#C4A882] mb-4 text-center">Add delegates below, then call the first speaker.</p>
             <button onClick={handleNext} disabled={(committee.caucusQueue ?? []).length === 0}
               className="bg-[#7B4A1E] hover:bg-[#8B5A2B] disabled:bg-[#2E1E0F] disabled:text-[#7A5A38] text-white px-8 py-3 rounded-xl font-bold transition-colors">
               Call First Speaker
@@ -761,25 +761,24 @@ function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee
           </>
         )}
       </div>
-      <div className="border-t border-[#2E1E0F] bg-[#0D0906] px-6 py-3">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="shrink-0">
-            <p className="text-xs text-[#7A5A38] font-mono">TOTAL REMAINING</p>
-            <p className={`text-lg font-black font-mono ${caucus.remainingTime <= 30 ? 'text-red-500' : 'text-white'}`}>{formatTime(caucus.remainingTime)}</p>
+      <div className="border-t border-[#2E1E0F] bg-[#0D0906] px-6 py-4">
+        <div className="flex items-center gap-3 mb-4">
+          <span className="text-xs text-[#7A5A38] font-mono shrink-0">TOTAL</span>
+          <p className={`text-lg font-black font-mono shrink-0 ${caucus.remainingTime <= 30 ? 'text-red-500' : 'text-white'}`}>{formatTime(caucus.remainingTime)}</p>
+          <div className="flex-1 h-2 bg-[#2E1E0F] rounded-full overflow-hidden">
+            <div className="h-full bg-[#B8844A]/60 rounded-full transition-all" style={{ width: `${caucus.totalTime > 0 ? (caucus.remainingTime / caucus.totalTime) * 100 : 0}%` }} />
           </div>
-          <div className="flex-1 h-1.5 bg-[#2E1E0F] rounded-full overflow-hidden">
-            <div className="h-full bg-[#B8844A]/60 rounded-full transition-all" style={{ width: `${totalProgress}%` }} />
-          </div>
-          <span className="text-xs text-[#7A5A38]">ticks with speaker</span>
-          <button onClick={() => setShowExtend((v) => !v)} className="px-3 py-1.5 rounded-lg font-bold text-xs bg-[#2E1E0F] hover:bg-emerald-950/50 text-[#C4A882] hover:text-emerald-400 transition-colors border border-[#2E1E0F] hover:border-emerald-900/50">
+          <button onClick={() => setShowExtend((v) => !v)}
+            className="px-3 py-1.5 rounded-lg font-bold text-xs bg-[#2E1E0F] hover:bg-emerald-950/50 text-[#C4A882] hover:text-emerald-400 transition-colors border border-[#2E1E0F] hover:border-emerald-900/50">
             Extend
           </button>
-          <button onClick={handleEndCaucus} className="px-3 py-1.5 rounded-lg font-bold text-xs bg-[#2E1E0F] hover:bg-red-950/50 text-[#C4A882] hover:text-red-400 transition-colors border border-[#2E1E0F] hover:border-red-900/50">
+          <button onClick={handleEndCaucus}
+            className="px-3 py-1.5 rounded-lg font-bold text-xs bg-[#2E1E0F] hover:bg-red-950/50 text-[#C4A882] hover:text-red-400 transition-colors border border-[#2E1E0F] hover:border-red-900/50">
             End Caucus
           </button>
         </div>
         {showExtend && (
-          <div className="flex items-center gap-2 mb-2">
+          <div className="flex items-center gap-2 mb-3">
             <span className="text-xs text-emerald-400 font-semibold shrink-0">Extend by</span>
             {[1, 2, 5, 10].map((m) => (
               <button key={m} onClick={() => handleExtendCaucus(m * 60)}
@@ -799,8 +798,8 @@ function ModeratedCaucusView({ committee, setCommittee }: { committee: Committee
           committee={committee}
           spokenCountries={spokenCountries}
           onAdd={handleAddToQueue}
-          maxSpeakers={caucus.speakingTime > 0 ? Math.floor(caucus.remainingTime / caucus.speakingTime) : 0}
-          currentQueueLength={(committee.caucusQueue ?? []).length}
+          maxSpeakers={maxByTime}
+          currentQueueLength={currentQueueLength}
         />
       </div>
     </div>
@@ -1018,6 +1017,9 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
   const [activePopover, setActivePopover] = useState<'extraTime' | 'rightToReply' | null>(null);
   const [extraTimeSecs, setExtraTimeSecs] = useState('');
   const [extraTimeAdded, setExtraTimeAdded] = useState(false);
+  const [caucusActivePopover, setCaucusActivePopover] = useState<'extraTime' | 'rightToReply' | null>(null);
+  const [caucusExtraTimeSecs, setCaucusExtraTimeSecs] = useState('');
+  const [caucusRtrCountry, setCaucusRtrCountry] = useState('');
   // RTR overlay — completely independent of GSL
   const [rtrOpen, setRtrOpen] = useState(false);
   const [rtrCountry, setRtrCountry] = useState('');
@@ -1696,7 +1698,16 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
             )}
             <main className="flex-1 overflow-hidden flex flex-col min-w-0">
               {committee.phase === 'moderated-caucus' && committee.caucus && (
-                <ModeratedCaucusView committee={committee} setCommittee={setCommittee} />
+                <ModeratedCaucusView
+                  committee={committee}
+                  setCommittee={setCommittee}
+                  caucusActivePopover={caucusActivePopover}
+                  setCaucusActivePopover={setCaucusActivePopover}
+                  caucusExtraTimeSecs={caucusExtraTimeSecs}
+                  setCaucusExtraTimeSecs={setCaucusExtraTimeSecs}
+                  caucusRtrCountry={caucusRtrCountry}
+                  setCaucusRtrCountry={setCaucusRtrCountry}
+                />
               )}
               {committee.phase === 'unmoderated-caucus' && committee.caucus && (
                 <UnmoderatedCaucusView committee={committee} setCommittee={setCommittee} />
@@ -1908,6 +1919,102 @@ export default function ChairSession({ params }: { params: Promise<{ code: strin
       {/* RTR OVERLAY — fixed position, completely outside document flow.
           Never render this inside any flex/grid container — it must not
           affect the layout of the GSL centre column in any way. */}
+      {/* CAUCUS ADD TIME OVERLAY */}
+      {committee.phase === 'moderated-caucus' && caucusActivePopover === 'extraTime' && (
+        <div className="fixed z-50" style={{ top: '50%', right: '2rem', transform: 'translateY(-50%)' }}>
+          <div className="bg-[#1A1209] border border-emerald-700/40 rounded-xl p-4 w-72 shadow-2xl">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs text-emerald-400 font-semibold">Add time</span>
+              <button onClick={() => setCaucusActivePopover(null)} className="text-[#7A5A38] hover:text-white text-sm">✕</button>
+            </div>
+            <div className="flex gap-2 mb-2">
+              {[15, 30, 60].map((s) => (
+                <button key={s}
+                  onClick={() => {
+                    if (!committee.caucus) return;
+                    const updated = { ...committee.caucus, speakerTimeRemaining: committee.caucus.speakerTimeRemaining + s };
+                    updateLocal(setCommittee, (c) => ({ ...c, caucus: updated }));
+                    updateCaucusInDB(committee.id, updated);
+                    setCaucusActivePopover(null);
+                    setCaucusExtraTimeSecs('');
+                  }}
+                  className="flex-1 py-2 bg-emerald-900/30 hover:bg-emerald-800/40 border border-emerald-700/30 text-emerald-300 text-xs rounded-lg font-bold transition-colors">
+                  {s === 60 ? '1m' : `${s}s`}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2 items-center">
+              <input
+                type="number"
+                value={caucusExtraTimeSecs}
+                onChange={(e) => setCaucusExtraTimeSecs(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const n = parseInt(caucusExtraTimeSecs);
+                    if (n > 0 && committee.caucus) {
+                      const updated = { ...committee.caucus, speakerTimeRemaining: committee.caucus.speakerTimeRemaining + n };
+                      updateLocal(setCommittee, (c) => ({ ...c, caucus: updated }));
+                      updateCaucusInDB(committee.id, updated);
+                      setCaucusActivePopover(null);
+                      setCaucusExtraTimeSecs('');
+                    }
+                  }
+                }}
+                placeholder="Custom sec…"
+                style={{ MozAppearance: 'textfield' } as React.CSSProperties}
+                className="flex-1 bg-[#150F09] border border-[#2E1E0F] rounded-lg px-2 py-1.5 text-white text-xs focus:outline-none focus:border-emerald-700/50 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              />
+              <button
+                onClick={() => {
+                  const n = parseInt(caucusExtraTimeSecs);
+                  if (n > 0 && committee.caucus) {
+                    const updated = { ...committee.caucus, speakerTimeRemaining: committee.caucus.speakerTimeRemaining + n };
+                    updateLocal(setCommittee, (c) => ({ ...c, caucus: updated }));
+                    updateCaucusInDB(committee.id, updated);
+                    setCaucusActivePopover(null);
+                    setCaucusExtraTimeSecs('');
+                  }
+                }}
+                disabled={!caucusExtraTimeSecs || parseInt(caucusExtraTimeSecs) <= 0}
+                className="px-3 py-1.5 bg-emerald-800/50 hover:bg-emerald-700/60 disabled:opacity-40 text-emerald-300 text-xs rounded-lg font-semibold transition-colors">
+                Add ↵
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* CAUCUS RTR OVERLAY */}
+      {committee.phase === 'moderated-caucus' && caucusActivePopover === 'rightToReply' && (
+        <div className="fixed z-50" style={{ top: '50%', right: '2rem', transform: 'translateY(-50%)' }}>
+          <div className="bg-[#1A1209] border border-orange-700/40 rounded-xl p-4 w-72 shadow-2xl">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs text-orange-400 font-semibold">Right of Reply</span>
+              <button onClick={() => setCaucusActivePopover(null)} className="text-[#7A5A38] hover:text-white text-sm">✕</button>
+            </div>
+            <RtrCountryInput committee={committee} value={caucusRtrCountry} onChange={setCaucusRtrCountry} />
+            <button
+              onClick={() => {
+                if (!caucusRtrCountry || !committee.caucus) return;
+                const delegate = committee.delegates.find((d) => d.country === caucusRtrCountry && d.status !== 'absent');
+                if (!delegate) return;
+                const rtrEntry = { delegateId: delegate.id, country: caucusRtrCountry };
+                const newQueue = [rtrEntry, ...(committee.caucusQueue ?? [])];
+                updateLocal(setCommittee, (c) => ({
+                  ...c,
+                  caucusQueue: newQueue,
+                  caucus: c.caucus ? { ...c.caucus, speakerTimeRemaining: Math.min(30, c.caucus.remainingTime) } : c.caucus,
+                }));
+                reorderSpeakersListInDB(committee.id, newQueue, 'caucus');
+                setCaucusRtrCountry('');
+                setCaucusActivePopover(null);
+              }}
+              disabled={!caucusRtrCountry}
+              className="w-full mt-3 py-2 bg-orange-600 hover:bg-orange-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs rounded-lg font-bold transition-colors">
+              Grant Right of Reply
+            </button>
+          </div>
+        </div>
+      )}
       {activePopover === 'rightToReply' && (
         <div
           className="fixed z-50"
