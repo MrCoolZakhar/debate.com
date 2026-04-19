@@ -699,16 +699,18 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       setLoading(false);
       if (found) {
         unsubscribe = subscribeToCommittee(found.id, async (table) => {
-          // The timer writes current_speaker.time_remaining every second.
-          // Never re-fetch for it — the chair manages that entirely via local setInterval.
+          // Timer writes current_speaker every second — chair owns this entirely, never re-fetch.
           if (table === 'current_speaker') return;
 
           const withinDebounce = Date.now() - localUpdateTime.current < 3000;
-          const updated = await getCommitteeByCode(code);
-          if (!updated) return;
 
+          // Within debounce: structural tables (speakers_list, delegates) changed because
+          // the chair just wrote them. Skip the fetch entirely — optimistic state is truth.
+          // Only fetch for motion/session/document events where another actor may have written.
           if (withinDebounce) {
-            // During debounce: only sync pendingMotions and session state — never touch timer or structural state
+            if (table === 'speakers_list' || table === 'delegates') return;
+            const updated = await getCommitteeByCode(code);
+            if (!updated) return;
             setCommittee((prev) => {
               if (!prev) return prev;
               let next = { ...prev, pendingMotions: updated.pendingMotions };
@@ -722,7 +724,11 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
             return;
           }
 
-          // Outside debounce: full update
+          // Outside debounce: full update — another actor (delegate, co-chair) changed something.
+          // Small delay for speakers_list to let Supabase reads catch up with the write.
+          if (table === 'speakers_list') await new Promise((r) => setTimeout(r, 300));
+          const updated = await getCommitteeByCode(code);
+          if (!updated) return;
           if (updated.endedAt) {
             setSessionEnded(true);
           } else if (updated.suspendedAt) {
