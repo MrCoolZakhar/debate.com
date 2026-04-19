@@ -513,80 +513,6 @@ function UnmoderatedCaucusView({ committee, setCommittee }: { committee: Committ
   );
 }
 
-// ── Vote Circle ───────────────────────────────────────────────────────────────
-function VoteCircle({ label, count, total, strokeColor, onInc, onDec }: {
-  label: string; count: number; total: number; strokeColor: string; onInc: () => void; onDec: () => void;
-}) {
-  const r = 36; const circumference = 2 * Math.PI * r;
-  const fraction = total > 0 ? Math.min(count / total, 1) : 0;
-  const labelColor = label === 'In Favour' ? 'text-green-400' : label === 'Against' ? 'text-red-400' : 'text-yellow-400';
-  return (
-    <div className="flex flex-col items-center gap-2">
-      <div className="relative">
-        <svg width="110" height="110" viewBox="0 0 100 100">
-          <circle cx="50" cy="50" r={r} fill="none" stroke="#2E1E0F" strokeWidth="10" />
-          <circle cx="50" cy="50" r={r} fill="none" stroke={strokeColor} strokeWidth="10"
-            strokeDasharray={circumference} strokeDashoffset={circumference * (1 - fraction)}
-            strokeLinecap="round" transform="rotate(-90 50 50)" style={{ transition: 'stroke-dashoffset 0.3s' }} />
-          <text x="50" y="56" textAnchor="middle" fill="white" fontSize="24" fontWeight="bold">{count}</text>
-        </svg>
-        <button onClick={onInc} className="absolute -top-1 -right-1 w-7 h-7 bg-[#2E1E0F] hover:bg-[#3D2A15] rounded-full text-white text-sm font-bold transition-colors">+</button>
-        <button onClick={onDec} disabled={count === 0} className="absolute -bottom-1 -right-1 w-7 h-7 bg-[#2E1E0F] hover:bg-[#3D2A15] disabled:opacity-30 rounded-full text-white text-sm font-bold transition-colors">−</button>
-      </div>
-      <span className={`text-sm font-semibold ${labelColor}`}>{label}</span>
-    </div>
-  );
-}
-
-// ── Voting View ───────────────────────────────────────────────────────────────
-function VotingView({ committee, setCommittee }: { committee: Committee; setCommittee: CommitteeSetter }) {
-  const [votes, setVotes] = useState<Record<string, { for: number; against: number; abstain: number }>>({});
-  const totalPresent = committee.delegates.filter((d) => d.status !== 'absent').length;
-  const approved = committee.resolutions.filter((r) => r.status === 'approved');
-  const adj = (id: string, field: 'for' | 'against' | 'abstain', delta: number) =>
-    setVotes((p) => { const v = p[id] || { for: 0, against: 0, abstain: 0 }; return { ...p, [id]: { ...v, [field]: Math.max(0, v[field] + delta) } }; });
-  const handleBack = () => { updateLocal(setCommittee, (c) => ({ ...c, phase: 'speakers-list' })); setPhaseInDB(committee.id, 'speakers-list'); };
-  return (
-    <div className="flex-1 overflow-y-auto">
-      <div className="p-8 max-w-2xl mx-auto w-full">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-black text-white">Voting Procedure</h2>
-          <button onClick={handleBack} className="text-sm text-[#C4A882] hover:text-white border border-[#2E1E0F] hover:border-[#7B4A1E] px-3 py-1.5 rounded-lg transition-colors">← Back to GSL</button>
-        </div>
-        {approved.length === 0 ? (
-          <div className="text-center py-12 text-[#7A5A38]">No approved resolutions to vote on.</div>
-        ) : approved.map((res) => {
-          const v = votes[res.id] || { for: 0, against: 0, abstain: 0 };
-          const done = res.status === 'passed' || res.status === 'failed';
-          return (
-            <div key={res.id} className="bg-[#1A1209] border border-[#2E1E0F] rounded-xl p-6 mb-4">
-              <h3 className="font-bold text-white mb-6 text-lg text-center">{res.title}</h3>
-              {done ? (
-                <div className={`text-center py-6 rounded-xl ${res.status === 'passed' ? 'bg-green-900/20' : 'bg-red-900/20'}`}>
-                  <p className={`text-3xl font-black ${res.status === 'passed' ? 'text-green-400' : 'text-red-400'}`}>{res.status === 'passed' ? 'PASSED ✓' : 'FAILED ✗'}</p>
-                  <p className="text-sm text-[#C4A882] mt-2">{v.for} in favour · {v.against} against · {v.abstain} abstain</p>
-                </div>
-              ) : (
-                <div>
-                  <div className="flex justify-around items-center mb-8">
-                    <VoteCircle label="In Favour" count={v.for} total={totalPresent} strokeColor="#22c55e" onInc={() => adj(res.id, 'for', 1)} onDec={() => adj(res.id, 'for', -1)} />
-                    <VoteCircle label="Abstain" count={v.abstain} total={totalPresent} strokeColor="#eab308" onInc={() => adj(res.id, 'abstain', 1)} onDec={() => adj(res.id, 'abstain', -1)} />
-                    <VoteCircle label="Against" count={v.against} total={totalPresent} strokeColor="#ef4444" onInc={() => adj(res.id, 'against', 1)} onDec={() => adj(res.id, 'against', -1)} />
-                  </div>
-                  <button onClick={() => { const result = v.for > v.against ? 'passed' : 'failed'; updateLocal(setCommittee, (c) => ({ ...c, resolutions: c.resolutions.map((r) => r.id === res.id ? { ...r, status: result } : r) })); }}
-                    className="w-full bg-[#7B4A1E] hover:bg-[#8B5A2B] text-white py-3 rounded-xl font-bold transition-colors">
-                    Finalize Vote
-                  </button>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 // ── Moderated Caucus Main ─────────────────────────────────────────────────────
 function ModeratedCaucusMain({
   committee, setCommittee,
@@ -1680,9 +1606,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               {committee.phase === 'unmoderated-caucus' && committee.caucus && (
                 <UnmoderatedCaucusView committee={committee} setCommittee={setCommittee} />
               )}
-              {committee.phase === 'voting' && (
-                <VotingView committee={committee} setCommittee={setCommittee} />
-              )}
+
 {committee.phase === 'speakers-list' && (
                 <>
                 <div className="flex-1 flex flex-row overflow-hidden">

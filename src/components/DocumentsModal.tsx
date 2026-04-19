@@ -472,7 +472,7 @@ function TimingSetup({ doc, onStart, onSkip }: {
           </button>
           <button onClick={onSkip}
             className="px-6 py-3.5 rounded-2xl font-bold bg-[#2E1E0F] hover:bg-[#3D2A15] text-[#C4A882] border border-[#2E1E0F] transition-colors">
-            Skip to Vote
+            Skip
           </button>
         </div>
       </div>
@@ -531,15 +531,9 @@ function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation
         </div>
       )}
       <div className="flex gap-2 pt-1">
-        {nextStatus && doc.status !== 'passed' && doc.status !== 'failed' && (
+        {nextStatus && doc.status !== 'passed' && doc.status !== 'failed' && doc.status !== 'introduced' && (
           <button onClick={handleAdvance} className="flex-1 bg-[#7B4A1E] hover:bg-[#8B5A2B] text-white py-2 rounded-lg font-bold text-xs transition-colors">
             {needsPresentation ? 'Introduce →' : `Advance → ${STATUS_META[nextStatus].label}`}
-          </button>
-        )}
-        {doc.status === 'introduced' && doc.type === 'draft-resolution' && (
-          <button onClick={() => onStatusChange(doc.id, 'failed')}
-            className="flex-1 bg-[#2E1E0F] hover:bg-red-950/40 border border-[#2E1E0F] hover:border-red-800/40 text-[#C4A882] hover:text-red-500 py-2 rounded-lg font-bold text-xs transition-colors">
-            ✗ Fail
           </button>
         )}
       </div>
@@ -563,7 +557,6 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate }
   const [stage, setStage] = useState<PresentationStage>(null);
   const [timings, setTimings] = useState({ reading: 0, presentation: 0, qa: 0 });
   const [showDocContent, setShowDocContent] = useState(false);
-  const [presentationComplete, setPresentationComplete] = useState(false);
 
   const update = (updater: (c: Committee) => Committee) => onCommitteeUpdate?.(updater);
   const docs = (committee.documents ?? []).filter((d) => d.type === tab);
@@ -622,7 +615,6 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate }
       // DR: presentation complete — stay on documents page, chair navigates to voting manually
       setStage(null);
       setActiveDoc(null);
-      setPresentationComplete(true);
     }
   };
 
@@ -633,11 +625,9 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate }
       setStage(null);
       setActiveDoc(null);
     } else {
-      // Mark as introduced, stay on documents page — chair navigates to voting manually
       handleStatusChange(activeDoc.id, 'introduced');
       setStage(null);
       setActiveDoc(null);
-      setPresentationComplete(true);
     }
   };
 
@@ -733,11 +723,11 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate }
             <SubmitForm committee={committee} type={tab} onDone={() => setShowForm(false)} onDocumentAdded={handleDocumentAdded} />
           ) : (
             <div className="px-7 pb-7 space-y-3">
-              {presentationComplete && (
-                <div className="flex items-center justify-between bg-purple-950/30 border border-purple-700/40 rounded-xl px-4 py-3">
-                  <span className="text-sm text-purple-300 font-semibold">Presentation complete. Return to voting when ready.</span>
-                  <button onClick={() => setPresentationComplete(false)} className="text-[#7A5A38] hover:text-white text-sm ml-4">✕</button>
-                </div>
+              {tab === 'draft-resolution' && (committee.documents ?? []).some((d) => d.type === 'draft-resolution' && d.status === 'introduced') && (
+                <button onClick={() => router.push(`/voting/${committee.code}`)}
+                  className="w-full bg-purple-900/40 hover:bg-purple-800/50 border border-purple-700/40 hover:border-purple-600/60 text-purple-300 hover:text-white py-3 rounded-xl font-bold text-sm transition-colors">
+                  🗳 Go to Voting
+                </button>
               )}
               {docs.length === 0 ? (
                 <div className="text-center py-10">

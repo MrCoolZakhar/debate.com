@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Committee, DelegateStatus } from '@/lib/types';
 import { getCountryByName, getFlagEmoji } from '@/lib/countries';
-import { getCommitteeByCode, setPhase as setPhaseInDB, setDelegateStatus as setDelegateStatusInDB } from '@/lib/committeeService';
+import { getCommitteeByCode, setPhase as setPhaseInDB, setDelegateStatus as setDelegateStatusInDB, updateDocumentStatus as updateDocumentStatusInDB } from '@/lib/committeeService';
 import { useSettingsStore } from '@/lib/settingsStore';
 import { SettingsPanel } from '@/components/SettingsPanel';
 
@@ -84,6 +84,10 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   const [showSettings, setShowSettings] = useState(false);
   // Local delegate statuses for roll call modal (mirrors committee.delegates)
   const [rollCallStatuses, setRollCallStatuses] = useState<Record<string, DelegateStatus>>({});
+  const [rightsTimerLimit, setRightsTimerLimit] = useState(60);
+  const [orderedRights, setOrderedRights] = useState<DelegateVote[]>([]);
+  const dragIndexRef = useRef<number | null>(null);
+  const resultPersistedRef = useRef(false);
 
   useEffect(() => {
     async function load() {
@@ -119,11 +123,11 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     return () => { if (rightsTimerRef.current) { clearInterval(rightsTimerRef.current); rightsTimerRef.current = null; } };
   }, [rightsRunning]);
 
-  // Reset rights timer when speaker index changes
+  // Reset rights timer when speaker index or limit changes
   useEffect(() => {
-    setRightsSpeakerTime(60);
+    setRightsSpeakerTime(rightsTimerLimit);
     setRightsRunning(false);
-  }, [rightsIndex]);
+  }, [rightsIndex, rightsTimerLimit]);
 
   if (loading) {
     return (
@@ -195,12 +199,20 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
 
   const passed = !p5Veto && !unanimousFail && thresholdMet;
 
+  const persistResult = (docId: string, result: 'passed' | 'failed') => {
+    if (resultPersistedRef.current) return;
+    resultPersistedRef.current = true;
+    updateDocumentStatusInDB(docId, result);
+  };
+
   const startNewVote = (docId: string) => {
     setSelectedDocId(docId);
     setVotes([]);
     setPhase('voting');
     setCurrentVoterIndex(0);
     setRightsIndex(0);
+    setOrderedRights([]);
+    resultPersistedRef.current = false;
   };
 
   const castVoteAndAdvance = (delegateId: string, country: string, choice: VoteChoice) => {
@@ -214,16 +226,19 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
 
   const handleFinishVoting = () => {
     if (withRights.length > 0) {
+      setOrderedRights([...withRights]);
       setPhase('rights-speakers');
       setRightsIndex(0);
     } else {
       setPhase('result');
+      if (selectedDoc) persistResult(selectedDoc.id, passed ? 'passed' : 'failed');
     }
   };
 
   const handleNextRightsSpeaker = () => {
-    if (rightsIndex + 1 >= withRights.length) {
+    if (rightsIndex + 1 >= orderedRights.length) {
       setPhase('result');
+      if (selectedDoc) persistResult(selectedDoc.id, passed ? 'passed' : 'failed');
     } else {
       setRightsIndex((i) => i + 1);
     }
@@ -521,53 +536,74 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       )}
 
       {/* ── Rights speakers ── */}
-      {phase === 'rights-speakers' && withRights.length > 0 && (
+      {phase === 'rights-speakers' && orderedRights.length > 0 && (
         <div className="flex-1 flex flex-col items-center justify-between py-8 px-8 overflow-hidden">
           <div className="flex-1 flex flex-col items-center justify-center min-h-0">
             <p className="text-xs text-amber-400 font-mono tracking-widest mb-6">
-              RIGHTS SPEAKERS — {rightsIndex + 1} OF {withRights.length}
+              RIGHTS SPEAKERS — {rightsIndex + 1} OF {orderedRights.length}
             </p>
             <div
               style={{ fontSize: 'min(18vw, 16vh)', lineHeight: '1' }}
               className="select-none mb-3"
             >
-              {getFlag(withRights[rightsIndex].country)}
+              {getFlag(orderedRights[rightsIndex].country)}
             </div>
             <h1
               style={{ fontSize: 'min(5vw, 4vh)' }}
               className="font-black text-white text-center mb-2"
             >
-              {withRights[rightsIndex].country}
+              {orderedRights[rightsIndex].country}
             </h1>
             <p className="text-amber-400 font-semibold">
-              {withRights[rightsIndex].choice === 'for-rights' ? '★ In Favour with Rights' : '★ Against with Rights'}
+              {orderedRights[rightsIndex].choice === 'for-rights' ? '★ In Favour with Rights' : '★ Against with Rights'}
             </p>
             {/* Rights speaker countdown timer */}
             <div className={`text-6xl font-black font-mono mt-4 tabular-nums ${rightsSpeakerTime <= 10 ? 'text-red-500' : rightsSpeakerTime <= 20 ? 'text-yellow-500' : 'text-white'}`}>
               {Math.floor(rightsSpeakerTime / 60)}:{String(rightsSpeakerTime % 60).padStart(2, '0')}
             </div>
-            <div className="flex gap-3 mt-3">
+            <div className="flex gap-2 mt-3 flex-wrap justify-center">
               <button
                 onClick={() => setRightsRunning((r) => !r)}
                 className={`px-6 py-2.5 rounded-xl font-bold text-sm transition-colors ${rightsRunning ? 'bg-yellow-600 hover:bg-yellow-500 text-white' : 'bg-[#3D6B35] hover:bg-[#4A7C42] text-white'}`}
               >
                 {rightsRunning ? '⏸ Pause' : '▶ Start'}
               </button>
+              {[30, 45, 60, 90, 120].map((s) => (
+                <button key={s} onClick={() => setRightsTimerLimit(s)}
+                  className={`px-3 py-2.5 rounded-xl font-bold text-xs transition-colors ${rightsTimerLimit === s ? 'bg-[#7B4A1E] text-white' : 'bg-[#2E1E0F] text-[#C4A882] hover:bg-[#3D2A15]'}`}>
+                  {s}s
+                </button>
+              ))}
             </div>
           </div>
 
           <div className="w-full max-w-md space-y-1 mb-4">
-            {withRights.map((v, i) => (
+            {orderedRights.map((v, i) => (
               <div
                 key={v.delegateId}
+                draggable={i > rightsIndex}
+                onDragStart={() => { dragIndexRef.current = i; }}
+                onDragOver={(e) => { if (i > rightsIndex) e.preventDefault(); }}
+                onDrop={() => {
+                  const from = dragIndexRef.current;
+                  if (from === null || from === i || from <= rightsIndex || i <= rightsIndex) return;
+                  setOrderedRights((prev) => {
+                    const arr = [...prev];
+                    const [item] = arr.splice(from, 1);
+                    arr.splice(i, 0, item);
+                    return arr;
+                  });
+                  dragIndexRef.current = null;
+                }}
                 className={`flex items-center gap-3 px-4 py-2 rounded-lg text-sm transition-opacity ${
                   i === rightsIndex
                     ? 'bg-amber-900/20 border border-amber-700/30 opacity-100'
                     : i < rightsIndex
                     ? 'opacity-30'
-                    : 'opacity-60'
+                    : 'opacity-60 cursor-grab'
                 }`}
               >
+                {i > rightsIndex && <span className="text-[#7A5A38] text-xs">⠿</span>}
                 <span className="text-[#7A5A38] text-xs w-5 font-mono text-right">{i + 1}</span>
                 <span className="text-white">{getFlag(v.country)} {v.country}</span>
                 <span className={`ml-auto text-xs ${
@@ -587,7 +623,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             onClick={() => { setRightsRunning(false); handleNextRightsSpeaker(); }}
             className="w-full max-w-md bg-[#7B4A1E] hover:bg-[#8B5A2B] text-white py-4 rounded-2xl font-black text-lg transition-colors"
           >
-            {rightsIndex + 1 < withRights.length ? 'Next Rights Speaker →' : 'See Final Result →'}
+            {rightsIndex + 1 < orderedRights.length ? 'Next Rights Speaker →' : 'See Final Result →'}
           </button>
         </div>
       )}
