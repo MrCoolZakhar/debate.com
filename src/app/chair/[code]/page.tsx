@@ -1450,39 +1450,42 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                   const delegate = committee.delegates.find((d) => d.id === delegateId);
                   if (!delegate) return;
                   if (committee.currentSpeaker?.delegateId === delegateId) return;
+                  if (queue.some((s) => s.delegateId === delegateId)) return;
                   if (queue.length >= maxByTime) return;
-                  const newList = [...queue, { delegateId, country: delegate.country }];
-                  updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: newList }));
-                  reorderSpeakersListInDB(committee.id, newList, 'caucus');
+                  const nextPosition = queue.length + 1;
+                  updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: [...(c.caucusQueue ?? []), { delegateId, country: delegate.country }] }), true);
+                  addToCaucusListInDB(committee.id, delegateId, delegate.country, nextPosition);
                 };
 
                 const handleCaucusAddFirst = (delegateId: string) => {
                   const delegate = committee.delegates.find((d) => d.id === delegateId);
                   if (!delegate) return;
+                  if (queue.some((s) => s.delegateId === delegateId)) return;
                   if (queue.length >= maxByTime) return;
-                  const without = queue.filter((s) => s.delegateId !== delegateId);
-                  const newList = [{ delegateId, country: delegate.country }, ...without];
-                  updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: newList }));
+                  const newList = [{ delegateId, country: delegate.country }, ...queue];
+                  updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: newList }), true);
+                  addToCaucusListInDB(committee.id, delegateId, delegate.country, 0);
                   reorderSpeakersListInDB(committee.id, newList, 'caucus');
                 };
 
                 const handleCaucusAddLast = (delegateId: string) => {
                   const delegate = committee.delegates.find((d) => d.id === delegateId);
                   if (!delegate) return;
+                  if (queue.some((s) => s.delegateId === delegateId)) return;
                   if (queue.length >= maxByTime) return;
-                  const without = queue.filter((s) => s.delegateId !== delegateId);
-                  const newList = [...without, { delegateId, country: delegate.country }];
-                  updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: newList }));
-                  reorderSpeakersListInDB(committee.id, newList, 'caucus');
+                  const nextPosition = queue.length + 1;
+                  const newList = [...queue, { delegateId, country: delegate.country }];
+                  updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: newList }), true);
+                  addToCaucusListInDB(committee.id, delegateId, delegate.country, nextPosition);
                 };
 
                 const handleCaucusRemoveFromQueue = (delegateId: string) => {
-                  updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: (c.caucusQueue ?? []).filter((s) => s.delegateId !== delegateId) }));
+                  updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: (c.caucusQueue ?? []).filter((s) => s.delegateId !== delegateId) }), true);
                   removeFromCaucusListInDB(committee.id, delegateId);
                 };
 
                 const handleCaucusReorderQueue = (newList: { delegateId: string; country: string }[]) => {
-                  updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: newList }));
+                  updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: newList }), true);
                   reorderSpeakersListInDB(committee.id, newList, 'caucus');
                 };
 
