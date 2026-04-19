@@ -336,8 +336,9 @@ function CaucusQueueSidebar({ committee, onRemove, onReorder, lastSpeakerDelegat
 }
 
 // ── Caucus Add Speaker Input ──────────────────────────────────────────────────
-function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, maxSpeakers, currentQueueLength }: {
+function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, onAddLast, maxSpeakers, currentQueueLength }: {
   committee: Committee; spokenCountries: string[]; onAdd: (id: string) => void;
+  onAddFirst?: (id: string) => void; onAddLast?: (id: string) => void;
   maxSpeakers?: number; currentQueueLength?: number;
 }) {
   const [query, setQuery] = useState('');
@@ -389,7 +390,23 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, maxSpeakers,
                 <span className="text-lg">{found ? getFlagEmoji(found.code) : '🌐'}</span>
                 <span className="text-sm flex-1">{d.country}</span>
                 {spoke && <span className="text-[10px] text-yellow-500 shrink-0">already spoke</span>}
-                {isFirst && !spoke && <span className="text-xs text-[#7A5A38] shrink-0">Enter ↵</span>}
+                {isFirst && !spoke && (
+                  <div className="flex items-center gap-1 shrink-0">
+                    {onAddFirst && (
+                      <button onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onAddFirst(d.id); setQuery(''); }}
+                        className="text-[10px] px-1.5 py-0.5 rounded bg-[#2E1E0F] hover:bg-[#3D2A15] text-[#B8844A] font-bold border border-[#3D2A15] transition-colors">
+                        ↑ First
+                      </button>
+                    )}
+                    {onAddLast && (
+                      <button onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onAddLast(d.id); setQuery(''); }}
+                        className="text-[10px] px-1.5 py-0.5 rounded bg-[#2E1E0F] hover:bg-[#3D2A15] text-[#B8844A] font-bold border border-[#3D2A15] transition-colors">
+                        ↓ Last
+                      </button>
+                    )}
+                    <span className="text-xs text-[#7A5A38]">Enter ↵</span>
+                  </div>
+                )}
               </button>
             );
           })}
@@ -423,27 +440,36 @@ function ModeratedCaucusView({
   const speakerTime = caucus.speakingTime;
   const queue = committee.caucusQueue ?? [];
 
-  // Ticks caucus.remainingTime down once per second while running — pure local,
-  // no DB write per tick. DB synced on next/pause/end.
-  const totalRef = useRef<NodeJS.Timeout | null>(null);
+  // Local remaining-time — derived from caucus.remainingTime at structural moments,
+  // not ticked by a separate interval. Stays in sync with speakerTimeRemaining.
+  const [localRemainingTime, setLocalRemainingTime] = useState(() => caucus.remainingTime);
+  const localRemainingRef = useRef(caucus.remainingTime);
+
+  // Reset when a new caucus loads (totalTime changes when a new motion passes)
   useEffect(() => {
-    if (timerRunning) {
-      totalRef.current = setInterval(() => {
-        updateLocal(setCommittee, (c) => {
-          if (!c.caucus) return c;
-          const newTotal = Math.max(0, c.caucus.remainingTime - 1);
-          if (newTotal === 0) {
-            updateCaucusInDB(c.id, null);
-            return { ...c, caucus: null, phase: 'speakers-list' as const };
-          }
-          return { ...c, caucus: { ...c.caucus, remainingTime: newTotal } };
-        });
-      }, 1000);
-    } else {
-      if (totalRef.current) { clearInterval(totalRef.current); totalRef.current = null; }
-    }
-    return () => { if (totalRef.current) { clearInterval(totalRef.current); totalRef.current = null; } };
-  }, [timerRunning]);
+    setLocalRemainingTime(caucus.remainingTime);
+    localRemainingRef.current = caucus.remainingTime;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [committee.id, caucus.totalTime]);
+
+  // Tick total in sync with the speaker atom — fires once per speaker tick while running.
+  // This keeps the two countdowns frame-perfect with zero drift.
+  useEffect(() => {
+    if (!timerRunning) return;
+    setLocalRemainingTime((prev) => {
+      const next = Math.max(0, prev - 1);
+      localRemainingRef.current = next;
+      if (next === 0) {
+        setTimeout(() => {
+          updateCaucusInDB(committee.id, null);
+          updateLocal(setCommittee, (c) => ({ ...c, caucus: null, phase: 'speakers-list' as const, caucusQueue: [] }), true);
+          setTimerRunning(false);
+        }, 0);
+      }
+      return next;
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [speakerTimeRemaining]);
 
   const [showExtend, setShowExtend] = useState(false);
   const [extendMins, setExtendMins] = useState(5);
@@ -459,7 +485,7 @@ function ModeratedCaucusView({
     if (!delegate) return;
     if (caucus.currentSpeaker === delegate.country) return;
     const speakTime = speakerTime > 0 ? speakerTime : 1;
-    const maxByTime = Math.floor(caucus.remainingTime / speakTime);
+    const maxByTime = Math.floor(localRemainingRef.current / speakTime);
     if (queue.length >= maxByTime) return;
     const lastIdx = lastPinnedId ? queue.findIndex((s) => s.delegateId === lastPinnedId) : -1;
     const entry = { delegateId, country: delegate.country };
@@ -493,6 +519,7 @@ function ModeratedCaucusView({
         ...c.caucus,
         currentSpeaker: next?.country ?? null,
         speakerTimeRemaining: speakerTime,
+        remainingTime: localRemainingRef.current,
         spokenCountries: newSpoken,
       };
       updateCaucusInDB(c.id, updatedCaucus);
@@ -502,12 +529,16 @@ function ModeratedCaucusView({
 
   const handleRestart = () => {
     setTimerRunning(false);
+    const used = speakerTime - speakerTimeRemaining;
     setSpeakerTimeRemaining(() => speakerTime);
+    setLocalRemainingTime((prev) => {
+      const next = Math.min(caucus.totalTime, prev + used);
+      localRemainingRef.current = next;
+      return next;
+    });
     updateLocal(setCommittee, (c) => {
       if (!c.caucus) return c;
-      const used = c.caucus.speakingTime - c.caucus.speakerTimeRemaining;
-      const newTotal = Math.min(c.caucus.totalTime, c.caucus.remainingTime + used);
-      const updated = { ...c.caucus, speakerTimeRemaining: speakerTime, remainingTime: newTotal };
+      const updated = { ...c.caucus, speakerTimeRemaining: speakerTime, remainingTime: localRemainingRef.current };
       updateCaucusInDB(c.id, updated);
       return { ...c, caucus: updated };
     });
@@ -536,9 +567,14 @@ function ModeratedCaucusView({
   };
 
   const handleExtend = (secs: number) => {
+    setLocalRemainingTime((prev) => {
+      const next = prev + secs;
+      localRemainingRef.current = next;
+      return next;
+    });
     updateLocal(setCommittee, (c) => {
       if (!c.caucus) return c;
-      const updated = { ...c.caucus, remainingTime: c.caucus.remainingTime + secs, totalTime: c.caucus.totalTime + secs };
+      const updated = { ...c.caucus, remainingTime: localRemainingRef.current, totalTime: c.caucus.totalTime + secs };
       updateCaucusInDB(c.id, updated);
       return { ...c, caucus: updated };
     });
@@ -546,10 +582,10 @@ function ModeratedCaucusView({
   };
 
   const speakerProgress = speakerTime > 0 ? (speakerTimeRemaining / speakerTime) * 100 : 0;
-  const totalProgress = caucus.totalTime > 0 ? (caucus.remainingTime / caucus.totalTime) * 100 : 0;
+  const totalProgress = caucus.totalTime > 0 ? (localRemainingTime / caucus.totalTime) * 100 : 0;
   const spokenCount = spokenCountries.length;
   const speakTime2 = speakerTime > 0 ? speakerTime : 1;
-  const maxByTime = Math.floor(caucus.remainingTime / speakTime2);
+  const maxByTime = Math.floor(localRemainingTime / speakTime2);
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -667,7 +703,7 @@ function ModeratedCaucusView({
       <div className="border-t border-[#2E1E0F] bg-[#0D0906] px-6 py-4">
         <div className="flex items-center gap-3 mb-4">
           <span className="text-xs text-[#7A5A38] font-mono shrink-0">TOTAL</span>
-          <p className={`text-lg font-black font-mono shrink-0 ${caucus.remainingTime <= 30 ? 'text-red-500' : 'text-white'}`}>{formatTime(caucus.remainingTime)}</p>
+          <p className={`text-lg font-black font-mono shrink-0 ${localRemainingTime <= 30 ? 'text-red-500' : 'text-white'}`}>{formatTime(localRemainingTime)}</p>
           <div className="flex-1 h-2 bg-[#2E1E0F] rounded-full overflow-hidden">
             <div className="h-full bg-[#B8844A]/60 rounded-full transition-all" style={{ width: `${totalProgress}%` }} />
           </div>
@@ -701,6 +737,25 @@ function ModeratedCaucusView({
           committee={committee}
           spokenCountries={spokenCountries}
           onAdd={handleAddToQueue}
+          onAddFirst={(delegateId) => {
+            const delegate = committee.delegates.find((d) => d.id === delegateId);
+            if (!delegate) return;
+            const speakTime = speakerTime > 0 ? speakerTime : 1;
+            if (queue.length >= Math.floor(localRemainingRef.current / speakTime)) return;
+            const newList = [{ delegateId, country: delegate.country }, ...queue.filter((s) => s.delegateId !== delegateId)];
+            updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: newList }));
+            reorderSpeakersListInDB(committee.id, newList, 'caucus');
+          }}
+          onAddLast={(delegateId) => {
+            const delegate = committee.delegates.find((d) => d.id === delegateId);
+            if (!delegate) return;
+            const speakTime = speakerTime > 0 ? speakerTime : 1;
+            if (queue.length >= Math.floor(localRemainingRef.current / speakTime)) return;
+            const without = queue.filter((s) => s.delegateId !== delegateId);
+            const newList = [...without, { delegateId, country: delegate.country }];
+            updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: newList }));
+            reorderSpeakersListInDB(committee.id, newList, 'caucus');
+          }}
           maxSpeakers={maxByTime}
           currentQueueLength={queue.length}
         />
