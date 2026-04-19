@@ -532,27 +532,30 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
   };
 
   return (
-    <div className="px-7 pb-7 space-y-4 flex flex-col h-full overflow-hidden">
-      <div className="flex items-center justify-between shrink-0">
+    <div className="px-7 pb-7 space-y-3 flex flex-col h-full overflow-hidden">
+      <div className="flex items-center shrink-0">
         <h2 className="text-2xl font-black text-white">Vote on Motions</h2>
-        <button onClick={onBack}
-          className="w-9 h-9 rounded-full bg-[#7B4A1E] hover:bg-[#8B5A2B] text-white font-black text-xl flex items-center justify-center transition-colors"
-          title="Raise another motion">
-          +
-        </button>
       </div>
-      <div className="flex items-center gap-2 px-3 py-2 bg-[#150F09] border border-[#2E1E0F] rounded-xl text-xs text-[#7A5A38] mb-1 shrink-0">
+      <div className="flex items-center gap-2 px-3 py-2 bg-[#150F09] border border-[#2E1E0F] rounded-xl text-xs text-[#7A5A38] shrink-0">
         <span>💡</span>
         <span>Drag motions to reorder them. Most disruptive is voted on first by default.</span>
       </div>
-      {order.length === 1 ? (
-        <div className="flex-1 flex flex-col">{renderCard(primary, true, 0)}</div>
-      ) : (
-        <div className="flex gap-4 flex-1 min-h-0">
+      <div className="flex gap-4 flex-1 min-h-0">
+        {/* Left column — primary motion being voted on */}
+        <div className="flex-1 flex flex-col min-w-0">
           {renderCard(primary, true, 0)}
-          <div className="w-72 flex flex-col gap-3 overflow-y-auto">{rest.map((m, i) => renderCard(m, false, i + 1))}</div>
         </div>
-      )}
+        {/* Right column — queued motions + Raise a Motion button */}
+        <div className="w-72 flex flex-col gap-3 overflow-y-auto">
+          {rest.map((m, i) => renderCard(m, false, i + 1))}
+          <button
+            onClick={onBack}
+            className="w-full bg-[#3D6B35] hover:bg-[#4A7C42] text-white py-3 rounded-2xl font-black text-sm transition-colors shrink-0"
+          >
+            + Raise a Motion
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
