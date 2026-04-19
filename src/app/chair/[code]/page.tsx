@@ -86,6 +86,24 @@ function updateLocal(setCommittee: CommitteeSetter, updater: (c: Committee) => C
   setCommittee((prev) => prev ? updater(prev) : prev);
 }
 
+const COUNTRY_ACRONYMS: Record<string, string> = {
+  'uk':   'United Kingdom',
+  'us':   'United States',
+  'usa':  'United States',
+  'uae':  'United Arab Emirates',
+  'drc':  'DR Congo',
+  'roc':  'Taiwan',
+  'rok':  'South Korea',
+  'dprk': 'North Korea',
+  'car':  'Central African Republic',
+  'png':  'Papua New Guinea',
+};
+
+function resolveQuery(raw: string): string {
+  const lower = raw.trim().toLowerCase();
+  return COUNTRY_ACRONYMS[lower] ?? raw.trim();
+}
+
 // ── Add Speaker Input ─────────────────────────────────────────────────────────
 function AddSpeakerInput({ committee, onAdd }: { committee: Committee; onAdd: (id: string) => void }) {
   const [query, setQuery] = useState('');
@@ -97,7 +115,7 @@ function AddSpeakerInput({ committee, onAdd }: { committee: Committee; onAdd: (i
   const eligible = committee.delegates.filter(
     (d) => d.status !== 'absent' && d.id !== committee.currentSpeaker?.delegateId
   );
-  const q = query.trim().toLowerCase();
+  const q = resolveQuery(query).toLowerCase();
   const matches = q
     ? eligible.filter((d) => d.country.trim().toLowerCase().startsWith(q))
         .concat(eligible.filter((d) => !d.country.trim().toLowerCase().startsWith(q) && d.country.trim().toLowerCase().includes(q)))
@@ -156,7 +174,7 @@ function RtrCountryInput({
   const [query, setQuery] = useState(value);
   const inputRef = useRef<HTMLInputElement>(null);
   const eligible = committee.delegates.filter((d) => d.status !== 'absent');
-  const q = query.trim().toLowerCase();
+  const q = resolveQuery(query).toLowerCase();
   const matches = q
     ? eligible
         .filter((d) => d.country.trim().toLowerCase().startsWith(q))
@@ -327,7 +345,7 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, maxSpeakers,
   const onList = new Set((committee.caucusQueue ?? committee.speakersList).map((s) => s.delegateId));
   const eligible = committee.delegates.filter((d) => d.status !== 'absent');
   const isFull = maxSpeakers !== undefined && currentQueueLength !== undefined && currentQueueLength >= maxSpeakers;
-  const cq = query.trim().toLowerCase();
+  const cq = resolveQuery(query).toLowerCase();
   const matches = cq
     ? eligible.filter((d) => d.country.trim().toLowerCase().startsWith(cq))
         .concat(eligible.filter((d) => !d.country.trim().toLowerCase().startsWith(cq) && d.country.trim().toLowerCase().includes(cq)))

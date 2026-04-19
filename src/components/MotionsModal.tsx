@@ -65,15 +65,29 @@ function DisruptivenessBadge({ type }: { type: PendingMotionType }) {
   return <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${colors[type]}`}>{labels[type]}</span>;
 }
 
+const COUNTRY_ACRONYMS: Record<string, string> = {
+  'uk':   'United Kingdom',
+  'us':   'United States',
+  'usa':  'United States',
+  'uae':  'United Arab Emirates',
+  'drc':  'DR Congo',
+  'roc':  'Taiwan',
+  'rok':  'South Korea',
+  'dprk': 'North Korea',
+  'car':  'Central African Republic',
+  'png':  'Papua New Guinea',
+};
+
 function ProposerInput({ candidates, value, onChange, blockedCountries }: {
   candidates: string[]; value: string; onChange: (v: string) => void; blockedCountries?: Set<string>;
 }) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const matches = query.trim()
-    ? candidates.filter((c) => c.toLowerCase().startsWith(query.toLowerCase()))
-        .concat(candidates.filter((c) => !c.toLowerCase().startsWith(query.toLowerCase()) && c.toLowerCase().includes(query.toLowerCase())))
+  const resolved = COUNTRY_ACRONYMS[query.trim().toLowerCase()] ?? query.trim();
+  const matches = resolved
+    ? candidates.filter((c) => c.toLowerCase().startsWith(resolved.toLowerCase()))
+        .concat(candidates.filter((c) => !c.toLowerCase().startsWith(resolved.toLowerCase()) && c.toLowerCase().includes(resolved.toLowerCase())))
     : [];
   const top = matches[0] ?? null;
   const commit = (country: string) => {
