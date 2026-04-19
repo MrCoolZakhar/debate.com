@@ -378,9 +378,7 @@ function RollCallPanelInner({
           const isUpNext = !isCurrentSpeaker && listView === 'queue' && queuePos === 1;
 
           const handleRowClick = () => {
-            if (isRollCallPhase) {
-              cycleStatus(d.id, effectiveStatus);
-            } else if (onAddToList && !isAbsent) {
+            if (onAddToList && !isAbsent) {
               if (!isOnList) onAddToList(d.id);
               else if (onRemoveFromList) onRemoveFromList(d.id);
             }
