@@ -353,6 +353,12 @@ export async function stopSpeakerTimer(committeeId: string): Promise<void> {
     .eq('committee_id', committeeId);
 }
 
+export async function clearCurrentSpeaker(committeeId: string): Promise<void> {
+  await supabase.from('current_speaker')
+    .update({ delegate_id: null, country: null, time_remaining: 0, started_at: null })
+    .eq('committee_id', committeeId);
+}
+
 // ============================================================
 // MOTIONS
 // ============================================================

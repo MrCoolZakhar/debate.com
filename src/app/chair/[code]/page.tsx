@@ -24,6 +24,7 @@ import {
   syncSpeakerTime as syncSpeakerTimeInDB,
   startSpeakerTimer as startSpeakerTimerInDB,
   stopSpeakerTimer as stopSpeakerTimerInDB,
+  clearCurrentSpeaker,
   updateCaucus as updateCaucusInDB,
   approveJoinRequest,
   denyJoinRequest,
@@ -788,7 +789,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const [extraTimeAdded, setExtraTimeAdded] = useState(false);
   const [caucusMaxReachedMsg, setCaucusMaxReachedMsg] = useState(false);
   const [caucusLoading, setCaucusLoading] = useState(false);
-  const caucusPanelLocked = useRef(false);
+  const [caucusPanelLocked, setCaucusPanelLocked] = useState(false);
 
   // RTR overlay — completely independent of GSL
   const [rtrOpen, setRtrOpen] = useState(false);
@@ -1091,13 +1092,14 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
 
   useEffect(() => {
     if (committee?.phase === 'moderated-caucus') {
-      caucusPanelLocked.current = true;
+      setCaucusPanelLocked(true);
       setCaucusLoading(true);
       updateLocal(setCommittee, (c) => ({ ...c, currentSpeaker: null }));
+      if (committee?.id) clearCurrentSpeaker(committee.id);
       const t = setTimeout(() => setCaucusLoading(false), 3500);
       return () => clearTimeout(t);
     } else {
-      caucusPanelLocked.current = false;
+      setCaucusPanelLocked(false);
     }
   }, [committee?.phase]);
 
@@ -1578,7 +1580,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                     Maximum speakers reached — add more delegates if time remains after current speakers.
                   </div>
                 )}
-                {(caucusPanelLocked.current || (committee.phase === 'moderated-caucus' && committee.caucus)) ? (
+                {(caucusPanelLocked || (committee.phase === 'moderated-caucus' && committee.caucus)) ? (
                   <RollCallPanel committee={caucusRollCallCommittee ?? { ...committee, speakersList: committee.caucusQueue ?? [], currentSpeaker: null }}
                     onAddToList={(delegateId) => {
                       const delegate = committee.delegates.find((d) => d.id === delegateId);
@@ -1662,7 +1664,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                   </div>
                 ) : (
                   <ModeratedCaucusMain
-                    committee={committee}
+                    committee={{ ...committee, currentSpeaker: null }}
                     setCommittee={setCommittee}
                     speakerTimeRemaining={speakerTimeRemaining}
                     timerRunning={timerRunning}
