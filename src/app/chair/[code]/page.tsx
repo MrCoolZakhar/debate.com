@@ -780,6 +780,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const [extraTimeSecs, setExtraTimeSecs] = useState('');
   const [extraTimeAdded, setExtraTimeAdded] = useState(false);
   const [caucusMaxReachedMsg, setCaucusMaxReachedMsg] = useState(false);
+  const [caucusLoading, setCaucusLoading] = useState(false);
 
   // RTR overlay — completely independent of GSL
   const [rtrOpen, setRtrOpen] = useState(false);
@@ -962,9 +963,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   );
 
   const caucusRollCallCommittee = useMemo(
-    () => committee ? { ...committee, speakersList: committee.caucusQueue ?? [] } : null,
+    () => committee ? { ...committee, speakersList: committee.caucusQueue ?? [], currentSpeaker: null } : null,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [committee?.caucusQueue, committee?.delegates, committee?.currentSpeaker, committee?.phase]
+    [committee?.caucusQueue, committee?.delegates, committee?.phase]
   );
 
   const caucusMaxSpeakers = useMemo(() => {
@@ -1079,6 +1080,14 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   useEffect(() => {
     if (sessionSuspended) setSuspendTab('suspend');
   }, [sessionSuspended]);
+
+  useEffect(() => {
+    if (committee?.phase === 'moderated-caucus') {
+      setCaucusLoading(true);
+      const t = setTimeout(() => setCaucusLoading(false), 1500);
+      return () => clearTimeout(t);
+    }
+  }, [committee?.phase]);
 
   useEffect(() => {
     if (!committee?.expiresAt) { setHoursRemaining(null); return; }
@@ -1557,15 +1566,15 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                     Maximum speakers reached — add more delegates if time remains after current speakers.
                   </div>
                 )}
-                {(committee.phase === 'moderated-caucus' || committee.caucus?.type === 'moderated') ? (
-                  <RollCallPanel committee={caucusRollCallCommittee ?? { ...committee, speakersList: committee.caucusQueue ?? [] }}
+                {(committee.phase === 'moderated-caucus' && committee.caucus) ? (
+                  <RollCallPanel committee={caucusRollCallCommittee ?? { ...committee, speakersList: committee.caucusQueue ?? [], currentSpeaker: null }}
                     onAddToList={(delegateId) => {
                       const delegate = committee.delegates.find((d) => d.id === delegateId);
                       if (!delegate) return;
                       if (committee.caucus?.currentSpeaker === delegate.country) return;
                       if (caucusMaxSpeakers !== null && (committee.caucusQueue ?? []).length >= caucusMaxSpeakers) {
                         setCaucusMaxReachedMsg(true);
-                        setTimeout(() => setCaucusMaxReachedMsg(false), 3000);
+                        setTimeout(() => setCaucusMaxReachedMsg(false), 6000);
                         return;
                       }
                       const inlinePos = (committee.caucusQueue ?? []).length + 1;
@@ -1586,7 +1595,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                     onDelegateAdd={handleDelegateAdd}
                     isRollCallPhase={showSliders}
                     isReadOnly={sessionEnded} />
-                ) : (committee.phase === 'unmoderated-caucus' || committee.caucus?.type === 'unmoderated') ? (
+                ) : (committee.phase === 'unmoderated-caucus' && committee.caucus) ? (
                   <RollCallPanel committee={committee}
                     onCycleStatus={handleCycleStatus}
                     onStatusChange={handleStatusChange}
@@ -1610,20 +1619,29 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
             )}
             <main className="flex-1 overflow-hidden flex flex-col min-w-0">
               {committee.phase === 'moderated-caucus' && committee.caucus && (
-                <ModeratedCaucusMain
-                  committee={committee}
-                  setCommittee={setCommittee}
-                  speakerTimeRemaining={speakerTimeRemaining}
-                  timerRunning={timerRunning}
-                  activePopover={activePopover}
-                  setActivePopover={setActivePopover}
-                  extraTimeAdded={extraTimeAdded}
-                  handleToggleTimer={handleToggleTimer}
-                  handleRestartTime={handleRestartTime}
-                  handleNextCaucusSpeaker={handleNextCaucusSpeaker}
-                  handleEndCaucus={handleEndCaucus}
-                  sessionEnded={sessionEnded}
-                />
+                caucusLoading ? (
+                  <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
+                    <div className="text-4xl mb-4">🎙️</div>
+                    <h2 className="text-2xl font-black text-white mb-2">{committee.caucus?.purpose || 'Moderated Caucus'}</h2>
+                    <p className="text-[#C4A882] mb-2">{formatTime(committee.caucus?.totalTime ?? 0)} · {committee.caucus?.speakingTime ?? 0}s per speaker</p>
+                    <div className="w-6 h-6 border-2 border-[#7B4A1E] border-t-transparent rounded-full animate-spin mt-4" />
+                  </div>
+                ) : (
+                  <ModeratedCaucusMain
+                    committee={committee}
+                    setCommittee={setCommittee}
+                    speakerTimeRemaining={speakerTimeRemaining}
+                    timerRunning={timerRunning}
+                    activePopover={activePopover}
+                    setActivePopover={setActivePopover}
+                    extraTimeAdded={extraTimeAdded}
+                    handleToggleTimer={handleToggleTimer}
+                    handleRestartTime={handleRestartTime}
+                    handleNextCaucusSpeaker={handleNextCaucusSpeaker}
+                    handleEndCaucus={handleEndCaucus}
+                    sessionEnded={sessionEnded}
+                  />
+                )
               )}
               {committee.phase === 'unmoderated-caucus' && committee.caucus && (
                 <UnmoderatedCaucusView committee={committee} setCommittee={setCommittee} />
