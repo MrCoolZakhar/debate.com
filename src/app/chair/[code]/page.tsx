@@ -24,7 +24,6 @@ import {
   syncSpeakerTime as syncSpeakerTimeInDB,
   startSpeakerTimer as startSpeakerTimerInDB,
   stopSpeakerTimer as stopSpeakerTimerInDB,
-  clearCurrentSpeaker,
   updateCaucus as updateCaucusInDB,
   approveJoinRequest,
   denyJoinRequest,
@@ -1094,8 +1093,6 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     if (committee?.phase === 'moderated-caucus') {
       setCaucusPanelLocked(true);
       setCaucusLoading(true);
-      updateLocal(setCommittee, (c) => ({ ...c, currentSpeaker: null }));
-      if (committee?.id) clearCurrentSpeaker(committee.id);
       const t = setTimeout(() => setCaucusLoading(false), 3500);
       return () => clearTimeout(t);
     } else {
@@ -1266,7 +1263,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       }
       updateCaucusInDB(c.id, updatedCaucus);
       return { ...c, caucusQueue: rest, caucus: updatedCaucus, currentSpeaker: next ?? null, speakerTimeRemaining: speakTime };
-    }, false);
+    }, true);
 
     await nextSpeakerInDB(
       committee.id,
@@ -1580,7 +1577,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                     Maximum speakers reached — add more delegates if time remains after current speakers.
                   </div>
                 )}
-                {(caucusPanelLocked || (committee.phase === 'moderated-caucus' && committee.caucus)) ? (
+                {(caucusPanelLocked || committee.caucus?.type === 'moderated') ? (
                   <RollCallPanel committee={caucusRollCallCommittee ?? { ...committee, speakersList: committee.caucusQueue ?? [], currentSpeaker: null }}
                     onAddToList={(delegateId) => {
                       const delegate = committee.delegates.find((d) => d.id === delegateId);
