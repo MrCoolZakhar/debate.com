@@ -569,7 +569,8 @@ function ModeratedCaucusMain({
   }, [speakerTimeRemaining, timerRunning]);
 
   const speakTime2 = speakerTime > 0 ? speakerTime : 1;
-  const maxByTime = Math.floor(liveRemaining / speakTime2);
+  const remainingForMax = committee.caucus?.remainingTime ?? liveRemaining;
+  const maxByTime = Math.floor(remainingForMax / speakTime2);
   const totalProgress = caucus.totalTime > 0 ? (liveRemaining / caucus.totalTime) * 100 : 0;
   const caucusProgress = speakerTime > 0 ? (speakerTimeRemaining / speakerTime) * 100 : 0;
 
@@ -580,7 +581,7 @@ function ModeratedCaucusMain({
     if (queue.some((s) => s.delegateId === delegateId)) return;
     if (queue.length >= maxByTime) return;
     const nextPosition = queue.length + 1;
-    updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: [...(c.caucusQueue ?? []), { delegateId, country: delegate.country }] }), true);
+    updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: [...(c.caucusQueue ?? []), { delegateId, country: delegate.country }] }));
     addToCaucusListInDB(committee.id, delegateId, delegate.country, nextPosition);
   };
 
@@ -590,7 +591,7 @@ function ModeratedCaucusMain({
     if (queue.some((s) => s.delegateId === delegateId)) return;
     if (queue.length >= maxByTime) return;
     const newList = [{ delegateId, country: delegate.country }, ...queue];
-    updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: newList }), true);
+    updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: newList }));
     addToCaucusListInDB(committee.id, delegateId, delegate.country, 0);
     setTimeout(() => reorderSpeakersListInDB(committee.id, newList, 'caucus'), 400);
   };
@@ -602,17 +603,17 @@ function ModeratedCaucusMain({
     if (queue.length >= maxByTime) return;
     const nextPosition = queue.length + 1;
     const newList = [...queue, { delegateId, country: delegate.country }];
-    updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: newList }), true);
+    updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: newList }));
     addToCaucusListInDB(committee.id, delegateId, delegate.country, nextPosition);
   };
 
   const handleCaucusRemoveFromQueue = (delegateId: string) => {
-    updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: (c.caucusQueue ?? []).filter((s) => s.delegateId !== delegateId) }), true);
+    updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: (c.caucusQueue ?? []).filter((s) => s.delegateId !== delegateId) }));
     removeFromCaucusListInDB(committee.id, delegateId);
   };
 
   const handleCaucusReorderQueue = (newList: { delegateId: string; country: string }[]) => {
-    updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: newList }), true);
+    updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: newList }));
     reorderSpeakersListInDB(committee.id, newList, 'caucus');
   };
 
@@ -1231,7 +1232,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       }
       updateCaucusInDB(c.id, updatedCaucus);
       return { ...c, caucusQueue: rest, caucus: updatedCaucus, currentSpeaker: next ?? null, speakerTimeRemaining: speakTime };
-    }, true);
+    }, false);
 
     await nextSpeakerInDB(
       committee.id,
