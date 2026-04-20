@@ -581,7 +581,7 @@ function ModeratedCaucusMain({
     if (queue.some((s) => s.delegateId === delegateId)) return;
     if (queue.length >= maxByTime) return;
     const nextPosition = queue.length + 1;
-    updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: [...(c.caucusQueue ?? []), { delegateId, country: delegate.country }] }));
+    updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: [...(c.caucusQueue ?? []), { delegateId, country: delegate.country }] }), true);
     addToCaucusListInDB(committee.id, delegateId, delegate.country, nextPosition);
   };
 
@@ -591,7 +591,7 @@ function ModeratedCaucusMain({
     if (queue.some((s) => s.delegateId === delegateId)) return;
     if (queue.length >= maxByTime) return;
     const newList = [{ delegateId, country: delegate.country }, ...queue];
-    updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: newList }));
+    updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: newList }), true);
     addToCaucusListInDB(committee.id, delegateId, delegate.country, 0);
     setTimeout(() => reorderSpeakersListInDB(committee.id, newList, 'caucus'), 400);
   };
@@ -603,17 +603,17 @@ function ModeratedCaucusMain({
     if (queue.length >= maxByTime) return;
     const nextPosition = queue.length + 1;
     const newList = [...queue, { delegateId, country: delegate.country }];
-    updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: newList }));
+    updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: newList }), true);
     addToCaucusListInDB(committee.id, delegateId, delegate.country, nextPosition);
   };
 
   const handleCaucusRemoveFromQueue = (delegateId: string) => {
-    updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: (c.caucusQueue ?? []).filter((s) => s.delegateId !== delegateId) }));
+    updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: (c.caucusQueue ?? []).filter((s) => s.delegateId !== delegateId) }), true);
     removeFromCaucusListInDB(committee.id, delegateId);
   };
 
   const handleCaucusReorderQueue = (newList: { delegateId: string; country: string }[]) => {
-    updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: newList }));
+    updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: newList }), true);
     reorderSpeakersListInDB(committee.id, newList, 'caucus');
   };
 
@@ -874,8 +874,6 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           }
 
           // Outside debounce: full update — another actor (delegate, co-chair) changed something.
-          // Small delay for speakers_list to let Supabase reads catch up with the write.
-          if (table === 'speakers_list') await new Promise((r) => setTimeout(r, 300));
           const updated = await getCommitteeByCode(code);
           if (!updated) return;
           if (updated.endedAt) {
@@ -1571,16 +1569,16 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                         return;
                       }
                       const inlinePos = (committee.caucusQueue ?? []).length + 1;
-                      updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: [...(c.caucusQueue ?? []), { delegateId, country: delegate.country }] }));
+                      updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: [...(c.caucusQueue ?? []), { delegateId, country: delegate.country }] }), true);
                       addToCaucusListInDB(committee.id, delegateId, delegate.country, inlinePos);
                     }}
                     onListIds={caucusQueueIds}
                     onRemoveFromList={(delegateId) => {
-                      updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: (c.caucusQueue ?? []).filter((s) => s.delegateId !== delegateId) }));
+                      updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: (c.caucusQueue ?? []).filter((s) => s.delegateId !== delegateId) }), true);
                       removeFromCaucusListInDB(committee.id, delegateId);
                     }}
                     onReorderList={(newList) => {
-                      updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: newList }));
+                      updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: newList }), true);
                       reorderSpeakersListInDB(committee.id, newList, 'caucus');
                     }}
                     onCycleStatus={handleCycleStatus}
