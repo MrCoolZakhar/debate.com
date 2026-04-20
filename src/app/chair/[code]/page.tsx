@@ -1093,6 +1093,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     if (committee?.phase === 'moderated-caucus') {
       caucusPanelLocked.current = true;
       setCaucusLoading(true);
+      updateLocal(setCommittee, (c) => ({ ...c, currentSpeaker: null }));
       const t = setTimeout(() => setCaucusLoading(false), 3500);
       return () => clearTimeout(t);
     } else {

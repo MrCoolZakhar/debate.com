@@ -631,7 +631,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
         proposerPosition: null, spokenCountries: [],
       };
       // GSL preserved, caucusQueue cleared, phase → unmoderated-caucus
-      update((c) => ({ ...c, phase: 'unmoderated-caucus', caucus, pendingMotions: [], caucusQueue: [] }));
+      update((c) => ({ ...c, phase: 'unmoderated-caucus', caucus, pendingMotions: [], caucusQueue: [], currentSpeaker: null }));
       onClose(); // Close immediately — user sees caucus screen, DB syncs in background
       clearPendingMotionsInDB(committee.id);
       clearCaucusListInDB(committee.id);
@@ -646,7 +646,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
         speakingTime: motion.speakingTime, speakerTimeRemaining: motion.speakingTime,
         currentSpeaker: null, proposerPosition: null, spokenCountries: [],
       };
-      update((c) => ({ ...c, phase: 'moderated-caucus', caucus, pendingMotions: [], caucusQueue: [] }));
+      update((c) => ({ ...c, phase: 'moderated-caucus', caucus, pendingMotions: [], caucusQueue: [], currentSpeaker: null }));
       onClose();
       clearPendingMotionsInDB(committee.id);
       clearCaucusListInDB(committee.id);
@@ -686,7 +686,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
       const caucusQueue = presentDelegates.map((d) => ({ delegateId: d.id, country: d.country }));
 
       // GSL preserved, caucusQueue filled with ordered delegates
-      update((c) => ({ ...c, phase: 'moderated-caucus', caucus, pendingMotions: [], caucusQueue }));
+      update((c) => ({ ...c, phase: 'moderated-caucus', caucus, pendingMotions: [], caucusQueue, currentSpeaker: null }));
       onClose(); // Close immediately — user sees tour screen, DB syncs in background
       clearPendingMotionsInDB(committee.id);
       clearCaucusListInDB(committee.id);

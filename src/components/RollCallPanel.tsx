@@ -352,7 +352,14 @@ function RollCallPanelInner({
   const notInQueueAbsent = notInQueue.filter((d) => d.status === 'absent');
   const queueOrdered = [...inQueue, ...notInQueuePresent, ...notInQueueAbsent];
 
-  const baseList = listView === 'queue' ? queueOrdered : alphabetical;
+  const currentSpeakerDelegate = committee.currentSpeaker?.delegateId
+    ? committee.delegates.find((d) => d.id === committee.currentSpeaker!.delegateId) ?? null
+    : null;
+  const finalQueueOrdered = currentSpeakerDelegate
+    ? [currentSpeakerDelegate, ...queueOrdered.filter((d) => d.id !== currentSpeakerDelegate.id)]
+    : queueOrdered;
+
+  const baseList = listView === 'queue' ? finalQueueOrdered : alphabetical;
   // When searching: show all, but grey out non-matches so the filter is visible
   const filtered = baseList;
 
