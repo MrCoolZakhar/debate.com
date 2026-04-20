@@ -294,21 +294,33 @@ function RollCallPanelInner({
   };
 
   const handleAllPresent = () => {
-    const updates = committee.delegates.map((d) => ({ id: d.id, status: 'present' as DelegateStatus }));
-    updates.forEach(({ id }) => onStatusChange?.(id, 'present'));
-    import('@/lib/committeeService').then(({ batchSetDelegateStatuses }) => batchSetDelegateStatuses(updates));
+    const newStatuses: Record<string, DelegateStatus> = {};
+    committee.delegates.forEach((d) => {
+      newStatuses[d.id] = 'present';
+      onStatusChange?.(d.id, 'present');
+      setDelegateStatusInDB(d.id, 'present');
+    });
+    setLocalStatuses(newStatuses);
   };
 
   const handleAllPresentVoting = () => {
-    const updates = committee.delegates.map((d) => ({ id: d.id, status: 'present-voting' as DelegateStatus }));
-    updates.forEach(({ id }) => onStatusChange?.(id, 'present-voting'));
-    import('@/lib/committeeService').then(({ batchSetDelegateStatuses }) => batchSetDelegateStatuses(updates));
+    const newStatuses: Record<string, DelegateStatus> = {};
+    committee.delegates.forEach((d) => {
+      newStatuses[d.id] = 'present-voting';
+      onStatusChange?.(d.id, 'present-voting');
+      setDelegateStatusInDB(d.id, 'present-voting');
+    });
+    setLocalStatuses(newStatuses);
   };
 
   const handleClear = () => {
-    const updates = committee.delegates.map((d) => ({ id: d.id, status: 'absent' as DelegateStatus }));
-    updates.forEach(({ id }) => onStatusChange?.(id, 'absent'));
-    import('@/lib/committeeService').then(({ batchSetDelegateStatuses }) => batchSetDelegateStatuses(updates));
+    const newStatuses: Record<string, DelegateStatus> = {};
+    committee.delegates.forEach((d) => {
+      newStatuses[d.id] = 'absent';
+      onStatusChange?.(d.id, 'absent');
+      setDelegateStatusInDB(d.id, 'absent');
+    });
+    setLocalStatuses(newStatuses);
   };
 
   const handleBeginSession = () => {
@@ -363,6 +375,13 @@ function RollCallPanelInner({
           </div>
           <ViewToggle view={listView} onChange={setListView} />
         </div>
+        {isRollCallPhase && (
+          <div className="flex gap-1.5 mt-2">
+            <button onClick={handleClear} className="text-[10px] font-semibold px-2.5 py-1.5 rounded-lg bg-[#2E1E0F] text-red-400 hover:bg-red-950/40 transition-colors">Clear All</button>
+            <button onClick={handleAllPresent} className="text-[10px] font-semibold px-2.5 py-1.5 rounded-lg bg-[#2E1E0F] text-green-400 hover:bg-green-950/40 transition-colors">All Present</button>
+            <button onClick={handleAllPresentVoting} className="text-[10px] font-semibold px-2.5 py-1.5 rounded-lg bg-[#2E1E0F] text-blue-400 hover:bg-blue-950/40 transition-colors">All P+V</button>
+          </div>
+        )}
       </div>
 
       <div ref={listRef} className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
