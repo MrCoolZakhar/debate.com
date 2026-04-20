@@ -600,7 +600,7 @@ function ModeratedCaucusMain({
     const newList = [{ delegateId, country: delegate.country }, ...queue];
     updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: newList }), true);
     addToCaucusListInDB(committee.id, delegateId, delegate.country, 0);
-    setTimeout(() => reorderSpeakersListInDB(committee.id, newList, 'caucus'), 400);
+    reorderSpeakersListInDB(committee.id, newList, 'caucus');
   };
 
   const handleCaucusAddLast = (delegateId: string) => {
@@ -628,7 +628,7 @@ function ModeratedCaucusMain({
     <>
       <div className="flex-1 flex flex-col items-center justify-center px-4 py-4 overflow-hidden">
         <div className="text-center mb-3 shrink-0">
-          <p className="text-xs font-mono tracking-widest text-[#7B4A1E] mb-1">{caucusTitle}</p>
+          <p className="text-5xl font-black tracking-widest text-[#7B4A1E] mb-2">{caucusTitle}</p>
           {!isTdT && caucus.purpose && <p className="text-base font-semibold text-[#C4A882]">{caucus.purpose}</p>}
         </div>
 
@@ -931,6 +931,30 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     return () => { if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; } };
   }, [timerRunning]);
 
+  // Seed speaker timer atom to caucus speaking time on entry.
+  useEffect(() => {
+    if (committee?.phase === 'moderated-caucus' && committee.caucus) {
+      setSpeakerTimeRemaining(committee.caucus.speakingTime);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [committee?.phase, committee?.caucus?.speakingTime]);
+
+  // Sync caucus total timer with speaker atom — one tick per second while running.
+  useEffect(() => {
+    if (!timerRunning) return;
+    if (committee?.phase !== 'moderated-caucus' || !committee.caucus) return;
+    setCommittee((prev) => {
+      if (!prev?.caucus || prev.phase !== 'moderated-caucus') return prev;
+      const next = Math.max(0, prev.caucus.remainingTime - 1);
+      if (next === 0) {
+        updateCaucusInDB(prev.id, null);
+        return { ...prev, caucus: null, phase: 'speakers-list' as const, caucusQueue: [], currentSpeaker: null };
+      }
+      return { ...prev, caucus: { ...prev.caucus, remainingTime: next } };
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [speakerTimeRemaining]);
+
   // RTR overlay countdown — fully independent of speakersList/DB
   useEffect(() => {
     if (rtrTimerActive) {
@@ -1215,7 +1239,22 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     setTimerRunning(false);
     stopSpeakerTimerInDB(committeeIdRef.current);
     setExtraTimeAdded(false);
-    setSpeakerTimeRemaining(speakerTimeLimit);
+    if (committee?.phase === 'moderated-caucus' && committee.caucus) {
+      const speakTime = committee.caucus.speakingTime;
+      const used = speakTime - speakerTimeRemaining;
+      setSpeakerTimeRemaining(speakTime);
+      if (used > 0) {
+        updateLocal(setCommittee, (c) => {
+          if (!c.caucus) return c;
+          const restored = Math.min(c.caucus.totalTime, c.caucus.remainingTime + used);
+          const updated = { ...c.caucus, remainingTime: restored };
+          updateCaucusInDB(c.id, updated);
+          return { ...c, caucus: updated };
+        });
+      }
+    } else {
+      setSpeakerTimeRemaining(speakerTimeLimit);
+    }
   };
 
   const handleNextCaucusSpeaker = async () => {
