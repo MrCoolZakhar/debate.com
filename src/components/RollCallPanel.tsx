@@ -276,9 +276,14 @@ function RollCallPanelInner({
   const total = committee.delegates.length;
 
   // Build a map: delegateId → position in GSL (1-indexed)
+  // Current speaker is always #1; queue starts at 2 if there's a current speaker.
   const queuePositionMap = new Map<string, number>();
+  if (committee.currentSpeaker?.delegateId) {
+    queuePositionMap.set(committee.currentSpeaker.delegateId, 1);
+  }
+  const queueOffset = committee.currentSpeaker ? 2 : 1;
   (committee.speakersList ?? []).forEach((s, i) => {
-    queuePositionMap.set(s.delegateId, i + 1);
+    queuePositionMap.set(s.delegateId, i + queueOffset);
   });
 
   const cycleStatus = (id: string, current: DelegateStatus) => {
@@ -393,8 +398,8 @@ function RollCallPanelInner({
           const matchesSearch = !search || d.country.toLowerCase().includes(search.toLowerCase());
           const isDraggable = listView === 'queue' && !isRollCallPhase && queuePositionMap.has(d.id);
           const isCurrentSpeaker = committee.currentSpeaker?.delegateId === d.id;
-          // "Up next" = first in queue, not currently speaking
-          const isUpNext = !isCurrentSpeaker && listView === 'queue' && queuePos === 1;
+          // "Up next" = first in the speakersList queue (not the current speaker)
+          const isUpNext = !isCurrentSpeaker && listView === 'queue' && queuePos === queueOffset;
 
           const handleRowClick = () => {
             if (onAddToList && !isAbsent) {
@@ -454,8 +459,12 @@ function RollCallPanelInner({
                   <FlagCircle country={d.country} size={isUpNext ? 'md' : 'sm'} />
                   {/* Queue position bubble */}
                   {queuePos !== null && (
-                    <div className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-0.5 bg-[#7B4A1E] rounded-full text-white text-[13px] flex items-center justify-center font-black leading-none">
-                      {queuePos <= 99 ? queuePos : '99+'}
+                    <div className={`absolute -top-1 -right-1 min-w-[18px] h-[18px] px-0.5 rounded-full text-white flex items-center justify-center font-black leading-none ${
+                      queuePos === 1 && committee.currentSpeaker?.delegateId === d.id
+                        ? 'bg-[#B8844A] text-[10px]'
+                        : 'bg-[#7B4A1E] text-[13px]'
+                    }`}>
+                      {queuePos === 1 && committee.currentSpeaker?.delegateId === d.id ? '🎙' : queuePos <= 99 ? queuePos : '99+'}
                     </div>
                   )}
                 </div>
