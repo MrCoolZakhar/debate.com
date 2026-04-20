@@ -1717,7 +1717,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                   </div>
                 ) : (
                   <ModeratedCaucusMain
-                    committee={{ ...committee, currentSpeaker: null }}
+                    committee={committee}
                     setCommittee={setCommittee}
                     speakerTimeRemaining={speakerTimeRemaining}
                     timerRunning={timerRunning}
