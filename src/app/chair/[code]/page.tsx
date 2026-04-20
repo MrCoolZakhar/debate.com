@@ -1263,47 +1263,64 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     stopSpeakerTimerInDB(committeeIdRef.current);
     setExtraTimeAdded(false);
 
-    const secondsSpoken = committee.caucus.speakingTime - speakerTimeRemaining;
-    if (secondsSpoken > 0 && committee.currentSpeaker) {
+    // Compute everything from current snapshot BEFORE any state updates
+    const queue = committee.caucusQueue ?? [];
+    const [next, ...rest] = queue;
+    const speakTime = committee.caucus.speakingTime;
+    const prevCountry = committee.currentSpeaker?.country ?? null;
+    const spentOnCurrent = Math.max(0, speakTime - speakerTimeRemaining);
+    const newRemaining = Math.max(0, committee.caucus.remainingTime - spentOnCurrent);
+    const newSpoken = prevCountry && !(committee.caucus.spokenCountries ?? []).includes(prevCountry)
+      ? [...(committee.caucus.spokenCountries ?? []), prevCountry]
+      : (committee.caucus.spokenCountries ?? []);
+
+    if (prevCountry && spentOnCurrent > 0) {
       logSpeakingTime(
         committee.id,
-        committee.currentSpeaker.country,
-        secondsSpoken,
+        prevCountry,
+        spentOnCurrent,
         'moderated-caucus',
         committee.caucus.purpose ?? committee.topic,
       );
     }
 
-    const queue = committee.caucusQueue ?? [];
-    const [next, ...rest] = queue;
-    const speakTime = committee.caucus.speakingTime;
-    const spentOnCurrent = committee.caucus.speakingTime - speakerTimeRemaining;
-    const newRemaining = Math.max(0, committee.caucus.remainingTime - spentOnCurrent);
-
     setSpeakerTimeRemaining(speakTime);
     localUpdateTime.current = Date.now();
 
-    updateLocal(setCommittee, (c) => {
-      if (!c.caucus) return c;
-      const prev = c.currentSpeaker?.country ?? null;
-      const newSpoken = prev && !c.caucus.spokenCountries.includes(prev)
-        ? [...c.caucus.spokenCountries, prev]
-        : c.caucus.spokenCountries;
-      const updatedCaucus = {
-        ...c.caucus,
-        currentSpeaker: next?.country ?? null,
+    if (newRemaining <= 0) {
+      updateLocal(setCommittee, (c) => ({
+        ...c,
+        caucus: null,
+        phase: 'speakers-list' as const,
+        caucusQueue: [],
+        currentSpeaker: null,
         speakerTimeRemaining: speakTime,
-        remainingTime: newRemaining,
-        spokenCountries: newSpoken,
-      };
-      if (newRemaining <= 0) {
-        updateCaucusInDB(c.id, null);
-        return { ...c, caucus: null, phase: 'speakers-list' as const, caucusQueue: [], currentSpeaker: null, speakerTimeRemaining: speakTime };
-      }
-      updateCaucusInDB(c.id, updatedCaucus);
-      return { ...c, caucusQueue: rest, caucus: updatedCaucus, currentSpeaker: next ?? null, speakerTimeRemaining: speakTime };
-    }, true);
+      }), true);
+      updateCaucusInDB(committee.id, null);
+      await nextSpeakerInDB(committee.id, speakTime, null, null, null);
+      localUpdateTime.current = Date.now();
+      return;
+    }
 
+    const updatedCaucus = {
+      ...committee.caucus,
+      currentSpeaker: next?.country ?? null,
+      speakerTimeRemaining: speakTime,
+      remainingTime: newRemaining,
+      spokenCountries: newSpoken,
+    };
+
+    // Pure state update — no DB calls inside
+    updateLocal(setCommittee, (c) => ({
+      ...c,
+      caucusQueue: rest,
+      caucus: updatedCaucus,
+      currentSpeaker: next ?? null,
+      speakerTimeRemaining: speakTime,
+    }), true);
+
+    // DB calls outside setState
+    updateCaucusInDB(committee.id, updatedCaucus);
     await nextSpeakerInDB(
       committee.id,
       speakTime,
