@@ -779,6 +779,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const [activePopover, setActivePopover] = useState<'extraTime' | 'rightToReply' | null>(null);
   const [extraTimeSecs, setExtraTimeSecs] = useState('');
   const [extraTimeAdded, setExtraTimeAdded] = useState(false);
+  const [caucusMaxReachedMsg, setCaucusMaxReachedMsg] = useState(false);
 
   // RTR overlay — completely independent of GSL
   const [rtrOpen, setRtrOpen] = useState(false);
@@ -961,6 +962,18 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     () => new Set((committee?.caucusQueue ?? []).map((s) => s.delegateId)),
     [committee?.caucusQueue]
   );
+
+  const caucusRollCallCommittee = useMemo(
+    () => committee ? { ...committee, speakersList: committee.caucusQueue ?? [] } : null,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [committee?.caucusQueue, committee?.delegates, committee?.currentSpeaker, committee?.phase]
+  );
+
+  const caucusMaxSpeakers = useMemo(() => {
+    if (!committee?.caucus) return null;
+    const speakTime = committee.caucus.speakingTime > 0 ? committee.caucus.speakingTime : 1;
+    return Math.floor(committee.caucus.remainingTime / speakTime);
+  }, [committee?.caucus?.remainingTime, committee?.caucus?.speakingTime]);
 
   // ── Stable callbacks (must be before early returns — Rules of Hooks) ──────────
 
@@ -1541,12 +1554,22 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           <>
             {showRollCall && (
               <aside className="w-[22rem] border-r border-[#2E1E0F] bg-[#0D0906] flex flex-col overflow-hidden shrink-0">
-                {committee.phase === 'moderated-caucus' ? (
-                  <RollCallPanel committee={{ ...committee, speakersList: committee.caucusQueue ?? [] }}
+                {caucusMaxReachedMsg && (
+                  <div className="shrink-0 px-3 py-2 bg-amber-900/20 border-b border-amber-700/40 text-amber-300 text-xs text-center font-semibold">
+                    Maximum speakers reached — add more delegates if time remains after current speakers.
+                  </div>
+                )}
+                {(committee.phase === 'moderated-caucus' || committee.caucus?.type === 'moderated') ? (
+                  <RollCallPanel committee={caucusRollCallCommittee ?? { ...committee, speakersList: committee.caucusQueue ?? [] }}
                     onAddToList={(delegateId) => {
                       const delegate = committee.delegates.find((d) => d.id === delegateId);
                       if (!delegate) return;
                       if (committee.caucus?.currentSpeaker === delegate.country) return;
+                      if (caucusMaxSpeakers !== null && (committee.caucusQueue ?? []).length >= caucusMaxSpeakers) {
+                        setCaucusMaxReachedMsg(true);
+                        setTimeout(() => setCaucusMaxReachedMsg(false), 3000);
+                        return;
+                      }
                       const inlinePos = (committee.caucusQueue ?? []).length + 1;
                       updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: [...(c.caucusQueue ?? []), { delegateId, country: delegate.country }] }));
                       addToCaucusListInDB(committee.id, delegateId, delegate.country, inlinePos);
@@ -1565,7 +1588,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                     onDelegateAdd={handleDelegateAdd}
                     isRollCallPhase={showSliders}
                     isReadOnly={sessionEnded} />
-                ) : committee.phase === 'unmoderated-caucus' ? (
+                ) : (committee.phase === 'unmoderated-caucus' || committee.caucus?.type === 'unmoderated') ? (
                   <RollCallPanel committee={committee}
                     onCycleStatus={handleCycleStatus}
                     onStatusChange={handleStatusChange}
