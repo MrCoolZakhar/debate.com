@@ -489,9 +489,17 @@ function UnmoderatedCaucusView({ committee, setCommittee }: { committee: Committ
   };
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center px-8 py-12">
+    <div className="relative flex-1 flex flex-col items-center justify-center px-8 py-12">
+      {/* Absolute overlay: motion name + topic — does not affect centred layout */}
+      <div className="absolute left-0 top-1/2 -translate-y-1/2 flex flex-col gap-2 max-w-[180px] pl-4 pointer-events-none select-none">
+        <span className="text-white font-black text-2xl leading-tight">
+          {caucus.purpose ?? unmoderatedName}
+        </span>
+        <span className="text-white/70 text-lg font-medium leading-snug">
+          {committee.topic}
+        </span>
+      </div>
       <p className="text-xs text-purple-400 font-mono mb-4">{unmoderatedName.toUpperCase()}</p>
-      {caucus.purpose && <p className="text-[#C4A882] mb-6">{caucus.purpose}</p>}
       <div className={`text-9xl font-black font-mono tabular-nums mb-8 ${caucus.remainingTime <= 30 ? 'text-red-500' : 'text-white'}`}>
         {formatTime(caucus.remainingTime)}
       </div>
@@ -669,78 +677,79 @@ function ModeratedCaucusMain({
 
   return (
     <>
-      <div className="flex-1 flex flex-col items-center justify-center px-4 py-3 overflow-hidden">
+      <div className="relative flex-1 flex flex-col items-center justify-center px-4 py-3 overflow-hidden">
         {committee.currentSpeaker ? (
-          <div className="flex flex-row gap-6 items-center justify-center w-full flex-1">
-            {/* Left column: motion name + topic */}
-            <div className="flex flex-col justify-center w-48 shrink-0">
-              <p className="text-3xl font-black tracking-widest text-[#7B4A1E]">{caucusTitle}</p>
-              {!isTdT && caucus.purpose && <p className="text-lg font-semibold text-[#C4A882] mt-2">{caucus.purpose}</p>}
+          <>
+            {/* Absolute overlay: motion name + topic — does not affect centred layout */}
+            <div className="absolute left-0 top-1/2 -translate-y-1/2 flex flex-col gap-2 max-w-[180px] pl-4 pointer-events-none select-none">
+              <span className="text-white font-black text-2xl leading-tight">
+                {committee.caucus?.purpose ?? caucusTitle}
+              </span>
+              <span className="text-white/70 text-lg font-medium leading-snug">
+                {committee.topic}
+              </span>
             </div>
-            {/* Right: queue + speaker block */}
-            <div className="flex-1 flex flex-col items-center">
-              {queue.length > 0 && (
-                <DraggableSpeakersQueue
-                  list={queue}
-                  onReorder={handleCaucusReorderQueue}
-                  onRemove={handleCaucusRemoveFromQueue}
-                />
-              )}
-              <div className="flex flex-col items-center">
-                <div className="ring-4 ring-[#7B4A1E] rounded-full">
-                  <div className="relative w-36 h-36 rounded-full overflow-hidden bg-[#2E1E0F] shrink-0">
-                    {(() => {
-                      const f = getCountryByName(committee.currentSpeaker.country);
-                      return f
-                        ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ width: '7rem', height: '7rem', objectFit: 'contain', position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }} />
-                        : <span style={{ fontSize: '5rem', lineHeight: '1', position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>🌐</span>;
-                    })()}
-                  </div>
-                </div>
-                <h1 className="text-5xl font-black text-white mt-2 mb-1 text-center">{committee.currentSpeaker.country}</h1>
-                <div className={`text-8xl font-black font-mono mt-2 mb-3 tabular-nums ${
-                  extraTimeAdded ? 'text-emerald-400' :
-                  speakerTimeRemaining <= 10 ? 'text-red-500' :
-                  speakerTimeRemaining <= 30 ? 'text-yellow-600' : 'text-white'
-                }`}>
-                  {formatTime(speakerTimeRemaining)}
-                  {extraTimeAdded && <span className="text-base ml-2 font-normal text-emerald-400">+time</span>}
-                </div>
-                <div className="w-full max-w-2xl h-2 bg-[#2E1E0F] rounded-full overflow-hidden mb-3">
-                  <div className={`h-full rounded-full transition-all ${caucusProgress > 50 ? 'bg-[#B8844A]' : caucusProgress > 20 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{ width: `${caucusProgress}%` }} />
+            {queue.length > 0 && (
+              <DraggableSpeakersQueue
+                list={queue}
+                onReorder={handleCaucusReorderQueue}
+                onRemove={handleCaucusRemoveFromQueue}
+              />
+            )}
+            <div className="flex flex-col items-center">
+              <div className="ring-4 ring-[#7B4A1E] rounded-full">
+                <div className="relative w-36 h-36 rounded-full overflow-hidden bg-[#2E1E0F] shrink-0">
+                  {(() => {
+                    const f = getCountryByName(committee.currentSpeaker.country);
+                    return f
+                      ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ width: '7rem', height: '7rem', objectFit: 'contain', position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }} />
+                      : <span style={{ fontSize: '5rem', lineHeight: '1', position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>🌐</span>;
+                  })()}
                 </div>
               </div>
-              {!sessionEnded && (
-                <div className="flex gap-2 w-full max-w-sm mt-1 flex-wrap justify-center">
-                  <button onClick={handleRestartTime} title="Restart speaker time"
-                    className="px-3 py-3 bg-[#2E1E0F] hover:bg-[#3D2A15] border border-[#3D2A15] hover:border-[#7B4A1E] rounded-xl font-bold text-sm text-[#C4A882] transition-colors">
-                    ↺
-                  </button>
-                  <button onClick={handleToggleTimer}
-                    className={`flex-1 py-3 px-6 rounded-xl font-bold text-base transition-colors ${timerRunning ? 'bg-yellow-600 hover:bg-yellow-500 text-white' : 'bg-[#3D6B35] hover:bg-[#4A7C42] text-white'}`}>
-                    {timerRunning ? '⏸ Pause' : '▶ Start'}
-                  </button>
-                  <button onClick={handleNextCaucusSpeaker} disabled={queue.length === 0}
-                    className="flex-1 bg-[#2E1E0F] hover:bg-[#3D2A15] disabled:opacity-40 text-white py-3 px-6 rounded-xl font-bold text-base transition-colors">
-                    Next →
-                  </button>
-                  <button onClick={() => setActivePopover(activePopover === 'extraTime' ? null : 'extraTime')} title="Add time"
-                    className={`px-3 py-3 border rounded-xl font-bold text-sm transition-colors ${activePopover === 'extraTime' ? 'bg-emerald-900/40 border-emerald-700/50 text-emerald-300' : 'bg-[#2E1E0F] hover:bg-emerald-950/50 hover:border-emerald-800/50 border-[#3D2A15] text-[#C4A882]'}`}>
-                    +⏱
-                  </button>
-                  {!isTdT && (
-                    <button onClick={() => setActivePopover(activePopover === 'rightToReply' ? null : 'rightToReply')}
-                      className={`px-3 py-3 border rounded-xl font-bold text-xs transition-colors ${activePopover === 'rightToReply' ? 'bg-orange-600 border-orange-500 text-white' : 'bg-orange-900/40 hover:bg-orange-800/50 border-orange-700/40 text-orange-300'}`}>
-                      Right of Reply
-                    </button>
-                  )}
-                </div>
-              )}
-              {spokenCountries.length > 0 && (
-                <p className="text-xs text-yellow-500 mt-2">{spokenCountries.length} delegate{spokenCountries.length !== 1 ? 's' : ''} spoke</p>
-              )}
+              <h1 className="text-5xl font-black text-white mt-2 mb-1 text-center">{committee.currentSpeaker.country}</h1>
+              <div className={`text-8xl font-black font-mono mt-2 mb-3 tabular-nums ${
+                extraTimeAdded ? 'text-emerald-400' :
+                speakerTimeRemaining <= 10 ? 'text-red-500' :
+                speakerTimeRemaining <= 30 ? 'text-yellow-600' : 'text-white'
+              }`}>
+                {formatTime(speakerTimeRemaining)}
+                {extraTimeAdded && <span className="text-base ml-2 font-normal text-emerald-400">+time</span>}
+              </div>
+              <div className="w-full max-w-2xl h-2 bg-[#2E1E0F] rounded-full overflow-hidden mb-3">
+                <div className={`h-full rounded-full transition-all ${caucusProgress > 50 ? 'bg-[#B8844A]' : caucusProgress > 20 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{ width: `${caucusProgress}%` }} />
+              </div>
             </div>
-          </div>
+            {!sessionEnded && (
+              <div className="flex gap-2 w-full max-w-sm mt-1 flex-wrap justify-center">
+                <button onClick={handleRestartTime} title="Restart speaker time"
+                  className="px-3 py-3 bg-[#2E1E0F] hover:bg-[#3D2A15] border border-[#3D2A15] hover:border-[#7B4A1E] rounded-xl font-bold text-sm text-[#C4A882] transition-colors">
+                  ↺
+                </button>
+                <button onClick={handleToggleTimer}
+                  className={`flex-1 py-3 px-6 rounded-xl font-bold text-base transition-colors ${timerRunning ? 'bg-yellow-600 hover:bg-yellow-500 text-white' : 'bg-[#3D6B35] hover:bg-[#4A7C42] text-white'}`}>
+                  {timerRunning ? '⏸ Pause' : '▶ Start'}
+                </button>
+                <button onClick={handleNextCaucusSpeaker} disabled={queue.length === 0}
+                  className="flex-1 bg-[#2E1E0F] hover:bg-[#3D2A15] disabled:opacity-40 text-white py-3 px-6 rounded-xl font-bold text-base transition-colors">
+                  Next →
+                </button>
+                <button onClick={() => setActivePopover(activePopover === 'extraTime' ? null : 'extraTime')} title="Add time"
+                  className={`px-3 py-3 border rounded-xl font-bold text-sm transition-colors ${activePopover === 'extraTime' ? 'bg-emerald-900/40 border-emerald-700/50 text-emerald-300' : 'bg-[#2E1E0F] hover:bg-emerald-950/50 hover:border-emerald-800/50 border-[#3D2A15] text-[#C4A882]'}`}>
+                  +⏱
+                </button>
+                {!isTdT && (
+                  <button onClick={() => setActivePopover(activePopover === 'rightToReply' ? null : 'rightToReply')}
+                    className={`px-3 py-3 border rounded-xl font-bold text-xs transition-colors ${activePopover === 'rightToReply' ? 'bg-orange-600 border-orange-500 text-white' : 'bg-orange-900/40 hover:bg-orange-800/50 border-orange-700/40 text-orange-300'}`}>
+                    Right of Reply
+                  </button>
+                )}
+              </div>
+            )}
+            {spokenCountries.length > 0 && (
+              <p className="text-xs text-yellow-500 mt-2">{spokenCountries.length} delegate{spokenCountries.length !== 1 ? 's' : ''} spoke</p>
+            )}
+          </>
         ) : (
           <>
             <div className="text-center mb-3 shrink-0">
@@ -1328,6 +1337,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     setExtraTimeAdded(false);
     if (committee?.phase === 'moderated-caucus' && committee.caucus) {
       const speakTime = committee.caucus.speakingTime;
+      const spentSeconds = Math.max(0, speakTime - speakerTimeRemaining);
+      const newRemainingTime = committee.caucus.remainingTime + spentSeconds;
       setSpeakerTimeRemaining(speakTime);
       // Ensure current speaker is in spokenCountries so a realtime echo cannot re-add them to the queue
       const currentCountry = committee.currentSpeaker?.country ?? null;
@@ -1335,7 +1346,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       const newSpoken = currentCountry && !prevSpoken.includes(currentCountry)
         ? [...prevSpoken, currentCountry]
         : prevSpoken;
-      const updated = { ...committee.caucus, speakerTimeRemaining: speakTime, spokenCountries: newSpoken };
+      const updated = { ...committee.caucus, speakerTimeRemaining: speakTime, remainingTime: newRemainingTime, spokenCountries: newSpoken };
       updateLocal(setCommittee, (c) => ({ ...c, caucus: updated }), true);
       updateCaucusInDB(committee.id, updated);
     } else {
@@ -1355,7 +1366,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     const speakTime = committee.caucus.speakingTime;
     const prevCountry = committee.currentSpeaker?.country ?? null;
     const spentOnCurrent = Math.max(0, speakTime - speakerTimeRemaining);
-    const newRemaining = Math.max(0, committee.caucus.remainingTime - spentOnCurrent);
+    const newRemaining = committee.caucus.remainingTime;
     const newSpoken = prevCountry && !(committee.caucus.spokenCountries ?? []).includes(prevCountry)
       ? [...(committee.caucus.spokenCountries ?? []), prevCountry]
       : (committee.caucus.spokenCountries ?? []);
