@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useSettingsStore, CommitteeSettings, DEFAULT_MOTION_NAMES } from '@/lib/settingsStore';
 import { Committee } from '@/lib/types';
 import { updateCommitteeCode, deleteDocumentsByType } from '@/lib/committeeService';
-import { getFlagEmoji, getCountryByName } from '@/lib/countries';
+import { getFlagUrl, getCountryByName } from '@/lib/countries';
 
 type SettingsTab = 'voting' | 'motions' | 'access' | 'points';
 
@@ -572,7 +572,7 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
                 .map((d) => ({ delegate: d, score: computeScore(d.country) }))
                 .sort((a, b) => b.score.total - a.score.total)
                 .map(({ delegate: d, score }, idx) => {
-                  const flag = getFlagEmoji(getCountryByName(d.country)?.code ?? '') || '🌐';
+                  const flagCode = getCountryByName(d.country)?.code ?? null;
                   const isExpanded = expandedDelegate === d.id;
                   return (
                     <div key={d.id} className="border-b border-[#2E1E0F] last:border-0">
@@ -581,7 +581,9 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
                         onClick={() => setExpandedDelegate(isExpanded ? null : d.id)}
                       >
                         <span className="text-xs text-[#7A5A38] w-5 text-right shrink-0">{idx + 1}</span>
-                        <span className="text-lg leading-none shrink-0">{flag}</span>
+                        {flagCode
+                          ? <img src={getFlagUrl(flagCode)} alt={flagCode} className="w-5 h-5 object-contain shrink-0" />
+                          : <span className="text-lg shrink-0">🌐</span>}
                         <span className="flex-1 text-sm font-semibold text-white truncate">{d.country}</span>
                         <span className={`text-xs font-mono px-2 py-0.5 rounded-full shrink-0 ${d.status === 'absent' ? 'text-[#7A5A38]' : 'text-[#C4A882]'}`}>
                           {score.total} pts
