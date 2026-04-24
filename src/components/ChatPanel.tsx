@@ -2,17 +2,17 @@
 
 import React, { useState, useRef, useEffect, useMemo, ReactNode } from 'react';
 import { Committee, ChatMessage } from '@/lib/types';
-import { getFlagEmoji, getCountryByName } from '@/lib/countries';
+import { getFlagUrl, getCountryByName } from '@/lib/countries';
 import { sendMessage as sendMessageToDB } from '@/lib/committeeService';
 
 function isSystemLog(c: string) { return c.startsWith('__log__:'); }
 function displayContent(c: string) { return c.startsWith('[🎙️] ') ? c.slice(5) : c; }
-function flagFor(country: string) { const c = getCountryByName(country); return c ? getFlagEmoji(c.code) : '🌐'; }
+function flagFor(country: string): ReactNode { const c = getCountryByName(country); return c ? <img src={getFlagUrl(c.code)} alt={c.code} className="w-4 h-4 object-contain inline-block" /> : '🌐'; }
 function fmtTime(ts: Date) { return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
 
 type ConvKey = 'everyone' | string;
-interface Conversation { key: ConvKey; label: string; emoji: string; messages: ChatMessage[]; }
-interface DmOption { id: string; key: string; label: string; emoji: string; }
+interface Conversation { key: ConvKey; label: string; emoji: ReactNode; messages: ChatMessage[]; }
+interface DmOption { id: string; key: string; label: string; emoji: ReactNode; }
 
 export default function ChatPanel({ committee, senderName, isChair = false, onClose, speakerCard, initialReadCounts, onReadCountsChange, readOnly }: {
   committee: Committee;
@@ -41,7 +41,7 @@ export default function ChatPanel({ committee, senderName, isChair = false, onCl
   };
   // Ephemeral draft thread: created when DM picker selects a new conversation with no messages yet.
   // Disappears if user navigates away without sending; persists once a message is sent.
-  const [draftThread, setDraftThread] = useState<{ key: string; label: string; emoji: string } | null>(null);
+  const [draftThread, setDraftThread] = useState<{ key: string; label: string; emoji: ReactNode } | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { chairNames, currentSpeaker } = committee;

@@ -6,7 +6,7 @@ import { useCommitteeStore } from '@/lib/store';
 import { useSettingsStore, DEFAULT_MOTION_NAMES } from '@/lib/settingsStore';
 import { Committee } from '@/lib/types';
 import { FlagCircle } from '@/components/RollCallPanel';
-import { getFlagEmoji, getCountryByName } from '@/lib/countries';
+import { getFlagUrl, getCountryByName } from '@/lib/countries';
 
 function formatTime(seconds: number) {
   const m = Math.floor(seconds / 60);
@@ -54,7 +54,9 @@ function ExpandedDelegateCard({
     'text-[#7A5A38]';
 
   const found = getCountryByName(delegate.country);
-  const flag = found ? getFlagEmoji(found.code) : '🌐';
+  const flagEl = found
+    ? <img src={getFlagUrl(found.code)} alt={found.code} style={{ width: '4.5rem', height: '4.5rem', objectFit: 'contain' }} />
+    : <span style={{ fontSize: '4.5rem', lineHeight: 1 }}>🌐</span>;
 
   const handleNudge = (emoji: string) => {
     sendMessage(committee.id, 'Faculty Advisor', `${emoji} to ${delegate.country}`, false);
@@ -103,7 +105,7 @@ function ExpandedDelegateCard({
 
       {/* Flag + name */}
       <div className="flex flex-col items-center gap-2 pt-2">
-        <span style={{ fontSize: '4.5rem', lineHeight: 1 }}>{flag}</span>
+        {flagEl}
         <h2 className="text-3xl font-black text-white text-center">{delegate.country}</h2>
         <span className={`text-sm font-bold ${statusColor}`}>{statusLabel}</span>
       </div>
@@ -151,7 +153,9 @@ function CollapsedDelegateCard({
   onSelect: () => void;
 }) {
   const found = getCountryByName(delegate.country);
-  const flag = found ? getFlagEmoji(found.code) : '🌐';
+  const flagEl = found
+    ? <img src={getFlagUrl(found.code)} alt={found.code} style={{ width: '1.5rem', height: '1.5rem', objectFit: 'contain' }} />
+    : <span style={{ fontSize: '1.5rem', lineHeight: 1 }}>🌐</span>;
 
   return (
     <button
@@ -159,7 +163,7 @@ function CollapsedDelegateCard({
       className="flex flex-col items-center gap-1 w-16 h-16 justify-center rounded-xl border border-[#2E1E0F] bg-[#150F09] hover:border-[#7B4A1E] transition-all duration-200 shrink-0"
       title={delegate.country}
     >
-      <span style={{ fontSize: '1.5rem', lineHeight: 1 }}>{flag}</span>
+      {flagEl}
       <span className="text-[9px] text-[#C4A882] truncate max-w-full px-1 leading-tight">{delegate.country}</span>
     </button>
   );

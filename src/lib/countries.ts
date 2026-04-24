@@ -11,6 +11,24 @@ export function getFlagEmoji(code: string): string {
     .join('');
 }
 
+// Twemoji CDN — renders identically on Windows, Mac, Linux, Android.
+// Input: ISO 3166-1 alpha-2 country code e.g. 'GB', 'US', 'DE'
+// Output: URL to a 72×72 PNG on jsDelivr's Twemoji mirror.
+export function getFlagUrl(code: string): string {
+  const points = code
+    .toUpperCase()
+    .split('')
+    .map((c) => (c.codePointAt(0)! + 0x1F1A5).toString(16))
+    .join('-');
+  return `https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/${points}.png`;
+}
+
+// Twemoji URL for arbitrary non-flag emojis by their Unicode codepoint hex string.
+// e.g. getTwemojiUrl('1f3a4') for 🎙, getTwemojiUrl('1f3c1') for 🏁
+export function getTwemojiUrl(codepoint: string): string {
+  return `https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/${codepoint}.png`;
+}
+
 export const UN_COUNTRIES: Country[] = [
   { name: 'Afghanistan', code: 'AF' },
   { name: 'Albania', code: 'AL' },

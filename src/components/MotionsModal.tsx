@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { Committee, PendingMotion, PendingMotionType } from '@/lib/types';
-import { getCountryByName, getFlagEmoji } from '@/lib/countries';
+import { getCountryByName, getFlagUrl } from '@/lib/countries';
 import { useSettingsStore, DEFAULT_MOTION_NAMES, MotionNames } from '@/lib/settingsStore';
 import {
   addPendingMotion as addPendingMotionInDB,
@@ -98,7 +98,7 @@ function ProposerInput({ candidates, value, onChange, blockedCountries }: {
     <div className="relative">
       {value && !open ? (
         <div className="flex items-center gap-3 bg-green-950/30 border border-green-800/30 rounded-xl px-4 py-3">
-          <span className="text-lg">{(() => { const f = getCountryByName(value); return f ? getFlagEmoji(f.code) : '🌐'; })()}</span>
+          {(() => { const f = getCountryByName(value); return f ? <img src={getFlagUrl(f.code)} alt={f.code} className="w-5 h-5 object-contain inline-block" /> : <span className="text-lg">🌐</span>; })()}
           <span className="text-sm text-white flex-1">{value}</span>
           <button onClick={() => { setOpen(true); setQuery(''); onChange(''); inputRef.current?.focus(); }} className="text-xs text-[#7A5A38] hover:text-white transition-colors">change</button>
         </div>
@@ -125,7 +125,7 @@ function ProposerInput({ candidates, value, onChange, blockedCountries }: {
                   isBlocked ? 'opacity-50 cursor-not-allowed bg-[#150F09]' :
                   i === 0 ? 'bg-[#7B4A1E]/20 text-white' : 'text-[#E8D5B7] hover:bg-[#2E1E0F]'
                 }`}>
-                <span className="text-lg">{found ? getFlagEmoji(found.code) : '🌐'}</span>
+                {found ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain inline-block" /> : <span className="text-lg">🌐</span>}
                 <span className="text-sm flex-1">{country}</span>
                 {isBlocked
                   ? <span className="text-xs text-orange-400 shrink-0 font-semibold">Motion on floor</span>
@@ -475,7 +475,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
         <div className="flex items-center gap-2">
           <span className={large ? 'text-3xl' : 'text-xl'}>{meta.icon}</span>
           <span className={`font-black text-white flex-1 ${large ? 'text-2xl' : 'text-base'}`}>{meta.label}</span>
-          <span className={large ? 'text-3xl' : 'text-xl'}>{f ? getFlagEmoji(f.code) : '🌐'}</span>
+          {f ? <img src={getFlagUrl(f.code)} alt={f.code} className={large ? 'w-8 h-8 object-contain inline-block' : 'w-5 h-5 object-contain inline-block'} /> : <span className={large ? 'text-3xl' : 'text-xl'}>🌐</span>}
         </div>
 
         {/* Topic inline */}
@@ -796,7 +796,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
                               <DisruptivenessBadge type={m.type} />
                             </div>
                             <div className="flex items-center gap-1.5 mt-1">
-                              <span className="text-base">{proposerFlag ? getFlagEmoji(proposerFlag.code) : '🌐'}</span>
+                              {proposerFlag ? <img src={getFlagUrl(proposerFlag.code)} alt={proposerFlag.code} className="w-5 h-5 object-contain inline-block" /> : <span className="text-base">🌐</span>}
                               <span className="text-sm font-semibold text-white">{m.proposedBy}</span>
                             </div>
                             {m.topic && <p className="text-sm text-[#C4A882] mt-1 font-medium">"{m.topic}"</p>}

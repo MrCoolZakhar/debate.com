@@ -6,7 +6,7 @@ import { Committee, DelegateStatus } from '@/lib/types';
 import RollCallPanel, { FlagCircle } from '@/components/RollCallPanel';
 import MotionsModal from '@/components/MotionsModal';
 import DocumentsModal from '@/components/DocumentsModal';
-import { getFlagEmoji, getCountryByName, UN_COUNTRIES } from '@/lib/countries';
+import { getFlagUrl, getCountryByName, UN_COUNTRIES } from '@/lib/countries';
 import { SettingsPanel } from '@/components/SettingsPanel';
 import { useSettingsStore } from '@/lib/settingsStore';
 import ChatPanel from '@/components/ChatPanel';
@@ -139,7 +139,11 @@ function AddSpeakerInput({ committee, onAdd }: { committee: Committee; onAdd: (i
             if (alreadyOnList) {
               return (
                 <div key={d.id} className="w-full flex items-center gap-3 px-4 py-2.5 opacity-40">
-                  <span className="text-lg">{found ? getFlagEmoji(found.code) : '🌐'}</span>
+                  <span className="shrink-0 w-6 h-6 inline-flex items-center justify-center">
+                  {found
+                    ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain" />
+                    : <span className="text-lg">🌐</span>}
+                </span>
                   <span className="text-sm flex-1 text-[#7A5A38]">{d.country}</span>
                   <span className="text-xs text-[#7A5A38]">already on list</span>
                 </div>
@@ -149,7 +153,11 @@ function AddSpeakerInput({ committee, onAdd }: { committee: Committee; onAdd: (i
             return (
               <button key={d.id} onMouseDown={(e) => { e.preventDefault(); commit(d); }}
                 className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${isFirst ? 'bg-[#7B4A1E]/20 text-white' : 'text-[#E8D5B7] hover:bg-[#2E1E0F]'}`}>
-                <span className="text-lg">{found ? getFlagEmoji(found.code) : '🌐'}</span>
+                <span className="shrink-0 w-6 h-6 inline-flex items-center justify-center">
+                  {found
+                    ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain" />
+                    : <span className="text-lg">🌐</span>}
+                </span>
                 <span className="text-sm">{d.country}</span>
                 {isFirst && <span className="ml-auto text-xs text-[#7A5A38]">Enter ↵</span>}
               </button>
@@ -218,7 +226,11 @@ function RtrCountryInput({
                 onMouseDown={(e) => { e.preventDefault(); setQuery(d.country); onChange(d.country); }}
                 className={`w-full flex items-center gap-2 px-3 py-2 text-left text-xs transition-colors ${i === 0 ? 'bg-[#7B4A1E]/20 text-white' : 'text-[#E8D5B7] hover:bg-[#2E1E0F]'}`}
               >
-                <span className="text-sm">{found ? getFlagEmoji(found.code) : '🌐'}</span>
+                <span className="shrink-0 w-5 h-5 inline-flex items-center justify-center">
+                {found
+                  ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-4 h-4 object-contain" />
+                  : <span className="text-sm">🌐</span>}
+              </span>
                 <span className="flex-1">{d.country}</span>
                 {i === 0 && <span className="text-[#7A5A38] shrink-0">Enter ↵</span>}
               </button>
@@ -324,7 +336,11 @@ function CaucusQueueSidebar({ committee, onRemove, onReorder, lastSpeakerDelegat
                 className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all bg-[#150F09] border border-[#2E1E0F] hover:border-[#7B4A1E]/40 cursor-grab group"
               >
                 <span className="text-xs text-[#7A5A38] font-mono w-5 text-right shrink-0">{i + 1}</span>
-                <span className="text-lg shrink-0">{found ? getFlagEmoji(found.code) : '🌐'}</span>
+                <span className="shrink-0 w-6 h-6 inline-flex items-center justify-center">
+                {found
+                  ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain" />
+                  : <span className="text-lg">🌐</span>}
+              </span>
                 <span className="flex-1 text-sm text-white line-clamp-2 break-words whitespace-normal leading-tight">{s.country}</span>
                 {lastSpeakerDelegateId && s.delegateId === lastSpeakerDelegateId && (
                   <span className="text-xs font-bold text-[#7A5A38] bg-[#2E1E0F] px-1.5 py-0.5 rounded shrink-0">Last</span>
@@ -384,7 +400,11 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
             if (alreadyOnList) {
               return (
                 <div key={d.id} className="w-full flex items-center gap-3 px-4 py-2.5 opacity-40">
-                  <span className="text-lg">{found ? getFlagEmoji(found.code) : '🌐'}</span>
+                  <span className="shrink-0 w-6 h-6 inline-flex items-center justify-center">
+                  {found
+                    ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain" />
+                    : <span className="text-lg">🌐</span>}
+                </span>
                   <span className="text-sm flex-1 text-[#7A5A38]">{d.country}</span>
                   <span className="text-xs text-[#7A5A38]">already on list</span>
                 </div>
@@ -394,7 +414,11 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
             return (
               <button key={d.id} onMouseDown={(e) => { e.preventDefault(); commit(d); }}
                 className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${isFirst ? 'bg-[#7B4A1E]/20 text-white' : 'text-[#E8D5B7] hover:bg-[#2E1E0F]'}`}>
-                <span className="text-lg">{found ? getFlagEmoji(found.code) : '🌐'}</span>
+                <span className="shrink-0 w-6 h-6 inline-flex items-center justify-center">
+                  {found
+                    ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain" />
+                    : <span className="text-lg">🌐</span>}
+                </span>
                 <span className="text-sm flex-1">{d.country}</span>
                 {spoke && <span className="text-[10px] text-yellow-500 shrink-0">already spoke</span>}
                 {isFirst && !spoke && (
@@ -644,9 +668,12 @@ function ModeratedCaucusMain({
             <div className="flex flex-col items-center">
               <div className="ring-4 ring-[#7B4A1E] rounded-full">
                 <div className="relative w-36 h-36 rounded-full overflow-hidden bg-[#2E1E0F] shrink-0">
-                  <span style={{ fontSize: '8rem', lineHeight: '1', position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>
-                    {(() => { const f = getCountryByName(committee.currentSpeaker.country); return f ? getFlagEmoji(f.code) : '🌐'; })()}
-                  </span>
+                  {(() => {
+                    const f = getCountryByName(committee.currentSpeaker.country);
+                    return f
+                      ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ width: '7rem', height: '7rem', objectFit: 'contain', position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }} />
+                      : <span style={{ fontSize: '5rem', lineHeight: '1', position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>🌐</span>;
+                  })()}
                 </div>
               </div>
               <h1 className="text-5xl font-black text-white mt-2 mb-1 text-center">{committee.currentSpeaker.country}</h1>
@@ -1523,11 +1550,13 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               let desiredStatus: 'present' | 'present-voting' = 'present';
               try { const parsed = JSON.parse(m.topic); delegateId = parsed.delegateId; desiredStatus = parsed.desiredStatus; } catch {}
               const found = getCountryByName(m.proposedBy);
-              const flag = found ? getFlagEmoji(found.code) : '🌐';
+              const flagEl = found
+                ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain inline-block" />
+                : <span className="text-lg">🌐</span>;
               return (
                 <div key={m.id} className="flex items-center gap-3 text-sm">
                   <span className="text-[#B8844A] font-bold shrink-0">🚪 Join Request</span>
-                  <span className="font-mono text-lg">{flag}</span>
+                  <span className="font-mono text-lg">{flagEl}</span>
                   <span className="text-white font-semibold">{m.proposedBy}</span>
                   <span className="text-[#C4A882] text-xs">wants to join as</span>
                   <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${desiredStatus === 'present-voting' ? 'bg-blue-900/40 text-blue-300' : 'bg-green-900/40 text-green-300'}`}>
@@ -1551,11 +1580,13 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               let delegateId = '';
               try { const parsed = JSON.parse(m.topic); delegateId = parsed.delegateId; } catch {}
               const found = getCountryByName(m.proposedBy);
-              const flag = found ? getFlagEmoji(found.code) : '🌐';
+              const flagEl = found
+                ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain inline-block" />
+                : <span className="text-lg">🌐</span>;
               return (
                 <div key={m.id} className="flex items-center gap-3 text-sm">
                   <span className="text-green-400 font-bold shrink-0">🎙️ GSL Request</span>
-                  <span className="font-mono text-lg">{flag}</span>
+                  <span className="font-mono text-lg">{flagEl}</span>
                   <span className="text-white font-semibold">{m.proposedBy}</span>
                   <span className="text-[#C4A882] text-xs">wants to speak</span>
                   <button onClick={() => handleApproveGslRequest(m.id, delegateId, m.proposedBy)}
@@ -1763,9 +1794,12 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                           {/* Current speaker flag */}
                           <div className="ring-4 ring-[#7B4A1E] rounded-full">
                             <div className="relative w-36 h-36 rounded-full overflow-hidden bg-[#2E1E0F] shrink-0">
-                              <span style={{ fontSize: '8rem', lineHeight: '1', position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>
-                                {(() => { const f = getCountryByName(committee.currentSpeaker.country); return f ? getFlagEmoji(f.code) : '🌐'; })()}
-                              </span>
+                              {(() => {
+                                const f = getCountryByName(committee.currentSpeaker.country);
+                                return f
+                                  ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ width: '7rem', height: '7rem', objectFit: 'contain', position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }} />
+                                  : <span style={{ fontSize: '5rem', lineHeight: '1', position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>🌐</span>;
+                              })()}
                             </div>
                           </div>
                           <h1 className="text-5xl font-black text-white mt-2 mb-1 text-center">{committee.currentSpeaker.country}</h1>
@@ -2014,7 +2048,12 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               // ── Active timer view ──────────────────────────────
               <>
                 <div className="flex items-center gap-2 mb-3 px-1">
-                  <span className="text-xl">{(() => { const f = getCountryByName(rtrCountry); return f ? getFlagEmoji(f.code) : '🌐'; })()}</span>
+                  {(() => {
+                    const f = getCountryByName(rtrCountry);
+                    return f
+                      ? <img src={getFlagUrl(f.code)} alt={f.code} className="w-6 h-6 object-contain inline-block" />
+                      : <span className="text-xl">🌐</span>;
+                  })()}
                   <span className="text-sm text-white font-bold flex-1">{rtrCountry}</span>
                   <span className="text-xs text-orange-400 font-mono">Right of Reply</span>
                 </div>

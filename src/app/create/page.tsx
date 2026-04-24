@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createCommittee as createCommitteeInDB } from '@/lib/committeeService';
 import { useSettingsStore } from '@/lib/settingsStore';
-import { UN_COUNTRIES, getFlagEmoji, getCountryByName } from '@/lib/countries';
+import { UN_COUNTRIES, getFlagUrl, getCountryByName } from '@/lib/countries';
 import { UNSC_MEMBERS, WHO_MEMBERS, IMF_MEMBERS, WORLD_BANK_MEMBERS, UNEP_MEMBERS } from '@/lib/presets';
 
 const COMMITTEE_PRESETS = [
@@ -290,7 +290,7 @@ function CreatePageInner() {
                         {available.slice(0, 5).map((c, i) => (
                           <button key={c.code} onMouseDown={(e) => { e.preventDefault(); addDelegate(c.name); setSearch(''); }}
                             className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${i === 0 ? 'bg-[#7B4A1E]/20 text-white' : 'text-[#E8D5B7] hover:bg-[#2E1E0F]'}`}>
-                            <span className="text-xl">{getFlagEmoji(c.code)}</span>
+                            <img src={getFlagUrl(c.code)} alt={c.code} className="w-6 h-6 object-contain inline-block" />
                             <span className="text-sm flex-1">{c.name}</span>
                             {i === 0 && <span className="ml-auto text-xs text-[#7A5A38]">Enter ↵</span>}
                           </button>
@@ -360,7 +360,7 @@ function CreatePageInner() {
                         const found = getCountryByName(name);
                         return (
                           <div key={name} className="flex items-center gap-3 px-4 py-2.5 border-b border-[#2E1E0F]/50 last:border-0 hover:bg-[#2E1E0F] transition-colors group">
-                            <span className="text-lg">{found ? getFlagEmoji(found.code) : '🌐'}</span>
+                            {found ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain inline-block" /> : <span className="text-lg">🌐</span>}
                             <span className="text-sm text-white flex-1 truncate">{name}</span>
                             <button onClick={() => setDelegates((p) => p.filter((d) => d !== name))}
                               className="text-[#7A5A38] group-hover:text-red-500 transition-colors text-sm opacity-0 group-hover:opacity-100">✕</button>

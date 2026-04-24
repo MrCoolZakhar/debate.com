@@ -4,7 +4,7 @@ import { use, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Committee, DelegateStatus } from '@/lib/types';
-import { getCountryByName, getFlagEmoji } from '@/lib/countries';
+import { getCountryByName, getFlagUrl } from '@/lib/countries';
 import { getCommitteeByCode, setPhase as setPhaseInDB, setDelegateStatus as setDelegateStatusInDB, updateDocumentStatus as updateDocumentStatusInDB } from '@/lib/committeeService';
 import { useSettingsStore } from '@/lib/settingsStore';
 import { SettingsPanel } from '@/components/SettingsPanel';
@@ -34,7 +34,9 @@ type VotingPhase = 'voting' | 'rights-speakers' | 'result';
 
 function getFlag(country: string) {
   const found = getCountryByName(country);
-  return found ? getFlagEmoji(found.code) : '🌐';
+  return found
+    ? <img src={getFlagUrl(found.code)} alt={found.code} className="inline-block object-contain" style={{ width: '1em', height: '1em' }} />
+    : <span>🌐</span>;
 }
 
 function VoteScale({ forCount, againstCount, totalVoted }: {
@@ -315,7 +317,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                   status === 'present' ? 'bg-green-950/30 border border-green-800/30' :
                   'bg-blue-950/30 border border-blue-800/30'
                 }`}>
-                  <span className="text-base">{(() => { const f = getCountryByName(d.country); return f ? getFlagEmoji(f.code) : '🌐'; })()}</span>
+                  {(() => { const f = getCountryByName(d.country); return f ? <img src={getFlagUrl(f.code)} alt={f.code} className="w-5 h-5 object-contain inline-block" /> : <span>🌐</span>; })()}
                   <span className="flex-1 text-sm text-white truncate">{d.country}</span>
                   <button
                     onClick={() => cycleStatus(d.id)}
@@ -411,7 +413,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
           <div className="flex-1 flex flex-col items-center justify-center min-h-0">
             <div
               style={{ fontSize: 'min(22vw, 18vh)', lineHeight: '1' }}
-              className="select-none mb-3"
+              className="select-none mb-3 flex items-center justify-center"
             >
               {getFlag(currentDelegate.country)}
             </div>
@@ -544,7 +546,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             </p>
             <div
               style={{ fontSize: 'min(18vw, 16vh)', lineHeight: '1' }}
-              className="select-none mb-3"
+              className="select-none mb-3 flex items-center justify-center"
             >
               {getFlag(orderedRights[rightsIndex].country)}
             </div>
