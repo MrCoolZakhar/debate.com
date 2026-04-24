@@ -244,6 +244,7 @@ function RollCallPanelInner({
   onDelegateAdd,
   onReorderList,
   isRollCallPhase = false,
+  showBulkActions = false,
   isReadOnly = false,
 }: {
   committee: Committee;
@@ -257,6 +258,7 @@ function RollCallPanelInner({
   onDelegateAdd?: (country: string) => void;
   onReorderList?: (newList: { delegateId: string; country: string }[]) => void;
   isRollCallPhase?: boolean;
+  showBulkActions?: boolean;
   isReadOnly?: boolean;
 }) {
   const [search, setSearch] = useState('');
@@ -386,7 +388,7 @@ function RollCallPanelInner({
           </div>
           <ViewToggle view={listView} onChange={setListView} />
         </div>
-        {isRollCallPhase && (
+        {showBulkActions && (
           <div className="flex gap-1.5 mt-2">
             <button onClick={handleClear} className="text-[10px] font-semibold px-2.5 py-1.5 rounded-lg bg-[#2E1E0F] text-red-400 hover:bg-red-950/40 transition-colors">Clear All</button>
             <button onClick={handleAllPresent} className="text-[10px] font-semibold px-2.5 py-1.5 rounded-lg bg-[#2E1E0F] text-green-400 hover:bg-green-950/40 transition-colors">All Present</button>
@@ -524,6 +526,7 @@ const RollCallPanel = React.memo(RollCallPanelInner, (prev, next) => {
     prev.committee.currentSpeaker === next.committee.currentSpeaker &&
     prev.committee.caucusQueue === next.committee.caucusQueue &&
     prev.isRollCallPhase === next.isRollCallPhase &&
+    prev.showBulkActions === next.showBulkActions &&
     prev.isReadOnly === next.isReadOnly &&
     prev.onListIds === next.onListIds
   );
