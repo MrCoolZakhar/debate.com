@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { Committee, CommitteeDocument, DocumentType, PendingMotionType, SpeakingLogEntry, DelegateStatus } from '@/lib/types';
 import ChatPanel from '@/components/ChatPanel';
 import { useSettingsStore } from '@/lib/settingsStore';
-import { getFlagEmoji, getCountryByName } from '@/lib/countries';
+import { getFlagUrl, getCountryByName } from '@/lib/countries';
 import {
   getCommitteeByCode,
   subscribeToCommittee,
@@ -39,9 +39,9 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-function flagFor(country: string): string {
+function flagFor(country: string) {
   const c = getCountryByName(country);
-  return c ? getFlagEmoji(c.code) : '🌐';
+  return c ? <img src={getFlagUrl(c.code)} alt={c.code} className="inline-block object-contain" style={{ width: '1em', height: '1em' }} /> : <span>🌐</span>;
 }
 
 function autoDocCode(type: DocumentType, existingDocs: { type: DocumentType }[]): string {

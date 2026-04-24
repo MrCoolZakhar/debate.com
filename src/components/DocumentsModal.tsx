@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, KeyboardEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { Committee, CommitteeDocument, DocumentType, DocumentStatus } from '@/lib/types';
-import { getCountryByName, getFlagEmoji } from '@/lib/countries';
+import { getCountryByName, getFlagUrl } from '@/lib/countries';
 import { useSettingsStore } from '@/lib/settingsStore';
 import {
   addDocument as addDocumentInDB,
@@ -38,7 +38,7 @@ function CountryChip({ country, onRemove }: { country: string; onRemove: () => v
   const found = getCountryByName(country);
   return (
     <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-[#2E1E0F] border border-[#2E1E0F] rounded-full text-xs text-white">
-      {found ? getFlagEmoji(found.code) : '🌐'}{country}
+      {found ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-4 h-4 object-contain inline-block mr-1" /> : '🌐'}{country}
       <button onClick={onRemove} className="text-[#7A5A38] hover:text-red-500 ml-0.5 leading-none">✕</button>
     </span>
   );
@@ -70,7 +70,7 @@ function SponsorSelect({ candidates, selected, onChange }: {
               return (
                 <button key={c} onMouseDown={(e) => { e.preventDefault(); add(c); }}
                   className={`w-full flex items-center gap-2 px-3 py-2 text-left transition-colors ${i === 0 ? 'bg-[#7B4A1E]/20 text-white' : 'text-[#E8D5B7] hover:bg-[#2E1E0F]'}`}>
-                  <span>{found ? getFlagEmoji(found.code) : '🌐'}</span>
+                  {found ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain inline-block" /> : <span>🌐</span>}
                   <span className="text-sm">{c}</span>
                 </button>
               );
