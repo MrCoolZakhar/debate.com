@@ -20,13 +20,13 @@ export function getFlagUrl(code: string): string {
     .split('')
     .map((c) => (c.codePointAt(0)! + 0x1F1A5).toString(16))
     .join('-');
-  return `https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/${points}.png`;
+  return `https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/${points}.svg`;
 }
 
 // Twemoji URL for arbitrary non-flag emojis by their Unicode codepoint hex string.
 // e.g. getTwemojiUrl('1f3a4') for 🎙, getTwemojiUrl('1f3c1') for 🏁
 export function getTwemojiUrl(codepoint: string): string {
-  return `https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/${codepoint}.png`;
+  return `https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/${codepoint}.svg`;
 }
 
 export const UN_COUNTRIES: Country[] = [
