@@ -378,18 +378,20 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
   const commit = (d: typeof topNotOnList) => { if (!d || onList.has(d.id) || isFull) return; onAdd(d.id); setQuery(''); };
   return (
     <div className="relative">
-      {isFull && (
-        <div className="mb-2 text-xs text-yellow-500 text-center px-2">
-          Queue full — {maxSpeakers} speaker{maxSpeakers !== 1 ? 's' : ''} fit in remaining time
+      {isFull ? (
+        <div className="pointer-events-none flex items-center justify-center px-4 py-3 bg-[#150F09] border border-yellow-700/30 rounded-xl">
+          <p className="text-sm text-amber-400 font-semibold text-center">
+            Queue full — {maxSpeakers} speaker{maxSpeakers !== 1 ? 's' : ''} fit in remaining time
+          </p>
         </div>
-      )}
-      <div className={`flex items-center bg-[#150F09] border rounded-xl transition-colors ${isFull ? 'border-yellow-700/40 opacity-60' : 'border-[#2E1E0F] focus-within:border-[#7B4A1E]'}`}>
+      ) : (
+      <>
+      <div className="flex items-center bg-[#150F09] border rounded-xl transition-colors border-[#2E1E0F] focus-within:border-[#7B4A1E]">
         <input ref={inputRef} type="text" value={query} onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(topNotOnList); } if (e.key === 'Escape') setQuery(''); }}
-          placeholder={isFull ? 'Queue full' : 'Add to speakers list…'}
-          disabled={isFull}
-          className="flex-1 bg-transparent px-4 py-3 text-white placeholder-[#7A5A38] focus:outline-none text-sm disabled:cursor-not-allowed" />
-        {topNotOnList && query && !isFull && <span className="text-xs text-[#7A5A38] px-3 truncate max-w-[120px]">↵ {topNotOnList.country}</span>}
+          placeholder="Add to speakers list…"
+          className="flex-1 bg-transparent px-4 py-3 text-white placeholder-[#7A5A38] focus:outline-none text-sm" />
+        {topNotOnList && query && <span className="text-xs text-[#7A5A38] px-3 truncate max-w-[120px]">↵ {topNotOnList.country}</span>}
       </div>
       {query && matches.length > 0 && (
         <div className="absolute bottom-full left-0 right-0 mb-1 bg-[#150F09] border border-[#2E1E0F] rounded-xl overflow-hidden shadow-xl z-10 max-h-48 overflow-y-auto">
@@ -442,6 +444,8 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
             );
           })}
         </div>
+      )}
+      </>
       )}
     </div>
   );
@@ -501,7 +505,7 @@ function UnmoderatedCaucusView({ committee, setCommittee }: { committee: Committ
         <button onClick={() => setShowExtendUnmod((v) => !v)} className="px-4 py-3 rounded-xl font-bold bg-[#2E1E0F] hover:bg-emerald-950/50 text-[#C4A882] hover:text-emerald-400 transition-colors border border-[#2E1E0F] hover:border-emerald-900/50">
           Extend
         </button>
-        <button onClick={handleEndCaucus} className="px-8 py-3 rounded-xl font-bold bg-[#2E1E0F] hover:bg-[#3D2A15] text-white transition-colors">
+        <button onClick={handleEndCaucus} className="px-8 py-3 rounded-xl font-black bg-red-600 hover:bg-red-700 text-white transition-colors">
           End Caucus
         </button>
       </div>
@@ -570,6 +574,21 @@ function ModeratedCaucusMain({
   const isTdT = caucus.purpose?.startsWith('Tour de Table') ?? false;
   const caucusTitle = isTdT ? 'TOUR DE TABLE' : (getSettings(committee.code).motionNames?.moderated ?? 'Moderated Caucus').toUpperCase();
   const spokenCountries = caucus.spokenCountries ?? [];
+
+  // Extend-time UI state
+  const [showExtendMod, setShowExtendMod] = useState(false);
+  const [extendMinsMod, setExtendMinsMod] = useState(1);
+  const [extendSecsMod, setExtendSecsMod] = useState(0);
+  const extendRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showExtendMod) return;
+    const handler = (e: MouseEvent) => {
+      if (extendRef.current && !extendRef.current.contains(e.target as Node)) setShowExtendMod(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showExtendMod]);
 
   // Local live remaining-time — ticks in lockstep with speakerTimeRemaining.
   const [liveRemaining, setLiveRemaining] = useState(caucus.remainingTime);
@@ -650,77 +669,84 @@ function ModeratedCaucusMain({
 
   return (
     <>
-      <div className="flex-1 flex flex-col items-center justify-center px-4 py-4 overflow-hidden">
-        <div className="text-center mb-3 shrink-0">
-          <p className="text-5xl font-black tracking-widest text-[#7B4A1E] mb-2">{caucusTitle}</p>
-          {!isTdT && caucus.purpose && <p className="text-base font-semibold text-[#C4A882]">{caucus.purpose}</p>}
-        </div>
-
+      <div className="flex-1 flex flex-col items-center justify-center px-4 py-3 overflow-hidden">
         {committee.currentSpeaker ? (
-          <>
-            {queue.length > 0 && (
-              <DraggableSpeakersQueue
-                list={queue}
-                onReorder={handleCaucusReorderQueue}
-                onRemove={handleCaucusRemoveFromQueue}
-              />
-            )}
-            <div className="flex flex-col items-center">
-              <div className="ring-4 ring-[#7B4A1E] rounded-full">
-                <div className="relative w-36 h-36 rounded-full overflow-hidden bg-[#2E1E0F] shrink-0">
-                  {(() => {
-                    const f = getCountryByName(committee.currentSpeaker.country);
-                    return f
-                      ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ width: '7rem', height: '7rem', objectFit: 'contain', position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }} />
-                      : <span style={{ fontSize: '5rem', lineHeight: '1', position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>🌐</span>;
-                  })()}
+          <div className="flex flex-row gap-6 items-center justify-center w-full flex-1">
+            {/* Left column: motion name + topic */}
+            <div className="flex flex-col justify-center w-48 shrink-0">
+              <p className="text-3xl font-black tracking-widest text-[#7B4A1E]">{caucusTitle}</p>
+              {!isTdT && caucus.purpose && <p className="text-lg font-semibold text-[#C4A882] mt-2">{caucus.purpose}</p>}
+            </div>
+            {/* Right: queue + speaker block */}
+            <div className="flex-1 flex flex-col items-center">
+              {queue.length > 0 && (
+                <DraggableSpeakersQueue
+                  list={queue}
+                  onReorder={handleCaucusReorderQueue}
+                  onRemove={handleCaucusRemoveFromQueue}
+                />
+              )}
+              <div className="flex flex-col items-center">
+                <div className="ring-4 ring-[#7B4A1E] rounded-full">
+                  <div className="relative w-36 h-36 rounded-full overflow-hidden bg-[#2E1E0F] shrink-0">
+                    {(() => {
+                      const f = getCountryByName(committee.currentSpeaker.country);
+                      return f
+                        ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ width: '7rem', height: '7rem', objectFit: 'contain', position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }} />
+                        : <span style={{ fontSize: '5rem', lineHeight: '1', position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>🌐</span>;
+                    })()}
+                  </div>
+                </div>
+                <h1 className="text-5xl font-black text-white mt-2 mb-1 text-center">{committee.currentSpeaker.country}</h1>
+                <div className={`text-8xl font-black font-mono mt-2 mb-3 tabular-nums ${
+                  extraTimeAdded ? 'text-emerald-400' :
+                  speakerTimeRemaining <= 10 ? 'text-red-500' :
+                  speakerTimeRemaining <= 30 ? 'text-yellow-600' : 'text-white'
+                }`}>
+                  {formatTime(speakerTimeRemaining)}
+                  {extraTimeAdded && <span className="text-base ml-2 font-normal text-emerald-400">+time</span>}
+                </div>
+                <div className="w-full max-w-2xl h-2 bg-[#2E1E0F] rounded-full overflow-hidden mb-3">
+                  <div className={`h-full rounded-full transition-all ${caucusProgress > 50 ? 'bg-[#B8844A]' : caucusProgress > 20 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{ width: `${caucusProgress}%` }} />
                 </div>
               </div>
-              <h1 className="text-5xl font-black text-white mt-2 mb-1 text-center">{committee.currentSpeaker.country}</h1>
-              <div className={`text-8xl font-black font-mono mt-2 mb-3 tabular-nums ${
-                extraTimeAdded ? 'text-emerald-400' :
-                speakerTimeRemaining <= 10 ? 'text-red-500' :
-                speakerTimeRemaining <= 30 ? 'text-yellow-600' : 'text-white'
-              }`}>
-                {formatTime(speakerTimeRemaining)}
-                {extraTimeAdded && <span className="text-base ml-2 font-normal text-emerald-400">+time</span>}
-              </div>
-              <div className="w-full max-w-2xl h-2 bg-[#2E1E0F] rounded-full overflow-hidden mb-3">
-                <div className={`h-full rounded-full transition-all ${caucusProgress > 50 ? 'bg-[#B8844A]' : caucusProgress > 20 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{ width: `${caucusProgress}%` }} />
-              </div>
-            </div>
-            {!sessionEnded && (
-              <div className="flex gap-2 w-full max-w-sm mt-1 flex-wrap justify-center">
-                <button onClick={handleRestartTime} title="Restart speaker time"
-                  className="px-3 py-3 bg-[#2E1E0F] hover:bg-[#3D2A15] border border-[#3D2A15] hover:border-[#7B4A1E] rounded-xl font-bold text-sm text-[#C4A882] transition-colors">
-                  ↺
-                </button>
-                <button onClick={handleToggleTimer}
-                  className={`flex-1 py-3 px-6 rounded-xl font-bold text-base transition-colors ${timerRunning ? 'bg-yellow-600 hover:bg-yellow-500 text-white' : 'bg-[#3D6B35] hover:bg-[#4A7C42] text-white'}`}>
-                  {timerRunning ? '⏸ Pause' : '▶ Start'}
-                </button>
-                <button onClick={handleNextCaucusSpeaker} disabled={queue.length === 0}
-                  className="flex-1 bg-[#2E1E0F] hover:bg-[#3D2A15] disabled:opacity-40 text-white py-3 px-6 rounded-xl font-bold text-base transition-colors">
-                  Next →
-                </button>
-                <button onClick={() => setActivePopover(activePopover === 'extraTime' ? null : 'extraTime')} title="Add time"
-                  className={`px-3 py-3 border rounded-xl font-bold text-sm transition-colors ${activePopover === 'extraTime' ? 'bg-emerald-900/40 border-emerald-700/50 text-emerald-300' : 'bg-[#2E1E0F] hover:bg-emerald-950/50 hover:border-emerald-800/50 border-[#3D2A15] text-[#C4A882]'}`}>
-                  +⏱
-                </button>
-                {!isTdT && (
-                  <button onClick={() => setActivePopover(activePopover === 'rightToReply' ? null : 'rightToReply')}
-                    className={`px-3 py-3 border rounded-xl font-bold text-xs transition-colors ${activePopover === 'rightToReply' ? 'bg-orange-600 border-orange-500 text-white' : 'bg-orange-900/40 hover:bg-orange-800/50 border-orange-700/40 text-orange-300'}`}>
-                    Right of Reply
+              {!sessionEnded && (
+                <div className="flex gap-2 w-full max-w-sm mt-1 flex-wrap justify-center">
+                  <button onClick={handleRestartTime} title="Restart speaker time"
+                    className="px-3 py-3 bg-[#2E1E0F] hover:bg-[#3D2A15] border border-[#3D2A15] hover:border-[#7B4A1E] rounded-xl font-bold text-sm text-[#C4A882] transition-colors">
+                    ↺
                   </button>
-                )}
-              </div>
-            )}
-            {spokenCountries.length > 0 && (
-              <p className="text-xs text-yellow-500 mt-2">{spokenCountries.length} delegate{spokenCountries.length !== 1 ? 's' : ''} spoke</p>
-            )}
-          </>
+                  <button onClick={handleToggleTimer}
+                    className={`flex-1 py-3 px-6 rounded-xl font-bold text-base transition-colors ${timerRunning ? 'bg-yellow-600 hover:bg-yellow-500 text-white' : 'bg-[#3D6B35] hover:bg-[#4A7C42] text-white'}`}>
+                    {timerRunning ? '⏸ Pause' : '▶ Start'}
+                  </button>
+                  <button onClick={handleNextCaucusSpeaker} disabled={queue.length === 0}
+                    className="flex-1 bg-[#2E1E0F] hover:bg-[#3D2A15] disabled:opacity-40 text-white py-3 px-6 rounded-xl font-bold text-base transition-colors">
+                    Next →
+                  </button>
+                  <button onClick={() => setActivePopover(activePopover === 'extraTime' ? null : 'extraTime')} title="Add time"
+                    className={`px-3 py-3 border rounded-xl font-bold text-sm transition-colors ${activePopover === 'extraTime' ? 'bg-emerald-900/40 border-emerald-700/50 text-emerald-300' : 'bg-[#2E1E0F] hover:bg-emerald-950/50 hover:border-emerald-800/50 border-[#3D2A15] text-[#C4A882]'}`}>
+                    +⏱
+                  </button>
+                  {!isTdT && (
+                    <button onClick={() => setActivePopover(activePopover === 'rightToReply' ? null : 'rightToReply')}
+                      className={`px-3 py-3 border rounded-xl font-bold text-xs transition-colors ${activePopover === 'rightToReply' ? 'bg-orange-600 border-orange-500 text-white' : 'bg-orange-900/40 hover:bg-orange-800/50 border-orange-700/40 text-orange-300'}`}>
+                      Right of Reply
+                    </button>
+                  )}
+                </div>
+              )}
+              {spokenCountries.length > 0 && (
+                <p className="text-xs text-yellow-500 mt-2">{spokenCountries.length} delegate{spokenCountries.length !== 1 ? 's' : ''} spoke</p>
+              )}
+            </div>
+          </div>
         ) : (
           <>
+            <div className="text-center mb-3 shrink-0">
+              <p className="text-5xl font-black tracking-widest text-[#7B4A1E] mb-2">{caucusTitle}</p>
+              {!isTdT && caucus.purpose && <p className="text-base font-semibold text-[#C4A882]">{caucus.purpose}</p>}
+            </div>
             {queue.length > 0 && (
               <DraggableSpeakersQueue
                 list={queue}
@@ -749,8 +775,42 @@ function ModeratedCaucusMain({
             <div className="flex-1 h-2 bg-[#2E1E0F] rounded-full overflow-hidden">
               <div className="h-full bg-[#B8844A]/60 rounded-full transition-all" style={{ width: `${totalProgress}%` }} />
             </div>
+            {!isTdT && (
+              <div className="relative" ref={extendRef}>
+                <button onClick={() => setShowExtendMod((v) => !v)}
+                  className="px-3 py-2 rounded-lg font-bold text-xs bg-amber-900/30 hover:bg-amber-800/40 text-amber-400 hover:text-amber-300 transition-colors border border-amber-700/30 hover:border-amber-600/40">
+                  Extend
+                </button>
+                {showExtendMod && (
+                  <div className="absolute bottom-full right-0 mb-2 bg-[#1A1209] border border-[#2E1E0F] rounded-xl px-4 py-3 shadow-xl flex items-center gap-2 z-20">
+                    <span className="text-xs text-amber-400 font-semibold shrink-0">Add</span>
+                    <input type="number" min={0} value={extendMinsMod} onChange={(e) => setExtendMinsMod(parseInt(e.target.value) || 0)}
+                      className="w-10 bg-[#150F09] border border-[#2E1E0F] rounded-lg px-2 py-1 text-white text-xs text-center focus:outline-none" />
+                    <span className="text-xs text-[#7A5A38]">m</span>
+                    <input type="number" min={0} max={59} value={extendSecsMod} onChange={(e) => setExtendSecsMod(Math.min(59, parseInt(e.target.value) || 0))}
+                      className="w-10 bg-[#150F09] border border-[#2E1E0F] rounded-lg px-2 py-1 text-white text-xs text-center focus:outline-none" />
+                    <span className="text-xs text-[#7A5A38]">s</span>
+                    <button onClick={() => {
+                      const addSecs = extendMinsMod * 60 + extendSecsMod;
+                      if (addSecs <= 0) return;
+                      updateLocal(setCommittee, (c) => {
+                        if (!c.caucus) return c;
+                        const newRemaining = c.caucus.remainingTime + addSecs;
+                        const newTotal = c.caucus.totalTime + addSecs;
+                        const updated = { ...c.caucus, remainingTime: newRemaining, totalTime: newTotal };
+                        updateCaucusInDB(committee.id, updated);
+                        return { ...c, caucus: updated };
+                      }, true);
+                      setShowExtendMod(false);
+                    }} className="px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-900/30 hover:bg-amber-800/40 border border-amber-700/30 text-amber-300 transition-colors shrink-0">
+                      + Add
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
             <button onClick={handleEndCaucus}
-              className="px-3 py-1.5 rounded-lg font-bold text-xs bg-[#2E1E0F] hover:bg-red-950/50 text-[#C4A882] hover:text-red-400 transition-colors border border-[#2E1E0F] hover:border-red-900/50">
+              className="px-8 py-3 rounded-lg font-black text-sm bg-red-600 hover:bg-red-700 text-white transition-colors">
               End Caucus
             </button>
           </div>
@@ -1268,17 +1328,16 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     setExtraTimeAdded(false);
     if (committee?.phase === 'moderated-caucus' && committee.caucus) {
       const speakTime = committee.caucus.speakingTime;
-      const used = speakTime - speakerTimeRemaining;
       setSpeakerTimeRemaining(speakTime);
-      if (used > 0) {
-        updateLocal(setCommittee, (c) => {
-          if (!c.caucus) return c;
-          const restored = Math.min(c.caucus.totalTime, c.caucus.remainingTime + used);
-          const updated = { ...c.caucus, remainingTime: restored };
-          updateCaucusInDB(c.id, updated);
-          return { ...c, caucus: updated };
-        });
-      }
+      // Ensure current speaker is in spokenCountries so a realtime echo cannot re-add them to the queue
+      const currentCountry = committee.currentSpeaker?.country ?? null;
+      const prevSpoken = committee.caucus.spokenCountries ?? [];
+      const newSpoken = currentCountry && !prevSpoken.includes(currentCountry)
+        ? [...prevSpoken, currentCountry]
+        : prevSpoken;
+      const updated = { ...committee.caucus, speakerTimeRemaining: speakTime, spokenCountries: newSpoken };
+      updateLocal(setCommittee, (c) => ({ ...c, caucus: updated }), true);
+      updateCaucusInDB(committee.id, updated);
     } else {
       setSpeakerTimeRemaining(speakerTimeLimit);
     }
@@ -1470,11 +1529,11 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         {committee.phase !== 'pre-session' && !sessionEnded ? (
           <div className="flex flex-1 min-w-0 h-full">
             <button onClick={() => setShowSliders((v) => !v)}
-              className={`flex-1 text-sm font-bold transition-colors border-b-2 ${showSliders ? 'text-white border-[#7B4A1E]' : 'text-[#7A5A38] border-transparent hover:text-[#C4A882]'}`}>
+              className={`flex-1 text-base font-bold px-3 transition-colors border-b-2 ${showSliders ? 'text-white border-[#7B4A1E]' : 'text-[#7A5A38] border-transparent hover:text-[#C4A882]'}`}>
               Roll Call
             </button>
             <button onClick={handleMotionsClick}
-              className={`flex-1 text-sm font-bold transition-colors border-b-2 relative ${showMotions ? 'text-white border-[#7B4A1E]' : 'text-[#7A5A38] border-transparent hover:text-[#C4A882]'}`}>
+              className={`flex-1 text-base font-bold px-3 transition-colors border-b-2 relative ${showMotions ? 'text-white border-[#7B4A1E]' : 'text-[#7A5A38] border-transparent hover:text-[#C4A882]'}`}>
               Motions
               {(committee.pendingMotions ?? []).filter((m) => m.type !== ('join-request' as string) && (m.type as string) !== 'gsl-request').length > 0 && (
                 <span className="absolute top-1 right-1 w-4 h-4 bg-[#7B4A1E] rounded-full text-white text-[10px] flex items-center justify-center">
@@ -1483,12 +1542,12 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               )}
             </button>
             <button onClick={handleDocumentsClick}
-              className={`flex-1 text-sm font-bold transition-colors border-b-2 relative ${showDocuments ? 'text-white border-[#7B4A1E]' : 'text-[#7A5A38] border-transparent hover:text-[#C4A882]'}`}>
+              className={`flex-1 text-base font-bold px-3 transition-colors border-b-2 relative ${showDocuments ? 'text-white border-[#7B4A1E]' : 'text-[#7A5A38] border-transparent hover:text-[#C4A882]'}`}>
               Documents
               {(() => { const n = (committee.documents ?? []).filter((d) => d.status === 'submitted').length; return n > 0 ? <span className="absolute top-1 right-1 w-4 h-4 bg-[#7B4A1E] rounded-full text-white text-[10px] flex items-center justify-center">{n}</span> : null; })()}
             </button>
             <button onClick={() => { if (!isPreSession) handleToggleChat(); }}
-              className={`flex-1 text-sm font-bold transition-colors border-b-2 relative ${showChat ? 'text-white border-[#7B4A1E]' : 'text-[#7A5A38] border-transparent hover:text-[#C4A882]'}`}>
+              className={`flex-1 text-base font-bold px-3 transition-colors border-b-2 relative ${showChat ? 'text-white border-[#7B4A1E]' : 'text-[#7A5A38] border-transparent hover:text-[#C4A882]'}`}>
               Chat
               {(() => { const unread = committee.messages.filter((m) => !m.content.startsWith('__log__:')).length - chatReadCount; return unread > 0 && !showChat ? <span className="absolute top-1 right-1 w-4 h-4 bg-[#7B4A1E] rounded-full text-white text-[10px] flex items-center justify-center">{unread}</span> : null; })()}
             </button>
