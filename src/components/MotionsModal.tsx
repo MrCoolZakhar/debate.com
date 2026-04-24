@@ -148,32 +148,64 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised }: {
 }) {
   const [type, setType] = useState<PendingMotionType | null>('moderated');
   const [proposer, setProposer] = useState('');
-  const [totalMins, setTotalMins] = useState(10);
-  const [totalSecs, setTotalSecs] = useState(0);
-  const [speakingTime, setSpeakingTime] = useState(60);
+  const [totalMinsStr, setTotalMinsStr] = useState('');
+  const [totalSecsStr, setTotalSecsStr] = useState('');
+  const [speakingTimeStr, setSpeakingTimeStr] = useState('');
   const [topic, setTopic] = useState('');
   const [tourOrder, setTourOrder] = useState<'asc' | 'desc' | 'custom'>('asc');
+  const [error, setError] = useState('');
+  const [showSpeakerInfo, setShowSpeakerInfo] = useState(false);
+  const speakerInfoRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showSpeakerInfo) return;
+    const handler = (e: MouseEvent) => {
+      if (speakerInfoRef.current && !speakerInfoRef.current.contains(e.target as Node)) {
+        setShowSpeakerInfo(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showSpeakerInfo]);
 
   const presentCountries = committee.delegates.filter((d) => d.status !== 'absent').map((d) => d.country);
-  const totalTime = totalMins * 60 + totalSecs;
   const countriesWithMotions = new Set(
     (committee.pendingMotions ?? [])
       .filter((m) => m.type !== ('join-request' as string) && (m.type as string) !== 'gsl-request')
       .map((m) => m.proposedBy)
   );
 
+  const totalMins = parseInt(totalMinsStr, 10) || 0;
+  const totalSecs = Math.min(59, parseInt(totalSecsStr, 10) || 0);
+  const speakingTime = parseInt(speakingTimeStr, 10) || 0;
+  const totalTime = totalMins * 60 + totalSecs;
+
+  const speakerCount = (totalTime > 0 && speakingTime > 0) ? Math.floor(totalTime / speakingTime) : null;
+  const unusedSecs = (totalTime > 0 && speakingTime > 0) ? totalTime % speakingTime : 0;
+
+  const numClass = 'bg-transparent text-white text-xl font-bold text-center focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none';
+  const numClassSm = 'bg-transparent text-white text-lg font-bold text-center focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none';
+
   const canSubmit = () => {
     if (!type || !proposer) return false;
-    if (type === 'suspend-debate' || type === 'end-debate') return true;
     if (type === 'moderated' && !topic.trim()) return false;
-
-    if (type !== 'tour' && type !== 'consultation' && totalTime <= 0) return false;
     return true;
   };
 
   const submit = () => {
     if (!type || !canSubmit()) return;
+    setError('');
     const isSuspendOrEnd = type === 'suspend-debate' || type === 'end-debate';
+    if (!isSuspendOrEnd) {
+      if ((type === 'moderated' || type === 'unmoderated') && totalTime === 0) {
+        setError('Total caucus time cannot be zero.');
+        return;
+      }
+      if (type === 'moderated' && speakingTime === 0) {
+        setError('Speaking time per delegate cannot be zero.');
+        return;
+      }
+    }
     const motion: Omit<PendingMotion, 'id' | 'disruptiveness'> = {
       type,
       proposedBy: proposer,
@@ -188,194 +220,225 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised }: {
   };
 
   return (
-    <div className="px-7 pb-7 space-y-4">
+    <div className="flex flex-col h-full">
       {/* PERMANENT NOTE: No scroll in raise motion form. If content doesn't fit, reduce spacing
           or lay fields side-by-side — never re-add overflow-y-auto here. */}
-      <div className="flex items-center gap-3">
-        <button onClick={onBack} className="text-sm text-[#C4A882] hover:text-white transition-colors">← Back</button>
+      <div className="flex-1 px-7 pt-0 pb-4 space-y-4">
         <h2 className="text-3xl font-black text-white">Raise a Motion</h2>
-      </div>
 
-      {/* Type tabs — always shown */}
-      <div className="flex gap-1.5 flex-wrap items-stretch">
-        <div className="flex gap-1.5 flex-1 flex-wrap">
-          {TYPE_ORDER.map((t) => (
-            <button key={t} type="button" onClick={() => setType(t)}
-              className={`px-3 py-2 rounded-xl border font-bold text-base transition-all flex-1 min-w-[120px] ${
-                type === t ? 'bg-[#7B4A1E] border-[#8B5A2B] text-white' : 'bg-[#1A1209] border-[#2E1E0F] text-[#C4A882] hover:border-[#7B4A1E]'
-              }`}>
-              {typeMeta[t].label}
+        {/* Type tabs — always shown */}
+        <div className="flex gap-1.5 flex-wrap items-stretch">
+          <div className="flex gap-1.5 flex-1 flex-wrap">
+            {TYPE_ORDER.map((t) => (
+              <button key={t} type="button" onClick={() => setType(t)}
+                className={`px-3 py-2 rounded-xl border font-bold text-base transition-all flex-1 min-w-[120px] ${
+                  type === t ? 'bg-[#7B4A1E] border-[#8B5A2B] text-white' : 'bg-[#1A1209] border-[#2E1E0F] text-[#C4A882] hover:border-[#7B4A1E]'
+                }`}>
+                {typeMeta[t].label}
+              </button>
+            ))}
+          </div>
+          {/* Special debate control buttons — half size, red, stacked */}
+          <div className="flex flex-col gap-1 self-stretch">
+            <button type="button" onClick={() => setType('suspend-debate')}
+              className={`px-2 flex-1 rounded-lg border text-xs font-bold transition-colors ${type === 'suspend-debate' ? 'bg-red-800 border-red-700 text-white' : 'border-red-900/50 bg-red-950/30 text-red-400 hover:bg-red-900/40'}`}>
+              Suspend
             </button>
-          ))}
+            <button type="button" onClick={() => setType('end-debate')}
+              className={`px-2 flex-1 rounded-lg border text-xs font-bold transition-colors ${type === 'end-debate' ? 'bg-red-800 border-red-700 text-white' : 'border-red-900/50 bg-red-950/30 text-red-400 hover:bg-red-900/40'}`}>
+              End Debate
+            </button>
+          </div>
         </div>
-        {/* Special debate control buttons — half size, red, stacked */}
-        <div className="flex flex-col gap-1 self-stretch">
-          <button type="button" onClick={() => setType('suspend-debate')}
-            className={`px-2 flex-1 rounded-lg border text-xs font-bold transition-colors ${type === 'suspend-debate' ? 'bg-red-800 border-red-700 text-white' : 'border-red-900/50 bg-red-950/30 text-red-400 hover:bg-red-900/40'}`}>
-            Suspend
-          </button>
-          <button type="button" onClick={() => setType('end-debate')}
-            className={`px-2 flex-1 rounded-lg border text-xs font-bold transition-colors ${type === 'end-debate' ? 'bg-red-800 border-red-700 text-white' : 'border-red-900/50 bg-red-950/30 text-red-400 hover:bg-red-900/40'}`}>
-            End Debate
-          </button>
-        </div>
-      </div>
 
-      {type && (
-        <>
-          {/* For moderated caucus: Topic first, then Proposed By */}
-          {type !== 'moderated' && (
-            <div>
-              <label className="block text-lg font-semibold text-[#C4A882] mb-2">Proposed by</label>
-              <ProposerInput candidates={presentCountries} value={proposer} onChange={setProposer} blockedCountries={countriesWithMotions} />
-            </div>
-          )}
-
-          {/* Tour de Table — speaking time per delegate + order */}
-          {type === 'tour' && (
-            <>
-              <div className="bg-[#1A1209] border border-[#2E1E0F] rounded-2xl p-4 space-y-3">
-                <p className="text-white font-semibold text-sm">
-                  All {presentCountries.length} present delegates will speak once each.
-                </p>
-                <div>
-                  <label className="block text-lg font-semibold text-[#C4A882] mb-2">Speaking time per delegate</label>
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2 bg-[#150F09] border border-[#2E1E0F] rounded-xl px-3 py-2">
-                      <input type="number" min={10} value={speakingTime} onChange={(e) => setSpeakingTime(parseInt(e.target.value) || 60)}
-                        className="w-14 bg-transparent text-white text-xl font-bold text-center focus:outline-none" />
-                      <span className="text-[#C4A882] text-sm">sec</span>
-                    </div>
-                    <span className="text-xs text-[#7A5A38]">
-                      Total ≈ {Math.ceil((presentCountries.length * speakingTime) / 60)}m
-                    </span>
-                  </div>
-                  <div className="flex gap-2 mt-2">
-                    {[30, 45, 60, 90, 120].map((t) => (
-                      <button key={t} onClick={() => setSpeakingTime(t)}
-                        className={`text-xs px-2.5 py-1.5 rounded-lg transition-colors ${speakingTime === t ? 'bg-[#7B4A1E] text-white font-bold' : 'bg-[#1A1209] border border-[#2E1E0F] text-[#C4A882] hover:text-white'}`}>
-                        {t}s
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-lg font-semibold text-[#C4A882] mb-2">Speaking order</label>
-                  <div className="flex gap-3">
-                    <button onClick={() => setTourOrder('asc')}
-                      className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-colors ${tourOrder === 'asc' ? 'bg-[#7B4A1E] text-white' : 'bg-[#1A1209] border border-[#2E1E0F] text-[#C4A882] hover:text-white'}`}>
-                      A → Z
-                    </button>
-                    <button onClick={() => setTourOrder('desc')}
-                      className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-colors ${tourOrder === 'desc' ? 'bg-[#7B4A1E] text-white' : 'bg-[#1A1209] border border-[#2E1E0F] text-[#C4A882] hover:text-white'}`}>
-                      Z → A
-                    </button>
-                    <button onClick={() => setTourOrder('custom')}
-                      className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-colors ${tourOrder === 'custom' ? 'bg-[#7B4A1E] text-white' : 'bg-[#1A1209] border border-[#2E1E0F] text-[#C4A882] hover:text-white'}`}>
-                      Custom
-                    </button>
-                  </div>
-                  {tourOrder === 'custom' && (
-                    <p className="text-xs text-[#7A5A38] mt-1">Starts/ends at proposed country and proceeds through all delegates.</p>
-                  )}
-                </div>
-              </div>
-            </>
-          )}
-
-          {/* Unmoderated / Consultation — total time */}
-          {(type === 'unmoderated' || type === 'consultation') && (
-            <div>
-              <label className="block text-lg font-semibold text-[#C4A882] mb-2">Total time</label>
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2 bg-[#150F09] border border-[#2E1E0F] rounded-xl px-3 py-2.5">
-                  <input type="number" min={0} value={totalMins} onChange={(e) => setTotalMins(parseInt(e.target.value) || 0)}
-                    className="w-12 bg-transparent text-white text-xl font-bold text-center focus:outline-none" />
-                  <span className="text-[#C4A882] text-sm">min</span>
-                </div>
-                <div className="flex items-center gap-2 bg-[#150F09] border border-[#2E1E0F] rounded-xl px-3 py-2.5">
-                  <input type="number" min={0} max={59} value={totalSecs} onChange={(e) => setTotalSecs(Math.min(59, parseInt(e.target.value) || 0))}
-                    className="w-12 bg-transparent text-white text-xl font-bold text-center focus:outline-none" />
-                  <span className="text-[#C4A882] text-sm">sec</span>
-                </div>
-              </div>
-              <div className="flex gap-2 mt-2">
-                {[2, 5, 10, 15, 20].map((m) => (
-                  <button key={m} onClick={() => { setTotalMins(m); setTotalSecs(0); }}
-                    className={`text-xs px-2.5 py-1.5 rounded-lg transition-colors ${totalMins === m && totalSecs === 0 ? 'bg-[#7B4A1E] text-white font-bold' : 'bg-[#1A1209] border border-[#2E1E0F] text-[#C4A882] hover:text-white'}`}>
-                    {m}m
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Moderated caucus — Topic first, then Proposed By */}
-          {type === 'moderated' && (
-            <>
-              <div>
-                <label className="block text-lg font-semibold text-[#C4A882] mb-2">Topic <span className="text-red-500">*</span></label>
-                <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)}
-                  placeholder="e.g. Humanitarian response in conflict zones"
-                  className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-xl px-4 py-4 text-white placeholder-[#7A5A38] focus:outline-none focus:border-[#7B4A1E] transition-colors" />
-              </div>
+        {type && (
+          <>
+            {/* For moderated caucus: Topic first, then Proposed By */}
+            {type !== 'moderated' && (
               <div>
                 <label className="block text-lg font-semibold text-[#C4A882] mb-2">Proposed by</label>
                 <ProposerInput candidates={presentCountries} value={proposer} onChange={setProposer} blockedCountries={countriesWithMotions} />
               </div>
-              {/* Total time + speaking time — side by side to avoid scroll */}
-              <div className="flex gap-4 items-start">
-                <div className="flex-1">
-                  <label className="block text-sm font-semibold text-[#C4A882] mb-2">Total time</label>
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-1.5 bg-[#150F09] border border-[#2E1E0F] rounded-xl px-3 py-2">
-                      <input type="number" min={0} value={totalMins} onChange={(e) => setTotalMins(parseInt(e.target.value) || 0)}
-                        className="w-10 bg-transparent text-white text-lg font-bold text-center focus:outline-none" />
-                      <span className="text-[#C4A882] text-xs">min</span>
+            )}
+
+            {/* Tour de Table — speaking time per delegate + order */}
+            {type === 'tour' && (
+              <>
+                <div className="bg-[#1A1209] border border-[#2E1E0F] rounded-2xl p-4 space-y-3">
+                  <p className="text-white font-semibold text-sm">
+                    All {presentCountries.length} present delegates will speak once each.
+                  </p>
+                  <div>
+                    <label className="block text-lg font-semibold text-[#C4A882] mb-2">Speaking time per delegate</label>
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2 bg-[#150F09] border border-[#2E1E0F] rounded-xl px-3 py-2">
+                        <input type="number" min={10} value={speakingTimeStr}
+                          onChange={(e) => setSpeakingTimeStr(e.target.value)}
+                          className={`w-14 ${numClass}`} />
+                        <span className="text-[#C4A882] text-sm">sec</span>
+                      </div>
+                      <span className="text-xs text-[#7A5A38]">
+                        Total ≈ {speakingTime > 0 ? Math.ceil((presentCountries.length * speakingTime) / 60) : 0}m
+                      </span>
                     </div>
-                    <div className="flex items-center gap-1.5 bg-[#150F09] border border-[#2E1E0F] rounded-xl px-3 py-2">
-                      <input type="number" min={0} max={59} value={totalSecs} onChange={(e) => setTotalSecs(Math.min(59, parseInt(e.target.value) || 0))}
-                        className="w-10 bg-transparent text-white text-lg font-bold text-center focus:outline-none" />
-                      <span className="text-[#C4A882] text-xs">sec</span>
+                    <div className="flex gap-2 mt-2">
+                      {[30, 45, 60, 90, 120].map((t) => (
+                        <button key={t} onClick={() => setSpeakingTimeStr(String(t))}
+                          className={`text-xs px-2.5 py-1.5 rounded-lg transition-colors ${speakingTime === t ? 'bg-[#7B4A1E] text-white font-bold' : 'bg-[#1A1209] border border-[#2E1E0F] text-[#C4A882] hover:text-white'}`}>
+                          {t}s
+                        </button>
+                      ))}
                     </div>
                   </div>
-                  <div className="flex gap-1.5 mt-2 flex-wrap">
-                    {[2, 5, 10, 15, 20].map((m) => (
-                      <button key={m} onClick={() => { setTotalMins(m); setTotalSecs(0); }}
-                        className={`text-xs px-2 py-1 rounded-lg transition-colors ${totalMins === m && totalSecs === 0 ? 'bg-[#7B4A1E] text-white font-bold' : 'bg-[#1A1209] border border-[#2E1E0F] text-[#C4A882] hover:text-white'}`}>
-                        {m}m
+                  <div>
+                    <label className="block text-lg font-semibold text-[#C4A882] mb-2">Speaking order</label>
+                    <div className="flex gap-3">
+                      <button onClick={() => setTourOrder('asc')}
+                        className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-colors ${tourOrder === 'asc' ? 'bg-[#7B4A1E] text-white' : 'bg-[#1A1209] border border-[#2E1E0F] text-[#C4A882] hover:text-white'}`}>
+                        A → Z
                       </button>
-                    ))}
+                      <button onClick={() => setTourOrder('desc')}
+                        className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-colors ${tourOrder === 'desc' ? 'bg-[#7B4A1E] text-white' : 'bg-[#1A1209] border border-[#2E1E0F] text-[#C4A882] hover:text-white'}`}>
+                        Z → A
+                      </button>
+                      <button onClick={() => setTourOrder('custom')}
+                        className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-colors ${tourOrder === 'custom' ? 'bg-[#7B4A1E] text-white' : 'bg-[#1A1209] border border-[#2E1E0F] text-[#C4A882] hover:text-white'}`}>
+                        Custom
+                      </button>
+                    </div>
+                    {tourOrder === 'custom' && (
+                      <p className="text-xs text-[#7A5A38] mt-1">Starts/ends at proposed country and proceeds through all delegates.</p>
+                    )}
                   </div>
                 </div>
-                <div className="flex-1">
-                  <label className="block text-sm font-semibold text-[#C4A882] mb-2">Per delegate</label>
-                  <div className="flex items-center gap-1.5 bg-[#150F09] border border-[#2E1E0F] rounded-xl px-3 py-2 w-fit">
-                    <input type="number" min={0} value={speakingTime} onChange={(e) => setSpeakingTime(parseInt(e.target.value) || 0)}
-                      className="w-12 bg-transparent text-white text-lg font-bold text-center focus:outline-none" />
-                    <span className="text-[#C4A882] text-xs">sec</span>
+              </>
+            )}
+
+            {/* Unmoderated / Consultation — total time */}
+            {(type === 'unmoderated' || type === 'consultation') && (
+              <div>
+                <label className="block text-lg font-semibold text-[#C4A882] mb-2">Total time</label>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 bg-[#150F09] border border-[#2E1E0F] rounded-xl px-3 py-2.5">
+                    <input type="number" min={0} value={totalMinsStr}
+                      onChange={(e) => setTotalMinsStr(e.target.value)}
+                      className={`w-12 ${numClass}`} />
+                    <span className="text-[#C4A882] text-sm">min</span>
                   </div>
-                  {speakingTime > 0 && totalTime > 0 && (
-                    <p className="text-xs text-[#7B4A1E] mt-1">≈ {Math.floor(totalTime / speakingTime)} speakers</p>
-                  )}
-                  <div className="flex gap-1.5 mt-2 flex-wrap">
-                    {[30, 45, 60, 90, 120].map((t) => (
-                      <button key={t} onClick={() => setSpeakingTime(t)}
-                        className={`text-xs px-2 py-1 rounded-lg transition-colors ${speakingTime === t ? 'bg-[#7B4A1E] text-white font-bold' : 'bg-[#1A1209] border border-[#2E1E0F] text-[#C4A882] hover:text-white'}`}>
-                        {t}s
-                      </button>
-                    ))}
+                  <div className="flex items-center gap-2 bg-[#150F09] border border-[#2E1E0F] rounded-xl px-3 py-2.5">
+                    <input type="number" min={0} max={59} value={totalSecsStr}
+                      onChange={(e) => setTotalSecsStr(e.target.value)}
+                      className={`w-12 ${numClass}`} />
+                    <span className="text-[#C4A882] text-sm">sec</span>
                   </div>
+                </div>
+                <div className="flex gap-2 mt-2">
+                  {[2, 5, 10, 15, 20].map((m) => (
+                    <button key={m} onClick={() => { setTotalMinsStr(String(m)); setTotalSecsStr(''); }}
+                      className={`text-xs px-2.5 py-1.5 rounded-lg transition-colors ${totalMins === m && totalSecs === 0 ? 'bg-[#7B4A1E] text-white font-bold' : 'bg-[#1A1209] border border-[#2E1E0F] text-[#C4A882] hover:text-white'}`}>
+                      {m}m
+                    </button>
+                  ))}
                 </div>
               </div>
-            </>
-          )}
+            )}
 
+            {/* Moderated caucus — Topic first, then Proposed By */}
+            {type === 'moderated' && (
+              <>
+                <div>
+                  <label className="block text-lg font-semibold text-[#C4A882] mb-2">Topic <span className="text-red-500">*</span></label>
+                  <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)}
+                    placeholder="e.g. Humanitarian response in conflict zones"
+                    className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-xl px-4 py-4 text-white placeholder-[#7A5A38] focus:outline-none focus:border-[#7B4A1E] transition-colors" />
+                </div>
+                <div>
+                  <label className="block text-lg font-semibold text-[#C4A882] mb-2">Proposed by</label>
+                  <ProposerInput candidates={presentCountries} value={proposer} onChange={setProposer} blockedCountries={countriesWithMotions} />
+                </div>
+                {/* Total time + speaking time — side by side to avoid scroll */}
+                <div className="flex gap-4 items-start">
+                  <div className="flex-1">
+                    <label className="block text-sm font-semibold text-[#C4A882] mb-2">Total time</label>
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5 bg-[#150F09] border border-[#2E1E0F] rounded-xl px-3 py-2">
+                        <input type="number" min={0} value={totalMinsStr}
+                          onChange={(e) => setTotalMinsStr(e.target.value)}
+                          className={`w-10 ${numClassSm}`} />
+                        <span className="text-[#C4A882] text-xs">min</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 bg-[#150F09] border border-[#2E1E0F] rounded-xl px-3 py-2">
+                        <input type="number" min={0} max={59} value={totalSecsStr}
+                          onChange={(e) => setTotalSecsStr(e.target.value)}
+                          className={`w-10 ${numClassSm}`} />
+                        <span className="text-[#C4A882] text-xs">sec</span>
+                      </div>
+                    </div>
+                    <div className="flex gap-1.5 mt-2 flex-wrap">
+                      {[2, 5, 10, 15, 20].map((m) => (
+                        <button key={m} onClick={() => { setTotalMinsStr(String(m)); setTotalSecsStr(''); }}
+                          className={`text-xs px-2 py-1 rounded-lg transition-colors ${totalMins === m && totalSecs === 0 ? 'bg-[#7B4A1E] text-white font-bold' : 'bg-[#1A1209] border border-[#2E1E0F] text-[#C4A882] hover:text-white'}`}>
+                          {m}m
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <label className="text-sm font-semibold text-[#C4A882]">Per delegate</label>
+                      <div className="relative" ref={speakerInfoRef}>
+                        <button
+                          type="button"
+                          onClick={() => setShowSpeakerInfo(!showSpeakerInfo)}
+                          className="w-4 h-4 rounded-full border border-[#7A5A38] text-[#7A5A38] text-[9px] flex items-center justify-center hover:border-[#C4A882] hover:text-[#C4A882] transition-colors leading-none"
+                        >
+                          i
+                        </button>
+                        {showSpeakerInfo && (
+                          <div className="absolute left-0 top-6 z-20 bg-[#1A1209] border border-[#2E1E0F] rounded-xl px-3 py-2.5 shadow-xl w-48">
+                            <p className="text-xs text-white font-semibold">
+                              Speakers who can speak: <span className="text-[#C4A882]">{speakerCount !== null ? speakerCount : '—'}</span>
+                            </p>
+                            {unusedSecs > 0 && (
+                              <p className="text-xs text-amber-400 mt-1">⚠ {unusedSecs}s will be unused</p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 bg-[#150F09] border border-[#2E1E0F] rounded-xl px-3 py-2 w-fit">
+                      <input type="number" min={0} value={speakingTimeStr}
+                        onChange={(e) => setSpeakingTimeStr(e.target.value)}
+                        className={`w-12 ${numClassSm}`} />
+                      <span className="text-[#C4A882] text-xs">sec</span>
+                    </div>
+                    {speakerCount !== null && (
+                      <p className="text-xs text-[#7B4A1E] mt-1">≈ {speakerCount} speakers</p>
+                    )}
+                    <div className="flex gap-1.5 mt-2 flex-wrap">
+                      {[30, 45, 60, 90, 120].map((t) => (
+                        <button key={t} onClick={() => setSpeakingTimeStr(String(t))}
+                          className={`text-xs px-2 py-1 rounded-lg transition-colors ${speakingTime === t ? 'bg-[#7B4A1E] text-white font-bold' : 'bg-[#1A1209] border border-[#2E1E0F] text-[#C4A882] hover:text-white'}`}>
+                          {t}s
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+          </>
+        )}
+      </div>
+
+      {type && (
+        <div className="px-7 pb-7 pt-3 border-t border-white/10 shrink-0">
+          {error && <p className="text-red-400 text-sm font-medium mb-3">{error}</p>}
           <button onClick={submit} disabled={!canSubmit()}
             className="w-full bg-[#7B4A1E] hover:bg-[#8B5A2B] disabled:bg-[#2E1E0F] disabled:text-[#7A5A38] text-white py-5 rounded-2xl text-base font-black transition-colors">
             Raise Motion →
           </button>
-        </>
+        </div>
       )}
     </div>
   );
@@ -473,14 +536,14 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
       >
         {/* Header: icon + type label + flag in top-right */}
         <div className="flex items-center gap-2">
-          <span className={large ? 'text-3xl' : 'text-xl'}>{meta.icon}</span>
-          <span className={`font-black text-white flex-1 ${large ? 'text-2xl' : 'text-base'}`}>{meta.label}</span>
-          {f ? <img src={getFlagUrl(f.code)} alt={f.code} className={large ? 'w-8 h-8 object-contain inline-block' : 'w-5 h-5 object-contain inline-block'} /> : <span className={large ? 'text-3xl' : 'text-xl'}>🌐</span>}
+          <span className={large ? 'text-4xl' : 'text-2xl'}>{meta.icon}</span>
+          <span className={`font-black text-white flex-1 ${large ? 'text-3xl' : 'text-lg'}`}>{meta.label}</span>
+          {f ? <img src={getFlagUrl(f.code)} alt={f.code} className={large ? 'w-10 h-10 object-contain inline-block' : 'w-6 h-6 object-contain inline-block'} /> : <span className={large ? 'text-4xl' : 'text-2xl'}>🌐</span>}
         </div>
 
         {/* Topic inline */}
         {m.topic && (
-          <p className={`${large ? 'text-xl' : 'text-sm'} text-[#C4A882]`}>
+          <p className={`${large ? 'text-2xl' : 'text-base'} text-[#C4A882]`}>
             <span className="text-[#7A5A38] font-semibold">Topic: </span>{m.topic}
           </p>
         )}
@@ -492,6 +555,9 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
               {fmtTime(totalMins, totalSecs)}
               {m.type === 'moderated' && m.speakingTime > 0 && (
                 <span className="text-[#7B4A1E]"> — {fmtTime(speakMins, speakSecs)}</span>
+              )}
+              {m.type === 'moderated' && m.speakingTime > 0 && m.totalTime > 0 && (
+                <span className="text-[#7A5A38]"> · {Math.floor(m.totalTime / m.speakingTime)} speakers{m.totalTime % m.speakingTime !== 0 ? ' ⚠' : ''}</span>
               )}
             </span>
           </div>
