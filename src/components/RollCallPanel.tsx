@@ -2,7 +2,7 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { Committee, DelegateStatus } from '@/lib/types';
-import { getFlagEmoji, getCountryByName, UN_COUNTRIES } from '@/lib/countries';
+import { getFlagUrl, getCountryByName, UN_COUNTRIES } from '@/lib/countries';
 import {
   setPhase as setPhaseInDB,
   setDelegateStatus as setDelegateStatusInDB,
@@ -12,21 +12,20 @@ import {
 // ── FlagCircle ────────────────────────────────────────────────────────────────
 export function FlagCircle({ country, size = 'md' }: { country: string; size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' | 'hero' }) {
   const found = getCountryByName(country);
-  const flag = found ? getFlagEmoji(found.code) : '🌐';
-  const dim: Record<string, { box: string; font: string }> = {
-    xs:   { box: 'w-7 h-7',   font: '1.6rem' },
-    sm:   { box: 'w-9 h-9',   font: '2rem'   },
-    md:   { box: 'w-12 h-12', font: '2.8rem' },
-    lg:   { box: 'w-14 h-14', font: '3.2rem' },
-    xl:   { box: 'w-20 h-20', font: '4.5rem' },
-    hero: { box: 'w-60 h-60', font: '13rem'  },
+  const dim: Record<string, string> = {
+    xs:   'w-7 h-7',
+    sm:   'w-9 h-9',
+    md:   'w-12 h-12',
+    lg:   'w-14 h-14',
+    xl:   'w-20 h-20',
+    hero: 'w-60 h-60',
   };
-  const { box, font } = dim[size];
+  const box = dim[size];
   return (
-    <div className={`relative ${box} rounded-full overflow-hidden bg-[#2E1E0F] shrink-0`}>
-      <span style={{ fontSize: font, lineHeight: '1', position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', display: 'block' }}>
-        {flag}
-      </span>
+    <div className={`relative ${box} rounded-full overflow-hidden bg-[#2E1E0F] shrink-0 flex items-center justify-center`}>
+      {found
+        ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-[85%] h-[85%] object-contain" />
+        : <span className="text-lg">🌐</span>}
     </div>
   );
 }
@@ -137,7 +136,7 @@ function AddCountryInput({ committee, onAdd, onQueryChange }: { committee: Commi
                   i === 0 ? 'bg-[#7B4A1E]/20 text-white' : 'text-[#E8D5B7] hover:bg-[#2E1E0F]'
                 }`}
               >
-                <span className="text-base">{getFlagEmoji(c.code)}</span>
+                <img src={getFlagUrl(c.code)} alt={c.code} className="w-5 h-5 object-contain shrink-0" />
                 <span className="text-sm flex-1">{c.name}</span>
                 {i === 0 && <span className="text-[10px] text-[#7A5A38] shrink-0">Enter ↵</span>}
               </button>
