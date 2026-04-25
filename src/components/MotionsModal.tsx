@@ -290,11 +290,11 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised }: {
                       </button>
                       <button onClick={() => setTourOrder('custom')}
                         className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-colors ${tourOrder === 'custom' ? 'bg-[#7B4A1E] text-white' : 'bg-[#1A1209] border border-[#2E1E0F] text-[#C4A882] hover:text-white'}`}>
-                        Custom
+                        Room Order
                       </button>
                     </div>
                     {tourOrder === 'custom' && (
-                      <p className="text-xs text-[#7A5A38] mt-1">Starts/ends at proposed country and proceeds through all delegates.</p>
+                      <p className="text-xs text-[#7A5A38] mt-2 leading-relaxed">Follows the physical room order. Call each speaker manually — the chair decides who goes next based on seating.</p>
                     )}
                   </div>
                 </div>
@@ -719,25 +719,54 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
       const alphabetical = committee.delegates
         .filter((d) => d.status !== 'absent')
         .sort((a, b) => a.country.localeCompare(b.country));
+
+      if (motion.tourOrder === 'custom') {
+        // Room Order — empty queue, chair calls speakers manually
+        const n = alphabetical.length;
+        const totalTourTime = n * motion.speakingTime;
+        const caucus = {
+          active: true, type: 'moderated' as const, motionLabel: typeMeta['tour'].label,
+          purpose: 'Tour de Table (Room Order)',
+          proposedBy: motion.proposedBy, totalTime: totalTourTime, remainingTime: totalTourTime,
+          speakingTime: motion.speakingTime, speakerTimeRemaining: motion.speakingTime,
+          currentSpeaker: null, proposerPosition: null, spokenCountries: [],
+        };
+        const caucusQueue: { delegateId: string; country: string }[] = [];
+        update((c) => ({ ...c, phase: 'moderated-caucus', caucus, pendingMotions: [], caucusQueue, currentSpeaker: null }));
+        onClose();
+        clearPendingMotionsInDB(committee.id);
+        clearCaucusListInDB(committee.id);
+        updateCaucusInDB(committee.id, caucus);
+        setPhaseInDB(committee.id, 'moderated-caucus');
+        return;
+      }
+
       let presentDelegates: typeof alphabetical;
-      if (motion.tourOrder === 'custom' && motion.proposedBy) {
-        // Start from proposer's alphabetical position and wrap around
+      if (motion.tourOrder === 'asc') {
+        // Proposer first, then remaining countries in A→Z order
         const proposerIdx = alphabetical.findIndex((d) => d.country === motion.proposedBy);
         if (proposerIdx !== -1) {
-          presentDelegates = [...alphabetical.slice(proposerIdx), ...alphabetical.slice(0, proposerIdx)];
+          const rest = [...alphabetical.slice(proposerIdx + 1), ...alphabetical.slice(0, proposerIdx)];
+          presentDelegates = [alphabetical[proposerIdx], ...rest];
         } else {
           presentDelegates = alphabetical;
         }
       } else {
-        presentDelegates = motion.tourOrder === 'desc'
-          ? [...alphabetical].reverse()
-          : alphabetical;
+        // desc — proposer first, then remaining in Z→A order
+        const descAll = [...alphabetical].reverse();
+        const proposerIdx = descAll.findIndex((d) => d.country === motion.proposedBy);
+        if (proposerIdx !== -1) {
+          const rest = [...descAll.slice(proposerIdx + 1), ...descAll.slice(0, proposerIdx)];
+          presentDelegates = [descAll[proposerIdx], ...rest];
+        } else {
+          presentDelegates = descAll;
+        }
       }
 
       const totalTourTime = presentDelegates.length * motion.speakingTime;
       const caucus = {
         active: true, type: 'moderated' as const, motionLabel: typeMeta['tour'].label,
-        purpose: `Tour de Table (${motion.tourOrder === 'desc' ? 'Z→A' : motion.tourOrder === 'custom' ? 'Custom' : 'A→Z'})`,
+        purpose: `Tour de Table (${motion.tourOrder === 'desc' ? 'Z→A' : 'A→Z'})`,
         proposedBy: motion.proposedBy, totalTime: totalTourTime, remainingTime: totalTourTime,
         speakingTime: motion.speakingTime, speakerTimeRemaining: motion.speakingTime,
         currentSpeaker: null, proposerPosition: null, spokenCountries: [],
@@ -746,7 +775,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
 
       // GSL preserved, caucusQueue filled with ordered delegates
       update((c) => ({ ...c, phase: 'moderated-caucus', caucus, pendingMotions: [], caucusQueue, currentSpeaker: null }));
-      onClose(); // Close immediately — user sees tour screen, DB syncs in background
+      onClose();
       clearPendingMotionsInDB(committee.id);
       clearCaucusListInDB(committee.id);
       updateCaucusInDB(committee.id, caucus);
