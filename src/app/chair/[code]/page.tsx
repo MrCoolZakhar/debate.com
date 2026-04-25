@@ -485,7 +485,24 @@ function UnmoderatedCaucusView({ committee, setCommittee }: { committee: Committ
     setRunning(false);
     setPhaseInDB(committee.id, 'speakers-list');
     updateCaucusInDB(committee.id, null);
-    updateLocal(setCommittee, (c) => ({ ...c, caucus: null, phase: 'speakers-list', caucusQueue: [] }), true);
+    updateLocal(setCommittee, (c) => {
+      const preCaucusSpeaker = c.currentSpeaker;
+      const newSpeakersList = preCaucusSpeaker
+        ? [preCaucusSpeaker, ...c.speakersList.filter((s) => s.delegateId !== preCaucusSpeaker.delegateId)]
+        : c.speakersList;
+      if (preCaucusSpeaker) {
+        reorderSpeakersListInDB(c.id, newSpeakersList, 'gsl');
+      }
+      return {
+        ...c,
+        caucus: null,
+        phase: 'speakers-list' as const,
+        caucusQueue: [],
+        currentSpeaker: null,
+        speakersList: newSpeakersList,
+        speakerTimeRemaining: c.speakerTimeLimit,
+      };
+    }, true);
   };
 
   return (
@@ -1086,7 +1103,12 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       const next = Math.max(0, prev.caucus.remainingTime - 1);
       if (next === 0) {
         updateCaucusInDB(prev.id, null);
-        return { ...prev, caucus: null, phase: 'speakers-list' as const, caucusQueue: [], currentSpeaker: null };
+        const preCaucusSpeaker = prev.currentSpeaker;
+        const newSpeakersList = preCaucusSpeaker
+          ? [preCaucusSpeaker, ...prev.speakersList.filter((s) => s.delegateId !== preCaucusSpeaker.delegateId)]
+          : prev.speakersList;
+        if (preCaucusSpeaker) reorderSpeakersListInDB(prev.id, newSpeakersList, 'gsl');
+        return { ...prev, caucus: null, phase: 'speakers-list' as const, caucusQueue: [], currentSpeaker: null, speakersList: newSpeakersList };
       }
       return { ...prev, caucus: { ...prev.caucus, remainingTime: next } };
     });

@@ -417,8 +417,11 @@ function RollCallPanelInner({
           const matchesSearch = !search || d.country.toLowerCase().includes(search.toLowerCase());
           const isDraggable = listView === 'queue' && !isRollCallPhase && queuePositionMap.has(d.id);
           const isCurrentSpeaker = committee.currentSpeaker?.delegateId === d.id;
-          // "Up next" = first in the speakersList queue (not the current speaker)
-          const isUpNext = !isCurrentSpeaker && listView === 'queue' && queuePos === queueOffset;
+          const isCurrentSpeakerInPanel = queuePos === 1 && (
+            committee.currentSpeaker?.delegateId === d.id ||
+            committee.caucus?.currentSpeaker === d.country
+          );
+          const isUpNext = listView === 'queue' && isCurrentSpeakerInPanel;
 
           const handleRowClick = () => {
             if (onAddToList && !isAbsent) {
