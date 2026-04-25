@@ -818,7 +818,7 @@ function ModeratedCaucusMain({
         )}
       </div>
 
-      {!sessionEnded && (
+      {!sessionEnded && !isTdT && (
         <div className="border-t border-[#2E1E0F] bg-[#0D0906] px-6 py-4">
           <div className="flex items-center gap-3 mb-4">
             <span className="text-xs text-[#7A5A38] font-mono shrink-0">TOTAL</span>
@@ -1846,6 +1846,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                     onStatusChange={handleStatusChange}
                     onDelegateAdd={handleDelegateAdd}
                     isRollCallPhase={showSliders}
+                    showViewToggle={false}
                     isReadOnly={sessionEnded} />
                 ) : (
                   <RollCallPanel committee={committee}
