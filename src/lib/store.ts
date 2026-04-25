@@ -416,6 +416,7 @@ export const useCommitteeStore = create<CommitteeStore>()(
           const caucus: CaucusState = {
             active: true,
             type: 'moderated',
+            motionLabel: 'Moderated Caucus',
             totalTime: motion.totalTime,
             remainingTime: motion.totalTime,
             speakingTime: motion.speakingTime,
@@ -445,6 +446,7 @@ export const useCommitteeStore = create<CommitteeStore>()(
         const caucus: CaucusState = {
           active: true,
           type: 'unmoderated',
+          motionLabel: motion.type === 'consultation' ? 'Consultation of the Whole' : 'Unmoderated Caucus',
           totalTime: motion.totalTime,
           remainingTime: motion.totalTime,
           speakingTime: 0,
