@@ -359,10 +359,11 @@ function CaucusQueueSidebar({ committee, onRemove, onReorder, lastSpeakerDelegat
 }
 
 // ── Caucus Add Speaker Input ──────────────────────────────────────────────────
-function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, onAddLast, maxSpeakers, currentQueueLength }: {
+function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, onAddLast, maxSpeakers, currentQueueLength, currentSpeakerCountry }: {
   committee: Committee; spokenCountries: string[]; onAdd: (id: string) => void;
   onAddFirst?: (id: string) => void; onAddLast?: (id: string) => void;
   maxSpeakers?: number; currentQueueLength?: number;
+  currentSpeakerCountry?: string | null;
 }) {
   const [query, setQuery] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -374,8 +375,9 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
     ? eligible.filter((d) => d.country.trim().toLowerCase().startsWith(cq))
         .concat(eligible.filter((d) => !d.country.trim().toLowerCase().startsWith(cq) && d.country.trim().toLowerCase().includes(cq)))
     : [];
-  const topNotOnList = matches.find((d) => !onList.has(d.id)) ?? null;
-  const commit = (d: typeof topNotOnList) => { if (!d || onList.has(d.id) || isFull) return; onAdd(d.id); setQuery(''); };
+  const isCurrentSpeaker = (d: { country: string }) => !!currentSpeakerCountry && d.country === currentSpeakerCountry;
+  const topNotOnList = matches.find((d) => !onList.has(d.id) && !isCurrentSpeaker(d)) ?? null;
+  const commit = (d: typeof topNotOnList) => { if (!d || onList.has(d.id) || isFull || isCurrentSpeaker(d)) return; onAdd(d.id); setQuery(''); };
   return (
     <div className="relative">
       {isFull ? (
@@ -399,7 +401,8 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
             const found = getCountryByName(d.country);
             const alreadyOnList = onList.has(d.id);
             const spoke = spokenCountries.includes(d.country);
-            if (alreadyOnList) {
+            const isCurrent = isCurrentSpeaker(d);
+            if (isCurrent || alreadyOnList) {
               return (
                 <div key={d.id} className="w-full flex items-center gap-3 px-4 py-2.5 opacity-40">
                   <span className="shrink-0 w-6 h-6 inline-flex items-center justify-center">
@@ -408,7 +411,7 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
                     : <span className="text-lg">🌐</span>}
                 </span>
                   <span className="text-sm flex-1 text-[#7A5A38]">{d.country}</span>
-                  <span className="text-xs text-[#7A5A38]">already on list</span>
+                  <span className="text-xs text-[#7A5A38]">{isCurrent ? 'currently speaking' : 'already on list'}</span>
                 </div>
               );
             }
@@ -701,6 +704,11 @@ function ModeratedCaucusMain({
                   {committee.caucus.purpose}
                 </span>
               )}
+              {spokenCountries.length > 0 && (
+                <span className="text-yellow-500 text-lg font-medium leading-snug">
+                  {spokenCountries.length} delegate{spokenCountries.length !== 1 ? 's' : ''} spoke
+                </span>
+              )}
             </div>
             {queue.length > 0 && (
               <DraggableSpeakersQueue
@@ -758,9 +766,6 @@ function ModeratedCaucusMain({
                   </button>
                 )}
               </div>
-            )}
-            {spokenCountries.length > 0 && (
-              <p className="text-xs text-yellow-500 mt-2">{spokenCountries.length} delegate{spokenCountries.length !== 1 ? 's' : ''} spoke</p>
             )}
           </>
         ) : (
@@ -873,6 +878,7 @@ function ModeratedCaucusMain({
             onAddLast={handleCaucusAddLast}
             maxSpeakers={maxByTime}
             currentQueueLength={queue.length}
+            currentSpeakerCountry={committee.currentSpeaker?.country ?? null}
           />
         </div>
       )}
