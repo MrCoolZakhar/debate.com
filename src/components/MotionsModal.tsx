@@ -321,7 +321,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised }: {
                 </div>
                 <div className="flex gap-2 mt-2">
                   {[2, 5, 10, 15, 20].map((m) => (
-                    <button key={m} onClick={() => { setTotalMinsStr(String(m)); setTotalSecsStr(''); }}
+                    <button key={m} onClick={() => { setTotalMinsStr(String(m)); setTotalSecsStr('0'); }}
                       className={`text-xs px-2.5 py-1.5 rounded-lg transition-colors ${totalMins === m && totalSecs === 0 ? 'bg-[#7B4A1E] text-white font-bold' : 'bg-[#1A1209] border border-[#2E1E0F] text-[#C4A882] hover:text-white'}`}>
                       {m}m
                     </button>
@@ -363,7 +363,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised }: {
                     </div>
                     <div className="flex gap-1.5 mt-2 flex-wrap">
                       {[2, 5, 10, 15, 20].map((m) => (
-                        <button key={m} onClick={() => { setTotalMinsStr(String(m)); setTotalSecsStr(''); }}
+                        <button key={m} onClick={() => { setTotalMinsStr(String(m)); setTotalSecsStr('0'); }}
                           className={`text-xs px-2 py-1 rounded-lg transition-colors ${totalMins === m && totalSecs === 0 ? 'bg-[#7B4A1E] text-white font-bold' : 'bg-[#1A1209] border border-[#2E1E0F] text-[#C4A882] hover:text-white'}`}>
                           {m}m
                         </button>
