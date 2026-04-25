@@ -288,6 +288,11 @@ function RollCallPanelInner({
   (committee.speakersList ?? []).forEach((s, i) => {
     queuePositionMap.set(s.delegateId, i + queueOffset);
   });
+  // Caucus current speaker — only when committee.currentSpeaker is null (caucus mode)
+  if (!committee.currentSpeaker && committee.caucus?.currentSpeaker) {
+    const caucusCurrent = committee.delegates.find((d) => d.country === committee.caucus!.currentSpeaker);
+    if (caucusCurrent) queuePositionMap.set(caucusCurrent.id, 1);
+  }
 
   const cycleStatus = (id: string, current: DelegateStatus) => {
     const next: DelegateStatus =
@@ -358,8 +363,12 @@ function RollCallPanelInner({
   const currentSpeakerDelegate = committee.currentSpeaker?.delegateId
     ? committee.delegates.find((d) => d.id === committee.currentSpeaker!.delegateId) ?? null
     : null;
-  const finalQueueOrdered = currentSpeakerDelegate
-    ? [currentSpeakerDelegate, ...queueOrdered.filter((d) => d.id !== currentSpeakerDelegate.id)]
+  const caucusCurrentDelegate = (!committee.currentSpeaker && committee.caucus?.currentSpeaker)
+    ? committee.delegates.find((d) => d.country === committee.caucus!.currentSpeaker) ?? null
+    : null;
+  const speakerAtTop = currentSpeakerDelegate ?? caucusCurrentDelegate;
+  const finalQueueOrdered = speakerAtTop
+    ? [speakerAtTop, ...queueOrdered.filter((d) => d.id !== speakerAtTop.id)]
     : queueOrdered;
 
   const baseList = listView === 'queue' ? finalQueueOrdered : alphabetical;
@@ -474,7 +483,7 @@ function RollCallPanelInner({
                         ? 'bg-[#B8844A] text-[10px]'
                         : 'bg-[#7B4A1E] text-[13px]'
                     }`}>
-                      {queuePos === 1 && committee.currentSpeaker?.delegateId === d.id ? '🎙' : queuePos <= 99 ? queuePos : '99+'}
+                      {queuePos === 1 && (committee.currentSpeaker?.delegateId === d.id || committee.caucus?.currentSpeaker === d.country) ? '🎙' : queuePos <= 99 ? queuePos : '99+'}
                     </div>
                   )}
                 </div>
