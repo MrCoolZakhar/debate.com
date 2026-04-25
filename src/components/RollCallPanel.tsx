@@ -245,6 +245,7 @@ function RollCallPanelInner({
   onReorderList,
   isRollCallPhase = false,
   showBulkActions = false,
+  showViewToggle = true,
   isReadOnly = false,
 }: {
   committee: Committee;
@@ -259,6 +260,7 @@ function RollCallPanelInner({
   onReorderList?: (newList: { delegateId: string; country: string }[]) => void;
   isRollCallPhase?: boolean;
   showBulkActions?: boolean;
+  showViewToggle?: boolean;
   isReadOnly?: boolean;
 }) {
   const [search, setSearch] = useState('');
@@ -386,7 +388,7 @@ function RollCallPanelInner({
             <MajorityPie arcFill={2 / 3} color="#E8A94A" label={`${Math.ceil(present * 2 / 3)}`} />
             <MajorityPie arcFill={0.5} color="#3D6B35" label={`${Math.floor(present / 2) + 1}`} />
           </div>
-          <ViewToggle view={listView} onChange={setListView} />
+          {showViewToggle && <ViewToggle view={listView} onChange={setListView} />}
         </div>
         {showBulkActions && (
           <div className="flex gap-1.5 mt-2">
@@ -527,6 +529,7 @@ const RollCallPanel = React.memo(RollCallPanelInner, (prev, next) => {
     prev.committee.caucusQueue === next.committee.caucusQueue &&
     prev.isRollCallPhase === next.isRollCallPhase &&
     prev.showBulkActions === next.showBulkActions &&
+    prev.showViewToggle === next.showViewToggle &&
     prev.isReadOnly === next.isReadOnly &&
     prev.onListIds === next.onListIds
   );

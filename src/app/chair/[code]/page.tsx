@@ -1761,6 +1761,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 onDelegateAdd={handleDelegateAdd}
                 isRollCallPhase={true}
                 showBulkActions={true}
+                showViewToggle={false}
                 isReadOnly={sessionEnded} />
             </div>
           </div>
