@@ -646,7 +646,7 @@ function ModeratedCaucusMain({
   const handleCaucusAddToQueue = (delegateId: string) => {
     const delegate = committee.delegates.find((d) => d.id === delegateId);
     if (!delegate) return;
-    if (committee.currentSpeaker?.delegateId === delegateId) return;
+    if (committee.caucus?.currentSpeaker === delegate.country) return;
     if (queue.some((s) => s.delegateId === delegateId)) return;
     if (queue.length >= maxByTime) return;
     const nextPosition = queue.length + 1;
@@ -689,7 +689,7 @@ function ModeratedCaucusMain({
   return (
     <>
       <div className="relative flex-1 flex flex-col items-center justify-center px-4 py-3 overflow-hidden">
-        {committee.currentSpeaker ? (
+        {committee.caucus?.currentSpeaker ? (
           <>
             {/* Absolute overlay: motion name + topic — does not affect centred layout */}
             <div className="absolute left-0 top-1/2 -translate-y-1/2 flex flex-col gap-2 max-w-[200px] pl-4 pointer-events-none select-none">
@@ -713,14 +713,14 @@ function ModeratedCaucusMain({
               <div className="ring-4 ring-[#7B4A1E] rounded-full">
                 <div className="relative w-36 h-36 rounded-full overflow-hidden bg-[#2E1E0F] shrink-0">
                   {(() => {
-                    const f = getCountryByName(committee.currentSpeaker.country);
+                    const f = getCountryByName(committee.caucus!.currentSpeaker!);
                     return f
                       ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ width: '7rem', height: '7rem', objectFit: 'contain', position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }} />
                       : <span style={{ fontSize: '5rem', lineHeight: '1', position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>🌐</span>;
                   })()}
                 </div>
               </div>
-              <h1 className="text-5xl font-black text-white mt-2 mb-1 text-center">{committee.currentSpeaker.country}</h1>
+              <h1 className="text-5xl font-black text-white mt-2 mb-1 text-center">{committee.caucus!.currentSpeaker}</h1>
               <div className={`text-8xl font-black font-mono mt-2 mb-3 tabular-nums ${
                 extraTimeAdded ? 'text-emerald-400' :
                 speakerTimeRemaining <= 10 ? 'text-red-500' :
@@ -1251,13 +1251,18 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     if (sessionSuspended) setSuspendTab('suspend');
   }, [sessionSuspended]);
 
+  const caucusLoadingFiredRef = useRef(false);
   useEffect(() => {
     if (committee?.phase === 'moderated-caucus') {
-      setCaucusPanelLocked(true);
-      setCaucusLoading(true);
-      const t = setTimeout(() => setCaucusLoading(false), 3500);
-      return () => clearTimeout(t);
+      if (!caucusLoadingFiredRef.current) {
+        caucusLoadingFiredRef.current = true;
+        setCaucusPanelLocked(true);
+        setCaucusLoading(true);
+        const t = setTimeout(() => setCaucusLoading(false), 3500);
+        return () => clearTimeout(t);
+      }
     } else {
+      caucusLoadingFiredRef.current = false;
       setCaucusPanelLocked(false);
     }
   }, [committee?.phase]);
