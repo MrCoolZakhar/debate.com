@@ -255,7 +255,7 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, lastSpeakerDelegate
   const displayItems = list.slice(0, 7);
   const overflow = qLen > 7 ? qLen - 7 : 0;
   return (
-    <div className="flex flex-col items-center w-full mb-4">
+    <div className="flex flex-col items-center w-full mb-1">
       <div className="flex flex-nowrap items-start gap-4 pt-2 pb-1 justify-center">
         {displayItems.map((s, i) => {
           const isCurrent = currentSpeakerDelegateId && s.delegateId === currentSpeakerDelegateId;
@@ -491,15 +491,16 @@ function UnmoderatedCaucusView({ committee, setCommittee }: { committee: Committ
   return (
     <div className="relative flex-1 flex flex-col items-center justify-center px-8 py-12">
       {/* Absolute overlay: motion name + topic — does not affect centred layout */}
-      <div className="absolute left-0 top-1/2 -translate-y-1/2 flex flex-col gap-2 max-w-[180px] pl-4 pointer-events-none select-none">
-        <span className="text-white font-black text-2xl leading-tight">
-          {caucus.purpose ?? unmoderatedName}
+      <div className="absolute left-0 top-1/2 -translate-y-1/2 flex flex-col gap-2 max-w-[200px] pl-4 pointer-events-none select-none">
+        <span className="text-white font-black text-2xl leading-tight uppercase">
+          {caucus.motionLabel ?? unmoderatedName}
         </span>
-        <span className="text-white/70 text-lg font-medium leading-snug">
-          {committee.topic}
-        </span>
+        {caucus.purpose && (
+          <span className="text-white/70 text-lg font-medium leading-snug">
+            {caucus.purpose}
+          </span>
+        )}
       </div>
-      <p className="text-xs text-purple-400 font-mono mb-4">{unmoderatedName.toUpperCase()}</p>
       <div className={`text-9xl font-black font-mono tabular-nums mb-8 ${caucus.remainingTime <= 30 ? 'text-red-500' : 'text-white'}`}>
         {formatTime(caucus.remainingTime)}
       </div>
@@ -691,13 +692,15 @@ function ModeratedCaucusMain({
         {committee.currentSpeaker ? (
           <>
             {/* Absolute overlay: motion name + topic — does not affect centred layout */}
-            <div className="absolute left-0 top-1/2 -translate-y-1/2 flex flex-col gap-2 max-w-[180px] pl-4 pointer-events-none select-none">
-              <span className="text-white font-black text-2xl leading-tight">
-                {committee.caucus?.purpose ?? caucusTitle}
+            <div className="absolute left-0 top-1/2 -translate-y-1/2 flex flex-col gap-2 max-w-[200px] pl-4 pointer-events-none select-none">
+              <span className="text-white font-black text-2xl leading-tight uppercase">
+                {committee.caucus?.motionLabel ?? caucusTitle}
               </span>
-              <span className="text-white/70 text-lg font-medium leading-snug">
-                {committee.topic}
-              </span>
+              {committee.caucus?.purpose && (
+                <span className="text-white/70 text-lg font-medium leading-snug">
+                  {committee.caucus.purpose}
+                </span>
+              )}
             </div>
             {queue.length > 0 && (
               <DraggableSpeakersQueue
@@ -763,13 +766,13 @@ function ModeratedCaucusMain({
         ) : (
           <>
             {/* Absolute overlay: motion name + topic — does not affect centred layout */}
-            <div className="absolute left-0 top-1/2 -translate-y-1/2 flex flex-col gap-2 max-w-[180px] pl-4 pointer-events-none select-none">
-              <span className="text-white font-black text-2xl leading-tight">
-                {caucusTitle}
+            <div className="absolute left-0 top-1/2 -translate-y-1/2 flex flex-col gap-2 max-w-[200px] pl-4 pointer-events-none select-none">
+              <span className="text-white font-black text-2xl leading-tight uppercase">
+                {committee.caucus?.motionLabel ?? caucusTitle}
               </span>
-              {!isTdT && (
+              {committee.caucus?.purpose && (
                 <span className="text-white/70 text-lg font-medium leading-snug">
-                  {committee.topic}
+                  {committee.caucus.purpose}
                 </span>
               )}
             </div>

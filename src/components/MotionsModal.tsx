@@ -150,7 +150,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised }: {
   const [proposer, setProposer] = useState('');
   const [totalMinsStr, setTotalMinsStr] = useState('10');
   const [totalSecsStr, setTotalSecsStr] = useState('0');
-  const [speakingTimeStr, setSpeakingTimeStr] = useState('');
+  const [speakingTimeStr, setSpeakingTimeStr] = useState('60');
   const [topic, setTopic] = useState('');
   const [tourOrder, setTourOrder] = useState<'asc' | 'desc' | 'custom'>('asc');
   const [error, setError] = useState('');
@@ -217,7 +217,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised }: {
         <div className="flex gap-1.5 flex-wrap items-stretch">
           <div className="flex gap-1.5 flex-1 flex-wrap">
             {TYPE_ORDER.map((t) => (
-              <button key={t} type="button" onClick={() => { setType(t); setTotalMinsStr('10'); setTotalSecsStr('0'); }}
+              <button key={t} type="button" onClick={() => setType(t)}
                 className={`px-3 py-2 rounded-xl border font-bold text-base transition-all flex-1 min-w-[120px] ${
                   type === t ? 'bg-[#7B4A1E] border-[#8B5A2B] text-white' : 'bg-[#1A1209] border-[#2E1E0F] text-[#C4A882] hover:border-[#7B4A1E]'
                 }`}>
@@ -227,11 +227,11 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised }: {
           </div>
           {/* Special debate control buttons — half size, red, stacked */}
           <div className="flex flex-col gap-1 self-stretch">
-            <button type="button" onClick={() => { setType('suspend-debate'); setTotalMinsStr('10'); setTotalSecsStr('0'); }}
+            <button type="button" onClick={() => setType('suspend-debate')}
               className={`px-2 flex-1 rounded-lg border text-xs font-bold transition-colors ${type === 'suspend-debate' ? 'bg-red-800 border-red-700 text-white' : 'border-red-900/50 bg-red-950/30 text-red-400 hover:bg-red-900/40'}`}>
               Suspend
             </button>
-            <button type="button" onClick={() => { setType('end-debate'); setTotalMinsStr('10'); setTotalSecsStr('0'); }}
+            <button type="button" onClick={() => setType('end-debate')}
               className={`px-2 flex-1 rounded-lg border text-xs font-bold transition-colors ${type === 'end-debate' ? 'bg-red-800 border-red-700 text-white' : 'border-red-900/50 bg-red-950/30 text-red-400 hover:bg-red-900/40'}`}>
               End Debate
             </button>
@@ -664,16 +664,33 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
       return;
     }
 
-    if (motion.type === 'unmoderated' || motion.type === 'consultation') {
+    if (motion.type === 'unmoderated') {
       const caucus = {
-        active: true, type: 'unmoderated' as const, purpose: motion.topic || '',
-        proposedBy: motion.proposedBy, totalTime: motion.totalTime, remainingTime: motion.totalTime,
+        active: true, type: 'unmoderated' as const, motionLabel: typeMeta['unmoderated'].label,
+        purpose: motion.topic || '', proposedBy: motion.proposedBy,
+        totalTime: motion.totalTime, remainingTime: motion.totalTime,
+        speakingTime: 0, speakerTimeRemaining: 0, currentSpeaker: null,
+        proposerPosition: null, spokenCountries: [],
+      };
+      update((c) => ({ ...c, phase: 'unmoderated-caucus', caucus, pendingMotions: [], caucusQueue: [], currentSpeaker: null }));
+      onClose();
+      clearPendingMotionsInDB(committee.id);
+      clearCaucusListInDB(committee.id);
+      updateCaucusInDB(committee.id, caucus);
+      setPhaseInDB(committee.id, 'unmoderated-caucus');
+      return;
+    }
+    if (motion.type === 'consultation') {
+      const caucus = {
+        active: true, type: 'unmoderated' as const, motionLabel: typeMeta['consultation'].label,
+        purpose: motion.topic || '', proposedBy: motion.proposedBy,
+        totalTime: motion.totalTime, remainingTime: motion.totalTime,
         speakingTime: 0, speakerTimeRemaining: 0, currentSpeaker: null,
         proposerPosition: null, spokenCountries: [],
       };
       // GSL preserved, caucusQueue cleared, phase → unmoderated-caucus
       update((c) => ({ ...c, phase: 'unmoderated-caucus', caucus, pendingMotions: [], caucusQueue: [], currentSpeaker: null }));
-      onClose(); // Close immediately — user sees caucus screen, DB syncs in background
+      onClose();
       clearPendingMotionsInDB(committee.id);
       clearCaucusListInDB(committee.id);
       updateCaucusInDB(committee.id, caucus);
@@ -682,8 +699,9 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
 
     } else if (motion.type === 'moderated') {
       const caucus = {
-        active: true, type: 'moderated' as const, purpose: motion.topic || '',
-        proposedBy: motion.proposedBy, totalTime: motion.totalTime, remainingTime: motion.totalTime,
+        active: true, type: 'moderated' as const, motionLabel: typeMeta['moderated'].label,
+        purpose: motion.topic || '', proposedBy: motion.proposedBy,
+        totalTime: motion.totalTime, remainingTime: motion.totalTime,
         speakingTime: motion.speakingTime, speakerTimeRemaining: motion.speakingTime,
         currentSpeaker: null, proposerPosition: null, spokenCountries: [],
       };
@@ -718,7 +736,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
 
       const totalTourTime = presentDelegates.length * motion.speakingTime;
       const caucus = {
-        active: true, type: 'moderated' as const,
+        active: true, type: 'moderated' as const, motionLabel: typeMeta['tour'].label,
         purpose: `Tour de Table (${motion.tourOrder === 'desc' ? 'Z→A' : motion.tourOrder === 'custom' ? 'Custom' : 'A→Z'})`,
         proposedBy: motion.proposedBy, totalTime: totalTourTime, remainingTime: totalTourTime,
         speakingTime: motion.speakingTime, speakerTimeRemaining: motion.speakingTime,

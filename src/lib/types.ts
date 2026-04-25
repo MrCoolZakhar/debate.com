@@ -90,6 +90,7 @@ export interface CommitteeDocument {
 export interface CaucusState {
   active: boolean;
   type: 'moderated' | 'unmoderated';
+  motionLabel: string;
   totalTime: number;
   remainingTime: number;
   speakingTime: number;
