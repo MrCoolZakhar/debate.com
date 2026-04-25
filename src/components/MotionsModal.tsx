@@ -148,25 +148,12 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised }: {
 }) {
   const [type, setType] = useState<PendingMotionType | null>('moderated');
   const [proposer, setProposer] = useState('');
-  const [totalMinsStr, setTotalMinsStr] = useState('');
-  const [totalSecsStr, setTotalSecsStr] = useState('');
+  const [totalMinsStr, setTotalMinsStr] = useState('10');
+  const [totalSecsStr, setTotalSecsStr] = useState('0');
   const [speakingTimeStr, setSpeakingTimeStr] = useState('');
   const [topic, setTopic] = useState('');
   const [tourOrder, setTourOrder] = useState<'asc' | 'desc' | 'custom'>('asc');
   const [error, setError] = useState('');
-  const [showSpeakerInfo, setShowSpeakerInfo] = useState(false);
-  const speakerInfoRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!showSpeakerInfo) return;
-    const handler = (e: MouseEvent) => {
-      if (speakerInfoRef.current && !speakerInfoRef.current.contains(e.target as Node)) {
-        setShowSpeakerInfo(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [showSpeakerInfo]);
 
   const presentCountries = committee.delegates.filter((d) => d.status !== 'absent').map((d) => d.country);
   const countriesWithMotions = new Set(
@@ -230,7 +217,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised }: {
         <div className="flex gap-1.5 flex-wrap items-stretch">
           <div className="flex gap-1.5 flex-1 flex-wrap">
             {TYPE_ORDER.map((t) => (
-              <button key={t} type="button" onClick={() => setType(t)}
+              <button key={t} type="button" onClick={() => { setType(t); setTotalMinsStr('10'); setTotalSecsStr('0'); }}
                 className={`px-3 py-2 rounded-xl border font-bold text-base transition-all flex-1 min-w-[120px] ${
                   type === t ? 'bg-[#7B4A1E] border-[#8B5A2B] text-white' : 'bg-[#1A1209] border-[#2E1E0F] text-[#C4A882] hover:border-[#7B4A1E]'
                 }`}>
@@ -240,11 +227,11 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised }: {
           </div>
           {/* Special debate control buttons — half size, red, stacked */}
           <div className="flex flex-col gap-1 self-stretch">
-            <button type="button" onClick={() => setType('suspend-debate')}
+            <button type="button" onClick={() => { setType('suspend-debate'); setTotalMinsStr('10'); setTotalSecsStr('0'); }}
               className={`px-2 flex-1 rounded-lg border text-xs font-bold transition-colors ${type === 'suspend-debate' ? 'bg-red-800 border-red-700 text-white' : 'border-red-900/50 bg-red-950/30 text-red-400 hover:bg-red-900/40'}`}>
               Suspend
             </button>
-            <button type="button" onClick={() => setType('end-debate')}
+            <button type="button" onClick={() => { setType('end-debate'); setTotalMinsStr('10'); setTotalSecsStr('0'); }}
               className={`px-2 flex-1 rounded-lg border text-xs font-bold transition-colors ${type === 'end-debate' ? 'bg-red-800 border-red-700 text-white' : 'border-red-900/50 bg-red-950/30 text-red-400 hover:bg-red-900/40'}`}>
               End Debate
             </button>
@@ -384,37 +371,13 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised }: {
                     </div>
                   </div>
                   <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <label className="text-sm font-semibold text-[#C4A882]">Per delegate</label>
-                      <div className="relative" ref={speakerInfoRef}>
-                        <button
-                          type="button"
-                          onClick={() => setShowSpeakerInfo(!showSpeakerInfo)}
-                          className="w-4 h-4 rounded-full border border-[#7A5A38] text-[#7A5A38] text-[9px] flex items-center justify-center hover:border-[#C4A882] hover:text-[#C4A882] transition-colors leading-none"
-                        >
-                          i
-                        </button>
-                        {showSpeakerInfo && (
-                          <div className="absolute left-0 top-6 z-20 bg-[#1A1209] border border-[#2E1E0F] rounded-xl px-3 py-2.5 shadow-xl w-48">
-                            <p className="text-xs text-white font-semibold">
-                              Speakers who can speak: <span className="text-[#C4A882]">{speakerCount !== null ? speakerCount : '—'}</span>
-                            </p>
-                            {unusedSecs > 0 && (
-                              <p className="text-xs text-amber-400 mt-1">⚠ {unusedSecs}s will be unused</p>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
+                    <label className="block text-sm font-semibold text-[#C4A882] mb-2">Per delegate</label>
                     <div className="flex items-center gap-1.5 bg-[#150F09] border border-[#2E1E0F] rounded-xl px-3 py-2 w-fit">
                       <input type="number" min={0} value={speakingTimeStr}
                         onChange={(e) => setSpeakingTimeStr(e.target.value)}
                         className={`w-12 ${numClassSm}`} />
                       <span className="text-[#C4A882] text-xs">sec</span>
                     </div>
-                    {speakerCount !== null && (
-                      <p className="text-xs text-[#7B4A1E] mt-1">≈ {speakerCount} speakers</p>
-                    )}
                     <div className="flex gap-1.5 mt-2 flex-wrap">
                       {[30, 45, 60, 90, 120].map((t) => (
                         <button key={t} onClick={() => setSpeakingTimeStr(String(t))}
@@ -423,6 +386,18 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised }: {
                         </button>
                       ))}
                     </div>
+                    {speakerCount !== null && (
+                      <div className="mt-3 rounded-xl bg-white/10 border border-white/20 px-4 py-3">
+                        <p className="text-white font-black text-2xl leading-tight">
+                          {speakerCount} <span className="text-base font-semibold text-[#C4A882]">delegates can speak</span>
+                        </p>
+                        {unusedSecs > 0 && (
+                          <p className="text-amber-400 text-sm font-semibold mt-1">
+                            ⚠ {unusedSecs}s of caucus time will be unused
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               </>

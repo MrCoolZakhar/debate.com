@@ -334,7 +334,7 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
               <p className="text-xs text-[#7A5A38] mb-3 leading-snug">Disabled motion types are hidden from the delegate motion-request interface immediately.</p>
               <Toggle label="Moderated caucus" value={s.motionModeratedCaucus} onChange={(v) => upd('motionModeratedCaucus', v)} />
               <Toggle label="Unmoderated caucus" value={s.motionUnmoderatedCaucus} onChange={(v) => upd('motionUnmoderatedCaucus', v)} />
-              <Toggle label="Committee of the Whole (CoW)" value={s.motionCoW} onChange={(v) => upd('motionCoW', v)} />
+              <Toggle label="Consultation of the Whole (CoW)" value={s.motionCoW} onChange={(v) => upd('motionCoW', v)} />
               <Toggle label="Tour de Table" value={s.motionTourDeTable} onChange={(v) => upd('motionTourDeTable', v)} />
 
               <SectionLabel>MOTION NAMES</SectionLabel>

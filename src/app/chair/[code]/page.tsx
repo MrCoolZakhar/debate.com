@@ -290,9 +290,9 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, lastSpeakerDelegate
           );
         })}
       </div>
-      {overflow > 0 && (
-        <div className="text-center text-xs text-[#7A5A38] mt-2">+{overflow} more in queue</div>
-      )}
+      <div className="text-center text-xs text-[#7A5A38] mt-2 h-4">
+        {overflow > 0 ? `+${overflow} more in queue` : ''}
+      </div>
     </div>
   );
 }
@@ -455,7 +455,7 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
 function UnmoderatedCaucusView({ committee, setCommittee }: { committee: Committee; setCommittee: CommitteeSetter }) {
   const { getSettings } = useSettingsStore();
   const unmoderatedName = getSettings(committee.code).motionNames?.unmoderated ?? 'Unmoderated Caucus';
-  const [running, setRunning] = useState(true);
+  const [running, setRunning] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const caucus = committee.caucus!;
   const remainingRef = useRef(caucus.remainingTime);
@@ -518,34 +518,45 @@ function UnmoderatedCaucusView({ committee, setCommittee }: { committee: Committ
         </button>
       </div>
       {showExtendUnmod && (
-        <div className="flex items-center gap-2 mt-4">
+        <div className="flex items-center gap-2 mt-4 flex-wrap justify-center">
           <span className="text-xs text-emerald-400 font-semibold shrink-0">Extend by</span>
-          {[1, 2, 5, 10].map((m) => (
-            <button key={m} onClick={() => {
-              updateLocal(setCommittee, (c) => {
-                if (!c.caucus) return c;
-                const newRemaining = c.caucus.remainingTime + m * 60;
-                const newTotal = c.caucus.totalTime + m * 60;
-                const updated = { ...c.caucus, remainingTime: newRemaining, totalTime: newTotal };
-                updateCaucusInDB(committee.id, updated);
-                return { ...c, caucus: updated };
-              });
-              setShowExtendUnmod(false);
-            }} className="px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-900/30 hover:bg-emerald-800/40 border border-emerald-700/30 text-emerald-300 transition-colors">
-              {m}m
-            </button>
-          ))}
+          {(() => {
+            const halfMins = caucus.totalTime / 120;
+            const rawSuggestions = [5, 10, halfMins];
+            const suggestions = [...new Set(
+              rawSuggestions
+                .filter((m) => m > 0)
+                .map((m) => Math.round(m * 2) / 2)
+            )].sort((a, b) => a - b);
+            return suggestions.map((m) => (
+              <button key={m} onClick={() => {
+                const addSecs = m * 60;
+                updateLocal(setCommittee, (c) => {
+                  if (!c.caucus) return c;
+                  const newRemaining = c.caucus.remainingTime + addSecs;
+                  const newTotal = c.caucus.totalTime + addSecs;
+                  const updated = { ...c.caucus, remainingTime: newRemaining, totalTime: newTotal };
+                  updateCaucusInDB(committee.id, updated);
+                  return { ...c, caucus: updated };
+                }, true);
+                setShowExtendUnmod(false);
+              }} className="px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-900/30 hover:bg-emerald-800/40 border border-emerald-700/30 text-emerald-300 transition-colors">
+                {m % 1 === 0 ? `${m}m` : `${m}m`}
+              </button>
+            ));
+          })()}
           <input type="number" min={1} value={extendMinsUnmod} onChange={(e) => setExtendMinsUnmod(parseInt(e.target.value) || 1)}
             className="w-12 bg-[#150F09] border border-[#2E1E0F] rounded-lg px-2 py-1 text-white text-xs focus:outline-none" />
           <button onClick={() => {
+            const addSecs = extendMinsUnmod * 60;
             updateLocal(setCommittee, (c) => {
               if (!c.caucus) return c;
-              const newRemaining = c.caucus.remainingTime + extendMinsUnmod * 60;
-              const newTotal = c.caucus.totalTime + extendMinsUnmod * 60;
+              const newRemaining = c.caucus.remainingTime + addSecs;
+              const newTotal = c.caucus.totalTime + addSecs;
               const updated = { ...c.caucus, remainingTime: newRemaining, totalTime: newTotal };
               updateCaucusInDB(committee.id, updated);
               return { ...c, caucus: updated };
-            });
+            }, true);
             setShowExtendUnmod(false);
           }} className="px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-900/30 hover:bg-emerald-800/40 border border-emerald-700/30 text-emerald-300 transition-colors">
             + custom
@@ -586,7 +597,6 @@ function ModeratedCaucusMain({
   // Extend-time UI state
   const [showExtendMod, setShowExtendMod] = useState(false);
   const [extendMinsMod, setExtendMinsMod] = useState(1);
-  const [extendSecsMod, setExtendSecsMod] = useState(0);
   const extendRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -752,9 +762,16 @@ function ModeratedCaucusMain({
           </>
         ) : (
           <>
-            <div className="text-center mb-3 shrink-0">
-              <p className="text-5xl font-black tracking-widest text-[#7B4A1E] mb-2">{caucusTitle}</p>
-              {!isTdT && caucus.purpose && <p className="text-base font-semibold text-[#C4A882]">{caucus.purpose}</p>}
+            {/* Absolute overlay: motion name + topic — does not affect centred layout */}
+            <div className="absolute left-0 top-1/2 -translate-y-1/2 flex flex-col gap-2 max-w-[180px] pl-4 pointer-events-none select-none">
+              <span className="text-white font-black text-2xl leading-tight">
+                {caucusTitle}
+              </span>
+              {!isTdT && (
+                <span className="text-white/70 text-lg font-medium leading-snug">
+                  {committee.topic}
+                </span>
+              )}
             </div>
             {queue.length > 0 && (
               <DraggableSpeakersQueue
@@ -791,16 +808,38 @@ function ModeratedCaucusMain({
                   Extend
                 </button>
                 {showExtendMod && (
-                  <div className="absolute bottom-full right-0 mb-2 bg-[#1A1209] border border-[#2E1E0F] rounded-xl px-4 py-3 shadow-xl flex items-center gap-2 z-20">
+                  <div className="absolute bottom-full right-0 mb-2 bg-[#1A1209] border border-[#2E1E0F] rounded-xl px-4 py-3 shadow-xl flex items-center gap-2 flex-wrap z-20">
                     <span className="text-xs text-amber-400 font-semibold shrink-0">Add</span>
-                    <input type="number" min={0} value={extendMinsMod} onChange={(e) => setExtendMinsMod(parseInt(e.target.value) || 0)}
+                    {(() => {
+                      const halfMins = caucus.totalTime / 120;
+                      const rawSuggestions = [5, 10, halfMins];
+                      const suggestions = [...new Set(
+                        rawSuggestions
+                          .filter((m) => m > 0)
+                          .map((m) => Math.round(m * 2) / 2)
+                      )].sort((a, b) => a - b);
+                      return suggestions.map((m) => (
+                        <button key={m} onClick={() => {
+                          const addSecs = m * 60;
+                          updateLocal(setCommittee, (c) => {
+                            if (!c.caucus) return c;
+                            const newRemaining = c.caucus.remainingTime + addSecs;
+                            const newTotal = c.caucus.totalTime + addSecs;
+                            const updated = { ...c.caucus, remainingTime: newRemaining, totalTime: newTotal };
+                            updateCaucusInDB(committee.id, updated);
+                            return { ...c, caucus: updated };
+                          }, true);
+                          setShowExtendMod(false);
+                        }} className="px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-900/30 hover:bg-amber-800/40 border border-amber-700/30 text-amber-300 transition-colors">
+                          {m % 1 === 0 ? `${m}m` : `${m}m`}
+                        </button>
+                      ));
+                    })()}
+                    <input type="number" min={1} value={extendMinsMod} onChange={(e) => setExtendMinsMod(parseInt(e.target.value) || 1)}
                       className="w-10 bg-[#150F09] border border-[#2E1E0F] rounded-lg px-2 py-1 text-white text-xs text-center focus:outline-none" />
                     <span className="text-xs text-[#7A5A38]">m</span>
-                    <input type="number" min={0} max={59} value={extendSecsMod} onChange={(e) => setExtendSecsMod(Math.min(59, parseInt(e.target.value) || 0))}
-                      className="w-10 bg-[#150F09] border border-[#2E1E0F] rounded-lg px-2 py-1 text-white text-xs text-center focus:outline-none" />
-                    <span className="text-xs text-[#7A5A38]">s</span>
                     <button onClick={() => {
-                      const addSecs = extendMinsMod * 60 + extendSecsMod;
+                      const addSecs = extendMinsMod * 60;
                       if (addSecs <= 0) return;
                       updateLocal(setCommittee, (c) => {
                         if (!c.caucus) return c;
