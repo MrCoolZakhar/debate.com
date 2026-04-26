@@ -244,12 +244,13 @@ function RtrCountryInput({
 }
 
 // ── Draggable GSL Speakers Queue ──────────────────────────────────────────────
-function DraggableSpeakersQueue({ list, onReorder, onRemove, lastSpeakerDelegateId, currentSpeakerDelegateId }: {
+function DraggableSpeakersQueue({ list, onReorder, onRemove, lastSpeakerDelegateId, currentSpeakerDelegateId, isTdT }: {
   list: { delegateId: string; country: string }[];
   onReorder: (newList: { delegateId: string; country: string }[]) => void;
   onRemove: (delegateId: string) => void;
   lastSpeakerDelegateId?: string | null;
   currentSpeakerDelegateId?: string | null;
+  isTdT?: boolean;
 }) {
   const dragIndexRef = useRef<number | null>(null);
   const qLen = list.length;
@@ -274,10 +275,18 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, lastSpeakerDelegate
                 onReorder(newList);
                 dragIndexRef.current = null;
               }}>
-              <div className={`rounded-full ${isCurrent ? 'ring-4 ring-[#7B4A1E]' : ''}`}>
-                <FlagCircle country={s.country} size="xl" />
-              </div>
-              <span className="line-clamp-2 break-words whitespace-normal leading-tight max-w-[80px] text-xs font-semibold text-[#C4A882] text-center">{abbrevCountry(s.country)}</span>
+              {isTdT ? (
+                <div className={`w-20 h-20 rounded-full bg-[#2E1E0F] border border-[#3D2A15] flex items-center justify-center ${isCurrent ? 'ring-4 ring-[#7B4A1E]' : ''}`}>
+                  <span className="text-3xl font-black text-[#B8844A]">{i + 2}</span>
+                </div>
+              ) : (
+                <div className={`rounded-full ${isCurrent ? 'ring-4 ring-[#7B4A1E]' : ''}`}>
+                  <FlagCircle country={s.country} size="xl" />
+                </div>
+              )}
+              {!isTdT && (
+                <span className="line-clamp-2 break-words whitespace-normal leading-tight max-w-[80px] text-xs font-semibold text-[#C4A882] text-center">{abbrevCountry(s.country)}</span>
+              )}
               {isCurrent && <span className="text-sm font-bold text-[#B8844A]">Speaking</span>}
               {!isCurrent && i === 0 && <span className="text-sm font-bold text-[#B8844A]">Up next</span>}
               {!isCurrent && lastSpeakerDelegateId && s.delegateId === lastSpeakerDelegateId && i !== 0 && (
@@ -742,18 +751,25 @@ function ModeratedCaucusMain({
                 list={queue}
                 onReorder={handleCaucusReorderQueue}
                 onRemove={handleCaucusRemoveFromQueue}
+                isTdT={isTdT}
               />
             )}
             <div className="flex flex-col items-center">
               <div className="ring-4 ring-[#7B4A1E] rounded-full">
-                <div className="relative w-36 h-36 rounded-full overflow-hidden bg-[#2E1E0F] shrink-0">
-                  {(() => {
-                    const f = getCountryByName(committee.caucus!.currentSpeaker!);
-                    return f
-                      ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ width: '7rem', height: '7rem', objectFit: 'contain', position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }} />
-                      : <Emoji size="5rem" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>🌐</Emoji>;
-                  })()}
-                </div>
+                {isTdT ? (
+                  <div className="relative w-36 h-36 rounded-full bg-[#2E1E0F] shrink-0 flex items-center justify-center">
+                    <span className="text-6xl font-black text-[#B8844A]">1</span>
+                  </div>
+                ) : (
+                  <div className="relative w-36 h-36 rounded-full overflow-hidden bg-[#2E1E0F] shrink-0">
+                    {(() => {
+                      const f = getCountryByName(committee.caucus!.currentSpeaker!);
+                      return f
+                        ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ width: '7rem', height: '7rem', objectFit: 'contain', position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }} />
+                        : <Emoji size="5rem" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>🌐</Emoji>;
+                    })()}
+                  </div>
+                )}
               </div>
               <h1 className="text-5xl font-black text-white mt-2 mb-1 text-center">{committee.caucus!.currentSpeaker}</h1>
               <div className={`text-8xl font-black font-mono mt-2 mb-3 tabular-nums ${
@@ -813,6 +829,7 @@ function ModeratedCaucusMain({
                 list={queue}
                 onReorder={handleCaucusReorderQueue}
                 onRemove={handleCaucusRemoveFromQueue}
+                isTdT={isTdT}
               />
             )}
             <div className="mb-6"><Emoji size="4.375rem">🎙</Emoji></div>
@@ -1854,6 +1871,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 )}
                 {(caucusPanelLocked || committee.caucus?.type === 'moderated') ? (
                   <RollCallPanel committee={caucusRollCallCommittee ?? { ...committee, speakersList: committee.caucusQueue ?? [], currentSpeaker: null }}
+                    isTdT={committee.caucus?.purpose?.startsWith('Tour de Table') ?? false}
                     onAddToList={(delegateId) => {
                       const delegate = committee.delegates.find((d) => d.id === delegateId);
                       if (!delegate) return;
@@ -2186,14 +2204,14 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         <MotionsModal
           committee={committee}
           onClose={() => setShowMotions(false)}
-          onCommitteeUpdate={(updater) => updateLocal(setCommittee, updater)}
+          onCommitteeUpdate={(updater) => updateLocal(setCommittee, updater, true)}
         />
       )}
       {showDocuments && !isPreSession && !sessionEnded && (
         <DocumentsModal
           committee={committee}
           onClose={() => setShowDocuments(false)}
-          onCommitteeUpdate={(updater) => updateLocal(setCommittee, updater)}
+          onCommitteeUpdate={(updater) => updateLocal(setCommittee, updater, true)}
         />
       )}
       {showSettings && (

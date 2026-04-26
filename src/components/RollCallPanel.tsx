@@ -247,6 +247,7 @@ function RollCallPanelInner({
   showBulkActions = false,
   showViewToggle = true,
   isReadOnly = false,
+  isTdT = false,
 }: {
   committee: Committee;
   onAddToList?: (delegateId: string) => void;
@@ -262,6 +263,7 @@ function RollCallPanelInner({
   showBulkActions?: boolean;
   showViewToggle?: boolean;
   isReadOnly?: boolean;
+  isTdT?: boolean;
 }) {
   const [search, setSearch] = useState('');
   const [listView, setListView] = useState<'az' | 'queue'>('az');
@@ -478,9 +480,15 @@ function RollCallPanelInner({
                 } ${isDraggable ? 'cursor-grab' : ''}`}
               >
                 <div className="relative shrink-0">
-                  <FlagCircle country={d.country} size={isUpNext ? 'md' : 'sm'} />
-                  {/* Queue position bubble */}
-                  {queuePos !== null && (
+                  {isTdT && queuePos !== null ? (
+                    <div className={`${isUpNext ? 'w-12 h-12' : 'w-9 h-9'} rounded-full bg-[#2E1E0F] border border-[#3D2A15] flex items-center justify-center`}>
+                      <span className={`font-black text-[#B8844A] ${isUpNext ? 'text-xl' : 'text-sm'}`}>{queuePos}</span>
+                    </div>
+                  ) : (
+                    <FlagCircle country={d.country} size={isUpNext ? 'md' : 'sm'} />
+                  )}
+                  {/* Queue position bubble — omitted when isTdT since position is already the primary display */}
+                  {queuePos !== null && !isTdT && (
                     <div className={`absolute -top-1 -right-1 min-w-[18px] h-[18px] px-0.5 rounded-full text-white flex items-center justify-center font-black leading-none ${
                       queuePos === 1 && committee.currentSpeaker?.delegateId === d.id
                         ? 'bg-[#B8844A] text-[10px]'
@@ -543,6 +551,7 @@ const RollCallPanel = React.memo(RollCallPanelInner, (prev, next) => {
     prev.showBulkActions === next.showBulkActions &&
     prev.showViewToggle === next.showViewToggle &&
     prev.isReadOnly === next.isReadOnly &&
+    prev.isTdT === next.isTdT &&
     prev.onListIds === next.onListIds
   );
 });
