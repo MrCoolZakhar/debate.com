@@ -244,13 +244,13 @@ function RtrCountryInput({
 }
 
 // ── Draggable GSL Speakers Queue ──────────────────────────────────────────────
-function DraggableSpeakersQueue({ list, onReorder, onRemove, lastSpeakerDelegateId, currentSpeakerDelegateId, isTdT }: {
+function DraggableSpeakersQueue({ list, onReorder, onRemove, lastSpeakerDelegateId, currentSpeakerDelegateId, isRoomOrderTdT }: {
   list: { delegateId: string; country: string }[];
   onReorder: (newList: { delegateId: string; country: string }[]) => void;
   onRemove: (delegateId: string) => void;
   lastSpeakerDelegateId?: string | null;
   currentSpeakerDelegateId?: string | null;
-  isTdT?: boolean;
+  isRoomOrderTdT?: boolean;
 }) {
   const dragIndexRef = useRef<number | null>(null);
   const qLen = list.length;
@@ -275,7 +275,7 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, lastSpeakerDelegate
                 onReorder(newList);
                 dragIndexRef.current = null;
               }}>
-              {isTdT ? (
+              {isRoomOrderTdT ? (
                 <div className={`w-20 h-20 rounded-full bg-[#2E1E0F] border border-[#3D2A15] flex items-center justify-center ${isCurrent ? 'ring-4 ring-[#7B4A1E]' : ''}`}>
                   <span className="text-3xl font-black text-[#B8844A]">{i + 2}</span>
                 </div>
@@ -284,7 +284,7 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, lastSpeakerDelegate
                   <FlagCircle country={s.country} size="xl" />
                 </div>
               )}
-              {!isTdT && (
+              {!isRoomOrderTdT && (
                 <span className="line-clamp-2 break-words whitespace-normal leading-tight max-w-[80px] text-xs font-semibold text-[#C4A882] text-center">{abbrevCountry(s.country)}</span>
               )}
               {isCurrent && <span className="text-sm font-bold text-[#B8844A]">Speaking</span>}
@@ -631,6 +631,7 @@ function ModeratedCaucusMain({
   const queue = committee.caucusQueue ?? [];
   const speakerTime = caucus.speakingTime;
   const isTdT = caucus.purpose?.startsWith('Tour de Table') ?? false;
+  const isRoomOrderTdT = isTdT && (caucus.purpose?.includes('Room Order') ?? false);
   const caucusTitle = isTdT ? 'TOUR DE TABLE' : (getSettings(committee.code).motionNames?.moderated ?? 'Moderated Caucus').toUpperCase();
   const spokenCountries = caucus.spokenCountries ?? [];
 
@@ -751,12 +752,12 @@ function ModeratedCaucusMain({
                 list={queue}
                 onReorder={handleCaucusReorderQueue}
                 onRemove={handleCaucusRemoveFromQueue}
-                isTdT={isTdT}
+                isRoomOrderTdT={isRoomOrderTdT}
               />
             )}
             <div className="flex flex-col items-center">
               <div className="ring-4 ring-[#7B4A1E] rounded-full">
-                {isTdT ? (
+                {isRoomOrderTdT ? (
                   <div className="relative w-36 h-36 rounded-full bg-[#2E1E0F] shrink-0 flex items-center justify-center">
                     <span className="text-6xl font-black text-[#B8844A]">1</span>
                   </div>
@@ -829,7 +830,7 @@ function ModeratedCaucusMain({
                 list={queue}
                 onReorder={handleCaucusReorderQueue}
                 onRemove={handleCaucusRemoveFromQueue}
-                isTdT={isTdT}
+                isRoomOrderTdT={isRoomOrderTdT}
               />
             )}
             <div className="mb-6"><Emoji size="4.375rem">🎙</Emoji></div>
@@ -1872,6 +1873,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 {(caucusPanelLocked || committee.caucus?.type === 'moderated') ? (
                   <RollCallPanel committee={caucusRollCallCommittee ?? { ...committee, speakersList: committee.caucusQueue ?? [], currentSpeaker: null }}
                     isTdT={committee.caucus?.purpose?.startsWith('Tour de Table') ?? false}
+                    isRoomOrderTdT={committee.caucus?.purpose?.includes('Room Order') ?? false}
                     onAddToList={(delegateId) => {
                       const delegate = committee.delegates.find((d) => d.id === delegateId);
                       if (!delegate) return;
