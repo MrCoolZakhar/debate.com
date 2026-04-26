@@ -574,8 +574,16 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
 
   return (
     <div className="px-7 pb-7 space-y-3 flex flex-col h-full overflow-hidden">
-      <div className="flex items-center shrink-0">
+      <div className="flex items-center justify-between shrink-0">
         <h2 className="text-2xl font-black text-white">Vote on Motions</h2>
+        <button
+          onClick={onBack}
+          title="Modify motions"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#2E1E0F] hover:bg-[#3D2A15] border border-[#3D2A15] hover:border-[#7B4A1E] text-[#C4A882] hover:text-white transition-colors text-xs font-semibold"
+        >
+          <span>⚙</span>
+          <span>Modify</span>
+        </button>
       </div>
       <div className="flex items-center gap-2 px-3 py-2 bg-[#150F09] border border-[#2E1E0F] rounded-xl text-xs text-[#7A5A38] shrink-0">
         <span>💡</span>

@@ -801,15 +801,16 @@ function ModeratedCaucusMain({
         )}
       </div>
 
-      {!sessionEnded && !isTdT && (
+      {!sessionEnded && (
         <div className="border-t border-[#2E1E0F] bg-[#0D0906] px-6 py-4">
-          <div className="flex items-center gap-3 mb-4">
-            <span className="text-xs text-[#7A5A38] font-mono shrink-0">TOTAL</span>
-            <p className={`text-lg font-black font-mono shrink-0 ${liveRemaining <= 30 ? 'text-red-500' : 'text-white'}`}>{formatTime(liveRemaining)}</p>
-            <div className="flex-1 h-2 bg-[#2E1E0F] rounded-full overflow-hidden">
-              <div className="h-full bg-[#B8844A]/60 rounded-full transition-all" style={{ width: `${totalProgress}%` }} />
-            </div>
-            {!isTdT && (
+          {/* Total timer bar — hidden for Tour de Table */}
+          {!isTdT && (
+            <div className="flex items-center gap-3 mb-4">
+              <span className="text-xs text-[#7A5A38] font-mono shrink-0">TOTAL</span>
+              <p className={`text-lg font-black font-mono shrink-0 ${liveRemaining <= 30 ? 'text-red-500' : 'text-white'}`}>{formatTime(liveRemaining)}</p>
+              <div className="flex-1 h-2 bg-[#2E1E0F] rounded-full overflow-hidden">
+                <div className="h-full bg-[#B8844A]/60 rounded-full transition-all" style={{ width: `${totalProgress}%` }} />
+              </div>
               <div className="relative" ref={extendRef}>
                 <button onClick={() => setShowExtendMod((v) => !v)}
                   className="px-3 py-2 rounded-lg font-bold text-xs bg-amber-900/30 hover:bg-amber-800/40 text-amber-400 hover:text-amber-300 transition-colors border border-amber-700/30 hover:border-amber-600/40">
@@ -864,12 +865,19 @@ function ModeratedCaucusMain({
                   </div>
                 )}
               </div>
-            )}
+              <button onClick={handleEndCaucus}
+                className="px-8 py-3 rounded-lg font-black text-sm bg-red-600 hover:bg-red-700 text-white transition-colors">
+                End Caucus
+              </button>
+            </div>
+          )}
+          {/* End Caucus — always visible; full-width for Tour de Table */}
+          {isTdT && (
             <button onClick={handleEndCaucus}
-              className="px-8 py-3 rounded-lg font-black text-sm bg-red-600 hover:bg-red-700 text-white transition-colors">
-              End Caucus
+              className="w-full py-2.5 rounded-lg font-black text-sm bg-red-600 hover:bg-red-700 text-white transition-colors mb-3">
+              End Tour de Table
             </button>
-          </div>
+          )}
           <CaucusAddSpeakerInput
             committee={committee}
             spokenCountries={spokenCountries}
@@ -1838,36 +1846,76 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
             )}
             <main className="flex-1 overflow-hidden flex flex-col min-w-0">
               {committee.phase === 'moderated-caucus' && committee.caucus && (
-                caucusLoading ? (
+                caucusLoading ? (() => {
+                  const isTdTParent = committee.caucus?.purpose?.startsWith('Tour de Table') ?? false;
+                  return (
                   <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
                     <div className="bg-[#1A1209] border border-[#7B4A1E]/40 rounded-3xl px-12 py-10 max-w-lg w-full shadow-2xl">
-                      <div className="text-5xl mb-5">🎙️</div>
-                      <p className="text-xs font-mono text-[#7A5A38] tracking-widest mb-3">MODERATED CAUCUS STARTING</p>
-                      <h1 className="text-3xl font-black text-white mb-2">{committee.caucus.purpose || 'Moderated Caucus'}</h1>
-                      <p className="text-[#C4A882] text-sm mb-6">{committee.topic}</p>
-                      <div className="flex justify-center gap-8 mb-8">
-                        <div className="text-center">
-                          <div className="text-2xl font-black text-[#B8844A]">{formatTime(committee.caucus.totalTime)}</div>
-                          <div className="text-xs text-[#7A5A38] mt-1">Total Time</div>
-                        </div>
-                        <div className="w-px bg-[#2E1E0F]" />
-                        <div className="text-center">
-                          <div className="text-2xl font-black text-[#B8844A]">{committee.caucus.speakingTime}s</div>
-                          <div className="text-xs text-[#7A5A38] mt-1">Per Speaker</div>
-                        </div>
-                        <div className="w-px bg-[#2E1E0F]" />
-                        <div className="text-center">
-                          <div className="text-2xl font-black text-[#B8844A]">{Math.floor(committee.caucus.totalTime / (committee.caucus.speakingTime || 1))}</div>
-                          <div className="text-xs text-[#7A5A38] mt-1">Max Speakers</div>
-                        </div>
-                      </div>
-                      <div className="flex items-center justify-center gap-2 text-[#7A5A38] text-sm">
-                        <div className="w-4 h-4 border-2 border-[#7B4A1E] border-t-transparent rounded-full animate-spin" />
-                        <span>Loading caucus...</span>
-                      </div>
+                      {isTdTParent ? (
+                        <>
+                          <div className="text-5xl mb-5">🔄</div>
+                          <p className="text-xs font-mono text-[#7A5A38] tracking-widest mb-3">TOUR DE TABLE STARTING</p>
+                          <h1 className="text-3xl font-black text-white mb-2">Tour de Table</h1>
+                          <p className="text-[#C4A882] text-sm mb-6">
+                            {committee.caucus.purpose?.includes('Room Order')
+                              ? 'Room Order — chair calls each speaker'
+                              : committee.caucus.purpose?.includes('Z→A') ? 'Z → A order' : 'A → Z order, proposer speaks first'}
+                          </p>
+                          <div className="flex justify-center gap-8 mb-8">
+                            <div className="text-center">
+                              <div className="text-2xl font-black text-[#B8844A]">
+                                {committee.caucusQueue?.length ?? Math.floor(committee.caucus.totalTime / (committee.caucus.speakingTime || 1))}
+                              </div>
+                              <div className="text-xs text-[#7A5A38] mt-1">Delegates</div>
+                            </div>
+                            <div className="w-px bg-[#2E1E0F]" />
+                            <div className="text-center">
+                              <div className="text-2xl font-black text-[#B8844A]">{committee.caucus.speakingTime}s</div>
+                              <div className="text-xs text-[#7A5A38] mt-1">Per Speaker</div>
+                            </div>
+                            <div className="w-px bg-[#2E1E0F]" />
+                            <div className="text-center">
+                              <div className="text-2xl font-black text-[#B8844A]">{formatTime(committee.caucus.totalTime)}</div>
+                              <div className="text-xs text-[#7A5A38] mt-1">Total Time</div>
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-center gap-2 text-[#7A5A38] text-sm">
+                            <div className="w-4 h-4 border-2 border-[#7B4A1E] border-t-transparent rounded-full animate-spin" />
+                            <span>Setting up speakers...</span>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="text-5xl mb-5">🎙️</div>
+                          <p className="text-xs font-mono text-[#7A5A38] tracking-widest mb-3">MODERATED CAUCUS STARTING</p>
+                          <h1 className="text-3xl font-black text-white mb-2">{committee.caucus.purpose || 'Moderated Caucus'}</h1>
+                          <p className="text-[#C4A882] text-sm mb-6">{committee.topic}</p>
+                          <div className="flex justify-center gap-8 mb-8">
+                            <div className="text-center">
+                              <div className="text-2xl font-black text-[#B8844A]">{formatTime(committee.caucus.totalTime)}</div>
+                              <div className="text-xs text-[#7A5A38] mt-1">Total Time</div>
+                            </div>
+                            <div className="w-px bg-[#2E1E0F]" />
+                            <div className="text-center">
+                              <div className="text-2xl font-black text-[#B8844A]">{committee.caucus.speakingTime}s</div>
+                              <div className="text-xs text-[#7A5A38] mt-1">Per Speaker</div>
+                            </div>
+                            <div className="w-px bg-[#2E1E0F]" />
+                            <div className="text-center">
+                              <div className="text-2xl font-black text-[#B8844A]">{Math.floor(committee.caucus.totalTime / (committee.caucus.speakingTime || 1))}</div>
+                              <div className="text-xs text-[#7A5A38] mt-1">Max Speakers</div>
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-center gap-2 text-[#7A5A38] text-sm">
+                            <div className="w-4 h-4 border-2 border-[#7B4A1E] border-t-transparent rounded-full animate-spin" />
+                            <span>Loading caucus...</span>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
-                ) : (
+                  );
+                })() : (
                   <ModeratedCaucusMain
                     committee={committee}
                     setCommittee={setCommittee}
