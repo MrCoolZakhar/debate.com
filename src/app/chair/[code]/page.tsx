@@ -359,11 +359,12 @@ function CaucusQueueSidebar({ committee, onRemove, onReorder, lastSpeakerDelegat
 }
 
 // ── Caucus Add Speaker Input ──────────────────────────────────────────────────
-function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, onAddLast, maxSpeakers, currentQueueLength, currentSpeakerCountry }: {
+function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, onAddLast, maxSpeakers, currentQueueLength, currentSpeakerCountry, onEndCaucus }: {
   committee: Committee; spokenCountries: string[]; onAdd: (id: string) => void;
   onAddFirst?: (id: string) => void; onAddLast?: (id: string) => void;
   maxSpeakers?: number; currentQueueLength?: number;
   currentSpeakerCountry?: string | null;
+  onEndCaucus?: () => void;
 }) {
   const [query, setQuery] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -379,7 +380,8 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
   const topNotOnList = matches.find((d) => !onList.has(d.id) && !isCurrentSpeaker(d)) ?? null;
   const commit = (d: typeof topNotOnList) => { if (!d || onList.has(d.id) || isFull || isCurrentSpeaker(d)) return; onAdd(d.id); setQuery(''); };
   return (
-    <div className="relative">
+    <div className="flex gap-2">
+      <div className="relative flex-1">
       {isFull ? (
         <div className="pointer-events-none flex items-center justify-center px-4 py-3 bg-[#150F09] border border-yellow-700/30 rounded-xl">
           <p className="text-sm text-amber-400 font-semibold text-center">
@@ -449,6 +451,13 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
         </div>
       )}
       </>
+      )}
+      </div>
+      {onEndCaucus && (
+        <button onClick={onEndCaucus}
+          className="shrink-0 px-5 py-3 rounded-xl font-black text-sm bg-red-600 hover:bg-red-700 text-white transition-colors">
+          End Caucus
+        </button>
       )}
     </div>
   );
@@ -888,13 +897,6 @@ function ModeratedCaucusMain({
               </button>
             </div>
           )}
-          {/* End Caucus — always visible; full-width for Tour de Table */}
-          {isTdT && (
-            <button onClick={handleEndCaucus}
-              className="w-full py-2.5 rounded-lg font-black text-sm bg-red-600 hover:bg-red-700 text-white transition-colors mb-3">
-              End Tour de Table
-            </button>
-          )}
           <CaucusAddSpeakerInput
             committee={committee}
             spokenCountries={spokenCountries}
@@ -904,6 +906,7 @@ function ModeratedCaucusMain({
             maxSpeakers={maxByTime}
             currentQueueLength={queue.length}
             currentSpeakerCountry={committee.currentSpeaker?.country ?? null}
+            onEndCaucus={isTdT ? handleEndCaucus : undefined}
           />
         </div>
       )}
