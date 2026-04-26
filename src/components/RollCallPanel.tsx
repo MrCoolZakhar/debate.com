@@ -24,7 +24,7 @@ export function FlagCircle({ country, size = 'md' }: { country: string; size?: '
   return (
     <div className={`relative ${box} rounded-full overflow-hidden bg-[#2E1E0F] shrink-0 flex items-center justify-center`}>
       {found
-        ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-[85%] h-[85%] object-contain" />
+        ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-[85%] h-[85%] object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
         : <span className="text-lg">🌐</span>}
     </div>
   );
@@ -136,7 +136,7 @@ function AddCountryInput({ committee, onAdd, onQueryChange }: { committee: Commi
                   i === 0 ? 'bg-[#7B4A1E]/20 text-white' : 'text-[#E8D5B7] hover:bg-[#2E1E0F]'
                 }`}
               >
-                <img src={getFlagUrl(c.code)} alt={c.code} className="w-5 h-5 object-contain shrink-0" />
+                <img src={getFlagUrl(c.code)} alt={c.code} className="w-5 h-5 object-contain shrink-0" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                 <span className="text-sm flex-1">{c.name}</span>
                 {i === 0 && <span className="text-[10px] text-[#7A5A38] shrink-0">Enter ↵</span>}
               </button>

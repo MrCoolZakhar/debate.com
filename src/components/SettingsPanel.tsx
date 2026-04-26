@@ -582,7 +582,7 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
                       >
                         <span className="text-xs text-[#7A5A38] w-5 text-right shrink-0">{idx + 1}</span>
                         {flagCode
-                          ? <img src={getFlagUrl(flagCode)} alt={flagCode} className="w-5 h-5 object-contain shrink-0" />
+                          ? <img src={getFlagUrl(flagCode)} alt={flagCode} className="w-5 h-5 object-contain shrink-0" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                           : <span className="text-lg shrink-0">🌐</span>}
                         <span className="flex-1 text-sm font-semibold text-white truncate">{d.country}</span>
                         <span className={`text-xs font-mono px-2 py-0.5 rounded-full shrink-0 ${d.status === 'absent' ? 'text-[#7A5A38]' : 'text-[#C4A882]'}`}>

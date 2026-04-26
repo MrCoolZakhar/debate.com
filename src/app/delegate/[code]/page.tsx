@@ -42,7 +42,7 @@ function formatTime(seconds: number): string {
 
 function flagFor(country: string) {
   const c = getCountryByName(country);
-  return c ? <img src={getFlagUrl(c.code)} alt={c.code} className="inline-block object-contain" style={{ width: '1em', height: '1em' }} /> : <Emoji size="1em">🌐</Emoji>;
+  return c ? <img src={getFlagUrl(c.code)} alt={c.code} className="inline-block object-contain" style={{ width: '1em', height: '1em' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <Emoji size="1em">🌐</Emoji>;
 }
 
 function autoDocCode(type: DocumentType, existingDocs: { type: DocumentType }[]): string {

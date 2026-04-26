@@ -8,7 +8,7 @@ import { sendMessage as sendMessageToDB } from '@/lib/committeeService';
 
 function isSystemLog(c: string) { return c.startsWith('__log__:'); }
 function displayContent(c: string) { return c.startsWith('[🎙️] ') ? c.slice(5) : c; }
-function flagFor(country: string): ReactNode { const c = getCountryByName(country); return c ? <img src={getFlagUrl(c.code)} alt={c.code} className="w-4 h-4 object-contain inline-block" /> : <Emoji size="1rem">🌐</Emoji>; }
+function flagFor(country: string): ReactNode { const c = getCountryByName(country); return c ? <img src={getFlagUrl(c.code)} alt={c.code} className="w-4 h-4 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <Emoji size="1rem">🌐</Emoji>; }
 function fmtTime(ts: Date) { return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
 
 type ConvKey = 'everyone' | string;

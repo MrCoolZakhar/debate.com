@@ -99,7 +99,7 @@ function ProposerInput({ candidates, value, onChange, blockedCountries }: {
     <div className="relative">
       {value && !open ? (
         <div className="flex items-center gap-3 bg-green-950/30 border border-green-800/30 rounded-xl px-4 py-3">
-          {(() => { const f = getCountryByName(value); return f ? <img src={getFlagUrl(f.code)} alt={f.code} className="w-5 h-5 object-contain inline-block" /> : <Emoji size="1.125rem">🌐</Emoji>; })()}
+          {(() => { const f = getCountryByName(value); return f ? <img src={getFlagUrl(f.code)} alt={f.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <Emoji size="1.125rem">🌐</Emoji>; })()}
           <span className="text-sm text-white flex-1">{value}</span>
           <button onClick={() => { setOpen(true); setQuery(''); onChange(''); inputRef.current?.focus(); }} className="text-xs text-[#7A5A38] hover:text-white transition-colors">change</button>
         </div>
@@ -126,7 +126,7 @@ function ProposerInput({ candidates, value, onChange, blockedCountries }: {
                   isBlocked ? 'opacity-50 cursor-not-allowed bg-[#150F09]' :
                   i === 0 ? 'bg-[#7B4A1E]/20 text-white' : 'text-[#E8D5B7] hover:bg-[#2E1E0F]'
                 }`}>
-                {found ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain inline-block" /> : <Emoji size="1.125rem">🌐</Emoji>}
+                {found ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <Emoji size="1.125rem">🌐</Emoji>}
                 <span className="text-sm flex-1">{country}</span>
                 {isBlocked
                   ? <span className="text-xs text-orange-400 shrink-0 font-semibold">Motion on floor</span>
@@ -516,7 +516,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
         <div className="flex items-center gap-2">
           <Emoji size={large ? '2.5rem' : '1.5rem'}>{meta.icon}</Emoji>
           <span className={`font-black text-white flex-1 ${large ? 'text-3xl' : 'text-lg'}`}>{meta.label}</span>
-          {f ? <img src={getFlagUrl(f.code)} alt={f.code} className={large ? 'w-10 h-10 object-contain inline-block' : 'w-6 h-6 object-contain inline-block'} /> : <Emoji size={large ? '2.5rem' : '1.5rem'}>🌐</Emoji>}
+          {f ? <img src={getFlagUrl(f.code)} alt={f.code} className={large ? 'w-10 h-10 object-contain inline-block' : 'w-6 h-6 object-contain inline-block'} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <Emoji size={large ? '2.5rem' : '1.5rem'}>🌐</Emoji>}
         </div>
 
         {/* Topic inline */}
@@ -940,7 +940,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
                               <DisruptivenessBadge type={m.type} />
                             </div>
                             <div className="flex items-center gap-1.5 mt-1">
-                              {proposerFlag ? <img src={getFlagUrl(proposerFlag.code)} alt={proposerFlag.code} className="w-5 h-5 object-contain inline-block" /> : <Emoji size="1rem">🌐</Emoji>}
+                              {proposerFlag ? <img src={getFlagUrl(proposerFlag.code)} alt={proposerFlag.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <Emoji size="1rem">🌐</Emoji>}
                               <span className="text-sm font-semibold text-white">{m.proposedBy}</span>
                             </div>
                             {m.topic && <p className="text-sm text-[#C4A882] mt-1 font-medium">"{m.topic}"</p>}
