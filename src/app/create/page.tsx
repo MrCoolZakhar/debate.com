@@ -7,6 +7,7 @@ import { createCommittee as createCommitteeInDB } from '@/lib/committeeService';
 import { useSettingsStore } from '@/lib/settingsStore';
 import { UN_COUNTRIES, getFlagUrl, getCountryByName } from '@/lib/countries';
 import { UNSC_MEMBERS, WHO_MEMBERS, IMF_MEMBERS, WORLD_BANK_MEMBERS, UNEP_MEMBERS } from '@/lib/presets';
+import { Emoji, InstitutionLogo } from '@/components/Emoji';
 
 const COMMITTEE_PRESETS = [
   { name: 'UN Security Council', acronym: 'UNSC', icon: '🛡️', members: UNSC_MEMBERS },
@@ -108,7 +109,7 @@ function CommitteeNameInput({ value, onChange, onPresetSelect }: {
                 i === 0 ? 'bg-[#7B4A1E]/20 text-white' : 'text-[#E8D5B7] hover:bg-[#2E1E0F]'
               }`}
             >
-              <span className="text-lg">{p.icon}</span>
+              <span className="text-lg"><Emoji size="1.125rem">{p.icon}</Emoji></span>
               <span className="text-sm flex-1">{p.name}</span>
               <span className="text-xs text-[#7A5A38] shrink-0">{p.acronym}</span>
               {i === 0 && <span className="text-xs text-[#7A5A38] shrink-0">↵</span>}
@@ -208,20 +209,20 @@ function CreatePageInner() {
             <p className="text-[#C4A882] text-sm mb-8">Select the type of committee you want to run.</p>
             <div className="flex flex-row gap-4 w-full max-w-4xl">
               <div className="flex-1 flex flex-col items-center justify-center bg-[#1A1209] border border-[#2E1E0F] rounded-3xl p-8 min-h-[300px] opacity-50 cursor-not-allowed relative transition-all hover:scale-[1.02]">
-                <span className="text-6xl mb-4">🗣️</span>
+                <span className="mb-4"><Emoji size="3.75rem">🗣️</Emoji></span>
                 <h2 className="text-xl font-black text-white mb-2">Regular Debate</h2>
                 <p className="text-[#C4A882] text-sm text-center mb-4">Traditional parliamentary debate</p>
                 <span className="px-3 py-1 bg-[#2E1E0F] border border-[#3D2A15] text-[#7A5A38] rounded-full text-xs font-semibold">Coming Soon</span>
               </div>
               <div onClick={() => setCommitteeMode('build')}
                 className="flex-1 flex flex-col items-center justify-center bg-[#1A1209] border-2 border-[#7B4A1E] rounded-3xl p-8 min-h-[300px] cursor-pointer hover:bg-[#2E1E0F] hover:border-[#C4A882] hover:scale-[1.04] transition-all group">
-                <span className="text-6xl mb-4">🌍</span>
+                <span className="mb-4"><Emoji size="3.75rem">🌍</Emoji></span>
                 <h2 className="text-xl font-black text-white mb-2">Model United Nations</h2>
                 <p className="text-[#C4A882] text-sm text-center mb-4">United Nations committee simulation</p>
                 <span className="px-4 py-2 bg-[#7B4A1E] group-hover:bg-[#8B5A2B] text-white rounded-xl text-sm font-bold transition-colors">Start →</span>
               </div>
               <div className="flex-1 flex flex-col items-center justify-center bg-[#1A1209] border border-[#2E1E0F] rounded-3xl p-8 min-h-[300px] opacity-50 cursor-not-allowed relative transition-all hover:scale-[1.02]">
-                <span className="text-6xl mb-4">⚡</span>
+                <span className="mb-4"><Emoji size="3.75rem">⚡</Emoji></span>
                 <h2 className="text-xl font-black text-white mb-2">Crisis Committee</h2>
                 <p className="text-[#C4A882] text-sm text-center mb-4">Fast-paced crisis scenarios</p>
                 <span className="px-3 py-1 bg-[#2E1E0F] border border-[#3D2A15] text-[#7A5A38] rounded-full text-xs font-semibold">Coming H2 2026</span>
@@ -260,7 +261,7 @@ function CreatePageInner() {
             </div>
             {isUNSC && (
               <div className="mb-3 px-4 py-2.5 bg-amber-900/20 border border-amber-700/40 rounded-xl text-amber-300 text-xs shrink-0">
-                🛡️ <strong>UNSC detected:</strong> P5 nations (China, France, Russia, UK, USA) will have veto voting power. You can configure this in <strong>Settings</strong> after the session starts.
+                <Emoji size="1em">🛡️</Emoji> <strong>UNSC detected:</strong> P5 nations (China, France, Russia, UK, USA) will have veto voting power. You can configure this in <strong>Settings</strong> after the session starts.
               </div>
             )}
 
@@ -298,7 +299,7 @@ function CreatePageInner() {
                         {search.trim() && !delegates.includes(search.trim()) && !available.some((c) => c.name.toLowerCase() === search.trim().toLowerCase()) && (
                           <button onMouseDown={(e) => { e.preventDefault(); addDelegate(search.trim()); setSearch(''); }}
                             className="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors text-[#E8D5B7] hover:bg-[#2E1E0F] border-t border-[#2E1E0F]">
-                            <span className="text-xl">🌐</span>
+                            <Emoji size="1.25rem">🌐</Emoji>
                             <span className="text-sm flex-1">{search.trim()}</span>
                             <span className="text-[10px] text-[#7B4A1E] shrink-0 font-semibold">Add custom</span>
                           </button>
@@ -351,7 +352,7 @@ function CreatePageInner() {
                 <div className="flex-1 bg-[#150F09] border border-[#2E1E0F] rounded-xl overflow-hidden mb-4 min-h-0">
                   {delegates.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full text-[#7A5A38] text-sm gap-2">
-                      <span className="text-3xl">🌍</span>
+                      <Emoji size="1.875rem">🌍</Emoji>
                       <span>No delegates added yet</span>
                     </div>
                   ) : (
@@ -360,7 +361,7 @@ function CreatePageInner() {
                         const found = getCountryByName(name);
                         return (
                           <div key={name} className="flex items-center gap-3 px-4 py-2.5 border-b border-[#2E1E0F]/50 last:border-0 hover:bg-[#2E1E0F] transition-colors group">
-                            {found ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain inline-block" /> : <span className="text-lg">🌐</span>}
+                            {found ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain inline-block" /> : <Emoji size="1.125rem">🌐</Emoji>}
                             <span className="text-sm text-white flex-1 truncate">{name}</span>
                             <button onClick={() => setDelegates((p) => p.filter((d) => d !== name))}
                               className="text-[#7A5A38] group-hover:text-red-500 transition-colors text-sm opacity-0 group-hover:opacity-100">✕</button>

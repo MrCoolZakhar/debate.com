@@ -7,6 +7,7 @@ import { Committee, CommitteeDocument, DocumentType, PendingMotionType, Speaking
 import ChatPanel from '@/components/ChatPanel';
 import { useSettingsStore } from '@/lib/settingsStore';
 import { getFlagUrl, getCountryByName } from '@/lib/countries';
+import { Emoji } from '@/components/Emoji';
 import {
   getCommitteeByCode,
   subscribeToCommittee,
@@ -41,7 +42,7 @@ function formatTime(seconds: number): string {
 
 function flagFor(country: string) {
   const c = getCountryByName(country);
-  return c ? <img src={getFlagUrl(c.code)} alt={c.code} className="inline-block object-contain" style={{ width: '1em', height: '1em' }} /> : <span>🌐</span>;
+  return c ? <img src={getFlagUrl(c.code)} alt={c.code} className="inline-block object-contain" style={{ width: '1em', height: '1em' }} /> : <Emoji size="1em">🌐</Emoji>;
 }
 
 function autoDocCode(type: DocumentType, existingDocs: { type: DocumentType }[]): string {
@@ -273,7 +274,7 @@ function InlinePdfViewer({ fileUrl, fileName }: { fileUrl: string; fileName: str
   return (
     <div className="space-y-1.5">
       <button onClick={() => setShow((v) => !v)} className="text-xs text-blue-400 hover:text-blue-300 transition-colors">
-        📎 {fileName} {show ? '▲' : '▼'}
+        <Emoji size="1em">📎</Emoji> {fileName} {show ? '▲' : '▼'}
       </button>
       {show && (
         <iframe src={fileUrl} title={fileName} className="w-full rounded-lg border border-[#2E1E0F]" style={{ height: '400px' }} />
@@ -382,7 +383,7 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
           <div className="flex items-center gap-2">
             <button onClick={() => fileInputRef.current?.click()}
               className="text-xs bg-[#150F09] border border-[#2E1E0F] hover:border-[#7B4A1E] text-[#C4A882] px-3 py-2 rounded-lg transition-colors">
-              {fileName ? `📎 ${fileName}` : '+ Attach file'}
+              {fileName ? <><Emoji size="1em">📎</Emoji>{` ${fileName}`}</> : '+ Attach file'}
             </button>
             {fileName && <button onClick={() => { setFileName(null); setFileUrl(null); }} className="text-xs text-[#7A5A38] hover:text-red-400">Remove</button>}
           </div>
@@ -685,7 +686,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     return (
       <div className="min-h-screen bg-[#0D0906] flex items-center justify-center">
         <div className="text-center">
-          <div className="text-4xl mb-4">🔍</div>
+          <div className="mb-4"><Emoji size="2.5rem">🔍</Emoji></div>
           <h1 className="text-2xl font-bold text-white mb-2">Session not found</h1>
           <p className="text-[#C4A882] mb-6">Code "{code}" is invalid or the session ended.</p>
           <Link href="/join" className="bg-[#7B4A1E] hover:bg-[#8B5A2B] text-white px-6 py-3 rounded-lg font-semibold transition-colors">Try Again</Link>
@@ -833,7 +834,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
             }}
             className={`relative text-xs px-3 py-1.5 rounded-lg transition-colors font-semibold shrink-0 ${showChat ? 'bg-[#7B4A1E] text-white' : 'bg-[#2E1E0F] text-[#C4A882] hover:text-white'}`}
           >
-            💬
+            <Emoji size="1em">💬</Emoji>
             {!showChat && (() => {
               const total = committee.messages.filter((m) => m.sender !== country && !m.content.startsWith('__log__:') && !m.isPrivate).length;
               const unread = total - (chatReadCounts['everyone'] ?? 0);
@@ -864,7 +865,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
 
       {sessionEnded && endedTab === 'ended' ? (
         <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
-          <div className="text-5xl mb-6">🏁</div>
+          <div className="mb-6"><Emoji size="3rem">🏁</Emoji></div>
           <h1 className="text-4xl font-black text-white mb-4">This committee has ended.</h1>
           <p className="text-xl text-[#C4A882] mb-2">{committee.name}</p>
           <p className="text-base text-[#7A5A38] mb-8">{committee.topic}</p>
@@ -992,7 +993,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                   <div className="flex-1 min-w-0">
                 <div className="text-xs font-mono text-[#7A5A38] mb-2">SESSION STATUS</div>
                 <div className={`text-2xl font-black mb-1 ${isCurrentSpeaker ? 'text-[#B8844A]' : isAdjourned ? 'text-red-400' : 'text-white'}`}>
-                  {isCurrentSpeaker ? '🎙️ You Have the Floor' : phaseDisplay}
+                  {isCurrentSpeaker ? <><Emoji size="1em">🎙️</Emoji>{' You Have the Floor'}</> : phaseDisplay}
                 </div>
 
 
@@ -1042,7 +1043,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                     <div className="text-xs text-[#7A5A38] font-mono">SPEAKERS LIST</div>
                     {!isOnSpeakersList && !isCurrentSpeaker && myDelegate?.status !== 'absent' && !sessionEnded && (
                       isGslRequestPending ? (
-                        <span className="text-xs text-[#B8844A] font-medium">⏳ Awaiting approval</span>
+                        <span className="text-xs text-[#B8844A] font-medium flex items-center gap-1"><Emoji size="0.875rem">⏳</Emoji> Awaiting approval</span>
                       ) : gslDenied ? (
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-red-400">Your request was denied</span>
@@ -1156,7 +1157,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
             </div>
             {/* Overlay */}
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0D0906]/60 backdrop-blur-sm">
-              <div className="text-5xl mb-6">🚧</div>
+              <div className="mb-6"><Emoji size="3rem">🚧</Emoji></div>
               <div className="text-3xl md:text-4xl font-black text-white tracking-tight text-center px-6">
                 FEATURE IS COMING
               </div>

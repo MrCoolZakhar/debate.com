@@ -7,6 +7,7 @@ import RollCallPanel, { FlagCircle } from '@/components/RollCallPanel';
 import MotionsModal from '@/components/MotionsModal';
 import DocumentsModal from '@/components/DocumentsModal';
 import { getFlagUrl, getCountryByName, UN_COUNTRIES } from '@/lib/countries';
+import { Emoji } from '@/components/Emoji';
 import { SettingsPanel } from '@/components/SettingsPanel';
 import { useSettingsStore } from '@/lib/settingsStore';
 import ChatPanel from '@/components/ChatPanel';
@@ -142,7 +143,7 @@ function AddSpeakerInput({ committee, onAdd }: { committee: Committee; onAdd: (i
                   <span className="shrink-0 w-6 h-6 inline-flex items-center justify-center">
                   {found
                     ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain" />
-                    : <span className="text-lg">🌐</span>}
+                    : <Emoji size="1.125rem">🌐</Emoji>}
                 </span>
                   <span className="text-sm flex-1 text-[#7A5A38]">{d.country}</span>
                   <span className="text-xs text-[#7A5A38]">already on list</span>
@@ -156,7 +157,7 @@ function AddSpeakerInput({ committee, onAdd }: { committee: Committee; onAdd: (i
                 <span className="shrink-0 w-6 h-6 inline-flex items-center justify-center">
                   {found
                     ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain" />
-                    : <span className="text-lg">🌐</span>}
+                    : <Emoji size="1.125rem">🌐</Emoji>}
                 </span>
                 <span className="text-sm">{d.country}</span>
                 {isFirst && <span className="ml-auto text-xs text-[#7A5A38]">Enter ↵</span>}
@@ -229,7 +230,7 @@ function RtrCountryInput({
                 <span className="shrink-0 w-5 h-5 inline-flex items-center justify-center">
                 {found
                   ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-4 h-4 object-contain" />
-                  : <span className="text-sm">🌐</span>}
+                  : <Emoji size="0.875rem">🌐</Emoji>}
               </span>
                 <span className="flex-1">{d.country}</span>
                 {i === 0 && <span className="text-[#7A5A38] shrink-0">Enter ↵</span>}
@@ -339,7 +340,7 @@ function CaucusQueueSidebar({ committee, onRemove, onReorder, lastSpeakerDelegat
                 <span className="shrink-0 w-6 h-6 inline-flex items-center justify-center">
                 {found
                   ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain" />
-                  : <span className="text-lg">🌐</span>}
+                  : <Emoji size="1.125rem">🌐</Emoji>}
               </span>
                 <span className="flex-1 text-sm text-white line-clamp-2 break-words whitespace-normal leading-tight">{s.country}</span>
                 {lastSpeakerDelegateId && s.delegateId === lastSpeakerDelegateId && (
@@ -410,7 +411,7 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
                   <span className="shrink-0 w-6 h-6 inline-flex items-center justify-center">
                   {found
                     ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain" />
-                    : <span className="text-lg">🌐</span>}
+                    : <Emoji size="1.125rem">🌐</Emoji>}
                 </span>
                   <span className="text-sm flex-1 text-[#7A5A38]">{d.country}</span>
                   <span className="text-xs text-[#7A5A38]">{isCurrent ? 'currently speaking' : 'already on list'}</span>
@@ -424,7 +425,7 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
                 <span className="shrink-0 w-6 h-6 inline-flex items-center justify-center">
                   {found
                     ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain" />
-                    : <span className="text-lg">🌐</span>}
+                    : <Emoji size="1.125rem">🌐</Emoji>}
                 </span>
                 <span className="text-sm flex-1">{d.country}</span>
                 {spoke && <span className="text-[10px] text-yellow-500 shrink-0">already spoke</span>}
@@ -733,7 +734,7 @@ function ModeratedCaucusMain({
                     const f = getCountryByName(committee.currentSpeaker.country);
                     return f
                       ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ width: '7rem', height: '7rem', objectFit: 'contain', position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }} />
-                      : <span style={{ fontSize: '5rem', lineHeight: '1', position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>🌐</span>;
+                      : <Emoji size="5rem" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>🌐</Emoji>;
                   })()}
                 </div>
               </div>
@@ -797,7 +798,7 @@ function ModeratedCaucusMain({
                 onRemove={handleCaucusRemoveFromQueue}
               />
             )}
-            <div className="text-7xl mb-6">🎙</div>
+            <div className="mb-6"><Emoji size="4.375rem">🎙</Emoji></div>
             <h2 className="text-3xl font-black text-white mb-2">No Current Speaker</h2>
             <p className="text-[#C4A882] mb-4 text-center">Add delegates below, then call the first speaker.</p>
             {!sessionEnded && (
@@ -901,7 +902,7 @@ function ModeratedCaucusMain({
 function SessionEndedContent({ committee, hoursRemaining }: { committee: Committee; hoursRemaining: number | null }) {
   return (
     <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
-      <div className="text-5xl mb-6">🏁</div>
+      <div className="mb-6"><Emoji size="3rem">🏁</Emoji></div>
       <h1 className="text-5xl font-black text-white mb-4">This committee has ended.</h1>
       <p className="text-xl text-[#C4A882] mb-2">{committee.name}</p>
       <p className="text-lg text-[#7A5A38] mb-8">{committee.topic}</p>
@@ -1681,7 +1682,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               const found = getCountryByName(m.proposedBy);
               const flagEl = found
                 ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain inline-block" />
-                : <span className="text-lg">🌐</span>;
+                : <Emoji size="1.125rem">🌐</Emoji>;
               return (
                 <div key={m.id} className="flex items-center gap-3 text-sm">
                   <span className="text-[#B8844A] font-bold shrink-0">🚪 Join Request</span>
@@ -1711,7 +1712,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               const found = getCountryByName(m.proposedBy);
               const flagEl = found
                 ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain inline-block" />
-                : <span className="text-lg">🌐</span>;
+                : <Emoji size="1.125rem">🌐</Emoji>;
               return (
                 <div key={m.id} className="flex items-center gap-3 text-sm">
                   <span className="text-green-400 font-bold shrink-0">🎙️ GSL Request</span>
@@ -1856,7 +1857,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                     <div className="bg-[#1A1209] border border-[#7B4A1E]/40 rounded-3xl px-12 py-10 max-w-lg w-full shadow-2xl">
                       {isTdTParent ? (
                         <>
-                          <div className="text-5xl mb-5">🔄</div>
+                          <div className="mb-5"><Emoji size="3rem">🔄</Emoji></div>
                           <p className="text-xs font-mono text-[#7A5A38] tracking-widest mb-3">TOUR DE TABLE STARTING</p>
                           <h1 className="text-3xl font-black text-white mb-2">Tour de Table</h1>
                           <p className="text-[#C4A882] text-sm mb-6">
@@ -1889,7 +1890,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                         </>
                       ) : (
                         <>
-                          <div className="text-5xl mb-5">🎙️</div>
+                          <div className="mb-5"><Emoji size="3rem">🎙️</Emoji></div>
                           <p className="text-xs font-mono text-[#7A5A38] tracking-widest mb-3">MODERATED CAUCUS STARTING</p>
                           <h1 className="text-3xl font-black text-white mb-2">{committee.caucus.purpose || 'Moderated Caucus'}</h1>
                           <p className="text-[#C4A882] text-sm mb-6">{committee.topic}</p>
@@ -1970,7 +1971,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                                 const f = getCountryByName(committee.currentSpeaker.country);
                                 return f
                                   ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ width: '7rem', height: '7rem', objectFit: 'contain', position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }} />
-                                  : <span style={{ fontSize: '5rem', lineHeight: '1', position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>🌐</span>;
+                                  : <Emoji size="5rem" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>🌐</Emoji>;
                               })()}
                             </div>
                           </div>
@@ -2047,7 +2048,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                             onRemove={handleRemoveFromSpeakersList}
                           />
                         )}
-                        <div className="text-7xl mb-6">🎙</div>
+                        <div className="mb-6"><Emoji size="4.375rem">🎙</Emoji></div>
                         <h2 className="text-3xl font-black text-white mb-2">No Current Speaker</h2>
                         <p className="text-[#C4A882] mb-4 text-center">Add delegates below, then call the first speaker.</p>
                         {committee.speakersList.length === 1 && (
@@ -2224,7 +2225,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                     const f = getCountryByName(rtrCountry);
                     return f
                       ? <img src={getFlagUrl(f.code)} alt={f.code} className="w-6 h-6 object-contain inline-block" />
-                      : <span className="text-xl">🌐</span>;
+                      : <Emoji size="1.25rem">🌐</Emoji>;
                   })()}
                   <span className="text-sm text-white font-bold flex-1">{rtrCountry}</span>
                   <span className="text-xs text-orange-400 font-mono">Right of Reply</span>
