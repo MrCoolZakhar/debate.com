@@ -140,19 +140,20 @@ function ProposerInput({ candidates, value, onChange, blockedCountries }: {
 }
 
 // ── Raise Motion Form ─────────────────────────────────────────────────────────
-function RaiseMotionForm({ committee, typeMeta, onBack, onRaised }: {
+function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion }: {
   committee: Committee;
   typeMeta: TypeMeta;
   onBack: () => void;
   onRaised: (motion: Omit<PendingMotion, 'id' | 'disruptiveness'>) => void;
+  editingMotion?: PendingMotion | null;
 }) {
-  const [type, setType] = useState<PendingMotionType | null>('moderated');
-  const [proposer, setProposer] = useState('');
-  const [totalMinsStr, setTotalMinsStr] = useState('10');
-  const [totalSecsStr, setTotalSecsStr] = useState('0');
-  const [speakingTimeStr, setSpeakingTimeStr] = useState('60');
-  const [topic, setTopic] = useState('');
-  const [tourOrder, setTourOrder] = useState<'asc' | 'desc' | 'custom'>('asc');
+  const [type, setType] = useState<PendingMotionType | null>(editingMotion?.type ?? 'moderated');
+  const [proposer, setProposer] = useState(editingMotion?.proposedBy ?? '');
+  const [totalMinsStr, setTotalMinsStr] = useState(editingMotion ? String(Math.floor(editingMotion.totalTime / 60)) : '10');
+  const [totalSecsStr, setTotalSecsStr] = useState(editingMotion ? String(editingMotion.totalTime % 60) : '0');
+  const [speakingTimeStr, setSpeakingTimeStr] = useState(editingMotion ? String(editingMotion.speakingTime) : '60');
+  const [topic, setTopic] = useState(editingMotion?.topic ?? '');
+  const [tourOrder, setTourOrder] = useState<'asc' | 'desc' | 'custom'>(editingMotion?.tourOrder ?? 'asc');
   const [error, setError] = useState('');
 
   const presentCountries = committee.delegates.filter((d) => d.status !== 'absent').map((d) => d.country);
@@ -211,7 +212,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised }: {
       {/* PERMANENT NOTE: No scroll in raise motion form. If content doesn't fit, reduce spacing
           or lay fields side-by-side — never re-add overflow-y-auto here. */}
       <div className="flex-1 px-7 pt-0 pb-4 space-y-4">
-        <h2 className="text-3xl font-black text-white">Raise a Motion</h2>
+        <h2 className="text-3xl font-black text-white">{editingMotion ? 'Edit Motion' : 'Raise a Motion'}</h2>
 
         {/* Type tabs — always shown */}
         <div className="flex gap-1.5 flex-wrap items-stretch">
@@ -420,13 +421,14 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised }: {
 }
 
 // ── Voting View ───────────────────────────────────────────────────────────────
-function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBack, pendingIds }: {
+function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBack, onEdit, pendingIds }: {
   committee: Committee;
   typeMeta: TypeMeta;
   onAccepted: (motion: PendingMotion) => void;
   onAllDone: () => void;
   onRemove: (motionId: string) => void;
   onBack: () => void;
+  onEdit: (motionId: string) => void;
   pendingIds: Set<string>;
 }) {
   // Filter out join-request pseudo-motions — those are handled in the chair banner, not here
@@ -509,10 +511,17 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
             : 'p-4 space-y-2 border border-[#2E1E0F]'
         }`}
       >
-        {/* Header: icon + type label + flag in top-right */}
+        {/* Header: icon + type label + modify button + flag in top-right */}
         <div className="flex items-center gap-2">
           <span className={large ? 'text-4xl' : 'text-2xl'}>{meta.icon}</span>
           <span className={`font-black text-white flex-1 ${large ? 'text-3xl' : 'text-lg'}`}>{meta.label}</span>
+          <button
+            onClick={(e) => { e.stopPropagation(); onEdit(m.id); }}
+            title="Edit this motion"
+            className="p-1.5 rounded-lg bg-[#2E1E0F] hover:bg-[#3D2A15] border border-[#2E1E0F] hover:border-[#7B4A1E] text-[#7A5A38] hover:text-[#C4A882] transition-colors text-xs shrink-0"
+          >
+            ⚙
+          </button>
           {f ? <img src={getFlagUrl(f.code)} alt={f.code} className={large ? 'w-10 h-10 object-contain inline-block' : 'w-6 h-6 object-contain inline-block'} /> : <span className={large ? 'text-4xl' : 'text-2xl'}>🌐</span>}
         </div>
 
@@ -574,16 +583,8 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
 
   return (
     <div className="px-7 pb-7 space-y-3 flex flex-col h-full overflow-hidden">
-      <div className="flex items-center justify-between shrink-0">
+      <div className="flex items-center shrink-0">
         <h2 className="text-2xl font-black text-white">Vote on Motions</h2>
-        <button
-          onClick={onBack}
-          title="Modify motions"
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#2E1E0F] hover:bg-[#3D2A15] border border-[#3D2A15] hover:border-[#7B4A1E] text-[#C4A882] hover:text-white transition-colors text-xs font-semibold"
-        >
-          <span>⚙</span>
-          <span>Modify</span>
-        </button>
       </div>
       <div className="flex items-center gap-2 px-3 py-2 bg-[#150F09] border border-[#2E1E0F] rounded-xl text-xs text-[#7A5A38] shrink-0">
         <span>💡</span>
@@ -622,6 +623,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
   const [view, setView] = useState<ModalView>(pending.length === 0 ? 'raise' : 'vote');
   const [specialVoteMotion, setSpecialVoteMotion] = useState<PendingMotion | null>(null);
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
+  const [editingMotionId, setEditingMotionId] = useState<string | null>(null);
   const update = (updater: (c: Committee) => Committee) => onCommitteeUpdate?.(updater);
 
   const handleRaised = (motion: Omit<PendingMotion, 'id' | 'disruptiveness'>) => {
@@ -661,6 +663,13 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
     if (!motionId.startsWith('temp-')) {
       removePendingMotionInDB(motionId);
     }
+  };
+
+  const handleEdited = (motion: Omit<PendingMotion, 'id' | 'disruptiveness'>) => {
+    if (!editingMotionId) return;
+    handleRemove(editingMotionId);
+    setEditingMotionId(null);
+    handleRaised(motion);
   };
 
   const handleMotionAccepted = async (motion: PendingMotion) => {
@@ -739,7 +748,11 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
           speakingTime: motion.speakingTime, speakerTimeRemaining: motion.speakingTime,
           currentSpeaker: null, proposerPosition: null, spokenCountries: [],
         };
-        const caucusQueue: { delegateId: string; country: string }[] = [];
+        // Numbered placeholder queue — "Speaker 1", "Speaker 2", etc.
+        const caucusQueue = alphabetical.map((_, i) => ({
+          delegateId: `room-order-${i + 1}`,
+          country: `Speaker ${i + 1}`,
+        }));
         update((c) => ({ ...c, phase: 'moderated-caucus', caucus, pendingMotions: [], caucusQueue, currentSpeaker: null }));
         onClose();
         clearPendingMotionsInDB(committee.id);
@@ -852,7 +865,15 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
           <button onClick={onClose} className="text-[#7A5A38] hover:text-white transition-colors text-xl leading-none">✕</button>
         </div>
         <div className="flex-1 min-h-0 pt-2 flex flex-col">
-          {view === 'raise' && <RaiseMotionForm committee={committee} typeMeta={typeMeta} onBack={() => setView(pending.length > 0 ? 'vote' : 'list')} onRaised={handleRaised} />}
+          {view === 'raise' && (
+            <RaiseMotionForm
+              committee={committee}
+              typeMeta={typeMeta}
+              onBack={() => { setEditingMotionId(null); setView(pending.length > 0 ? 'vote' : 'list'); }}
+              onRaised={editingMotionId ? handleEdited : handleRaised}
+              editingMotion={editingMotionId ? (pending.find((m) => m.id === editingMotionId) ?? null) : null}
+            />
+          )}
           {view === 'vote' && (
             <VotingView
               committee={committee}
@@ -861,6 +882,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
               onAllDone={() => { setView('list'); onClose(); }}
               onRemove={handleRemove}
               onBack={() => setView('raise')}
+              onEdit={(motionId) => { setEditingMotionId(motionId); setView('raise'); }}
               pendingIds={pendingIds}
             />
           )}
