@@ -412,7 +412,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion 
           {error && <p className="text-red-400 text-sm font-medium mb-3">{error}</p>}
           <button onClick={submit} disabled={!canSubmit()}
             className="w-full bg-[#7B4A1E] hover:bg-[#8B5A2B] disabled:bg-[#2E1E0F] disabled:text-[#7A5A38] text-white py-5 rounded-2xl text-base font-black transition-colors">
-            Raise Motion →
+            {editingMotion ? 'Edit Motion →' : 'Raise Motion →'}
           </button>
         </div>
       )}
@@ -518,7 +518,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
           <button
             onClick={(e) => { e.stopPropagation(); onEdit(m.id); }}
             title="Edit this motion"
-            className="p-1.5 rounded-lg bg-[#2E1E0F] hover:bg-[#3D2A15] border border-[#2E1E0F] hover:border-[#7B4A1E] text-[#7A5A38] hover:text-[#C4A882] transition-colors text-xs shrink-0"
+            className="text-[#7A5A38] hover:text-[#C4A882] transition-colors text-xl shrink-0 leading-none"
           >
             ⚙
           </button>
@@ -667,9 +667,35 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
 
   const handleEdited = (motion: Omit<PendingMotion, 'id' | 'disruptiveness'>) => {
     if (!editingMotionId) return;
-    handleRemove(editingMotionId);
+    const oldId = editingMotionId;
+
+    // Remove old motion from local state immediately (same as handleRemove but inline
+    // so committee.pendingMotions is clean before the re-add, avoiding the duplicate check)
+    update((c) => ({ ...c, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== oldId) }));
+    if (!oldId.startsWith('temp-')) removePendingMotionInDB(oldId);
+
+    // Add replacement — same logic as handleRaised but NO duplicate check
+    const tempId = `temp-${Date.now()}`;
+    const base: Record<string, number> = {
+      'end-debate': 6_000_000, 'suspend-debate': 5_000_000,
+      consultation: 4_000_000, tour: 3_000_000, unmoderated: 2_000_000, moderated: 1_000_000,
+    };
+    const disruptiveness = (base[motion.type] ?? 0) + motion.totalTime;
+
+    setPendingIds((prev) => new Set([...prev, tempId]));
+    update((c) => ({ ...c, pendingMotions: [...(c.pendingMotions ?? []), { ...motion, id: tempId, disruptiveness }] }));
+
+    addPendingMotionInDB(committee.id, motion).then((realId) => {
+      if (!realId) return;
+      update((c) => ({
+        ...c,
+        pendingMotions: (c.pendingMotions ?? []).map((m) => m.id === tempId ? { ...m, id: realId } : m),
+      }));
+      setPendingIds((prev) => { const next = new Set(prev); next.delete(tempId); return next; });
+    });
+
     setEditingMotionId(null);
-    handleRaised(motion);
+    setView('vote');
   };
 
   const handleMotionAccepted = async (motion: PendingMotion) => {
@@ -871,7 +897,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
               typeMeta={typeMeta}
               onBack={() => { setEditingMotionId(null); setView(pending.length > 0 ? 'vote' : 'list'); }}
               onRaised={editingMotionId ? handleEdited : handleRaised}
-              editingMotion={editingMotionId ? (pending.find((m) => m.id === editingMotionId) ?? null) : null}
+              editingMotion={editingMotionId ? ((committee.pendingMotions ?? []).find((m) => m.id === editingMotionId) ?? null) : null}
             />
           )}
           {view === 'vote' && (
