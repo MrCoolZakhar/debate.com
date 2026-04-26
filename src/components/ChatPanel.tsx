@@ -1,13 +1,14 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useMemo, ReactNode } from 'react';
+import { Emoji } from '@/components/Emoji';
 import { Committee, ChatMessage } from '@/lib/types';
 import { getFlagUrl, getCountryByName } from '@/lib/countries';
 import { sendMessage as sendMessageToDB } from '@/lib/committeeService';
 
 function isSystemLog(c: string) { return c.startsWith('__log__:'); }
 function displayContent(c: string) { return c.startsWith('[🎙️] ') ? c.slice(5) : c; }
-function flagFor(country: string): ReactNode { const c = getCountryByName(country); return c ? <img src={getFlagUrl(c.code)} alt={c.code} className="w-4 h-4 object-contain inline-block" /> : '🌐'; }
+function flagFor(country: string): ReactNode { const c = getCountryByName(country); return c ? <img src={getFlagUrl(c.code)} alt={c.code} className="w-4 h-4 object-contain inline-block" /> : <Emoji size="1rem">🌐</Emoji>; }
 function fmtTime(ts: Date) { return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
 
 type ConvKey = 'everyone' | string;
@@ -326,7 +327,7 @@ export default function ChatPanel({ committee, senderName, isChair = false, onCl
                 className={`w-full text-left px-3 py-3 border-b border-[#2E1E0F] transition-colors ${isActive ? 'bg-[#3D2A15] border-l-2 border-l-[#7B4A1E]' : 'hover:bg-[#1A1209]'}`}
               >
                 <div className="flex items-center gap-2">
-                  <span className="text-xl shrink-0">{conv.emoji}</span>
+                  <span className="text-xl shrink-0">{typeof conv.emoji === 'string' ? <Emoji size="1.25rem">{conv.emoji}</Emoji> : conv.emoji}</span>
                   <span className="text-sm font-bold text-white truncate flex-1">{conv.label}</span>
                   {unread > 0 && (
                     <span className="text-[10px] bg-[#7B4A1E] text-white rounded-full px-1.5 py-0.5 font-bold shrink-0 min-w-[18px] text-center">
@@ -364,7 +365,7 @@ export default function ChatPanel({ committee, senderName, isChair = false, onCl
                   onClick={() => startDmThread(o)}
                   className={`w-full text-left px-2 py-1.5 rounded-lg text-sm text-[#E8D5B7] flex items-center gap-2 transition-colors ${i === dmHighlight ? 'bg-[#3D2A15]' : 'hover:bg-[#3D2A15]'}`}
                 >
-                  <span className="text-base">{o.emoji}</span>
+                  <span className="text-base">{typeof o.emoji === 'string' ? <Emoji size="1rem">{o.emoji}</Emoji> : o.emoji}</span>
                   <span className="truncate">{o.label}</span>
                 </button>
               ))}
@@ -381,7 +382,7 @@ export default function ChatPanel({ committee, senderName, isChair = false, onCl
           onClick={() => { setShowDmPicker((v) => !v); setDmSearch(''); setDmHighlight(0); }}
           className={`mx-3 mt-2 mb-1 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1.5 border ${showDmPicker ? 'bg-[#7B4A1E] border-[#8B5A2B] text-white' : 'bg-[#150F09] border-[#2E1E0F] text-[#C4A882] hover:border-[#7B4A1E]'}`}
         >
-          ✏️ New message
+          <Emoji size="0.875rem">✏️</Emoji> New message
         </button>
 
         {/* Quick-jump to current speaker (chair only) */}
@@ -391,7 +392,7 @@ export default function ChatPanel({ committee, senderName, isChair = false, onCl
             onClick={() => selectConv(currentSpeaker.country)}
             className="mx-3 mb-3 py-1.5 rounded-lg text-xs font-semibold bg-orange-900/20 border border-orange-700/30 text-orange-300 hover:bg-orange-800/30 transition-colors flex items-center gap-1.5"
           >
-            <span>🎙️</span>
+            <Emoji size="0.875rem">🎙️</Emoji>
             <span className="truncate">{currentSpeaker.country}</span>
           </button>
         )}
@@ -402,7 +403,7 @@ export default function ChatPanel({ committee, senderName, isChair = false, onCl
 
         {/* Thread header */}
         <div className="px-4 py-3 border-b border-[#2E1E0F] shrink-0 flex items-center gap-2.5">
-          <span className="text-2xl">{activeConvObj.emoji}</span>
+          <span className="text-2xl">{typeof activeConvObj.emoji === 'string' ? <Emoji size="1.5rem">{activeConvObj.emoji}</Emoji> : activeConvObj.emoji}</span>
           <div className="min-w-0 flex-1">
             <h3 className="font-black text-white text-base truncate">{activeConvObj.label}</h3>
             <p className="text-xs text-[#7A5A38]">{displayMessages.length} message{displayMessages.length !== 1 ? 's' : ''}</p>
@@ -420,7 +421,7 @@ export default function ChatPanel({ committee, senderName, isChair = false, onCl
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 min-h-0">
           {displayMessages.length === 0 ? (
             <div className="text-center py-12 text-[#7A5A38]">
-              <div className="text-3xl mb-3">💬</div>
+              <div className="mb-3"><Emoji size="1.875rem">💬</Emoji></div>
               <p className="text-base">No messages yet</p>
             </div>
           ) : (
@@ -434,7 +435,7 @@ export default function ChatPanel({ committee, senderName, isChair = false, onCl
                   <div className={`max-w-[75%] flex flex-col gap-1 ${isMe ? 'items-end' : 'items-start'}`}>
                     <div className={`flex items-center gap-2 flex-wrap ${isMe ? 'justify-end' : 'justify-start'}`}>
                       {!isMe && (
-                        <span className="text-2xl">{isChairMsg ? '🪑' : flagFor(m.sender)}</span>
+                        <span className="text-2xl">{isChairMsg ? <Emoji size="1.5rem">🪑</Emoji> : flagFor(m.sender)}</span>
                       )}
                       <span className={`text-base font-black ${isChairMsg ? 'text-[#B8844A]' : isMe ? 'text-[#C4A882]' : 'text-white'}`}>
                         {isMe ? 'You' : m.sender}{isChairMsg && !isMe && ' · Chair'}

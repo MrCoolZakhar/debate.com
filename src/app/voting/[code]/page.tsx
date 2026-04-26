@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Committee, DelegateStatus } from '@/lib/types';
 import { getCountryByName, getFlagUrl } from '@/lib/countries';
+import { Emoji } from '@/components/Emoji';
 import { getCommitteeByCode, setPhase as setPhaseInDB, setDelegateStatus as setDelegateStatusInDB, updateDocumentStatus as updateDocumentStatusInDB } from '@/lib/committeeService';
 import { useSettingsStore } from '@/lib/settingsStore';
 import { SettingsPanel } from '@/components/SettingsPanel';
@@ -36,7 +37,7 @@ function getFlag(country: string) {
   const found = getCountryByName(country);
   return found
     ? <img src={getFlagUrl(found.code)} alt={found.code} className="inline-block object-contain" style={{ width: '1em', height: '1em' }} />
-    : <span>🌐</span>;
+    : <Emoji size="1em">🌐</Emoji>;
 }
 
 function VoteScale({ forCount, againstCount, totalVoted }: {
@@ -143,7 +144,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     return (
       <div className="min-h-screen bg-[#0D0906] flex items-center justify-center">
         <div className="text-center">
-          <div className="text-4xl mb-4">🔍</div>
+          <div className="mb-4"><Emoji size="2.5rem">🔍</Emoji></div>
           <h1 className="text-2xl font-bold text-white mb-2">Committee not found</h1>
           <p className="text-[#C4A882] mb-6">Code &ldquo;{code}&rdquo; is invalid or the session ended.</p>
           <Link href="/" className="bg-[#7B4A1E] hover:bg-[#8B5A2B] text-white px-6 py-3 rounded-lg font-semibold transition-colors">
@@ -317,7 +318,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                   status === 'present' ? 'bg-green-950/30 border border-green-800/30' :
                   'bg-blue-950/30 border border-blue-800/30'
                 }`}>
-                  {(() => { const f = getCountryByName(d.country); return f ? <img src={getFlagUrl(f.code)} alt={f.code} className="w-5 h-5 object-contain inline-block" /> : <span>🌐</span>; })()}
+                  {(() => { const f = getCountryByName(d.country); return f ? <img src={getFlagUrl(f.code)} alt={f.code} className="w-5 h-5 object-contain inline-block" /> : <Emoji size="1.25rem">🌐</Emoji>; })()}
                   <span className="flex-1 text-sm text-white truncate">{d.country}</span>
                   <button
                     onClick={() => cycleStatus(d.id)}
@@ -499,7 +500,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       {/* ── All voted — proceed screen ── */}
       {phase === 'voting' && !currentDelegate && (
         <div className="flex-1 flex flex-col items-center justify-center px-8 gap-6">
-          <div className="text-6xl">🗳️</div>
+          <Emoji size="3.75rem">🗳️</Emoji>
           <h2 className="text-3xl font-black text-white">
             All {presentDelegates.length} delegates have voted
           </h2>
@@ -666,7 +667,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
               )}
             </div>
             {p5Veto && (
-              <p className="text-red-400 text-sm mt-4 font-semibold">🛡️ P5 veto exercised</p>
+              <p className="text-red-400 text-sm mt-4 font-semibold flex items-center gap-1 justify-center"><Emoji size="1em">🛡️</Emoji> P5 veto exercised</p>
             )}
             {unanimousFail && (
               <p className="text-red-400 text-sm mt-4 font-semibold">⚠️ Unanimous vote required — failed</p>

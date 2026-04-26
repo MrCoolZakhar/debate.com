@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useRef, useEffect, KeyboardEvent } from 'react';
+import React, { useState, useRef, useEffect, KeyboardEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { Committee, CommitteeDocument, DocumentType, DocumentStatus } from '@/lib/types';
 import { getCountryByName, getFlagUrl } from '@/lib/countries';
+import { Emoji } from '@/components/Emoji';
 import { useSettingsStore } from '@/lib/settingsStore';
 import {
   addDocument as addDocumentInDB,
@@ -98,7 +99,7 @@ function StageTimer({
   label, color, totalSeconds, doc, showDocument,
   onComplete, onToggleDocument,
 }: {
-  label: string; color: string; totalSeconds: number;
+  label: React.ReactNode; color: string; totalSeconds: number;
   doc: CommitteeDocument; showDocument: boolean;
   onComplete: () => void; onToggleDocument: () => void;
 }) {
@@ -180,7 +181,7 @@ function StageTimer({
         <div className="mt-8 w-full max-w-xl bg-[#1A1209] border border-[#2E1E0F] rounded-2xl p-6 text-center">
           <p className="text-[#7A5A38] text-sm">No document content saved. Delegates can view via shared file.</p>
           {doc.fileUrl && doc.fileName && (
-            <a href={doc.fileUrl} download={doc.fileName} className="mt-3 inline-block text-blue-400 hover:text-blue-300 text-sm">📎 {doc.fileName}</a>
+            <a href={doc.fileUrl} download={doc.fileName} className="mt-3 inline-block text-blue-400 hover:text-blue-300 text-sm"><Emoji size="1em">📎</Emoji> {doc.fileName}</a>
           )}
         </div>
       )}
@@ -402,7 +403,7 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
         <label className="block text-sm font-semibold text-[#C4A882] mb-1.5">Attachment <span className="text-[#7A5A38] font-normal">(optional)</span></label>
         {fileName ? (
           <div className="flex items-center gap-2 bg-[#150F09] border border-[#2E1E0F] rounded-xl px-4 py-3">
-            <span className="text-sm text-white flex-1 truncate">📎 {fileName}</span>
+            <span className="text-sm text-white flex-1 truncate"><Emoji size="1em">📎</Emoji> {fileName}</span>
             <button onClick={() => { setFileName(null); setFileUrl(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
               className="text-[#7A5A38] hover:text-red-500 transition-colors text-sm">✕</button>
           </div>
@@ -448,11 +449,11 @@ function TimingSetup({ doc, onStart, onSkip }: {
 
       <div className="w-full max-w-sm space-y-4">
         {[
-          { label: '📖 Reading Time', value: readingMins, set: setReadingMins, color: 'text-[#B8844A]', note: 'Delegates read the document' },
-          { label: '🎤 Presentation', value: presentationMins, set: setPresentationMins, color: 'text-purple-400', note: 'Sponsors present the document' },
-          { label: '❓ Q&A', value: qaMins, set: setQaMins, color: 'text-blue-400', note: isWP ? 'Optional for Working Papers' : 'Questions from delegates' },
-        ].map(({ label, value, set, color, note }) => (
-          <div key={label} className="bg-[#1A1209] border border-[#2E1E0F] rounded-xl p-4">
+          { key: 'reading', label: <><Emoji size="1em">📖</Emoji>{' Reading Time'}</>, value: readingMins, set: setReadingMins, color: 'text-[#B8844A]', note: 'Delegates read the document' },
+          { key: 'presentation', label: <><Emoji size="1em">🎤</Emoji>{' Presentation'}</>, value: presentationMins, set: setPresentationMins, color: 'text-purple-400', note: 'Sponsors present the document' },
+          { key: 'qa', label: <><Emoji size="1em">❓</Emoji>{' Q&A'}</>, value: qaMins, set: setQaMins, color: 'text-blue-400', note: isWP ? 'Optional for Working Papers' : 'Questions from delegates' },
+        ].map(({ key, label, value, set, color, note }) => (
+          <div key={key} className="bg-[#1A1209] border border-[#2E1E0F] rounded-xl p-4">
             <div className="flex items-center justify-between mb-1">
               <span className={`font-bold text-sm ${color}`}>{label}</span>
               <div className="flex items-center gap-2">
@@ -508,14 +509,14 @@ function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation
           </div>
           <p className="text-sm font-bold text-white leading-snug">{doc.title}</p>
         </div>
-        <button onClick={() => onRemove(doc.id)} className="text-[#7A5A38] hover:text-red-500 transition-colors text-sm shrink-0" title="Delete">🗑</button>
+        <button onClick={() => onRemove(doc.id)} className="text-[#7A5A38] hover:text-red-500 transition-colors text-sm shrink-0" title="Delete"><Emoji size="1em">🗑</Emoji></button>
       </div>
       <div className="text-xs text-[#C4A882]"><span className="font-semibold">Sponsors: </span>{doc.sponsors.join(', ') || '—'}</div>
-      {doc.readingMinutes && <div className="text-xs text-[#B8844A]">📖 {doc.readingMinutes}m reading{doc.presentationMinutes ? ` · 🎤 ${doc.presentationMinutes}m presentation` : ''}{doc.qaMinutes ? ` · ❓ ${doc.qaMinutes}m Q&A` : ''}</div>}
+      {doc.readingMinutes && <div className="text-xs text-[#B8844A] flex items-center gap-1 flex-wrap"><Emoji size="1em">📖</Emoji> {doc.readingMinutes}m reading{doc.presentationMinutes ? <>{' · '}<Emoji size="1em">🎤</Emoji>{` ${doc.presentationMinutes}m presentation`}</> : ''}{doc.qaMinutes ? <>{' · '}<Emoji size="1em">❓</Emoji>{` ${doc.qaMinutes}m Q&A`}</> : ''}</div>}
       {doc.fileUrl && doc.fileName && (
         <div className="text-xs space-y-2">
           <button onClick={() => setShowPdf((v) => !v)} className="text-blue-400 hover:text-blue-300 transition-colors">
-            📎 {doc.fileName} {showPdf ? '▲' : '▼'}
+            <Emoji size="1em">📎</Emoji> {doc.fileName} {showPdf ? '▲' : '▼'}
           </button>
           {showPdf && (
             <iframe src={doc.fileUrl} title={doc.fileName} className="w-full rounded-lg border border-[#2E1E0F]" style={{ height: '480px' }} />
@@ -640,7 +641,7 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate }
             <span className="text-sm font-bold text-white">{activeDoc.docCode}</span>
             {['reading', 'presentation', 'qa'].map((s) => (
               <span key={s} className={`text-xs px-2 py-0.5 rounded-full ${stage === s ? 'bg-[#7B4A1E] text-white' : 'bg-[#2E1E0F] text-[#7A5A38]'}`}>
-                {s === 'reading' ? '📖 Reading' : s === 'presentation' ? '🎤 Presentation' : '❓ Q&A'}
+                {s === 'reading' ? <><Emoji size="1em">📖</Emoji>{' Reading'}</> : s === 'presentation' ? <><Emoji size="1em">🎤</Emoji>{' Presentation'}</> : <><Emoji size="1em">❓</Emoji>{' Q&A'}</>}
               </span>
             ))}
           </div>
@@ -648,21 +649,21 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate }
         </div>
 
         {stage === 'reading' && timings.reading > 0 && (
-          <StageTimer label="📖 Reading Time" color="text-[#B8844A]"
+          <StageTimer label={<><Emoji size="1em">📖</Emoji>{' Reading Time'}</>} color="text-[#B8844A]"
             totalSeconds={timings.reading * 60} doc={activeDoc}
             showDocument={showDocContent}
             onComplete={() => advanceFromStage('reading')}
             onToggleDocument={() => setShowDocContent((v) => !v)} />
         )}
         {stage === 'presentation' && timings.presentation > 0 && (
-          <StageTimer label="🎤 Presentation" color="text-purple-400"
+          <StageTimer label={<><Emoji size="1em">🎤</Emoji>{' Presentation'}</>} color="text-purple-400"
             totalSeconds={timings.presentation * 60} doc={activeDoc}
             showDocument={showDocContent}
             onComplete={() => advanceFromStage('presentation')}
             onToggleDocument={() => setShowDocContent((v) => !v)} />
         )}
         {stage === 'qa' && timings.qa > 0 && (
-          <StageTimer label="❓ Q&A" color="text-blue-400"
+          <StageTimer label={<><Emoji size="1em">❓</Emoji>{' Q&A'}</>} color="text-blue-400"
             totalSeconds={timings.qa * 60} doc={activeDoc}
             showDocument={showDocContent}
             onComplete={() => advanceFromStage('qa')}
@@ -726,12 +727,12 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate }
               {tab === 'draft-resolution' && (committee.documents ?? []).some((d) => d.type === 'draft-resolution' && d.status === 'introduced') && (
                 <button onClick={() => router.push(`/voting/${committee.code}`)}
                   className="w-full bg-purple-900/40 hover:bg-purple-800/50 border border-purple-700/40 hover:border-purple-600/60 text-purple-300 hover:text-white py-3 rounded-xl font-bold text-sm transition-colors">
-                  🗳 Go to Voting
+                  <Emoji size="1em">🗳</Emoji> Go to Voting
                 </button>
               )}
               {docs.length === 0 ? (
                 <div className="text-center py-10">
-                  <div className="text-4xl mb-3">{tab === 'working-paper' ? '📄' : '📜'}</div>
+                  <div className="mb-3"><Emoji size="2.5rem">{tab === 'working-paper' ? '📄' : '📜'}</Emoji></div>
                   <p className="text-[#C4A882] font-semibold">No {tab === 'working-paper' ? 'working papers' : 'draft resolutions'} yet.</p>
                   <p className="text-sm text-[#7A5A38] mt-1">Submit the first one below.</p>
                 </div>

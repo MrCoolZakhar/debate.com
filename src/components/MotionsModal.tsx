@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Committee, PendingMotion, PendingMotionType } from '@/lib/types';
 import { getCountryByName, getFlagUrl } from '@/lib/countries';
+import { Emoji } from '@/components/Emoji';
 import { useSettingsStore, DEFAULT_MOTION_NAMES, MotionNames } from '@/lib/settingsStore';
 import {
   addPendingMotion as addPendingMotionInDB,
@@ -98,7 +99,7 @@ function ProposerInput({ candidates, value, onChange, blockedCountries }: {
     <div className="relative">
       {value && !open ? (
         <div className="flex items-center gap-3 bg-green-950/30 border border-green-800/30 rounded-xl px-4 py-3">
-          {(() => { const f = getCountryByName(value); return f ? <img src={getFlagUrl(f.code)} alt={f.code} className="w-5 h-5 object-contain inline-block" /> : <span className="text-lg">🌐</span>; })()}
+          {(() => { const f = getCountryByName(value); return f ? <img src={getFlagUrl(f.code)} alt={f.code} className="w-5 h-5 object-contain inline-block" /> : <Emoji size="1.125rem">🌐</Emoji>; })()}
           <span className="text-sm text-white flex-1">{value}</span>
           <button onClick={() => { setOpen(true); setQuery(''); onChange(''); inputRef.current?.focus(); }} className="text-xs text-[#7A5A38] hover:text-white transition-colors">change</button>
         </div>
@@ -125,7 +126,7 @@ function ProposerInput({ candidates, value, onChange, blockedCountries }: {
                   isBlocked ? 'opacity-50 cursor-not-allowed bg-[#150F09]' :
                   i === 0 ? 'bg-[#7B4A1E]/20 text-white' : 'text-[#E8D5B7] hover:bg-[#2E1E0F]'
                 }`}>
-                {found ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain inline-block" /> : <span className="text-lg">🌐</span>}
+                {found ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain inline-block" /> : <Emoji size="1.125rem">🌐</Emoji>}
                 <span className="text-sm flex-1">{country}</span>
                 {isBlocked
                   ? <span className="text-xs text-orange-400 shrink-0 font-semibold">Motion on floor</span>
@@ -513,7 +514,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
       >
         {/* Header: icon + type label + modify button + flag in top-right */}
         <div className="flex items-center gap-2">
-          <span className={large ? 'text-4xl' : 'text-2xl'}>{meta.icon}</span>
+          <Emoji size={large ? '2.5rem' : '1.5rem'}>{meta.icon}</Emoji>
           <span className={`font-black text-white flex-1 ${large ? 'text-3xl' : 'text-lg'}`}>{meta.label}</span>
           <button
             onClick={(e) => { e.stopPropagation(); onEdit(m.id); }}
@@ -522,7 +523,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
           >
             ⚙
           </button>
-          {f ? <img src={getFlagUrl(f.code)} alt={f.code} className={large ? 'w-10 h-10 object-contain inline-block' : 'w-6 h-6 object-contain inline-block'} /> : <span className={large ? 'text-4xl' : 'text-2xl'}>🌐</span>}
+          {f ? <img src={getFlagUrl(f.code)} alt={f.code} className={large ? 'w-10 h-10 object-contain inline-block' : 'w-6 h-6 object-contain inline-block'} /> : <Emoji size={large ? '2.5rem' : '1.5rem'}>🌐</Emoji>}
         </div>
 
         {/* Topic inline */}
@@ -587,7 +588,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
         <h2 className="text-2xl font-black text-white">Vote on Motions</h2>
       </div>
       <div className="flex items-center gap-2 px-3 py-2 bg-[#150F09] border border-[#2E1E0F] rounded-xl text-xs text-[#7A5A38] shrink-0">
-        <span>💡</span>
+        <Emoji size="1em">💡</Emoji>
         <span>Drag motions to reorder them. Most disruptive is voted on first by default.</span>
       </div>
       <div className="flex gap-4 flex-1 min-h-0">
@@ -917,7 +918,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
               <h2 className="text-3xl font-black text-white">Motions</h2>
               {pending.length === 0 ? (
                 <div className="text-center py-8">
-                  <div className="text-4xl mb-3">📋</div>
+                  <div className="mb-3"><Emoji size="2.5rem">📋</Emoji></div>
                   <p className="text-[#C4A882]">No motions raised yet.</p>
                   <p className="text-sm text-[#7A5A38] mt-1">The floor is open — invite delegates to raise motions.</p>
                 </div>
@@ -933,14 +934,14 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
                       <div key={m.id} className="bg-[#1A1209] border border-[#2E1E0F] rounded-xl px-4 py-4">
                         <div className="flex items-start gap-3">
                           <span className="text-xs text-[#7A5A38] font-mono w-4 mt-1">{i + 1}</span>
-                          <span className="text-2xl">{meta.icon}</span>
+                          <Emoji size="1.5rem">{meta.icon}</Emoji>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="text-base font-black text-white">{meta.label}</span>
                               <DisruptivenessBadge type={m.type} />
                             </div>
                             <div className="flex items-center gap-1.5 mt-1">
-                              {proposerFlag ? <img src={getFlagUrl(proposerFlag.code)} alt={proposerFlag.code} className="w-5 h-5 object-contain inline-block" /> : <span className="text-base">🌐</span>}
+                              {proposerFlag ? <img src={getFlagUrl(proposerFlag.code)} alt={proposerFlag.code} className="w-5 h-5 object-contain inline-block" /> : <Emoji size="1rem">🌐</Emoji>}
                               <span className="text-sm font-semibold text-white">{m.proposedBy}</span>
                             </div>
                             {m.topic && <p className="text-sm text-[#C4A882] mt-1 font-medium">"{m.topic}"</p>}

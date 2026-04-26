@@ -7,6 +7,7 @@ import { useCommitteeStore } from '@/lib/store';
 import { getCommitteeByCode, addChairName } from '@/lib/committeeService';
 import { Committee } from '@/lib/types';
 import { useSettingsStore } from '@/lib/settingsStore';
+import { Emoji } from '@/components/Emoji';
 
 type JoinMode = 'delegate' | 'chair' | 'advisor';
 
@@ -167,7 +168,7 @@ function JoinPageInner() {
                     ? 'bg-[#2E1E0F] border-[#7B4A1E] text-white'
                     : 'bg-[#1A1209] border-[#2E1E0F] text-[#C4A882] hover:border-[#7B4A1E]'
                 }`}>
-                <span className="text-xl">{t.icon}</span>
+                <Emoji size="1.25rem">{t.icon}</Emoji>
                 <span className="text-xs font-bold">{t.label}</span>
               </button>
             ))}

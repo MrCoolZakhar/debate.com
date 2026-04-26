@@ -7,6 +7,7 @@ import { useSettingsStore, DEFAULT_MOTION_NAMES } from '@/lib/settingsStore';
 import { Committee } from '@/lib/types';
 import { FlagCircle } from '@/components/RollCallPanel';
 import { getFlagUrl, getCountryByName } from '@/lib/countries';
+import { Emoji } from '@/components/Emoji';
 
 function formatTime(seconds: number) {
   const m = Math.floor(seconds / 60);
@@ -56,7 +57,7 @@ function ExpandedDelegateCard({
   const found = getCountryByName(delegate.country);
   const flagEl = found
     ? <img src={getFlagUrl(found.code)} alt={found.code} style={{ width: '4.5rem', height: '4.5rem', objectFit: 'contain' }} />
-    : <span style={{ fontSize: '4.5rem', lineHeight: 1 }}>🌐</span>;
+    : <Emoji size="4.5rem">🌐</Emoji>;
 
   const handleNudge = (emoji: string) => {
     sendMessage(committee.id, 'Faculty Advisor', `${emoji} to ${delegate.country}`, false);
@@ -155,7 +156,7 @@ function CollapsedDelegateCard({
   const found = getCountryByName(delegate.country);
   const flagEl = found
     ? <img src={getFlagUrl(found.code)} alt={found.code} style={{ width: '1.5rem', height: '1.5rem', objectFit: 'contain' }} />
-    : <span style={{ fontSize: '1.5rem', lineHeight: 1 }}>🌐</span>;
+    : <Emoji size="1.5rem">🌐</Emoji>;
 
   return (
     <button
@@ -294,7 +295,7 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
             </div>
           ) : (
             <div className="flex flex-col items-center px-4 py-6 border-b border-[#2E1E0F] shrink-0">
-              <div className="text-4xl mb-2">🎙️</div>
+              <div className="mb-2"><Emoji size="2.5rem">🎙️</Emoji></div>
               <p className="text-[#C4A882] text-sm text-center">No current speaker</p>
             </div>
           )}
