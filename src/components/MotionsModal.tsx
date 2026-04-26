@@ -781,34 +781,21 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
         update((c) => ({ ...c, phase: 'moderated-caucus', caucus, pendingMotions: [], caucusQueue, currentSpeaker: null }));
         onClose();
         clearPendingMotionsInDB(committee.id);
-        clearCaucusListInDB(committee.id);
         updateCaucusInDB(committee.id, caucus);
         setPhaseInDB(committee.id, 'moderated-caucus');
-        batchAddToCaucusListInDB(committee.id, caucusQueue);
+        clearCaucusListInDB(committee.id).then(() =>
+          batchAddToCaucusListInDB(committee.id, caucusQueue)
+        );
         return;
       }
 
-      let presentDelegates: typeof alphabetical;
-      if (motion.tourOrder === 'asc') {
-        // Proposer first, then remaining countries in A→Z order
-        const proposerIdx = alphabetical.findIndex((d) => d.country === motion.proposedBy);
-        if (proposerIdx !== -1) {
-          const rest = [...alphabetical.slice(proposerIdx + 1), ...alphabetical.slice(0, proposerIdx)];
-          presentDelegates = [alphabetical[proposerIdx], ...rest];
-        } else {
-          presentDelegates = alphabetical;
-        }
-      } else {
-        // desc — proposer first, then remaining in Z→A order
-        const descAll = [...alphabetical].reverse();
-        const proposerIdx = descAll.findIndex((d) => d.country === motion.proposedBy);
-        if (proposerIdx !== -1) {
-          const rest = [...descAll.slice(proposerIdx + 1), ...descAll.slice(0, proposerIdx)];
-          presentDelegates = [descAll[proposerIdx], ...rest];
-        } else {
-          presentDelegates = descAll;
-        }
-      }
+      const proposer = alphabetical.find((d) => d.country === motion.proposedBy);
+      const remaining = alphabetical
+        .filter((d) => d.country !== motion.proposedBy)
+        .sort((a, b) => motion.tourOrder === 'asc'
+          ? a.country.localeCompare(b.country)
+          : b.country.localeCompare(a.country));
+      const presentDelegates = [...(proposer ? [proposer] : []), ...remaining];
 
       const totalTourTime = presentDelegates.length * motion.speakingTime;
       const caucus = {
@@ -824,13 +811,14 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
       update((c) => ({ ...c, phase: 'moderated-caucus', caucus, pendingMotions: [], caucusQueue, currentSpeaker: null }));
       onClose();
       clearPendingMotionsInDB(committee.id);
-      clearCaucusListInDB(committee.id);
       updateCaucusInDB(committee.id, caucus);
       setPhaseInDB(committee.id, 'moderated-caucus');
-      // Batch insert all delegates at once — no rate limits, all delegates added
-      batchAddToCaucusListInDB(
-        committee.id,
-        presentDelegates.map((d) => ({ delegateId: d.id, country: d.country }))
+      // Await clear before insert to prevent race condition (DELETE winning after INSERT)
+      clearCaucusListInDB(committee.id).then(() =>
+        batchAddToCaucusListInDB(
+          committee.id,
+          presentDelegates.map((d) => ({ delegateId: d.id, country: d.country }))
+        )
       );
       return;
     }
