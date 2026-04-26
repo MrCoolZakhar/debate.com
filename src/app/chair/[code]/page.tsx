@@ -962,6 +962,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const [caucusMaxReachedMsg, setCaucusMaxReachedMsg] = useState(false);
   const [caucusLoading, setCaucusLoading] = useState(false);
   const [caucusPanelLocked, setCaucusPanelLocked] = useState(false);
+  const [unmodLoading, setUnmodLoading] = useState(false);
 
   // RTR overlay — completely independent of GSL
   const [rtrOpen, setRtrOpen] = useState(false);
@@ -1292,8 +1293,14 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   }, [sessionSuspended]);
 
   const caucusLoadingFiredRef = useRef(false);
+  const prevCaucusKeyRef = useRef<string | null>(null);
   useEffect(() => {
-    if (committee?.phase === 'moderated-caucus') {
+    if (committee?.phase === 'moderated-caucus' && committee.caucus) {
+      const caucusKey = `${committee.phase}-${committee.caucus.proposedBy}-${committee.caucus.totalTime}`;
+      if (prevCaucusKeyRef.current !== caucusKey) {
+        prevCaucusKeyRef.current = caucusKey;
+        caucusLoadingFiredRef.current = false;
+      }
       if (!caucusLoadingFiredRef.current) {
         caucusLoadingFiredRef.current = true;
         setCaucusPanelLocked(true);
@@ -1302,10 +1309,32 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         return () => clearTimeout(t);
       }
     } else {
+      prevCaucusKeyRef.current = null;
       caucusLoadingFiredRef.current = false;
       setCaucusPanelLocked(false);
     }
-  }, [committee?.phase]);
+  }, [committee?.phase, committee?.caucus?.proposedBy, committee?.caucus?.totalTime]);
+
+  const unmodLoadingFiredRef = useRef(false);
+  const prevUnmodKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (committee?.phase === 'unmoderated-caucus' && committee.caucus) {
+      const unmodKey = `${committee.phase}-${committee.caucus.proposedBy}-${committee.caucus.totalTime}`;
+      if (prevUnmodKeyRef.current !== unmodKey) {
+        prevUnmodKeyRef.current = unmodKey;
+        unmodLoadingFiredRef.current = false;
+      }
+      if (!unmodLoadingFiredRef.current) {
+        unmodLoadingFiredRef.current = true;
+        setUnmodLoading(true);
+        const t = setTimeout(() => setUnmodLoading(false), 3000);
+        return () => clearTimeout(t);
+      }
+    } else {
+      prevUnmodKeyRef.current = null;
+      unmodLoadingFiredRef.current = false;
+    }
+  }, [committee?.phase, committee?.caucus?.proposedBy, committee?.caucus?.totalTime]);
 
   useEffect(() => {
     if (!committee?.expiresAt) { setHoursRemaining(null); return; }
@@ -1964,7 +1993,41 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 )
               )}
               {committee.phase === 'unmoderated-caucus' && committee.caucus && (
-                <UnmoderatedCaucusView committee={committee} setCommittee={setCommittee} />
+                unmodLoading ? (
+                  <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
+                    <div className="bg-[#1A1209] border border-[#2E1E0F]/40 rounded-3xl px-12 py-10 max-w-lg w-full shadow-2xl">
+                      <div className="text-5xl mb-5">
+                        {committee.caucus.motionLabel?.includes('Consultation') ? '🤝' : '💬'}
+                      </div>
+                      <p className="text-xs font-mono text-[#7A5A38] tracking-widest mb-3">
+                        {(committee.caucus.motionLabel ?? 'UNMODERATED CAUCUS').toUpperCase()} STARTING
+                      </p>
+                      <h1 className="text-3xl font-black text-white mb-2">
+                        {committee.caucus.motionLabel ?? 'Unmoderated Caucus'}
+                      </h1>
+                      {committee.caucus.purpose && (
+                        <p className="text-[#C4A882] text-sm mb-6">{committee.caucus.purpose}</p>
+                      )}
+                      <div className="flex justify-center gap-8 mb-8">
+                        <div className="text-center">
+                          <div className="text-2xl font-black text-[#B8844A]">{formatTime(committee.caucus.totalTime)}</div>
+                          <div className="text-xs text-[#7A5A38] mt-1">Total Time</div>
+                        </div>
+                        <div className="w-px bg-[#2E1E0F]" />
+                        <div className="text-center">
+                          <div className="text-2xl font-black text-[#B8844A]">{committee.caucus.proposedBy}</div>
+                          <div className="text-xs text-[#7A5A38] mt-1">Proposed by</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-center gap-2 text-[#7A5A38] text-sm">
+                        <div className="w-4 h-4 border-2 border-[#7B4A1E] border-t-transparent rounded-full animate-spin" />
+                        <span>Starting caucus...</span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <UnmoderatedCaucusView committee={committee} setCommittee={setCommittee} />
+                )
               )}
 
 {committee.phase === 'speakers-list' && (
