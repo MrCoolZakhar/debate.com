@@ -56,7 +56,7 @@ function ExpandedDelegateCard({
 
   const found = getCountryByName(delegate.country);
   const flagEl = found
-    ? <img src={getFlagUrl(found.code)} alt={found.code} style={{ width: '4.5rem', height: '4.5rem', objectFit: 'contain' }} />
+    ? <img src={getFlagUrl(found.code)} alt={found.code} style={{ width: '4.5rem', height: '4.5rem', objectFit: 'contain' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
     : <Emoji size="4.5rem">🌐</Emoji>;
 
   const handleNudge = (emoji: string) => {
@@ -155,7 +155,7 @@ function CollapsedDelegateCard({
 }) {
   const found = getCountryByName(delegate.country);
   const flagEl = found
-    ? <img src={getFlagUrl(found.code)} alt={found.code} style={{ width: '1.5rem', height: '1.5rem', objectFit: 'contain' }} />
+    ? <img src={getFlagUrl(found.code)} alt={found.code} style={{ width: '1.5rem', height: '1.5rem', objectFit: 'contain' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
     : <Emoji size="1.5rem">🌐</Emoji>;
 
   return (

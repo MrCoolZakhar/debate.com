@@ -142,7 +142,7 @@ function AddSpeakerInput({ committee, onAdd }: { committee: Committee; onAdd: (i
                 <div key={d.id} className="w-full flex items-center gap-3 px-4 py-2.5 opacity-40">
                   <span className="shrink-0 w-6 h-6 inline-flex items-center justify-center">
                   {found
-                    ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain" />
+                    ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                     : <Emoji size="1.125rem">🌐</Emoji>}
                 </span>
                   <span className="text-sm flex-1 text-[#7A5A38]">{d.country}</span>
@@ -156,7 +156,7 @@ function AddSpeakerInput({ committee, onAdd }: { committee: Committee; onAdd: (i
                 className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${isFirst ? 'bg-[#7B4A1E]/20 text-white' : 'text-[#E8D5B7] hover:bg-[#2E1E0F]'}`}>
                 <span className="shrink-0 w-6 h-6 inline-flex items-center justify-center">
                   {found
-                    ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain" />
+                    ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                     : <Emoji size="1.125rem">🌐</Emoji>}
                 </span>
                 <span className="text-sm">{d.country}</span>
@@ -229,7 +229,7 @@ function RtrCountryInput({
               >
                 <span className="shrink-0 w-5 h-5 inline-flex items-center justify-center">
                 {found
-                  ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-4 h-4 object-contain" />
+                  ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-4 h-4 object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                   : <Emoji size="0.875rem">🌐</Emoji>}
               </span>
                 <span className="flex-1">{d.country}</span>
@@ -348,7 +348,7 @@ function CaucusQueueSidebar({ committee, onRemove, onReorder, lastSpeakerDelegat
                 <span className="text-xs text-[#7A5A38] font-mono w-5 text-right shrink-0">{i + 1}</span>
                 <span className="shrink-0 w-6 h-6 inline-flex items-center justify-center">
                 {found
-                  ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain" />
+                  ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                   : <Emoji size="1.125rem">🌐</Emoji>}
               </span>
                 <span className="flex-1 text-sm text-white line-clamp-2 break-words whitespace-normal leading-tight">{s.country}</span>
@@ -419,7 +419,7 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
                 <div key={d.id} className="w-full flex items-center gap-3 px-4 py-2.5 opacity-40">
                   <span className="shrink-0 w-6 h-6 inline-flex items-center justify-center">
                   {found
-                    ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain" />
+                    ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                     : <Emoji size="1.125rem">🌐</Emoji>}
                 </span>
                   <span className="text-sm flex-1 text-[#7A5A38]">{d.country}</span>
@@ -433,7 +433,7 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
                 className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${isFirst ? 'bg-[#7B4A1E]/20 text-white' : 'text-[#E8D5B7] hover:bg-[#2E1E0F]'}`}>
                 <span className="shrink-0 w-6 h-6 inline-flex items-center justify-center">
                   {found
-                    ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain" />
+                    ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                     : <Emoji size="1.125rem">🌐</Emoji>}
                 </span>
                 <span className="text-sm flex-1">{d.country}</span>
@@ -765,7 +765,7 @@ function ModeratedCaucusMain({
                     {(() => {
                       const f = getCountryByName(committee.caucus!.currentSpeaker!);
                       return f
-                        ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ width: '7rem', height: '7rem', objectFit: 'contain', position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }} />
+                        ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ width: '7rem', height: '7rem', objectFit: 'contain', position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                         : <Emoji size="5rem" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>🌐</Emoji>;
                     })()}
                   </div>
@@ -1754,7 +1754,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               try { const parsed = JSON.parse(m.topic); delegateId = parsed.delegateId; desiredStatus = parsed.desiredStatus; } catch {}
               const found = getCountryByName(m.proposedBy);
               const flagEl = found
-                ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain inline-block" />
+                ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                 : <Emoji size="1.125rem">🌐</Emoji>;
               return (
                 <div key={m.id} className="flex items-center gap-3 text-sm">
@@ -1784,7 +1784,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               try { const parsed = JSON.parse(m.topic); delegateId = parsed.delegateId; } catch {}
               const found = getCountryByName(m.proposedBy);
               const flagEl = found
-                ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain inline-block" />
+                ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                 : <Emoji size="1.125rem">🌐</Emoji>;
               return (
                 <div key={m.id} className="flex items-center gap-3 text-sm">
@@ -2078,7 +2078,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                               {(() => {
                                 const f = getCountryByName(committee.currentSpeaker.country);
                                 return f
-                                  ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ width: '7rem', height: '7rem', objectFit: 'contain', position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }} />
+                                  ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ width: '7rem', height: '7rem', objectFit: 'contain', position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                                   : <Emoji size="5rem" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>🌐</Emoji>;
                               })()}
                             </div>
@@ -2332,7 +2332,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                   {(() => {
                     const f = getCountryByName(rtrCountry);
                     return f
-                      ? <img src={getFlagUrl(f.code)} alt={f.code} className="w-6 h-6 object-contain inline-block" />
+                      ? <img src={getFlagUrl(f.code)} alt={f.code} className="w-6 h-6 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                       : <Emoji size="1.25rem">🌐</Emoji>;
                   })()}
                   <span className="text-sm text-white font-bold flex-1">{rtrCountry}</span>

@@ -36,7 +36,7 @@ type VotingPhase = 'voting' | 'rights-speakers' | 'result';
 function getFlag(country: string) {
   const found = getCountryByName(country);
   return found
-    ? <img src={getFlagUrl(found.code)} alt={found.code} className="inline-block object-contain" style={{ width: '1em', height: '1em' }} />
+    ? <img src={getFlagUrl(found.code)} alt={found.code} className="inline-block object-contain" style={{ width: '1em', height: '1em' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
     : <Emoji size="1em">🌐</Emoji>;
 }
 
@@ -318,7 +318,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                   status === 'present' ? 'bg-green-950/30 border border-green-800/30' :
                   'bg-blue-950/30 border border-blue-800/30'
                 }`}>
-                  {(() => { const f = getCountryByName(d.country); return f ? <img src={getFlagUrl(f.code)} alt={f.code} className="w-5 h-5 object-contain inline-block" /> : <Emoji size="1.25rem">🌐</Emoji>; })()}
+                  {(() => { const f = getCountryByName(d.country); return f ? <img src={getFlagUrl(f.code)} alt={f.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <Emoji size="1.25rem">🌐</Emoji>; })()}
                   <span className="flex-1 text-sm text-white truncate">{d.country}</span>
                   <button
                     onClick={() => cycleStatus(d.id)}

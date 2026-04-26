@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { getTwemojiUrl } from '@/lib/countries';
 
 /**
@@ -76,8 +76,9 @@ export function Emoji({
   className?: string;
   style?: React.CSSProperties;
 }) {
+  const [imgFailed, setImgFailed] = useState(false);
   const url = getEmojiUrl(children);
-  if (!url) return <span className={className} style={style}>{children}</span>;
+  if (!url || imgFailed) return <span className={className} style={style}>{children}</span>;
   return (
     <img
       src={url}
@@ -85,6 +86,7 @@ export function Emoji({
       aria-hidden="true"
       className={`inline-block object-contain shrink-0 ${className}`}
       style={{ width: size, height: size, verticalAlign: '-0.125em', ...style }}
+      onError={() => setImgFailed(true)}
     />
   );
 }
