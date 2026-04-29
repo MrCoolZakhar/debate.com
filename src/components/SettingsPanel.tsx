@@ -352,30 +352,6 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
               <Toggle label="Consultation of the Whole (CoW)" value={s.motionCoW} onChange={(v) => upd('motionCoW', v)} />
               <Toggle label="Tour de Table" value={s.motionTourDeTable} onChange={(v) => upd('motionTourDeTable', v)} />
 
-              <SectionHeading>MOTION NAMES</SectionHeading>
-              <Divider />
-              {(
-                [
-                  { key: 'moderated',     defaultName: DEFAULT_MOTION_NAMES.moderated },
-                  { key: 'unmoderated',   defaultName: DEFAULT_MOTION_NAMES.unmoderated },
-                  { key: 'consultation',  defaultName: DEFAULT_MOTION_NAMES.consultation },
-                  { key: 'tour',          defaultName: DEFAULT_MOTION_NAMES.tour },
-                  { key: 'suspendDebate', defaultName: DEFAULT_MOTION_NAMES.suspendDebate },
-                  { key: 'endDebate',     defaultName: DEFAULT_MOTION_NAMES.endDebate },
-                ] as const
-              ).map(({ key, defaultName }) => (
-                <div key={key} className="py-2 border-b border-[#2E1E0F] last:border-0">
-                  <div className="text-xs text-[#7A5A38] mb-1">{defaultName}</div>
-                  <input
-                    type="text"
-                    value={s.motionNames?.[key] ?? defaultName}
-                    onChange={(e) => upd('motionNames', { ...(s.motionNames ?? DEFAULT_MOTION_NAMES), [key]: e.target.value })}
-                    placeholder={defaultName}
-                    className="w-full bg-[#150F09] border border-[#2E1E0F] focus:border-[#7B4A1E] rounded-lg px-3 py-1.5 text-white text-sm focus:outline-none transition-colors"
-                  />
-                </div>
-              ))}
-
               <SectionHeading>DOCUMENT SUBMISSION LIMITS</SectionHeading>
               <Divider />
 
@@ -479,11 +455,7 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
               <SectionHeading>SESSION ID &amp; JOIN CODES</SectionHeading>
               <Divider />
               <div className="py-3 border-b border-[#2E1E0F]">
-                <div className="text-sm font-semibold text-white mb-0.5">Custom session ID</div>
-                <div className="text-xs text-[#7A5A38] mb-2 leading-snug">
-                  Human-readable identifier (e.g. UNSC-2026). Delegates re-joining will need the new ID.
-                  Updates instantly — delegates can join with the new code right away.
-                </div>
+                <div className="text-sm font-semibold text-white mb-2">Custom session ID</div>
                 <div className="flex gap-2">
                   <input
                     type="text"
@@ -514,7 +486,6 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
               </div>
               <Toggle
                 label="Separate chair join code"
-                note="Chairs join with a unique code separate from delegates. The chair code is shown below."
                 value={s.separateChairCode}
                 onChange={(v) => upd('separateChairCode', v)}
               />
@@ -539,7 +510,6 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
               )}
               <Toggle
                 label="Chair must approve delegate entry"
-                note="Joining delegates are held in a waiting room and the chair must admit them individually."
                 value={s.requireChairApproval}
                 onChange={(v) => upd('requireChairApproval', v)}
               />
@@ -548,30 +518,13 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
               <Divider />
               <Toggle
                 label="Allow multiple co-chairs simultaneously"
-                note="Permits more than one chair account to be active in the same session at the same time."
                 value={s.allowMultipleCoChairs}
                 onChange={(v) => upd('allowMultipleCoChairs', v)}
               />
               <Toggle
                 label="Chair session persistence"
-                note="Keeps chair signed in across browser refreshes and device switches without re-authenticating."
                 value={s.chairSessionPersistence}
                 onChange={(v) => upd('chairSessionPersistence', v)}
-              />
-              <Toggle
-                label="Chair takeover protection"
-                note="New device sign-in alerts the existing session with a 30-second window to confirm before logout."
-                value={s.chairTakeoverProtection}
-                onChange={(v) => upd('chairTakeoverProtection', v)}
-              />
-
-              <SectionHeading>DELEGATE IDENTITY</SectionHeading>
-              <Divider />
-              <Toggle
-                label="Require delegation name at join"
-                note="Delegates must specify their country or bloc name before entering the session."
-                value={s.requireDelegationName}
-                onChange={(v) => upd('requireDelegationName', v)}
               />
             </div>
           )}
