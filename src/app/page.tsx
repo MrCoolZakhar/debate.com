@@ -27,7 +27,7 @@ export default function LandingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0D0906] flex flex-col relative overflow-x-hidden">
+    <div className="min-h-screen bg-[#0D0906] flex flex-col relative overflow-x-hidden" style={{ backgroundImage: 'url(/landing-bg.png)', backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' }}>
 
       {/* Grain overlay — place background-grain.png in /public/ */}
       <div
