@@ -387,8 +387,8 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
         .concat(eligible.filter((d) => !d.country.trim().toLowerCase().startsWith(cq) && d.country.trim().toLowerCase().includes(cq)))
     : [];
   const isCurrentSpeaker = (d: { country: string }) => !!currentSpeakerCountry && d.country === currentSpeakerCountry;
-  const topNotOnList = matches.find((d) => !onList.has(d.id) && !isCurrentSpeaker(d) && !spokenCountries.includes(d.country)) ?? null;
-  const commit = (d: typeof topNotOnList) => { if (!d || onList.has(d.id) || isFull || isCurrentSpeaker(d)) return; if (spokenCountries.includes(d.country)) return; onAdd(d.id); setQuery(''); };
+  const topNotOnList = matches.find((d) => !onList.has(d.id) && !isCurrentSpeaker(d)) ?? null;
+  const commit = (d: typeof topNotOnList) => { if (!d || onList.has(d.id) || isFull || isCurrentSpeaker(d)) return; onAdd(d.id); setQuery(''); };
   return (
     <div className="flex gap-2">
       <div className="relative flex-1">
@@ -414,7 +414,7 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
             const alreadyOnList = onList.has(d.id);
             const spoke = spokenCountries.includes(d.country);
             const isCurrent = isCurrentSpeaker(d);
-            if (isCurrent || alreadyOnList || spoke) {
+            if (isCurrent || alreadyOnList) {
               return (
                 <div key={d.id} className="w-full flex items-center gap-3 px-4 py-2.5 opacity-40">
                   <span className="shrink-0 w-6 h-6 inline-flex items-center justify-center">
@@ -423,7 +423,7 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
                     : <Emoji size="1.125rem">🌐</Emoji>}
                 </span>
                   <span className="text-sm flex-1 text-[#7A5A38]">{d.country}</span>
-                  <span className="text-xs text-[#7A5A38]">{isCurrent ? 'currently speaking' : spoke ? 'already spoke' : 'already on list'}</span>
+                  <span className="text-xs text-[#7A5A38]">{isCurrent ? 'currently speaking' : 'already on list'}</span>
                 </div>
               );
             }

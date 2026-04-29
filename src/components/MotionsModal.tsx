@@ -789,20 +789,13 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
         return;
       }
 
-      // Build full sorted list (A→Z or Z→A)
-      const sorted = [...committee.delegates]
-        .filter((d) => d.status !== 'absent')
+      const proposer = alphabetical.find((d) => d.country === motion.proposedBy);
+      const remaining = alphabetical
+        .filter((d) => d.country !== motion.proposedBy)
         .sort((a, b) => motion.tourOrder === 'asc'
           ? a.country.localeCompare(b.country)
           : b.country.localeCompare(a.country));
-
-      // Find proposer's index in the sorted circle
-      const proposerIdx = sorted.findIndex((d) => d.country === motion.proposedBy);
-
-      // Slice the circle starting at proposer: [proposer, ...rest wrapping around]
-      const presentDelegates = proposerIdx >= 0
-        ? [...sorted.slice(proposerIdx), ...sorted.slice(0, proposerIdx)]
-        : sorted;
+      const presentDelegates = [...(proposer ? [proposer] : []), ...remaining];
 
       const totalTourTime = presentDelegates.length * motion.speakingTime;
       const caucus = {
