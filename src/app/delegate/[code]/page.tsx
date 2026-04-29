@@ -1245,7 +1245,7 @@ export default function DelegateSession({ params }: { params: Promise<{ code: st
   return (
     <Suspense fallback={
       <div className="min-h-screen bg-[#0D0906] flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-[#7B4A1E] border-t-transparent rounded-full animate-spin" />
+        <img src="/loading.gif" alt="Loading..." className="w-24 h-24 object-contain" />
       </div>
     }>
       <DelegateSessionInner params={params} />
