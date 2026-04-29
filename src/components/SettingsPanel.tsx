@@ -1,15 +1,26 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { Poppins } from 'next/font/google';
 import { useSettingsStore, CommitteeSettings, DEFAULT_MOTION_NAMES } from '@/lib/settingsStore';
 import { Committee } from '@/lib/types';
 import { updateCommitteeCode, deleteDocumentsByType } from '@/lib/committeeService';
 import { getFlagUrl, getCountryByName } from '@/lib/countries';
 
+const poppins = Poppins({ subsets: ['latin'], weight: ['600', '700', '800'] });
+
 type SettingsTab = 'voting' | 'motions' | 'access' | 'points';
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return <p className="text-[10px] font-mono text-[#7A5A38] tracking-widest mb-1 mt-5 first:mt-0">{children}</p>;
+function SectionHeading({ children }: { children: React.ReactNode }) {
+  return (
+    <div className={`${poppins.className} text-xs font-bold text-[#C4A882] tracking-widest uppercase mt-6 mb-1 first:mt-0`}>
+      {children}
+    </div>
+  );
+}
+
+function Divider() {
+  return <div className="border-t border-[#2E1E0F] my-1" />;
 }
 
 function Toggle({ value, onChange, label, note }: {
@@ -215,12 +226,13 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto px-5 py-4">
+        <div className="flex-1 overflow-y-auto px-5 py-5">
 
           {/* ── Voting & Majorities ── */}
           {tab === 'voting' && (
             <div>
-              <SectionLabel>VOTING THRESHOLDS</SectionLabel>
+              <SectionHeading>VOTING THRESHOLDS</SectionHeading>
+              <Divider />
               <BubbleRow
                 label="Procedural vote threshold"
                 value={s.proceduralThreshold}
@@ -250,15 +262,17 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
                 ]}
               />
 
-              <SectionLabel>ABSTENTIONS</SectionLabel>
+              <SectionHeading>ABSTENTIONS</SectionHeading>
+              <Divider />
               <Toggle
-                label="Allow abstentions on substantive votes"
-                note="Abstentions are excluded from the denominator when calculating the threshold."
+                label="Allow abstentions on Draft Resolutions"
+                note="If turned off, all delegations will have to vote."
                 value={s.allowAbstentions}
                 onChange={(v) => upd('allowAbstentions', v)}
               />
 
-              <SectionLabel>VETO POWER</SectionLabel>
+              <SectionHeading>VETO POWER</SectionHeading>
+              <Divider />
               {/* Vertical slider — 3 positions, active highlighted with moving indicator */}
               <div className="py-3 border-b border-[#2E1E0F]">
                 {(() => {
@@ -311,7 +325,8 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
                 </div>
               )}
 
-              <SectionLabel>QUORUM</SectionLabel>
+              <SectionHeading>QUORUM</SectionHeading>
+              <Divider />
               <BubbleRow
                 label="Quorum threshold"
                 note="Minimum delegates present for formal business (motions, voting) to proceed."
@@ -330,15 +345,15 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
           {/* ── Motions ── */}
           {tab === 'motions' && (
             <div>
-              <SectionLabel>ENABLED MOTION TYPES</SectionLabel>
-              <p className="text-xs text-[#7A5A38] mb-3 leading-snug">Disabled motion types are hidden from the delegate motion-request interface immediately.</p>
+              <SectionHeading>ENABLED MOTION TYPES</SectionHeading>
+              <Divider />
               <Toggle label="Moderated caucus" value={s.motionModeratedCaucus} onChange={(v) => upd('motionModeratedCaucus', v)} />
               <Toggle label="Unmoderated caucus" value={s.motionUnmoderatedCaucus} onChange={(v) => upd('motionUnmoderatedCaucus', v)} />
               <Toggle label="Consultation of the Whole (CoW)" value={s.motionCoW} onChange={(v) => upd('motionCoW', v)} />
               <Toggle label="Tour de Table" value={s.motionTourDeTable} onChange={(v) => upd('motionTourDeTable', v)} />
 
-              <SectionLabel>MOTION NAMES</SectionLabel>
-              <p className="text-xs text-[#7A5A38] mb-3 leading-snug">Rename motion types to match your committee's rules of procedure.</p>
+              <SectionHeading>MOTION NAMES</SectionHeading>
+              <Divider />
               {(
                 [
                   { key: 'moderated',     defaultName: DEFAULT_MOTION_NAMES.moderated },
@@ -361,8 +376,8 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
                 </div>
               ))}
 
-              <SectionLabel>DOCUMENT SUBMISSION LIMITS</SectionLabel>
-              <p className="text-xs text-[#7A5A38] mb-3 leading-snug">Set a cap on how many working papers or draft resolutions can be submitted per session.</p>
+              <SectionHeading>DOCUMENT SUBMISSION LIMITS</SectionHeading>
+              <Divider />
 
               {/* WP limit */}
               <div className="py-3 border-b border-[#2E1E0F]">
@@ -461,7 +476,8 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
           {/* ── Access & Identity ── */}
           {tab === 'access' && (
             <div>
-              <SectionLabel>SESSION ID & JOIN CODES</SectionLabel>
+              <SectionHeading>SESSION ID &amp; JOIN CODES</SectionHeading>
+              <Divider />
               <div className="py-3 border-b border-[#2E1E0F]">
                 <div className="text-sm font-semibold text-white mb-0.5">Custom session ID</div>
                 <div className="text-xs text-[#7A5A38] mb-2 leading-snug">
@@ -528,7 +544,8 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
                 onChange={(v) => upd('requireChairApproval', v)}
               />
 
-              <SectionLabel>CHAIR RE-SIGN-IN</SectionLabel>
+              <SectionHeading>CHAIR RE-SIGN-IN</SectionHeading>
+              <Divider />
               <Toggle
                 label="Allow multiple co-chairs simultaneously"
                 note="Permits more than one chair account to be active in the same session at the same time."
@@ -548,7 +565,8 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
                 onChange={(v) => upd('chairTakeoverProtection', v)}
               />
 
-              <SectionLabel>DELEGATE IDENTITY</SectionLabel>
+              <SectionHeading>DELEGATE IDENTITY</SectionHeading>
+              <Divider />
               <Toggle
                 label="Require delegation name at join"
                 note="Delegates must specify their country or bloc name before entering the session."
@@ -561,7 +579,8 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
           {/* ── Points ── */}
           {tab === 'points' && (
             <div>
-              <SectionLabel>DELEGATE LEADERBOARD</SectionLabel>
+              <SectionHeading>DELEGATE LEADERBOARD</SectionHeading>
+              <Divider />
               <p className="text-xs text-[#7A5A38] mb-3 leading-snug">
                 Scores: +5 attendance · +10 per WP sponsored · +20 per DR sponsored · +1 per 10s speaking · +10 per GSL speech · +8 per caucus speech
               </p>
