@@ -1403,6 +1403,14 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const progress = committee.currentSpeaker ? (speakerTimeRemaining / committee.speakerTimeLimit) * 100 : 0;
   const isPreSession = committee.phase === 'pre-session';
 
+  // ── Quorum enforcement ──────────────────────────────────────────────────────
+  const settings = getSettings(committee.code);
+  const presentCount = committee.delegates.filter((d) => d.status !== 'absent').length;
+  const totalCount = committee.delegates.length;
+  const quorumMap: Record<string, number> = { 'none': 0, '1-4': 1 / 4, '1-3': 1 / 3, '1-2': 1 / 2 };
+  const quorumFraction = quorumMap[settings.quorumThreshold ?? 'none'] ?? 0;
+  const belowQuorum = quorumFraction > 0 && totalCount > 0 && (presentCount / totalCount) < quorumFraction;
+
   // ── Optimistic action handlers ──────────────────────────────────────────────
 
   const handleNextSpeaker = async () => {
@@ -1454,6 +1462,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   };
 
   const handleToggleTimer = () => {
+    if (belowQuorum) return;
     const starting = !timerRunning;
     setTimerRunning(starting);
     if (starting) {
@@ -2192,7 +2201,12 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                         className="w-14 bg-[#150F09] border border-[#2E1E0F] rounded-lg px-2 py-1 text-white text-xs focus:outline-none" />
                     </div>
                   </div>
-                  <AddSpeakerInput committee={committee} onAdd={handleAddToSpeakersList} />
+                  {belowQuorum && (
+                    <p className="text-xs text-red-400 text-center py-2">
+                      ⚠️ Below quorum — speakers cannot be added until {Math.ceil(quorumFraction * totalCount)} delegates are present.
+                    </p>
+                  )}
+                  <AddSpeakerInput committee={committee} onAdd={belowQuorum ? () => {} : handleAddToSpeakersList} />
                 </div>
                 )}
                 </>
@@ -2207,6 +2221,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           committee={committee}
           onClose={() => setShowMotions(false)}
           onCommitteeUpdate={(updater) => updateLocal(setCommittee, updater, true)}
+          belowQuorum={belowQuorum}
         />
       )}
       {showDocuments && !isPreSession && !sessionEnded && (

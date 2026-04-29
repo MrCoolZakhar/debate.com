@@ -141,12 +141,13 @@ function ProposerInput({ candidates, value, onChange, blockedCountries }: {
 }
 
 // ── Raise Motion Form ─────────────────────────────────────────────────────────
-function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion }: {
+function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion, belowQuorum = false }: {
   committee: Committee;
   typeMeta: TypeMeta;
   onBack: () => void;
   onRaised: (motion: Omit<PendingMotion, 'id' | 'disruptiveness'>) => void;
   editingMotion?: PendingMotion | null;
+  belowQuorum?: boolean;
 }) {
   const [type, setType] = useState<PendingMotionType | null>(editingMotion?.type ?? 'moderated');
   const [proposer, setProposer] = useState(editingMotion?.proposedBy ?? '');
@@ -410,8 +411,13 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion 
 
       {type && (
         <div className="px-7 pb-7 pt-3 border-t border-white/10 shrink-0">
+          {belowQuorum && (
+            <div className="mb-4 p-3 bg-red-950/30 border border-red-900/40 rounded-xl text-xs text-red-400">
+              ⚠️ Quorum not met. Motions cannot be raised until the required number of delegates are present.
+            </div>
+          )}
           {error && <p className="text-red-400 text-sm font-medium mb-3">{error}</p>}
-          <button onClick={submit} disabled={!canSubmit()}
+          <button onClick={submit} disabled={!canSubmit() || belowQuorum}
             className="w-full bg-[#7B4A1E] hover:bg-[#8B5A2B] disabled:bg-[#2E1E0F] disabled:text-[#7A5A38] text-white py-5 rounded-2xl text-base font-black transition-colors">
             {editingMotion ? 'Edit Motion →' : 'Raise Motion →'}
           </button>
@@ -610,10 +616,11 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
 }
 
 // ── Main Modal ────────────────────────────────────────────────────────────────
-export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: {
+export default function MotionsModal({ committee, onClose, onCommitteeUpdate, belowQuorum = false }: {
   committee: Committee;
   onClose: () => void;
   onCommitteeUpdate?: (updater: (c: Committee) => Committee) => void;
+  belowQuorum?: boolean;
 }) {
   const { getSettings } = useSettingsStore();
   const motionNames = { ...DEFAULT_MOTION_NAMES, ...(getSettings(committee.code).motionNames ?? {}) };
@@ -886,6 +893,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
               onBack={() => { setEditingMotionId(null); setView(pending.length > 0 ? 'vote' : 'list'); }}
               onRaised={editingMotionId ? handleEdited : handleRaised}
               editingMotion={editingMotionId ? ((committee.pendingMotions ?? []).find((m) => m.id === editingMotionId) ?? null) : null}
+              belowQuorum={belowQuorum}
             />
           )}
           {view === 'vote' && (

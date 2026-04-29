@@ -158,10 +158,11 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   // ── committee is guaranteed non-null from here ─────────────────────────────
   const settings = getSettings(committee.code);
 
-  const introducedDRs = (committee.documents ?? []).filter(
-    (d) => d.type === 'draft-resolution' && d.status === 'introduced'
+  const allDRs = (committee.documents ?? []).filter(
+    (d) => d.type === 'draft-resolution' &&
+      ['introduced', 'passed', 'failed'].includes(d.status)
   );
-  const selectedDoc = introducedDRs.find((d) => d.id === selectedDocId) ?? null;
+  const selectedDoc = allDRs.find((d) => d.id === selectedDocId) ?? null;
   // Use roll call statuses (local) if roll call is done, else use DB status
   const presentDelegates = committee.delegates
     .filter((d) => (rollCallDone ? rollCallStatuses[d.id] ?? d.status : d.status) !== 'absent')
@@ -182,11 +183,17 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   const p5Veto = settings.vetoMode === 'p5'
     && votes.some((v) => vetoList.includes(v.country) && (v.choice === 'against' || v.choice === 'against-rights'));
   const unanimousRequired = settings.vetoMode === 'unanimous';
-  const pvDelegates = committee.delegates.filter((d) => d.status === 'present-voting');
-  const unanimousFail = unanimousRequired && pvDelegates.some((d) => {
-    const vote = votes.find((v) => v.delegateId === d.id);
-    return !vote || vote.choice === 'against' || vote.choice === 'against-rights' || vote.choice === 'abstain';
-  });
+  // Unanimous: every present delegate (P and PV) must vote 'for' or 'for-rights'
+  const presentAndPvDelegates = committee.delegates.filter(
+    (d) => (rollCallStatuses[d.id] ?? d.status) !== 'absent'
+  );
+  const unanimousFail =
+    unanimousRequired &&
+    phase === 'result' &&
+    presentAndPvDelegates.some((d) => {
+      const vote = votes.find((v) => v.delegateId === d.id);
+      return !vote || (vote.choice !== 'for' && vote.choice !== 'for-rights');
+    });
 
   // Threshold check (substantive votes)
   const totalDecisive = forCount + againstCount; // abstentions excluded from denominator
@@ -361,22 +368,38 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             <p className="text-xs font-mono text-[#7A5A38] text-center mb-5 tracking-widest">
               SELECT DRAFT RESOLUTION TO VOTE ON
             </p>
-            {introducedDRs.length === 0 ? (
+            {allDRs.length === 0 ? (
               <p className="text-sm text-[#7A5A38] text-center py-8">No introduced draft resolutions.</p>
             ) : (
-              introducedDRs.map((doc) => (
-                <button
-                  key={doc.id}
-                  onClick={() => startNewVote(doc.id)}
-                  className="w-full text-left px-4 py-4 rounded-xl border border-[#2E1E0F] bg-[#1A1209] text-[#C4A882] hover:border-[#7B4A1E]/60 hover:bg-[#7B4A1E]/10 transition-colors"
-                >
-                  <span className="text-xs font-mono font-bold text-[#7B4A1E] block">{doc.docCode}</span>
-                  <span className="text-base font-bold text-white block mt-0.5">{doc.title}</span>
-                  {doc.sponsors.length > 0 && (
-                    <span className="text-xs text-[#7A5A38] block mt-1">Sponsors: {doc.sponsors.join(', ')}</span>
-                  )}
-                </button>
-              ))
+              allDRs.map((doc) => {
+                const isVoted = doc.status === 'passed' || doc.status === 'failed';
+                return (
+                  <button
+                    key={doc.id}
+                    onClick={() => !isVoted && startNewVote(doc.id)}
+                    disabled={isVoted}
+                    className={`w-full text-left px-4 py-4 rounded-xl border transition-colors ${
+                      isVoted
+                        ? 'border-[#2E1E0F] bg-[#0D0906] opacity-60 cursor-not-allowed'
+                        : 'border-[#2E1E0F] bg-[#1A1209] text-[#C4A882] hover:border-[#7B4A1E]/60 hover:bg-[#7B4A1E]/10'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2 mb-0.5">
+                      <span className="text-xs font-mono font-bold text-[#7B4A1E]">{doc.docCode}</span>
+                      {doc.status === 'passed' && (
+                        <span className="text-[10px] font-bold text-green-400 bg-green-950/40 border border-green-800/40 px-2 py-0.5 rounded-full">✓ PASSED</span>
+                      )}
+                      {doc.status === 'failed' && (
+                        <span className="text-[10px] font-bold text-red-400 bg-red-950/40 border border-red-800/40 px-2 py-0.5 rounded-full">✗ FAILED</span>
+                      )}
+                    </div>
+                    <span className="text-base font-bold text-white block">{doc.title}</span>
+                    {doc.sponsors.length > 0 && (
+                      <span className="text-xs text-[#7A5A38] block mt-1">Sponsors: {doc.sponsors.join(', ')}</span>
+                    )}
+                  </button>
+                );
+              })
             )}
           </div>
         </div>
@@ -670,7 +693,9 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
               <p className="text-red-400 text-sm mt-4 font-semibold flex items-center gap-1 justify-center"><Emoji size="1em">🛡️</Emoji> P5 veto exercised</p>
             )}
             {unanimousFail && (
-              <p className="text-red-400 text-sm mt-4 font-semibold">⚠️ Unanimous vote required — failed</p>
+              <p className="text-red-400 text-sm mt-4 font-semibold">
+                ⚠️ Unanimous vote required — one or more delegates voted against or abstained
+              </p>
             )}
             {!p5Veto && !unanimousFail && settings.substantiveThreshold === 'supermajority-2-3' && (
               <p className={`text-sm mt-3 font-semibold ${thresholdMet ? 'text-green-400' : 'text-red-400'}`}>
