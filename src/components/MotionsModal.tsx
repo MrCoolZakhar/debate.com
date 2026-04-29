@@ -789,13 +789,15 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate }: 
         return;
       }
 
-      const proposer = alphabetical.find((d) => d.country === motion.proposedBy);
-      const remaining = alphabetical
-        .filter((d) => d.country !== motion.proposedBy)
+      const sorted = committee.delegates
+        .filter((d) => d.status !== 'absent')
         .sort((a, b) => motion.tourOrder === 'asc'
           ? a.country.localeCompare(b.country)
           : b.country.localeCompare(a.country));
-      const presentDelegates = [...(proposer ? [proposer] : []), ...remaining];
+      const proposerIdx = sorted.findIndex((d) => d.country === motion.proposedBy);
+      const presentDelegates = proposerIdx >= 0
+        ? [...sorted.slice(proposerIdx), ...sorted.slice(0, proposerIdx)]
+        : sorted;
 
       const totalTourTime = presentDelegates.length * motion.speakingTime;
       const caucus = {
