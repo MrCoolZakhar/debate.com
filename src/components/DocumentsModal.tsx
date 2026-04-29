@@ -126,7 +126,8 @@ function StageTimer({
   const progress = totalSeconds > 0 ? ((totalSeconds - remaining) / totalSeconds) * 100 : 100;
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center px-8 py-8 text-center">
+    <div className={`flex-1 flex ${showDocument ? 'flex-row items-stretch' : 'flex-col items-center justify-center px-8 py-8 text-center'}`}>
+      <div className={`flex flex-col items-center justify-center text-center ${showDocument ? 'w-1/2 px-6 py-8 border-r border-[#2E1E0F]' : 'w-full px-8 py-8'}`}>
       <p className="text-xs font-mono tracking-widest mb-2 text-[#7A5A38]">
         {doc.type === 'working-paper' ? 'WORKING PAPER' : 'DRAFT RESOLUTION'} · {doc.docCode}
       </p>
@@ -167,21 +168,29 @@ function StageTimer({
         </>
       )}
 
-      {/* Fullscreen document display */}
-      {showDocument && doc.content && (
-        <div className="mt-8 w-full max-w-3xl text-left bg-[#1A1209] border border-[#2E1E0F] rounded-2xl p-6 max-h-80 overflow-y-auto">
-          <div className="flex items-center gap-3 mb-4">
-            <span className="text-xs font-mono font-bold text-[#7B4A1E]">{doc.docCode}</span>
-            <span className="text-sm font-bold text-white">{doc.title}</span>
-          </div>
-          <pre className="text-sm text-[#E8D5B7] whitespace-pre-wrap font-sans leading-relaxed">{doc.content}</pre>
-        </div>
-      )}
-      {showDocument && !doc.content && (
-        <div className="mt-8 w-full max-w-xl bg-[#1A1209] border border-[#2E1E0F] rounded-2xl p-6 text-center">
-          <p className="text-[#7A5A38] text-sm">No document content saved. Delegates can view via shared file.</p>
-          {doc.fileUrl && doc.fileName && (
-            <a href={doc.fileUrl} download={doc.fileName} className="mt-3 inline-block text-blue-400 hover:text-blue-300 text-sm"><Emoji size="1em">📎</Emoji> {doc.fileName}</a>
+      </div>
+
+      {showDocument && (
+        <div className="w-1/2 flex flex-col p-4 overflow-hidden">
+          {doc.fileUrl ? (
+            <iframe
+              src={doc.fileUrl}
+              title={doc.title}
+              className="flex-1 w-full rounded-xl border border-[#2E1E0F]"
+              style={{ minHeight: 0 }}
+            />
+          ) : doc.content ? (
+            <div className="flex-1 overflow-y-auto bg-[#1A1209] border border-[#2E1E0F] rounded-xl p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <span className="text-xs font-mono font-bold text-[#7B4A1E]">{doc.docCode}</span>
+                <span className="text-sm font-bold text-white">{doc.title}</span>
+              </div>
+              <pre className="text-sm text-[#E8D5B7] whitespace-pre-wrap font-sans leading-relaxed">{doc.content}</pre>
+            </div>
+          ) : (
+            <div className="flex-1 flex items-center justify-center bg-[#1A1209] border border-[#2E1E0F] rounded-xl">
+              <p className="text-[#7A5A38] text-sm text-center px-6">No document content saved.<br/>Delegates can view via shared file.</p>
+            </div>
           )}
         </div>
       )}
@@ -394,13 +403,13 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
       </div>
       <SponsorSelect candidates={presentCountries} selected={sponsors} onChange={setSponsors} />
       <div>
-        <label className="block text-sm font-semibold text-[#C4A882] mb-1.5">Content <span className="text-[#7A5A38] font-normal">(optional — shown during reading time)</span></label>
-        <textarea value={content} onChange={(e) => setContent(e.target.value)}
-          placeholder="Paste the full text of the document…" rows={5}
-          className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-xl px-4 py-3 text-white placeholder-[#7A5A38] focus:outline-none focus:border-[#7B4A1E] transition-colors text-sm resize-none" />
+        <label className="block text-sm font-semibold text-[#C4A882] mb-1.5">Google Docs Link <span className="text-[#7A5A38] font-normal">(Optional)</span></label>
+        <input type="text" value={content} onChange={(e) => setContent(e.target.value)}
+          placeholder="https://docs.google.com/..."
+          className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-xl px-4 py-3 text-white placeholder-[#7A5A38] focus:outline-none focus:border-[#7B4A1E] transition-colors text-sm" />
       </div>
       <div>
-        <label className="block text-sm font-semibold text-[#C4A882] mb-1.5">Attachment <span className="text-[#7A5A38] font-normal">(optional)</span></label>
+        <label className="block text-sm font-semibold text-[#C4A882] mb-1.5">Attachment</label>
         {fileName ? (
           <div className="flex items-center gap-2 bg-[#150F09] border border-[#2E1E0F] rounded-xl px-4 py-3">
             <span className="text-sm text-white flex-1 truncate"><Emoji size="1em">📎</Emoji> {fileName}</span>
