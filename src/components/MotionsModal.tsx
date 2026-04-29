@@ -149,7 +149,16 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
   editingMotion?: PendingMotion | null;
   belowQuorum?: boolean;
 }) {
-  const [type, setType] = useState<PendingMotionType | null>(editingMotion?.type ?? 'moderated');
+  const { getSettings } = useSettingsStore();
+  const s = getSettings(committee.code);
+  const enabledTypes = TYPE_ORDER.filter((t) => {
+    if (t === 'moderated')    return s.motionModeratedCaucus !== false;
+    if (t === 'unmoderated')  return s.motionUnmoderatedCaucus !== false;
+    if (t === 'consultation') return s.motionCoW !== false;
+    if (t === 'tour')         return s.motionTourDeTable !== false;
+    return true;
+  });
+  const [type, setType] = useState<PendingMotionType | null>(editingMotion?.type ?? enabledTypes[0] ?? null);
   const [proposer, setProposer] = useState(editingMotion?.proposedBy ?? '');
   const [totalMinsStr, setTotalMinsStr] = useState(editingMotion ? String(Math.floor(editingMotion.totalTime / 60)) : '10');
   const [totalSecsStr, setTotalSecsStr] = useState(editingMotion ? String(editingMotion.totalTime % 60) : '0');
@@ -219,7 +228,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
         {/* Type tabs — always shown */}
         <div className="flex gap-1.5 flex-wrap items-stretch">
           <div className="flex gap-1.5 flex-1 flex-wrap">
-            {TYPE_ORDER.map((t) => (
+            {enabledTypes.map((t) => (
               <button key={t} type="button" onClick={() => setType(t)}
                 className={`px-3 py-2 rounded-xl border font-bold text-base transition-all flex-1 min-w-[120px] ${
                   type === t ? 'bg-[#7B4A1E] border-[#8B5A2B] text-white' : 'bg-[#1A1209] border-[#2E1E0F] text-[#C4A882] hover:border-[#7B4A1E]'
