@@ -1850,9 +1850,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           <div className="flex-1 flex items-center justify-center px-6 py-8">
             <div className="w-full max-w-md bg-[#1A1209] border border-[#2E1E0F] rounded-2xl overflow-hidden" style={{ maxHeight: '88vh', display: 'flex', flexDirection: 'column' }}>
               <RollCallPanel committee={committee}
-                onAddToList={handleAddToSpeakersList}
                 onListIds={gslListIds}
-                onRemoveFromList={handleRemoveFromSpeakersList}
                 onCycleStatus={handleCycleStatus}
                 onStatusChange={handleStatusChange}
                 onPhaseChange={handlePhaseChange}
