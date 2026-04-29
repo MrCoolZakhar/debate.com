@@ -759,7 +759,10 @@ function ModeratedCaucusMain({
               <div className="ring-4 ring-[#7B4A1E] rounded-full">
                 {isRoomOrderTdT ? (
                   <div className="relative w-36 h-36 rounded-full bg-[#2E1E0F] shrink-0 flex items-center justify-center">
-                    <span className="text-6xl font-black text-[#B8844A]">1</span>
+                    <span className="text-6xl font-black text-[#B8844A]">{(() => {
+                      const match = committee.caucus!.currentSpeaker?.match(/(\d+)$/);
+                      return match ? match[1] : '?';
+                    })()}</span>
                   </div>
                 ) : (
                   <div className="relative w-36 h-36 rounded-full overflow-hidden bg-[#2E1E0F] shrink-0">
