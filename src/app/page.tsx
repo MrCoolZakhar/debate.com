@@ -27,7 +27,7 @@ export default function LandingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F6F1E9] flex flex-col relative overflow-x-hidden" style={{ backgroundImage: 'url(/landing-bg.png)', backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' }}>
+    <div className="min-h-screen bg-[#F6F1E9] flex flex-col relative overflow-x-hidden">
 
       {/* Grain overlay — place background-grain.png in /public/ */}
       <div
@@ -56,12 +56,12 @@ export default function LandingPage() {
 
         {/* Left image slot — 9:16, name the file landing-left.jpg */}
         <div className="hidden lg:flex flex-col w-[22vw] shrink-0">
-          <div className="flex-1 rounded-2xl border border-[#DDD4C0] overflow-hidden bg-[#F6F1E9]"
+          <div className="flex-1 rounded-2xl border border-[#DDD4C0] overflow-hidden bg-[#EDE7D8]"
             style={{ aspectRatio: '9/16', maxHeight: '78vh' }}>
             <img
               src="/landing-left.jpg"
               alt=""
-              className="w-full h-full object-cover opacity-80"
+              className="w-full h-full object-cover"
               onError={(e) => {
                 (e.target as HTMLImageElement).style.display = 'none';
                 (e.target as HTMLImageElement).parentElement!.style.background = '#EDE7D8';
@@ -72,14 +72,14 @@ export default function LandingPage() {
 
         {/* Center content */}
         <div className="flex-1 flex flex-col items-center justify-center py-12 px-4">
-          <div className="inline-flex items-center gap-2 bg-[#1B3828]/10 border border-[#DDD4C0] text-[#6A5A4A] text-xs font-medium px-3 py-1.5 rounded-full mb-8">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#2A5A3C] animate-pulse shrink-0" />
+          <div className="inline-flex items-center gap-2 bg-[#EAF1EC] border border-[#DDD4C0] text-[#1B3828] text-xs font-medium px-3 py-1.5 rounded-full mb-8">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#3D7A52] animate-pulse shrink-0" />
             Free to use · No account needed
           </div>
 
           <h1 className="text-5xl md:text-6xl font-black tracking-tight text-[#1C1410] leading-[1.05] mb-5 text-center">
             Run Your Committee<br />
-            <span className="text-[#B6871F]">with Confidence</span>
+            <span className="text-[#B6871F] italic" style={{ fontStyle: 'italic' }}>with Confidence</span>
           </h1>
 
           <p className="text-[#6A5A4A] text-lg max-w-md text-center mb-12 leading-relaxed">
@@ -110,7 +110,7 @@ export default function LandingPage() {
               <button
                 onClick={handleJoin}
                 disabled={joinCode.trim().length < 4}
-                className="bg-[#DDD4C0] hover:bg-[#C8BAA8] disabled:opacity-40 border border-[#DDD4C0] text-[#6A5A4A] px-4 py-3 rounded-xl font-bold text-sm transition-colors"
+                className="bg-[#1B3828] hover:bg-[#2A5A3C] disabled:opacity-40 border border-[#1B3828] text-[#EED98A] px-4 py-3 rounded-xl font-bold text-sm transition-colors"
               >
                 Join →
               </button>
@@ -120,12 +120,12 @@ export default function LandingPage() {
 
         {/* Right image slot — 9:16, name the file landing-right.jpg */}
         <div className="hidden lg:flex flex-col w-[22vw] shrink-0">
-          <div className="flex-1 rounded-2xl border border-[#DDD4C0] overflow-hidden bg-[#F6F1E9]"
+          <div className="flex-1 rounded-2xl border border-[#DDD4C0] overflow-hidden bg-[#EDE7D8]"
             style={{ aspectRatio: '9/16', maxHeight: '78vh' }}>
             <img
               src="/landing-right.jpg"
               alt=""
-              className="w-full h-full object-cover opacity-80"
+              className="w-full h-full object-cover"
               onError={(e) => {
                 (e.target as HTMLImageElement).style.display = 'none';
                 (e.target as HTMLImageElement).parentElement!.style.background = '#EDE7D8';
@@ -136,18 +136,18 @@ export default function LandingPage() {
       </section>
 
       {/* How it works */}
-      <section className="relative z-10 border-t border-[#DDD4C0] py-20 px-6">
+      <section className="relative z-10 border-t border-[#DDD4C0] bg-[#1B3828] py-20 px-6">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-14">
-            <h2 className="text-3xl font-black text-[#1C1410] mb-3">Up and Running in Minutes</h2>
-            <p className="text-[#6A5A4A]">No downloads, no setup. Just open your browser and start chairing.</p>
+            <h2 className="text-3xl font-black text-white mb-3">Up and Running in Minutes</h2>
+            <p className="text-[#EED98A]">No downloads, no setup. Just open your browser and start chairing.</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
             {steps.map((s) => (
               <div key={s.step} className="text-center">
-                <div className="text-5xl font-black text-[#DDD4C0] mb-4">{s.step}</div>
-                <h3 className="text-lg font-bold text-[#1C1410] mb-2">{s.title}</h3>
-                <p className="text-[#9A8A78] text-sm leading-relaxed">{s.desc}</p>
+                <div className="text-5xl font-black text-[#2A5A3C] mb-4">{s.step}</div>
+                <h3 className="text-lg font-bold text-white mb-2">{s.title}</h3>
+                <p className="text-[#EED98A] opacity-70 text-sm leading-relaxed">{s.desc}</p>
               </div>
             ))}
           </div>
@@ -155,7 +155,7 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="relative z-10 border-t border-[#DDD4C0] px-6 py-8 flex flex-col md:flex-row items-center justify-between gap-4">
+      <footer className="relative z-10 border-t border-[#DDD4C0] bg-[#F6F1E9] px-6 py-8 flex flex-col md:flex-row items-center justify-between gap-4">
         <img
           src="/gavelling-logo.png"
           alt="Gavelling"
