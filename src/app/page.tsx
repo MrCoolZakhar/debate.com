@@ -56,19 +56,16 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen bg-[#EDE7D8] flex flex-col relative overflow-x-hidden">
-      {/* Crosshatch pattern overlay */}
-      <div className="fixed inset-0 z-0 pointer-events-none" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Cpath d='M0 40 L40 0' stroke='%231B3828' stroke-width='0.8'/%3E%3Cpath d='M-10 10 L10 -10' stroke='%231B3828' stroke-width='0.8'/%3E%3Cpath d='M30 50 L50 30' stroke='%231B3828' stroke-width='0.8'/%3E%3Cpath d='M40 0 L0 40' stroke='%231B3828' stroke-width='0.8'/%3E%3Cpath d='M50 10 L10 50' stroke='%231B3828' stroke-width='0.8'/%3E%3Cpath d='M-10 30 L30 -10' stroke='%231B3828' stroke-width='0.8'/%3E%3C/svg%3E")`, backgroundSize: '40px 40px', backgroundRepeat: 'repeat', opacity: 0.012 }} />
-
       <div className="relative z-10 flex flex-col min-h-screen">
         {/* Grain overlay */}
         <div
           className="pointer-events-none fixed inset-0 z-0"
           style={{
-            backgroundImage: 'url(/background-grain.png)',
+            backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`,
             backgroundRepeat: 'repeat',
             backgroundSize: '300px 300px',
-            mixBlendMode: 'screen',
-            opacity: 0.07,
+            mixBlendMode: 'multiply',
+            opacity: 0.18,
           }}
         />
 
