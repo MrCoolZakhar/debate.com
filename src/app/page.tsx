@@ -131,9 +131,9 @@ export default function LandingPage() {
                 </div>
 
                 {/* Title */}
-                <h1 className="text-reveal-2 font-black tracking-wide text-[#1C1410] leading-[0.95] mb-4 uppercase text-center" style={{ fontSize: 'clamp(36px, 4.8vw, 72px)', opacity: 0 }}>
-                  Run Your Committee<br />
-                  <span className="text-[#B6871F]">with Confidence</span>
+                <h1 className="text-reveal-2 font-black tracking-wide text-[#1C1410] leading-[0.95] mb-4 uppercase text-center" style={{ fontSize: 'clamp(32px, 4.2vw, 64px)', opacity: 0 }}>
+                  Run Your<br />
+                  Committee <span className="text-[#B6871F]">with Confidence</span>
                 </h1>
 
                 {/* Subtitle */}
