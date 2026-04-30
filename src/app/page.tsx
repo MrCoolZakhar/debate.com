@@ -28,8 +28,8 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen bg-[#EDE7D8] flex flex-col relative overflow-x-hidden" style={{
-    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cg transform='rotate(-45 60 60)' opacity='0.06'%3E%3Cellipse cx='30' cy='20' rx='5' ry='8' fill='%231B3828' transform='rotate(20 30 20)'/%3E%3Cellipse cx='38' cy='30' rx='5' ry='8' fill='%231B3828' transform='rotate(15 38 30)'/%3E%3Cellipse cx='44' cy='41' rx='4' ry='7' fill='%231B3828' transform='rotate(10 44 41)'/%3E%3Cellipse cx='48' cy='52' rx='4' ry='7' fill='%231B3828' transform='rotate(5 48 52)'/%3E%3Cellipse cx='50' cy='63' rx='4' ry='6' fill='%231B3828' transform='rotate(0 50 63)'/%3E%3Cpath d='M60 80 Q40 50 28 16' stroke='%231B3828' stroke-width='1.2' fill='none'/%3E%3Cellipse cx='90' cy='20' rx='5' ry='8' fill='%231B3828' transform='rotate(-20 90 20)'/%3E%3Cellipse cx='82' cy='30' rx='5' ry='8' fill='%231B3828' transform='rotate(-15 82 30)'/%3E%3Cellipse cx='76' cy='41' rx='4' ry='7' fill='%231B3828' transform='rotate(-10 76 41)'/%3E%3Cellipse cx='72' cy='52' rx='4' ry='7' fill='%231B3828' transform='rotate(-5 72 52)'/%3E%3Cellipse cx='70' cy='63' rx='4' ry='6' fill='%231B3828' transform='rotate(0 70 63)'/%3E%3Cpath d='M60 80 Q80 50 92 16' stroke='%231B3828' stroke-width='1.2' fill='none'/%3E%3Ccircle cx='60' cy='85' r='4' fill='%231B3828' opacity='0.5'/%3E%3C/g%3E%3C/svg%3E")`,
-    backgroundSize: '120px 120px',
+    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'%3E%3Cg transform='translate(30,140) rotate(-45)' fill='%231B3828' opacity='0.045'%3E%3Cellipse cx='0' cy='0' rx='4' ry='7' transform='rotate(-35)'/%3E%3Cellipse cx='10' cy='-12' rx='4' ry='7' transform='translate(10,-12) rotate(-25)'/%3E%3Cellipse cx='0' cy='0' rx='4' ry='7' transform='translate(19,-25) rotate(-15)'/%3E%3Cellipse cx='0' cy='0' rx='4' ry='7' transform='translate(26,-38) rotate(-5)'/%3E%3Cellipse cx='0' cy='0' rx='3.5' ry='6' transform='translate(31,-52) rotate(5)'/%3E%3Cellipse cx='0' cy='0' rx='3' ry='5.5' transform='translate(34,-66) rotate(12)'/%3E%3Cellipse cx='0' cy='0' rx='3' ry='5' transform='translate(35,-79) rotate(18)'/%3E%3Cpath d='M0,0 Q18,-40 35,-82' stroke='%231B3828' stroke-width='1.5' fill='none'/%3E%3C/g%3E%3C/svg%3E")`,
+    backgroundSize: '160px 160px',
     backgroundRepeat: 'repeat',
   }}>
 
@@ -82,7 +82,7 @@ export default function LandingPage() {
             Free to use · No account needed
           </div>
 
-          <h1 className="text-5xl md:text-6xl font-black tracking-tight text-[#1C1410] leading-[1.05] mb-5 text-center uppercase tracking-wide">
+          <h1 className="text-4xl md:text-5xl font-black tracking-tight text-[#1C1410] leading-[1.1] mb-5 text-center uppercase tracking-wide">
             Run Your Committee<br />
             <span className="text-[#B6871F] font-black uppercase">with Confidence</span>
           </h1>
