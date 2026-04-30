@@ -52,9 +52,9 @@ export default function SpeakersListPanel({ committee }: { committee: Committee 
           <div className="text-xs text-[#4a5580] font-mono mb-2">CURRENT SPEAKER</div>
           {committee.currentSpeaker ? (
             <>
-              <div className="text-2xl font-black text-white mb-4">{committee.currentSpeaker.country}</div>
+              <div className="text-2xl font-black text-[#1C1410] mb-4">{committee.currentSpeaker.country}</div>
               <div className="flex justify-between items-end mb-2">
-                <span className={`text-4xl font-mono font-bold ${committee.speakerTimeRemaining <= 10 ? 'text-red-400' : 'text-white'}`}>
+                <span className={`text-4xl font-mono font-bold ${committee.speakerTimeRemaining <= 10 ? 'text-red-400' : 'text-[#1C1410]'}`}>
                   {formatTime(committee.speakerTimeRemaining)}
                 </span>
                 <span className="text-sm text-[#4a5580]">/ {formatTime(committee.speakerTimeLimit)}</span>
@@ -78,7 +78,7 @@ export default function SpeakersListPanel({ committee }: { committee: Committee 
                 </button>
                 <button
                   onClick={() => { setRunning(false); nextSpeaker(committee.id); }}
-                  className="flex-1 bg-[#1e2540] hover:bg-[#2a3050] text-white py-2.5 rounded-lg font-semibold text-sm transition-colors"
+                  className="flex-1 bg-[#1e2540] hover:bg-[#2a3050] text-[#1C1410] py-2.5 rounded-lg font-semibold text-sm transition-colors"
                 >
                   Next →
                 </button>
@@ -91,7 +91,7 @@ export default function SpeakersListPanel({ committee }: { committee: Committee 
               <button
                 onClick={() => nextSpeaker(committee.id)}
                 disabled={committee.speakersList.length === 0}
-                className="mt-4 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-900 disabled:text-blue-700 text-white px-6 py-2 rounded-lg text-sm font-semibold transition-colors"
+                className="mt-4 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-900 disabled:text-blue-700 text-[#1C1410] px-6 py-2 rounded-lg text-sm font-semibold transition-colors"
               >
                 Call Next Speaker
               </button>
@@ -107,14 +107,14 @@ export default function SpeakersListPanel({ committee }: { committee: Committee 
               type="number"
               value={newTimeLimit}
               onChange={(e) => setNewTimeLimit(e.target.value)}
-              className="flex-1 bg-[#141929] border border-[#1e2540] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-600"
+              className="flex-1 bg-[#141929] border border-[#1e2540] rounded-lg px-3 py-2 text-[#1C1410] text-sm focus:outline-none focus:border-blue-600"
               min={10}
               max={600}
             />
             <span className="text-sm text-[#8892aa] self-center">sec</span>
             <button
               onClick={() => setSpeakerTimeLimit(committee.id, parseInt(newTimeLimit) || 90)}
-              className="bg-[#1e2540] hover:bg-[#2a3050] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+              className="bg-[#1e2540] hover:bg-[#2a3050] text-[#1C1410] px-4 py-2 rounded-lg text-sm font-medium transition-colors"
             >
               Set
             </button>
@@ -125,7 +125,7 @@ export default function SpeakersListPanel({ committee }: { committee: Committee 
                 key={t}
                 onClick={() => { setSpeakerTimeLimit(committee.id, t); setNewTimeLimit(String(t)); }}
                 className={`text-xs px-2 py-1 rounded transition-colors ${
-                  committee.speakerTimeLimit === t ? 'bg-blue-700 text-white' : 'bg-[#141929] text-[#8892aa] hover:text-white'
+                  committee.speakerTimeLimit === t ? 'bg-blue-700 text-[#1C1410]' : 'bg-[#141929] text-[#8892aa] hover:text-[#1C1410]'
                 }`}
               >
                 {t}s
@@ -158,7 +158,7 @@ export default function SpeakersListPanel({ committee }: { committee: Committee 
       <div className="w-64 flex flex-col bg-[#0f1526] border border-[#1e2540] rounded-xl overflow-hidden">
         <div className="p-3 border-b border-[#1e2540]">
           <div className="text-xs text-[#4a5580] font-mono">SPEAKERS LIST</div>
-          <div className="text-white text-sm font-bold mt-0.5">{committee.speakersList.length} queued</div>
+          <div className="text-[#1C1410] text-sm font-bold mt-0.5">{committee.speakersList.length} queued</div>
         </div>
         <div className="flex-1 overflow-y-auto p-2 space-y-1">
           {committee.speakersList.length === 0 ? (
@@ -187,7 +187,7 @@ export default function SpeakersListPanel({ committee }: { committee: Committee 
                 <button
                   key={d.id}
                   onClick={() => addToSpeakersList(committee.id, d.id)}
-                  className="w-full text-left text-xs text-[#8892aa] hover:text-white hover:bg-[#1e2540] px-2 py-1.5 rounded transition-colors"
+                  className="w-full text-left text-xs text-[#8892aa] hover:text-[#1C1410] hover:bg-[#1e2540] px-2 py-1.5 rounded transition-colors"
                 >
                   + {d.country}
                 </button>

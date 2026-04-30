@@ -39,12 +39,12 @@ export default function ResolutionsPanel({ committee }: { committee: Committee }
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between p-4 border-b border-[#1e2540]">
         <div>
-          <h3 className="font-bold text-white">Resolutions</h3>
+          <h3 className="font-bold text-[#1C1410]">Resolutions</h3>
           <p className="text-[#8892aa] text-xs mt-0.5">{committee.resolutions.length} documents</p>
         </div>
         <button
           onClick={() => setShowForm((v) => !v)}
-          className="bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1.5 rounded-lg font-medium transition-colors"
+          className="bg-blue-600 hover:bg-blue-500 text-[#1C1410] text-xs px-3 py-1.5 rounded-lg font-medium transition-colors"
         >
           + New
         </button>
@@ -57,27 +57,27 @@ export default function ResolutionsPanel({ committee }: { committee: Committee }
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Resolution title..."
-            className="w-full bg-[#141929] border border-[#1e2540] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-600 placeholder-[#4a5580]"
+            className="w-full bg-[#141929] border border-[#1e2540] rounded-lg px-3 py-2 text-[#1C1410] text-sm focus:outline-none focus:border-blue-600 placeholder-[#4a5580]"
           />
           <input
             type="text"
             value={sponsors}
             onChange={(e) => setSponsors(e.target.value)}
             placeholder="Sponsors (comma-separated countries)"
-            className="w-full bg-[#141929] border border-[#1e2540] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-600 placeholder-[#4a5580]"
+            className="w-full bg-[#141929] border border-[#1e2540] rounded-lg px-3 py-2 text-[#1C1410] text-sm focus:outline-none focus:border-blue-600 placeholder-[#4a5580]"
           />
           <textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
             placeholder="Resolution text (preambulatory and operative clauses)..."
             rows={4}
-            className="w-full bg-[#141929] border border-[#1e2540] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-600 placeholder-[#4a5580] resize-none"
+            className="w-full bg-[#141929] border border-[#1e2540] rounded-lg px-3 py-2 text-[#1C1410] text-sm focus:outline-none focus:border-blue-600 placeholder-[#4a5580] resize-none"
           />
           <div className="flex gap-2">
             <button
               onClick={handleAdd}
               disabled={!title.trim()}
-              className="flex-1 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-900 disabled:text-blue-700 text-white py-2 rounded-lg text-sm font-semibold transition-colors"
+              className="flex-1 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-900 disabled:text-blue-700 text-[#1C1410] py-2 rounded-lg text-sm font-semibold transition-colors"
             >
               Submit
             </button>
@@ -104,7 +104,7 @@ export default function ResolutionsPanel({ committee }: { committee: Committee }
                   onClick={() => setExpanded(expanded === res.id ? null : res.id)}
                 >
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-semibold text-white truncate">{res.title}</div>
+                    <div className="text-sm font-semibold text-[#1C1410] truncate">{res.title}</div>
                     <div className="text-xs text-[#8892aa] mt-0.5">{res.sponsors.join(', ')}</div>
                   </div>
                   <span className={`text-xs font-bold ml-3 ${cfg.color}`}>{cfg.label}</span>

@@ -144,20 +144,20 @@ function JoinPageInner() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#0D0906] flex flex-col">
-      <nav className="border-b border-[#2E1E0F] px-6 h-16 flex items-center justify-between bg-[#150F09]">
+    <div className="min-h-screen bg-[#F6F1E9] flex flex-col">
+      <nav className="border-b border-[#DDD4C0] px-6 h-16 flex items-center justify-between bg-[#FAF8F3]">
         <Link href="/" className="flex items-center gap-3">
           <img src="/gavelling-logo.png" alt="Gavelling" className="w-[16vw] h-auto max-h-9 object-contain" />
         </Link>
-        <Link href="/create" className="text-sm text-[#7B4A1E] hover:text-[#C4A882] transition-colors">
+        <Link href="/create" className="text-sm text-[#1B3828] hover:text-[#6A5A4A] transition-colors">
           Chair? Create Committee →
         </Link>
       </nav>
 
       <div className="flex-1 flex items-center justify-center px-6 py-12">
         <div className="w-full max-w-md">
-          <h1 className="text-3xl font-black text-white mb-2">Join a Session</h1>
-          <p className="text-[#C4A882] mb-8">Enter the session code and choose your role.</p>
+          <h1 className="text-3xl font-black text-[#1C1410] mb-2">Join a Session</h1>
+          <p className="text-[#6A5A4A] mb-8">Enter the session code and choose your role.</p>
 
           {/* Mode tabs */}
           <div className="flex gap-2 mb-8">
@@ -165,8 +165,8 @@ function JoinPageInner() {
               <button key={t.key} onClick={() => resetMode(t.key)}
                 className={`flex-1 flex flex-col items-center gap-1 py-3 px-2 rounded-xl border transition-all text-center ${
                   mode === t.key
-                    ? 'bg-[#2E1E0F] border-[#7B4A1E] text-white'
-                    : 'bg-[#1A1209] border-[#2E1E0F] text-[#C4A882] hover:border-[#7B4A1E]'
+                    ? 'bg-[#DDD4C0] border-[#1B3828] text-[#1C1410]'
+                    : 'bg-[#EDE7D8] border-[#DDD4C0] text-[#6A5A4A] hover:border-[#1B3828]'
                 }`}>
                 <Emoji size="1.25rem">{t.icon}</Emoji>
                 <span className="text-xs font-bold">{t.label}</span>
@@ -176,7 +176,7 @@ function JoinPageInner() {
 
           <div className="space-y-5">
             <div>
-              <label className="block text-sm font-medium text-[#E8D5B7] mb-2">Session Code</label>
+              <label className="block text-sm font-medium text-[#1C1410] mb-2">Session Code</label>
               <div className="relative">
                 <input
                   type="text"
@@ -184,30 +184,30 @@ function JoinPageInner() {
                   onChange={(e) => handleCodeChange(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter' && foundCommittee) handleJoin(); }}
                   placeholder="ABC123 or UNSC-2026"
-                  className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-lg px-4 py-3 text-white placeholder-[#7A5A38] focus:outline-none focus:border-[#7B4A1E] transition-colors font-mono text-xl tracking-widest text-center uppercase"
+                  className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] transition-colors font-mono text-xl tracking-widest text-center uppercase"
                   maxLength={20}
                   autoFocus
                 />
                 {lookingUp && (
                   <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                    <div className="w-4 h-4 border-2 border-[#7B4A1E] border-t-transparent rounded-full animate-spin" />
+                    <div className="w-4 h-4 border-2 border-[#1B3828] border-t-transparent rounded-full animate-spin" />
                   </div>
                 )}
               </div>
               {error && <p className="text-red-400 text-sm mt-2">{error}</p>}
               {mode === 'chair' && (
-                <p className="text-[#7A5A38] text-xs mt-2">Enter full chair code including -XXXX suffix</p>
+                <p className="text-[#9A8A78] text-xs mt-2">Enter full chair code including -XXXX suffix</p>
               )}
             </div>
 
             {foundCommittee && (
-              <div className="bg-[#7B4A1E]/10 border border-[#7B4A1E]/30 rounded-xl p-4">
-                <div className="text-[#7B4A1E] text-xs font-mono mb-2">✓ COMMITTEE FOUND</div>
-                <div className="text-white font-bold">{foundCommittee.name}</div>
-                <div className="text-[#C4A882] text-sm mt-1">{foundCommittee.topic}</div>
-                <div className="text-[#7A5A38] text-xs mt-2">{foundCommittee.delegates.length} delegates registered</div>
+              <div className="bg-[#1B3828]/10 border border-[#1B3828]/30 rounded-xl p-4">
+                <div className="text-[#1B3828] text-xs font-mono mb-2">✓ COMMITTEE FOUND</div>
+                <div className="text-[#1C1410] font-bold">{foundCommittee.name}</div>
+                <div className="text-[#6A5A4A] text-sm mt-1">{foundCommittee.topic}</div>
+                <div className="text-[#9A8A78] text-xs mt-2">{foundCommittee.delegates.length} delegates registered</div>
                 {foundCommittee.endedAt && (
-                  <div className="mt-3 text-xs text-[#B8844A] bg-[#7B4A1E]/20 border border-[#7B4A1E]/30 rounded-lg px-3 py-2">
+                  <div className="mt-3 text-xs text-[#B6871F] bg-[#1B3828]/20 border border-[#1B3828]/30 rounded-lg px-3 py-2">
                     This session has ended — view only access.
                   </div>
                 )}
@@ -224,11 +224,11 @@ function JoinPageInner() {
               if (!requireName) return null;
               return (
                 <div>
-                  <label className="block text-sm font-medium text-[#E8D5B7] mb-2">Your Country / Delegation</label>
+                  <label className="block text-sm font-medium text-[#1C1410] mb-2">Your Country / Delegation</label>
                   <select
                     value={country}
                     onChange={(e) => setCountry(e.target.value)}
-                    className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-lg px-4 py-3 text-white focus:outline-none focus:border-[#7B4A1E] transition-colors"
+                    className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-4 py-3 text-[#1C1410] focus:outline-none focus:border-[#1B3828] transition-colors"
                   >
                     <option value="">Select your country...</option>
                     {foundCommittee.delegates.map((d) => (
@@ -242,7 +242,7 @@ function JoinPageInner() {
             {/* Chair name selection — shown when committee found in chair mode */}
             {foundCommittee && mode === 'chair' && (
               <div>
-                <label className="block text-sm font-medium text-[#E8D5B7] mb-2">Which chair are you?</label>
+                <label className="block text-sm font-medium text-[#1C1410] mb-2">Which chair are you?</label>
                 {foundCommittee.chairNames.length > 0 && (
                   <div className="space-y-2 mb-3">
                     {foundCommittee.chairNames.map((n) => (
@@ -251,8 +251,8 @@ function JoinPageInner() {
                         onClick={() => { setChairNameMode('select'); setChairName(n); }}
                         className={`w-full text-left px-4 py-2.5 rounded-lg border text-sm font-semibold transition-colors ${
                           chairNameMode === 'select' && chairName === n
-                            ? 'bg-[#7B4A1E] border-[#8B5A2B] text-white'
-                            : 'bg-[#150F09] border-[#2E1E0F] text-[#C4A882] hover:border-[#7B4A1E]'
+                            ? 'bg-[#1B3828] border-[#2A5A3C] text-white'
+                            : 'bg-[#FAF8F3] border-[#DDD4C0] text-[#6A5A4A] hover:border-[#1B3828]'
                         }`}
                       >
                         🪑 {n}
@@ -262,8 +262,8 @@ function JoinPageInner() {
                       onClick={() => { setChairNameMode('new'); setChairName(''); }}
                       className={`w-full text-left px-4 py-2.5 rounded-lg border text-sm font-semibold transition-colors ${
                         chairNameMode === 'new'
-                          ? 'bg-[#2E1E0F] border-[#7B4A1E] text-white'
-                          : 'bg-[#150F09] border-[#2E1E0F] text-[#7A5A38] hover:border-[#7B4A1E]'
+                          ? 'bg-[#DDD4C0] border-[#1B3828] text-[#1C1410]'
+                          : 'bg-[#FAF8F3] border-[#DDD4C0] text-[#9A8A78] hover:border-[#1B3828]'
                       }`}
                     >
                       + New name
@@ -277,7 +277,7 @@ function JoinPageInner() {
                     onChange={(e) => setNewChairName(e.target.value)}
                     placeholder="Enter your name…"
                     autoFocus={chairNameMode === 'new'}
-                    className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-lg px-4 py-3 text-white placeholder-[#7A5A38] focus:outline-none focus:border-[#7B4A1E] transition-colors"
+                    className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] transition-colors"
                   />
                 )}
               </div>
@@ -294,7 +294,7 @@ function JoinPageInner() {
                       (chairNameMode === 'select' ? !chairName : !newChairName.trim()))
                   : !foundCommittee
               }
-              className="w-full bg-[#7B4A1E] hover:bg-[#8B5A2B] disabled:bg-[#2E1E0F] disabled:text-[#7A5A38] text-white py-3 rounded-lg font-semibold transition-colors"
+              className="w-full bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white py-3 rounded-lg font-semibold transition-colors"
             >
               {mode === 'delegate'
                 ? (foundCommittee?.endedAt ? 'View Session →' : 'Join Session →')
@@ -302,9 +302,9 @@ function JoinPageInner() {
             </button>
           </div>
 
-          <p className="text-center text-[#7A5A38] text-sm mt-8">
+          <p className="text-center text-[#9A8A78] text-sm mt-8">
             Are you a chair?{' '}
-            <Link href="/create" className="text-[#7B4A1E] hover:text-[#C4A882]">
+            <Link href="/create" className="text-[#1B3828] hover:text-[#6A5A4A]">
               Create a committee instead
             </Link>
           </p>
@@ -317,15 +317,15 @@ function JoinPageInner() {
 export default function JoinPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-[#0D0906] flex flex-col items-center justify-center gap-4">
+      <div className="min-h-screen bg-[#F6F1E9] flex flex-col items-center justify-center gap-4">
         <style>{`@keyframes gavel-strike { 0% { transform: rotate(-30deg); } 35% { transform: rotate(15deg); } 50% { transform: rotate(10deg); } 65% { transform: rotate(15deg); } 100% { transform: rotate(-30deg); } } .gavel-anim { animation: gavel-strike 1s ease-in-out infinite; transform-origin: 85% 85%; }`}</style>
         <svg className="gavel-anim" width="72" height="72" viewBox="0 0 72 72" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect x="38" y="38" width="8" height="28" rx="3" transform="rotate(-45 38 38)" fill="#7B4A1E" />
-          <rect x="8" y="14" width="36" height="16" rx="5" transform="rotate(-45 8 14)" fill="#B8844A" />
-          <rect x="10" y="16" width="36" height="7" rx="3" transform="rotate(-45 10 16)" fill="#C4A882" opacity="0.4" />
-          <circle cx="56" cy="56" r="3" fill="#7B4A1E" opacity="0.5" />
+          <rect x="38" y="38" width="8" height="28" rx="3" transform="rotate(-45 38 38)" fill="#1B3828" />
+          <rect x="8" y="14" width="36" height="16" rx="5" transform="rotate(-45 8 14)" fill="#B6871F" />
+          <rect x="10" y="16" width="36" height="7" rx="3" transform="rotate(-45 10 16)" fill="#6A5A4A" opacity="0.4" />
+          <circle cx="56" cy="56" r="3" fill="#1B3828" opacity="0.5" />
         </svg>
-        <p className="text-[#7A5A38] text-sm font-mono tracking-widest">LOADING…</p>
+        <p className="text-[#9A8A78] text-sm font-mono tracking-widest">LOADING…</p>
       </div>
     }>
       <JoinPageInner />

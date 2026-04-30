@@ -97,22 +97,22 @@ function CommitteeNameInput({ value, onChange, onPresetSelect }: {
           if (e.key === 'Escape') setOpen(false);
         }}
         placeholder="e.g. Human Rights Council or HRC"
-        className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-xl px-4 py-3 text-white placeholder-[#7A5A38] focus:outline-none focus:border-[#7B4A1E] transition-colors"
+        className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] transition-colors"
       />
       {open && matches.length > 0 && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-[#150F09] border border-[#2E1E0F] rounded-xl overflow-hidden z-30 shadow-xl">
+        <div className="absolute top-full left-0 right-0 mt-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl overflow-hidden z-30 shadow-xl">
           {matches.slice(0, 6).map((p, i) => (
             <button
               key={p.name}
               onMouseDown={(e) => { e.preventDefault(); onPresetSelect(p); setOpen(false); }}
               className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
-                i === 0 ? 'bg-[#7B4A1E]/20 text-white' : 'text-[#E8D5B7] hover:bg-[#2E1E0F]'
+                i === 0 ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'
               }`}
             >
               <span className="text-lg"><Emoji size="1.125rem">{p.icon}</Emoji></span>
               <span className="text-sm flex-1">{p.name}</span>
-              <span className="text-xs text-[#7A5A38] shrink-0">{p.acronym}</span>
-              {i === 0 && <span className="text-xs text-[#7A5A38] shrink-0">↵</span>}
+              <span className="text-xs text-[#9A8A78] shrink-0">{p.acronym}</span>
+              {i === 0 && <span className="text-xs text-[#9A8A78] shrink-0">↵</span>}
             </button>
           ))}
         </div>
@@ -187,8 +187,8 @@ function CreatePageInner() {
   };
 
   return (
-    <div className="h-screen bg-[#0D0906] flex flex-col overflow-hidden">
-      <nav className="border-b border-[#2E1E0F] bg-[#150F09] px-6 h-14 flex items-center justify-between shrink-0">
+    <div className="h-screen bg-[#F6F1E9] flex flex-col overflow-hidden">
+      <nav className="border-b border-[#DDD4C0] bg-[#FAF8F3] px-6 h-14 flex items-center justify-between shrink-0">
         <Link href="/" className="flex items-center gap-2">
           <img src="/gavelling-logo.png" alt="Gavelling" className="w-[16vw] h-auto max-h-9 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
         </Link>
@@ -205,27 +205,27 @@ function CreatePageInner() {
               style={{ width: 'min(320px, 40vw)', height: 'auto' }}
               onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
             />
-            <h1 className="text-2xl font-black text-white mb-2">Choose Committee Type</h1>
-            <p className="text-[#C4A882] text-sm mb-8">Select the type of committee you want to run.</p>
+            <h1 className="text-2xl font-black text-[#1C1410] mb-2">Choose Committee Type</h1>
+            <p className="text-[#6A5A4A] text-sm mb-8">Select the type of committee you want to run.</p>
             <div className="flex flex-row gap-4 w-full max-w-4xl">
-              <div className="flex-1 flex flex-col items-center justify-center bg-[#1A1209] border border-[#2E1E0F] rounded-3xl p-8 min-h-[300px] opacity-50 cursor-not-allowed relative transition-all hover:scale-[1.02]">
+              <div className="flex-1 flex flex-col items-center justify-center bg-[#EDE7D8] border border-[#DDD4C0] rounded-3xl p-8 min-h-[300px] opacity-50 cursor-not-allowed relative transition-all hover:scale-[1.02]">
                 <span className="mb-4"><Emoji size="3.75rem">🗣️</Emoji></span>
-                <h2 className="text-xl font-black text-white mb-2">Regular Debate</h2>
-                <p className="text-[#C4A882] text-sm text-center mb-4">Traditional parliamentary debate</p>
-                <span className="px-3 py-1 bg-[#2E1E0F] border border-[#3D2A15] text-[#7A5A38] rounded-full text-xs font-semibold">Coming Soon</span>
+                <h2 className="text-xl font-black text-[#1C1410] mb-2">Regular Debate</h2>
+                <p className="text-[#6A5A4A] text-sm text-center mb-4">Traditional parliamentary debate</p>
+                <span className="px-3 py-1 bg-[#DDD4C0] border border-[#C8BAA8] text-[#9A8A78] rounded-full text-xs font-semibold">Coming Soon</span>
               </div>
               <div onClick={() => setCommitteeMode('build')}
-                className="flex-1 flex flex-col items-center justify-center bg-[#1A1209] border-2 border-[#7B4A1E] rounded-3xl p-8 min-h-[300px] cursor-pointer hover:bg-[#2E1E0F] hover:border-[#C4A882] hover:scale-[1.04] transition-all group">
+                className="flex-1 flex flex-col items-center justify-center bg-[#EDE7D8] border-2 border-[#1B3828] rounded-3xl p-8 min-h-[300px] cursor-pointer hover:bg-[#DDD4C0] hover:border-[#6A5A4A] hover:scale-[1.04] transition-all group">
                 <span className="mb-4"><Emoji size="3.75rem">🌍</Emoji></span>
-                <h2 className="text-xl font-black text-white mb-2">Model United Nations</h2>
-                <p className="text-[#C4A882] text-sm text-center mb-4">United Nations committee simulation</p>
-                <span className="px-4 py-2 bg-[#7B4A1E] group-hover:bg-[#8B5A2B] text-white rounded-xl text-sm font-bold transition-colors">Start →</span>
+                <h2 className="text-xl font-black text-[#1C1410] mb-2">Model United Nations</h2>
+                <p className="text-[#6A5A4A] text-sm text-center mb-4">United Nations committee simulation</p>
+                <span className="px-4 py-2 bg-[#1B3828] group-hover:bg-[#2A5A3C] text-white rounded-xl text-sm font-bold transition-colors">Start →</span>
               </div>
-              <div className="flex-1 flex flex-col items-center justify-center bg-[#1A1209] border border-[#2E1E0F] rounded-3xl p-8 min-h-[300px] opacity-50 cursor-not-allowed relative transition-all hover:scale-[1.02]">
+              <div className="flex-1 flex flex-col items-center justify-center bg-[#EDE7D8] border border-[#DDD4C0] rounded-3xl p-8 min-h-[300px] opacity-50 cursor-not-allowed relative transition-all hover:scale-[1.02]">
                 <span className="mb-4"><Emoji size="3.75rem">⚡</Emoji></span>
-                <h2 className="text-xl font-black text-white mb-2">Crisis Committee</h2>
-                <p className="text-[#C4A882] text-sm text-center mb-4">Fast-paced crisis scenarios</p>
-                <span className="px-3 py-1 bg-[#2E1E0F] border border-[#3D2A15] text-[#7A5A38] rounded-full text-xs font-semibold">Coming H2 2026</span>
+                <h2 className="text-xl font-black text-[#1C1410] mb-2">Crisis Committee</h2>
+                <p className="text-[#6A5A4A] text-sm text-center mb-4">Fast-paced crisis scenarios</p>
+                <span className="px-3 py-1 bg-[#DDD4C0] border border-[#C8BAA8] text-[#9A8A78] rounded-full text-xs font-semibold">Coming H2 2026</span>
               </div>
             </div>
           </div>
@@ -234,29 +234,29 @@ function CreatePageInner() {
         {committeeMode === 'build' && (
           <div className="flex-1 flex flex-col overflow-hidden px-8 py-6">
             <div className="flex items-center gap-3 mb-6 shrink-0">
-              <button onClick={() => setCommitteeMode('select')} className="text-sm text-[#C4A882] hover:text-white transition-colors">← Back</button>
+              <button onClick={() => setCommitteeMode('select')} className="text-sm text-[#6A5A4A] hover:text-[#1C1410] transition-colors">← Back</button>
               <span className="text-2xl">✏️</span>
-              <h1 className="text-2xl font-black text-white">New Committee</h1>
+              <h1 className="text-2xl font-black text-[#1C1410]">New Committee</h1>
             </div>
 
             <div className="grid grid-cols-3 gap-4 mb-3 shrink-0">
               <div>
-                <label className="block text-xs font-semibold text-[#C4A882] mb-1.5">Committee Name</label>
+                <label className="block text-xs font-semibold text-[#6A5A4A] mb-1.5">Committee Name</label>
                 <CommitteeNameInput value={committeeName} onChange={(v) => { setCommitteeName(v); setIsUNSC(false); }} onPresetSelect={handleCommitteePreset} />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-[#C4A882] mb-1.5">
-                  Chair Name <span className="text-[#7A5A38] font-normal">(optional)</span>
+                <label className="block text-xs font-semibold text-[#6A5A4A] mb-1.5">
+                  Chair Name <span className="text-[#9A8A78] font-normal">(optional)</span>
                 </label>
                 <input type="text" value={chairNames[0]} onChange={(e) => setChairNames([e.target.value])}
                   placeholder="e.g. John Smith"
-                  className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-xl px-4 py-3 text-white placeholder-[#7A5A38] focus:outline-none focus:border-[#7B4A1E] transition-colors" />
+                  className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] transition-colors" />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-[#C4A882] mb-1.5">Topic / Agenda Item</label>
+                <label className="block text-xs font-semibold text-[#6A5A4A] mb-1.5">Topic / Agenda Item</label>
                 <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)}
                   placeholder="e.g. The right to education"
-                  className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-xl px-4 py-3 text-white placeholder-[#7A5A38] focus:outline-none focus:border-[#7B4A1E] transition-colors" />
+                  className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] transition-colors" />
               </div>
             </div>
             {isUNSC && (
@@ -268,9 +268,9 @@ function CreatePageInner() {
             <div className="flex-1 grid grid-cols-2 gap-6 min-h-0">
               <div className="flex flex-col gap-4 min-h-0">
                 <div className="shrink-0">
-                  <label className="block text-xs font-semibold text-[#C4A882] mb-1.5">Search &amp; Add</label>
+                  <label className="block text-xs font-semibold text-[#6A5A4A] mb-1.5">Search &amp; Add</label>
                   <div className="relative">
-                    <div className="flex items-center bg-[#150F09] border border-[#2E1E0F] focus-within:border-[#7B4A1E] rounded-xl overflow-visible transition-colors">
+                    <div className="flex items-center bg-[#FAF8F3] border border-[#DDD4C0] focus-within:border-[#1B3828] rounded-xl overflow-visible transition-colors">
                       <input type="text" value={search} onChange={(e) => setSearch(e.target.value)}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
@@ -281,27 +281,27 @@ function CreatePageInner() {
                           if (e.key === 'Escape') setSearch('');
                         }}
                         placeholder="Search countries or add custom…"
-                        className="flex-1 bg-transparent px-4 py-3 text-white placeholder-[#7A5A38] focus:outline-none text-sm" />
+                        className="flex-1 bg-transparent px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none text-sm" />
                       {search && (available[0] || search.trim()) && (
-                        <span className="text-xs text-[#7A5A38] px-3 shrink-0">↵ {available[0]?.name ?? search.trim()}</span>
+                        <span className="text-xs text-[#9A8A78] px-3 shrink-0">↵ {available[0]?.name ?? search.trim()}</span>
                       )}
                     </div>
                     {search && (available.length > 0 || search.trim()) && (
-                      <div className="absolute top-full left-0 right-0 mt-1 bg-[#150F09] border border-[#2E1E0F] rounded-xl overflow-hidden z-20 shadow-xl">
+                      <div className="absolute top-full left-0 right-0 mt-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl overflow-hidden z-20 shadow-xl">
                         {available.slice(0, 5).map((c, i) => (
                           <button key={c.code} onMouseDown={(e) => { e.preventDefault(); addDelegate(c.name); setSearch(''); }}
-                            className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${i === 0 ? 'bg-[#7B4A1E]/20 text-white' : 'text-[#E8D5B7] hover:bg-[#2E1E0F]'}`}>
+                            className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${i === 0 ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'}`}>
                             <img src={getFlagUrl(c.code)} alt={c.code} className="w-6 h-6 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                             <span className="text-sm flex-1">{c.name}</span>
-                            {i === 0 && <span className="ml-auto text-xs text-[#7A5A38]">Enter ↵</span>}
+                            {i === 0 && <span className="ml-auto text-xs text-[#9A8A78]">Enter ↵</span>}
                           </button>
                         ))}
                         {search.trim() && !delegates.includes(search.trim()) && !available.some((c) => c.name.toLowerCase() === search.trim().toLowerCase()) && (
                           <button onMouseDown={(e) => { e.preventDefault(); addDelegate(search.trim()); setSearch(''); }}
-                            className="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors text-[#E8D5B7] hover:bg-[#2E1E0F] border-t border-[#2E1E0F]">
+                            className="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors text-[#1C1410] hover:bg-[#DDD4C0] border-t border-[#DDD4C0]">
                             <Emoji size="1.25rem">🌐</Emoji>
                             <span className="text-sm flex-1">{search.trim()}</span>
-                            <span className="text-[10px] text-[#7B4A1E] shrink-0 font-semibold">Add custom</span>
+                            <span className="text-[10px] text-[#1B3828] shrink-0 font-semibold">Add custom</span>
                           </button>
                         )}
                       </div>
@@ -310,27 +310,27 @@ function CreatePageInner() {
                 </div>
 
                 <div className="shrink-0">
-                  <label className="block text-xs font-semibold text-[#C4A882] mb-2">Quick Bundles</label>
+                  <label className="block text-xs font-semibold text-[#6A5A4A] mb-2">Quick Bundles</label>
                   <div className="flex flex-wrap gap-2">
                     {Object.entries(BUNDLES).map(([key, bundle]) => (
                       <button key={key} onClick={() => addBundle(key)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1A1209] border border-[#2E1E0F] hover:border-[#7B4A1E] rounded-lg text-xs font-semibold text-[#C4A882] hover:text-white transition-all">
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-[#EDE7D8] border border-[#DDD4C0] hover:border-[#1B3828] rounded-lg text-xs font-semibold text-[#6A5A4A] hover:text-[#1C1410] transition-all">
                         <span>{bundle.icon}</span>
                         <span>{bundle.label}</span>
-                        <span className="text-[#7A5A38]">+{bundle.members.length}</span>
+                        <span className="text-[#9A8A78]">+{bundle.members.length}</span>
                       </button>
                     ))}
                   </div>
                 </div>
 
                 <div className="flex-1 flex flex-col min-h-0">
-                  <label className="block text-xs font-semibold text-[#C4A882] mb-1.5">Paste Country List</label>
+                  <label className="block text-xs font-semibold text-[#6A5A4A] mb-1.5">Paste Country List</label>
                   <textarea value={pasteText} onChange={(e) => { setPasteText(e.target.value); setPasteError(''); }}
                     placeholder={'France\nGermany\nBrazil, India...'}
-                    className="flex-1 bg-[#150F09] border border-[#2E1E0F] rounded-xl px-4 py-3 text-white placeholder-[#7A5A38] focus:outline-none focus:border-[#7B4A1E] transition-colors text-sm resize-none min-h-0" />
+                    className="flex-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] transition-colors text-sm resize-none min-h-0" />
                   <div className="flex items-center gap-3 mt-2">
                     <button onClick={handlePaste} disabled={!pasteText.trim()}
-                      className="px-4 py-2 bg-[#1A1209] hover:bg-[#2E1E0F] disabled:opacity-40 border border-[#2E1E0F] text-[#C4A882] rounded-lg text-xs font-semibold transition-colors">
+                      className="px-4 py-2 bg-[#EDE7D8] hover:bg-[#DDD4C0] disabled:opacity-40 border border-[#DDD4C0] text-[#6A5A4A] rounded-lg text-xs font-semibold transition-colors">
                       Auto-match &amp; Add →
                     </button>
                     {pasteError && <p className="text-xs text-yellow-400 flex-1">{pasteError}</p>}
@@ -340,18 +340,18 @@ function CreatePageInner() {
 
               <div className="flex flex-col min-h-0">
                 <div className="flex items-center justify-between mb-2 shrink-0">
-                  <label className="text-xs font-semibold text-[#C4A882]">Selected Delegates</label>
+                  <label className="text-xs font-semibold text-[#6A5A4A]">Selected Delegates</label>
                   <div className="flex items-center gap-3">
-                    <span className="text-xs font-bold text-white">{delegates.length} added</span>
+                    <span className="text-xs font-bold text-[#1C1410]">{delegates.length} added</span>
                     {delegates.length > 0 && (
-                      <button onClick={() => setDelegates([])} className="text-xs text-[#7A5A38] hover:text-red-500 transition-colors">Clear all</button>
+                      <button onClick={() => setDelegates([])} className="text-xs text-[#9A8A78] hover:text-red-500 transition-colors">Clear all</button>
                     )}
                   </div>
                 </div>
 
-                <div className="flex-1 bg-[#150F09] border border-[#2E1E0F] rounded-xl overflow-hidden mb-4 min-h-0">
+                <div className="flex-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl overflow-hidden mb-4 min-h-0">
                   {delegates.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-full text-[#7A5A38] text-sm gap-2">
+                    <div className="flex flex-col items-center justify-center h-full text-[#9A8A78] text-sm gap-2">
                       <Emoji size="1.875rem">🌍</Emoji>
                       <span>No delegates added yet</span>
                     </div>
@@ -360,11 +360,11 @@ function CreatePageInner() {
                       {delegates.map((name) => {
                         const found = getCountryByName(name);
                         return (
-                          <div key={name} className="flex items-center gap-3 px-4 py-2.5 border-b border-[#2E1E0F]/50 last:border-0 hover:bg-[#2E1E0F] transition-colors group">
+                          <div key={name} className="flex items-center gap-3 px-4 py-2.5 border-b border-[#DDD4C0]/50 last:border-0 hover:bg-[#DDD4C0] transition-colors group">
                             {found ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <Emoji size="1.125rem">🌐</Emoji>}
-                            <span className="text-sm text-white flex-1 truncate">{name}</span>
+                            <span className="text-sm text-[#1C1410] flex-1 truncate">{name}</span>
                             <button onClick={() => setDelegates((p) => p.filter((d) => d !== name))}
-                              className="text-[#7A5A38] group-hover:text-red-500 transition-colors text-sm opacity-0 group-hover:opacity-100">✕</button>
+                              className="text-[#9A8A78] group-hover:text-red-500 transition-colors text-sm opacity-0 group-hover:opacity-100">✕</button>
                           </div>
                         );
                       })}
@@ -373,7 +373,7 @@ function CreatePageInner() {
                 </div>
 
                 <button onClick={handleCreate} disabled={!canProceed || creating}
-                  className="w-full bg-[#3D6B35] hover:bg-[#4A7C42] disabled:bg-[#2E1E0F] disabled:text-[#7A5A38] text-white py-4 rounded-xl font-bold transition-colors text-base shrink-0">
+                  className="w-full bg-[#2A5A3C] hover:bg-[#3D7A52] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-[#1C1410] py-4 rounded-xl font-bold transition-colors text-base shrink-0">
                   {creating ? 'Creating...' : canProceed ? 'Start Session →' : 'Enter committee name, chair, and topic above'}
                 </button>
               </div>
@@ -387,7 +387,7 @@ function CreatePageInner() {
 
 export default function CreatePage() {
   return (
-    <Suspense fallback={<div className="h-screen bg-[#0D0906] flex items-center justify-center"><span className="text-[#7A5A38]">Loading...</span></div>}>
+    <Suspense fallback={<div className="h-screen bg-[#F6F1E9] flex items-center justify-center"><span className="text-[#9A8A78]">Loading...</span></div>}>
       <CreatePageInner />
     </Suspense>
   );

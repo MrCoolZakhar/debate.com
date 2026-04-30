@@ -47,7 +47,7 @@ function VoteScale({ forCount, againstCount, totalVoted }: {
   const againstPct = totalVoted > 0 ? (againstCount / totalVoted) * 50 : 0;
   return (
     <div className="w-full max-w-2xl px-4">
-      <div className="relative h-7 bg-[#1A1209] rounded-full overflow-hidden border border-[#2E1E0F]">
+      <div className="relative h-7 bg-[#EDE7D8] rounded-full overflow-hidden border border-[#DDD4C0]">
         <div
           className="absolute right-1/2 top-0 bottom-0 bg-red-500/70 transition-all duration-300"
           style={{ width: `${againstPct}%` }}
@@ -56,11 +56,11 @@ function VoteScale({ forCount, againstCount, totalVoted }: {
           className="absolute left-1/2 top-0 bottom-0 bg-green-500/70 transition-all duration-300"
           style={{ width: `${forPct}%` }}
         />
-        <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-[#7A5A38] -translate-x-px" />
+        <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-[#9A8A78] -translate-x-px" />
       </div>
       <div className="flex justify-between mt-1.5 text-xs font-bold">
         <span className="text-red-400">← {againstCount} Against</span>
-        <span className="text-[#7A5A38] text-[10px] font-normal">{totalVoted} voted</span>
+        <span className="text-[#9A8A78] text-[10px] font-normal">{totalVoted} voted</span>
         <span className="text-green-400">{forCount} For →</span>
       </div>
     </div>
@@ -134,7 +134,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0D0906] flex items-center justify-center">
+      <div className="min-h-screen bg-[#F6F1E9] flex items-center justify-center">
         <img src="/loading.gif" alt="Loading..." className="w-24 h-24 object-contain" />
       </div>
     );
@@ -142,12 +142,12 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
 
   if (!committee) {
     return (
-      <div className="min-h-screen bg-[#0D0906] flex items-center justify-center">
+      <div className="min-h-screen bg-[#F6F1E9] flex items-center justify-center">
         <div className="text-center">
           <div className="mb-4"><Emoji size="2.5rem">🔍</Emoji></div>
-          <h1 className="text-2xl font-bold text-white mb-2">Committee not found</h1>
-          <p className="text-[#C4A882] mb-6">Code &ldquo;{code}&rdquo; is invalid or the session ended.</p>
-          <Link href="/" className="bg-[#7B4A1E] hover:bg-[#8B5A2B] text-white px-6 py-3 rounded-lg font-semibold transition-colors">
+          <h1 className="text-2xl font-bold text-[#1C1410] mb-2">Committee not found</h1>
+          <p className="text-[#6A5A4A] mb-6">Code &ldquo;{code}&rdquo; is invalid or the session ended.</p>
+          <Link href="/" className="bg-[#1B3828] hover:bg-[#2A5A3C] text-white px-6 py-3 rounded-lg font-semibold transition-colors">
             Go Home
           </Link>
         </div>
@@ -274,7 +274,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   };
 
   const Header = ({ children }: { children?: React.ReactNode }) => (
-    <header className="border-b border-[#2E1E0F] bg-[#150F08] px-6 h-12 flex items-center gap-4 shrink-0">
+    <header className="border-b border-[#DDD4C0] bg-[#FAF8F3] px-6 h-12 flex items-center gap-4 shrink-0">
       <Link href="/">
         <img
           src="/gavelling-logo.png"
@@ -284,11 +284,11 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
         />
       </Link>
       <div className="flex-1 min-w-0 flex items-center gap-2">
-        <span className="text-sm font-bold text-white truncate">{abbreviateCommitteeName(committee.name)}</span>
+        <span className="text-sm font-bold text-[#1C1410] truncate">{abbreviateCommitteeName(committee.name)}</span>
       </div>
       <button
         onClick={handleBackToSession}
-        className="text-xs px-3 py-1 rounded-lg bg-[#2E1E0F] text-[#C4A882] hover:text-white transition-colors shrink-0"
+        className="text-xs px-3 py-1 rounded-lg bg-[#DDD4C0] text-[#6A5A4A] hover:text-[#1C1410] transition-colors shrink-0"
       >
         ← Back to Session
       </button>
@@ -298,7 +298,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       >
         End Debate
       </button>
-      <button onClick={() => setShowSettings(true)} className="text-[#7A5A38] hover:text-white transition-colors shrink-0 text-2xl">⚙</button>
+      <button onClick={() => setShowSettings(true)} className="text-[#9A8A78] hover:text-[#1C1410] transition-colors shrink-0 text-2xl">⚙</button>
       {children}
     </header>
   );
@@ -321,10 +321,10 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     const presentCount = Object.values(rollCallStatuses).filter((s) => s !== 'absent').length;
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(5, 4, 3, 0.92)', backdropFilter: 'blur(4px)' }}>
-        <div className="bg-[#1A1209] border border-[#2E1E0F] rounded-2xl w-full max-w-md shadow-2xl flex flex-col" style={{ maxHeight: '85vh' }}>
-          <div className="px-5 py-4 border-b border-[#2E1E0F] shrink-0">
-            <h2 className="text-base font-black text-white">Roll Call</h2>
-            <p className="text-xs text-[#7A5A38] mt-0.5">{presentCount} of {committee.delegates.length} delegates present — confirm before voting</p>
+        <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-2xl w-full max-w-md shadow-2xl flex flex-col" style={{ maxHeight: '85vh' }}>
+          <div className="px-5 py-4 border-b border-[#DDD4C0] shrink-0">
+            <h2 className="text-base font-black text-[#1C1410]">Roll Call</h2>
+            <p className="text-xs text-[#9A8A78] mt-0.5">{presentCount} of {committee.delegates.length} delegates present — confirm before voting</p>
           </div>
           <div className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
             {sorted.map((d) => {
@@ -336,15 +336,15 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                   'bg-blue-950/30 border border-blue-800/30'
                 }`}>
                   {(() => { const f = getCountryByName(d.country); return f ? <img src={getFlagUrl(f.code)} alt={f.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <Emoji size="1.25rem">🌐</Emoji>; })()}
-                  <span className="flex-1 text-sm text-white truncate">{d.country}</span>
+                  <span className="flex-1 text-sm text-[#1C1410] truncate">{d.country}</span>
                   <button
                     onClick={() => cycleStatus(d.id)}
-                    className={`relative w-[90px] h-[30px] rounded-full bg-[#1A1209] border border-[#2E1E0F] cursor-pointer shrink-0 select-none`}
+                    className={`relative w-[90px] h-[30px] rounded-full bg-[#EDE7D8] border border-[#DDD4C0] cursor-pointer shrink-0 select-none`}
                   >
                     <div className="absolute inset-0 grid grid-cols-3 items-center pointer-events-none">
-                      <span className={`text-[10px] font-bold text-center ${status === 'absent' ? 'text-red-900' : 'text-[#7A5A38]'}`}>A</span>
-                      <span className={`text-[10px] font-bold text-center ${status === 'present' ? 'text-white' : 'text-[#7A5A38]'}`}>P</span>
-                      <span className={`text-[10px] font-bold text-center ${status === 'present-voting' ? 'text-white' : 'text-[#7A5A38]'}`}>PV</span>
+                      <span className={`text-[10px] font-bold text-center ${status === 'absent' ? 'text-red-900' : 'text-[#9A8A78]'}`}>A</span>
+                      <span className={`text-[10px] font-bold text-center ${status === 'present' ? 'text-[#1C1410]' : 'text-[#9A8A78]'}`}>P</span>
+                      <span className={`text-[10px] font-bold text-center ${status === 'present-voting' ? 'text-[#1C1410]' : 'text-[#9A8A78]'}`}>PV</span>
                     </div>
                     <div className={`absolute top-[3px] w-[26px] h-[24px] rounded-full transition-all duration-200 ${thumbPos(status)} ${thumbColor(status)}`} />
                   </button>
@@ -352,11 +352,11 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
               );
             })}
           </div>
-          <div className="px-4 py-4 border-t border-[#2E1E0F] shrink-0">
+          <div className="px-4 py-4 border-t border-[#DDD4C0] shrink-0">
             <button
               onClick={() => setRollCallDone(true)}
               disabled={presentCount === 0}
-              className="w-full bg-[#7B4A1E] hover:bg-[#8B5A2B] disabled:bg-[#2E1E0F] disabled:text-[#7A5A38] text-white py-3 rounded-xl font-black text-sm transition-colors"
+              className="w-full bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white py-3 rounded-xl font-black text-sm transition-colors"
             >
               {presentCount > 0 ? `Start Voting with ${presentCount} delegates →` : 'Mark at least 1 delegate present'}
             </button>
@@ -369,17 +369,17 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   // ── Doc selection screen ──────────────────────────────────────────────────
   if (!selectedDoc) {
     return (
-      <div className="min-h-screen bg-[#0D0906] flex flex-col">
+      <div className="min-h-screen bg-[#F6F1E9] flex flex-col">
         <Header />
         {!rollCallDone && <RollCallModal />}
         {showSettings && <SettingsPanel committee={committee} onClose={() => setShowSettings(false)} />}
         <div className="flex-1 flex items-center justify-center">
           <div className="w-96 space-y-3">
-            <p className="text-xs font-mono text-[#7A5A38] text-center mb-5 tracking-widest">
+            <p className="text-xs font-mono text-[#9A8A78] text-center mb-5 tracking-widest">
               SELECT DRAFT RESOLUTION TO VOTE ON
             </p>
             {allDRs.length === 0 ? (
-              <p className="text-sm text-[#7A5A38] text-center py-8">No introduced draft resolutions.</p>
+              <p className="text-sm text-[#9A8A78] text-center py-8">No introduced draft resolutions.</p>
             ) : (
               allDRs.map((doc) => {
                 const isVoted = doc.status === 'passed' || doc.status === 'failed';
@@ -390,12 +390,12 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                     disabled={isVoted}
                     className={`w-full text-left px-4 py-4 rounded-xl border transition-colors ${
                       isVoted
-                        ? 'border-[#2E1E0F] bg-[#0D0906] opacity-60 cursor-not-allowed'
-                        : 'border-[#2E1E0F] bg-[#1A1209] text-[#C4A882] hover:border-[#7B4A1E]/60 hover:bg-[#7B4A1E]/10'
+                        ? 'border-[#DDD4C0] bg-[#F6F1E9] opacity-60 cursor-not-allowed'
+                        : 'border-[#DDD4C0] bg-[#EDE7D8] text-[#6A5A4A] hover:border-[#1B3828]/60 hover:bg-[#1B3828]/10'
                     }`}
                   >
                     <div className="flex items-center justify-between gap-2 mb-0.5">
-                      <span className="text-xs font-mono font-bold text-[#7B4A1E]">{doc.docCode}</span>
+                      <span className="text-xs font-mono font-bold text-[#1B3828]">{doc.docCode}</span>
                       {doc.status === 'passed' && (
                         <span className="text-[10px] font-bold text-green-400 bg-green-950/40 border border-green-800/40 px-2 py-0.5 rounded-full">✓ PASSED</span>
                       )}
@@ -403,9 +403,9 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                         <span className="text-[10px] font-bold text-red-400 bg-red-950/40 border border-red-800/40 px-2 py-0.5 rounded-full">✗ FAILED</span>
                       )}
                     </div>
-                    <span className="text-base font-bold text-white block">{doc.title}</span>
+                    <span className="text-base font-bold text-[#1C1410] block">{doc.title}</span>
                     {doc.sponsors.length > 0 && (
-                      <span className="text-xs text-[#7A5A38] block mt-1">Sponsors: {doc.sponsors.join(', ')}</span>
+                      <span className="text-xs text-[#9A8A78] block mt-1">Sponsors: {doc.sponsors.join(', ')}</span>
                     )}
                   </button>
                 );
@@ -423,18 +423,18 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   const upcomingDelegates = presentDelegates.slice(currentVoterIndex + 1, currentVoterIndex + 6);
 
   return (
-    <div className="h-screen bg-[#0D0906] flex flex-col overflow-hidden">
+    <div className="h-screen bg-[#F6F1E9] flex flex-col overflow-hidden">
       <Header>
-        <span className="text-xs font-mono font-bold text-[#7B4A1E] bg-[#2E1E0F] px-2 py-0.5 rounded shrink-0">
+        <span className="text-xs font-mono font-bold text-[#1B3828] bg-[#DDD4C0] px-2 py-0.5 rounded shrink-0">
           {selectedDoc.docCode}
         </span>
-        <span className="text-sm font-bold text-white truncate hidden sm:block">{selectedDoc.title}</span>
-        <span className="text-xs text-[#7A5A38] shrink-0">
+        <span className="text-sm font-bold text-[#1C1410] truncate hidden sm:block">{selectedDoc.title}</span>
+        <span className="text-xs text-[#9A8A78] shrink-0">
           {Math.min(currentVoterIndex, presentDelegates.length)}/{presentDelegates.length} voted
         </span>
         <button
           onClick={() => setSelectedDocId(null)}
-          className="text-xs text-[#7A5A38] hover:text-[#C4A882] transition-colors shrink-0"
+          className="text-xs text-[#9A8A78] hover:text-[#6A5A4A] transition-colors shrink-0"
         >
           ← DRs
         </button>
@@ -453,11 +453,11 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             </div>
             <h1
               style={{ fontSize: 'min(5.5vw, 5vh)' }}
-              className="font-black text-white text-center leading-tight mb-1"
+              className="font-black text-[#1C1410] text-center leading-tight mb-1"
             >
               {currentDelegate.country}
             </h1>
-            <p className="text-[#7A5A38] text-sm">
+            <p className="text-[#9A8A78] text-sm">
               {currentVoterIndex + 1} of {presentDelegates.length}
             </p>
           </div>
@@ -479,12 +479,12 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             {(rollCallStatuses[currentDelegate.id] ?? currentDelegate.status) === 'present' ? (
               <button
                 onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'abstain')}
-                className="flex-1 bg-[#2E1E0F]/60 hover:bg-[#3D2A15]/80 border border-[#7A5A38]/50 text-[#C4A882] font-black text-base py-6 rounded-2xl transition-colors"
+                className="flex-1 bg-[#DDD4C0]/60 hover:bg-[#C8BAA8]/80 border border-[#9A8A78]/50 text-[#6A5A4A] font-black text-base py-6 rounded-2xl transition-colors"
               >
                 Abstain
               </button>
             ) : (
-              <button disabled className="flex-1 bg-[#2E1E0F]/30 border border-[#7A5A38]/20 text-[#7A5A38] font-black text-base py-6 rounded-2xl opacity-40 cursor-not-allowed">
+              <button disabled className="flex-1 bg-[#DDD4C0]/30 border border-[#9A8A78]/20 text-[#9A8A78] font-black text-base py-6 rounded-2xl opacity-40 cursor-not-allowed">
                 Abstain (P+V)
               </button>
             )}
@@ -508,7 +508,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
           {/* Upcoming voters */}
           {upcomingDelegates.length > 0 && (
             <div className="mt-4 w-full max-w-2xl">
-              <p className="text-[10px] text-[#7A5A38] font-mono text-center mb-2 tracking-widest">UP NEXT</p>
+              <p className="text-[10px] text-[#9A8A78] font-mono text-center mb-2 tracking-widest">UP NEXT</p>
               <div className="flex items-center justify-center gap-4">
                 {upcomingDelegates.map((d, i) => (
                   <div
@@ -519,7 +519,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                     <span style={{ fontSize: i === 0 ? '4rem' : `${Math.max(1.2, 2.8 - i * 0.2)}rem`, lineHeight: '1' }}>
                       {getFlag(d.country)}
                     </span>
-                    <span className="text-[9px] text-[#7A5A38] text-center max-w-[52px] truncate">
+                    <span className="text-[9px] text-[#9A8A78] text-center max-w-[52px] truncate">
                       {d.country}
                     </span>
                   </div>
@@ -534,35 +534,35 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       {phase === 'voting' && !currentDelegate && (
         <div className="flex-1 flex flex-col items-center justify-center px-8 gap-6">
           <Emoji size="3.75rem">🗳️</Emoji>
-          <h2 className="text-3xl font-black text-white">
+          <h2 className="text-3xl font-black text-[#1C1410]">
             All {presentDelegates.length} delegates have voted
           </h2>
           <div className="flex gap-10 text-center">
             <div>
               <div className="text-4xl font-black text-green-400">{forCount}</div>
-              <div className="text-[#C4A882] text-sm mt-1">For</div>
+              <div className="text-[#6A5A4A] text-sm mt-1">For</div>
             </div>
             <div>
               <div className="text-4xl font-black text-red-400">{againstCount}</div>
-              <div className="text-[#C4A882] text-sm mt-1">Against</div>
+              <div className="text-[#6A5A4A] text-sm mt-1">Against</div>
             </div>
             {abstainCount > 0 && (
               <div>
-                <div className="text-4xl font-black text-[#C4A882]">{abstainCount}</div>
-                <div className="text-[#7A5A38] text-sm mt-1">Abstain</div>
+                <div className="text-4xl font-black text-[#6A5A4A]">{abstainCount}</div>
+                <div className="text-[#9A8A78] text-sm mt-1">Abstain</div>
               </div>
             )}
             {withRights.length > 0 && (
               <div>
                 <div className="text-4xl font-black text-amber-400">{withRights.length}</div>
-                <div className="text-[#C4A882] text-sm mt-1">w/ Rights</div>
+                <div className="text-[#6A5A4A] text-sm mt-1">w/ Rights</div>
               </div>
             )}
           </div>
           <VoteScale forCount={forCount} againstCount={againstCount} totalVoted={votes.length} />
           <button
             onClick={handleFinishVoting}
-            className="bg-[#7B4A1E] hover:bg-[#8B5A2B] text-white px-12 py-4 rounded-2xl font-black text-lg transition-colors mt-2"
+            className="bg-[#1B3828] hover:bg-[#2A5A3C] text-white px-12 py-4 rounded-2xl font-black text-lg transition-colors mt-2"
           >
             {withRights.length > 0
               ? `Proceed to Rights Speakers (${withRights.length}) →`
@@ -586,7 +586,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             </div>
             <h1
               style={{ fontSize: 'min(5vw, 4vh)' }}
-              className="font-black text-white text-center mb-2"
+              className="font-black text-[#1C1410] text-center mb-2"
             >
               {orderedRights[rightsIndex].country}
             </h1>
@@ -594,19 +594,19 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
               {orderedRights[rightsIndex].choice === 'for-rights' ? '★ In Favour with Rights' : '★ Against with Rights'}
             </p>
             {/* Rights speaker countdown timer */}
-            <div className={`text-6xl font-black font-mono mt-4 tabular-nums ${rightsSpeakerTime <= 10 ? 'text-red-500' : rightsSpeakerTime <= 20 ? 'text-yellow-500' : 'text-white'}`}>
+            <div className={`text-6xl font-black font-mono mt-4 tabular-nums ${rightsSpeakerTime <= 10 ? 'text-red-500' : rightsSpeakerTime <= 20 ? 'text-yellow-500' : 'text-[#1C1410]'}`}>
               {Math.floor(rightsSpeakerTime / 60)}:{String(rightsSpeakerTime % 60).padStart(2, '0')}
             </div>
             <div className="flex gap-2 mt-3 flex-wrap justify-center">
               <button
                 onClick={() => setRightsRunning((r) => !r)}
-                className={`px-6 py-2.5 rounded-xl font-bold text-sm transition-colors ${rightsRunning ? 'bg-yellow-600 hover:bg-yellow-500 text-white' : 'bg-[#3D6B35] hover:bg-[#4A7C42] text-white'}`}
+                className={`px-6 py-2.5 rounded-xl font-bold text-sm transition-colors ${rightsRunning ? 'bg-yellow-600 hover:bg-yellow-500 text-white' : 'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'}`}
               >
                 {rightsRunning ? '⏸ Pause' : '▶ Start'}
               </button>
               {[30, 45, 60, 90, 120].map((s) => (
                 <button key={s} onClick={() => setRightsTimerLimit(s)}
-                  className={`px-3 py-2.5 rounded-xl font-bold text-xs transition-colors ${rightsTimerLimit === s ? 'bg-[#7B4A1E] text-white' : 'bg-[#2E1E0F] text-[#C4A882] hover:bg-[#3D2A15]'}`}>
+                  className={`px-3 py-2.5 rounded-xl font-bold text-xs transition-colors ${rightsTimerLimit === s ? 'bg-[#1B3828] text-white' : 'bg-[#DDD4C0] text-[#6A5A4A] hover:bg-[#C8BAA8]'}`}>
                   {s}s
                 </button>
               ))}
@@ -639,13 +639,13 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                     : 'opacity-60 cursor-grab'
                 }`}
               >
-                {i > rightsIndex && <span className="text-[#7A5A38] text-xs">⠿</span>}
-                <span className="text-[#7A5A38] text-xs w-5 font-mono text-right">{i + 1}</span>
-                <span className="text-white">{getFlag(v.country)} {v.country}</span>
+                {i > rightsIndex && <span className="text-[#9A8A78] text-xs">⠿</span>}
+                <span className="text-[#9A8A78] text-xs w-5 font-mono text-right">{i + 1}</span>
+                <span className="text-[#1C1410]">{getFlag(v.country)} {v.country}</span>
                 <span className={`ml-auto text-xs ${
-                  i < rightsIndex ? 'text-[#7A5A38]' :
+                  i < rightsIndex ? 'text-[#9A8A78]' :
                   i === rightsIndex ? 'text-amber-400 font-bold' :
-                  'text-[#7A5A38]'
+                  'text-[#9A8A78]'
                 }`}>
                   {i < rightsIndex ? 'Done' :
                    i === rightsIndex ? 'Speaking' :
@@ -657,7 +657,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
 
           <button
             onClick={() => { setRightsRunning(false); handleNextRightsSpeaker(); }}
-            className="w-full max-w-md bg-[#7B4A1E] hover:bg-[#8B5A2B] text-white py-4 rounded-2xl font-black text-lg transition-colors"
+            className="w-full max-w-md bg-[#1B3828] hover:bg-[#2A5A3C] text-white py-4 rounded-2xl font-black text-lg transition-colors"
           >
             {rightsIndex + 1 < orderedRights.length ? 'Next Rights Speaker →' : 'See Final Result →'}
           </button>
@@ -667,7 +667,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       {/* ── Final result ── */}
       {phase === 'result' && (
         <div className="flex-1 flex flex-col items-center justify-center px-8 gap-6">
-          <p className="text-xs font-mono text-[#7A5A38] tracking-widest">
+          <p className="text-xs font-mono text-[#9A8A78] tracking-widest">
             FINAL RESULT — {selectedDoc.docCode}
           </p>
           <div className={`rounded-3xl border px-16 py-12 text-center ${
@@ -676,26 +676,26 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             <div className={`text-6xl font-black mb-3 ${passed ? 'text-green-400' : 'text-red-400'}`}>
               {passed ? '✓ PASSED' : '✗ FAILED'}
             </div>
-            <p className="text-xl font-bold text-white mb-6">{selectedDoc.title}</p>
+            <p className="text-xl font-bold text-[#1C1410] mb-6">{selectedDoc.title}</p>
             <div className="flex justify-center gap-10">
               <div className="text-center">
                 <div className="text-4xl font-black text-green-400">{forCount}</div>
-                <div className="text-[#C4A882] mt-1">For</div>
+                <div className="text-[#6A5A4A] mt-1">For</div>
               </div>
               <div className="text-center">
                 <div className="text-4xl font-black text-red-400">{againstCount}</div>
-                <div className="text-[#C4A882] mt-1">Against</div>
+                <div className="text-[#6A5A4A] mt-1">Against</div>
               </div>
               {abstainCount > 0 && (
                 <div className="text-center">
-                  <div className="text-4xl font-black text-[#C4A882]">{abstainCount}</div>
-                  <div className="text-[#7A5A38] mt-1">Abstain</div>
+                  <div className="text-4xl font-black text-[#6A5A4A]">{abstainCount}</div>
+                  <div className="text-[#9A8A78] mt-1">Abstain</div>
                 </div>
               )}
               {withRights.length > 0 && (
                 <div className="text-center">
                   <div className="text-4xl font-black text-amber-400">{withRights.length}</div>
-                  <div className="text-[#C4A882] mt-1">w/ Rights</div>
+                  <div className="text-[#6A5A4A] mt-1">w/ Rights</div>
                 </div>
               )}
             </div>
@@ -722,13 +722,13 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
           <div className="flex gap-3">
             <button
               onClick={() => startNewVote(selectedDoc.id)}
-              className="bg-[#2E1E0F] hover:bg-[#3E2A1A] border border-[#2E1E0F] text-[#C4A882] py-3 px-6 rounded-xl font-bold transition-colors"
+              className="bg-[#DDD4C0] hover:bg-[#EDE7D8] border border-[#DDD4C0] text-[#6A5A4A] py-3 px-6 rounded-xl font-bold transition-colors"
             >
               Vote Again
             </button>
             <button
               onClick={() => setSelectedDocId(null)}
-              className="bg-[#2E1E0F] hover:bg-[#3E2A1A] border border-[#2E1E0F] text-[#C4A882] py-3 px-6 rounded-xl font-bold transition-colors"
+              className="bg-[#DDD4C0] hover:bg-[#EDE7D8] border border-[#DDD4C0] text-[#6A5A4A] py-3 px-6 rounded-xl font-bold transition-colors"
             >
               Move to Next DR →
             </button>

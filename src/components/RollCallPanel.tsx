@@ -22,7 +22,7 @@ export function FlagCircle({ country, size = 'md' }: { country: string; size?: '
   };
   const box = dim[size];
   return (
-    <div className={`relative ${box} rounded-full overflow-hidden bg-[#2E1E0F] shrink-0 flex items-center justify-center`}>
+    <div className={`relative ${box} rounded-full overflow-hidden bg-[#DDD4C0] shrink-0 flex items-center justify-center`}>
       {found
         ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-[85%] h-[85%] object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
         : <span className="text-lg">🌐</span>}
@@ -37,13 +37,13 @@ function StatusSlider({ status, onCycle }: { status: DelegateStatus; onCycle: ()
   return (
     <button
       onClick={(e) => { e.stopPropagation(); onCycle(); }}
-      className="relative w-[90px] h-[30px] rounded-full bg-[#1A1209] border border-[#2E1E0F] cursor-pointer shrink-0 select-none"
+      className="relative w-[90px] h-[30px] rounded-full bg-[#EDE7D8] border border-[#DDD4C0] cursor-pointer shrink-0 select-none"
       title="Tap to cycle: Absent → Present → PV"
     >
       <div className="absolute inset-0 grid grid-cols-3 items-center pointer-events-none">
-        <span className={`text-[10px] font-bold text-center ${status === 'absent' ? 'text-red-900' : 'text-[#7A5A38]'}`}>A</span>
-        <span className={`text-[10px] font-bold text-center ${status === 'present' ? 'text-white' : 'text-[#7A5A38]'}`}>P</span>
-        <span className={`text-[10px] font-bold text-center ${status === 'present-voting' ? 'text-white' : 'text-[#7A5A38]'}`}>PV</span>
+        <span className={`text-[10px] font-bold text-center ${status === 'absent' ? 'text-red-900' : 'text-[#9A8A78]'}`}>A</span>
+        <span className={`text-[10px] font-bold text-center ${status === 'present' ? 'text-[#1C1410]' : 'text-[#9A8A78]'}`}>P</span>
+        <span className={`text-[10px] font-bold text-center ${status === 'present-voting' ? 'text-[#1C1410]' : 'text-[#9A8A78]'}`}>PV</span>
       </div>
       <div className={`absolute top-[3px] w-[26px] h-[24px] rounded-full transition-all duration-200 ${thumbPos} ${thumbColor}`} />
     </button>
@@ -56,14 +56,14 @@ function ViewToggle({ view, onChange }: { view: 'az' | 'queue'; onChange: (v: 'a
   return (
     <button
       onClick={() => onChange(isQueue ? 'az' : 'queue')}
-      className="relative w-[104px] h-[28px] rounded-full bg-[#1A1209] border border-[#2E1E0F] cursor-pointer select-none shrink-0"
+      className="relative w-[104px] h-[28px] rounded-full bg-[#EDE7D8] border border-[#DDD4C0] cursor-pointer select-none shrink-0"
       title="Toggle A-Z / Queue view"
     >
       <div className="absolute inset-0 grid grid-cols-2 items-center pointer-events-none z-10">
-        <span className={`text-[10px] font-bold text-center ${!isQueue ? 'text-white' : 'text-[#7A5A38]'}`}>A-Z</span>
-        <span className={`text-[10px] font-bold text-center ${isQueue ? 'text-[#B8844A]' : 'text-[#7A5A38]'}`}>QUEUE</span>
+        <span className={`text-[10px] font-bold text-center ${!isQueue ? 'text-[#1C1410]' : 'text-[#9A8A78]'}`}>A-Z</span>
+        <span className={`text-[10px] font-bold text-center ${isQueue ? 'text-[#B6871F]' : 'text-[#9A8A78]'}`}>QUEUE</span>
       </div>
-      <div className={`absolute top-[2px] w-[50px] h-[24px] rounded-full transition-all duration-200 ${isQueue ? 'left-[52px] bg-[#7B4A1E]' : 'left-[2px] bg-[#2E1E0F]'}`} />
+      <div className={`absolute top-[2px] w-[50px] h-[24px] rounded-full transition-all duration-200 ${isQueue ? 'left-[52px] bg-[#1B3828]' : 'left-[2px] bg-[#DDD4C0]'}`} />
     </button>
   );
 }
@@ -99,7 +99,7 @@ function AddCountryInput({ committee, onAdd, onQueryChange }: { committee: Commi
 
   return (
     <div className="relative">
-      <div className="flex items-center bg-[#150F09] border border-[#2E1E0F] focus-within:border-[#7B4A1E] rounded-xl overflow-hidden transition-colors">
+      <div className="flex items-center bg-[#FAF8F3] border border-[#DDD4C0] focus-within:border-[#1B3828] rounded-xl overflow-hidden transition-colors">
         <input
           ref={inputRef}
           type="text"
@@ -114,17 +114,17 @@ function AddCountryInput({ committee, onAdd, onQueryChange }: { committee: Commi
             if (e.key === 'Escape') updateQuery('');
           }}
           placeholder="Filter or add country / observer…"
-          className="flex-1 bg-transparent px-3 py-2.5 text-white text-sm placeholder-[#7A5A38] focus:outline-none"
+          className="flex-1 bg-transparent px-3 py-2.5 text-[#1C1410] text-sm placeholder-[#9A8A78] focus:outline-none"
         />
         {query && (topKnown || trimmed) && (
-          <span className="text-[10px] text-[#7A5A38] px-2 truncate max-w-[80px]">
+          <span className="text-[10px] text-[#9A8A78] px-2 truncate max-w-[80px]">
             ↵ {topKnown ? topKnown.name : trimmed}
           </span>
         )}
       </div>
 
       {query && (knownMatches.length > 0 || showCustomOption) && (
-        <div className="absolute bottom-full left-0 right-0 mb-1 bg-[#150F09] border border-[#2E1E0F] rounded-xl overflow-hidden z-30 shadow-xl max-h-52 overflow-y-auto">
+        <div className="absolute bottom-full left-0 right-0 mb-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl overflow-hidden z-30 shadow-xl max-h-52 overflow-y-auto">
           {knownMatches
             .filter((c) => !existingNames.has(c.name.toLowerCase()))
             .slice(0, showCustomOption ? 5 : 8)
@@ -133,22 +133,22 @@ function AddCountryInput({ committee, onAdd, onQueryChange }: { committee: Commi
                 key={c.code}
                 onMouseDown={(e) => { e.preventDefault(); commit(c.name); }}
                 className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-left transition-colors ${
-                  i === 0 ? 'bg-[#7B4A1E]/20 text-white' : 'text-[#E8D5B7] hover:bg-[#2E1E0F]'
+                  i === 0 ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'
                 }`}
               >
                 <img src={getFlagUrl(c.code)} alt={c.code} className="w-5 h-5 object-contain shrink-0" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                 <span className="text-sm flex-1">{c.name}</span>
-                {i === 0 && <span className="text-[10px] text-[#7A5A38] shrink-0">Enter ↵</span>}
+                {i === 0 && <span className="text-[10px] text-[#9A8A78] shrink-0">Enter ↵</span>}
               </button>
             ))}
           {showCustomOption && (
             <button
               onMouseDown={(e) => { e.preventDefault(); commit(trimmed); }}
-              className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left transition-colors text-[#E8D5B7] hover:bg-[#2E1E0F] border-t border-[#2E1E0F]"
+              className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left transition-colors text-[#1C1410] hover:bg-[#DDD4C0] border-t border-[#DDD4C0]"
             >
               <span className="text-base">🌐</span>
               <span className="text-sm flex-1">{trimmed}</span>
-              <span className="text-[10px] text-[#7B4A1E] shrink-0 font-semibold">Add custom</span>
+              <span className="text-[10px] text-[#1B3828] shrink-0 font-semibold">Add custom</span>
             </button>
           )}
         </div>
@@ -175,27 +175,27 @@ function FullListPopup({
       style={{ background: 'rgba(5, 8, 20, 0.80)', backdropFilter: 'blur(4px)' }}
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="bg-[#1A1209] border border-[#2E1E0F] rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden max-h-[80vh] flex flex-col">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[#2E1E0F] shrink-0">
-          <h3 className="font-black text-white text-base">{title}</h3>
+      <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden max-h-[80vh] flex flex-col">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[#DDD4C0] shrink-0">
+          <h3 className="font-black text-[#1C1410] text-base">{title}</h3>
           <div className="flex items-center gap-3">
-            <span className="text-xs text-[#7A5A38] font-mono">{list.length} speakers</span>
-            <button onClick={onClose} className="text-[#7A5A38] hover:text-white text-xl leading-none">✕</button>
+            <span className="text-xs text-[#9A8A78] font-mono">{list.length} speakers</span>
+            <button onClick={onClose} className="text-[#9A8A78] hover:text-[#1C1410] text-xl leading-none">✕</button>
           </div>
         </div>
         <div className="overflow-y-auto flex-1">
           {list.length === 0 ? (
-            <div className="px-5 py-8 text-center text-[#7A5A38] text-sm">No speakers queued</div>
+            <div className="px-5 py-8 text-center text-[#9A8A78] text-sm">No speakers queued</div>
           ) : (
             list.map((s, i) => (
-              <div key={s.delegateId} className="flex items-center gap-3 px-4 py-2.5 border-b border-[#2E1E0F]/40 group hover:bg-[#2E1E0F]/30 transition-colors">
-                <span className="text-xs text-[#7A5A38] font-mono w-6 text-right shrink-0">{i + 1}</span>
+              <div key={s.delegateId} className="flex items-center gap-3 px-4 py-2.5 border-b border-[#DDD4C0]/40 group hover:bg-[#DDD4C0]/30 transition-colors">
+                <span className="text-xs text-[#9A8A78] font-mono w-6 text-right shrink-0">{i + 1}</span>
                 <FlagCircle country={s.country} size="xs" />
-                <span className="text-sm text-white flex-1 truncate">{s.country}</span>
+                <span className="text-sm text-[#1C1410] flex-1 truncate">{s.country}</span>
                 {onRemove && (
                   <button
                     onClick={() => onRemove(s.delegateId)}
-                    className="text-[#7A5A38] hover:text-red-500 transition-colors text-xs opacity-0 group-hover:opacity-100 shrink-0"
+                    className="text-[#9A8A78] hover:text-red-500 transition-colors text-xs opacity-0 group-hover:opacity-100 shrink-0"
                   >✕</button>
                 )}
               </div>
@@ -218,7 +218,7 @@ function MajorityPie({ arcFill, color, label }: {
   return (
     <div className="flex items-center gap-1">
       <svg width="32" height="32" viewBox="0 0 32 32">
-        <circle cx="16" cy="16" r={r} fill="none" stroke="#2E1E0F" strokeWidth="5" />
+        <circle cx="16" cy="16" r={r} fill="none" stroke="#DDD4C0" strokeWidth="5" />
         <circle cx="16" cy="16" r={r} fill="none" stroke={color} strokeWidth="5"
           strokeDasharray={circ}
           strokeDashoffset={circ * (1 - Math.min(arcFill, 1))}
@@ -227,7 +227,7 @@ function MajorityPie({ arcFill, color, label }: {
           style={{ transition: 'stroke-dashoffset 0.3s' }}
         />
       </svg>
-      <span className="text-xs font-bold text-white">{label}</span>
+      <span className="text-xs font-bold text-[#1C1410]">{label}</span>
     </div>
   );
 }
@@ -388,26 +388,26 @@ function RollCallPanelInner({
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="px-4 pt-4 pb-3 border-b border-[#2E1E0F] shrink-0">
-        <p className="text-lg font-black text-white leading-tight truncate mb-0.5">{committee.name}</p>
+      <div className="px-4 pt-4 pb-3 border-b border-[#DDD4C0] shrink-0">
+        <p className="text-lg font-black text-[#1C1410] leading-tight truncate mb-0.5">{committee.name}</p>
         {committee.topic && (
-          <p className="text-xs text-[#C4A882] leading-snug line-clamp-2 mb-2">
-            <span className="text-[#7A5A38] font-semibold">Topic: </span>{committee.topic}
+          <p className="text-xs text-[#6A5A4A] leading-snug line-clamp-2 mb-2">
+            <span className="text-[#9A8A78] font-semibold">Topic: </span>{committee.topic}
           </p>
         )}
         <div className="flex items-center justify-between">
           <div className="flex gap-1.5">
             <MajorityPie arcFill={1} color="#4A90D9" label={`${present}`} />
             <MajorityPie arcFill={2 / 3} color="#E8A94A" label={`${Math.ceil(present * 2 / 3)}`} />
-            <MajorityPie arcFill={0.5} color="#3D6B35" label={`${Math.floor(present / 2) + 1}`} />
+            <MajorityPie arcFill={0.5} color="#2A5A3C" label={`${Math.floor(present / 2) + 1}`} />
           </div>
           {showViewToggle && <ViewToggle view={listView} onChange={setListView} />}
         </div>
         {showBulkActions && (
           <div className="flex gap-1.5 mt-2">
-            <button onClick={handleClear} className="text-[10px] font-semibold px-2.5 py-1.5 rounded-lg bg-[#2E1E0F] text-red-400 hover:bg-red-950/40 transition-colors">Clear All</button>
-            <button onClick={handleAllPresent} className="text-[10px] font-semibold px-2.5 py-1.5 rounded-lg bg-[#2E1E0F] text-green-400 hover:bg-green-950/40 transition-colors">All Present</button>
-            <button onClick={handleAllPresentVoting} className="text-[10px] font-semibold px-2.5 py-1.5 rounded-lg bg-[#2E1E0F] text-blue-400 hover:bg-blue-950/40 transition-colors">All P+V</button>
+            <button onClick={handleClear} className="text-[10px] font-semibold px-2.5 py-1.5 rounded-lg bg-[#DDD4C0] text-red-400 hover:bg-red-950/40 transition-colors">Clear All</button>
+            <button onClick={handleAllPresent} className="text-[10px] font-semibold px-2.5 py-1.5 rounded-lg bg-[#DDD4C0] text-green-400 hover:bg-green-950/40 transition-colors">All Present</button>
+            <button onClick={handleAllPresentVoting} className="text-[10px] font-semibold px-2.5 py-1.5 rounded-lg bg-[#DDD4C0] text-blue-400 hover:bg-blue-950/40 transition-colors">All P+V</button>
           </div>
         )}
       </div>
@@ -437,7 +437,7 @@ function RollCallPanelInner({
           return (
             <div key={d.id}>
               {dragOverIndex === idx && dragOverIndex !== dragIndexRef.current && (
-                <div className="h-0.5 bg-[#7B4A1E] rounded-full mx-2 -mb-0.5" />
+                <div className="h-0.5 bg-[#1B3828] rounded-full mx-2 -mb-0.5" />
               )}
               <div
                 data-matches={matchesSearch ? 'true' : 'false'}
@@ -467,7 +467,7 @@ function RollCallPanelInner({
                   !matchesSearch
                     ? 'border border-transparent opacity-25'
                     : isCurrentSpeaker
-                    ? 'bg-[#7B4A1E]/20 border-2 border-[#7B4A1E]'
+                    ? 'bg-[#1B3828]/20 border-2 border-[#1B3828]'
                     : isAbsent
                     ? 'border border-transparent opacity-40'
                     : effectiveStatus === 'present'
@@ -475,7 +475,7 @@ function RollCallPanelInner({
                     : 'bg-blue-950/30 border border-blue-800/30'
                 } ${
                   (!isRollCallPhase && onAddToList && !isAbsent) || isRollCallPhase
-                    ? 'cursor-pointer hover:bg-[#2E1E0F]/50'
+                    ? 'cursor-pointer hover:bg-[#DDD4C0]/50'
                     : isAbsent && !isRollCallPhase
                     ? 'cursor-not-allowed'
                     : ''
@@ -483,28 +483,28 @@ function RollCallPanelInner({
               >
                 <div className="relative shrink-0">
                   {isRoomOrderTdT && queuePos !== null ? (
-                    <div className={`${isUpNext ? 'w-12 h-12' : 'w-9 h-9'} rounded-full bg-[#2E1E0F] border border-[#3D2A15] flex items-center justify-center`}>
-                      <span className={`font-black text-[#B8844A] ${isUpNext ? 'text-xl' : 'text-sm'}`}>{queuePos}</span>
+                    <div className={`${isUpNext ? 'w-12 h-12' : 'w-9 h-9'} rounded-full bg-[#DDD4C0] border border-[#C8BAA8] flex items-center justify-center`}>
+                      <span className={`font-black text-[#B6871F] ${isUpNext ? 'text-xl' : 'text-sm'}`}>{queuePos}</span>
                     </div>
                   ) : (
                     <FlagCircle country={d.country} size={isUpNext ? 'md' : 'sm'} />
                   )}
                   {/* Queue position bubble — omitted when isRoomOrderTdT since position is already the primary display */}
                   {queuePos !== null && !isRoomOrderTdT && (
-                    <div className={`absolute -top-1 -right-1 min-w-[18px] h-[18px] px-0.5 rounded-full text-white flex items-center justify-center font-black leading-none ${
+                    <div className={`absolute -top-1 -right-1 min-w-[18px] h-[18px] px-0.5 rounded-full text-[#1C1410] flex items-center justify-center font-black leading-none ${
                       queuePos === 1 && committee.currentSpeaker?.delegateId === d.id
-                        ? 'bg-[#B8844A] text-[10px]'
-                        : 'bg-[#7B4A1E] text-[13px]'
+                        ? 'bg-[#B6871F] text-[10px]'
+                        : 'bg-[#1B3828] text-[13px]'
                     }`}>
                       {queuePos === 1 && (committee.currentSpeaker?.delegateId === d.id || committee.caucus?.currentSpeaker === d.country) ? '🎙' : queuePos <= 99 ? queuePos : '99+'}
                     </div>
                   )}
                 </div>
-                <span className={`flex-1 line-clamp-2 break-words whitespace-normal leading-tight max-w-[100px] ${isUpNext ? 'text-lg font-bold' : 'text-base'} ${!isAbsent ? 'text-white font-medium' : 'text-[#7A5A38]'}`}>
+                <span className={`flex-1 line-clamp-2 break-words whitespace-normal leading-tight max-w-[100px] ${isUpNext ? 'text-lg font-bold' : 'text-base'} ${!isAbsent ? 'text-[#1C1410] font-medium' : 'text-[#9A8A78]'}`}>
                   {d.country}
                 </span>
                 {isAbsent && !isRollCallPhase && (
-                  <span className="text-[10px] text-[#7A5A38] shrink-0 font-mono ml-auto">absent</span>
+                  <span className="text-[10px] text-[#9A8A78] shrink-0 font-mono ml-auto">absent</span>
                 )}
                 {isRollCallPhase && (
                   <div onClick={(e) => e.stopPropagation()} className={`ml-auto shrink-0 ${isReadOnly ? 'pointer-events-none opacity-50' : ''}`}>
@@ -517,13 +517,13 @@ function RollCallPanelInner({
         })}
       </div>
 
-      <div className="border-t border-[#2E1E0F] px-3 py-3 space-y-2 shrink-0 overflow-visible">
+      <div className="border-t border-[#DDD4C0] px-3 py-3 space-y-2 shrink-0 overflow-visible">
         <AddCountryInput committee={committee} onAdd={handleAddDelegate} onQueryChange={setSearch} />
         {(committee.phase === 'pre-session' || committee.phase === 'roll-call') && (
           <button
             onClick={handleBeginSession}
             disabled={present < 1}
-            className="w-full bg-[#3D6B35] hover:bg-[#4A7C42] disabled:bg-[#2E1E0F] disabled:text-[#7A5A38] text-white py-3 rounded-xl text-sm font-bold transition-colors"
+            className="w-full bg-[#2A5A3C] hover:bg-[#3D7A52] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-[#1C1410] py-3 rounded-xl text-sm font-bold transition-colors"
           >
             {present >= 1 ? 'Begin Session →' : 'Add at least 1 delegate'}
           </button>

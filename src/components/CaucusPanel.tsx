@@ -44,7 +44,7 @@ export default function CaucusPanel({ committee }: { committee: Committee }) {
             <div className={`text-xs font-mono mb-1 ${caucus.type === 'moderated' ? 'text-blue-400' : 'text-purple-400'}`}>
               {caucus.type === 'moderated' ? 'MODERATED CAUCUS' : 'UNMODERATED CAUCUS'}
             </div>
-            {caucus.purpose && <div className="text-white font-semibold text-sm">{caucus.purpose}</div>}
+            {caucus.purpose && <div className="text-[#1C1410] font-semibold text-sm">{caucus.purpose}</div>}
           </div>
           <button
             onClick={endCaucus.bind(null, committee.id)}
@@ -54,7 +54,7 @@ export default function CaucusPanel({ committee }: { committee: Committee }) {
           </button>
         </div>
 
-        <div className="text-5xl font-black font-mono text-white mb-2">
+        <div className="text-5xl font-black font-mono text-[#1C1410] mb-2">
           {formatTime(caucus.remainingTime)}
         </div>
         <div className="h-2 bg-[#1a1f2e] rounded-full overflow-hidden mb-4">
@@ -81,9 +81,9 @@ export default function CaucusPanel({ committee }: { committee: Committee }) {
           {caucus.currentSpeaker && (
             <div className="mb-4 p-3 bg-blue-950/30 border border-blue-800/30 rounded-lg">
               <div className="text-xs text-blue-400 mb-1">NOW SPEAKING</div>
-              <div className="text-white font-bold">{caucus.currentSpeaker}</div>
+              <div className="text-[#1C1410] font-bold">{caucus.currentSpeaker}</div>
               <div className="flex justify-between items-end mt-2 mb-1">
-                <span className={`text-2xl font-mono font-bold ${caucus.speakerTimeRemaining <= 5 ? 'text-red-400' : 'text-white'}`}>
+                <span className={`text-2xl font-mono font-bold ${caucus.speakerTimeRemaining <= 5 ? 'text-red-400' : 'text-[#1C1410]'}`}>
                   {formatTime(caucus.speakerTimeRemaining)}
                 </span>
               </div>
@@ -100,7 +100,7 @@ export default function CaucusPanel({ committee }: { committee: Committee }) {
             <select
               value={selectedSpeaker}
               onChange={(e) => setSelectedSpeaker(e.target.value)}
-              className="flex-1 bg-[#141929] border border-[#1e2540] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-600"
+              className="flex-1 bg-[#141929] border border-[#1e2540] rounded-lg px-3 py-2 text-[#1C1410] text-sm focus:outline-none focus:border-blue-600"
             >
               <option value="">Select speaker...</option>
               {committee.delegates.filter((d) => d.status !== 'absent').map((d) => (
@@ -110,7 +110,7 @@ export default function CaucusPanel({ committee }: { committee: Committee }) {
             <button
               onClick={() => { if (selectedSpeaker) { nextCaucusSpeaker(committee.id, selectedSpeaker); setSelectedSpeaker(''); } }}
               disabled={!selectedSpeaker}
-              className="bg-blue-600 hover:bg-blue-500 disabled:bg-blue-900 disabled:text-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors"
+              className="bg-blue-600 hover:bg-blue-500 disabled:bg-blue-900 disabled:text-blue-700 text-[#1C1410] px-4 py-2 rounded-lg text-sm font-semibold transition-colors"
             >
               Call
             </button>

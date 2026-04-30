@@ -61,7 +61,7 @@ function DisruptivenessBadge({ type }: { type: PendingMotionType }) {
     consultation: 'bg-red-900/40 text-red-400 border-red-800/40',
     tour: 'bg-orange-900/40 text-orange-400 border-orange-800/40',
     unmoderated: 'bg-yellow-900/40 text-yellow-400 border-yellow-800/40',
-    moderated: 'bg-[#7B4A1E]/30 text-[#E8C49A] border-[#7B4A1E]/40',
+    moderated: 'bg-[#1B3828]/30 text-[#EED98A] border-[#1B3828]/40',
   };
   return <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${colors[type]}`}>{labels[type]}</span>;
 }
@@ -100,21 +100,21 @@ function ProposerInput({ candidates, value, onChange, blockedCountries }: {
       {value && !open ? (
         <div className="flex items-center gap-3 bg-green-950/30 border border-green-800/30 rounded-xl px-4 py-3">
           {(() => { const f = getCountryByName(value); return f ? <img src={getFlagUrl(f.code)} alt={f.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <Emoji size="1.125rem">🌐</Emoji>; })()}
-          <span className="text-sm text-white flex-1">{value}</span>
-          <button onClick={() => { setOpen(true); setQuery(''); onChange(''); inputRef.current?.focus(); }} className="text-xs text-[#7A5A38] hover:text-white transition-colors">change</button>
+          <span className="text-sm text-[#1C1410] flex-1">{value}</span>
+          <button onClick={() => { setOpen(true); setQuery(''); onChange(''); inputRef.current?.focus(); }} className="text-xs text-[#9A8A78] hover:text-[#1C1410] transition-colors">change</button>
         </div>
       ) : (
-        <div className="flex items-center bg-[#150F09] border border-[#2E1E0F] focus-within:border-[#7B4A1E] rounded-xl overflow-hidden transition-colors">
+        <div className="flex items-center bg-[#FAF8F3] border border-[#DDD4C0] focus-within:border-[#1B3828] rounded-xl overflow-hidden transition-colors">
           <input ref={inputRef} autoFocus={open} type="text" value={query}
             onChange={(e) => { setQuery(e.target.value); setOpen(true); onChange(''); }}
             onKeyDown={(e) => { if (e.key === 'Enter' && top) { e.preventDefault(); commit(top); } if (e.key === 'Escape') { setQuery(''); setOpen(false); } }}
             placeholder="Type country name…"
-            className="flex-1 bg-transparent px-4 py-3 text-white placeholder-[#7A5A38] focus:outline-none text-sm" />
-          {top && query && <span className="text-xs text-[#7A5A38] px-3 truncate max-w-[120px]">↵ {top}</span>}
+            className="flex-1 bg-transparent px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none text-sm" />
+          {top && query && <span className="text-xs text-[#9A8A78] px-3 truncate max-w-[120px]">↵ {top}</span>}
         </div>
       )}
       {open && query && matches.length > 0 && (
-        <div className="absolute bottom-full left-0 right-0 mb-1 bg-[#150F09] border border-[#2E1E0F] rounded-xl overflow-hidden z-30 shadow-xl max-h-48 overflow-y-auto">
+        <div className="absolute bottom-full left-0 right-0 mb-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl overflow-hidden z-30 shadow-xl max-h-48 overflow-y-auto">
           {matches.slice(0, 6).map((country, i) => {
             const found = getCountryByName(country);
             const isBlocked = blockedCountries?.has(country) ?? false;
@@ -123,14 +123,14 @@ function ProposerInput({ candidates, value, onChange, blockedCountries }: {
                 onMouseDown={(e) => { e.preventDefault(); if (!isBlocked) commit(country); }}
                 disabled={isBlocked}
                 className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
-                  isBlocked ? 'opacity-50 cursor-not-allowed bg-[#150F09]' :
-                  i === 0 ? 'bg-[#7B4A1E]/20 text-white' : 'text-[#E8D5B7] hover:bg-[#2E1E0F]'
+                  isBlocked ? 'opacity-50 cursor-not-allowed bg-[#FAF8F3]' :
+                  i === 0 ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'
                 }`}>
                 {found ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <Emoji size="1.125rem">🌐</Emoji>}
                 <span className="text-sm flex-1">{country}</span>
                 {isBlocked
                   ? <span className="text-xs text-orange-400 shrink-0 font-semibold">Motion on floor</span>
-                  : i === 0 && <span className="ml-auto text-xs text-[#7A5A38]">Enter ↵</span>}
+                  : i === 0 && <span className="ml-auto text-xs text-[#9A8A78]">Enter ↵</span>}
               </button>
             );
           })}
@@ -182,8 +182,8 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
   const speakerCount = (totalTime > 0 && speakingTime > 0) ? Math.floor(totalTime / speakingTime) : null;
   const unusedSecs = (totalTime > 0 && speakingTime > 0) ? totalTime % speakingTime : 0;
 
-  const numClass = 'bg-transparent text-white text-xl font-bold text-center focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none';
-  const numClassSm = 'bg-transparent text-white text-lg font-bold text-center focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none';
+  const numClass = 'bg-transparent text-[#1C1410] text-xl font-bold text-center focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none';
+  const numClassSm = 'bg-transparent text-[#1C1410] text-lg font-bold text-center focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none';
 
   const canSubmit = () => {
     if (!type || !proposer) return false;
@@ -223,7 +223,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
       {/* PERMANENT NOTE: No scroll in raise motion form. If content doesn't fit, reduce spacing
           or lay fields side-by-side — never re-add overflow-y-auto here. */}
       <div className="flex-1 px-7 pt-0 pb-4 space-y-4">
-        <h2 className="text-3xl font-black text-white">{editingMotion ? 'Edit Motion' : 'Raise a Motion'}</h2>
+        <h2 className="text-3xl font-black text-[#1C1410]">{editingMotion ? 'Edit Motion' : 'Raise a Motion'}</h2>
 
         {/* Type tabs — always shown */}
         <div className="flex gap-1.5 flex-wrap items-stretch">
@@ -231,7 +231,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
             {enabledTypes.map((t) => (
               <button key={t} type="button" onClick={() => setType(t)}
                 className={`px-3 py-2 rounded-xl border font-bold text-base transition-all flex-1 min-w-[120px] ${
-                  type === t ? 'bg-[#7B4A1E] border-[#8B5A2B] text-white' : 'bg-[#1A1209] border-[#2E1E0F] text-[#C4A882] hover:border-[#7B4A1E]'
+                  type === t ? 'bg-[#1B3828] border-[#2A5A3C] text-white' : 'bg-[#EDE7D8] border-[#DDD4C0] text-[#6A5A4A] hover:border-[#1B3828]'
                 }`}>
                 {typeMeta[t].label}
               </button>
@@ -255,7 +255,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
             {/* For moderated caucus: Topic first, then Proposed By */}
             {type !== 'moderated' && (
               <div>
-                <label className="block text-lg font-semibold text-[#C4A882] mb-2">Proposed by</label>
+                <label className="block text-lg font-semibold text-[#6A5A4A] mb-2">Proposed by</label>
                 <ProposerInput candidates={presentCountries} value={proposer} onChange={setProposer} blockedCountries={countriesWithMotions} />
               </div>
             )}
@@ -263,50 +263,50 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
             {/* Tour de Table — speaking time per delegate + order */}
             {type === 'tour' && (
               <>
-                <div className="bg-[#1A1209] border border-[#2E1E0F] rounded-2xl p-4 space-y-3">
-                  <p className="text-white font-semibold text-sm">
+                <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-2xl p-4 space-y-3">
+                  <p className="text-[#1C1410] font-semibold text-sm">
                     All {presentCountries.length} present delegates will speak once each.
                   </p>
                   <div>
-                    <label className="block text-lg font-semibold text-[#C4A882] mb-2">Speaking time per delegate</label>
+                    <label className="block text-lg font-semibold text-[#6A5A4A] mb-2">Speaking time per delegate</label>
                     <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-2 bg-[#150F09] border border-[#2E1E0F] rounded-xl px-3 py-2">
+                      <div className="flex items-center gap-2 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-3 py-2">
                         <input type="number" min={10} value={speakingTimeStr}
                           onChange={(e) => setSpeakingTimeStr(e.target.value)}
                           className={`w-14 ${numClass}`} />
-                        <span className="text-[#C4A882] text-sm">sec</span>
+                        <span className="text-[#6A5A4A] text-sm">sec</span>
                       </div>
-                      <span className="text-xs text-[#7A5A38]">
+                      <span className="text-xs text-[#9A8A78]">
                         Total ≈ {speakingTime > 0 ? Math.ceil((presentCountries.length * speakingTime) / 60) : 0}m
                       </span>
                     </div>
                     <div className="flex gap-2 mt-2">
                       {[30, 45, 60, 90, 120].map((t) => (
                         <button key={t} onClick={() => setSpeakingTimeStr(String(t))}
-                          className={`text-xs px-2.5 py-1.5 rounded-lg transition-colors ${speakingTime === t ? 'bg-[#7B4A1E] text-white font-bold' : 'bg-[#1A1209] border border-[#2E1E0F] text-[#C4A882] hover:text-white'}`}>
+                          className={`text-xs px-2.5 py-1.5 rounded-lg transition-colors ${speakingTime === t ? 'bg-[#1B3828] text-white font-bold' : 'bg-[#EDE7D8] border border-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
                           {t}s
                         </button>
                       ))}
                     </div>
                   </div>
                   <div>
-                    <label className="block text-lg font-semibold text-[#C4A882] mb-2">Speaking order</label>
+                    <label className="block text-lg font-semibold text-[#6A5A4A] mb-2">Speaking order</label>
                     <div className="flex gap-3">
                       <button onClick={() => setTourOrder('asc')}
-                        className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-colors ${tourOrder === 'asc' ? 'bg-[#7B4A1E] text-white' : 'bg-[#1A1209] border border-[#2E1E0F] text-[#C4A882] hover:text-white'}`}>
+                        className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-colors ${tourOrder === 'asc' ? 'bg-[#1B3828] text-white' : 'bg-[#EDE7D8] border border-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
                         A → Z
                       </button>
                       <button onClick={() => setTourOrder('desc')}
-                        className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-colors ${tourOrder === 'desc' ? 'bg-[#7B4A1E] text-white' : 'bg-[#1A1209] border border-[#2E1E0F] text-[#C4A882] hover:text-white'}`}>
+                        className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-colors ${tourOrder === 'desc' ? 'bg-[#1B3828] text-white' : 'bg-[#EDE7D8] border border-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
                         Z → A
                       </button>
                       <button onClick={() => setTourOrder('custom')}
-                        className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-colors ${tourOrder === 'custom' ? 'bg-[#7B4A1E] text-white' : 'bg-[#1A1209] border border-[#2E1E0F] text-[#C4A882] hover:text-white'}`}>
+                        className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-colors ${tourOrder === 'custom' ? 'bg-[#1B3828] text-white' : 'bg-[#EDE7D8] border border-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
                         Room Order
                       </button>
                     </div>
                     {tourOrder === 'custom' && (
-                      <p className="text-xs text-[#7A5A38] mt-2 leading-relaxed">Follows the physical room order. Call each speaker manually — the chair decides who goes next based on seating.</p>
+                      <p className="text-xs text-[#9A8A78] mt-2 leading-relaxed">Follows the physical room order. Call each speaker manually — the chair decides who goes next based on seating.</p>
                     )}
                   </div>
                 </div>
@@ -316,25 +316,25 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
             {/* Unmoderated / Consultation — total time */}
             {(type === 'unmoderated' || type === 'consultation') && (
               <div>
-                <label className="block text-lg font-semibold text-[#C4A882] mb-2">Total time</label>
+                <label className="block text-lg font-semibold text-[#6A5A4A] mb-2">Total time</label>
                 <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2 bg-[#150F09] border border-[#2E1E0F] rounded-xl px-3 py-2.5">
+                  <div className="flex items-center gap-2 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-3 py-2.5">
                     <input type="number" min={0} value={totalMinsStr}
                       onChange={(e) => setTotalMinsStr(e.target.value)}
                       className={`w-12 ${numClass}`} />
-                    <span className="text-[#C4A882] text-sm">min</span>
+                    <span className="text-[#6A5A4A] text-sm">min</span>
                   </div>
-                  <div className="flex items-center gap-2 bg-[#150F09] border border-[#2E1E0F] rounded-xl px-3 py-2.5">
+                  <div className="flex items-center gap-2 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-3 py-2.5">
                     <input type="number" min={0} max={59} value={totalSecsStr}
                       onChange={(e) => setTotalSecsStr(e.target.value)}
                       className={`w-12 ${numClass}`} />
-                    <span className="text-[#C4A882] text-sm">sec</span>
+                    <span className="text-[#6A5A4A] text-sm">sec</span>
                   </div>
                 </div>
                 <div className="flex gap-2 mt-2">
                   {[2, 5, 10, 15, 20].map((m) => (
                     <button key={m} onClick={() => { setTotalMinsStr(String(m)); setTotalSecsStr('0'); }}
-                      className={`text-xs px-2.5 py-1.5 rounded-lg transition-colors ${totalMins === m && totalSecs === 0 ? 'bg-[#7B4A1E] text-white font-bold' : 'bg-[#1A1209] border border-[#2E1E0F] text-[#C4A882] hover:text-white'}`}>
+                      className={`text-xs px-2.5 py-1.5 rounded-lg transition-colors ${totalMins === m && totalSecs === 0 ? 'bg-[#1B3828] text-white font-bold' : 'bg-[#EDE7D8] border border-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
                       {m}m
                     </button>
                   ))}
@@ -346,62 +346,62 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
             {type === 'moderated' && (
               <>
                 <div>
-                  <label className="block text-lg font-semibold text-[#C4A882] mb-2">Topic <span className="text-red-500">*</span></label>
+                  <label className="block text-lg font-semibold text-[#6A5A4A] mb-2">Topic <span className="text-red-500">*</span></label>
                   <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)}
                     placeholder="e.g. Humanitarian response in conflict zones"
-                    className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-xl px-4 py-4 text-white placeholder-[#7A5A38] focus:outline-none focus:border-[#7B4A1E] transition-colors" />
+                    className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-4 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] transition-colors" />
                 </div>
                 <div>
-                  <label className="block text-lg font-semibold text-[#C4A882] mb-2">Proposed by</label>
+                  <label className="block text-lg font-semibold text-[#6A5A4A] mb-2">Proposed by</label>
                   <ProposerInput candidates={presentCountries} value={proposer} onChange={setProposer} blockedCountries={countriesWithMotions} />
                 </div>
                 {/* Total time + speaking time — side by side to avoid scroll */}
                 <div className="flex gap-4 items-start">
                   <div className="flex-1">
-                    <label className="block text-sm font-semibold text-[#C4A882] mb-2">Total time</label>
+                    <label className="block text-sm font-semibold text-[#6A5A4A] mb-2">Total time</label>
                     <div className="flex items-center gap-2">
-                      <div className="flex items-center gap-1.5 bg-[#150F09] border border-[#2E1E0F] rounded-xl px-3 py-2">
+                      <div className="flex items-center gap-1.5 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-3 py-2">
                         <input type="number" min={0} value={totalMinsStr}
                           onChange={(e) => setTotalMinsStr(e.target.value)}
                           className={`w-10 ${numClassSm}`} />
-                        <span className="text-[#C4A882] text-xs">min</span>
+                        <span className="text-[#6A5A4A] text-xs">min</span>
                       </div>
-                      <div className="flex items-center gap-1.5 bg-[#150F09] border border-[#2E1E0F] rounded-xl px-3 py-2">
+                      <div className="flex items-center gap-1.5 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-3 py-2">
                         <input type="number" min={0} max={59} value={totalSecsStr}
                           onChange={(e) => setTotalSecsStr(e.target.value)}
                           className={`w-10 ${numClassSm}`} />
-                        <span className="text-[#C4A882] text-xs">sec</span>
+                        <span className="text-[#6A5A4A] text-xs">sec</span>
                       </div>
                     </div>
                     <div className="flex gap-1.5 mt-2 flex-wrap">
                       {[2, 5, 10, 15, 20].map((m) => (
                         <button key={m} onClick={() => { setTotalMinsStr(String(m)); setTotalSecsStr('0'); }}
-                          className={`text-xs px-2 py-1 rounded-lg transition-colors ${totalMins === m && totalSecs === 0 ? 'bg-[#7B4A1E] text-white font-bold' : 'bg-[#1A1209] border border-[#2E1E0F] text-[#C4A882] hover:text-white'}`}>
+                          className={`text-xs px-2 py-1 rounded-lg transition-colors ${totalMins === m && totalSecs === 0 ? 'bg-[#1B3828] text-white font-bold' : 'bg-[#EDE7D8] border border-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
                           {m}m
                         </button>
                       ))}
                     </div>
                   </div>
                   <div className="flex-1">
-                    <label className="block text-sm font-semibold text-[#C4A882] mb-2">Per delegate</label>
-                    <div className="flex items-center gap-1.5 bg-[#150F09] border border-[#2E1E0F] rounded-xl px-3 py-2 w-fit">
+                    <label className="block text-sm font-semibold text-[#6A5A4A] mb-2">Per delegate</label>
+                    <div className="flex items-center gap-1.5 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-3 py-2 w-fit">
                       <input type="number" min={0} value={speakingTimeStr}
                         onChange={(e) => setSpeakingTimeStr(e.target.value)}
                         className={`w-12 ${numClassSm}`} />
-                      <span className="text-[#C4A882] text-xs">sec</span>
+                      <span className="text-[#6A5A4A] text-xs">sec</span>
                     </div>
                     <div className="flex gap-1.5 mt-2 flex-wrap">
                       {[30, 45, 60, 90, 120].map((t) => (
                         <button key={t} onClick={() => setSpeakingTimeStr(String(t))}
-                          className={`text-xs px-2 py-1 rounded-lg transition-colors ${speakingTime === t ? 'bg-[#7B4A1E] text-white font-bold' : 'bg-[#1A1209] border border-[#2E1E0F] text-[#C4A882] hover:text-white'}`}>
+                          className={`text-xs px-2 py-1 rounded-lg transition-colors ${speakingTime === t ? 'bg-[#1B3828] text-white font-bold' : 'bg-[#EDE7D8] border border-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
                           {t}s
                         </button>
                       ))}
                     </div>
                     {speakerCount !== null && (
                       <div className="mt-3 rounded-xl bg-white/10 border border-white/20 px-4 py-3">
-                        <p className="text-white font-black text-2xl leading-tight">
-                          {speakerCount} <span className="text-base font-semibold text-[#C4A882]">delegates can speak</span>
+                        <p className="text-[#1C1410] font-black text-2xl leading-tight">
+                          {speakerCount} <span className="text-base font-semibold text-[#6A5A4A]">delegates can speak</span>
                         </p>
                         {unusedSecs > 0 && (
                           <p className="text-amber-400 text-sm font-semibold mt-1">
@@ -427,7 +427,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
           )}
           {error && <p className="text-red-400 text-sm font-medium mb-3">{error}</p>}
           <button onClick={submit} disabled={!canSubmit() || belowQuorum}
-            className="w-full bg-[#7B4A1E] hover:bg-[#8B5A2B] disabled:bg-[#2E1E0F] disabled:text-[#7A5A38] text-white py-5 rounded-2xl text-base font-black transition-colors">
+            className="w-full bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white py-5 rounded-2xl text-base font-black transition-colors">
             {editingMotion ? 'Edit Motion →' : 'Raise Motion →'}
           </button>
         </div>
@@ -484,8 +484,8 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
   if (order.length === 0) {
     return (
       <div className="px-7 pb-7 text-center py-8">
-        <p className="text-[#C4A882]">No motions to vote on.</p>
-        <button onClick={onAllDone} className="mt-4 text-sm text-[#B8844A] hover:text-[#E8C49A]">← Back</button>
+        <p className="text-[#6A5A4A]">No motions to vote on.</p>
+        <button onClick={onAllDone} className="mt-4 text-sm text-[#B6871F] hover:text-[#EED98A]">← Back</button>
       </div>
     );
   }
@@ -521,55 +521,55 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
           dragIndexRef.current = null;
         }}
         onDragEnd={() => { dragIndexRef.current = null; }}
-        className={`bg-[#1A1209] rounded-2xl flex flex-col cursor-grab ${
+        className={`bg-[#EDE7D8] rounded-2xl flex flex-col cursor-grab ${
           large
-            ? `p-6 space-y-3 flex-1 min-w-0 border-2 ${isPrimary ? 'border-[#7B4A1E]' : 'border-[#2E1E0F]'}`
-            : 'p-4 space-y-2 border border-[#2E1E0F]'
+            ? `p-6 space-y-3 flex-1 min-w-0 border-2 ${isPrimary ? 'border-[#1B3828]' : 'border-[#DDD4C0]'}`
+            : 'p-4 space-y-2 border border-[#DDD4C0]'
         }`}
       >
         {/* Header: icon + type label + flag in top-right */}
         <div className="flex items-center gap-2">
           <Emoji size={large ? '2.5rem' : '1.5rem'}>{meta.icon}</Emoji>
-          <span className={`font-black text-white flex-1 ${large ? 'text-3xl' : 'text-lg'}`}>{meta.label}</span>
+          <span className={`font-black text-[#1C1410] flex-1 ${large ? 'text-3xl' : 'text-lg'}`}>{meta.label}</span>
           {f ? <img src={getFlagUrl(f.code)} alt={f.code} className={large ? 'w-10 h-10 object-contain inline-block' : 'w-6 h-6 object-contain inline-block'} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <Emoji size={large ? '2.5rem' : '1.5rem'}>🌐</Emoji>}
         </div>
 
         {/* Topic inline */}
         {m.topic && (
-          <p className={`${large ? 'text-2xl' : 'text-base'} text-[#C4A882]`}>
-            <span className="text-[#7A5A38] font-semibold">Topic: </span>{m.topic}
+          <p className={`${large ? 'text-2xl' : 'text-base'} text-[#6A5A4A]`}>
+            <span className="text-[#9A8A78] font-semibold">Topic: </span>{m.topic}
           </p>
         )}
 
         {/* Timings — emphasised */}
         {m.type !== 'tour' && m.totalTime > 0 && (
           <div className="flex items-center gap-2 flex-wrap">
-            <span className={`font-black ${large ? 'text-base text-white' : 'text-xs text-[#C4A882]'}`}>
+            <span className={`font-black ${large ? 'text-base text-[#1C1410]' : 'text-xs text-[#6A5A4A]'}`}>
               {fmtTime(totalMins, totalSecs)}
               {m.type === 'moderated' && m.speakingTime > 0 && (
-                <span className="text-[#7B4A1E]"> — {fmtTime(speakMins, speakSecs)}</span>
+                <span className="text-[#1B3828]"> — {fmtTime(speakMins, speakSecs)}</span>
               )}
               {m.type === 'moderated' && m.speakingTime > 0 && m.totalTime > 0 && (
-                <span className="text-[#7A5A38]"> · {Math.floor(m.totalTime / m.speakingTime)} speakers{m.totalTime % m.speakingTime !== 0 ? ' ⚠' : ''}</span>
+                <span className="text-[#9A8A78]"> · {Math.floor(m.totalTime / m.speakingTime)} speakers{m.totalTime % m.speakingTime !== 0 ? ' ⚠' : ''}</span>
               )}
             </span>
           </div>
         )}
         {m.type === 'tour' && (
           <div className="flex items-center gap-2">
-            <span className={`font-black ${large ? 'text-base text-white' : 'text-xs text-[#C4A882]'}`}>
+            <span className={`font-black ${large ? 'text-base text-[#1C1410]' : 'text-xs text-[#6A5A4A]'}`}>
               {fmtTime(0, m.speakingTime)} / delegate
             </span>
-            <span className={`${large ? 'text-sm' : 'text-xs'} text-[#7A5A38]`}>
+            <span className={`${large ? 'text-sm' : 'text-xs'} text-[#9A8A78]`}>
               {m.tourOrder === 'desc' ? 'Z→A' : m.tourOrder === 'custom' ? 'Custom' : 'A→Z'}
             </span>
           </div>
         )}
 
         {/* Required votes */}
-        <div className="flex items-center gap-2 bg-[#150F09] border border-[#2E1E0F] rounded-xl px-3 py-1.5">
-          <span className="text-xs text-[#7A5A38]">{fraction}</span>
-          <span className="text-xs text-white font-bold ml-auto">Needs {needed} of {present}</span>
+        <div className="flex items-center gap-2 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-3 py-1.5">
+          <span className="text-xs text-[#9A8A78]">{fraction}</span>
+          <span className="text-xs text-[#1C1410] font-bold ml-auto">Needs {needed} of {present}</span>
         </div>
 
         {/* Accept/Reject/Edit — ONLY on the primary (idx===0) card being voted upon */}
@@ -581,12 +581,12 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
             </button>
             <button onClick={() => onRemove(m.id)}
               disabled={pendingIds.has(m.id)}
-              className={`flex-1 bg-[#2E1E0F] hover:bg-red-950/40 hover:text-red-500 text-[#C4A882] border border-[#2E1E0F] hover:border-red-800/40 py-2.5 rounded-xl font-bold text-sm transition-colors ${pendingIds.has(m.id) ? 'opacity-40 cursor-not-allowed' : ''}`}>
+              className={`flex-1 bg-[#DDD4C0] hover:bg-red-950/40 hover:text-red-500 text-[#6A5A4A] border border-[#DDD4C0] hover:border-red-800/40 py-2.5 rounded-xl font-bold text-sm transition-colors ${pendingIds.has(m.id) ? 'opacity-40 cursor-not-allowed' : ''}`}>
               ✗ Reject
             </button>
             <button onClick={(e) => { e.stopPropagation(); onEdit(m.id); }}
               title="Edit motion"
-              className="bg-[#3D2A15] hover:bg-[#4D3520] border border-[#7B4A1E] hover:border-[#B8844A] text-[#C4A882] hover:text-white py-2.5 px-5 rounded-xl font-bold text-lg transition-colors shrink-0">
+              className="bg-[#C8BAA8] hover:bg-[#1B3828] border border-[#1B3828] hover:border-[#B6871F] text-[#6A5A4A] hover:text-white py-2.5 px-5 rounded-xl font-bold text-lg transition-colors shrink-0">
               ⚙
             </button>
           </div>
@@ -598,9 +598,9 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
   return (
     <div className="px-7 pb-7 space-y-3 flex flex-col h-full overflow-hidden">
       <div className="flex items-center shrink-0">
-        <h2 className="text-2xl font-black text-white">Vote on Motions</h2>
+        <h2 className="text-2xl font-black text-[#1C1410]">Vote on Motions</h2>
       </div>
-      <div className="flex items-center gap-2 px-3 py-2 bg-[#150F09] border border-[#2E1E0F] rounded-xl text-xs text-[#7A5A38] shrink-0">
+      <div className="flex items-center gap-2 px-3 py-2 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl text-xs text-[#9A8A78] shrink-0">
         <Emoji size="1em">💡</Emoji>
         <span>Drag motions to reorder them. Most disruptive is voted on first by default.</span>
       </div>
@@ -614,7 +614,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
           {rest.map((m, i) => renderCard(m, false, i + 1))}
           <button
             onClick={onBack}
-            className="w-full bg-[#3D6B35] hover:bg-[#4A7C42] text-white py-3 rounded-2xl font-black text-sm transition-colors shrink-0"
+            className="w-full bg-[#2A5A3C] hover:bg-[#3D7A52] text-white py-3 rounded-2xl font-black text-sm transition-colors shrink-0"
           >
             + Raise a Motion
           </button>
@@ -846,11 +846,11 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
   if (specialVoteMotion) {
     const isSuspend = specialVoteMotion.type === 'suspend-debate';
     return (
-      <div className="fixed inset-0 z-[60] bg-[#0D0906] flex flex-col items-center justify-center text-center px-8">
-        <p className="text-xs font-mono tracking-widest text-[#7A5A38] mb-6">
+      <div className="fixed inset-0 z-[60] bg-[#F6F1E9] flex flex-col items-center justify-center text-center px-8">
+        <p className="text-xs font-mono tracking-widest text-[#9A8A78] mb-6">
           {typeMeta[specialVoteMotion.type].label.toUpperCase()} · {specialVoteMotion.proposedBy}
         </p>
-        <h1 className="text-5xl font-black text-white mb-14">Does this motion pass?</h1>
+        <h1 className="text-5xl font-black text-[#1C1410] mb-14">Does this motion pass?</h1>
         <div className="flex gap-8">
           <button
             onClick={async () => {
@@ -892,9 +892,9 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background: 'rgba(5, 8, 20, 0.88)', backdropFilter: 'blur(4px)' }}
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="bg-[#1A1209] border border-[#2E1E0F] rounded-3xl w-full shadow-2xl overflow-hidden flex flex-col max-w-5xl" style={{ height: '88vh' }}>
+      <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-3xl w-full shadow-2xl overflow-hidden flex flex-col max-w-5xl" style={{ height: '88vh' }}>
         <div className="flex items-center justify-end px-7 pt-6 pb-0 shrink-0">
-          <button onClick={onClose} className="text-[#7A5A38] hover:text-white transition-colors text-xl leading-none">✕</button>
+          <button onClick={onClose} className="text-[#9A8A78] hover:text-[#1C1410] transition-colors text-xl leading-none">✕</button>
         </div>
         <div className="flex-1 min-h-0 pt-2 flex flex-col">
           {view === 'raise' && (
@@ -921,60 +921,60 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
           )}
           {view === 'list' && (
             <div className="px-7 pb-7 space-y-4">
-              <h2 className="text-3xl font-black text-white">Motions</h2>
+              <h2 className="text-3xl font-black text-[#1C1410]">Motions</h2>
               {pending.length === 0 ? (
                 <div className="text-center py-8">
                   <div className="mb-3"><Emoji size="2.5rem">📋</Emoji></div>
-                  <p className="text-[#C4A882]">No motions raised yet.</p>
-                  <p className="text-sm text-[#7A5A38] mt-1">The floor is open — invite delegates to raise motions.</p>
+                  <p className="text-[#6A5A4A]">No motions raised yet.</p>
+                  <p className="text-sm text-[#9A8A78] mt-1">The floor is open — invite delegates to raise motions.</p>
                 </div>
               ) : (
                 <div className="space-y-2">
-                  <p className="text-xs text-[#7A5A38] font-mono">RANKED — MOST DISRUPTIVE FIRST</p>
+                  <p className="text-xs text-[#9A8A78] font-mono">RANKED — MOST DISRUPTIVE FIRST</p>
                   {pending.map((m, i) => {
                     const meta = typeMeta[m.type];
                     const mins = Math.floor(m.totalTime / 60);
                     const secs = m.totalTime % 60;
                     const proposerFlag = getCountryByName(m.proposedBy);
                     return (
-                      <div key={m.id} className="bg-[#1A1209] border border-[#2E1E0F] rounded-xl px-4 py-4">
+                      <div key={m.id} className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl px-4 py-4">
                         <div className="flex items-start gap-3">
-                          <span className="text-xs text-[#7A5A38] font-mono w-4 mt-1">{i + 1}</span>
+                          <span className="text-xs text-[#9A8A78] font-mono w-4 mt-1">{i + 1}</span>
                           <Emoji size="1.5rem">{meta.icon}</Emoji>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-base font-black text-white">{meta.label}</span>
+                              <span className="text-base font-black text-[#1C1410]">{meta.label}</span>
                               <DisruptivenessBadge type={m.type} />
                             </div>
                             <div className="flex items-center gap-1.5 mt-1">
                               {proposerFlag ? <img src={getFlagUrl(proposerFlag.code)} alt={proposerFlag.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <Emoji size="1rem">🌐</Emoji>}
-                              <span className="text-sm font-semibold text-white">{m.proposedBy}</span>
+                              <span className="text-sm font-semibold text-[#1C1410]">{m.proposedBy}</span>
                             </div>
-                            {m.topic && <p className="text-sm text-[#C4A882] mt-1 font-medium">"{m.topic}"</p>}
+                            {m.topic && <p className="text-sm text-[#6A5A4A] mt-1 font-medium">"{m.topic}"</p>}
                             <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                               {m.type !== 'tour' && m.totalTime > 0 && (
-                                <span className="text-xs font-bold text-[#7B4A1E] bg-[#150F09] border border-[#2E1E0F] px-2 py-0.5 rounded-md">
+                                <span className="text-xs font-bold text-[#1B3828] bg-[#FAF8F3] border border-[#DDD4C0] px-2 py-0.5 rounded-md">
                                   {mins > 0 ? `${mins}m` : ''}{secs > 0 ? ` ${secs}s` : ''} total
                                 </span>
                               )}
                               {m.type === 'moderated' && m.speakingTime > 0 && (
-                                <span className="text-xs font-bold text-[#3D6B35] bg-[#150F09] border border-[#2E1E0F] px-2 py-0.5 rounded-md">
+                                <span className="text-xs font-bold text-[#2A5A3C] bg-[#FAF8F3] border border-[#DDD4C0] px-2 py-0.5 rounded-md">
                                   {m.speakingTime}s/speaker
                                 </span>
                               )}
                               {m.type === 'tour' && (
                                 <>
-                                  <span className="text-xs font-bold text-[#7B4A1E] bg-[#150F09] border border-[#2E1E0F] px-2 py-0.5 rounded-md">
+                                  <span className="text-xs font-bold text-[#1B3828] bg-[#FAF8F3] border border-[#DDD4C0] px-2 py-0.5 rounded-md">
                                     {m.speakingTime}s/delegate
                                   </span>
-                                  <span className="text-xs font-bold text-[#C4A882] bg-[#150F09] border border-[#2E1E0F] px-2 py-0.5 rounded-md">
+                                  <span className="text-xs font-bold text-[#6A5A4A] bg-[#FAF8F3] border border-[#DDD4C0] px-2 py-0.5 rounded-md">
                                     {m.tourOrder === 'desc' ? 'Z→A' : 'A→Z'}
                                   </span>
                                 </>
                               )}
                             </div>
                           </div>
-                          <button onClick={() => handleRemove(m.id)} className="text-[#7A5A38] hover:text-red-500 text-sm transition-colors mt-0.5">✕</button>
+                          <button onClick={() => handleRemove(m.id)} className="text-[#9A8A78] hover:text-red-500 text-sm transition-colors mt-0.5">✕</button>
                         </div>
                       </div>
                     );
@@ -983,12 +983,12 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
               )}
               <div className="flex gap-3 pt-2">
                 <button onClick={() => setView('raise')}
-                  className="flex-1 bg-[#1A1209] hover:bg-[#2E1E0F] border border-[#2E1E0F] hover:border-[#7B4A1E] text-white py-3.5 rounded-2xl font-bold transition-all">
+                  className="flex-1 bg-[#EDE7D8] hover:bg-[#DDD4C0] border border-[#DDD4C0] hover:border-[#1B3828] text-[#1C1410] py-3.5 rounded-2xl font-bold transition-all">
                   + Raise Motion
                 </button>
                 {pending.length > 0 && (
                   <button onClick={() => setView('vote')}
-                    className="flex-1 bg-[#7B4A1E] hover:bg-[#8B5A2B] text-white py-3.5 rounded-2xl font-black transition-colors">
+                    className="flex-1 bg-[#1B3828] hover:bg-[#2A5A3C] text-white py-3.5 rounded-2xl font-black transition-colors">
                     Vote on Motions →
                   </button>
                 )}

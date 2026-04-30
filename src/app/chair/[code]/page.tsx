@@ -45,7 +45,7 @@ function formatTime(seconds: number) {
 
 function GavelLoader() {
   return (
-    <div className="min-h-screen bg-[#0D0906] flex flex-col items-center justify-center gap-4">
+    <div className="min-h-screen bg-[#F6F1E9] flex flex-col items-center justify-center gap-4">
       <style>{`
         @keyframes gavel-strike {
           0%   { transform: rotate(-30deg); }
@@ -60,12 +60,12 @@ function GavelLoader() {
         }
       `}</style>
       <svg className="gavel-anim" width="72" height="72" viewBox="0 0 72 72" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect x="38" y="38" width="8" height="28" rx="3" transform="rotate(-45 38 38)" fill="#7B4A1E" />
-        <rect x="8" y="14" width="36" height="16" rx="5" transform="rotate(-45 8 14)" fill="#B8844A" />
-        <rect x="10" y="16" width="36" height="7" rx="3" transform="rotate(-45 10 16)" fill="#C4A882" opacity="0.4" />
-        <circle cx="56" cy="56" r="3" fill="#7B4A1E" opacity="0.5" />
+        <rect x="38" y="38" width="8" height="28" rx="3" transform="rotate(-45 38 38)" fill="#1B3828" />
+        <rect x="8" y="14" width="36" height="16" rx="5" transform="rotate(-45 8 14)" fill="#B6871F" />
+        <rect x="10" y="16" width="36" height="7" rx="3" transform="rotate(-45 10 16)" fill="#6A5A4A" opacity="0.4" />
+        <circle cx="56" cy="56" r="3" fill="#1B3828" opacity="0.5" />
       </svg>
-      <p className="text-[#7A5A38] text-sm font-mono tracking-widest">LOADING…</p>
+      <p className="text-[#9A8A78] text-sm font-mono tracking-widest">LOADING…</p>
     </div>
   );
 }
@@ -152,15 +152,15 @@ function AddSpeakerInput({ committee, onAdd }: { committee: Committee; onAdd: (i
   const commit = (d: typeof topNotOnList) => { if (!d || onList.has(d.id)) return; onAdd(d.id); setQuery(''); };
   return (
     <div className="relative">
-      <div className="flex items-center bg-[#150F09] border border-[#2E1E0F] focus-within:border-[#7B4A1E] rounded-xl transition-colors">
+      <div className="flex items-center bg-[#FAF8F3] border border-[#DDD4C0] focus-within:border-[#1B3828] rounded-xl transition-colors">
         <input ref={inputRef} type="text" value={query} onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(topNotOnList); } if (e.key === 'Escape') setQuery(''); }}
           placeholder="Add to speakers list..." autoFocus
-          className="flex-1 bg-transparent px-4 py-3 text-white placeholder-[#7A5A38] focus:outline-none text-sm" />
-        {topNotOnList && query && <span className="text-xs text-[#7A5A38] px-3 truncate max-w-[120px]">↵ {topNotOnList.country}</span>}
+          className="flex-1 bg-transparent px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none text-sm" />
+        {topNotOnList && query && <span className="text-xs text-[#9A8A78] px-3 truncate max-w-[120px]">↵ {topNotOnList.country}</span>}
       </div>
       {query && matches.length > 0 && (
-        <div className="absolute bottom-full left-0 right-0 mb-1 bg-[#150F09] border border-[#2E1E0F] rounded-xl overflow-hidden shadow-xl z-10 max-h-48 overflow-y-auto">
+        <div className="absolute bottom-full left-0 right-0 mb-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl overflow-hidden shadow-xl z-10 max-h-48 overflow-y-auto">
           {matches.slice(0, 6).map((d, i) => {
             const found = getCountryByName(d.country);
             const alreadyOnList = onList.has(d.id);
@@ -172,22 +172,22 @@ function AddSpeakerInput({ committee, onAdd }: { committee: Committee; onAdd: (i
                     ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                     : <Emoji size="1.125rem">🌐</Emoji>}
                 </span>
-                  <span className="text-sm flex-1 text-[#7A5A38]">{d.country}</span>
-                  <span className="text-xs text-[#7A5A38]">already on list</span>
+                  <span className="text-sm flex-1 text-[#9A8A78]">{d.country}</span>
+                  <span className="text-xs text-[#9A8A78]">already on list</span>
                 </div>
               );
             }
             const isFirst = d === topNotOnList;
             return (
               <button key={d.id} onMouseDown={(e) => { e.preventDefault(); commit(d); }}
-                className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${isFirst ? 'bg-[#7B4A1E]/20 text-white' : 'text-[#E8D5B7] hover:bg-[#2E1E0F]'}`}>
+                className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${isFirst ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'}`}>
                 <span className="shrink-0 w-6 h-6 inline-flex items-center justify-center">
                   {found
                     ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                     : <Emoji size="1.125rem">🌐</Emoji>}
                 </span>
                 <span className="text-sm">{d.country}</span>
-                {isFirst && <span className="ml-auto text-xs text-[#7A5A38]">Enter ↵</span>}
+                {isFirst && <span className="ml-auto text-xs text-[#9A8A78]">Enter ↵</span>}
               </button>
             );
           })}
@@ -223,7 +223,7 @@ function RtrCountryInput({
 
   return (
     <div className="relative flex-1">
-      <div className="flex items-center bg-[#150F09] border border-[#2E1E0F] focus-within:border-[#7B4A1E] rounded-xl transition-colors">
+      <div className="flex items-center bg-[#FAF8F3] border border-[#DDD4C0] focus-within:border-[#1B3828] rounded-xl transition-colors">
         <input
           ref={inputRef}
           type="text"
@@ -238,21 +238,21 @@ function RtrCountryInput({
             if (e.key === 'Escape') { setQuery(''); onChange(''); }
           }}
           placeholder="Type country…"
-          className="flex-1 bg-transparent px-3 py-1.5 text-white text-xs placeholder-[#7A5A38] focus:outline-none"
+          className="flex-1 bg-transparent px-3 py-1.5 text-[#1C1410] text-xs placeholder-[#9A8A78] focus:outline-none"
         />
         {topMatch && query && !value && query.toLowerCase() !== topMatch.country.toLowerCase() && (
-          <span className="text-[10px] text-[#7A5A38] px-2 truncate max-w-[90px]">↵ {topMatch.country}</span>
+          <span className="text-[10px] text-[#9A8A78] px-2 truncate max-w-[90px]">↵ {topMatch.country}</span>
         )}
       </div>
       {query && matches.length > 0 && !value && (
-        <div className="absolute bottom-full left-0 right-0 mb-1 bg-[#150F09] border border-[#2E1E0F] rounded-xl overflow-hidden shadow-xl z-10">
+        <div className="absolute bottom-full left-0 right-0 mb-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl overflow-hidden shadow-xl z-10">
           {matches.slice(0, 5).map((d, i) => {
             const found = getCountryByName(d.country);
             return (
               <button
                 key={d.id}
                 onMouseDown={(e) => { e.preventDefault(); setQuery(d.country); onChange(d.country); }}
-                className={`w-full flex items-center gap-2 px-3 py-2 text-left text-xs transition-colors ${i === 0 ? 'bg-[#7B4A1E]/20 text-white' : 'text-[#E8D5B7] hover:bg-[#2E1E0F]'}`}
+                className={`w-full flex items-center gap-2 px-3 py-2 text-left text-xs transition-colors ${i === 0 ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'}`}
               >
                 <span className="shrink-0 w-5 h-5 inline-flex items-center justify-center">
                 {found
@@ -260,7 +260,7 @@ function RtrCountryInput({
                   : <Emoji size="0.875rem">🌐</Emoji>}
               </span>
                 <span className="flex-1">{d.country}</span>
-                {i === 0 && <span className="text-[#7A5A38] shrink-0">Enter ↵</span>}
+                {i === 0 && <span className="text-[#9A8A78] shrink-0">Enter ↵</span>}
               </button>
             );
           })}
@@ -303,21 +303,21 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, lastSpeakerDelegate
                 dragIndexRef.current = null;
               }}>
               {isRoomOrderTdT ? (
-                <div className={`w-20 h-20 rounded-full bg-[#2E1E0F] border border-[#3D2A15] flex items-center justify-center ${isCurrent ? 'ring-4 ring-[#7B4A1E]' : ''}`}>
-                  <span className="text-3xl font-black text-[#B8844A]">{i + 2}</span>
+                <div className={`w-20 h-20 rounded-full bg-[#DDD4C0] border border-[#C8BAA8] flex items-center justify-center ${isCurrent ? 'ring-4 ring-[#1B3828]' : ''}`}>
+                  <span className="text-3xl font-black text-[#B6871F]">{i + 2}</span>
                 </div>
               ) : (
-                <div className={`rounded-full ${isCurrent ? 'ring-4 ring-[#7B4A1E]' : ''}`}>
+                <div className={`rounded-full ${isCurrent ? 'ring-4 ring-[#1B3828]' : ''}`}>
                   <FlagCircle country={s.country} size="xl" />
                 </div>
               )}
               {!isRoomOrderTdT && (
-                <span className="line-clamp-2 break-words whitespace-normal leading-tight max-w-[80px] text-xs font-semibold text-[#C4A882] text-center">{abbrevCountry(s.country)}</span>
+                <span className="line-clamp-2 break-words whitespace-normal leading-tight max-w-[80px] text-xs font-semibold text-[#6A5A4A] text-center">{abbrevCountry(s.country)}</span>
               )}
-              {isCurrent && <span className="text-sm font-bold text-[#B8844A]">Speaking</span>}
-              {!isCurrent && i === 0 && <span className="text-sm font-bold text-[#B8844A]">Up next</span>}
+              {isCurrent && <span className="text-sm font-bold text-[#B6871F]">Speaking</span>}
+              {!isCurrent && i === 0 && <span className="text-sm font-bold text-[#B6871F]">Up next</span>}
               {!isCurrent && lastSpeakerDelegateId && s.delegateId === lastSpeakerDelegateId && i !== 0 && (
-                <span className="text-xs font-bold text-[#7A5A38] bg-[#2E1E0F] px-1.5 py-0.5 rounded">Last</span>
+                <span className="text-xs font-bold text-[#9A8A78] bg-[#DDD4C0] px-1.5 py-0.5 rounded">Last</span>
               )}
               {!isCurrent && (
                 <button onClick={() => onRemove(s.delegateId)}
@@ -327,7 +327,7 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, lastSpeakerDelegate
           );
         })}
       </div>
-      <div className="text-center text-xs text-[#7A5A38] mt-2 h-4">
+      <div className="text-center text-xs text-[#9A8A78] mt-2 h-4">
         {overflow > 0 ? `+${overflow} more in queue` : ''}
       </div>
     </div>
@@ -345,13 +345,13 @@ function CaucusQueueSidebar({ committee, onRemove, onReorder, lastSpeakerDelegat
   const queue = committee.caucusQueue ?? [];
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="px-4 pt-4 pb-3 border-b border-[#2E1E0F] shrink-0">
-        <span className="text-sm font-bold text-white">Speaker Queue</span>
-        <span className="text-xs text-[#7A5A38] ml-2 font-mono">{queue.length} speakers</span>
+      <div className="px-4 pt-4 pb-3 border-b border-[#DDD4C0] shrink-0">
+        <span className="text-sm font-bold text-[#1C1410]">Speaker Queue</span>
+        <span className="text-xs text-[#9A8A78] ml-2 font-mono">{queue.length} speakers</span>
       </div>
       <div className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
         {queue.length === 0 ? (
-          <div className="px-4 py-8 text-center text-[#7A5A38] text-sm">No speakers queued</div>
+          <div className="px-4 py-8 text-center text-[#9A8A78] text-sm">No speakers queued</div>
         ) : (
           queue.map((s, i) => {
             const found = getCountryByName(s.country);
@@ -370,21 +370,21 @@ function CaucusQueueSidebar({ committee, onRemove, onReorder, lastSpeakerDelegat
                   onReorder(newList);
                   dragIndexRef.current = null;
                 }}
-                className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all bg-[#150F09] border border-[#2E1E0F] hover:border-[#7B4A1E]/40 cursor-grab group"
+                className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all bg-[#FAF8F3] border border-[#DDD4C0] hover:border-[#1B3828]/40 cursor-grab group"
               >
-                <span className="text-xs text-[#7A5A38] font-mono w-5 text-right shrink-0">{i + 1}</span>
+                <span className="text-xs text-[#9A8A78] font-mono w-5 text-right shrink-0">{i + 1}</span>
                 <span className="shrink-0 w-6 h-6 inline-flex items-center justify-center">
                 {found
                   ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                   : <Emoji size="1.125rem">🌐</Emoji>}
               </span>
-                <span className="flex-1 text-sm text-white line-clamp-2 break-words whitespace-normal leading-tight">{s.country}</span>
+                <span className="flex-1 text-sm text-[#1C1410] line-clamp-2 break-words whitespace-normal leading-tight">{s.country}</span>
                 {lastSpeakerDelegateId && s.delegateId === lastSpeakerDelegateId && (
-                  <span className="text-xs font-bold text-[#7A5A38] bg-[#2E1E0F] px-1.5 py-0.5 rounded shrink-0">Last</span>
+                  <span className="text-xs font-bold text-[#9A8A78] bg-[#DDD4C0] px-1.5 py-0.5 rounded shrink-0">Last</span>
                 )}
                 <button
                   onClick={() => onRemove(s.delegateId)}
-                  className="text-[#7A5A38] hover:text-red-500 transition-colors text-xs opacity-0 group-hover:opacity-100 shrink-0"
+                  className="text-[#9A8A78] hover:text-red-500 transition-colors text-xs opacity-0 group-hover:opacity-100 shrink-0"
                 >✕</button>
               </div>
             );
@@ -420,22 +420,22 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
     <div className="flex gap-2">
       <div className="relative flex-1">
       {isFull ? (
-        <div className="pointer-events-none flex items-center justify-center px-4 py-3 bg-[#150F09] border border-yellow-700/30 rounded-xl">
+        <div className="pointer-events-none flex items-center justify-center px-4 py-3 bg-[#FAF8F3] border border-yellow-700/30 rounded-xl">
           <p className="text-sm text-amber-400 font-semibold text-center">
             Queue full — {maxSpeakers} speaker{maxSpeakers !== 1 ? 's' : ''} fit in remaining time
           </p>
         </div>
       ) : (
       <>
-      <div className="flex items-center bg-[#150F09] border rounded-xl transition-colors border-[#2E1E0F] focus-within:border-[#7B4A1E]">
+      <div className="flex items-center bg-[#FAF8F3] border rounded-xl transition-colors border-[#DDD4C0] focus-within:border-[#1B3828]">
         <input ref={inputRef} type="text" value={query} onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(topNotOnList); } if (e.key === 'Escape') setQuery(''); }}
           placeholder="Add to speakers list…"
-          className="flex-1 bg-transparent px-4 py-3 text-white placeholder-[#7A5A38] focus:outline-none text-sm" />
-        {topNotOnList && query && <span className="text-xs text-[#7A5A38] px-3 truncate max-w-[120px]">↵ {topNotOnList.country}</span>}
+          className="flex-1 bg-transparent px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none text-sm" />
+        {topNotOnList && query && <span className="text-xs text-[#9A8A78] px-3 truncate max-w-[120px]">↵ {topNotOnList.country}</span>}
       </div>
       {query && matches.length > 0 && (
-        <div className="absolute bottom-full left-0 right-0 mb-1 bg-[#150F09] border border-[#2E1E0F] rounded-xl overflow-hidden shadow-xl z-10 max-h-48 overflow-y-auto">
+        <div className="absolute bottom-full left-0 right-0 mb-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl overflow-hidden shadow-xl z-10 max-h-48 overflow-y-auto">
           {matches.slice(0, 6).map((d) => {
             const found = getCountryByName(d.country);
             const alreadyOnList = onList.has(d.id);
@@ -449,15 +449,15 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
                     ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                     : <Emoji size="1.125rem">🌐</Emoji>}
                 </span>
-                  <span className="text-sm flex-1 text-[#7A5A38]">{d.country}</span>
-                  <span className="text-xs text-[#7A5A38]">{isCurrent ? 'currently speaking' : 'already on list'}</span>
+                  <span className="text-sm flex-1 text-[#9A8A78]">{d.country}</span>
+                  <span className="text-xs text-[#9A8A78]">{isCurrent ? 'currently speaking' : 'already on list'}</span>
                 </div>
               );
             }
             const isFirst = d === topNotOnList;
             return (
               <button key={d.id} onMouseDown={(e) => { e.preventDefault(); commit(d); }}
-                className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${isFirst ? 'bg-[#7B4A1E]/20 text-white' : 'text-[#E8D5B7] hover:bg-[#2E1E0F]'}`}>
+                className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${isFirst ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'}`}>
                 <span className="shrink-0 w-6 h-6 inline-flex items-center justify-center">
                   {found
                     ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
@@ -469,17 +469,17 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
                   <div className="flex items-center gap-1 shrink-0">
                     {onAddFirst && (
                       <button onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onAddFirst(d.id); setQuery(''); }}
-                        className="text-[10px] px-1.5 py-0.5 rounded bg-[#2E1E0F] hover:bg-[#3D2A15] text-[#B8844A] font-bold border border-[#3D2A15] transition-colors">
+                        className="text-[10px] px-1.5 py-0.5 rounded bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#B6871F] font-bold border border-[#C8BAA8] transition-colors">
                         ↑ First
                       </button>
                     )}
                     {onAddLast && (
                       <button onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onAddLast(d.id); setQuery(''); }}
-                        className="text-[10px] px-1.5 py-0.5 rounded bg-[#2E1E0F] hover:bg-[#3D2A15] text-[#B8844A] font-bold border border-[#3D2A15] transition-colors">
+                        className="text-[10px] px-1.5 py-0.5 rounded bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#B6871F] font-bold border border-[#C8BAA8] transition-colors">
                         ↓ Last
                       </button>
                     )}
-                    <span className="text-xs text-[#7A5A38]">Enter ↵</span>
+                    <span className="text-xs text-[#9A8A78]">Enter ↵</span>
                   </div>
                 )}
               </button>
@@ -558,26 +558,26 @@ function UnmoderatedCaucusView({ committee, setCommittee }: { committee: Committ
     <div className="relative flex-1 flex flex-col items-center justify-center px-8 py-12">
       {/* Absolute overlay: motion name + topic — does not affect centred layout */}
       <div className="absolute left-0 top-1/2 -translate-y-1/2 flex flex-col gap-2 max-w-[200px] pl-4 pointer-events-none select-none">
-        <span className="text-white font-black text-2xl leading-tight uppercase">
+        <span className="text-[#1C1410] font-black text-2xl leading-tight uppercase">
           {caucus.motionLabel ?? unmoderatedName}
         </span>
         {caucus.purpose && (
-          <span className="text-white/70 text-lg font-medium leading-snug">
+          <span className="text-[#1C1410]/70 text-lg font-medium leading-snug">
             {caucus.purpose}
           </span>
         )}
       </div>
-      <div className={`text-9xl font-black font-mono tabular-nums mb-8 ${caucus.remainingTime <= 30 ? 'text-red-500' : 'text-white'}`}>
+      <div className={`text-9xl font-black font-mono tabular-nums mb-8 ${caucus.remainingTime <= 30 ? 'text-red-500' : 'text-[#1C1410]'}`}>
         {formatTime(caucus.remainingTime)}
       </div>
-      <div className="w-full max-w-sm h-2 bg-[#2E1E0F] rounded-full overflow-hidden mb-8">
+      <div className="w-full max-w-sm h-2 bg-[#DDD4C0] rounded-full overflow-hidden mb-8">
         <div className="h-full bg-purple-500 rounded-full transition-all" style={{ width: `${caucus.totalTime > 0 ? (caucus.remainingTime / caucus.totalTime) * 100 : 0}%` }} />
       </div>
       <div className="flex gap-3 flex-wrap justify-center">
-        <button onClick={() => setRunning((r) => !r)} className={`px-8 py-3 rounded-xl font-bold transition-colors ${running ? 'bg-yellow-600 hover:bg-yellow-500 text-white' : 'bg-[#3D6B35] hover:bg-[#4A7C42] text-white'}`}>
+        <button onClick={() => setRunning((r) => !r)} className={`px-8 py-3 rounded-xl font-bold transition-colors ${running ? 'bg-yellow-600 hover:bg-yellow-500 text-white' : 'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'}`}>
           {running ? '⏸ Pause' : '▶ Resume'}
         </button>
-        <button onClick={() => setShowExtendUnmod((v) => !v)} className="px-4 py-3 rounded-xl font-bold bg-[#2E1E0F] hover:bg-emerald-950/50 text-[#C4A882] hover:text-emerald-400 transition-colors border border-[#2E1E0F] hover:border-emerald-900/50">
+        <button onClick={() => setShowExtendUnmod((v) => !v)} className="px-4 py-3 rounded-xl font-bold bg-[#DDD4C0] hover:bg-emerald-950/50 text-[#6A5A4A] hover:text-emerald-400 transition-colors border border-[#DDD4C0] hover:border-emerald-900/50">
           Extend
         </button>
         <button onClick={handleEndCaucus} className="px-8 py-3 rounded-xl font-black bg-red-600 hover:bg-red-700 text-white transition-colors">
@@ -613,7 +613,7 @@ function UnmoderatedCaucusView({ committee, setCommittee }: { committee: Committ
             ));
           })()}
           <input type="number" min={1} value={extendMinsUnmod} onChange={(e) => setExtendMinsUnmod(parseInt(e.target.value) || 1)}
-            className="w-12 bg-[#150F09] border border-[#2E1E0F] rounded-lg px-2 py-1 text-white text-xs focus:outline-none" />
+            className="w-12 bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-2 py-1 text-[#1C1410] text-xs focus:outline-none" />
           <button onClick={() => {
             const addSecs = extendMinsUnmod * 60;
             updateLocal(setCommittee, (c) => {
@@ -760,11 +760,11 @@ function ModeratedCaucusMain({
           <>
             {/* Absolute overlay: motion name + topic — does not affect centred layout */}
             <div className="absolute left-0 top-1/2 -translate-y-1/2 flex flex-col gap-2 max-w-[200px] pl-4 pointer-events-none select-none">
-              <span className="text-white font-black text-2xl leading-tight uppercase">
+              <span className="text-[#1C1410] font-black text-2xl leading-tight uppercase">
                 {committee.caucus?.motionLabel ?? caucusTitle}
               </span>
               {committee.caucus?.purpose && (
-                <span className="text-white/70 text-lg font-medium leading-snug">
+                <span className="text-[#1C1410]/70 text-lg font-medium leading-snug">
                   {committee.caucus.purpose}
                 </span>
               )}
@@ -783,16 +783,16 @@ function ModeratedCaucusMain({
               />
             )}
             <div className="flex flex-col items-center">
-              <div className="ring-4 ring-[#7B4A1E] rounded-full">
+              <div className="ring-4 ring-[#1B3828] rounded-full">
                 {isRoomOrderTdT ? (
-                  <div className="relative w-36 h-36 rounded-full bg-[#2E1E0F] shrink-0 flex items-center justify-center">
-                    <span className="text-6xl font-black text-[#B8844A]">{(() => {
+                  <div className="relative w-36 h-36 rounded-full bg-[#DDD4C0] shrink-0 flex items-center justify-center">
+                    <span className="text-6xl font-black text-[#B6871F]">{(() => {
                       const match = committee.caucus!.currentSpeaker?.match(/(\d+)$/);
                       return match ? match[1] : '?';
                     })()}</span>
                   </div>
                 ) : (
-                  <div className="relative w-36 h-36 rounded-full overflow-hidden bg-[#2E1E0F] shrink-0">
+                  <div className="relative w-36 h-36 rounded-full overflow-hidden bg-[#DDD4C0] shrink-0">
                     {(() => {
                       const f = getCountryByName(committee.caucus!.currentSpeaker!);
                       return f
@@ -802,40 +802,40 @@ function ModeratedCaucusMain({
                   </div>
                 )}
               </div>
-              <h1 className="text-5xl font-black text-white mt-2 mb-1 text-center">{committee.caucus!.currentSpeaker}</h1>
+              <h1 className="text-5xl font-black text-[#1C1410] mt-2 mb-1 text-center">{committee.caucus!.currentSpeaker}</h1>
               <div className={`text-8xl font-black font-mono mt-2 mb-3 tabular-nums ${
                 extraTimeAdded ? 'text-emerald-400' :
                 speakerTimeRemaining <= 10 ? 'text-red-500' :
-                speakerTimeRemaining <= 30 ? 'text-yellow-600' : 'text-white'
+                speakerTimeRemaining <= 30 ? 'text-yellow-600' : 'text-[#1C1410]'
               }`}>
                 {formatTime(speakerTimeRemaining)}
                 {extraTimeAdded && <span className="text-base ml-2 font-normal text-emerald-400">+time</span>}
               </div>
-              <div className="w-full max-w-2xl h-2 bg-[#2E1E0F] rounded-full overflow-hidden mb-3">
-                <div className={`h-full rounded-full transition-all ${caucusProgress > 50 ? 'bg-[#B8844A]' : caucusProgress > 20 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{ width: `${caucusProgress}%` }} />
+              <div className="w-full max-w-2xl h-2 bg-[#DDD4C0] rounded-full overflow-hidden mb-3">
+                <div className={`h-full rounded-full transition-all ${caucusProgress > 50 ? 'bg-[#B6871F]' : caucusProgress > 20 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{ width: `${caucusProgress}%` }} />
               </div>
             </div>
             {!sessionEnded && (
               <div className="flex gap-2 w-full max-w-sm mt-1 flex-wrap justify-center">
                 <button onClick={handleRestartTime} title="Restart speaker time"
-                  className="px-3 py-3 bg-[#2E1E0F] hover:bg-[#3D2A15] border border-[#3D2A15] hover:border-[#7B4A1E] rounded-xl font-bold text-sm text-[#C4A882] transition-colors">
+                  className="px-3 py-3 bg-[#DDD4C0] hover:bg-[#C8BAA8] border border-[#C8BAA8] hover:border-[#1B3828] rounded-xl font-bold text-sm text-[#6A5A4A] transition-colors">
                   ↺
                 </button>
                 <button onClick={handleToggleTimer}
-                  className={`flex-1 py-3 px-6 rounded-xl font-bold text-base transition-colors ${timerRunning ? 'bg-yellow-600 hover:bg-yellow-500 text-white' : 'bg-[#3D6B35] hover:bg-[#4A7C42] text-white'}`}>
+                  className={`flex-1 py-3 px-6 rounded-xl font-bold text-base transition-colors ${timerRunning ? 'bg-yellow-600 hover:bg-yellow-500 text-white' : 'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'}`}>
                   {timerRunning ? '⏸ Pause' : '▶ Start'}
                 </button>
                 <button onClick={handleNextCaucusSpeaker} disabled={queue.length === 0}
-                  className="flex-1 bg-[#2E1E0F] hover:bg-[#3D2A15] disabled:opacity-40 text-white py-3 px-6 rounded-xl font-bold text-base transition-colors">
+                  className="flex-1 bg-[#DDD4C0] hover:bg-[#C8BAA8] disabled:opacity-40 text-[#1C1410] py-3 px-6 rounded-xl font-bold text-base transition-colors">
                   Next →
                 </button>
                 <button onClick={() => setActivePopover(activePopover === 'extraTime' ? null : 'extraTime')} title="Add time"
-                  className={`px-3 py-3 border rounded-xl font-bold text-sm transition-colors ${activePopover === 'extraTime' ? 'bg-emerald-900/40 border-emerald-700/50 text-emerald-300' : 'bg-[#2E1E0F] hover:bg-emerald-950/50 hover:border-emerald-800/50 border-[#3D2A15] text-[#C4A882]'}`}>
+                  className={`px-3 py-3 border rounded-xl font-bold text-sm transition-colors ${activePopover === 'extraTime' ? 'bg-emerald-900/40 border-emerald-700/50 text-emerald-300' : 'bg-[#DDD4C0] hover:bg-emerald-950/50 hover:border-emerald-800/50 border-[#C8BAA8] text-[#6A5A4A]'}`}>
                   +⏱
                 </button>
                 {!isTdT && (
                   <button onClick={() => setActivePopover(activePopover === 'rightToReply' ? null : 'rightToReply')}
-                    className={`px-3 py-3 border rounded-xl font-bold text-xs transition-colors ${activePopover === 'rightToReply' ? 'bg-orange-600 border-orange-500 text-white' : 'bg-orange-900/40 hover:bg-orange-800/50 border-orange-700/40 text-orange-300'}`}>
+                    className={`px-3 py-3 border rounded-xl font-bold text-xs transition-colors ${activePopover === 'rightToReply' ? 'bg-orange-600 border-orange-500 text-[#1C1410]' : 'bg-orange-900/40 hover:bg-orange-800/50 border-orange-700/40 text-orange-300'}`}>
                     Right of Reply
                   </button>
                 )}
@@ -846,11 +846,11 @@ function ModeratedCaucusMain({
           <>
             {/* Absolute overlay: motion name + topic — does not affect centred layout */}
             <div className="absolute left-0 top-1/2 -translate-y-1/2 flex flex-col gap-2 max-w-[200px] pl-4 pointer-events-none select-none">
-              <span className="text-white font-black text-2xl leading-tight uppercase">
+              <span className="text-[#1C1410] font-black text-2xl leading-tight uppercase">
                 {committee.caucus?.motionLabel ?? caucusTitle}
               </span>
               {committee.caucus?.purpose && (
-                <span className="text-white/70 text-lg font-medium leading-snug">
+                <span className="text-[#1C1410]/70 text-lg font-medium leading-snug">
                   {committee.caucus.purpose}
                 </span>
               )}
@@ -864,11 +864,11 @@ function ModeratedCaucusMain({
               />
             )}
             <div className="mb-6"><Emoji size="4.375rem">🎙</Emoji></div>
-            <h2 className="text-3xl font-black text-white mb-2">No Current Speaker</h2>
-            <p className="text-[#C4A882] mb-4 text-center">Add delegates below, then call the first speaker.</p>
+            <h2 className="text-3xl font-black text-[#1C1410] mb-2">No Current Speaker</h2>
+            <p className="text-[#6A5A4A] mb-4 text-center">Add delegates below, then call the first speaker.</p>
             {!sessionEnded && (
               <button onClick={handleNextCaucusSpeaker} disabled={queue.length === 0}
-                className="bg-[#7B4A1E] hover:bg-[#8B5A2B] disabled:bg-[#2E1E0F] disabled:text-[#7A5A38] text-white px-8 py-3 rounded-xl font-bold transition-colors">
+                className="bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white px-8 py-3 rounded-xl font-bold transition-colors">
                 Call First Speaker
               </button>
             )}
@@ -877,14 +877,14 @@ function ModeratedCaucusMain({
       </div>
 
       {!sessionEnded && (
-        <div className="border-t border-[#2E1E0F] bg-[#0D0906] px-6 py-4">
+        <div className="border-t border-[#DDD4C0] bg-[#F6F1E9] px-6 py-4">
           {/* Total timer bar — hidden for Tour de Table */}
           {!isTdT && (
             <div className="flex items-center gap-3 mb-4">
-              <span className="text-xs text-[#7A5A38] font-mono shrink-0">TOTAL</span>
-              <p className={`text-lg font-black font-mono shrink-0 ${liveRemaining <= 30 ? 'text-red-500' : 'text-white'}`}>{formatTime(liveRemaining)}</p>
-              <div className="flex-1 h-2 bg-[#2E1E0F] rounded-full overflow-hidden">
-                <div className="h-full bg-[#B8844A]/60 rounded-full transition-all" style={{ width: `${totalProgress}%` }} />
+              <span className="text-xs text-[#9A8A78] font-mono shrink-0">TOTAL</span>
+              <p className={`text-lg font-black font-mono shrink-0 ${liveRemaining <= 30 ? 'text-red-500' : 'text-[#1C1410]'}`}>{formatTime(liveRemaining)}</p>
+              <div className="flex-1 h-2 bg-[#DDD4C0] rounded-full overflow-hidden">
+                <div className="h-full bg-[#B6871F]/60 rounded-full transition-all" style={{ width: `${totalProgress}%` }} />
               </div>
               <div className="relative" ref={extendRef}>
                 <button onClick={() => setShowExtendMod((v) => !v)}
@@ -892,7 +892,7 @@ function ModeratedCaucusMain({
                   Extend
                 </button>
                 {showExtendMod && (
-                  <div className="absolute bottom-full right-0 mb-2 bg-[#1A1209] border border-[#2E1E0F] rounded-xl px-4 py-3 shadow-xl flex items-center gap-2 flex-wrap z-20">
+                  <div className="absolute bottom-full right-0 mb-2 bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl px-4 py-3 shadow-xl flex items-center gap-2 flex-wrap z-20">
                     <span className="text-xs text-amber-400 font-semibold shrink-0">Add</span>
                     {(() => {
                       const halfMins = caucus.totalTime / 120;
@@ -920,8 +920,8 @@ function ModeratedCaucusMain({
                       ));
                     })()}
                     <input type="number" min={1} value={extendMinsMod} onChange={(e) => setExtendMinsMod(parseInt(e.target.value) || 1)}
-                      className="w-10 bg-[#150F09] border border-[#2E1E0F] rounded-lg px-2 py-1 text-white text-xs text-center focus:outline-none" />
-                    <span className="text-xs text-[#7A5A38]">m</span>
+                      className="w-10 bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-2 py-1 text-[#1C1410] text-xs text-center focus:outline-none" />
+                    <span className="text-xs text-[#9A8A78]">m</span>
                     <button onClick={() => {
                       const addSecs = extendMinsMod * 60;
                       if (addSecs <= 0) return;
@@ -968,13 +968,13 @@ function SessionEndedContent({ committee, hoursRemaining }: { committee: Committ
   return (
     <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
       <div className="mb-6"><Emoji size="3rem">🏁</Emoji></div>
-      <h1 className="text-5xl font-black text-white mb-4">This committee has ended.</h1>
-      <p className="text-xl text-[#C4A882] mb-2">{committee.name}</p>
-      <p className="text-lg text-[#7A5A38] mb-8">{committee.topic}</p>
+      <h1 className="text-5xl font-black text-[#1C1410] mb-4">This committee has ended.</h1>
+      <p className="text-xl text-[#6A5A4A] mb-2">{committee.name}</p>
+      <p className="text-lg text-[#9A8A78] mb-8">{committee.topic}</p>
       {hoursRemaining !== null && (
-        <p className="text-base text-[#7A5A38]">{hoursRemaining} hour{hoursRemaining !== 1 ? 's' : ''} until committee is deleted</p>
+        <p className="text-base text-[#9A8A78]">{hoursRemaining} hour{hoursRemaining !== 1 ? 's' : ''} until committee is deleted</p>
       )}
-      <p className="text-xs text-[#7A5A38] mt-8">Press ESC to return to main menu</p>
+      <p className="text-xs text-[#9A8A78] mt-8">Press ESC to return to main menu</p>
     </div>
   );
 }
@@ -1399,10 +1399,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
 
   if (!committee) {
     return (
-      <div className="min-h-screen bg-[#0D0906] flex items-center justify-center">
+      <div className="min-h-screen bg-[#F6F1E9] flex items-center justify-center">
         <div className="text-center">
-          <p className="text-white text-xl font-bold mb-4">Committee not found</p>
-          <Link href="/create" className="bg-[#7B4A1E] text-white px-6 py-3 rounded-xl font-semibold hover:bg-[#8B5A2B] transition-colors">Create Committee</Link>
+          <p className="text-[#1C1410] text-xl font-bold mb-4">Committee not found</p>
+          <Link href="/create" className="bg-[#1B3828] text-white px-6 py-3 rounded-xl font-semibold hover:bg-[#2A5A3C] transition-colors">Create Committee</Link>
         </div>
       </div>
     );
@@ -1683,8 +1683,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   };
 
   return (
-    <div className="h-screen bg-[#0D0906] flex flex-col overflow-hidden">
-      <header className="border-b border-[#2E1E0F] bg-[#150F08] px-4 h-11 flex items-center gap-2">
+    <div className="h-screen bg-[#F6F1E9] flex flex-col overflow-hidden">
+      <header className="border-b border-[#DDD4C0] bg-[#FAF8F3] px-4 h-11 flex items-center gap-2">
         <Link href="/">
           <img src="/gavelling-logo.png" alt="Gavelling" className="w-[14vw] h-auto max-h-8 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
         </Link>
@@ -1692,62 +1692,62 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         {committee.phase !== 'pre-session' && !sessionEnded ? (
           <div className="flex flex-1 min-w-0 h-full">
             <button onClick={() => setShowSliders((v) => !v)}
-              className={`flex-1 text-base font-bold px-3 transition-colors border-b-2 ${showSliders ? 'text-white border-[#7B4A1E]' : 'text-[#7A5A38] border-transparent hover:text-[#C4A882]'}`}>
+              className={`flex-1 text-base font-bold px-3 transition-colors border-b-2 ${showSliders ? 'text-[#1C1410] border-[#1B3828]' : 'text-[#9A8A78] border-transparent hover:text-[#6A5A4A]'}`}>
               Roll Call
             </button>
             <button onClick={handleMotionsClick}
-              className={`flex-1 text-base font-bold px-3 transition-colors border-b-2 relative ${showMotions ? 'text-white border-[#7B4A1E]' : 'text-[#7A5A38] border-transparent hover:text-[#C4A882]'}`}>
+              className={`flex-1 text-base font-bold px-3 transition-colors border-b-2 relative ${showMotions ? 'text-[#1C1410] border-[#1B3828]' : 'text-[#9A8A78] border-transparent hover:text-[#6A5A4A]'}`}>
               Motions
               {(committee.pendingMotions ?? []).filter((m) => m.type !== ('join-request' as string) && (m.type as string) !== 'gsl-request').length > 0 && (
-                <span className="absolute top-1 right-1 w-4 h-4 bg-[#7B4A1E] rounded-full text-white text-[10px] flex items-center justify-center">
+                <span className="absolute top-1 right-1 w-4 h-4 bg-[#1B3828] rounded-full text-white text-[10px] flex items-center justify-center">
                   {(committee.pendingMotions ?? []).filter((m) => m.type !== ('join-request' as string) && (m.type as string) !== 'gsl-request').length}
                 </span>
               )}
             </button>
             <button onClick={handleDocumentsClick}
-              className={`flex-1 text-base font-bold px-3 transition-colors border-b-2 relative ${showDocuments ? 'text-white border-[#7B4A1E]' : 'text-[#7A5A38] border-transparent hover:text-[#C4A882]'}`}>
+              className={`flex-1 text-base font-bold px-3 transition-colors border-b-2 relative ${showDocuments ? 'text-[#1C1410] border-[#1B3828]' : 'text-[#9A8A78] border-transparent hover:text-[#6A5A4A]'}`}>
               Documents
-              {(() => { const n = (committee.documents ?? []).filter((d) => d.status === 'submitted').length; return n > 0 ? <span className="absolute top-1 right-1 w-4 h-4 bg-[#7B4A1E] rounded-full text-white text-[10px] flex items-center justify-center">{n}</span> : null; })()}
+              {(() => { const n = (committee.documents ?? []).filter((d) => d.status === 'submitted').length; return n > 0 ? <span className="absolute top-1 right-1 w-4 h-4 bg-[#1B3828] rounded-full text-white text-[10px] flex items-center justify-center">{n}</span> : null; })()}
             </button>
             <button onClick={() => { if (!isPreSession) handleToggleChat(); }}
-              className={`flex-1 text-base font-bold px-3 transition-colors border-b-2 relative ${showChat ? 'text-white border-[#7B4A1E]' : 'text-[#7A5A38] border-transparent hover:text-[#C4A882]'}`}>
+              className={`flex-1 text-base font-bold px-3 transition-colors border-b-2 relative ${showChat ? 'text-[#1C1410] border-[#1B3828]' : 'text-[#9A8A78] border-transparent hover:text-[#6A5A4A]'}`}>
               Chat
-              {(() => { const unread = committee.messages.filter((m) => !m.content.startsWith('__log__:')).length - chatReadCount; return unread > 0 && !showChat ? <span className="absolute top-1 right-1 w-4 h-4 bg-[#7B4A1E] rounded-full text-white text-[10px] flex items-center justify-center">{unread}</span> : null; })()}
+              {(() => { const unread = committee.messages.filter((m) => !m.content.startsWith('__log__:')).length - chatReadCount; return unread > 0 && !showChat ? <span className="absolute top-1 right-1 w-4 h-4 bg-[#1B3828] rounded-full text-white text-[10px] flex items-center justify-center">{unread}</span> : null; })()}
             </button>
           </div>
         ) : (
-          <span className="text-[#7A5A38] text-xs hidden sm:block truncate flex-1">{committee.name} — {committee.topic}</span>
+          <span className="text-[#9A8A78] text-xs hidden sm:block truncate flex-1">{committee.name} — {committee.topic}</span>
         )}
 
 
         <button onClick={() => { navigator.clipboard.writeText(committee.code); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
-          className="text-xs font-mono bg-[#2E1E0F] hover:bg-[#3D2A15] text-white px-2.5 py-1 rounded-lg transition-colors shrink-0">
+          className="text-xs font-mono bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#1C1410] px-2.5 py-1 rounded-lg transition-colors shrink-0">
           {copied ? '✓' : committee.code}
         </button>
-        <button onClick={() => setShowSettings(true)} className="text-[#7A5A38] hover:text-white transition-colors shrink-0 text-3xl">⚙</button>
+        <button onClick={() => setShowSettings(true)} className="text-[#9A8A78] hover:text-[#1C1410] transition-colors shrink-0 text-3xl">⚙</button>
       </header>
       {/* Ended tab bar */}
       {sessionEnded && (
-        <div className="flex border-b border-[#2E1E0F] bg-[#150F08] shrink-0">
+        <div className="flex border-b border-[#DDD4C0] bg-[#FAF8F3] shrink-0">
           <button onClick={() => setEndedTab('ended')}
-            className={`flex-1 py-2.5 text-sm font-bold transition-colors border-b-2 ${endedTab === 'ended' ? 'text-white border-[#7B4A1E]' : 'text-[#7A5A38] border-transparent hover:text-[#C4A882]'}`}>
+            className={`flex-1 py-2.5 text-sm font-bold transition-colors border-b-2 ${endedTab === 'ended' ? 'text-[#1C1410] border-[#1B3828]' : 'text-[#9A8A78] border-transparent hover:text-[#6A5A4A]'}`}>
             🏁 End View
           </button>
           <button onClick={() => setEndedTab('session')}
-            className={`flex-1 py-2.5 text-sm font-bold transition-colors border-b-2 ${endedTab === 'session' ? 'text-white border-[#7B4A1E]' : 'text-[#7A5A38] border-transparent hover:text-[#C4A882]'}`}>
+            className={`flex-1 py-2.5 text-sm font-bold transition-colors border-b-2 ${endedTab === 'session' ? 'text-[#1C1410] border-[#1B3828]' : 'text-[#9A8A78] border-transparent hover:text-[#6A5A4A]'}`}>
             👁 Session View
           </button>
         </div>
       )}
       {/* Suspend tab bar */}
       {!sessionEnded && sessionSuspended && (
-        <div className="flex border-b border-[#2E1E0F] bg-[#150F08] shrink-0">
+        <div className="flex border-b border-[#DDD4C0] bg-[#FAF8F3] shrink-0">
           <button onClick={() => setSuspendTab('suspend')}
-            className={`flex-1 py-2.5 text-sm font-bold transition-colors border-b-2 ${suspendTab === 'suspend' ? 'text-white border-[#7B4A1E]' : 'text-[#7A5A38] border-transparent hover:text-[#C4A882]'}`}>
+            className={`flex-1 py-2.5 text-sm font-bold transition-colors border-b-2 ${suspendTab === 'suspend' ? 'text-[#1C1410] border-[#1B3828]' : 'text-[#9A8A78] border-transparent hover:text-[#6A5A4A]'}`}>
             ⏸ Suspend View
           </button>
           <button onClick={() => setSuspendTab('session')}
-            className={`flex-1 py-2.5 text-sm font-bold transition-colors border-b-2 ${suspendTab === 'session' ? 'text-white border-[#7B4A1E]' : 'text-[#7A5A38] border-transparent hover:text-[#C4A882]'}`}>
+            className={`flex-1 py-2.5 text-sm font-bold transition-colors border-b-2 ${suspendTab === 'session' ? 'text-[#1C1410] border-[#1B3828]' : 'text-[#9A8A78] border-transparent hover:text-[#6A5A4A]'}`}>
             🪑 Session View
           </button>
         </div>
@@ -1764,7 +1764,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       )}
       {/* Join request banner */}
       {(committee.pendingMotions ?? []).filter((m) => m.type === ('join-request' as string)).length > 0 && (
-        <div className="shrink-0 bg-[#1A0E06] border-b border-[#7B4A1E]/40 px-4 py-2 flex flex-wrap gap-4">
+        <div className="shrink-0 bg-[#EDE7D8] border-b border-[#1B3828]/40 px-4 py-2 flex flex-wrap gap-4">
           {(committee.pendingMotions ?? [])
             .filter((m) => m.type === ('join-request' as string))
             .map((m) => {
@@ -1777,10 +1777,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 : <Emoji size="1.125rem">🌐</Emoji>;
               return (
                 <div key={m.id} className="flex items-center gap-3 text-sm">
-                  <span className="text-[#B8844A] font-bold shrink-0">🚪 Join Request</span>
+                  <span className="text-[#B6871F] font-bold shrink-0">🚪 Join Request</span>
                   <span className="font-mono text-lg">{flagEl}</span>
-                  <span className="text-white font-semibold">{m.proposedBy}</span>
-                  <span className="text-[#C4A882] text-xs">wants to join as</span>
+                  <span className="text-[#1C1410] font-semibold">{m.proposedBy}</span>
+                  <span className="text-[#6A5A4A] text-xs">wants to join as</span>
                   <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${desiredStatus === 'present-voting' ? 'bg-blue-900/40 text-blue-300' : 'bg-green-900/40 text-green-300'}`}>
                     {desiredStatus === 'present-voting' ? 'P+V' : 'P'}
                   </span>
@@ -1809,8 +1809,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 <div key={m.id} className="flex items-center gap-3 text-sm">
                   <span className="text-green-400 font-bold shrink-0">🎙️ GSL Request</span>
                   <span className="font-mono text-lg">{flagEl}</span>
-                  <span className="text-white font-semibold">{m.proposedBy}</span>
-                  <span className="text-[#C4A882] text-xs">wants to speak</span>
+                  <span className="text-[#1C1410] font-semibold">{m.proposedBy}</span>
+                  <span className="text-[#6A5A4A] text-xs">wants to speak</span>
                   <button onClick={() => handleApproveGslRequest(m.id, delegateId, m.proposedBy)}
                     className="ml-2 px-3 py-1 bg-green-800/50 hover:bg-green-700/60 border border-green-700/50 text-green-300 text-xs rounded-lg font-semibold transition-colors">Add to GSL</button>
                   <button onClick={() => handleDenyGslRequest(m.id)}
@@ -1829,23 +1829,23 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
             return (
               <>
                 <div className="text-5xl mb-6">⏸️</div>
-                <h1 className="text-5xl font-black text-white mb-4">Session Adjourned</h1>
-                <p className="text-xl text-[#C4A882] mb-12">This session has been temporarily suspended.</p>
+                <h1 className="text-5xl font-black text-[#1C1410] mb-4">Session Adjourned</h1>
+                <p className="text-xl text-[#6A5A4A] mb-12">This session has been temporarily suspended.</p>
                 {anotherChairResuming ? (
                   <>
-                    <button disabled className="px-12 py-5 bg-[#2E1E0F] text-[#7A5A38] text-xl font-black rounded-2xl cursor-not-allowed">
+                    <button disabled className="px-12 py-5 bg-[#DDD4C0] text-[#9A8A78] text-xl font-black rounded-2xl cursor-not-allowed">
                       Resume Session
                     </button>
-                    <p className="text-sm text-[#B8844A] mt-4">{committee.resumingChair} is resuming the session…</p>
+                    <p className="text-sm text-[#B6871F] mt-4">{committee.resumingChair} is resuming the session…</p>
                   </>
                 ) : (
                   <button
                     onClick={handleResumeClick}
-                    className="px-12 py-5 bg-[#7B4A1E] hover:bg-[#8B5A2B] text-white text-xl font-black rounded-2xl transition-colors">
+                    className="px-12 py-5 bg-[#1B3828] hover:bg-[#2A5A3C] text-white text-xl font-black rounded-2xl transition-colors">
                     Resume Session
                   </button>
                 )}
-                <p className="text-xs text-[#7A5A38] mt-8">Press ESC to return to main menu</p>
+                <p className="text-xs text-[#9A8A78] mt-8">Press ESC to return to main menu</p>
               </>
             );
           })()}
@@ -1863,7 +1863,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         )}
         {!showChat && committee.phase === 'pre-session' && (
           <div className="flex-1 flex items-center justify-center px-6 py-8">
-            <div className="w-full max-w-md bg-[#1A1209] border border-[#2E1E0F] rounded-2xl overflow-hidden" style={{ maxHeight: '88vh', display: 'flex', flexDirection: 'column' }}>
+            <div className="w-full max-w-md bg-[#EDE7D8] border border-[#DDD4C0] rounded-2xl overflow-hidden" style={{ maxHeight: '88vh', display: 'flex', flexDirection: 'column' }}>
               <RollCallPanel committee={committee}
                 onListIds={gslListIds}
                 onCycleStatus={handleCycleStatus}
@@ -1880,7 +1880,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         {!showChat && committee.phase !== 'pre-session' && (
           <>
             {showRollCall && (
-              <aside className="w-[22rem] border-r border-[#2E1E0F] bg-[#0D0906] flex flex-col overflow-hidden shrink-0">
+              <aside className="w-[22rem] border-r border-[#DDD4C0] bg-[#F6F1E9] flex flex-col overflow-hidden shrink-0">
                 {caucusMaxReachedMsg && (
                   <div className="shrink-0 px-3 py-2 bg-amber-900/20 border-b border-amber-700/40 text-amber-300 text-xs text-center font-semibold">
                     Maximum speakers reached — add more delegates if time remains after current speakers.
@@ -1946,64 +1946,64 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                   const isTdTParent = committee.caucus?.purpose?.startsWith('Tour de Table') ?? false;
                   return (
                   <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
-                    <div className="bg-[#1A1209] border border-[#7B4A1E]/40 rounded-3xl px-12 py-10 max-w-lg w-full shadow-2xl">
+                    <div className="bg-[#EDE7D8] border border-[#1B3828]/40 rounded-3xl px-12 py-10 max-w-lg w-full shadow-2xl">
                       {isTdTParent ? (
                         <>
                           <div className="mb-5"><Emoji size="3rem">🔄</Emoji></div>
-                          <p className="text-xs font-mono text-[#7A5A38] tracking-widest mb-3">TOUR DE TABLE STARTING</p>
-                          <h1 className="text-3xl font-black text-white mb-2">Tour de Table</h1>
-                          <p className="text-[#C4A882] text-sm mb-6">
+                          <p className="text-xs font-mono text-[#9A8A78] tracking-widest mb-3">TOUR DE TABLE STARTING</p>
+                          <h1 className="text-3xl font-black text-[#1C1410] mb-2">Tour de Table</h1>
+                          <p className="text-[#6A5A4A] text-sm mb-6">
                             {committee.caucus.purpose?.includes('Room Order')
                               ? 'Room Order — chair calls each speaker'
                               : committee.caucus.purpose?.includes('Z→A') ? 'Z → A order' : 'A → Z order, proposer speaks first'}
                           </p>
                           <div className="flex justify-center gap-8 mb-8">
                             <div className="text-center">
-                              <div className="text-2xl font-black text-[#B8844A]">
+                              <div className="text-2xl font-black text-[#B6871F]">
                                 {committee.caucusQueue?.length ?? Math.floor(committee.caucus.totalTime / (committee.caucus.speakingTime || 1))}
                               </div>
-                              <div className="text-xs text-[#7A5A38] mt-1">Delegates</div>
+                              <div className="text-xs text-[#9A8A78] mt-1">Delegates</div>
                             </div>
-                            <div className="w-px bg-[#2E1E0F]" />
+                            <div className="w-px bg-[#DDD4C0]" />
                             <div className="text-center">
-                              <div className="text-2xl font-black text-[#B8844A]">{committee.caucus.speakingTime}s</div>
-                              <div className="text-xs text-[#7A5A38] mt-1">Per Speaker</div>
+                              <div className="text-2xl font-black text-[#B6871F]">{committee.caucus.speakingTime}s</div>
+                              <div className="text-xs text-[#9A8A78] mt-1">Per Speaker</div>
                             </div>
-                            <div className="w-px bg-[#2E1E0F]" />
+                            <div className="w-px bg-[#DDD4C0]" />
                             <div className="text-center">
-                              <div className="text-2xl font-black text-[#B8844A]">{formatTime(committee.caucus.totalTime)}</div>
-                              <div className="text-xs text-[#7A5A38] mt-1">Total Time</div>
+                              <div className="text-2xl font-black text-[#B6871F]">{formatTime(committee.caucus.totalTime)}</div>
+                              <div className="text-xs text-[#9A8A78] mt-1">Total Time</div>
                             </div>
                           </div>
-                          <div className="flex items-center justify-center gap-2 text-[#7A5A38] text-sm">
-                            <div className="w-4 h-4 border-2 border-[#7B4A1E] border-t-transparent rounded-full animate-spin" />
+                          <div className="flex items-center justify-center gap-2 text-[#9A8A78] text-sm">
+                            <div className="w-4 h-4 border-2 border-[#1B3828] border-t-transparent rounded-full animate-spin" />
                             <span>Setting up speakers...</span>
                           </div>
                         </>
                       ) : (
                         <>
                           <div className="mb-5"><Emoji size="3rem">🎙️</Emoji></div>
-                          <p className="text-xs font-mono text-[#7A5A38] tracking-widest mb-3">MODERATED CAUCUS STARTING</p>
-                          <h1 className="text-3xl font-black text-white mb-2">{committee.caucus.purpose || 'Moderated Caucus'}</h1>
-                          <p className="text-[#C4A882] text-sm mb-6">{committee.topic}</p>
+                          <p className="text-xs font-mono text-[#9A8A78] tracking-widest mb-3">MODERATED CAUCUS STARTING</p>
+                          <h1 className="text-3xl font-black text-[#1C1410] mb-2">{committee.caucus.purpose || 'Moderated Caucus'}</h1>
+                          <p className="text-[#6A5A4A] text-sm mb-6">{committee.topic}</p>
                           <div className="flex justify-center gap-8 mb-8">
                             <div className="text-center">
-                              <div className="text-2xl font-black text-[#B8844A]">{formatTime(committee.caucus.totalTime)}</div>
-                              <div className="text-xs text-[#7A5A38] mt-1">Total Time</div>
+                              <div className="text-2xl font-black text-[#B6871F]">{formatTime(committee.caucus.totalTime)}</div>
+                              <div className="text-xs text-[#9A8A78] mt-1">Total Time</div>
                             </div>
-                            <div className="w-px bg-[#2E1E0F]" />
+                            <div className="w-px bg-[#DDD4C0]" />
                             <div className="text-center">
-                              <div className="text-2xl font-black text-[#B8844A]">{committee.caucus.speakingTime}s</div>
-                              <div className="text-xs text-[#7A5A38] mt-1">Per Speaker</div>
+                              <div className="text-2xl font-black text-[#B6871F]">{committee.caucus.speakingTime}s</div>
+                              <div className="text-xs text-[#9A8A78] mt-1">Per Speaker</div>
                             </div>
-                            <div className="w-px bg-[#2E1E0F]" />
+                            <div className="w-px bg-[#DDD4C0]" />
                             <div className="text-center">
-                              <div className="text-2xl font-black text-[#B8844A]">{Math.floor(committee.caucus.totalTime / (committee.caucus.speakingTime || 1))}</div>
-                              <div className="text-xs text-[#7A5A38] mt-1">Max Speakers</div>
+                              <div className="text-2xl font-black text-[#B6871F]">{Math.floor(committee.caucus.totalTime / (committee.caucus.speakingTime || 1))}</div>
+                              <div className="text-xs text-[#9A8A78] mt-1">Max Speakers</div>
                             </div>
                           </div>
-                          <div className="flex items-center justify-center gap-2 text-[#7A5A38] text-sm">
-                            <div className="w-4 h-4 border-2 border-[#7B4A1E] border-t-transparent rounded-full animate-spin" />
+                          <div className="flex items-center justify-center gap-2 text-[#9A8A78] text-sm">
+                            <div className="w-4 h-4 border-2 border-[#1B3828] border-t-transparent rounded-full animate-spin" />
                             <span>Loading caucus...</span>
                           </div>
                         </>
@@ -2031,32 +2031,32 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               {committee.phase === 'unmoderated-caucus' && committee.caucus && (
                 unmodLoading ? (
                   <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
-                    <div className="bg-[#1A1209] border border-[#2E1E0F]/40 rounded-3xl px-12 py-10 max-w-lg w-full shadow-2xl">
+                    <div className="bg-[#EDE7D8] border border-[#DDD4C0]/40 rounded-3xl px-12 py-10 max-w-lg w-full shadow-2xl">
                       <div className="text-5xl mb-5">
                         {committee.caucus.motionLabel?.includes('Consultation') ? '🤝' : '💬'}
                       </div>
-                      <p className="text-xs font-mono text-[#7A5A38] tracking-widest mb-3">
+                      <p className="text-xs font-mono text-[#9A8A78] tracking-widest mb-3">
                         {(committee.caucus.motionLabel ?? 'UNMODERATED CAUCUS').toUpperCase()} STARTING
                       </p>
-                      <h1 className="text-3xl font-black text-white mb-2">
+                      <h1 className="text-3xl font-black text-[#1C1410] mb-2">
                         {committee.caucus.motionLabel ?? 'Unmoderated Caucus'}
                       </h1>
                       {committee.caucus.purpose && (
-                        <p className="text-[#C4A882] text-sm mb-6">{committee.caucus.purpose}</p>
+                        <p className="text-[#6A5A4A] text-sm mb-6">{committee.caucus.purpose}</p>
                       )}
                       <div className="flex justify-center gap-8 mb-8">
                         <div className="text-center">
-                          <div className="text-2xl font-black text-[#B8844A]">{formatTime(committee.caucus.totalTime)}</div>
-                          <div className="text-xs text-[#7A5A38] mt-1">Total Time</div>
+                          <div className="text-2xl font-black text-[#B6871F]">{formatTime(committee.caucus.totalTime)}</div>
+                          <div className="text-xs text-[#9A8A78] mt-1">Total Time</div>
                         </div>
-                        <div className="w-px bg-[#2E1E0F]" />
+                        <div className="w-px bg-[#DDD4C0]" />
                         <div className="text-center">
-                          <div className="text-2xl font-black text-[#B8844A]">{committee.caucus.proposedBy}</div>
-                          <div className="text-xs text-[#7A5A38] mt-1">Proposed by</div>
+                          <div className="text-2xl font-black text-[#B6871F]">{committee.caucus.proposedBy}</div>
+                          <div className="text-xs text-[#9A8A78] mt-1">Proposed by</div>
                         </div>
                       </div>
-                      <div className="flex items-center justify-center gap-2 text-[#7A5A38] text-sm">
-                        <div className="w-4 h-4 border-2 border-[#7B4A1E] border-t-transparent rounded-full animate-spin" />
+                      <div className="flex items-center justify-center gap-2 text-[#9A8A78] text-sm">
+                        <div className="w-4 h-4 border-2 border-[#1B3828] border-t-transparent rounded-full animate-spin" />
                         <span>Starting caucus...</span>
                       </div>
                     </div>
@@ -2091,8 +2091,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                         })()}
                         <div className="flex flex-col items-center">
                           {/* Current speaker flag */}
-                          <div className="ring-4 ring-[#7B4A1E] rounded-full">
-                            <div className="relative w-36 h-36 rounded-full overflow-hidden bg-[#2E1E0F] shrink-0">
+                          <div className="ring-4 ring-[#1B3828] rounded-full">
+                            <div className="relative w-36 h-36 rounded-full overflow-hidden bg-[#DDD4C0] shrink-0">
                               {(() => {
                                 const f = getCountryByName(committee.currentSpeaker.country);
                                 return f
@@ -2101,17 +2101,17 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                               })()}
                             </div>
                           </div>
-                          <h1 className="text-5xl font-black text-white mt-2 mb-1 text-center">{committee.currentSpeaker.country}</h1>
+                          <h1 className="text-5xl font-black text-[#1C1410] mt-2 mb-1 text-center">{committee.currentSpeaker.country}</h1>
                           <div className={`text-8xl font-black font-mono mt-2 mb-3 tabular-nums ${
                             extraTimeAdded ? 'text-emerald-400' :
                             speakerTimeRemaining <= 10 ? 'text-red-500' :
-                            speakerTimeRemaining <= 30 ? 'text-yellow-600' : 'text-white'
+                            speakerTimeRemaining <= 30 ? 'text-yellow-600' : 'text-[#1C1410]'
                           }`}>
                             {formatTime(speakerTimeRemaining)}
                             {extraTimeAdded && <span className="text-base ml-2 font-normal text-emerald-400">+time</span>}
                           </div>
-                          <div className="w-full max-w-2xl h-2 bg-[#2E1E0F] rounded-full overflow-hidden mb-3">
-                            <div className={`h-full rounded-full transition-all ${progress > 50 ? 'bg-[#B8844A]' : progress > 20 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{ width: `${progress}%` }} />
+                          <div className="w-full max-w-2xl h-2 bg-[#DDD4C0] rounded-full overflow-hidden mb-3">
+                            <div className={`h-full rounded-full transition-all ${progress > 50 ? 'bg-[#B6871F]' : progress > 20 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{ width: `${progress}%` }} />
                           </div>
                         </div>
                         {isLastGSLSpeaker && (
@@ -2124,7 +2124,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                           {/* Restart button */}
                           <button onClick={handleRestartTime}
                             title="Restart time"
-                            className="px-3 py-3 bg-[#2E1E0F] hover:bg-[#3D2A15] border border-[#3D2A15] hover:border-[#7B4A1E] rounded-xl font-bold text-sm text-[#C4A882] transition-colors">
+                            className="px-3 py-3 bg-[#DDD4C0] hover:bg-[#C8BAA8] border border-[#C8BAA8] hover:border-[#1B3828] rounded-xl font-bold text-sm text-[#6A5A4A] transition-colors">
                             ↺
                           </button>
                           {/* Start/Pause */}
@@ -2132,13 +2132,13 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                             disabled={isLastGSLSpeaker}
                             className={`flex-1 py-3 px-6 rounded-xl font-bold text-base transition-colors ${
                               timerRunning ? 'bg-yellow-600 hover:bg-yellow-500 text-white' :
-                              isLastGSLSpeaker ? 'bg-[#2E1E0F] text-[#7A5A38] cursor-not-allowed' :
-                              'bg-[#3D6B35] hover:bg-[#4A7C42] text-white'
+                              isLastGSLSpeaker ? 'bg-[#DDD4C0] text-[#9A8A78] cursor-not-allowed' :
+                              'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'
                             }`}>
                             {timerRunning ? '⏸ Pause' : '▶ Start'}
                           </button>
                           <button onClick={handleNextSpeaker} disabled={committee.speakersList.length === 0}
-                            className="flex-1 bg-[#2E1E0F] hover:bg-[#3D2A15] disabled:opacity-40 text-white py-3 px-6 rounded-xl font-bold text-base transition-colors">
+                            className="flex-1 bg-[#DDD4C0] hover:bg-[#C8BAA8] disabled:opacity-40 text-[#1C1410] py-3 px-6 rounded-xl font-bold text-base transition-colors">
                             Next →
                           </button>
                           {/* Add Time button */}
@@ -2148,7 +2148,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                             className={`px-3 py-3 border rounded-xl font-bold text-sm transition-colors ${
                               activePopover === 'extraTime'
                                 ? 'bg-emerald-900/40 border-emerald-700/50 text-emerald-300'
-                                : 'bg-[#2E1E0F] hover:bg-emerald-950/50 hover:border-emerald-800/50 border-[#3D2A15] text-[#C4A882]'
+                                : 'bg-[#DDD4C0] hover:bg-emerald-950/50 hover:border-emerald-800/50 border-[#C8BAA8] text-[#6A5A4A]'
                             }`}>
                             +⏱
                           </button>
@@ -2157,7 +2157,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                             onClick={() => setActivePopover(activePopover === 'rightToReply' ? null : 'rightToReply')}
                             className={`px-3 py-3 border rounded-xl font-bold text-xs transition-colors ${
                               activePopover === 'rightToReply'
-                                ? 'bg-orange-600 border-orange-500 text-white'
+                                ? 'bg-orange-600 border-orange-500 text-[#1C1410]'
                                 : 'bg-orange-900/40 hover:bg-orange-800/50 border-orange-700/40 text-orange-300'
                             }`}>
                             Right of Reply
@@ -2175,8 +2175,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                           />
                         )}
                         <div className="mb-6"><Emoji size="4.375rem">🎙</Emoji></div>
-                        <h2 className="text-3xl font-black text-white mb-2">No Current Speaker</h2>
-                        <p className="text-[#C4A882] mb-4 text-center">Add delegates below, then call the first speaker.</p>
+                        <h2 className="text-3xl font-black text-[#1C1410] mb-2">No Current Speaker</h2>
+                        <p className="text-[#6A5A4A] mb-4 text-center">Add delegates below, then call the first speaker.</p>
                         {committee.speakersList.length === 1 && (
                           <div className="mb-4 px-4 py-2 bg-yellow-900/30 border border-yellow-700/40 rounded-lg text-yellow-400 text-xs text-center">
                             Only 1 delegate on the list — add more before starting.
@@ -2184,7 +2184,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                         )}
                         {!sessionEnded && (
                           <button onClick={handleNextSpeaker} disabled={committee.speakersList.length < 2}
-                            className="bg-[#7B4A1E] hover:bg-[#8B5A2B] disabled:bg-[#2E1E0F] disabled:text-[#7A5A38] text-white px-8 py-3 rounded-xl font-bold transition-colors">
+                            className="bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white px-8 py-3 rounded-xl font-bold transition-colors">
                             Call First Speaker
                           </button>
                         )}
@@ -2193,19 +2193,19 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                   </div>
                 </div>{/* end flex-row */}
                 {!sessionEnded && (
-                <div className="border-t border-[#2E1E0F] bg-[#0D0906] px-6 py-4">
+                <div className="border-t border-[#DDD4C0] bg-[#F6F1E9] px-6 py-4">
                   <div className="flex items-center gap-3 mb-4">
-                    <span className="text-xs text-[#7A5A38] font-mono shrink-0">TIME</span>
+                    <span className="text-xs text-[#9A8A78] font-mono shrink-0">TIME</span>
                     <div className="flex gap-1.5">
                       {[30, 60, 90, 120, 180].map((t) => (
                         <button key={t} onClick={() => handleSetSpeakerTimeLimit(t)}
-                          className={`text-xs px-2.5 py-1 rounded-lg transition-colors font-semibold ${speakerTimeLimit === t ? 'bg-[#7B4A1E] text-white' : 'bg-[#2E1E0F] text-[#C4A882] hover:text-white'}`}>
+                          className={`text-xs px-2.5 py-1 rounded-lg transition-colors font-semibold ${speakerTimeLimit === t ? 'bg-[#1B3828] text-white' : 'bg-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
                           {t}s
                         </button>
                       ))}
                       <input type="number" value={speakerTimeLimit}
                         onChange={(e) => handleSetSpeakerTimeLimit(parseInt(e.target.value) || 90)}
-                        className="w-14 bg-[#150F09] border border-[#2E1E0F] rounded-lg px-2 py-1 text-white text-xs focus:outline-none" />
+                        className="w-14 bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-2 py-1 text-[#1C1410] text-xs focus:outline-none" />
                     </div>
                   </div>
                   {belowQuorum && (
@@ -2250,10 +2250,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           className="fixed z-50"
           style={{ top: '50%', right: '2rem', transform: 'translateY(-50%)' }}
         >
-          <div className="bg-[#1A1209] border border-emerald-700/40 rounded-xl p-3 w-72 shadow-2xl">
+          <div className="bg-[#EDE7D8] border border-emerald-700/40 rounded-xl p-3 w-72 shadow-2xl">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs text-emerald-400 font-semibold">Add time</span>
-              <button onClick={() => setActivePopover(null)} className="text-[#7A5A38] hover:text-white text-sm">✕</button>
+              <button onClick={() => setActivePopover(null)} className="text-[#9A8A78] hover:text-[#1C1410] text-sm">✕</button>
             </div>
             <div className="flex gap-2 mb-2">
               {[15, 30, 60].map((s) => (
@@ -2271,7 +2271,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 onKeyDown={(e) => { if (e.key === 'Enter') { const n = parseInt(extraTimeSecs); if (n > 0) handleAddExtraTime(n); } }}
                 placeholder="Custom sec…"
                 style={{ MozAppearance: 'textfield' } as React.CSSProperties}
-                className="flex-1 bg-[#150F09] border border-[#2E1E0F] rounded-lg px-2 py-1.5 text-white text-xs focus:outline-none focus:border-emerald-700/50 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                className="flex-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-2 py-1.5 text-[#1C1410] text-xs focus:outline-none focus:border-emerald-700/50 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
               />
               <button
                 onClick={() => { const n = parseInt(extraTimeSecs); if (n > 0) handleAddExtraTime(n); }}
@@ -2291,7 +2291,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           className="fixed z-50"
           style={{ top: '50%', right: '2rem', transform: 'translateY(-50%)' }}
         >
-          <div className="bg-[#1A1209] border border-orange-700/40 rounded-xl p-4 w-72 shadow-2xl">
+          <div className="bg-[#EDE7D8] border border-orange-700/40 rounded-xl p-4 w-72 shadow-2xl">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs text-orange-400 font-semibold">Right of Reply</span>
               <button onClick={() => {
@@ -2300,7 +2300,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 setRtrTimerActive(false);
                 setRtrCountry('');
                 setRtrTimeRemaining(rtrSeconds);
-              }} className="text-[#7A5A38] hover:text-white text-sm">✕</button>
+              }} className="text-[#9A8A78] hover:text-[#1C1410] text-sm">✕</button>
             </div>
             {!rtrOpen ? (
               // ── Setup view ────────────────────────────────────
@@ -2317,8 +2317,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                       onClick={() => setRtrSeconds(s)}
                       className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-colors border ${
                         rtrSeconds === s
-                          ? 'bg-orange-600 border-orange-500 text-white'
-                          : 'bg-[#2E1E0F] border-[#2E1E0F] text-[#C4A882] hover:border-orange-700/50'
+                          ? 'bg-orange-600 border-orange-500 text-[#1C1410]'
+                          : 'bg-[#DDD4C0] border-[#DDD4C0] text-[#6A5A4A] hover:border-orange-700/50'
                       }`}
                     >
                       {s}s
@@ -2331,9 +2331,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                       value={rtrSeconds}
                       onChange={(e) => setRtrSeconds(parseInt(e.target.value) || 30)}
                       style={{ MozAppearance: 'textfield' } as React.CSSProperties}
-                      className="w-14 bg-[#150F09] border border-[#2E1E0F] rounded-lg px-2 py-1.5 text-white text-xs focus:outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                      className="w-14 bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-2 py-1.5 text-[#1C1410] text-xs focus:outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                     />
-                    <span className="text-xs text-[#7A5A38]">s</span>
+                    <span className="text-xs text-[#9A8A78]">s</span>
                   </div>
                 </div>
                 <button
@@ -2344,7 +2344,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                     setRtrOpen(true);
                   }}
                   disabled={!rtrCountry}
-                  className="w-full py-2 bg-orange-600 hover:bg-orange-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs rounded-lg font-bold transition-colors"
+                  className="w-full py-2 bg-orange-600 hover:bg-orange-500 disabled:opacity-40 disabled:cursor-not-allowed text-[#1C1410] text-xs rounded-lg font-bold transition-colors"
                 >
                   Grant Right of Reply
                 </button>
@@ -2359,7 +2359,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                       ? <img src={getFlagUrl(f.code)} alt={f.code} className="w-6 h-6 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                       : <Emoji size="1.25rem">🌐</Emoji>;
                   })()}
-                  <span className="text-sm text-white font-bold flex-1">{rtrCountry}</span>
+                  <span className="text-sm text-[#1C1410] font-bold flex-1">{rtrCountry}</span>
                   <span className="text-xs text-orange-400 font-mono">Right of Reply</span>
                 </div>
                 <div className={`text-5xl font-black font-mono text-center mb-3 tabular-nums ${
@@ -2367,7 +2367,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 }`}>
                   {Math.floor(rtrTimeRemaining / 60)}:{String(rtrTimeRemaining % 60).padStart(2, '0')}
                 </div>
-                <div className="w-full h-1.5 bg-[#2E1E0F] rounded-full overflow-hidden mb-3">
+                <div className="w-full h-1.5 bg-[#DDD4C0] rounded-full overflow-hidden mb-3">
                   <div
                     className={`h-full rounded-full transition-all ${rtrTimeRemaining / rtrSeconds > 0.5 ? 'bg-orange-500' : rtrTimeRemaining / rtrSeconds > 0.2 ? 'bg-yellow-500' : 'bg-red-500'}`}
                     style={{ width: `${(rtrTimeRemaining / rtrSeconds) * 100}%` }}
@@ -2377,7 +2377,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                   <button
                     onClick={() => setRtrTimerActive((r) => !r)}
                     className={`flex-1 py-2 rounded-lg font-bold text-xs transition-colors ${
-                      rtrTimerActive ? 'bg-yellow-600 hover:bg-yellow-500 text-white' : 'bg-[#3D6B35] hover:bg-[#4A7C42] text-white'
+                      rtrTimerActive ? 'bg-yellow-600 hover:bg-yellow-500 text-white' : 'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'
                     }`}
                   >
                     {rtrTimerActive ? '⏸ Pause' : '▶ Start'}
@@ -2390,7 +2390,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                       setRtrTimeRemaining(rtrSeconds);
                       setActivePopover(null);
                     }}
-                    className="px-3 py-2 rounded-lg font-bold text-xs bg-[#2E1E0F] hover:bg-[#3D2A15] text-[#C4A882] transition-colors"
+                    className="px-3 py-2 rounded-lg font-bold text-xs bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#6A5A4A] transition-colors"
                   >
                     Done
                   </button>

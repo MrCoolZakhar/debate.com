@@ -297,20 +297,20 @@ export default function ChatPanel({ committee, senderName, isChair = false, onCl
   // Render
   // ---------------------------------------------------------------------------
   return (
-    <div className="flex w-full h-full bg-[#0D0906] overflow-hidden">
+    <div className="flex w-full h-full bg-[#F6F1E9] overflow-hidden">
 
       {/* LEFT: conversation list — 280px, WhatsApp-style */}
-      <div className="flex flex-col w-[280px] shrink-0 border-r border-[#2E1E0F] bg-[#0A0705]">
+      <div className="flex flex-col w-[280px] shrink-0 border-r border-[#DDD4C0] bg-[#0A0705]">
 
         {/* Delegate-only: countdown-to-speech card, pinned above conversation list */}
         {speakerCard && (
-          <div className="shrink-0 border-b border-[#2E1E0F] p-3">
+          <div className="shrink-0 border-b border-[#DDD4C0] p-3">
             {speakerCard}
           </div>
         )}
 
-        <div className="px-3 py-3 border-b border-[#2E1E0F] shrink-0">
-          <h3 className="font-black text-white text-base">Messages</h3>
+        <div className="px-3 py-3 border-b border-[#DDD4C0] shrink-0">
+          <h3 className="font-black text-[#1C1410] text-base">Messages</h3>
         </div>
 
         {/* Conversation list */}
@@ -324,21 +324,21 @@ export default function ChatPanel({ committee, senderName, isChair = false, onCl
                 key={conv.key}
                 type="button"
                 onClick={() => selectConv(conv.key)}
-                className={`w-full text-left px-3 py-3 border-b border-[#2E1E0F] transition-colors ${isActive ? 'bg-[#3D2A15] border-l-2 border-l-[#7B4A1E]' : 'hover:bg-[#1A1209]'}`}
+                className={`w-full text-left px-3 py-3 border-b border-[#DDD4C0] transition-colors ${isActive ? 'bg-[#C8BAA8] border-l-2 border-l-[#1B3828]' : 'hover:bg-[#EDE7D8]'}`}
               >
                 <div className="flex items-center gap-2">
                   <span className="text-xl shrink-0">{typeof conv.emoji === 'string' ? <Emoji size="1.25rem">{conv.emoji}</Emoji> : conv.emoji}</span>
-                  <span className="text-sm font-bold text-white truncate flex-1">{conv.label}</span>
+                  <span className="text-sm font-bold text-[#1C1410] truncate flex-1">{conv.label}</span>
                   {unread > 0 && (
-                    <span className="text-[10px] bg-[#7B4A1E] text-white rounded-full px-1.5 py-0.5 font-bold shrink-0 min-w-[18px] text-center">
+                    <span className="text-[10px] bg-[#1B3828] text-white rounded-full px-1.5 py-0.5 font-bold shrink-0 min-w-[18px] text-center">
                       {unread}
                     </span>
                   )}
                 </div>
                 {lastMsg ? (
-                  <p className="text-xs text-[#7A5A38] truncate mt-1 pl-7">{displayContent(lastMsg.content)}</p>
+                  <p className="text-xs text-[#9A8A78] truncate mt-1 pl-7">{displayContent(lastMsg.content)}</p>
                 ) : conv.key === draftThread?.key ? (
-                  <p className="text-xs text-[#7A5A38] truncate mt-1 pl-7 italic">New conversation…</p>
+                  <p className="text-xs text-[#9A8A78] truncate mt-1 pl-7 italic">New conversation…</p>
                 ) : null}
               </button>
             );
@@ -347,7 +347,7 @@ export default function ChatPanel({ committee, senderName, isChair = false, onCl
 
         {/* DM picker — slides up above the new message button */}
         {showDmPicker && (
-          <div className="border-t border-[#2E1E0F] px-3 py-2 bg-[#0D0906] shrink-0">
+          <div className="border-t border-[#DDD4C0] px-3 py-2 bg-[#F6F1E9] shrink-0">
             <input
               type="text"
               value={dmSearch}
@@ -355,7 +355,7 @@ export default function ChatPanel({ committee, senderName, isChair = false, onCl
               onKeyDown={handleDmKeyDown}
               placeholder="Search…"
               autoFocus
-              className="w-full bg-[#150F09] border border-[#2E1E0F] rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:border-[#7B4A1E] placeholder-[#7A5A38] mb-1"
+              className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-2 py-1.5 text-sm text-[#1C1410] focus:outline-none focus:border-[#1B3828] placeholder-[#9A8A78] mb-1"
             />
             <div className="max-h-64 overflow-y-auto space-y-0.5">
               {filteredDm.map((o, i) => (
@@ -363,14 +363,14 @@ export default function ChatPanel({ committee, senderName, isChair = false, onCl
                   key={o.id}
                   type="button"
                   onClick={() => startDmThread(o)}
-                  className={`w-full text-left px-2 py-1.5 rounded-lg text-sm text-[#E8D5B7] flex items-center gap-2 transition-colors ${i === dmHighlight ? 'bg-[#3D2A15]' : 'hover:bg-[#3D2A15]'}`}
+                  className={`w-full text-left px-2 py-1.5 rounded-lg text-sm text-[#1C1410] flex items-center gap-2 transition-colors ${i === dmHighlight ? 'bg-[#C8BAA8]' : 'hover:bg-[#C8BAA8]'}`}
                 >
                   <span className="text-base">{typeof o.emoji === 'string' ? <Emoji size="1rem">{o.emoji}</Emoji> : o.emoji}</span>
                   <span className="truncate">{o.label}</span>
                 </button>
               ))}
               {filteredDm.length === 0 && (
-                <p className="text-xs text-[#7A5A38] px-2 py-2">No results</p>
+                <p className="text-xs text-[#9A8A78] px-2 py-2">No results</p>
               )}
             </div>
           </div>
@@ -380,7 +380,7 @@ export default function ChatPanel({ committee, senderName, isChair = false, onCl
         <button
           type="button"
           onClick={() => { setShowDmPicker((v) => !v); setDmSearch(''); setDmHighlight(0); }}
-          className={`mx-3 mt-2 mb-1 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1.5 border ${showDmPicker ? 'bg-[#7B4A1E] border-[#8B5A2B] text-white' : 'bg-[#150F09] border-[#2E1E0F] text-[#C4A882] hover:border-[#7B4A1E]'}`}
+          className={`mx-3 mt-2 mb-1 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1.5 border ${showDmPicker ? 'bg-[#1B3828] border-[#2A5A3C] text-[#1C1410]' : 'bg-[#FAF8F3] border-[#DDD4C0] text-[#6A5A4A] hover:border-[#1B3828]'}`}
         >
           <Emoji size="0.875rem">✏️</Emoji> New message
         </button>
@@ -402,16 +402,16 @@ export default function ChatPanel({ committee, senderName, isChair = false, onCl
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
 
         {/* Thread header */}
-        <div className="px-4 py-3 border-b border-[#2E1E0F] shrink-0 flex items-center gap-2.5">
+        <div className="px-4 py-3 border-b border-[#DDD4C0] shrink-0 flex items-center gap-2.5">
           <span className="text-2xl">{typeof activeConvObj.emoji === 'string' ? <Emoji size="1.5rem">{activeConvObj.emoji}</Emoji> : activeConvObj.emoji}</span>
           <div className="min-w-0 flex-1">
-            <h3 className="font-black text-white text-base truncate">{activeConvObj.label}</h3>
-            <p className="text-xs text-[#7A5A38]">{displayMessages.length} message{displayMessages.length !== 1 ? 's' : ''}</p>
+            <h3 className="font-black text-[#1C1410] text-base truncate">{activeConvObj.label}</h3>
+            <p className="text-xs text-[#9A8A78]">{displayMessages.length} message{displayMessages.length !== 1 ? 's' : ''}</p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="ml-2 shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-[#7A5A38] hover:text-white hover:bg-[#2E1E0F] transition-colors font-bold text-base"
+            className="ml-2 shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-[#9A8A78] hover:text-[#1C1410] hover:bg-[#DDD4C0] transition-colors font-bold text-base"
           >
             ✕
           </button>
@@ -420,7 +420,7 @@ export default function ChatPanel({ committee, senderName, isChair = false, onCl
         {/* Messages */}
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 min-h-0">
           {displayMessages.length === 0 ? (
-            <div className="text-center py-12 text-[#7A5A38]">
+            <div className="text-center py-12 text-[#9A8A78]">
               <div className="mb-3"><Emoji size="1.875rem">💬</Emoji></div>
               <p className="text-base">No messages yet</p>
             </div>
@@ -437,18 +437,18 @@ export default function ChatPanel({ committee, senderName, isChair = false, onCl
                       {!isMe && (
                         <span className="text-2xl">{isChairMsg ? <Emoji size="1.5rem">🪑</Emoji> : flagFor(m.sender)}</span>
                       )}
-                      <span className={`text-base font-black ${isChairMsg ? 'text-[#B8844A]' : isMe ? 'text-[#C4A882]' : 'text-white'}`}>
+                      <span className={`text-base font-black ${isChairMsg ? 'text-[#B6871F]' : isMe ? 'text-[#6A5A4A]' : 'text-[#1C1410]'}`}>
                         {isMe ? 'You' : m.sender}{isChairMsg && !isMe && ' · Chair'}
                       </span>
-                      <span className="text-xs text-[#7A5A38]">{fmtTime(m.timestamp)}</span>
-                      {isOptimistic && <span className="text-[10px] text-[#7A5A38]">sending…</span>}
+                      <span className="text-xs text-[#9A8A78]">{fmtTime(m.timestamp)}</span>
+                      {isOptimistic && <span className="text-[10px] text-[#9A8A78]">sending…</span>}
                     </div>
                     <div className={`rounded-2xl px-4 py-3 text-base leading-relaxed break-words ${
                       isMe
-                        ? 'bg-[#7B4A1E] text-white rounded-br-sm'
+                        ? 'bg-[#1B3828] text-white rounded-br-sm'
                         : isChairMsg
-                        ? 'bg-[#3D2A15]/60 border border-[#7B4A1E]/30 text-[#E8D5B7] rounded-bl-sm'
-                        : 'bg-[#1A1209] border border-[#2E1E0F] text-[#E8D5B7] rounded-bl-sm'
+                        ? 'bg-[#C8BAA8]/60 border border-[#1B3828]/30 text-[#1C1410] rounded-bl-sm'
+                        : 'bg-[#EDE7D8] border border-[#DDD4C0] text-[#1C1410] rounded-bl-sm'
                     } ${isOptimistic ? 'opacity-70' : ''}`}>
                       {text}
                     </div>
@@ -462,9 +462,9 @@ export default function ChatPanel({ committee, senderName, isChair = false, onCl
 
         {/* Compose */}
         {readOnly ? (
-          <div className="px-4 py-3 text-xs text-[#7A5A38] text-center border-t border-[#2E1E0F]">Chat is view-only — session has ended.</div>
+          <div className="px-4 py-3 text-xs text-[#9A8A78] text-center border-t border-[#DDD4C0]">Chat is view-only — session has ended.</div>
         ) : (
-        <div className="px-4 pb-4 pt-3 shrink-0 border-t border-[#2E1E0F]">
+        <div className="px-4 pb-4 pt-3 shrink-0 border-t border-[#DDD4C0]">
           <div className="flex gap-2">
             <input
               ref={inputRef}
@@ -473,13 +473,13 @@ export default function ChatPanel({ committee, senderName, isChair = false, onCl
               onChange={(e) => setMsg(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSend(); } }}
               placeholder={activeConv === 'everyone' ? 'Message everyone…' : `Message ${activeConv}…`}
-              className="flex-1 bg-[#150F09] border border-[#2E1E0F] rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#7B4A1E] placeholder-[#7A5A38] transition-colors"
+              className="flex-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3 text-sm text-[#1C1410] focus:outline-none focus:border-[#1B3828] placeholder-[#9A8A78] transition-colors"
             />
             <button
               type="button"
               onClick={handleSend}
               disabled={!msg.trim()}
-              className="bg-[#7B4A1E] hover:bg-[#8B5A2B] disabled:bg-[#2E1E0F] disabled:text-[#7A5A38] text-white px-4 py-3 rounded-xl text-sm font-bold transition-colors shrink-0"
+              className="bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white px-4 py-3 rounded-xl text-sm font-bold transition-colors shrink-0"
             >
               →
             </button>
