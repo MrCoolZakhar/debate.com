@@ -27,7 +27,11 @@ export default function LandingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#EDE7D8] flex flex-col relative overflow-x-hidden">
+    <div className="min-h-screen bg-[#EDE7D8] flex flex-col relative overflow-x-hidden" style={{
+    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cg transform='rotate(-45 60 60)' opacity='0.06'%3E%3Cellipse cx='30' cy='20' rx='5' ry='8' fill='%231B3828' transform='rotate(20 30 20)'/%3E%3Cellipse cx='38' cy='30' rx='5' ry='8' fill='%231B3828' transform='rotate(15 38 30)'/%3E%3Cellipse cx='44' cy='41' rx='4' ry='7' fill='%231B3828' transform='rotate(10 44 41)'/%3E%3Cellipse cx='48' cy='52' rx='4' ry='7' fill='%231B3828' transform='rotate(5 48 52)'/%3E%3Cellipse cx='50' cy='63' rx='4' ry='6' fill='%231B3828' transform='rotate(0 50 63)'/%3E%3Cpath d='M60 80 Q40 50 28 16' stroke='%231B3828' stroke-width='1.2' fill='none'/%3E%3Cellipse cx='90' cy='20' rx='5' ry='8' fill='%231B3828' transform='rotate(-20 90 20)'/%3E%3Cellipse cx='82' cy='30' rx='5' ry='8' fill='%231B3828' transform='rotate(-15 82 30)'/%3E%3Cellipse cx='76' cy='41' rx='4' ry='7' fill='%231B3828' transform='rotate(-10 76 41)'/%3E%3Cellipse cx='72' cy='52' rx='4' ry='7' fill='%231B3828' transform='rotate(-5 72 52)'/%3E%3Cellipse cx='70' cy='63' rx='4' ry='6' fill='%231B3828' transform='rotate(0 70 63)'/%3E%3Cpath d='M60 80 Q80 50 92 16' stroke='%231B3828' stroke-width='1.2' fill='none'/%3E%3Ccircle cx='60' cy='85' r='4' fill='%231B3828' opacity='0.5'/%3E%3C/g%3E%3C/svg%3E")`,
+    backgroundSize: '120px 120px',
+    backgroundRepeat: 'repeat',
+  }}>
 
       {/* Grain overlay — place background-grain.png in /public/ */}
       <div
@@ -78,9 +82,9 @@ export default function LandingPage() {
             Free to use · No account needed
           </div>
 
-          <h1 className="text-5xl md:text-6xl font-black tracking-tight text-[#1C1410] leading-[1.05] mb-5 text-center">
+          <h1 className="text-5xl md:text-6xl font-black tracking-tight text-[#1C1410] leading-[1.05] mb-5 text-center uppercase tracking-wide">
             Run Your Committee<br />
-            <span className="text-[#B6871F] font-black">with Confidence</span>
+            <span className="text-[#B6871F] font-black uppercase">with Confidence</span>
           </h1>
 
           <p className="text-[#6A5A4A] text-lg max-w-md text-center mb-12 leading-relaxed">
@@ -140,14 +144,14 @@ export default function LandingPage() {
       <section className="relative z-10 border-t border-[#DDD4C0] bg-[#1B3828] py-20 px-6">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-14">
-            <h2 className="text-3xl font-black text-white mb-3">Up and Running in Minutes</h2>
+            <h2 className="text-3xl font-black text-white mb-3 uppercase tracking-wide">Up and Running in Minutes</h2>
             <p className="text-[#EED98A]">No downloads, no setup. Just open your browser and start chairing.</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-[#B6871F]/30">
             {steps.map((s) => (
               <div key={s.step} className="text-center px-10 py-6">
                 <div className="text-5xl font-black text-[#2A5A3C] mb-4">{s.step}</div>
-                <h3 className="text-lg font-bold text-white mb-2">{s.title}</h3>
+                <h3 className="text-lg font-bold text-white mb-2 uppercase tracking-wide">{s.title}</h3>
                 <p className="text-[#EED98A] opacity-70 text-sm leading-relaxed">{s.desc}</p>
               </div>
             ))}
