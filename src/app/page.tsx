@@ -31,13 +31,11 @@ const rightImages = [
 export default function LandingPage() {
   const router = useRouter();
   const [joinCode, setJoinCode] = useState('');
-  const [leftIdx, setLeftIdx] = useState(0);
-  const [rightIdx, setRightIdx] = useState(3);
+  const [carouselIdx, setCarouselIdx] = useState(0);
 
   useEffect(() => {
     const t = setInterval(() => {
-      setLeftIdx((i) => (i + 1) % leftImages.length);
-      setRightIdx((i) => (i + 1) % rightImages.length);
+      setCarouselIdx((i) => (i + 1) % leftImages.length);
     }, 3500);
     return () => clearInterval(t);
   }, []);
@@ -59,7 +57,7 @@ export default function LandingPage() {
       <div className="relative z-10 flex flex-col min-h-screen">
         {/* Grain overlay */}
         <div
-          className="pointer-events-none fixed inset-0 z-0"
+          className="pointer-events-none fixed inset-0 z-[1]"
           style={{
             backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`,
             backgroundRepeat: 'repeat',
@@ -92,15 +90,15 @@ export default function LandingPage() {
                   src={src}
                   alt=""
                   className="absolute inset-0 w-full h-full object-cover transition-opacity duration-1000"
-                  style={{ opacity: i === leftIdx ? 1 : 0 }}
+                  style={{ opacity: i === carouselIdx ? 1 : 0 }}
                   onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                 />
               ))}
             </div>
             <div className="flex justify-center gap-1.5 mt-2">
               {leftImages.map((_, i) => (
-                <button key={i} onClick={() => setLeftIdx(i)}
-                  className={`w-1.5 h-1.5 rounded-full transition-all ${i === leftIdx ? 'bg-[#1B3828]' : 'bg-[#DDD4C0]'}`}
+                <button key={i} onClick={() => setCarouselIdx(i)}
+                  className={`w-1.5 h-1.5 rounded-full transition-all ${i === carouselIdx ? 'bg-[#1B3828]' : 'bg-[#DDD4C0]'}`}
                 />
               ))}
             </div>
@@ -163,15 +161,15 @@ export default function LandingPage() {
                   src={src}
                   alt=""
                   className="absolute inset-0 w-full h-full object-cover transition-opacity duration-1000"
-                  style={{ opacity: i === rightIdx ? 1 : 0 }}
+                  style={{ opacity: i === carouselIdx ? 1 : 0 }}
                   onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                 />
               ))}
             </div>
             <div className="flex justify-center gap-1.5 mt-2">
               {rightImages.map((_, i) => (
-                <button key={i} onClick={() => setRightIdx(i)}
-                  className={`w-1.5 h-1.5 rounded-full transition-all ${i === rightIdx ? 'bg-[#1B3828]' : 'bg-[#DDD4C0]'}`}
+                <button key={i} onClick={() => setCarouselIdx(i)}
+                  className={`w-1.5 h-1.5 rounded-full transition-all ${i === carouselIdx ? 'bg-[#1B3828]' : 'bg-[#DDD4C0]'}`}
                 />
               ))}
             </div>
