@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 
 const steps = [
@@ -12,13 +12,25 @@ const steps = [
 export default function LandingPage() {
   const router = useRouter();
   const [joinCode, setJoinCode] = useState('');
+  const greenSectionRef = useRef<HTMLElement>(null);
+  const [sectionVisible, setSectionVisible] = useState(false);
   const [scrollY, setScrollY] = useState(0);
+
   useEffect(() => {
-    const handleScroll = () => setScrollY(window.scrollY);
+    const handleScroll = () => {
+      setScrollY(window.scrollY);
+      if (greenSectionRef.current) {
+        const rect = greenSectionRef.current.getBoundingClientRect();
+        if (rect.top < window.innerHeight * 0.85) {
+          setSectionVisible(true);
+        }
+      }
+    };
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
-  const sectionOffset = Math.min(scrollY * 0.4, 80);
+
+  const sectionOffset = sectionVisible ? Math.min((window.innerHeight * 0.85 - (greenSectionRef.current?.getBoundingClientRect().top ?? 999)) * 0.5, 80) : 0;
 
   const handleJoin = () => {
     const code = joinCode.trim().toUpperCase();
@@ -194,7 +206,7 @@ export default function LandingPage() {
           </section>
 
           {/* How it works */}
-          <section className="relative z-10 border-t border-[#DDD4C0] bg-[#1B3828] py-20 px-6" style={{ marginTop: `-${sectionOffset}px`, paddingTop: `calc(64px + ${sectionOffset}px)` }}>
+          <section ref={greenSectionRef} className="relative z-10 border-t border-[#DDD4C0] bg-[#1B3828] py-20 px-6" style={{ marginTop: `-${sectionOffset}px`, paddingTop: `calc(64px + ${sectionOffset}px)` }}>
             <div className="max-w-4xl mx-auto">
               <div className="text-center mb-14">
                 <h2 className="text-5xl font-black text-white mb-4 uppercase tracking-wider">Up and Running in Minutes</h2>
@@ -202,17 +214,35 @@ export default function LandingPage() {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-[#B6871F]/30 w-full max-w-6xl mx-auto mt-16">
                 {steps.map((s) => (
-                  <div key={s.step} className="text-center px-16 py-10 group relative overflow-hidden cursor-default">
-                    <div className="text-8xl font-black text-[#2A5A3C]/40 mb-6 transition-all duration-300 group-hover:text-[#B6871F]/60 group-hover:scale-110">{s.step}</div>
-                    <h3 className="text-2xl font-black text-white mb-4 uppercase tracking-wider">{s.title}</h3>
-                    <div className="relative">
-                      {/* Limelight spotlight — appears on hover */}
-                      <div className="absolute -top-8 left-1/2 -translate-x-1/2 w-24 h-1.5 rounded-full bg-[#B6871F] opacity-0 group-hover:opacity-100 transition-all duration-300 shadow-[0_0_30px_8px_rgba(182,135,31,0.4)]" />
-                      <div className="absolute -top-8 left-1/2 -translate-x-1/2 w-32 h-20 opacity-0 group-hover:opacity-100 transition-all duration-500"
-                        style={{ background: 'radial-gradient(ellipse 80% 60% at 50% 0%, rgba(182,135,31,0.15) 0%, transparent 100%)' }} />
-                      {/* Description — hidden until hover */}
-                      <p className="text-[#EED98A] text-base leading-relaxed opacity-0 group-hover:opacity-100 transition-all duration-400 transform translate-y-2 group-hover:translate-y-0 max-w-xs mx-auto">{s.desc}</p>
+                  <div key={s.step} className="text-center px-16 py-10 group relative overflow-hidden cursor-default flex flex-col items-center">
+
+                    {/* LIMELIGHT — sits at very top of card */}
+                    <div className="relative w-full flex justify-center mb-2 h-12">
+                      {/* The light bar */}
+                      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-16 h-1.5 rounded-full bg-[#B6871F] opacity-0 group-hover:opacity-100 transition-all duration-300 shadow-[0_0_20px_6px_rgba(182,135,31,0.5)]" />
+                      {/* Round trapezoid beam — wide at bottom, narrow at top */}
+                      <div
+                        className="absolute top-1.5 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-all duration-500"
+                        style={{
+                          width: '180px',
+                          height: '120px',
+                          background: 'linear-gradient(to bottom, rgba(182,135,31,0.25) 0%, transparent 100%)',
+                          clipPath: 'polygon(30% 0%, 70% 0%, 100% 100%, 0% 100%)',
+                          borderRadius: '0 0 50% 50%',
+                          filter: 'blur(8px)',
+                        }}
+                      />
                     </div>
+
+                    {/* Step number */}
+                    <div className="text-8xl font-black text-[#2A5A3C]/40 mb-6 transition-all duration-300 group-hover:text-[#B6871F]/60 group-hover:scale-110 leading-none">{s.step}</div>
+
+                    {/* Step title */}
+                    <h3 className="text-2xl font-black text-white mb-4 uppercase tracking-wider">{s.title}</h3>
+
+                    {/* Description — hidden until hover, slides up */}
+                    <p className="text-[#EED98A] text-base leading-relaxed opacity-0 group-hover:opacity-100 transition-all duration-400 transform translate-y-3 group-hover:translate-y-0 max-w-xs mx-auto">{s.desc}</p>
+
                   </div>
                 ))}
               </div>
