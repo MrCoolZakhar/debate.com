@@ -45,11 +45,11 @@ export default function LandingPage() {
           0%   { opacity: 0; transform: translateY(28px); }
           100% { opacity: 1; transform: translateY(0); }
         }
-        .text-reveal-1 { animation: textReveal 0.7s cubic-bezier(0.4,0,0.2,1) both 4.2s; }
-        .text-reveal-2 { animation: textReveal 0.7s cubic-bezier(0.4,0,0.2,1) both 4.4s; }
-        .text-reveal-3 { animation: textReveal 0.7s cubic-bezier(0.4,0,0.2,1) both 4.6s; }
-        .text-reveal-4 { animation: textReveal 0.7s cubic-bezier(0.4,0,0.2,1) both 4.8s; }
-        .text-reveal-5 { animation: textReveal 0.7s cubic-bezier(0.4,0,0.2,1) both 5.0s; }
+        .text-reveal-1 { animation: textReveal 0.7s cubic-bezier(0.4,0,0.2,1) both 3.3s; }
+        .text-reveal-2 { animation: textReveal 0.7s cubic-bezier(0.4,0,0.2,1) both 3.55s; }
+        .text-reveal-3 { animation: textReveal 0.7s cubic-bezier(0.4,0,0.2,1) both 3.8s; }
+        .text-reveal-4 { animation: textReveal 0.7s cubic-bezier(0.4,0,0.2,1) both 4.05s; }
+        .text-reveal-5 { animation: textReveal 0.7s cubic-bezier(0.4,0,0.2,1) both 4.1s; }
       `}</style>
 
       <div className="min-h-screen bg-[#EDE7D8] flex flex-col relative overflow-x-hidden">
