@@ -27,7 +27,7 @@ export default function LandingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F6F1E9] flex flex-col relative overflow-x-hidden">
+    <div className="min-h-screen bg-[#EDE7D8] flex flex-col relative overflow-x-hidden">
 
       {/* Grain overlay — place background-grain.png in /public/ */}
       <div
@@ -47,6 +47,7 @@ export default function LandingPage() {
           src="/gavelling-logo.png"
           alt="Gavelling"
           className="w-[16vw] h-auto max-h-9 object-contain"
+          style={{ filter: 'brightness(0) saturate(100%) invert(18%) sepia(25%) saturate(800%) hue-rotate(100deg) brightness(85%)' }}
           onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
         />
       </nav>
@@ -79,7 +80,7 @@ export default function LandingPage() {
 
           <h1 className="text-5xl md:text-6xl font-black tracking-tight text-[#1C1410] leading-[1.05] mb-5 text-center">
             Run Your Committee<br />
-            <span className="text-[#B6871F] italic" style={{ fontStyle: 'italic' }}>with Confidence</span>
+            <span className="text-[#B6871F] italic font-light" style={{ fontStyle: 'italic', fontWeight: '300' }}>with Confidence</span>
           </h1>
 
           <p className="text-[#6A5A4A] text-lg max-w-md text-center mb-12 leading-relaxed">
@@ -155,11 +156,12 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="relative z-10 border-t border-[#DDD4C0] bg-[#F6F1E9] px-6 py-8 flex flex-col md:flex-row items-center justify-between gap-4">
+      <footer className="relative z-10 border-t border-[#DDD4C0] bg-[#EDE7D8] px-6 py-8 flex flex-col md:flex-row items-center justify-between gap-4">
         <img
           src="/gavelling-logo.png"
           alt="Gavelling"
           className="h-7 w-auto"
+          style={{ filter: 'brightness(0) saturate(100%) invert(18%) sepia(25%) saturate(800%) hue-rotate(100deg) brightness(85%)' }}
           onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
         />
         <p className="text-xs text-[#9A8A78]">
