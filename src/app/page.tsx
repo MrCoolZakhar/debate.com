@@ -84,7 +84,7 @@ export default function LandingPage() {
           </nav>
 
           {/* Hero */}
-          <section className="relative z-10 min-h-[92vh] flex flex-col overflow-hidden">
+          <section className="relative z-10 min-h-screen flex flex-col justify-center overflow-hidden">
 
             {/* VIDEO BACKGROUND */}
             <div className="absolute inset-0 z-0">
@@ -116,31 +116,30 @@ export default function LandingPage() {
             </div>
 
             {/* CONTENT — centered vertically, text left */}
-            <div className="relative z-10 flex-1 flex items-center px-8 md:px-14 py-16">
+            <div className="relative z-10 flex-1 flex items-center px-8 md:px-14 py-8">
               <div className="flex flex-col justify-center items-center text-center w-full max-w-2xl mx-auto">
 
                 {/* Eyebrow */}
-                <div className="text-reveal-1 inline-flex items-center gap-2 bg-[#EAF1EC] border border-[#C8D8C0] text-[#1B3828] text-xs font-semibold px-4 py-1.5 rounded-full mb-6 w-fit tracking-wide mx-auto" style={{ opacity: 0 }}>
+                <div className="text-reveal-1 inline-flex items-center gap-2 bg-[#EAF1EC] border border-[#C8D8C0] text-[#1B3828] text-xs font-semibold px-4 py-1.5 rounded-full mb-4 w-fit tracking-wide mx-auto" style={{ opacity: 0 }}>
                   <span className="w-1.5 h-1.5 rounded-full bg-[#3D7A52] animate-pulse shrink-0" />
                   Free to use · No account needed
                 </div>
 
                 {/* Title */}
-                <h1 className="text-reveal-2 font-black tracking-tight text-[#1C1410] leading-[0.92] mb-6 uppercase" style={{ fontSize: 'clamp(48px, 6vw, 88px)', opacity: 0 }}>
-                  Run Your<br />
-                  Committee<br />
+                <h1 className="text-reveal-2 font-black tracking-tight text-[#1C1410] leading-[0.95] mb-4 uppercase text-center" style={{ fontSize: 'clamp(36px, 4.8vw, 72px)', opacity: 0 }}>
+                  Run Your Committee<br />
                   <span className="text-[#B6871F]">with Confidence</span>
                 </h1>
 
                 {/* Subtitle */}
-                <p className="text-reveal-3 text-[#3D2E22] text-lg max-w-lg mb-10 leading-relaxed font-medium" style={{ opacity: 0 }}>
+                <p className="text-reveal-3 text-[#3D2E22] text-lg max-w-lg mb-6 leading-relaxed font-medium" style={{ opacity: 0 }}>
                   Gavelling gives chairs everything they need — from roll call to final voting.
                 </p>
 
                 {/* CTA */}
                 <button
                   onClick={() => router.push('/create')}
-                  className="text-reveal-4 bg-[#1B3828] hover:bg-[#2A5A3C] active:scale-[0.98] text-[#EED98A] px-10 py-5 rounded-2xl font-black text-xl transition-all shadow-lg shadow-[#1B3828]/20 mb-8 w-fit mx-auto"
+                  className="text-reveal-4 bg-[#1B3828] hover:bg-[#2A5A3C] active:scale-[0.98] text-[#EED98A] px-10 py-5 rounded-2xl font-black text-xl transition-all shadow-lg shadow-[#1B3828]/20 mb-5 w-fit mx-auto"
                   style={{ opacity: 0 }}
                 >
                   Start Your Committee →
