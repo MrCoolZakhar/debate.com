@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
 const steps = [
@@ -12,6 +12,13 @@ const steps = [
 export default function LandingPage() {
   const router = useRouter();
   const [joinCode, setJoinCode] = useState('');
+  const [scrollY, setScrollY] = useState(0);
+  useEffect(() => {
+    const handleScroll = () => setScrollY(window.scrollY);
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+  const sectionOffset = Math.min(scrollY * 0.4, 80);
 
   const handleJoin = () => {
     const code = joinCode.trim().toUpperCase();
@@ -187,18 +194,25 @@ export default function LandingPage() {
           </section>
 
           {/* How it works */}
-          <section className="relative z-10 border-t border-[#DDD4C0] bg-[#1B3828] py-20 px-6">
+          <section className="relative z-10 border-t border-[#DDD4C0] bg-[#1B3828] py-20 px-6" style={{ marginTop: `-${sectionOffset}px`, paddingTop: `calc(64px + ${sectionOffset}px)` }}>
             <div className="max-w-4xl mx-auto">
               <div className="text-center mb-14">
-                <h2 className="text-3xl font-black text-white mb-3 uppercase tracking-wide">Up and Running in Minutes</h2>
-                <p className="text-[#EED98A]">No downloads, no setup. Just open your browser and start chairing.</p>
+                <h2 className="text-5xl font-black text-white mb-4 uppercase tracking-wider">Up and Running in Minutes</h2>
+                <p className="text-[#EED98A]/70 text-lg mb-4">No downloads, no setup. Just open your browser and start chairing.</p>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-[#B6871F]/30">
+              <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-[#B6871F]/30 w-full max-w-6xl mx-auto mt-16">
                 {steps.map((s) => (
-                  <div key={s.step} className="text-center px-10 py-6">
-                    <div className="text-5xl font-black text-[#2A5A3C] mb-4">{s.step}</div>
-                    <h3 className="text-lg font-bold text-white mb-2 uppercase tracking-wide">{s.title}</h3>
-                    <p className="text-[#EED98A] opacity-70 text-sm leading-relaxed">{s.desc}</p>
+                  <div key={s.step} className="text-center px-16 py-10 group relative overflow-hidden cursor-default">
+                    <div className="text-8xl font-black text-[#2A5A3C]/40 mb-6 transition-all duration-300 group-hover:text-[#B6871F]/60 group-hover:scale-110">{s.step}</div>
+                    <h3 className="text-2xl font-black text-white mb-4 uppercase tracking-wider">{s.title}</h3>
+                    <div className="relative">
+                      {/* Limelight spotlight — appears on hover */}
+                      <div className="absolute -top-8 left-1/2 -translate-x-1/2 w-24 h-1.5 rounded-full bg-[#B6871F] opacity-0 group-hover:opacity-100 transition-all duration-300 shadow-[0_0_30px_8px_rgba(182,135,31,0.4)]" />
+                      <div className="absolute -top-8 left-1/2 -translate-x-1/2 w-32 h-20 opacity-0 group-hover:opacity-100 transition-all duration-500"
+                        style={{ background: 'radial-gradient(ellipse 80% 60% at 50% 0%, rgba(182,135,31,0.15) 0%, transparent 100%)' }} />
+                      {/* Description — hidden until hover */}
+                      <p className="text-[#EED98A] text-base leading-relaxed opacity-0 group-hover:opacity-100 transition-all duration-400 transform translate-y-2 group-hover:translate-y-0 max-w-xs mx-auto">{s.desc}</p>
+                    </div>
                   </div>
                 ))}
               </div>
