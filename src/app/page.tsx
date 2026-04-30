@@ -13,24 +13,31 @@ export default function LandingPage() {
   const router = useRouter();
   const [joinCode, setJoinCode] = useState('');
   const greenSectionRef = useRef<HTMLElement>(null);
-  const [sectionVisible, setSectionVisible] = useState(false);
-  const [scrollY, setScrollY] = useState(0);
+  const [sectionOffset, setSectionOffset] = useState(0);
 
   useEffect(() => {
     const handleScroll = () => {
-      setScrollY(window.scrollY);
-      if (greenSectionRef.current) {
-        const rect = greenSectionRef.current.getBoundingClientRect();
-        if (rect.top < window.innerHeight * 0.85) {
-          setSectionVisible(true);
-        }
+      if (!greenSectionRef.current) return;
+      const rect = greenSectionRef.current.getBoundingClientRect();
+      const windowHeight = window.innerHeight;
+
+      // Only start expanding when the green section's TOP is at 40% of viewport height
+      // meaning user has scrolled well past it
+      const triggerPoint = windowHeight * 0.4;
+
+      if (rect.top < triggerPoint) {
+        // How far past the trigger point we've scrolled
+        const progress = Math.max(0, triggerPoint - rect.top);
+        // Very slow expansion — max 60px, requires 300px of scroll past trigger
+        const offset = Math.min((progress / 300) * 60, 60);
+        setSectionOffset(offset);
+      } else {
+        setSectionOffset(0);
       }
     };
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
-
-  const sectionOffset = sectionVisible ? Math.min((window.innerHeight * 0.85 - (greenSectionRef.current?.getBoundingClientRect().top ?? 999)) * 0.5, 80) : 0;
 
   const handleJoin = () => {
     const code = joinCode.trim().toUpperCase();
@@ -206,7 +213,7 @@ export default function LandingPage() {
           </section>
 
           {/* How it works */}
-          <section ref={greenSectionRef} className="relative z-10 border-t border-[#DDD4C0] bg-[#1B3828] py-20 px-6" style={{ marginTop: `-${sectionOffset}px`, paddingTop: `calc(64px + ${sectionOffset}px)` }}>
+          <section ref={greenSectionRef} className="relative z-10 border-t border-[#DDD4C0] bg-[#1B3828] pb-20 px-6" style={{ marginTop: `-${sectionOffset}px`, paddingTop: `calc(80px + ${sectionOffset}px)`, transition: 'margin-top 0.1s ease-out, padding-top 0.1s ease-out' }}>
             <div className="max-w-4xl mx-auto">
               <div className="text-center mb-14">
                 <h2 className="text-5xl font-black text-white mb-4 uppercase tracking-wider">Up and Running in Minutes</h2>
