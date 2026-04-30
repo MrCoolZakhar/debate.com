@@ -41,6 +41,15 @@ export default function LandingPage() {
           0%   { opacity: 0; transform: translateX(120px) translateY(-52%); }
           100% { opacity: 1; transform: translateX(0) translateY(-52%); }
         }
+        @keyframes textReveal {
+          0%   { opacity: 0; transform: translateY(28px); }
+          100% { opacity: 1; transform: translateY(0); }
+        }
+        .text-reveal-1 { animation: textReveal 0.7s cubic-bezier(0.4,0,0.2,1) both 3.5s; }
+        .text-reveal-2 { animation: textReveal 0.7s cubic-bezier(0.4,0,0.2,1) both 3.7s; }
+        .text-reveal-3 { animation: textReveal 0.7s cubic-bezier(0.4,0,0.2,1) both 3.9s; }
+        .text-reveal-4 { animation: textReveal 0.7s cubic-bezier(0.4,0,0.2,1) both 4.1s; }
+        .text-reveal-5 { animation: textReveal 0.7s cubic-bezier(0.4,0,0.2,1) both 4.3s; }
       `}</style>
 
       <div className="min-h-screen bg-[#EDE7D8] flex flex-col relative overflow-x-hidden">
@@ -74,84 +83,95 @@ export default function LandingPage() {
             </div>
           </nav>
 
-          {/* Hero — two columns */}
-          <section className="relative z-10 flex items-center min-h-[88vh] px-8 md:px-14 gap-8 pb-12 overflow-hidden">
+          {/* Hero */}
+          <section className="relative z-10 min-h-[92vh] flex flex-col overflow-hidden">
 
-            {/* LEFT — text column */}
-            <div className="flex-1 flex flex-col justify-center max-w-2xl relative z-10">
+            {/* VIDEO BACKGROUND */}
+            <div className="absolute inset-0 z-0">
+              <video
+                autoPlay
+                muted
+                playsInline
+                className="absolute inset-0 w-full h-full object-cover"
+                style={{ opacity: 0.55 }}
+              >
+                <source src="/hero_no_audio.webm" type="video/webm" />
+                <source src="/hero_no_audio.mp4" type="video/mp4" />
+              </video>
 
-              {/* Eyebrow */}
-              <div className="hero-1 inline-flex items-center gap-2 bg-[#EAF1EC] border border-[#C8D8C0] text-[#1B3828] text-xs font-semibold px-4 py-1.5 rounded-full mb-4 w-fit tracking-wide">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#3D7A52] animate-pulse shrink-0" />
-                Free to use · No account needed
-              </div>
+              {/* Inward vignette mask — darkens edges, keeps center clear */}
+              <div className="absolute inset-0" style={{
+                background: 'radial-gradient(ellipse 70% 70% at 50% 50%, transparent 40%, rgba(237,231,216,0.6) 70%, rgba(237,231,216,0.95) 100%)',
+              }} />
 
-              {/* Title */}
-              <h1 className="hero-2 font-black tracking-tight text-[#1C1410] leading-[0.92] mb-6 uppercase"
-                  style={{ fontSize: 'clamp(48px, 6vw, 88px)' }}>
-                Run Your<br />
-                Committee<br />
-                <span className="text-[#B6871F]">with Confidence</span>
-              </h1>
+              {/* Bottom gradient — fades into green section cleanly */}
+              <div className="absolute bottom-0 left-0 right-0 h-48" style={{
+                background: 'linear-gradient(to bottom, transparent, #EDE7D8)',
+              }} />
 
-              {/* Subtitle */}
-              <p className="hero-3 text-[#6A5A4A] text-lg max-w-md mb-10 leading-relaxed">
-                Gavelling gives chairs everything they need — from roll call to final voting.
-              </p>
+              {/* Left gradient — text readability */}
+              <div className="absolute top-0 left-0 bottom-0 w-[55%]" style={{
+                background: 'linear-gradient(to right, rgba(237,231,216,0.85) 0%, rgba(237,231,216,0.5) 60%, transparent 100%)',
+              }} />
+            </div>
 
-              {/* CTA */}
-              <button
-                onClick={() => router.push('/create')}
-                className="hero-4 bg-[#1B3828] hover:bg-[#2A5A3C] active:scale-[0.98] text-[#EED98A] px-10 py-5 rounded-2xl font-black text-xl transition-all shadow-lg shadow-[#1B3828]/20 mb-8 w-fit">
-                Start Your Committee →
-              </button>
+            {/* CONTENT — centered vertically, text left */}
+            <div className="relative z-10 flex-1 flex items-center px-8 md:px-14 py-16">
+              <div className="flex flex-col justify-center max-w-xl">
 
-              {/* Join input */}
-              <div className="hero-5 flex flex-col gap-2 w-fit mt-3">
-                <p className="text-xs text-[#9A8A78] tracking-[0.16em] uppercase" style={{ fontFamily: "'DM Mono', monospace" }}>Join a Session</p>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="SESSION CODE"
-                    value={joinCode}
-                    onChange={(e) => setJoinCode(e.target.value.toUpperCase().slice(0, 20))}
-                    onKeyDown={(e) => { if (e.key === 'Enter') handleJoin(); }}
-                    maxLength={20}
-                    className="bg-[#FAF8F3] border border-[#DDD4C0] focus:border-[#1B3828] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none text-sm tracking-widest uppercase text-center transition-colors w-44"
-                    style={{ fontFamily: "'DM Mono', monospace" }}
-                  />
-                  <button
-                    onClick={handleJoin}
-                    disabled={joinCode.trim().length < 4}
-                    className="bg-[#1B3828] hover:bg-[#2A5A3C] disabled:opacity-40 text-[#EED98A] px-5 py-3 rounded-xl font-bold text-sm transition-colors">
-                    Join →
-                  </button>
+                {/* Eyebrow */}
+                <div className="text-reveal-1 inline-flex items-center gap-2 bg-[#EAF1EC] border border-[#C8D8C0] text-[#1B3828] text-xs font-semibold px-4 py-1.5 rounded-full mb-6 w-fit tracking-wide" style={{ opacity: 0 }}>
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#3D7A52] animate-pulse shrink-0" />
+                  Free to use · No account needed
                 </div>
+
+                {/* Title */}
+                <h1 className="text-reveal-2 font-black tracking-tight text-[#1C1410] leading-[0.92] mb-6 uppercase" style={{ fontSize: 'clamp(48px, 6vw, 88px)', opacity: 0 }}>
+                  Run Your<br />
+                  Committee<br />
+                  <span className="text-[#B6871F]">with Confidence</span>
+                </h1>
+
+                {/* Subtitle */}
+                <p className="text-reveal-3 text-[#3D2E22] text-lg max-w-md mb-10 leading-relaxed font-medium" style={{ opacity: 0 }}>
+                  Gavelling gives chairs everything they need — from roll call to final voting.
+                </p>
+
+                {/* CTA */}
+                <button
+                  onClick={() => router.push('/create')}
+                  className="text-reveal-4 bg-[#1B3828] hover:bg-[#2A5A3C] active:scale-[0.98] text-[#EED98A] px-10 py-5 rounded-2xl font-black text-xl transition-all shadow-lg shadow-[#1B3828]/20 mb-8 w-fit"
+                  style={{ opacity: 0 }}
+                >
+                  Start Your Committee →
+                </button>
+
+                {/* Join input */}
+                <div className="text-reveal-5 flex flex-col gap-2 w-fit" style={{ opacity: 0 }}>
+                  <p className="text-xs text-[#6A5A4A] tracking-[0.16em] uppercase font-semibold" style={{ fontFamily: "'DM Mono', monospace" }}>Join a Session</p>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="SESSION CODE"
+                      value={joinCode}
+                      onChange={(e) => setJoinCode(e.target.value.toUpperCase().slice(0, 20))}
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleJoin(); }}
+                      maxLength={20}
+                      className="bg-[#FAF8F3]/90 border border-[#DDD4C0] focus:border-[#1B3828] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none text-sm tracking-widest uppercase text-center transition-colors w-44 backdrop-blur-sm"
+                      style={{ fontFamily: "'DM Mono', monospace" }}
+                    />
+                    <button
+                      onClick={handleJoin}
+                      disabled={joinCode.trim().length < 4}
+                      className="bg-[#1B3828] hover:bg-[#2A5A3C] disabled:opacity-40 text-[#EED98A] px-5 py-3 rounded-xl font-bold text-sm transition-colors"
+                    >
+                      Join →
+                    </button>
+                  </div>
+                </div>
+
               </div>
             </div>
-
-            {/* RIGHT — gavel */}
-            <div className="absolute inset-0 pointer-events-none overflow-hidden">
-              <img
-                src="/GAVELLING__1_.png"
-                alt="Gavelling gavel"
-                draggable={false}
-                className="select-none absolute"
-                style={{
-                  mixBlendMode: 'multiply',
-                  filter: 'drop-shadow(0 24px 64px rgba(27,56,40,0.12))',
-                  width: '780px',
-                  height: '780px',
-                  maxWidth: 'none',
-                  objectFit: 'contain',
-                  right: '-80px',
-                  top: '50%',
-                  transform: 'translateY(-52%)',
-                  animation: 'gavelFadeIn 0.9s cubic-bezier(0.25, 0.46, 0.45, 0.94) both 0.3s',
-                }}
-              />
-            </div>
-
           </section>
 
           {/* How it works */}
