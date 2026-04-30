@@ -80,7 +80,7 @@ export default function LandingPage() {
 
           <h1 className="text-5xl md:text-6xl font-black tracking-tight text-[#1C1410] leading-[1.05] mb-5 text-center">
             Run Your Committee<br />
-            <span className="text-[#B6871F] italic font-light" style={{ fontStyle: 'italic', fontWeight: '300' }}>with Confidence</span>
+            <span className="text-[#B6871F] font-black">with Confidence</span>
           </h1>
 
           <p className="text-[#6A5A4A] text-lg max-w-md text-center mb-12 leading-relaxed">
@@ -143,9 +143,9 @@ export default function LandingPage() {
             <h2 className="text-3xl font-black text-white mb-3">Up and Running in Minutes</h2>
             <p className="text-[#EED98A]">No downloads, no setup. Just open your browser and start chairing.</p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
+          <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-[#B6871F]/30">
             {steps.map((s) => (
-              <div key={s.step} className="text-center">
+              <div key={s.step} className="text-center px-10 py-6">
                 <div className="text-5xl font-black text-[#2A5A3C] mb-4">{s.step}</div>
                 <h3 className="text-lg font-bold text-white mb-2">{s.title}</h3>
                 <p className="text-[#EED98A] opacity-70 text-sm leading-relaxed">{s.desc}</p>
