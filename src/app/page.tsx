@@ -38,8 +38,8 @@ export default function LandingPage() {
         .hero-4 { animation: fadeUp 0.55s cubic-bezier(0.4,0,0.2,1) both 0.42s; }
         .hero-5 { animation: fadeUp 0.55s cubic-bezier(0.4,0,0.2,1) both 0.54s; }
         @keyframes gavelFadeIn {
-          0%   { opacity: 0; transform: translateX(280px) translateY(8%); }
-          100% { opacity: 1; transform: translateX(15%) translateY(8%); }
+          0%   { opacity: 0; transform: translateX(calc(28% + 280px)) translateY(12%); }
+          100% { opacity: 1; transform: translateX(28%) translateY(12%); }
         }
       `}</style>
 
@@ -78,7 +78,7 @@ export default function LandingPage() {
           <section className="relative z-10 flex items-center min-h-[88vh] px-8 md:px-14 gap-8 pb-12 overflow-hidden">
 
             {/* LEFT — text column */}
-            <div className="flex-1 flex flex-col justify-center max-w-2xl">
+            <div className="flex-1 flex flex-col justify-center max-w-2xl relative z-10">
 
               {/* Eyebrow */}
               <div className="hero-1 inline-flex items-center gap-2 bg-[#EAF1EC] border border-[#C8D8C0] text-[#1B3828] text-xs font-semibold px-4 py-1.5 rounded-full mb-4 w-fit tracking-wide">
@@ -131,21 +131,21 @@ export default function LandingPage() {
             </div>
 
             {/* RIGHT — gavel */}
-            <div className="flex-1 flex items-center justify-center relative overflow-visible">
+            <div className="absolute right-0 top-0 bottom-0 w-[58%] flex items-center justify-end overflow-visible pointer-events-none">
               <img
                 src="/GAVELLING__1_.png"
                 alt="Gavelling gavel"
-                className="object-contain select-none"
+                draggable={false}
+                className="select-none"
                 style={{
                   mixBlendMode: 'multiply',
                   filter: 'drop-shadow(0 24px 64px rgba(27,56,40,0.12))',
-                  width: '130%',
-                  maxWidth: '900px',
+                  width: '95vw',
+                  maxWidth: '1100px',
                   height: 'auto',
-                  transform: 'translateX(15%) translateY(8%)',
+                  transform: 'translateX(28%) translateY(12%)',
                   animation: 'gavelFadeIn 0.9s cubic-bezier(0.25, 0.46, 0.45, 0.94) both 0.3s',
                 }}
-                draggable={false}
               />
             </div>
 
