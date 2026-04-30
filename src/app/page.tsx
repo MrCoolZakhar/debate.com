@@ -78,13 +78,13 @@ export default function LandingPage() {
             </div>
             {/* Nav links — right */}
             <div className="flex items-center gap-8">
-              <a href="#about" className="text-[#1C1410] font-medium text-sm hover:text-[#1B3828] transition-colors tracking-wide">About Us</a>
               <a href="#sessions" className="text-[#1C1410] font-medium text-sm hover:text-[#1B3828] transition-colors tracking-wide">Sessions</a>
+              <a href="#about" className="text-[#1C1410] font-medium text-sm hover:text-[#1B3828] transition-colors tracking-wide">About Us</a>
             </div>
           </nav>
 
           {/* Hero */}
-          <section className="relative z-10 min-h-screen flex flex-col justify-center overflow-hidden">
+          <section className="relative z-10 h-[calc(100vh-72px)] flex flex-col items-center justify-center overflow-hidden">
 
             {/* VIDEO BACKGROUND */}
             <div className="absolute inset-0 z-0">
@@ -113,10 +113,15 @@ export default function LandingPage() {
               <div className="absolute top-0 left-0 bottom-0 w-[55%]" style={{
                 background: 'linear-gradient(to right, rgba(237,231,216,0.85) 0%, rgba(237,231,216,0.5) 60%, transparent 100%)',
               }} />
+
+              {/* Top gradient — integrates nav with video */}
+              <div className="absolute top-0 left-0 right-0 h-40" style={{
+                background: 'linear-gradient(to bottom, rgba(237,231,216,0.98) 0%, rgba(237,231,216,0.7) 50%, transparent 100%)',
+              }} />
             </div>
 
             {/* CONTENT — centered vertically, text left */}
-            <div className="relative z-10 flex-1 flex items-center px-8 md:px-14 py-8">
+            <div className="relative z-10 flex items-center px-8 md:px-14">
               <div className="flex flex-col justify-center items-center text-center w-full max-w-2xl mx-auto">
 
                 {/* Eyebrow */}
@@ -132,7 +137,14 @@ export default function LandingPage() {
                 </h1>
 
                 {/* Subtitle */}
-                <p className="text-reveal-3 text-[#FAF8F3] text-lg max-w-lg mb-6 leading-relaxed font-medium" style={{ opacity: 0 }}>
+                <p className="text-reveal-3 text-lg max-w-lg mb-6 leading-relaxed font-medium text-center text-[#1B3828]" style={{
+                  opacity: 0,
+                  backgroundColor: 'rgba(246,241,233,0.55)',
+                  backdropFilter: 'blur(4px)',
+                  WebkitBackdropFilter: 'blur(4px)',
+                  borderRadius: '12px',
+                  padding: '10px 20px',
+                }}>
                   Gavelling gives chairs everything they need — from roll call to final voting.
                 </p>
 
@@ -142,7 +154,7 @@ export default function LandingPage() {
                   className="text-reveal-4 bg-[#1B3828] hover:bg-[#2A5A3C] active:scale-[0.98] text-[#EED98A] px-10 py-5 rounded-2xl font-black text-xl transition-all shadow-lg shadow-[#1B3828]/20 mb-5 w-fit mx-auto"
                   style={{ opacity: 0 }}
                 >
-                  Start Your Committee →
+                  START YOUR COMMITTEE →
                 </button>
 
                 {/* Join input */}
