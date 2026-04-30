@@ -37,16 +37,10 @@ export default function LandingPage() {
         .hero-3 { animation: fadeUp 0.55s cubic-bezier(0.4,0,0.2,1) both 0.30s; }
         .hero-4 { animation: fadeUp 0.55s cubic-bezier(0.4,0,0.2,1) both 0.42s; }
         .hero-5 { animation: fadeUp 0.55s cubic-bezier(0.4,0,0.2,1) both 0.54s; }
-        @keyframes gavelSlideIn {
-          0%   { opacity: 0; transform: rotate(-22deg) translateX(320px) translateY(60px); }
-          45%  { opacity: 1; transform: rotate(-22deg) translateX(120px) translateY(60px); }
-          58%  { transform: rotate(-8deg) translateX(120px) translateY(90px); }
-          68%  { transform: rotate(-30deg) translateX(120px) translateY(30px); }
-          78%  { transform: rotate(-14deg) translateX(120px) translateY(75px); }
-          88%  { transform: rotate(-25deg) translateX(120px) translateY(45px); }
-          100% { transform: rotate(-22deg) translateX(120px) translateY(60px); }
+        @keyframes gavelFadeIn {
+          0%   { opacity: 0; transform: translateX(280px) translateY(8%); }
+          100% { opacity: 1; transform: translateX(15%) translateY(8%); }
         }
-        .gavel-strike { animation: gavelSlideIn 1.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) both 0.3s; }
       `}</style>
 
       <div className="min-h-screen bg-[#EDE7D8] flex flex-col relative overflow-x-hidden">
@@ -81,13 +75,13 @@ export default function LandingPage() {
           </nav>
 
           {/* Hero — two columns */}
-          <section className="relative z-10 flex items-center min-h-[88vh] px-8 md:px-14 gap-8 pb-24 overflow-hidden">
+          <section className="relative z-10 flex items-center min-h-[88vh] px-8 md:px-14 gap-8 pb-12 overflow-hidden">
 
             {/* LEFT — text column */}
             <div className="flex-1 flex flex-col justify-center max-w-2xl">
 
               {/* Eyebrow */}
-              <div className="hero-1 inline-flex items-center gap-2 bg-[#EAF1EC] border border-[#C8D8C0] text-[#1B3828] text-xs font-semibold px-4 py-1.5 rounded-full mb-8 w-fit tracking-wide">
+              <div className="hero-1 inline-flex items-center gap-2 bg-[#EAF1EC] border border-[#C8D8C0] text-[#1B3828] text-xs font-semibold px-4 py-1.5 rounded-full mb-4 w-fit tracking-wide">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#3D7A52] animate-pulse shrink-0" />
                 Free to use · No account needed
               </div>
@@ -113,7 +107,7 @@ export default function LandingPage() {
               </button>
 
               {/* Join input */}
-              <div className="hero-5 flex flex-col gap-2 w-fit mt-6">
+              <div className="hero-5 flex flex-col gap-2 w-fit mt-3">
                 <p className="text-xs text-[#9A8A78] tracking-[0.16em] uppercase" style={{ fontFamily: "'DM Mono', monospace" }}>Join a Session</p>
                 <div className="flex gap-2">
                   <input
@@ -141,11 +135,15 @@ export default function LandingPage() {
               <img
                 src="/GAVELLING__1_.png"
                 alt="Gavelling gavel"
-                className="gavel-strike w-[780px] h-[780px] md:w-[900px] md:h-[900px] object-contain select-none"
+                className="object-contain select-none"
                 style={{
                   mixBlendMode: 'multiply',
                   filter: 'drop-shadow(0 24px 64px rgba(27,56,40,0.12))',
-                  transform: 'rotate(-22deg) translateX(120px) translateY(60px)',
+                  width: '130%',
+                  maxWidth: '900px',
+                  height: 'auto',
+                  transform: 'translateX(15%) translateY(8%)',
+                  animation: 'gavelFadeIn 0.9s cubic-bezier(0.25, 0.46, 0.45, 0.94) both 0.3s',
                 }}
                 draggable={false}
               />
