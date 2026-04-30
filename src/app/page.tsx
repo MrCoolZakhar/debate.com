@@ -69,11 +69,11 @@ export default function LandingPage() {
           {/* Nav */}
           <nav className="relative z-20 flex items-center justify-between px-8 md:px-14 py-5">
             {/* Logo — left */}
-            <div className="flex items-center gap-3">
-              <img src="/GAVELLING__1_.png" alt="Gavelling" className="w-11 h-11 object-contain" style={{ mixBlendMode: 'multiply' }} />
-              <div className="flex flex-col leading-none">
-                <span className="font-black text-[#1B3828] text-lg tracking-tight uppercase">Gavelling</span>
-                <span className="text-[#B6871F] text-[9px] tracking-[0.18em] uppercase" style={{ fontFamily: "'DM Mono', monospace" }}>Sessions App</span>
+            <div className="flex items-center gap-1.5">
+              <img src="/GAVELLING__1_.png" alt="Gavelling" className="w-10 h-10 object-contain" style={{ mixBlendMode: 'multiply' }} />
+              <div className="flex flex-col leading-none items-end">
+                <span className="font-black text-[#1B3828] text-2xl tracking-tight uppercase leading-none">Gavelling</span>
+                <span className="text-[#B6871F] text-[9px] tracking-[0.14em] uppercase leading-none mt-0.5" style={{ fontFamily: "'DM Mono', monospace" }}>Sessions</span>
               </div>
             </div>
             {/* Nav links — right */}
