@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
 
 const steps = [
   { step: '01', title: 'Create a Committee', desc: 'Chair enters committee name, topic, and delegates. Pick a preset or build custom.' },
@@ -38,6 +37,16 @@ export default function LandingPage() {
         .hero-3 { animation: fadeUp 0.55s cubic-bezier(0.4,0,0.2,1) both 0.30s; }
         .hero-4 { animation: fadeUp 0.55s cubic-bezier(0.4,0,0.2,1) both 0.42s; }
         .hero-5 { animation: fadeUp 0.55s cubic-bezier(0.4,0,0.2,1) both 0.54s; }
+        @keyframes gavelSlideIn {
+          0%   { opacity: 0; transform: rotate(-22deg) translateX(320px) translateY(60px); }
+          45%  { opacity: 1; transform: rotate(-22deg) translateX(120px) translateY(60px); }
+          58%  { transform: rotate(-8deg) translateX(120px) translateY(90px); }
+          68%  { transform: rotate(-30deg) translateX(120px) translateY(30px); }
+          78%  { transform: rotate(-14deg) translateX(120px) translateY(75px); }
+          88%  { transform: rotate(-25deg) translateX(120px) translateY(45px); }
+          100% { transform: rotate(-22deg) translateX(120px) translateY(60px); }
+        }
+        .gavel-strike { animation: gavelSlideIn 1.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) both 0.3s; }
       `}</style>
 
       <div className="min-h-screen bg-[#EDE7D8] flex flex-col relative overflow-x-hidden">
@@ -72,7 +81,7 @@ export default function LandingPage() {
           </nav>
 
           {/* Hero — two columns */}
-          <section className="relative z-10 flex items-center min-h-[88vh] px-8 md:px-14 gap-8 pb-24">
+          <section className="relative z-10 flex items-center min-h-[88vh] px-8 md:px-14 gap-8 pb-24 overflow-hidden">
 
             {/* LEFT — text column */}
             <div className="flex-1 flex flex-col justify-center max-w-2xl">
@@ -127,115 +136,19 @@ export default function LandingPage() {
               </div>
             </div>
 
-            {/* RIGHT — gavel + animated SVG leaves */}
-            <div className="flex-1 flex items-center justify-center relative">
-
-              {/* Gavel PNG — fades and pops in first */}
-              <motion.img
+            {/* RIGHT — gavel */}
+            <div className="flex-1 flex items-center justify-center relative overflow-visible">
+              <img
                 src="/GAVELLING__1_.png"
                 alt="Gavelling gavel"
-                initial={{ opacity: 0, scale: 0.7, rotate: -30 }}
-                animate={{ opacity: 1, scale: 1, rotate: 0 }}
-                transition={{ duration: 0.9, ease: [0.34, 1.56, 0.64, 1], delay: 0.2 }}
-                className="w-[620px] h-[620px] md:w-[720px] md:h-[720px] object-contain select-none absolute"
+                className="gavel-strike w-[780px] h-[780px] md:w-[900px] md:h-[900px] object-contain select-none"
                 style={{
                   mixBlendMode: 'multiply',
                   filter: 'drop-shadow(0 24px 64px rgba(27,56,40,0.12))',
-                  transform: 'rotate(-22deg) translateX(60px) translateY(20px)',
+                  transform: 'rotate(-22deg) translateX(120px) translateY(60px)',
                 }}
                 draggable={false}
               />
-
-              {/* SVG olive wreath — leaves draw in after gavel appears */}
-              <motion.svg
-                viewBox="0 0 300 300"
-                className="absolute w-[380px] h-[380px] md:w-[440px] md:h-[440px]"
-                style={{ transform: 'translateX(30px) translateY(10px)' }}
-                initial="hidden"
-                animate="visible"
-              >
-                {/* Left branch */}
-                <motion.path
-                  d="M150,220 Q100,200 70,170 Q45,140 40,110 Q38,85 50,70"
-                  stroke="#3D7A52"
-                  strokeWidth="3"
-                  fill="none"
-                  variants={{
-                    hidden: { pathLength: 0, opacity: 0 },
-                    visible: { pathLength: 1, opacity: 1, transition: { duration: 1.4, ease: 'easeInOut', delay: 1.0 } }
-                  }}
-                />
-                <motion.path
-                  d="M80,160 Q60,145 55,125"
-                  stroke="#3D7A52" strokeWidth="8" strokeLinecap="round" fill="none"
-                  variants={{ hidden: { pathLength: 0, opacity: 0 }, visible: { pathLength: 1, opacity: 1, transition: { duration: 0.5, delay: 1.1 } } }}
-                />
-                <motion.path
-                  d="M65,140 Q48,122 47,102"
-                  stroke="#3D7A52" strokeWidth="8" strokeLinecap="round" fill="none"
-                  variants={{ hidden: { pathLength: 0, opacity: 0 }, visible: { pathLength: 1, opacity: 1, transition: { duration: 0.5, delay: 1.25 } } }}
-                />
-                <motion.path
-                  d="M58,115 Q50,95 56,76"
-                  stroke="#3D7A52" strokeWidth="7" strokeLinecap="round" fill="none"
-                  variants={{ hidden: { pathLength: 0, opacity: 0 }, visible: { pathLength: 1, opacity: 1, transition: { duration: 0.5, delay: 1.4 } } }}
-                />
-                <motion.path
-                  d="M100,185 Q78,175 72,155"
-                  stroke="#3D7A52" strokeWidth="8" strokeLinecap="round" fill="none"
-                  variants={{ hidden: { pathLength: 0, opacity: 0 }, visible: { pathLength: 1, opacity: 1, transition: { duration: 0.5, delay: 1.0 } } }}
-                />
-                <motion.path
-                  d="M120,200 Q100,195 92,178"
-                  stroke="#3D7A52" strokeWidth="8" strokeLinecap="round" fill="none"
-                  variants={{ hidden: { pathLength: 0, opacity: 0 }, visible: { pathLength: 1, opacity: 1, transition: { duration: 0.5, delay: 0.95 } } }}
-                />
-
-                {/* Right branch */}
-                <motion.path
-                  d="M150,220 Q200,200 230,170 Q255,140 260,110 Q262,85 250,70"
-                  stroke="#3D7A52"
-                  strokeWidth="3"
-                  fill="none"
-                  variants={{
-                    hidden: { pathLength: 0, opacity: 0 },
-                    visible: { pathLength: 1, opacity: 1, transition: { duration: 1.4, ease: 'easeInOut', delay: 1.0 } }
-                  }}
-                />
-                <motion.path
-                  d="M220,160 Q240,145 245,125"
-                  stroke="#3D7A52" strokeWidth="8" strokeLinecap="round" fill="none"
-                  variants={{ hidden: { pathLength: 0, opacity: 0 }, visible: { pathLength: 1, opacity: 1, transition: { duration: 0.5, delay: 1.1 } } }}
-                />
-                <motion.path
-                  d="M235,140 Q252,122 253,102"
-                  stroke="#3D7A52" strokeWidth="8" strokeLinecap="round" fill="none"
-                  variants={{ hidden: { pathLength: 0, opacity: 0 }, visible: { pathLength: 1, opacity: 1, transition: { duration: 0.5, delay: 1.25 } } }}
-                />
-                <motion.path
-                  d="M242,115 Q250,95 244,76"
-                  stroke="#3D7A52" strokeWidth="7" strokeLinecap="round" fill="none"
-                  variants={{ hidden: { pathLength: 0, opacity: 0 }, visible: { pathLength: 1, opacity: 1, transition: { duration: 0.5, delay: 1.4 } } }}
-                />
-                <motion.path
-                  d="M200,185 Q222,175 228,155"
-                  stroke="#3D7A52" strokeWidth="8" strokeLinecap="round" fill="none"
-                  variants={{ hidden: { pathLength: 0, opacity: 0 }, visible: { pathLength: 1, opacity: 1, transition: { duration: 0.5, delay: 1.0 } } }}
-                />
-                <motion.path
-                  d="M180,200 Q200,195 208,178"
-                  stroke="#3D7A52" strokeWidth="8" strokeLinecap="round" fill="none"
-                  variants={{ hidden: { pathLength: 0, opacity: 0 }, visible: { pathLength: 1, opacity: 1, transition: { duration: 0.5, delay: 0.95 } } }}
-                />
-
-                {/* Bottom stem where branches meet */}
-                <motion.path
-                  d="M135,225 Q150,235 165,225"
-                  stroke="#3D7A52" strokeWidth="4" fill="none"
-                  variants={{ hidden: { pathLength: 0, opacity: 0 }, visible: { pathLength: 1, opacity: 1, transition: { duration: 0.4, delay: 0.9 } } }}
-                />
-              </motion.svg>
-
             </div>
 
           </section>
