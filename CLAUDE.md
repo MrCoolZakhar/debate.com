@@ -67,3 +67,8 @@ Each panel (`SpeakersListPanel`, `CaucusPanel`, `MotionsPanel`, `ResolutionsPane
 - The chair page uses a **local-optimistic update** pattern: `updateLocal()` applies changes immediately to React state while the async DB write proceeds in parallel. Incoming Supabase Realtime events are debounced (ignored for ~500 ms after a local write) to prevent the remote echo from overwriting optimistic state.
 - Timer ticks (speaker countdown, caucus countdown) are handled client-side with `setInterval` in the chair page, writing to `current_speaker.time_remaining` each second.
 - The `speakers_list` table uses a `position` integer for ordering. Reorder operations delete and re-insert the full list.
+
+## UI Skills
+@.claude/skills/ui-ux-pro-max/SKILL.md
+@.claude/skills/awesome-design/SKILL.md
+@.claude/skills/impeccable/SKILL.md
