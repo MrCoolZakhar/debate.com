@@ -45,11 +45,11 @@ export default function LandingPage() {
           0%   { opacity: 0; transform: translateY(28px); }
           100% { opacity: 1; transform: translateY(0); }
         }
-        .text-reveal-1 { animation: textReveal 0.7s cubic-bezier(0.4,0,0.2,1) both 3.5s; }
-        .text-reveal-2 { animation: textReveal 0.7s cubic-bezier(0.4,0,0.2,1) both 3.7s; }
-        .text-reveal-3 { animation: textReveal 0.7s cubic-bezier(0.4,0,0.2,1) both 3.9s; }
-        .text-reveal-4 { animation: textReveal 0.7s cubic-bezier(0.4,0,0.2,1) both 4.1s; }
-        .text-reveal-5 { animation: textReveal 0.7s cubic-bezier(0.4,0,0.2,1) both 4.3s; }
+        .text-reveal-1 { animation: textReveal 0.7s cubic-bezier(0.4,0,0.2,1) both 4.2s; }
+        .text-reveal-2 { animation: textReveal 0.7s cubic-bezier(0.4,0,0.2,1) both 4.4s; }
+        .text-reveal-3 { animation: textReveal 0.7s cubic-bezier(0.4,0,0.2,1) both 4.6s; }
+        .text-reveal-4 { animation: textReveal 0.7s cubic-bezier(0.4,0,0.2,1) both 4.8s; }
+        .text-reveal-5 { animation: textReveal 0.7s cubic-bezier(0.4,0,0.2,1) both 5.0s; }
       `}</style>
 
       <div className="min-h-screen bg-[#EDE7D8] flex flex-col relative overflow-x-hidden">
@@ -117,10 +117,10 @@ export default function LandingPage() {
 
             {/* CONTENT — centered vertically, text left */}
             <div className="relative z-10 flex-1 flex items-center px-8 md:px-14 py-16">
-              <div className="flex flex-col justify-center max-w-xl">
+              <div className="flex flex-col justify-center items-center text-center w-full max-w-2xl mx-auto">
 
                 {/* Eyebrow */}
-                <div className="text-reveal-1 inline-flex items-center gap-2 bg-[#EAF1EC] border border-[#C8D8C0] text-[#1B3828] text-xs font-semibold px-4 py-1.5 rounded-full mb-6 w-fit tracking-wide" style={{ opacity: 0 }}>
+                <div className="text-reveal-1 inline-flex items-center gap-2 bg-[#EAF1EC] border border-[#C8D8C0] text-[#1B3828] text-xs font-semibold px-4 py-1.5 rounded-full mb-6 w-fit tracking-wide mx-auto" style={{ opacity: 0 }}>
                   <span className="w-1.5 h-1.5 rounded-full bg-[#3D7A52] animate-pulse shrink-0" />
                   Free to use · No account needed
                 </div>
@@ -133,21 +133,21 @@ export default function LandingPage() {
                 </h1>
 
                 {/* Subtitle */}
-                <p className="text-reveal-3 text-[#3D2E22] text-lg max-w-md mb-10 leading-relaxed font-medium" style={{ opacity: 0 }}>
+                <p className="text-reveal-3 text-[#3D2E22] text-lg max-w-lg mb-10 leading-relaxed font-medium" style={{ opacity: 0 }}>
                   Gavelling gives chairs everything they need — from roll call to final voting.
                 </p>
 
                 {/* CTA */}
                 <button
                   onClick={() => router.push('/create')}
-                  className="text-reveal-4 bg-[#1B3828] hover:bg-[#2A5A3C] active:scale-[0.98] text-[#EED98A] px-10 py-5 rounded-2xl font-black text-xl transition-all shadow-lg shadow-[#1B3828]/20 mb-8 w-fit"
+                  className="text-reveal-4 bg-[#1B3828] hover:bg-[#2A5A3C] active:scale-[0.98] text-[#EED98A] px-10 py-5 rounded-2xl font-black text-xl transition-all shadow-lg shadow-[#1B3828]/20 mb-8 w-fit mx-auto"
                   style={{ opacity: 0 }}
                 >
                   Start Your Committee →
                 </button>
 
                 {/* Join input */}
-                <div className="text-reveal-5 flex flex-col gap-2 w-fit" style={{ opacity: 0 }}>
+                <div className="text-reveal-5 flex flex-col gap-2 w-fit items-center" style={{ opacity: 0 }}>
                   <p className="text-xs text-[#6A5A4A] tracking-[0.16em] uppercase font-semibold" style={{ fontFamily: "'DM Mono', monospace" }}>Join a Session</p>
                   <div className="flex gap-2">
                     <input
