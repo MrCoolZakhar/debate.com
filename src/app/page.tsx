@@ -38,8 +38,8 @@ export default function LandingPage() {
         .hero-4 { animation: fadeUp 0.55s cubic-bezier(0.4,0,0.2,1) both 0.42s; }
         .hero-5 { animation: fadeUp 0.55s cubic-bezier(0.4,0,0.2,1) both 0.54s; }
         @keyframes gavelFadeIn {
-          0%   { opacity: 0; transform: translateX(calc(28% + 280px)) translateY(12%); }
-          100% { opacity: 1; transform: translateX(28%) translateY(12%); }
+          0%   { opacity: 0; transform: translateX(120px) translateY(-52%); }
+          100% { opacity: 1; transform: translateX(0) translateY(-52%); }
         }
       `}</style>
 
@@ -131,19 +131,22 @@ export default function LandingPage() {
             </div>
 
             {/* RIGHT — gavel */}
-            <div className="absolute right-0 top-0 bottom-0 w-[58%] flex items-center justify-end overflow-visible pointer-events-none">
+            <div className="absolute inset-0 pointer-events-none overflow-hidden">
               <img
                 src="/GAVELLING__1_.png"
                 alt="Gavelling gavel"
                 draggable={false}
-                className="select-none"
+                className="select-none absolute"
                 style={{
                   mixBlendMode: 'multiply',
                   filter: 'drop-shadow(0 24px 64px rgba(27,56,40,0.12))',
-                  width: '95vw',
-                  maxWidth: '1100px',
-                  height: 'auto',
-                  transform: 'translateX(28%) translateY(12%)',
+                  width: '780px',
+                  height: '780px',
+                  maxWidth: 'none',
+                  objectFit: 'contain',
+                  right: '-80px',
+                  top: '50%',
+                  transform: 'translateY(-52%)',
                   animation: 'gavelFadeIn 0.9s cubic-bezier(0.25, 0.46, 0.45, 0.94) both 0.3s',
                 }}
               />
