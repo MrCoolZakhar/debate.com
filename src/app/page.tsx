@@ -131,7 +131,7 @@ export default function LandingPage() {
                 </div>
 
                 {/* Title */}
-                <h1 className="text-reveal-2 font-black tracking-tight text-[#1C1410] leading-[0.95] mb-4 uppercase text-center" style={{ fontSize: 'clamp(36px, 4.8vw, 72px)', opacity: 0 }}>
+                <h1 className="text-reveal-2 font-black tracking-wide text-[#1C1410] leading-[0.95] mb-4 uppercase text-center" style={{ fontSize: 'clamp(36px, 4.8vw, 72px)', opacity: 0 }}>
                   Run Your Committee<br />
                   <span className="text-[#B6871F]">with Confidence</span>
                 </h1>
@@ -145,7 +145,7 @@ export default function LandingPage() {
                   borderRadius: '12px',
                   padding: '10px 20px',
                 }}>
-                  Gavelling gives chairs everything they need — from roll call to final voting.
+                  Gavelling gives chairs everything they need —<br />from roll call to final voting.
                 </p>
 
                 {/* CTA */}
