@@ -132,7 +132,7 @@ export default function LandingPage() {
                 </h1>
 
                 {/* Subtitle */}
-                <p className="text-reveal-3 text-[#3D2E22] text-lg max-w-lg mb-6 leading-relaxed font-medium" style={{ opacity: 0 }}>
+                <p className="text-reveal-3 text-[#FAF8F3] text-lg max-w-lg mb-6 leading-relaxed font-medium" style={{ opacity: 0 }}>
                   Gavelling gives chairs everything they need — from roll call to final voting.
                 </p>
 
