@@ -96,7 +96,7 @@ export default function LandingPage() {
           {/* Nav */}
           <nav className="relative z-20 flex items-center justify-between px-8 md:px-14 py-5">
             {/* Logo — left */}
-            <img src="/gavelling-logo.png" alt="Gavelling" className="h-10 w-auto object-contain" />
+            <img src="/GavellingSessionsApp.png" alt="Gavelling" className="h-10 w-auto object-contain" />
             {/* Nav links — right */}
             <div className="flex items-center gap-8">
               <a href="#sessions" className="text-[#1C1410] font-medium text-sm hover:text-[#1B3828] transition-colors tracking-wide">Sessions</a>
@@ -258,7 +258,7 @@ export default function LandingPage() {
           {/* Footer */}
           <footer className="relative z-10 border-t border-[#DDD4C0] bg-[#EDE7D8] px-6 py-8 flex flex-col md:flex-row items-center justify-between gap-4">
             <img
-              src="/gavelling-logo.png"
+              src="/GavellingSessionsApp.png"
               alt="Gavelling"
               className="h-7 w-auto"
               style={{ filter: 'brightness(0) saturate(100%) invert(18%) sepia(25%) saturate(800%) hue-rotate(100deg) brightness(85%)' }}
