@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 const steps = [
@@ -12,35 +12,6 @@ const steps = [
 export default function LandingPage() {
   const router = useRouter();
   const [joinCode, setJoinCode] = useState('');
-  const greenSectionRef = useRef<HTMLElement>(null);
-  const [sectionOffset, setSectionOffset] = useState(0);
-
-  useEffect(() => {
-    const handleScroll = () => {
-      if (!greenSectionRef.current) return;
-      const rect = greenSectionRef.current.getBoundingClientRect();
-      const windowHeight = window.innerHeight;
-
-      // Only start expanding when the green section's TOP is at 40% of viewport height
-      // meaning user has scrolled well past it
-      const triggerPoint = windowHeight * 0.4;
-
-      if (rect.top < triggerPoint) {
-        // How far past the trigger point we've scrolled
-        const progress = Math.max(0, triggerPoint - rect.top);
-        // Max expansion = full viewport height to cover all ivory
-        const maxExpansion = windowHeight * 0.85;
-        // Expand over 600px of scroll for smooth effect
-        const offset = Math.min((progress / 600) * maxExpansion, maxExpansion);
-        setSectionOffset(offset);
-      } else {
-        setSectionOffset(0);
-      }
-    };
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
   const handleJoin = () => {
     const code = joinCode.trim().toUpperCase();
     if (code.length >= 4) {
@@ -215,8 +186,8 @@ export default function LandingPage() {
           </section>
 
           {/* How it works */}
-          <section ref={greenSectionRef} className="relative z-10 border-t border-[#DDD4C0] bg-[#1B3828] px-6" style={{ marginTop: `-${sectionOffset}px`, paddingTop: `calc(72px + ${sectionOffset}px)`, paddingBottom: '72px', transition: 'margin-top 0.1s ease-out, padding-top 0.1s ease-out' }}>
-            <div style={{ transform: `translateY(-${sectionOffset}px)`, transition: 'transform 0.1s ease-out' }}>
+          <section className="relative z-10 bg-[#1B3828] pt-24 pb-20 px-6" style={{ clipPath: 'polygon(0 40px, 50% 0, 100% 40px, 100% 100%, 0 100%)' }}>
+            <div>
               <div className="max-w-4xl mx-auto">
                 <div className="text-center mb-14">
                   <h2 className="text-5xl font-black text-white mb-4 uppercase tracking-wider">Up and Running in Minutes</h2>
@@ -261,7 +232,7 @@ export default function LandingPage() {
           </section>
 
           {/* Footer */}
-          <footer className="relative z-10 border-t border-[#DDD4C0] bg-[#EDE7D8] px-6 py-8 flex flex-col md:flex-row items-center justify-between gap-4" style={{ transform: `translateY(-${sectionOffset}px)`, transition: 'transform 0.1s ease-out' }}>
+          <footer className="relative z-10 border-t border-[#DDD4C0] bg-[#EDE7D8] px-6 py-8 flex flex-col md:flex-row items-center justify-between gap-4">
             <img
               src="/gavelling-logo.png"
               alt="Gavelling"
