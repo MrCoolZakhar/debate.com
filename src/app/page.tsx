@@ -152,7 +152,7 @@ export default function LandingPage() {
               <div className="flex flex-col justify-center items-center text-center w-full max-w-2xl mx-auto">
 
                 {/* Title */}
-                <h1 className="font-black tracking-tight text-white leading-[1.05] mb-5 text-center whitespace-nowrap" style={{ fontSize: 'clamp(120px, 18vw, 220px)' }}>
+                <h1 className="font-black tracking-tight text-white leading-[1.05] mb-5 text-center whitespace-nowrap" style={{ fontSize: 'clamp(90px, 13.5vw, 165px)' }}>
                   MUN done{' '}
                   <span
                     style={{
