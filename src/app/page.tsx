@@ -80,7 +80,7 @@ export default function LandingPage() {
         .text-reveal-5 { animation: textReveal 0.7s cubic-bezier(0.4,0,0.2,1) both 4.1s; }
       `}</style>
 
-      <div className="min-h-screen bg-[#EDE7D8] flex flex-col relative overflow-x-hidden">
+      <div className="min-h-screen bg-[#EDE7D8] flex flex-col relative overflow-hidden">
         <div className="relative z-10 flex flex-col min-h-screen">
           {/* Grain overlay */}
           <div
@@ -216,50 +216,52 @@ export default function LandingPage() {
 
           {/* How it works */}
           <section ref={greenSectionRef} className="relative z-10 border-t border-[#DDD4C0] bg-[#1B3828] px-6" style={{ marginTop: `-${sectionOffset}px`, paddingTop: `calc(72px + ${sectionOffset}px)`, paddingBottom: '72px', transition: 'margin-top 0.1s ease-out, padding-top 0.1s ease-out' }}>
-            <div className="max-w-4xl mx-auto">
-              <div className="text-center mb-14">
-                <h2 className="text-5xl font-black text-white mb-4 uppercase tracking-wider">Up and Running in Minutes</h2>
-                <p className="text-[#EED98A]/70 text-lg mb-4">No downloads, no setup. Just open your browser and start chairing.</p>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-[#B6871F]/30 w-full max-w-6xl mx-auto mt-16">
-                {steps.map((s) => (
-                  <div key={s.step} className="text-center px-16 py-8 group relative overflow-hidden cursor-default flex flex-col items-center">
+            <div style={{ transform: `translateY(-${sectionOffset}px)`, transition: 'transform 0.1s ease-out' }}>
+              <div className="max-w-4xl mx-auto">
+                <div className="text-center mb-14">
+                  <h2 className="text-5xl font-black text-white mb-4 uppercase tracking-wider">Up and Running in Minutes</h2>
+                  <p className="text-[#EED98A]/70 text-lg mb-4">No downloads, no setup. Just open your browser and start chairing.</p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-[#B6871F]/30 w-full max-w-6xl mx-auto mt-16">
+                  {steps.map((s) => (
+                    <div key={s.step} className="text-center px-16 py-8 group relative overflow-hidden cursor-default flex flex-col items-center">
 
-                    {/* LIMELIGHT — sits at very top of card */}
-                    <div className="relative w-full flex justify-center mb-2 h-8">
-                      {/* The light bar */}
-                      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-16 h-1.5 rounded-full bg-[#B6871F] opacity-0 group-hover:opacity-100 transition-all duration-300 shadow-[0_0_20px_6px_rgba(182,135,31,0.5)]" />
-                      {/* Round trapezoid beam — wide at bottom, narrow at top */}
-                      <div
-                        className="absolute top-1.5 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-all duration-500"
-                        style={{
-                          width: '180px',
-                          height: '120px',
-                          background: 'linear-gradient(to bottom, rgba(182,135,31,0.25) 0%, transparent 100%)',
-                          clipPath: 'polygon(30% 0%, 70% 0%, 100% 100%, 0% 100%)',
-                          borderRadius: '0 0 50% 50%',
-                          filter: 'blur(8px)',
-                        }}
-                      />
+                      {/* LIMELIGHT — sits at very top of card */}
+                      <div className="relative w-full flex justify-center mb-2 h-8">
+                        {/* The light bar */}
+                        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-16 h-1.5 rounded-full bg-[#B6871F] opacity-0 group-hover:opacity-100 transition-all duration-300 shadow-[0_0_20px_6px_rgba(182,135,31,0.5)]" />
+                        {/* Round trapezoid beam — wide at bottom, narrow at top */}
+                        <div
+                          className="absolute top-1.5 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-all duration-500"
+                          style={{
+                            width: '180px',
+                            height: '120px',
+                            background: 'linear-gradient(to bottom, rgba(182,135,31,0.25) 0%, transparent 100%)',
+                            clipPath: 'polygon(30% 0%, 70% 0%, 100% 100%, 0% 100%)',
+                            borderRadius: '0 0 50% 50%',
+                            filter: 'blur(8px)',
+                          }}
+                        />
+                      </div>
+
+                      {/* Step number */}
+                      <div className="text-7xl font-black text-[#2A5A3C]/40 mb-6 transition-all duration-300 group-hover:text-[#B6871F]/60 group-hover:scale-110 leading-none">{s.step}</div>
+
+                      {/* Step title */}
+                      <h3 className="text-2xl font-black text-white mb-4 uppercase tracking-wider">{s.title}</h3>
+
+                      {/* Description — hidden until hover, slides up */}
+                      <p className="text-[#EED98A] text-base leading-relaxed opacity-0 group-hover:opacity-100 transition-all duration-400 transform translate-y-3 group-hover:translate-y-0 max-w-xs mx-auto">{s.desc}</p>
+
                     </div>
-
-                    {/* Step number */}
-                    <div className="text-7xl font-black text-[#2A5A3C]/40 mb-6 transition-all duration-300 group-hover:text-[#B6871F]/60 group-hover:scale-110 leading-none">{s.step}</div>
-
-                    {/* Step title */}
-                    <h3 className="text-2xl font-black text-white mb-4 uppercase tracking-wider">{s.title}</h3>
-
-                    {/* Description — hidden until hover, slides up */}
-                    <p className="text-[#EED98A] text-base leading-relaxed opacity-0 group-hover:opacity-100 transition-all duration-400 transform translate-y-3 group-hover:translate-y-0 max-w-xs mx-auto">{s.desc}</p>
-
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             </div>
           </section>
 
           {/* Footer */}
-          <footer className="relative z-10 border-t border-[#DDD4C0] bg-[#EDE7D8] px-6 py-8 flex flex-col md:flex-row items-center justify-between gap-4">
+          <footer className="relative z-10 border-t border-[#DDD4C0] bg-[#EDE7D8] px-6 py-8 flex flex-col md:flex-row items-center justify-between gap-4" style={{ transform: `translateY(-${sectionOffset}px)`, transition: 'transform 0.1s ease-out' }}>
             <img
               src="/gavelling-logo.png"
               alt="Gavelling"
