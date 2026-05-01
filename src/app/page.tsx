@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
 const steps = [
@@ -23,6 +23,22 @@ export default function LandingPage() {
       }
     }
   };
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('visible');
+            observer.unobserve(entry.target);
+          }
+        });
+      },
+      { threshold: 0.15 }
+    );
+    document.querySelectorAll('.scroll-reveal').forEach((el) => observer.observe(el));
+    return () => observer.disconnect();
+  }, []);
 
   return (
     <>
@@ -49,6 +65,18 @@ export default function LandingPage() {
         .text-reveal-3 { animation: textReveal 0.7s cubic-bezier(0.4,0,0.2,1) both 3.8s; }
         .text-reveal-4 { animation: textReveal 0.7s cubic-bezier(0.4,0,0.2,1) both 4.05s; }
         .text-reveal-5 { animation: textReveal 0.7s cubic-bezier(0.4,0,0.2,1) both 4.1s; }
+        @keyframes fadeInUp {
+          from { opacity: 0; transform: translateY(32px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        .scroll-reveal {
+          opacity: 0;
+        }
+        .scroll-reveal.visible {
+          animation: fadeInUp 0.7s cubic-bezier(0.4, 0, 0.2, 1) both;
+        }
+        .scroll-reveal.visible:nth-child(2) { animation-delay: 0.1s; }
+        .scroll-reveal.visible:nth-child(3) { animation-delay: 0.2s; }
       `}</style>
 
       <div className="min-h-screen bg-[#EDE7D8] flex flex-col relative overflow-hidden">
@@ -186,16 +214,16 @@ export default function LandingPage() {
           </section>
 
           {/* How it works */}
-          <section className="relative z-10 bg-[#1B3828] pt-24 pb-20 px-6" style={{ clipPath: 'polygon(0 40px, 50% 0, 100% 40px, 100% 100%, 0 100%)' }}>
+          <section className="relative z-10 bg-[#1B3828] pt-24 pb-20 px-6" style={{ marginTop: '-2px', borderRadius: '40px 40px 0 0' }}>
             <div>
               <div className="max-w-4xl mx-auto">
                 <div className="text-center mb-14">
-                  <h2 className="text-5xl font-black text-white mb-4 uppercase tracking-wider">Up and Running in Minutes</h2>
-                  <p className="text-[#EED98A]/70 text-lg mb-4">No downloads, no setup. Just open your browser and start chairing.</p>
+                  <h2 className="scroll-reveal text-5xl font-black text-white mb-4 uppercase tracking-wider">Up and Running in Minutes</h2>
+                  <p className="scroll-reveal text-[#EED98A]/70 text-lg mb-4">No downloads, no setup. Just open your browser and start chairing.</p>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-[#B6871F]/30 w-full max-w-6xl mx-auto mt-16">
                   {steps.map((s) => (
-                    <div key={s.step} className="text-center px-16 py-8 group relative overflow-hidden cursor-default flex flex-col items-center">
+                    <div key={s.step} className="scroll-reveal text-center px-16 py-8 group relative overflow-hidden cursor-default flex flex-col items-center">
 
                       {/* LIMELIGHT — sits at very top of card */}
                       <div className="relative w-full flex justify-center mb-2 h-8">
