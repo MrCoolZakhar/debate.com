@@ -154,7 +154,7 @@ export default function LandingPage() {
             className="absolute inset-0 w-full h-full object-cover"
             style={{ objectPosition: 'center center' }}
           >
-            <source src="/hero-video.mp4" type="video/mp4" />
+            <source src="/hero_no_audio.mp4" type="video/mp4" />
           </video>
         </div>
 
