@@ -55,7 +55,7 @@ export default function LandingPage() {
             style={{
               fontFamily: "'Montserrat', sans-serif",
               fontWeight: 900,
-              fontSize: 'clamp(200px, 26vw, 340px)',
+              fontSize: 'clamp(72px, 9vw, 118px)',
               color: '#1B4D2E',
               textShadow: '0 0 80px rgba(27, 77, 46, 0.25), 0 0 160px rgba(27, 77, 46, 0.12)',
               letterSpacing: '-0.02em',
@@ -63,7 +63,7 @@ export default function LandingPage() {
           >
             A NEW<br />
             WAY TO<br />
-            do MUN
+            DO MUN
           </h1>
 
           {/* Primary CTA */}
