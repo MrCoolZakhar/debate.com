@@ -151,17 +151,19 @@ export default function LandingPage() {
             <div className="relative z-10 flex items-center px-8 md:px-14">
               <div className="flex flex-col justify-center items-center text-center w-full max-w-2xl mx-auto">
 
-                {/* Eyebrow */}
-                <div className="text-reveal-1 inline-flex items-center gap-2 bg-[#EAF1EC] border border-[#C8D8C0] text-[#1B3828] text-xs font-semibold px-4 py-1.5 rounded-full mb-4 w-fit tracking-wide mx-auto" style={{ opacity: 0 }}>
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#3D7A52] animate-pulse shrink-0" />
-                  Free to use · No account needed
-                </div>
-
                 {/* Title */}
-                <h1 className="text-reveal-2 font-black tracking-wide text-[#1C1410] leading-[0.95] mb-4 uppercase text-center" style={{ fontSize: 'clamp(32px, 4.2vw, 64px)', opacity: 0 }}>
-                  Run Your<br />
-                  Committee<br />
-                  <span className="text-[#B6871F]">with Confidence</span>
+                <h1 className="text-reveal-2 text-5xl md:text-6xl font-black tracking-tight text-white leading-[1.05] mb-5 text-center whitespace-nowrap" style={{ opacity: 0 }}>
+                  MUN Done{' '}
+                  <span
+                    style={{
+                      fontFamily: "'Playfair Display', serif",
+                      fontStyle: 'italic',
+                      fontWeight: 400,
+                      color: '#B8844A',
+                    }}
+                  >
+                    right.
+                  </span>
                 </h1>
 
                 {/* Subtitle */}
@@ -173,7 +175,7 @@ export default function LandingPage() {
                   borderRadius: '12px',
                   padding: '10px 20px',
                 }}>
-                  Gavelling gives chairs everything they need —<br />from roll call to final voting.
+                  The most user-friendly way to run your MUN committee.
                 </p>
 
                 {/* CTA */}
@@ -262,7 +264,7 @@ export default function LandingPage() {
           {/* Footer */}
           <footer className="relative z-10 border-t border-[#DDD4C0] bg-[#EDE7D8] px-6 py-8 flex flex-col md:flex-row items-center justify-between gap-4">
             <img
-              src="/gavelling-logo.png"
+              src="/GavellingSessionsApp.png"
               alt="Gavelling"
               className="h-7 w-auto"
               style={{ filter: 'brightness(0) saturate(100%) invert(18%) sepia(25%) saturate(800%) hue-rotate(100deg) brightness(85%)' }}
