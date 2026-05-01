@@ -28,8 +28,10 @@ export default function LandingPage() {
       if (rect.top < triggerPoint) {
         // How far past the trigger point we've scrolled
         const progress = Math.max(0, triggerPoint - rect.top);
-        // Very slow expansion — max 60px, requires 300px of scroll past trigger
-        const offset = Math.min((progress / 300) * 60, 60);
+        // Max expansion = full viewport height to cover all ivory
+        const maxExpansion = windowHeight * 0.85;
+        // Expand over 600px of scroll for smooth effect
+        const offset = Math.min((progress / 600) * maxExpansion, maxExpansion);
         setSectionOffset(offset);
       } else {
         setSectionOffset(0);
@@ -213,7 +215,7 @@ export default function LandingPage() {
           </section>
 
           {/* How it works */}
-          <section ref={greenSectionRef} className="relative z-10 border-t border-[#DDD4C0] bg-[#1B3828] pb-20 px-6" style={{ marginTop: `-${sectionOffset}px`, paddingTop: `calc(80px + ${sectionOffset}px)`, transition: 'margin-top 0.1s ease-out, padding-top 0.1s ease-out' }}>
+          <section ref={greenSectionRef} className="relative z-10 border-t border-[#DDD4C0] bg-[#1B3828] px-6" style={{ marginTop: `-${sectionOffset}px`, paddingTop: `calc(72px + ${sectionOffset}px)`, paddingBottom: '72px', transition: 'margin-top 0.1s ease-out, padding-top 0.1s ease-out' }}>
             <div className="max-w-4xl mx-auto">
               <div className="text-center mb-14">
                 <h2 className="text-5xl font-black text-white mb-4 uppercase tracking-wider">Up and Running in Minutes</h2>
@@ -221,10 +223,10 @@ export default function LandingPage() {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-[#B6871F]/30 w-full max-w-6xl mx-auto mt-16">
                 {steps.map((s) => (
-                  <div key={s.step} className="text-center px-16 py-10 group relative overflow-hidden cursor-default flex flex-col items-center">
+                  <div key={s.step} className="text-center px-16 py-8 group relative overflow-hidden cursor-default flex flex-col items-center">
 
                     {/* LIMELIGHT — sits at very top of card */}
-                    <div className="relative w-full flex justify-center mb-2 h-12">
+                    <div className="relative w-full flex justify-center mb-2 h-8">
                       {/* The light bar */}
                       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-16 h-1.5 rounded-full bg-[#B6871F] opacity-0 group-hover:opacity-100 transition-all duration-300 shadow-[0_0_20px_6px_rgba(182,135,31,0.5)]" />
                       {/* Round trapezoid beam — wide at bottom, narrow at top */}
@@ -242,7 +244,7 @@ export default function LandingPage() {
                     </div>
 
                     {/* Step number */}
-                    <div className="text-8xl font-black text-[#2A5A3C]/40 mb-6 transition-all duration-300 group-hover:text-[#B6871F]/60 group-hover:scale-110 leading-none">{s.step}</div>
+                    <div className="text-7xl font-black text-[#2A5A3C]/40 mb-6 transition-all duration-300 group-hover:text-[#B6871F]/60 group-hover:scale-110 leading-none">{s.step}</div>
 
                     {/* Step title */}
                     <h3 className="text-2xl font-black text-white mb-4 uppercase tracking-wider">{s.title}</h3>
