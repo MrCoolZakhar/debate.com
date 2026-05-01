@@ -145,7 +145,7 @@ export default function LandingPage() {
         </div>
 
         {/* Right — video */}
-        <div className="flex-1 relative overflow-hidden" style={{ backgroundColor: '#EDEAE4' }}>
+        <div className="flex-1 relative overflow-hidden">
           <video
             autoPlay
             muted
