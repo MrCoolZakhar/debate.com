@@ -26,18 +26,18 @@ export default function LandingPage() {
       style={{ backgroundColor: '#EDEAE4', fontFamily: "'Montserrat', sans-serif" }}
     >
       {/* Nav */}
-      <nav className="relative z-20 flex items-center justify-between px-10 py-5">
+      <nav className="relative z-20 flex items-center justify-between px-10 py-5" style={{ borderBottom: '1px solid rgba(0, 0, 0, 0.12)' }}>
         <img
           src="/GavellingSessionsApp.png"
           alt="Gavelling Sessions App"
           className="h-16 w-auto object-contain"
         />
-        <div className="flex items-center gap-10">
+        <div className="flex items-center gap-12">
           {['Conferences', 'About Us', 'Contact'].map((item) => (
             <span
               key={item}
               className="text-[#2C2C2C] font-semibold text-lg cursor-pointer hover:text-[#1B4D2E] transition-colors"
-              style={{ fontFamily: 'system-ui, sans-serif', fontWeight: 600 }}
+              style={{ fontFamily: 'system-ui, sans-serif', fontWeight: 600, letterSpacing: '0.01em' }}
             >
               {item}
             </span>
@@ -63,7 +63,7 @@ export default function LandingPage() {
           >
             A NEW<br />
             WAY TO<br />
-            DO MUN
+            DO <span style={{ textDecoration: 'underline', textDecorationColor: '#000000', textUnderlineOffset: '6px', textDecorationThickness: '6px' }}>MUN</span>
           </h1>
 
           {/* Primary CTA */}
@@ -145,14 +145,18 @@ export default function LandingPage() {
         </div>
 
         {/* Right — video */}
-        <div className="flex-1 relative overflow-hidden">
+        <div className="flex-1 relative overflow-hidden" style={{ backgroundColor: '#EDEAE4' }}>
           <video
             autoPlay
-            loop
             muted
             playsInline
             className="absolute inset-0 w-full h-full object-cover"
             style={{ objectPosition: 'center center' }}
+            onEnded={(e) => {
+              const video = e.currentTarget;
+              video.currentTime = video.duration - 0.001;
+              video.pause();
+            }}
           >
             <source src="/hero-video.mp4" type="video/mp4" />
           </video>
