@@ -52,7 +52,7 @@ function CommitteeMockup() {
   const barColor = timerSecs <= 10 ? '#8B2020' : timerSecs <= 30 ? '#B6871F' : '#3D7A52';
 
   return (
-    <div className="w-full max-w-sm bg-[#FAF8F3] rounded-2xl border border-[#DDD4C0] overflow-hidden select-none"
+    <div className="w-full max-w-full bg-[#FAF8F3] rounded-2xl border border-[#DDD4C0] overflow-hidden select-none"
       style={{ boxShadow: '0 24px 64px rgba(27,56,40,0.14)' }}>
 
       {/* Header */}
@@ -388,40 +388,40 @@ export default function LandingPage() {
 
           {/* ── LIVE COMMITTEE MOCKUP SECTION ── */}
           <section className="relative z-10 bg-[#EDE7D8] px-8 md:px-20 py-24 scroll-reveal">
-            <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center gap-16">
+            <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center gap-12">
 
               {/* LEFT — text */}
-              <div className="flex-1 flex flex-col justify-center max-w-lg">
+              <div className="flex-1 flex flex-col justify-center max-w-md">
                 <div className="inline-flex items-center gap-2 bg-[#EAF1EC] border border-[#C8D8C0] text-[#1B3828] text-xs font-semibold px-4 py-1.5 rounded-full mb-6 w-fit tracking-widest uppercase" style={{ fontFamily: "'DM Mono', monospace" }}>
                   <span className="w-1.5 h-1.5 rounded-full bg-[#3D7A52]" />
                   Built for Chairs
                 </div>
-                <h2 className="font-black text-[#1C1410] uppercase tracking-wide leading-tight mb-5" style={{ fontSize: 'clamp(28px, 3.5vw, 52px)' }}>
-                  Everything chairs need<br />
-                  <span className="text-[#1B3828]">to run committees.</span>
+                <h2 className="font-black uppercase tracking-wide leading-tight mb-5" style={{ fontSize: 'clamp(28px, 3.5vw, 52px)' }}>
+                  <span className="text-[#1B3828]">Everything chairs need</span><br />
+                  <span className="text-[#B8844A]">to run committees.</span>
                 </h2>
                 <p className="text-[#6A5A4A] text-base mb-10 leading-relaxed">
                   One dashboard. Every tool. From the opening gavel to the final vote.
                 </p>
                 <div className="grid grid-cols-2 gap-3">
                   {[
-                    { icon: <Mic size={16} className="text-[#1B3828]" />, label: 'Roll Call' },
-                    { icon: <Scale size={16} className="text-[#1B3828]" />, label: 'Motions & Voting' },
-                    { icon: <List size={16} className="text-[#1B3828]" />, label: 'Speakers List' },
-                    { icon: <FileText size={16} className="text-[#1B3828]" />, label: 'Document Upload' },
-                    { icon: <MessageSquare size={16} className="text-[#1B3828]" />, label: 'Live Chat' },
-                    { icon: <Save size={16} className="text-[#1B3828]" />, label: 'Saved Sessions' },
+                    { icon: <Mic size={16} className="text-[#EED98A]" />, label: 'Roll Call' },
+                    { icon: <Scale size={16} className="text-[#EED98A]" />, label: 'Motions & Voting' },
+                    { icon: <List size={16} className="text-[#EED98A]" />, label: 'Speakers List' },
+                    { icon: <FileText size={16} className="text-[#EED98A]" />, label: 'Document Upload' },
+                    { icon: <MessageSquare size={16} className="text-[#EED98A]" />, label: 'Live Chat' },
+                    { icon: <Save size={16} className="text-[#EED98A]" />, label: 'Saved Sessions' },
                   ].map((f) => (
-                    <div key={f.label} className="flex items-center gap-3 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3 hover:border-[#1B3828] transition-colors">
+                    <div key={f.label} className="flex items-center gap-3 bg-[#1B3828] border border-[#1B3828] rounded-xl px-4 py-3 hover:bg-[#2A5A3C] transition-colors">
                       <span className="flex items-center justify-center w-5 h-5">{f.icon}</span>
-                      <span className="text-xs font-bold text-[#1C1410] uppercase tracking-wide">{f.label}</span>
+                      <span className="text-xs font-bold text-[#EED98A] uppercase tracking-wide">{f.label}</span>
                     </div>
                   ))}
                 </div>
               </div>
 
               {/* RIGHT — animated committee mockup */}
-              <div className="flex-1 flex justify-center">
+              <div className="flex-1 flex justify-center items-stretch">
                 <CommitteeMockup />
               </div>
 
