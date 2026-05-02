@@ -275,6 +275,100 @@ export default function LandingPage() {
             </div>
           </section>
 
+          {/* ── FEATURES PREVIEW SECTION ── */}
+          <section className="relative z-10 bg-[#EDE7D8] px-8 md:px-20 py-24 scroll-reveal">
+            <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center gap-16">
+
+              {/* LEFT — text */}
+              <div className="flex-1 flex flex-col justify-center">
+
+                {/* Eyebrow */}
+                <div className="inline-flex items-center gap-2 bg-[#EAF1EC] border border-[#C8D8C0] text-[#1B3828] text-xs font-semibold px-4 py-1.5 rounded-full mb-6 w-fit tracking-widest uppercase" style={{ fontFamily: "'DM Mono', monospace" }}>
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#3D7A52]" />
+                  Built for Chairs
+                </div>
+
+                {/* Heading */}
+                <h2 className="font-black text-[#1C1410] uppercase tracking-wide leading-tight mb-4" style={{ fontSize: 'clamp(28px, 3.5vw, 52px)' }}>
+                  Everything chairs need<br />
+                  <span className="text-[#1B3828]">to run committees.</span>
+                </h2>
+
+                {/* Subtitle */}
+                <p className="text-[#6A5A4A] text-base mb-10 leading-relaxed max-w-sm">
+                  One dashboard. Every tool. From the opening gavel to the final vote.
+                </p>
+
+                {/* Feature pills */}
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { icon: '🎙️', label: 'Roll Call' },
+                    { icon: '⚖️', label: 'Motions & Voting' },
+                    { icon: '📋', label: 'Speakers List' },
+                    { icon: '📄', label: 'Document Upload' },
+                    { icon: '💬', label: 'Live Chat' },
+                    { icon: '💾', label: 'Saved Sessions' },
+                  ].map((f) => (
+                    <div key={f.label} className="flex items-center gap-3 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3">
+                      <span className="text-lg">{f.icon}</span>
+                      <span className="text-sm font-semibold text-[#1C1410] uppercase tracking-wide">{f.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* RIGHT — committee UI preview */}
+              <div className="flex-1 flex justify-center">
+                <div className="w-full max-w-md bg-[#FAF8F3] rounded-2xl border border-[#DDD4C0] overflow-hidden" style={{ boxShadow: '0 20px 60px rgba(27,56,40,0.12)' }}>
+
+                  {/* Preview header */}
+                  <div className="bg-[#1B3828] px-5 py-4 flex items-center justify-between">
+                    <div>
+                      <p className="text-[#EED98A]/60 text-[10px] font-mono tracking-widest uppercase mb-0.5">Security Council — Live</p>
+                      <p className="text-[#EED98A] text-sm font-bold uppercase tracking-wide">Nuclear Non-Proliferation</p>
+                    </div>
+                    <div className="bg-[#3D7A52] text-white text-[9px] font-mono tracking-widest px-2.5 py-1 rounded-full uppercase">Active</div>
+                  </div>
+
+                  {/* Current speaker */}
+                  <div className="px-5 py-4 border-b border-[#DDD4C0]">
+                    <p className="text-[#9A8A78] text-[10px] font-mono tracking-widest uppercase mb-3">Currently Speaking</p>
+                    <div className="bg-[#1B3828] rounded-xl px-4 py-3 flex items-center gap-3 mb-3">
+                      <div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center text-lg flex-shrink-0">🇫🇷</div>
+                      <div className="flex-1">
+                        <p className="text-[#EED98A] font-bold text-sm uppercase">France</p>
+                        <p className="text-[#EED98A]/50 text-[10px] font-mono">GSL · Speaker 2 of 7</p>
+                      </div>
+                      <p className="text-[#EED98A] font-mono text-2xl font-bold">1:18</p>
+                    </div>
+                    <div className="h-1.5 bg-[#DDD4C0] rounded-full overflow-hidden">
+                      <div className="h-full w-[62%] bg-[#1B3828] rounded-full" />
+                    </div>
+                  </div>
+
+                  {/* Queue */}
+                  <div className="px-5 py-4">
+                    <p className="text-[#9A8A78] text-[10px] font-mono tracking-widest uppercase mb-3">Up Next</p>
+                    <div className="flex flex-col gap-2">
+                      {[
+                        { flag: '🇩🇪', country: 'Germany', pos: 2 },
+                        { flag: '🇧🇷', country: 'Brazil', pos: 3 },
+                        { flag: '🇮🇳', country: 'India', pos: 4 },
+                      ].map((d) => (
+                        <div key={d.country} className="flex items-center gap-3 bg-[#EDE7D8] rounded-xl px-4 py-2.5">
+                          <span className="text-[#9A8A78] font-mono text-xs w-4">{d.pos}</span>
+                          <span className="text-lg">{d.flag}</span>
+                          <span className="text-sm font-semibold text-[#1C1410] flex-1 uppercase">{d.country}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+            </div>
+          </section>
+
           {/* Footer */}
           <footer className="relative z-10 border-t border-[#DDD4C0] bg-[#EDE7D8] px-6 py-8 flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-2">
