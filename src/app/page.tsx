@@ -96,11 +96,24 @@ export default function LandingPage() {
           {/* Nav */}
           <nav className="relative z-20 flex items-center justify-between px-8 md:px-14 py-5">
             {/* Logo — left */}
-            <img src="/GavellingSessionsApp.png" alt="Gavelling" className="h-10 w-auto object-contain" />
+            <div className="flex items-center gap-2 cursor-pointer" onClick={() => router.push('/')}>
+              <img
+                src="/GAVELLING__1_.png"
+                alt="Gavelling"
+                className="w-10 h-10 object-contain"
+                style={{ mixBlendMode: 'multiply' }}
+              />
+              <div className="flex flex-col leading-none items-end">
+                <span className="font-black text-[#1B3828] text-xl tracking-tight uppercase leading-none">Gavelling</span>
+                <span className="text-[#B6871F] text-[9px] tracking-[0.14em] uppercase leading-none mt-0.5" style={{ fontFamily: "'DM Mono', monospace" }}>Sessions</span>
+              </div>
+            </div>
             {/* Nav links — right */}
             <div className="flex items-center gap-8">
-              <a href="#sessions" className="text-[#1C1410] font-medium text-sm hover:text-[#1B3828] transition-colors tracking-wide">Sessions</a>
-              <a href="#about" className="text-[#1C1410] font-medium text-sm hover:text-[#1B3828] transition-colors tracking-wide">About Us</a>
+              <a href="#conferences" className="text-[#1C1410] font-medium text-sm hover:text-[#1B3828] transition-colors tracking-wide uppercase">Conferences</a>
+              <a href="#courses" className="text-[#1C1410] font-medium text-sm hover:text-[#1B3828] transition-colors tracking-wide uppercase">Courses</a>
+              <a href="#sessions" className="text-[#1C1410] font-medium text-sm hover:text-[#1B3828] transition-colors tracking-wide uppercase">Sessions</a>
+              <a href="#about" className="text-[#1C1410] font-medium text-sm hover:text-[#1B3828] transition-colors tracking-wide uppercase">About Us</a>
             </div>
           </nav>
 
@@ -183,7 +196,7 @@ export default function LandingPage() {
 
                 {/* Join input */}
                 <div className="text-reveal-5 flex flex-col gap-2 w-fit items-center" style={{ opacity: 0 }}>
-                  <p className="text-xs text-[#6A5A4A] tracking-[0.16em] uppercase font-semibold" style={{ fontFamily: "'DM Mono', monospace" }}>Join a Session</p>
+                  <p className="text-xs text-[#EDE7D8] tracking-[0.16em] uppercase font-semibold" style={{ fontFamily: "'DM Mono', monospace" }}>Join a Session</p>
                   <div className="flex gap-2">
                     <input
                       type="text"
@@ -200,7 +213,7 @@ export default function LandingPage() {
                       disabled={joinCode.trim().length < 4}
                       className="bg-[#1B3828] hover:bg-[#2A5A3C] disabled:opacity-40 text-[#EED98A] px-5 py-3 rounded-xl font-bold text-sm transition-colors"
                     >
-                      Join →
+                      JOIN →
                     </button>
                   </div>
                 </div>
@@ -257,13 +270,18 @@ export default function LandingPage() {
 
           {/* Footer */}
           <footer className="relative z-10 border-t border-[#DDD4C0] bg-[#EDE7D8] px-6 py-8 flex flex-col md:flex-row items-center justify-between gap-4">
-            <img
-              src="/GavellingSessionsApp.png"
-              alt="Gavelling"
-              className="h-7 w-auto"
-              style={{ filter: 'brightness(0) saturate(100%) invert(18%) sepia(25%) saturate(800%) hue-rotate(100deg) brightness(85%)' }}
-              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-            />
+            <div className="flex items-center gap-2">
+              <img
+                src="/GAVELLING__1_.png"
+                alt="Gavelling"
+                className="w-8 h-8 object-contain"
+                style={{ mixBlendMode: 'multiply' }}
+              />
+              <div className="flex flex-col leading-none items-end">
+                <span className="font-black text-[#1B3828] text-base tracking-tight uppercase leading-none">Gavelling</span>
+                <span className="text-[#B6871F] text-[8px] tracking-[0.14em] uppercase leading-none mt-0.5" style={{ fontFamily: "'DM Mono', monospace" }}>Sessions</span>
+              </div>
+            </div>
             <p className="text-xs text-[#9A8A78]">
               © {new Date().getFullYear()} Gavelling. Built for the MUN community.
             </p>
