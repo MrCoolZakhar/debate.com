@@ -341,7 +341,7 @@ export default function LandingPage() {
           </section>
 
           {/* How it works */}
-          <section className="relative z-10 bg-[#1B3828] pt-24 pb-20 px-6" style={{ marginTop: '-2px', borderRadius: '40px 40px 0 0' }}>
+          <section className="relative z-10 bg-[#1B3828] pt-24 pb-20 px-6" style={{ marginTop: '-2px', borderRadius: '40px 40px 0 0', paddingBottom: '120px' }}>
             <div>
               <div className="max-w-4xl mx-auto">
                 <div className="text-center mb-14">
@@ -387,7 +387,7 @@ export default function LandingPage() {
           </section>
 
           {/* ── LIVE COMMITTEE MOCKUP SECTION ── */}
-          <section className="relative z-10 bg-[#EDE7D8] px-8 md:px-20 py-24 scroll-reveal">
+          <section className="relative z-10 bg-[#EDE7D8] px-8 md:px-20 pt-32 pb-24 scroll-reveal">
             <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-start gap-20">
 
               {/* LEFT — text */}
@@ -405,23 +405,23 @@ export default function LandingPage() {
                 </p>
                 <div className="grid grid-cols-2 gap-3">
                   {[
-                    { icon: <Mic size={16} className="text-[#EED98A]" />, label: 'Roll Call' },
-                    { icon: <Scale size={16} className="text-[#EED98A]" />, label: 'Motions & Voting' },
-                    { icon: <List size={16} className="text-[#EED98A]" />, label: 'Speakers List' },
-                    { icon: <FileText size={16} className="text-[#EED98A]" />, label: 'Document Upload' },
-                    { icon: <MessageSquare size={16} className="text-[#EED98A]" />, label: 'Live Chat' },
-                    { icon: <Save size={16} className="text-[#EED98A]" />, label: 'Saved Sessions' },
+                    { icon: <Mic size={16} className="text-[#B6871F]" />, label: 'Roll Call' },
+                    { icon: <Scale size={16} className="text-[#B6871F]" />, label: 'Motions & Voting' },
+                    { icon: <List size={16} className="text-[#B6871F]" />, label: 'Speakers List' },
+                    { icon: <FileText size={16} className="text-[#B6871F]" />, label: 'Document Upload' },
+                    { icon: <MessageSquare size={16} className="text-[#B6871F]" />, label: 'Live Chat' },
+                    { icon: <Save size={16} className="text-[#B6871F]" />, label: 'Saved Sessions' },
                   ].map((f) => (
                     <div key={f.label} className="flex items-center gap-3 bg-[#1B3828] border border-[#1B3828] rounded-xl px-4 py-3 hover:bg-[#2A5A3C] transition-colors">
                       <span className="flex items-center justify-center w-5 h-5">{f.icon}</span>
-                      <span className="text-xs font-bold text-[#EED98A] uppercase tracking-wide">{f.label}</span>
+                      <span className="text-xs font-bold text-[#B6871F] uppercase tracking-wide">{f.label}</span>
                     </div>
                   ))}
                 </div>
               </div>
 
               {/* RIGHT — animated committee mockup */}
-              <div className="flex-1 flex justify-end items-start pt-8">
+              <div className="flex-1 flex justify-end items-start pt-8 pr-0 md:pr-8">
                 <CommitteeMockup />
               </div>
 
@@ -430,9 +430,9 @@ export default function LandingPage() {
 
           {/* Footer */}
           <footer
-            className="relative z-10 border-t border-[#DDD4C0] px-6 py-8 flex flex-col md:flex-row items-center justify-between gap-4"
+            className="relative z-10 border-t border-[#EDE7D8] px-6 py-8 flex flex-col md:flex-row items-center justify-between gap-4"
             style={{
-              backgroundColor: '#EDE7D8',
+              backgroundColor: '#F6F1E9',
               backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`,
               backgroundRepeat: 'repeat',
               backgroundSize: '300px 300px',
