@@ -60,11 +60,11 @@ export default function LandingPage() {
           0%   { opacity: 0; transform: translateY(28px); }
           100% { opacity: 1; transform: translateY(0); }
         }
-        .text-reveal-1 { animation: textReveal 0.7s cubic-bezier(0.4,0,0.2,1) both 3.3s; }
-        .text-reveal-2 { animation: textReveal 0.7s cubic-bezier(0.4,0,0.2,1) both 3.55s; }
-        .text-reveal-3 { animation: textReveal 0.7s cubic-bezier(0.4,0,0.2,1) both 3.8s; }
-        .text-reveal-4 { animation: textReveal 0.7s cubic-bezier(0.4,0,0.2,1) both 4.05s; }
-        .text-reveal-5 { animation: textReveal 0.7s cubic-bezier(0.4,0,0.2,1) both 4.1s; }
+        .text-reveal-1 { animation: textReveal 0.6s cubic-bezier(0.4,0,0.2,1) both 1.5s; }
+        .text-reveal-2 { animation: textReveal 0.6s cubic-bezier(0.4,0,0.2,1) both 1.7s; }
+        .text-reveal-3 { animation: textReveal 0.6s cubic-bezier(0.4,0,0.2,1) both 1.9s; }
+        .text-reveal-4 { animation: textReveal 0.6s cubic-bezier(0.4,0,0.2,1) both 2.1s; }
+        .text-reveal-5 { animation: textReveal 0.6s cubic-bezier(0.4,0,0.2,1) both 2.3s; }
         @keyframes fadeInUp {
           from { opacity: 0; transform: translateY(32px); }
           to   { opacity: 1; transform: translateY(0); }
@@ -195,8 +195,15 @@ export default function LandingPage() {
                 </button>
 
                 {/* Join input */}
-                <div className="text-reveal-5 flex flex-col gap-2 w-fit items-center" style={{ opacity: 0 }}>
-                  <p className="text-xs text-[#EDE7D8] tracking-[0.16em] uppercase font-semibold" style={{ fontFamily: "'DM Mono', monospace" }}>Join a Session</p>
+                <div className="text-reveal-5 flex flex-col gap-2 w-fit items-center" style={{
+                  opacity: 0,
+                  background: 'rgba(237,231,216,0.45)',
+                  backdropFilter: 'blur(6px)',
+                  WebkitBackdropFilter: 'blur(6px)',
+                  borderRadius: '14px',
+                  padding: '12px 20px',
+                }}>
+                  <p className="text-xs text-[#1B3828] tracking-[0.16em] uppercase font-semibold" style={{ fontFamily: "'DM Mono', monospace" }}>Join a Session</p>
                   <div className="flex gap-2">
                     <input
                       type="text"
