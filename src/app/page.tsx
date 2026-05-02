@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { Mic, Scale, List, FileText, MessageSquare, Save } from 'lucide-react';
+import { getFlagUrl, getCountryByName } from '@/lib/countries';
 
 const steps = [
   { step: '01', title: 'Create a Committee', desc: 'Chair enters committee name, topic, and delegates. Pick a preset or builds custom.' },
@@ -14,13 +16,16 @@ function CommitteeMockup() {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [isRunning, setIsRunning] = useState(true);
 
-  const speakers = [
-    { flag: '🇫🇷', country: 'France', pos: 1 },
-    { flag: '🇩🇪', country: 'Germany', pos: 2 },
-    { flag: '🇧🇷', country: 'Brazil', pos: 3 },
-    { flag: '🇮🇳', country: 'India', pos: 4 },
-    { flag: '🇯🇵', country: 'Japan', pos: 5 },
-  ];
+  const speakers = ['France', 'Germany', 'Brazil', 'India', 'Japan'];
+
+  const flagImg = (country: string) => {
+    const c = getCountryByName(country);
+    return c ? (
+      <img src={getFlagUrl(c.code)} alt={country} className="w-7 h-7 object-contain rounded-sm" />
+    ) : (
+      <div className="w-7 h-7 rounded-sm bg-[#DDD4C0]" />
+    );
+  };
 
   const totalTime = 90;
   const currentSpeaker = speakers[currentIdx];
@@ -66,11 +71,11 @@ function CommitteeMockup() {
       <div className="px-5 pt-4 pb-3 border-b border-[#DDD4C0]">
         <p className="text-[#9A8A78] text-[10px] font-mono tracking-widest uppercase mb-2">Currently Speaking</p>
         <div className="bg-[#1B3828] rounded-xl px-4 py-3 flex items-center gap-3 mb-3 transition-all duration-500">
-          <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-xl flex-shrink-0">
-            {currentSpeaker.flag}
+          <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0">
+            {flagImg(currentSpeaker)}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-[#EED98A] font-black text-sm uppercase">{currentSpeaker.country}</p>
+            <p className="text-[#EED98A] font-black text-sm uppercase">{currentSpeaker}</p>
             <p className="text-[#EED98A]/50 text-[10px] font-mono">Speaker {currentIdx + 1} of {speakers.length}</p>
           </div>
           <p className="text-[#EED98A] font-mono text-2xl font-bold tabular-nums flex-shrink-0">{timeStr}</p>
@@ -101,10 +106,10 @@ function CommitteeMockup() {
         <p className="text-[#9A8A78] text-[10px] font-mono tracking-widest uppercase mb-3">Up Next</p>
         <div className="flex flex-col gap-2">
           {queue.map((d, i) => (
-            <div key={d.country} className="flex items-center gap-3 bg-[#EDE7D8] rounded-xl px-4 py-2.5">
+            <div key={d} className="flex items-center gap-3 bg-[#EDE7D8] rounded-xl px-4 py-2.5">
               <span className="text-[#9A8A78] font-mono text-xs w-5 text-center font-bold">{currentIdx + i + 2}</span>
-              <span className="text-lg">{d.flag}</span>
-              <span className="text-sm font-semibold text-[#1C1410] flex-1 uppercase">{d.country}</span>
+              {flagImg(d)}
+              <span className="text-sm font-semibold text-[#1C1410] flex-1 uppercase">{d}</span>
               <span className="text-[10px] font-mono text-[#9A8A78] uppercase">P</span>
             </div>
           ))}
@@ -400,15 +405,15 @@ export default function LandingPage() {
                 </p>
                 <div className="grid grid-cols-2 gap-3">
                   {[
-                    { icon: '🎙️', label: 'Roll Call' },
-                    { icon: '⚖️', label: 'Motions & Voting' },
-                    { icon: '📋', label: 'Speakers List' },
-                    { icon: '📄', label: 'Document Upload' },
-                    { icon: '💬', label: 'Live Chat' },
-                    { icon: '💾', label: 'Saved Sessions' },
+                    { icon: <Mic size={16} className="text-[#1B3828]" />, label: 'Roll Call' },
+                    { icon: <Scale size={16} className="text-[#1B3828]" />, label: 'Motions & Voting' },
+                    { icon: <List size={16} className="text-[#1B3828]" />, label: 'Speakers List' },
+                    { icon: <FileText size={16} className="text-[#1B3828]" />, label: 'Document Upload' },
+                    { icon: <MessageSquare size={16} className="text-[#1B3828]" />, label: 'Live Chat' },
+                    { icon: <Save size={16} className="text-[#1B3828]" />, label: 'Saved Sessions' },
                   ].map((f) => (
                     <div key={f.label} className="flex items-center gap-3 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3 hover:border-[#1B3828] transition-colors">
-                      <span className="text-lg">{f.icon}</span>
+                      <span className="flex items-center justify-center w-5 h-5">{f.icon}</span>
                       <span className="text-xs font-bold text-[#1C1410] uppercase tracking-wide">{f.label}</span>
                     </div>
                   ))}
