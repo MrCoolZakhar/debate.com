@@ -388,7 +388,7 @@ export default function LandingPage() {
 
           {/* ── LIVE COMMITTEE MOCKUP SECTION ── */}
           <section className="relative z-10 bg-[#EDE7D8] px-8 md:px-20 py-24 scroll-reveal">
-            <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center gap-12">
+            <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-start gap-20">
 
               {/* LEFT — text */}
               <div className="flex-1 flex flex-col justify-center max-w-md">
@@ -421,7 +421,7 @@ export default function LandingPage() {
               </div>
 
               {/* RIGHT — animated committee mockup */}
-              <div className="flex-1 flex justify-center items-stretch">
+              <div className="flex-1 flex justify-end items-start pt-8">
                 <CommitteeMockup />
               </div>
 
@@ -429,7 +429,16 @@ export default function LandingPage() {
           </section>
 
           {/* Footer */}
-          <footer className="relative z-10 border-t border-[#DDD4C0] bg-[#EDE7D8] px-6 py-8 flex flex-col md:flex-row items-center justify-between gap-4">
+          <footer
+            className="relative z-10 border-t border-[#DDD4C0] px-6 py-8 flex flex-col md:flex-row items-center justify-between gap-4"
+            style={{
+              backgroundColor: '#EDE7D8',
+              backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`,
+              backgroundRepeat: 'repeat',
+              backgroundSize: '300px 300px',
+              mixBlendMode: 'normal',
+            }}
+          >
             <div className="flex items-center gap-2">
               <img
                 src="/GAVELLING__1_.png"
@@ -442,9 +451,7 @@ export default function LandingPage() {
                 <span className="text-[#B6871F] text-[8px] tracking-[0.14em] uppercase leading-none mt-0.5" style={{ fontFamily: "'DM Mono', monospace" }}>Sessions</span>
               </div>
             </div>
-            <p className="text-xs text-[#9A8A78]">
-              © {new Date().getFullYear()} Gavelling. Built for the MUN community.
-            </p>
+            <p className="text-xs font-semibold text-[#1B3828]">© {new Date().getFullYear()} Gavelling. Built for the MUN community.</p>
           </footer>
         </div>
       </div>
