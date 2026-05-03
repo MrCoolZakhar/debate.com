@@ -79,7 +79,7 @@ export default function AboutPage() {
       {/* Founders */}
       <section className="relative z-10 py-24 px-6 max-w-6xl mx-auto w-full">
         <div className="flex flex-col md:flex-row items-center gap-16 mb-28">
-          <div className="shrink-0"><FounderPhoto src="/Peter.png" name="Peter Zakhar" /></div>
+          <div className="shrink-0"><FounderPhoto src="/PeterPic.png" name="Peter Zakhar" /></div>
           <div className="flex-1">
             <p className="text-xs font-mono tracking-[0.18em] text-[#9A8A78] mb-2 uppercase">Co-Founder</p>
             <h2 className="text-4xl font-black text-[#1C1410] mb-1">Peter Zakhar</h2>
