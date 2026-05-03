@@ -341,7 +341,7 @@ export default function LandingPage() {
           </section>
 
           {/* How it works */}
-          <section className="relative z-10 bg-[#1B3828] pt-24 pb-20 px-6" style={{ marginTop: '-2px', borderRadius: '40px 40px 0 0', paddingBottom: '120px' }}>
+          <section className="relative z-10 bg-[#1B3828] pt-24 pb-20 px-6" style={{ marginTop: '-2px', paddingBottom: '120px' }}>
             <div>
               <div className="max-w-4xl mx-auto">
                 <div className="text-center mb-14">
@@ -401,27 +401,27 @@ export default function LandingPage() {
                   <span className="text-[#B8844A]">to run committees.</span>
                 </h2>
                 <p className="text-[#6A5A4A] text-base mb-10 leading-relaxed">
-                  One dashboard. Every tool. From the opening gavel to the final vote.
+                  One dashboard. Every tool. From opening session to final voting.
                 </p>
                 <div className="grid grid-cols-2 gap-3">
                   {[
-                    { icon: <Mic size={16} className="text-[#B6871F]" />, label: 'Roll Call' },
-                    { icon: <Scale size={16} className="text-[#B6871F]" />, label: 'Motions & Voting' },
-                    { icon: <List size={16} className="text-[#B6871F]" />, label: 'Speakers List' },
-                    { icon: <FileText size={16} className="text-[#B6871F]" />, label: 'Document Upload' },
-                    { icon: <MessageSquare size={16} className="text-[#B6871F]" />, label: 'Live Chat' },
-                    { icon: <Save size={16} className="text-[#B6871F]" />, label: 'Saved Sessions' },
+                    { icon: <Mic size={16} className="text-[#EED98A]" />, label: 'Roll Call' },
+                    { icon: <Scale size={16} className="text-[#EED98A]" />, label: 'Motions & Voting' },
+                    { icon: <List size={16} className="text-[#EED98A]" />, label: 'Speakers List' },
+                    { icon: <FileText size={16} className="text-[#EED98A]" />, label: 'Document Upload' },
+                    { icon: <MessageSquare size={16} className="text-[#EED98A]" />, label: 'Live Chat' },
+                    { icon: <Save size={16} className="text-[#EED98A]" />, label: 'Saved Sessions' },
                   ].map((f) => (
                     <div key={f.label} className="flex items-center gap-3 bg-[#1B3828] border border-[#1B3828] rounded-xl px-4 py-3 hover:bg-[#2A5A3C] transition-colors">
                       <span className="flex items-center justify-center w-5 h-5">{f.icon}</span>
-                      <span className="text-xs font-bold text-[#B6871F] uppercase tracking-wide">{f.label}</span>
+                      <span className="text-xs font-bold text-[#EED98A] uppercase tracking-wide">{f.label}</span>
                     </div>
                   ))}
                 </div>
               </div>
 
               {/* RIGHT — animated committee mockup */}
-              <div className="flex-1 flex justify-end items-start pt-8 pr-0 md:pr-8">
+              <div className="flex-1 flex justify-center items-start pt-8 pl-16">
                 <CommitteeMockup />
               </div>
 
