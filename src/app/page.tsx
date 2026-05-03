@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Mic, Scale, List, FileText, MessageSquare, Save } from 'lucide-react';
-import { getFlagUrl, getCountryByName } from '@/lib/countries';
+import { motion, useScroll, useTransform } from 'framer-motion';
+import type { MotionValue } from 'framer-motion';
 
 const steps = [
   { step: '01', title: 'Create a Committee', desc: 'Chair enters committee name, topic, and delegates. Pick a preset or builds custom.' },
@@ -11,118 +12,350 @@ const steps = [
   { step: '03', title: 'Run the Session', desc: 'Manage roll call, speakers list, motions, and voting — all in one place.' },
 ];
 
-function CommitteeMockup() {
-  const [timerSecs, setTimerSecs] = useState(78);
-  const [currentIdx, setCurrentIdx] = useState(0);
-  const [isRunning, setIsRunning] = useState(true);
+const featureCards = [
+  { id: 'roll-call', label: 'Roll Call' },
+  { id: 'motions', label: 'Motions & Voting' },
+  { id: 'speakers', label: 'Speakers List' },
+  { id: 'documents', label: 'Document Upload' },
+  { id: 'chat', label: 'Live Chat' },
+  { id: 'archive', label: 'Saved Sessions' },
+];
 
-  const speakers = ['France', 'Germany', 'Brazil', 'India', 'Japan'];
+// ── Individual feature card components ──────────────────────────────────────
 
-  const flagImg = (country: string) => {
-    const c = getCountryByName(country);
-    return c ? (
-      <img src={getFlagUrl(c.code)} alt={country} className="w-7 h-7 object-contain rounded-sm" />
-    ) : (
-      <div className="w-7 h-7 rounded-sm bg-[#DDD4C0]" />
-    );
-  };
-
-  const totalTime = 90;
-  const currentSpeaker = speakers[currentIdx];
-  const queue = speakers.slice(currentIdx + 1).slice(0, 3);
-
-  useEffect(() => {
-    if (!isRunning) return;
-    const t = setInterval(() => {
-      setTimerSecs((s) => {
-        if (s <= 1) {
-          setCurrentIdx((i) => (i + 1) % speakers.length);
-          return totalTime;
-        }
-        return s - 1;
-      });
-    }, 1000);
-    return () => clearInterval(t);
-  }, [isRunning]);
-
-  const mins = Math.floor(timerSecs / 60);
-  const secs = timerSecs % 60;
-  const timeStr = `${mins}:${secs.toString().padStart(2, '0')}`;
-  const progress = (timerSecs / totalTime) * 100;
-  const barColor = timerSecs <= 10 ? '#8B2020' : timerSecs <= 30 ? '#B6871F' : '#3D7A52';
-
+function RollCallCard() {
+  const base = 'w-full bg-[#FAF8F3] rounded-2xl border border-[#DDD4C0] overflow-hidden';
+  const shadow = { boxShadow: '0 24px 64px rgba(27,56,40,0.14)' };
   return (
-    <div className="w-full max-w-full bg-[#FAF8F3] rounded-2xl border border-[#DDD4C0] overflow-hidden select-none"
-      style={{ boxShadow: '0 24px 64px rgba(27,56,40,0.14)' }}>
-
-      {/* Header */}
-      <div className="bg-[#1B3828] px-5 py-4 flex items-center justify-between">
-        <div>
-          <p className="text-[#EED98A]/50 text-[10px] font-mono tracking-widest uppercase mb-0.5">Security Council</p>
-          <p className="text-[#EED98A] text-sm font-black uppercase tracking-wide">General Speakers List</p>
-        </div>
-        <div className="flex items-center gap-1.5 bg-[#3D7A52] px-2.5 py-1 rounded-full">
-          <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-          <span className="text-white text-[9px] font-mono tracking-widest uppercase">Live</span>
-        </div>
+    <div className={base} style={shadow}>
+      <div className="bg-[#1B3828] px-5 py-3 flex items-center justify-between">
+        <p className="text-[#EED98A] font-black text-sm uppercase tracking-wide">Roll Call</p>
+        <span className="bg-[#3D7A52] text-white text-[9px] font-mono px-2 py-0.5 rounded-full uppercase tracking-widest">Pre-Session</span>
       </div>
-
-      {/* Current speaker */}
-      <div className="px-5 pt-4 pb-3 border-b border-[#DDD4C0]">
-        <p className="text-[#9A8A78] text-[10px] font-mono tracking-widest uppercase mb-2">Currently Speaking</p>
-        <div className="bg-[#1B3828] rounded-xl px-4 py-3 flex items-center gap-3 mb-3 transition-all duration-500">
-          <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0">
-            {flagImg(currentSpeaker)}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-[#EED98A] font-black text-sm uppercase">{currentSpeaker}</p>
-            <p className="text-[#EED98A]/50 text-[10px] font-mono">Speaker {currentIdx + 1} of {speakers.length}</p>
-          </div>
-          <p className="text-[#EED98A] font-mono text-2xl font-bold tabular-nums flex-shrink-0">{timeStr}</p>
-        </div>
-        {/* Timer bar */}
-        <div className="h-1.5 bg-[#DDD4C0] rounded-full overflow-hidden">
-          <div className="h-full rounded-full transition-all duration-1000"
-            style={{ width: `${progress}%`, backgroundColor: barColor }} />
-        </div>
-        {/* Controls */}
-        <div className="flex gap-2 mt-3">
-          <button
-            onClick={() => setIsRunning(r => !r)}
-            className="flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-colors border"
-            style={{ background: isRunning ? '#1B3828' : '#FAF8F3', color: isRunning ? '#EED98A' : '#1B3828', borderColor: '#1B3828' }}>
-            {isRunning ? '⏸ Pause' : '▶ Resume'}
-          </button>
-          <button
-            onClick={() => { setCurrentIdx(i => (i + 1) % speakers.length); setTimerSecs(totalTime); }}
-            className="flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-wide bg-[#EDE7D8] text-[#1B3828] border border-[#DDD4C0] hover:border-[#1B3828] transition-colors">
-            → Next
-          </button>
-        </div>
-      </div>
-
-      {/* Queue */}
       <div className="px-5 py-4">
-        <p className="text-[#9A8A78] text-[10px] font-mono tracking-widest uppercase mb-3">Up Next</p>
-        <div className="flex flex-col gap-2">
-          {queue.map((d, i) => (
-            <div key={d} className="flex items-center gap-3 bg-[#EDE7D8] rounded-xl px-4 py-2.5">
-              <span className="text-[#9A8A78] font-mono text-xs w-5 text-center font-bold">{currentIdx + i + 2}</span>
-              {flagImg(d)}
-              <span className="text-sm font-semibold text-[#1C1410] flex-1 uppercase">{d}</span>
-              <span className="text-[10px] font-mono text-[#9A8A78] uppercase">P</span>
-            </div>
+        <div className="flex gap-2 mb-4">
+          {['All Present', 'All P+V', 'Clear'].map(btn => (
+            <button key={btn} className="flex-1 py-2 text-[10px] font-bold uppercase tracking-wide rounded-lg bg-[#1B3828] text-[#EED98A] border border-[#1B3828]">{btn}</button>
           ))}
         </div>
+        <div className="flex flex-col gap-1.5">
+          {[
+            { country: 'France', code: 'fr', status: 'P+V' },
+            { country: 'Germany', code: 'de', status: 'P' },
+            { country: 'Brazil', code: 'br', status: 'P+V' },
+            { country: 'India', code: 'in', status: 'P' },
+            { country: 'Japan', code: 'jp', status: 'Absent' },
+            { country: 'China', code: 'cn', status: 'P+V' },
+          ].map(d => {
+            const flagCode = d.code === 'fr' ? '1f1eb-1f1f7' : d.code === 'de' ? '1f1e9-1f1ea' : d.code === 'br' ? '1f1e7-1f1f7' : d.code === 'in' ? '1f1ee-1f1f3' : d.code === 'jp' ? '1f1ef-1f1f5' : '1f1e8-1f1f3';
+            return (
+              <div key={d.country} className="flex items-center gap-3 px-3 py-2 rounded-xl bg-[#EDE7D8]">
+                <img src={`https://cdn.jsdelivr.net/npm/twemoji@14.0.2/assets/svg/${flagCode}.svg`} alt={d.country} className="w-5 h-5 object-contain" />
+                <span className="flex-1 text-sm font-semibold text-[#1C1410] uppercase">{d.country}</span>
+                <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full ${d.status === 'Absent' ? 'bg-[#DDD4C0] text-[#9A8A78]' : d.status === 'P+V' ? 'bg-[#EED98A] text-[#1B3828]' : 'bg-[#EAF1EC] text-[#1B3828]'}`}>{d.status}</span>
+              </div>
+            );
+          })}
+        </div>
+        <div className="mt-4 pt-3 border-t border-[#DDD4C0] flex items-center justify-between">
+          <span className="text-xs font-mono text-[#9A8A78] uppercase tracking-wide">Quorum</span>
+          <div className="flex items-center gap-2">
+            <div className="h-2 w-32 bg-[#DDD4C0] rounded-full overflow-hidden">
+              <div className="h-full w-[83%] bg-[#1B3828] rounded-full" />
+            </div>
+            <span className="text-xs font-mono text-[#1B3828] font-bold">5/6</span>
+          </div>
+        </div>
       </div>
-
     </div>
   );
 }
 
+function MotionsCard() {
+  const base = 'w-full bg-[#FAF8F3] rounded-2xl border border-[#DDD4C0] overflow-hidden';
+  const shadow = { boxShadow: '0 24px 64px rgba(27,56,40,0.14)' };
+  return (
+    <div className={base} style={shadow}>
+      <div className="bg-[#1B3828] px-5 py-3 flex items-center justify-between">
+        <p className="text-[#EED98A] font-black text-sm uppercase tracking-wide">Pending Motions</p>
+        <span className="bg-[#B6871F] text-white text-[9px] font-mono px-2 py-0.5 rounded-full uppercase tracking-widest">3 Motions</span>
+      </div>
+      <div className="px-5 py-4 flex flex-col gap-3">
+        {[
+          { type: 'Unmoderated Caucus', time: '15 min', proposer: 'France' },
+          { type: 'Consultation of the Whole', time: '20 min', proposer: 'Germany' },
+          { type: 'Moderated Caucus', time: '10 min / 90s', proposer: 'Brazil' },
+        ].map(m => (
+          <div key={m.type} className="rounded-xl border border-[#DDD4C0] overflow-hidden">
+            <div className="px-4 py-2.5 flex items-center justify-between bg-[#EDE7D8]">
+              <div>
+                <p className="text-xs font-black text-[#1C1410] uppercase tracking-wide">{m.type}</p>
+                <p className="text-[10px] text-[#9A8A78] font-mono mt-0.5">{m.time} · Proposed by {m.proposer}</p>
+              </div>
+              <div className="flex gap-1.5">
+                <button className="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase bg-[#1B3828] text-[#EED98A]">Accept</button>
+                <button className="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase bg-[#DDD4C0] text-[#6A5A4A]">Reject</button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SpeakersCard() {
+  const [timerSecs, setTimerSecs] = useState(67);
+  useEffect(() => {
+    const t = setInterval(() => setTimerSecs(s => s > 0 ? s - 1 : 90), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const mins = Math.floor(timerSecs / 60);
+  const secs = timerSecs % 60;
+  const base = 'w-full bg-[#FAF8F3] rounded-2xl border border-[#DDD4C0] overflow-hidden';
+  const shadow = { boxShadow: '0 24px 64px rgba(27,56,40,0.14)' };
+  return (
+    <div className={base} style={shadow}>
+      <div className="bg-[#1B3828] px-5 py-3 flex items-center justify-between">
+        <p className="text-[#EED98A] font-black text-sm uppercase tracking-wide">General Speakers List</p>
+        <span className="flex items-center gap-1 bg-[#3D7A52] text-white text-[9px] font-mono px-2 py-0.5 rounded-full uppercase tracking-widest">
+          <span className="w-1 h-1 rounded-full bg-white animate-pulse" />Live
+        </span>
+      </div>
+      <div className="px-5 py-4">
+        <p className="text-[#9A8A78] text-[10px] font-mono tracking-widest uppercase mb-2">Currently Speaking</p>
+        <div className="bg-[#1B3828] rounded-xl px-4 py-3 flex items-center gap-3 mb-2">
+          <img src="https://cdn.jsdelivr.net/npm/twemoji@14.0.2/assets/svg/1f1eb-1f1f7.svg" alt="France" className="w-8 h-8 object-contain rounded-sm" />
+          <div className="flex-1">
+            <p className="text-[#EED98A] font-black text-sm uppercase">France</p>
+            <p className="text-[#EED98A]/50 text-[10px] font-mono">Speaker 2 of 6</p>
+          </div>
+          <p className="text-[#EED98A] font-mono text-2xl font-bold tabular-nums">{mins}:{secs.toString().padStart(2, '0')}</p>
+        </div>
+        <div className="h-1.5 bg-[#DDD4C0] rounded-full overflow-hidden mb-3">
+          <div
+            className="h-full rounded-full transition-all duration-1000"
+            style={{ width: `${(timerSecs / 90) * 100}%`, backgroundColor: timerSecs <= 10 ? '#8B2020' : timerSecs <= 30 ? '#B6871F' : '#3D7A52' }}
+          />
+        </div>
+        <p className="text-[#9A8A78] text-[10px] font-mono tracking-widest uppercase mb-2">Up Next</p>
+        {[
+          { country: 'Germany', code: '1f1e9-1f1ea', pos: 3 },
+          { country: 'Brazil', code: '1f1e7-1f1f7', pos: 4 },
+          { country: 'India', code: '1f1ee-1f1f3', pos: 5 },
+        ].map(d => (
+          <div key={d.country} className="flex items-center gap-3 bg-[#EDE7D8] rounded-xl px-3 py-2 mb-1.5">
+            <span className="text-[#9A8A78] font-mono text-xs w-4 text-center font-bold">{d.pos}</span>
+            <img src={`https://cdn.jsdelivr.net/npm/twemoji@14.0.2/assets/svg/${d.code}.svg`} alt={d.country} className="w-5 h-5 object-contain" />
+            <span className="text-sm font-semibold text-[#1C1410] flex-1 uppercase">{d.country}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function DocumentsCard() {
+  const [docTimer, setDocTimer] = useState(180);
+  useEffect(() => {
+    const t = setInterval(() => setDocTimer(s => s > 0 ? s - 1 : 180), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const m = Math.floor(docTimer / 60);
+  const s = docTimer % 60;
+  const shadow = { boxShadow: '0 24px 64px rgba(27,56,40,0.14)' };
+  return (
+    <div
+      className="w-full bg-[#FAF8F3] rounded-2xl border border-[#DDD4C0] overflow-hidden flex flex-row"
+      style={{ ...shadow, minHeight: '340px' }}
+    >
+      <div className="w-2/5 border-r border-[#DDD4C0] flex flex-col">
+        <div className="bg-[#1B3828] px-4 py-3">
+          <p className="text-[#EED98A] font-black text-xs uppercase tracking-wide">Reading Time</p>
+        </div>
+        <div className="flex-1 flex flex-col items-center justify-center px-4 py-6 text-center">
+          <p className="text-[#9A8A78] text-[10px] font-mono tracking-widest uppercase mb-1">S/RES/2767 (2024)</p>
+          <p className="text-[#1C1410] font-black text-xs uppercase mb-4">Situation in Somalia</p>
+          <p className="text-[#1B3828] font-mono text-3xl font-bold tabular-nums mb-1">{m}:{s.toString().padStart(2, '0')}</p>
+          <p className="text-[#9A8A78] text-[10px] font-mono mb-4">Reading Time</p>
+          <div className="w-full h-1.5 bg-[#DDD4C0] rounded-full overflow-hidden">
+            <div className="h-full bg-[#1B3828] rounded-full transition-all duration-1000" style={{ width: `${(docTimer / 180) * 100}%` }} />
+          </div>
+        </div>
+      </div>
+      <div className="w-3/5 bg-[#EDE7D8] flex flex-col">
+        <div className="px-3 py-2 bg-[#DDD4C0] flex items-center justify-between">
+          <span className="text-[10px] font-mono text-[#6A5A4A] uppercase tracking-wide">Document</span>
+          <span className="text-[10px] font-bold text-[#1B3828] uppercase">Show Doc</span>
+        </div>
+        <iframe
+          src="https://www.un.org/unispal/wp-content/uploads/2024/09/n2425089.pdf"
+          className="flex-1 w-full border-none"
+          title="UNSC Resolution"
+        />
+      </div>
+    </div>
+  );
+}
+
+function ChatCard() {
+  const messages = [
+    { sender: 'Chair', text: 'Welcome to the Security Council session on Nuclear Non-Proliferation.', time: '09:02', isChair: true },
+    { sender: 'France', text: 'France is prepared to engage constructively on this matter.', time: '09:04', isChair: false },
+    { sender: 'Chair', text: "You're doing great! Keep it up!", time: '09:06', isChair: true },
+    { sender: 'Germany', text: 'Germany seconds the motion for a moderated caucus.', time: '09:07', isChair: false },
+  ];
+  const base = 'w-full bg-[#FAF8F3] rounded-2xl border border-[#DDD4C0] overflow-hidden';
+  const shadow = { boxShadow: '0 24px 64px rgba(27,56,40,0.14)' };
+  return (
+    <div className={base} style={shadow}>
+      <div className="bg-[#1B3828] px-5 py-3 flex items-center justify-between">
+        <p className="text-[#EED98A] font-black text-sm uppercase tracking-wide">Committee Chat</p>
+        <span className="flex items-center gap-1 bg-[#3D7A52] text-white text-[9px] font-mono px-2 py-0.5 rounded-full uppercase tracking-widest">
+          <span className="w-1 h-1 rounded-full bg-white animate-pulse" />Live
+        </span>
+      </div>
+      <div className="px-4 py-3 flex flex-col gap-2.5" style={{ maxHeight: '280px', overflowY: 'auto' }}>
+        {messages.map((msg, i) => (
+          <div key={i} className={`flex gap-2.5 ${msg.isChair ? 'flex-row-reverse' : 'flex-row'}`}>
+            <div className={`w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-black ${msg.isChair ? 'bg-[#1B3828] text-[#EED98A]' : 'bg-[#EDE7D8] text-[#1C1410]'}`}>
+              {msg.isChair ? '🪑' : msg.sender[0]}
+            </div>
+            <div className={`flex flex-col max-w-[75%] ${msg.isChair ? 'items-end' : 'items-start'}`}>
+              <div className={`px-3 py-2 rounded-xl text-xs leading-relaxed ${msg.isChair ? 'bg-[#1B3828] text-[#EED98A]' : 'bg-[#EDE7D8] text-[#1C1410]'}`}>
+                {msg.text}
+              </div>
+              <span className="text-[9px] text-[#9A8A78] font-mono mt-0.5">{msg.sender} · {msg.time}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="px-4 py-3 border-t border-[#DDD4C0] flex gap-2">
+        <div className="flex-1 bg-[#EDE7D8] rounded-xl px-3 py-2 text-xs text-[#9A8A78] font-mono">Type a message...</div>
+        <button className="px-3 py-2 bg-[#1B3828] rounded-xl text-[#EED98A] text-xs font-bold uppercase">Send</button>
+      </div>
+    </div>
+  );
+}
+
+function ArchiveCard() {
+  const base = 'w-full bg-[#FAF8F3] rounded-2xl border border-[#DDD4C0] overflow-hidden';
+  const shadow = { boxShadow: '0 24px 64px rgba(27,56,40,0.14)' };
+  return (
+    <div className={base} style={shadow}>
+      <div className="bg-[#1B3828] px-5 py-3 flex items-center justify-between">
+        <p className="text-[#EED98A] font-black text-sm uppercase tracking-wide">Session Archive</p>
+        <span className="bg-[#B6871F] text-white text-[9px] font-mono px-2 py-0.5 rounded-full uppercase tracking-widest flex items-center gap-1">
+          <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1a5 5 0 1 1 0 10A5 5 0 0 1 12 1zm0 12c5.33 0 8 2.67 8 4v2H4v-2c0-1.33 2.67-4 8-4z" /></svg>
+          Premium
+        </span>
+      </div>
+      <div className="px-5 py-8 flex flex-col items-center text-center">
+        <div className="w-16 h-16 rounded-2xl bg-[#EDE7D8] border border-[#DDD4C0] flex items-center justify-center mb-4">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#1B3828" strokeWidth="1.5">
+            <rect x="3" y="3" width="18" height="18" rx="3" />
+            <path d="M3 9h18M9 21V9" />
+          </svg>
+        </div>
+        <h3 className="font-black text-[#1C1410] uppercase text-sm tracking-wide mb-2">Coming Soon</h3>
+        <p className="text-[#6A5A4A] text-xs leading-relaxed mb-5 max-w-xs">Save sessions, replay debates, and track delegate performance over time. Full statistics and analytics for every committee.</p>
+        <div className="grid grid-cols-3 gap-2 w-full mb-4">
+          {['Sessions Saved', 'Delegates Tracked', 'Hours Logged'].map(stat => (
+            <div key={stat} className="bg-[#EDE7D8] rounded-xl p-2.5 text-center opacity-50">
+              <p className="font-black text-[#1B3828] text-lg">—</p>
+              <p className="text-[9px] text-[#9A8A78] font-mono uppercase tracking-wide mt-0.5">{stat}</p>
+            </div>
+          ))}
+        </div>
+        <button className="px-6 py-2.5 bg-[#B6871F] rounded-xl text-white font-bold text-xs uppercase tracking-wide opacity-60 cursor-not-allowed">Unlock with Premium</button>
+      </div>
+    </div>
+  );
+}
+
+function FeatureCard({ id }: { id: string }) {
+  if (id === 'roll-call') return <RollCallCard />;
+  if (id === 'motions') return <MotionsCard />;
+  if (id === 'speakers') return <SpeakersCard />;
+  if (id === 'documents') return <DocumentsCard />;
+  if (id === 'chat') return <ChatCard />;
+  if (id === 'archive') return <ArchiveCard />;
+  return null;
+}
+
+// Separate component so useTransform hooks are not called inside a .map()
+function AnimatedFeatureCard({
+  scrollYProgress,
+  card,
+  index,
+  total,
+  setActiveFeature,
+}: {
+  scrollYProgress: MotionValue<number>;
+  card: { id: string; label: string };
+  index: number;
+  total: number;
+  setActiveFeature: (id: string) => void;
+}) {
+  const start = index / total;
+  const end = (index + 1) / total;
+  const scale = useTransform(scrollYProgress, [start, end], [1, 0.92]);
+  const opacity = useTransform(scrollYProgress, [start, Math.min(end + 0.05, 1)], [1, 0]);
+  const progress = useTransform(scrollYProgress, [start, end], [0, 1]);
+
+  useEffect(() => {
+    return progress.on('change', (v: number) => {
+      if (v > 0.1 && v < 0.9) setActiveFeature(card.id);
+    });
+  }, [progress, card.id, setActiveFeature]);
+
+  return (
+    <motion.div
+      style={{ scale, opacity, position: 'absolute', top: 0, left: 0, right: 0 }}
+      className="w-full"
+    >
+      <FeatureCard id={card.id} />
+    </motion.div>
+  );
+}
+
+function FeatureShowcase({
+  activeFeature,
+  setActiveFeature,
+}: {
+  activeFeature: string;
+  setActiveFeature: (id: string) => void;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const { scrollYProgress } = useScroll({ target: containerRef, offset: ['start start', 'end end'] });
+
+  return (
+    <div ref={containerRef} className="relative" style={{ height: `${featureCards.length * 100}vh` }}>
+      <div className="sticky top-0 h-screen flex items-center justify-center overflow-hidden">
+        <div className="relative w-full max-w-lg" style={{ minHeight: '460px' }}>
+          {featureCards.map((card, i) => (
+            <AnimatedFeatureCard
+              key={card.id}
+              scrollYProgress={scrollYProgress}
+              card={card}
+              index={i}
+              total={featureCards.length}
+              setActiveFeature={setActiveFeature}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Main page ────────────────────────────────────────────────────────────────
+
 export default function LandingPage() {
   const router = useRouter();
   const [joinCode, setJoinCode] = useState('');
+  const [activeFeature, setActiveFeature] = useState('roll-call');
+
   const handleJoin = () => {
     const code = joinCode.trim().toUpperCase();
     if (code.length >= 4) {
@@ -206,7 +439,6 @@ export default function LandingPage() {
 
           {/* Nav */}
           <nav className="relative z-20 flex items-center justify-between px-8 md:px-14 py-5">
-            {/* Logo — left */}
             <div className="flex items-center gap-2 cursor-pointer" onClick={() => router.push('/')}>
               <img
                 src="/GAVELLING__1_.png"
@@ -219,7 +451,6 @@ export default function LandingPage() {
                 <span className="text-[#B6871F] text-[9px] tracking-[0.14em] uppercase leading-none mt-0.5" style={{ fontFamily: "'DM Mono', monospace" }}>Sessions</span>
               </div>
             </div>
-            {/* Nav links — right */}
             <div className="flex items-center gap-8">
               <a href="#conferences" className="text-[#1C1410] font-medium text-sm hover:text-[#1B3828] transition-colors tracking-wide uppercase">Conferences</a>
               <a href="#courses" className="text-[#1C1410] font-medium text-sm hover:text-[#1B3828] transition-colors tracking-wide uppercase">Courses</a>
@@ -230,8 +461,6 @@ export default function LandingPage() {
 
           {/* Hero */}
           <section className="relative z-10 h-[calc(100vh-72px)] flex flex-col items-center justify-center overflow-hidden">
-
-            {/* VIDEO BACKGROUND */}
             <div className="absolute inset-0 z-0">
               <video
                 autoPlay
@@ -243,48 +472,28 @@ export default function LandingPage() {
                 <source src="/hero_no_audio.webm" type="video/webm" />
                 <source src="/hero_no_audio.mp4" type="video/mp4" />
               </video>
-
-              {/* Inward vignette mask — darkens edges, keeps center clear */}
               <div className="absolute inset-0" style={{
                 background: 'radial-gradient(ellipse 70% 70% at 50% 50%, transparent 40%, rgba(237,231,216,0.6) 70%, rgba(237,231,216,0.95) 100%)',
               }} />
-
-              {/* Bottom gradient — fades into green section cleanly */}
               <div className="absolute bottom-0 left-0 right-0 h-48" style={{
                 background: 'linear-gradient(to bottom, transparent, #EDE7D8)',
               }} />
-
-              {/* Left gradient — text readability */}
               <div className="absolute top-0 left-0 bottom-0 w-[55%]" style={{
                 background: 'linear-gradient(to right, rgba(237,231,216,0.85) 0%, rgba(237,231,216,0.5) 60%, transparent 100%)',
               }} />
-
-              {/* Top gradient — integrates nav with video */}
               <div className="absolute top-0 left-0 right-0 h-40" style={{
                 background: 'linear-gradient(to bottom, rgba(237,231,216,0.98) 0%, rgba(237,231,216,0.7) 50%, transparent 100%)',
               }} />
             </div>
 
-            {/* CONTENT — centered vertically, text left */}
             <div className="relative z-10 flex items-center px-8 md:px-14">
               <div className="flex flex-col justify-center items-center text-center w-full max-w-2xl mx-auto">
-
-                {/* Title */}
                 <h1 className="font-black tracking-tight text-white leading-[1.05] mb-5 text-center whitespace-nowrap" style={{ fontSize: 'clamp(90px, 13.5vw, 165px)' }}>
                   MUN done{' '}
-                  <span
-                    style={{
-                      fontFamily: "'Playfair Display', serif",
-                      fontStyle: 'italic',
-                      fontWeight: 400,
-                      color: '#B8844A',
-                    }}
-                  >
+                  <span style={{ fontFamily: "'Playfair Display', serif", fontStyle: 'italic', fontWeight: 400, color: '#B8844A' }}>
                     right.
                   </span>
                 </h1>
-
-                {/* Subtitle */}
                 <p className="text-reveal-3 text-lg max-w-lg mb-6 leading-relaxed font-medium text-center text-[#1B3828]" style={{
                   opacity: 0,
                   backgroundColor: 'rgba(246,241,233,0.55)',
@@ -295,8 +504,6 @@ export default function LandingPage() {
                 }}>
                   The most user-friendly way to run your MUN committee.
                 </p>
-
-                {/* CTA */}
                 <button
                   onClick={() => router.push('/create')}
                   className="text-reveal-4 bg-[#1B3828] hover:bg-[#2A5A3C] active:scale-[0.98] text-[#EED98A] px-10 py-5 rounded-2xl font-black text-xl transition-all shadow-lg shadow-[#1B3828]/20 mb-5 w-fit mx-auto"
@@ -304,8 +511,6 @@ export default function LandingPage() {
                 >
                   START YOUR COMMITTEE →
                 </button>
-
-                {/* Join input */}
                 <div className="text-reveal-5 flex flex-col gap-2 w-fit items-center" style={{
                   opacity: 0,
                   background: 'rgba(237,231,216,0.45)',
@@ -335,7 +540,6 @@ export default function LandingPage() {
                     </button>
                   </div>
                 </div>
-
               </div>
             </div>
           </section>
@@ -351,12 +555,8 @@ export default function LandingPage() {
                 <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-[#B6871F]/30 w-full max-w-6xl mx-auto mt-16">
                   {steps.map((s) => (
                     <div key={s.step} className="scroll-reveal text-center px-16 py-8 group relative overflow-hidden cursor-default flex flex-col items-center">
-
-                      {/* LIMELIGHT — sits at very top of card */}
                       <div className="relative w-full flex justify-center mb-2 h-8">
-                        {/* The light bar */}
                         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-16 h-1.5 rounded-full bg-[#B6871F] opacity-0 group-hover:opacity-100 transition-all duration-300 shadow-[0_0_20px_6px_rgba(182,135,31,0.5)]" />
-                        {/* Round trapezoid beam — wide at bottom, narrow at top */}
                         <div
                           className="absolute top-1.5 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-all duration-500"
                           style={{
@@ -369,16 +569,9 @@ export default function LandingPage() {
                           }}
                         />
                       </div>
-
-                      {/* Step number */}
                       <div className="text-7xl font-black text-[#2A5A3C]/40 mb-6 transition-all duration-300 group-hover:text-[#B6871F]/60 group-hover:scale-110 leading-none">{s.step}</div>
-
-                      {/* Step title */}
                       <h3 className="text-2xl font-black text-white mb-4 uppercase tracking-wider">{s.title}</h3>
-
-                      {/* Description — hidden until hover, slides up */}
                       <p className="text-[#EED98A] text-base leading-relaxed opacity-0 group-hover:opacity-100 transition-all duration-400 transform translate-y-3 group-hover:translate-y-0 max-w-xs mx-auto">{s.desc}</p>
-
                     </div>
                   ))}
                 </div>
@@ -386,12 +579,12 @@ export default function LandingPage() {
             </div>
           </section>
 
-          {/* ── LIVE COMMITTEE MOCKUP SECTION ── */}
+          {/* ── FEATURE SHOWCASE SECTION ── */}
           <section className="relative z-10 bg-[#EDE7D8] px-8 md:px-20 pt-32 pb-24 scroll-reveal">
             <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-start gap-20">
 
-              {/* LEFT — text */}
-              <div className="flex-1 flex flex-col justify-center max-w-md">
+              {/* LEFT — sticky text + pills */}
+              <div className="flex-1 flex flex-col justify-center max-w-md sticky top-32 self-start">
                 <div className="inline-flex items-center gap-2 bg-[#EAF1EC] border border-[#C8D8C0] text-[#1B3828] text-xs font-semibold px-4 py-1.5 rounded-full mb-6 w-fit tracking-widest uppercase" style={{ fontFamily: "'DM Mono', monospace" }}>
                   <span className="w-1.5 h-1.5 rounded-full bg-[#3D7A52]" />
                   Built for Chairs
@@ -405,14 +598,22 @@ export default function LandingPage() {
                 </p>
                 <div className="grid grid-cols-2 gap-3">
                   {[
-                    { icon: <Mic size={16} className="text-[#EED98A]" />, label: 'Roll Call' },
-                    { icon: <Scale size={16} className="text-[#EED98A]" />, label: 'Motions & Voting' },
-                    { icon: <List size={16} className="text-[#EED98A]" />, label: 'Speakers List' },
-                    { icon: <FileText size={16} className="text-[#EED98A]" />, label: 'Document Upload' },
-                    { icon: <MessageSquare size={16} className="text-[#EED98A]" />, label: 'Live Chat' },
-                    { icon: <Save size={16} className="text-[#EED98A]" />, label: 'Saved Sessions' },
+                    { id: 'roll-call', icon: <Mic size={16} className="text-[#EED98A]" />, label: 'Roll Call' },
+                    { id: 'motions', icon: <Scale size={16} className="text-[#EED98A]" />, label: 'Motions & Voting' },
+                    { id: 'speakers', icon: <List size={16} className="text-[#EED98A]" />, label: 'Speakers List' },
+                    { id: 'documents', icon: <FileText size={16} className="text-[#EED98A]" />, label: 'Document Upload' },
+                    { id: 'chat', icon: <MessageSquare size={16} className="text-[#EED98A]" />, label: 'Live Chat' },
+                    { id: 'archive', icon: <Save size={16} className="text-[#EED98A]" />, label: 'Saved Sessions' },
                   ].map((f) => (
-                    <div key={f.label} className="flex items-center gap-3 bg-[#1B3828] border border-[#1B3828] rounded-xl px-4 py-3 hover:bg-[#2A5A3C] transition-colors">
+                    <div
+                      key={f.label}
+                      onClick={() => setActiveFeature(f.id)}
+                      className={`flex items-center gap-3 rounded-xl px-4 cursor-pointer transition-all duration-300 border ${
+                        activeFeature === f.id
+                          ? 'bg-[#2A5A3C] border-[#3D7A52] py-4 shadow-lg'
+                          : 'bg-[#1B3828] border-[#1B3828] py-3 hover:bg-[#2A5A3C]'
+                      }`}
+                    >
                       <span className="flex items-center justify-center w-5 h-5">{f.icon}</span>
                       <span className="text-xs font-bold text-[#EED98A] uppercase tracking-wide">{f.label}</span>
                     </div>
@@ -420,9 +621,9 @@ export default function LandingPage() {
                 </div>
               </div>
 
-              {/* RIGHT — animated committee mockup */}
-              <div className="flex-1 flex justify-center items-start pt-8 pl-16">
-                <CommitteeMockup />
+              {/* RIGHT — sticky scroll feature showcase */}
+              <div className="flex-1">
+                <FeatureShowcase activeFeature={activeFeature} setActiveFeature={setActiveFeature} />
               </div>
 
             </div>
