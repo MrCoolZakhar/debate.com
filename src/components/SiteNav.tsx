@@ -16,22 +16,10 @@ export default function SiteNav() {
   const [hovered, setHovered] = useState<string | null>(null);
 
   return (
-    <nav
-      className="relative z-20 flex items-center justify-between px-8 shrink-0"
-      style={{
-        height: '72px',
-        borderBottom: '1px solid rgba(46, 30, 15, 0.8)',
-        backdropFilter: 'blur(8px)',
-        backgroundColor: 'rgba(13, 9, 6, 0.92)',
-      }}
-    >
+    <nav className="relative z-20 flex items-center justify-between px-8 md:px-14 shrink-0" style={{ height: '72px' }}>
       <Link href="/">
-        <img
-          src="/GavellingLogo.png"
-          alt="Gavelling"
-          className="h-10 w-auto object-contain"
-          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-        />
+        <img src="/GavellingLogo.png" alt="Gavelling" className="h-10 w-auto object-contain"
+          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
       </Link>
 
       <div className="flex items-center">
@@ -41,13 +29,7 @@ export default function SiteNav() {
           return (
             <div key={link.label} className="flex items-center">
               {i > 0 && (
-                <div style={{
-                  width: '1px',
-                  height: '28px',
-                  backgroundColor: 'rgba(196, 168, 130, 0.2)',
-                  margin: '0 2px',
-                  flexShrink: 0,
-                }} />
+                <div style={{ width: '1px', height: '28px', backgroundColor: 'rgba(28, 20, 16, 0.2)', margin: '0 2px' }} />
               )}
               <Link
                 href={link.href}
@@ -57,15 +39,15 @@ export default function SiteNav() {
                   display: 'inline-flex',
                   alignItems: 'center',
                   position: 'relative',
-                  padding: '8px 20px',
+                  padding: '8px 16px',
                   fontSize: '13px',
                   fontWeight: active ? 900 : 700,
                   letterSpacing: '0.08em',
-                  color: active || hl ? '#C4A882' : 'rgba(196, 168, 130, 0.5)',
+                  color: active || hl ? '#1B3828' : 'rgba(28, 20, 16, 0.55)',
                   textDecoration: 'none',
                   borderRadius: '8px',
-                  transition: 'all 180ms ease',
-                  backgroundColor: active ? 'rgba(196, 168, 130, 0.09)' : hl ? 'rgba(196, 168, 130, 0.05)' : 'transparent',
+                  transition: 'all 200ms ease',
+                  backgroundColor: active ? 'rgba(27, 56, 40, 0.07)' : hl ? 'rgba(27, 56, 40, 0.04)' : 'transparent',
                   transform: hl && !active ? 'translateY(-1px)' : 'translateY(0)',
                 }}
               >
@@ -73,13 +55,13 @@ export default function SiteNav() {
                 <span style={{
                   position: 'absolute',
                   bottom: '4px',
-                  left: '20px',
-                  right: '20px',
+                  left: '16px',
+                  right: '16px',
                   height: active ? '2px' : '1px',
-                  backgroundColor: '#B8844A',
+                  backgroundColor: '#B6871F',
                   transform: active || hl ? 'scaleX(1)' : 'scaleX(0)',
                   transformOrigin: 'left',
-                  transition: 'transform 180ms ease',
+                  transition: 'transform 200ms ease',
                   borderRadius: '2px',
                 }} />
               </Link>
@@ -92,17 +74,15 @@ export default function SiteNav() {
         href="/pre-register"
         onMouseEnter={(e) => {
           const el = e.currentTarget as HTMLElement;
-          el.style.backgroundColor = '#B8844A';
-          el.style.color = '#0D0906';
+          el.style.backgroundColor = '#1B3828';
+          el.style.color = '#EED98A';
           el.style.transform = 'translateY(-1px)';
-          el.style.boxShadow = '0 4px 20px rgba(184, 132, 74, 0.4)';
         }}
         onMouseLeave={(e) => {
           const el = e.currentTarget as HTMLElement;
           el.style.backgroundColor = 'transparent';
-          el.style.color = '#C4A882';
+          el.style.color = '#1B3828';
           el.style.transform = 'translateY(0)';
-          el.style.boxShadow = 'none';
         }}
         style={{
           display: 'inline-flex',
@@ -111,11 +91,11 @@ export default function SiteNav() {
           fontSize: '13px',
           fontWeight: 800,
           letterSpacing: '0.08em',
-          color: '#C4A882',
-          border: '1.5px solid rgba(196, 168, 130, 0.4)',
+          color: '#1B3828',
+          border: '1.5px solid rgba(27, 56, 40, 0.5)',
           borderRadius: '9999px',
           textDecoration: 'none',
-          transition: 'all 180ms ease',
+          transition: 'all 200ms ease',
           backgroundColor: 'transparent',
         }}
       >

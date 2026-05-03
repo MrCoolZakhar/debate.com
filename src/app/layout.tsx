@@ -16,7 +16,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital@1&display=swap" rel="stylesheet" />
       </head>
-      <body className="min-h-full bg-[#0D0906] text-[#E8D5B7] antialiased">
+      <body className="min-h-full bg-[#EDE7D8] text-[#1C1410] antialiased">
         {children}
       </body>
     </html>
