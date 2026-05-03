@@ -22,10 +22,10 @@ export default function ConferencesPage() {
 
       {/* Main content */}
       <section className="relative z-10 flex-1 flex items-center justify-center px-8 py-20">
-        <div className="flex flex-col md:flex-row items-center gap-16 max-w-4xl w-full">
+        <div className="flex flex-col md:flex-row items-center gap-16 max-w-4xl w-full" style={{ paddingLeft: '6vw' }}>
 
           {/* Otter image */}
-          <div className="shrink-0 flex items-center justify-center" style={{ width: 280 }}>
+          <div className="shrink-0 flex items-center justify-center" style={{ width: 420 }}>
             <img
               src="/WIP.png"
               alt="An otter with a half-eaten gavel — work in progress"
