@@ -28,7 +28,7 @@ export default function LandingPage() {
       {/* Nav */}
       <nav className="relative z-20 flex items-center justify-between px-10 py-5" style={{ borderBottom: '1px solid rgba(0, 0, 0, 0.12)' }}>
         <img
-          src="/GavellingSessionsApp.png"
+          src="/GavellingLogo.png"
           alt="Gavelling Sessions App"
           className="h-16 w-auto object-contain"
         />
