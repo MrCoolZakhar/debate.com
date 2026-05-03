@@ -3,22 +3,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Mic, Scale, List, FileText, MessageSquare, Save } from 'lucide-react';
-import { motion, useScroll, useTransform } from 'framer-motion';
-
 const steps = [
   { step: '01', title: 'Create a Committee', desc: 'Chair enters committee name, topic, and delegates. Pick a preset or builds custom.' },
   { step: '02', title: 'Share the Code', desc: 'Delegates, co-chairs, and faculty advisors join instantly with a session code from any device.' },
   { step: '03', title: 'Run the Session', desc: 'Manage roll call, speakers list, motions, and voting — all in one place.' },
 ];
 
-const featureCards = [
-  { id: 'roll-call', label: 'Roll Call' },
-  { id: 'motions', label: 'Motions & Voting' },
-  { id: 'speakers', label: 'Speakers List' },
-  { id: 'documents', label: 'Document Upload' },
-  { id: 'chat', label: 'Live Chat' },
-  { id: 'archive', label: 'Saved Sessions' },
-];
 
 // ── Individual feature card components ──────────────────────────────────────
 
@@ -282,61 +272,80 @@ function FeatureCard({ id }: { id: string }) {
   return null;
 }
 
-function FeatureStackCard({ id, index, total, scrollYProgress, isActive }: {
-  id: string;
-  index: number;
-  total: number;
-  scrollYProgress: any;
-  isActive: boolean;
+function FeatureCarousel({
+  activeFeature,
+  setActiveFeature,
+}: {
+  activeFeature: string;
+  setActiveFeature: (id: string) => void;
 }) {
-  const start = index / total;
-  const end = (index + 1) / total;
-
-  const opacity = useTransform(scrollYProgress, [start, end, Math.min(end + 0.05, 1)], [0, 1, index === total - 1 ? 1 : 0]);
-  const y = useTransform(scrollYProgress, [start, end], [40, 0]);
-  const scale = useTransform(scrollYProgress, [start, end], [0.96, 1]);
-
-  return (
-    <motion.div
-      style={{ opacity, y, scale, position: 'absolute', top: 0, left: 0, right: 0 }}
-      className="w-full"
-    >
-      <FeatureCard id={id} />
-    </motion.div>
-  );
-}
-
-function FeatureScrollStack({ activeFeature, setActiveFeature }: { activeFeature: string; setActiveFeature: (id: string) => void }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const { scrollYProgress } = useScroll({
-    target: containerRef,
-    offset: ['start start', 'end end'],
-  });
-
   const featureIds = ['roll-call', 'motions', 'speakers', 'documents', 'chat', 'archive'];
+  const sectionRef = useRef<HTMLDivElement>(null);
+  const isHijacked = useRef(false);
 
   useEffect(() => {
-    const unsubscribe = scrollYProgress.on('change', (v: number) => {
-      const index = Math.min(Math.floor(v * featureIds.length), featureIds.length - 1);
-      setActiveFeature(featureIds[index]);
-    });
-    return unsubscribe;
-  }, [scrollYProgress]);
+    const handleWheel = (e: WheelEvent) => {
+      const section = sectionRef.current;
+      if (!section) return;
+
+      const rect = section.getBoundingClientRect();
+      const inView = rect.top <= 80 && rect.bottom >= window.innerHeight * 0.5;
+
+      if (!inView) {
+        isHijacked.current = false;
+        return;
+      }
+
+      const currentIndex = featureIds.indexOf(activeFeature);
+      const scrollingDown = e.deltaY > 0;
+      const scrollingUp = e.deltaY < 0;
+
+      // At last feature scrolling down — release
+      if (scrollingDown && currentIndex >= featureIds.length - 1) {
+        isHijacked.current = false;
+        return;
+      }
+
+      // At first feature scrolling up — release
+      if (scrollingUp && currentIndex <= 0) {
+        isHijacked.current = false;
+        return;
+      }
+
+      // Otherwise hijack
+      e.preventDefault();
+      e.stopPropagation();
+      isHijacked.current = true;
+
+      if (scrollingDown) {
+        setActiveFeature(featureIds[Math.min(currentIndex + 1, featureIds.length - 1)]);
+      } else if (scrollingUp) {
+        setActiveFeature(featureIds[Math.max(currentIndex - 1, 0)]);
+      }
+    };
+
+    window.addEventListener('wheel', handleWheel, { passive: false });
+    return () => window.removeEventListener('wheel', handleWheel);
+  }, [activeFeature]);
 
   return (
-    <div ref={containerRef} style={{ height: `${featureIds.length * 80}vh` }}>
-      <div className="sticky top-24 relative" style={{ height: '520px' }}>
-        {featureIds.map((id, i) => (
-          <FeatureStackCard
-            key={id}
-            id={id}
-            index={i}
-            total={featureIds.length}
-            scrollYProgress={scrollYProgress}
-            isActive={activeFeature === id}
-          />
-        ))}
-      </div>
+    <div ref={sectionRef} className="flex-1 flex justify-center items-start pl-16 relative" style={{ minHeight: '520px' }}>
+      {featureIds.map((id) => (
+        <div
+          key={id}
+          className="absolute inset-0 flex justify-center items-start"
+          style={{
+            opacity: id === activeFeature ? 1 : 0,
+            transform: id === activeFeature ? 'translateY(0) scale(1)' : 'translateY(20px) scale(0.97)',
+            transition: 'opacity 0.4s cubic-bezier(0.4,0,0.2,1), transform 0.4s cubic-bezier(0.4,0,0.2,1)',
+            pointerEvents: id === activeFeature ? 'auto' : 'none',
+          }}
+        >
+          <div className="w-full max-w-md">
+            <FeatureCard id={id} />
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -415,7 +424,7 @@ export default function LandingPage() {
         .scroll-reveal.visible:nth-child(3) { animation-delay: 0.2s; }
       `}</style>
 
-      <div className="min-h-screen bg-[#EDE7D8] flex flex-col relative overflow-hidden">
+      <div className="min-h-screen bg-[#EDE7D8] flex flex-col relative overflow-x-hidden">
         <div className="relative z-10 flex flex-col min-h-screen">
           {/* Grain overlay */}
           <div
@@ -600,7 +609,7 @@ export default function LandingPage() {
                     { id: 'speakers', icon: <List size={15} className="text-[#EED98A]" />, label: 'Speakers List' },
                     { id: 'documents', icon: <FileText size={15} className="text-[#EED98A]" />, label: 'Document Upload' },
                     { id: 'chat', icon: <MessageSquare size={15} className="text-[#EED98A]" />, label: 'Live Chat' },
-                    { id: 'archive', icon: <Save size={15} className="text-[#EED98A]" />, label: 'Saved Sessions' },
+                    { id: 'archive', icon: <Save size={15} className="text-[#EED98A]" />, label: 'Archives' },
                   ].map((f) => (
                     <div
                       key={f.id}
@@ -621,9 +630,9 @@ export default function LandingPage() {
                 </div>
               </div>
 
-              {/* RIGHT — scroll container with stacking cards */}
-              <div className="flex-1 py-24">
-                <FeatureScrollStack activeFeature={activeFeature} setActiveFeature={setActiveFeature} />
+              {/* RIGHT — scroll-hijacked carousel */}
+              <div className="flex-1 py-24 flex items-start justify-center">
+                <FeatureCarousel activeFeature={activeFeature} setActiveFeature={setActiveFeature} />
               </div>
 
             </div>
