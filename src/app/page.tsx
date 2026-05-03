@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Mic, Scale, List, FileText, MessageSquare, Save } from 'lucide-react';
 import { motion, useScroll, useTransform } from 'framer-motion';
-import type { MotionValue } from 'framer-motion';
 
 const steps = [
   { step: '01', title: 'Create a Committee', desc: 'Chair enters committee name, topic, and delegates. Pick a preset or builds custom.' },
@@ -283,67 +282,60 @@ function FeatureCard({ id }: { id: string }) {
   return null;
 }
 
-// Separate component so useTransform hooks are not called inside a .map()
-function AnimatedFeatureCard({
-  scrollYProgress,
-  card,
-  index,
-  total,
-  setActiveFeature,
-}: {
-  scrollYProgress: MotionValue<number>;
-  card: { id: string; label: string };
+function FeatureStackCard({ id, index, total, scrollYProgress, isActive }: {
+  id: string;
   index: number;
   total: number;
-  setActiveFeature: (id: string) => void;
+  scrollYProgress: any;
+  isActive: boolean;
 }) {
   const start = index / total;
   const end = (index + 1) / total;
-  const scale = useTransform(scrollYProgress, [start, end], [1, 0.92]);
-  const opacity = useTransform(scrollYProgress, [start, Math.min(end + 0.05, 1)], [1, 0]);
-  const progress = useTransform(scrollYProgress, [start, end], [0, 1]);
 
-  useEffect(() => {
-    return progress.on('change', (v: number) => {
-      if (v > 0.1 && v < 0.9) setActiveFeature(card.id);
-    });
-  }, [progress, card.id, setActiveFeature]);
+  const opacity = useTransform(scrollYProgress, [start, end, Math.min(end + 0.05, 1)], [0, 1, index === total - 1 ? 1 : 0]);
+  const y = useTransform(scrollYProgress, [start, end], [40, 0]);
+  const scale = useTransform(scrollYProgress, [start, end], [0.96, 1]);
 
   return (
     <motion.div
-      style={{ scale, opacity, position: 'absolute', top: 0, left: 0, right: 0 }}
+      style={{ opacity, y, scale, position: 'absolute', top: 0, left: 0, right: 0 }}
       className="w-full"
     >
-      <FeatureCard id={card.id} />
+      <FeatureCard id={id} />
     </motion.div>
   );
 }
 
-function FeatureShowcase({
-  activeFeature,
-  setActiveFeature,
-}: {
-  activeFeature: string;
-  setActiveFeature: (id: string) => void;
-}) {
+function FeatureScrollStack({ activeFeature, setActiveFeature }: { activeFeature: string; setActiveFeature: (id: string) => void }) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const { scrollYProgress } = useScroll({ target: containerRef, offset: ['start start', 'end end'] });
+  const { scrollYProgress } = useScroll({
+    target: containerRef,
+    offset: ['start start', 'end end'],
+  });
+
+  const featureIds = ['roll-call', 'motions', 'speakers', 'documents', 'chat', 'archive'];
+
+  useEffect(() => {
+    const unsubscribe = scrollYProgress.on('change', (v: number) => {
+      const index = Math.min(Math.floor(v * featureIds.length), featureIds.length - 1);
+      setActiveFeature(featureIds[index]);
+    });
+    return unsubscribe;
+  }, [scrollYProgress]);
 
   return (
-    <div ref={containerRef} className="relative" style={{ height: `${featureCards.length * 100}vh` }}>
-      <div className="sticky top-0 h-screen flex items-center justify-center overflow-hidden">
-        <div className="relative w-full max-w-lg" style={{ minHeight: '460px' }}>
-          {featureCards.map((card, i) => (
-            <AnimatedFeatureCard
-              key={card.id}
-              scrollYProgress={scrollYProgress}
-              card={card}
-              index={i}
-              total={featureCards.length}
-              setActiveFeature={setActiveFeature}
-            />
-          ))}
-        </div>
+    <div ref={containerRef} style={{ height: `${featureIds.length * 80}vh` }}>
+      <div className="sticky top-24 relative" style={{ height: '520px' }}>
+        {featureIds.map((id, i) => (
+          <FeatureStackCard
+            key={id}
+            id={id}
+            index={i}
+            total={featureIds.length}
+            scrollYProgress={scrollYProgress}
+            isActive={activeFeature === id}
+          />
+        ))}
       </div>
     </div>
   );
@@ -580,50 +572,58 @@ export default function LandingPage() {
           </section>
 
           {/* ── FEATURE SHOWCASE SECTION ── */}
-          <section className="relative z-10 bg-[#EDE7D8] px-8 md:px-20 pt-32 pb-24 scroll-reveal">
-            <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-start gap-20">
+          <section id="features" className="relative z-10 bg-[#EDE7D8] px-8 md:px-20 scroll-reveal">
+            <div className="max-w-6xl mx-auto flex flex-col md:flex-row gap-20">
 
               {/* LEFT — sticky text + pills */}
-              <div className="flex-1 flex flex-col justify-center max-w-md sticky top-32 self-start">
+              <div className="w-80 flex-shrink-0 sticky top-24 self-start py-24">
+
                 <div className="inline-flex items-center gap-2 bg-[#EAF1EC] border border-[#C8D8C0] text-[#1B3828] text-xs font-semibold px-4 py-1.5 rounded-full mb-6 w-fit tracking-widest uppercase" style={{ fontFamily: "'DM Mono', monospace" }}>
                   <span className="w-1.5 h-1.5 rounded-full bg-[#3D7A52]" />
                   Built for Chairs
                 </div>
-                <h2 className="font-black uppercase tracking-wide leading-tight mb-5" style={{ fontSize: 'clamp(28px, 3.5vw, 52px)' }}>
+
+                <h2 className="font-black uppercase tracking-wide leading-tight mb-5" style={{ fontSize: 'clamp(24px, 3vw, 42px)' }}>
                   <span className="text-[#1B3828]">Everything chairs need</span><br />
                   <span className="text-[#B8844A]">to run committees.</span>
                 </h2>
-                <p className="text-[#6A5A4A] text-base mb-10 leading-relaxed">
+
+                <p className="text-[#6A5A4A] text-base mb-8 leading-relaxed">
                   One dashboard. Every tool. From opening session to final voting.
                 </p>
-                <div className="grid grid-cols-2 gap-3">
+
+                {/* Pills — flex-col so each pill is independent height */}
+                <div className="flex flex-col gap-2.5">
                   {[
-                    { id: 'roll-call', icon: <Mic size={16} className="text-[#EED98A]" />, label: 'Roll Call' },
-                    { id: 'motions', icon: <Scale size={16} className="text-[#EED98A]" />, label: 'Motions & Voting' },
-                    { id: 'speakers', icon: <List size={16} className="text-[#EED98A]" />, label: 'Speakers List' },
-                    { id: 'documents', icon: <FileText size={16} className="text-[#EED98A]" />, label: 'Document Upload' },
-                    { id: 'chat', icon: <MessageSquare size={16} className="text-[#EED98A]" />, label: 'Live Chat' },
-                    { id: 'archive', icon: <Save size={16} className="text-[#EED98A]" />, label: 'Saved Sessions' },
+                    { id: 'roll-call', icon: <Mic size={15} className="text-[#EED98A]" />, label: 'Roll Call' },
+                    { id: 'motions', icon: <Scale size={15} className="text-[#EED98A]" />, label: 'Motions & Voting' },
+                    { id: 'speakers', icon: <List size={15} className="text-[#EED98A]" />, label: 'Speakers List' },
+                    { id: 'documents', icon: <FileText size={15} className="text-[#EED98A]" />, label: 'Document Upload' },
+                    { id: 'chat', icon: <MessageSquare size={15} className="text-[#EED98A]" />, label: 'Live Chat' },
+                    { id: 'archive', icon: <Save size={15} className="text-[#EED98A]" />, label: 'Saved Sessions' },
                   ].map((f) => (
                     <div
-                      key={f.label}
-                      onClick={() => setActiveFeature(f.id)}
+                      key={f.id}
                       className={`flex items-center gap-3 rounded-xl px-4 cursor-pointer transition-all duration-300 border ${
                         activeFeature === f.id
-                          ? 'bg-[#2A5A3C] border-[#3D7A52] py-4 shadow-lg'
-                          : 'bg-[#1B3828] border-[#1B3828] py-3 hover:bg-[#2A5A3C]'
+                          ? 'bg-[#2A5A3C] border-[#3D7A52] py-3.5 shadow-lg shadow-[#1B3828]/20'
+                          : 'bg-[#1B3828] border-[#1B3828] py-2.5 hover:bg-[#2A5A3C]'
                       }`}
+                      onClick={() => {
+                        setActiveFeature(f.id);
+                        document.getElementById(`feature-${f.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                      }}
                     >
-                      <span className="flex items-center justify-center w-5 h-5">{f.icon}</span>
+                      <span className="flex items-center justify-center w-4 h-4 flex-shrink-0">{f.icon}</span>
                       <span className="text-xs font-bold text-[#EED98A] uppercase tracking-wide">{f.label}</span>
                     </div>
                   ))}
                 </div>
               </div>
 
-              {/* RIGHT — sticky scroll feature showcase */}
-              <div className="flex-1">
-                <FeatureShowcase activeFeature={activeFeature} setActiveFeature={setActiveFeature} />
+              {/* RIGHT — scroll container with stacking cards */}
+              <div className="flex-1 py-24">
+                <FeatureScrollStack activeFeature={activeFeature} setActiveFeature={setActiveFeature} />
               </div>
 
             </div>
