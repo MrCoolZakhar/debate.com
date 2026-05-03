@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Mic, Scale, List, FileText, MessageSquare, Save } from 'lucide-react';
+import { getFlagUrl, getCountryByName } from '@/lib/countries';
 const steps = [
   { step: '01', title: 'Create a Committee', desc: 'Chair enters committee name, topic, and delegates. Pick a preset or builds custom.' },
   { step: '02', title: 'Share the Code', desc: 'Delegates, co-chairs, and faculty advisors join instantly with a session code from any device.' },
@@ -15,8 +16,12 @@ const steps = [
 function RollCallCard() {
   const base = 'w-full bg-[#FAF8F3] rounded-2xl border border-[#DDD4C0] overflow-hidden';
   const shadow = { boxShadow: '0 24px 64px rgba(27,56,40,0.14)' };
+  const getFlag = (country: string) => {
+    const c = getCountryByName(country);
+    return c ? <img src={getFlagUrl(c.code)} alt={country} className="w-5 h-5 object-contain" /> : <span className="w-5 h-5 bg-[#DDD4C0] rounded-sm inline-block" />;
+  };
   return (
-    <div className={base} style={shadow}>
+    <div className={base} style={{ ...shadow, minHeight: '460px' }}>
       <div className="bg-[#1B3828] px-5 py-3 flex items-center justify-between">
         <p className="text-[#EED98A] font-black text-sm uppercase tracking-wide">Roll Call</p>
         <span className="bg-[#3D7A52] text-white text-[9px] font-mono px-2 py-0.5 rounded-full uppercase tracking-widest">Pre-Session</span>
@@ -29,22 +34,19 @@ function RollCallCard() {
         </div>
         <div className="flex flex-col gap-1.5">
           {[
-            { country: 'France', code: 'fr', status: 'P+V' },
-            { country: 'Germany', code: 'de', status: 'P' },
-            { country: 'Brazil', code: 'br', status: 'P+V' },
-            { country: 'India', code: 'in', status: 'P' },
-            { country: 'Japan', code: 'jp', status: 'Absent' },
-            { country: 'China', code: 'cn', status: 'P+V' },
-          ].map(d => {
-            const flagCode = d.code === 'fr' ? '1f1eb-1f1f7' : d.code === 'de' ? '1f1e9-1f1ea' : d.code === 'br' ? '1f1e7-1f1f7' : d.code === 'in' ? '1f1ee-1f1f3' : d.code === 'jp' ? '1f1ef-1f1f5' : '1f1e8-1f1f3';
-            return (
-              <div key={d.country} className="flex items-center gap-3 px-3 py-2 rounded-xl bg-[#EDE7D8]">
-                <img src={`https://cdn.jsdelivr.net/npm/twemoji@14.0.2/assets/svg/${flagCode}.svg`} alt={d.country} className="w-5 h-5 object-contain" />
-                <span className="flex-1 text-sm font-semibold text-[#1C1410] uppercase">{d.country}</span>
-                <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full ${d.status === 'Absent' ? 'bg-[#DDD4C0] text-[#9A8A78]' : d.status === 'P+V' ? 'bg-[#EED98A] text-[#1B3828]' : 'bg-[#EAF1EC] text-[#1B3828]'}`}>{d.status}</span>
-              </div>
-            );
-          })}
+            { country: 'France', status: 'P+V' },
+            { country: 'Germany', status: 'P' },
+            { country: 'Brazil', status: 'P+V' },
+            { country: 'India', status: 'P' },
+            { country: 'Japan', status: 'Absent' },
+            { country: 'China', status: 'P+V' },
+          ].map(d => (
+            <div key={d.country} className="flex items-center gap-3 px-3 py-2 rounded-xl bg-[#EDE7D8]">
+              {getFlag(d.country)}
+              <span className="flex-1 text-sm font-semibold text-[#1C1410] uppercase">{d.country}</span>
+              <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full ${d.status === 'Absent' ? 'bg-[#DDD4C0] text-[#9A8A78]' : d.status === 'P+V' ? 'bg-[#EED98A] text-[#1B3828]' : 'bg-[#EAF1EC] text-[#1B3828]'}`}>{d.status}</span>
+            </div>
+          ))}
         </div>
         <div className="mt-4 pt-3 border-t border-[#DDD4C0] flex items-center justify-between">
           <span className="text-xs font-mono text-[#9A8A78] uppercase tracking-wide">Quorum</span>
@@ -64,7 +66,7 @@ function MotionsCard() {
   const base = 'w-full bg-[#FAF8F3] rounded-2xl border border-[#DDD4C0] overflow-hidden';
   const shadow = { boxShadow: '0 24px 64px rgba(27,56,40,0.14)' };
   return (
-    <div className={base} style={shadow}>
+    <div className={base} style={{ ...shadow, minHeight: '460px' }}>
       <div className="bg-[#1B3828] px-5 py-3 flex items-center justify-between">
         <p className="text-[#EED98A] font-black text-sm uppercase tracking-wide">Pending Motions</p>
         <span className="bg-[#B6871F] text-white text-[9px] font-mono px-2 py-0.5 rounded-full uppercase tracking-widest">3 Motions</span>
@@ -104,7 +106,7 @@ function SpeakersCard() {
   const base = 'w-full bg-[#FAF8F3] rounded-2xl border border-[#DDD4C0] overflow-hidden';
   const shadow = { boxShadow: '0 24px 64px rgba(27,56,40,0.14)' };
   return (
-    <div className={base} style={shadow}>
+    <div className={base} style={{ ...shadow, minHeight: '460px' }}>
       <div className="bg-[#1B3828] px-5 py-3 flex items-center justify-between">
         <p className="text-[#EED98A] font-black text-sm uppercase tracking-wide">General Speakers List</p>
         <span className="flex items-center gap-1 bg-[#3D7A52] text-white text-[9px] font-mono px-2 py-0.5 rounded-full uppercase tracking-widest">
@@ -114,7 +116,7 @@ function SpeakersCard() {
       <div className="px-5 py-4">
         <p className="text-[#9A8A78] text-[10px] font-mono tracking-widest uppercase mb-2">Currently Speaking</p>
         <div className="bg-[#1B3828] rounded-xl px-4 py-3 flex items-center gap-3 mb-2">
-          <img src="https://cdn.jsdelivr.net/npm/twemoji@14.0.2/assets/svg/1f1eb-1f1f7.svg" alt="France" className="w-8 h-8 object-contain rounded-sm" />
+          <img src={(() => { const c = getCountryByName('France'); return c ? getFlagUrl(c.code) : ''; })()} alt="France" className="w-8 h-8 object-contain rounded-sm" />
           <div className="flex-1">
             <p className="text-[#EED98A] font-black text-sm uppercase">France</p>
             <p className="text-[#EED98A]/50 text-[10px] font-mono">Speaker 2 of 6</p>
@@ -129,13 +131,13 @@ function SpeakersCard() {
         </div>
         <p className="text-[#9A8A78] text-[10px] font-mono tracking-widest uppercase mb-2">Up Next</p>
         {[
-          { country: 'Germany', code: '1f1e9-1f1ea', pos: 3 },
-          { country: 'Brazil', code: '1f1e7-1f1f7', pos: 4 },
-          { country: 'India', code: '1f1ee-1f1f3', pos: 5 },
+          { country: 'Germany', pos: 3 },
+          { country: 'Brazil', pos: 4 },
+          { country: 'India', pos: 5 },
         ].map(d => (
           <div key={d.country} className="flex items-center gap-3 bg-[#EDE7D8] rounded-xl px-3 py-2 mb-1.5">
             <span className="text-[#9A8A78] font-mono text-xs w-4 text-center font-bold">{d.pos}</span>
-            <img src={`https://cdn.jsdelivr.net/npm/twemoji@14.0.2/assets/svg/${d.code}.svg`} alt={d.country} className="w-5 h-5 object-contain" />
+            <img src={(() => { const c = getCountryByName(d.country); return c ? getFlagUrl(c.code) : ''; })()} alt={d.country} className="w-5 h-5 object-contain" />
             <span className="text-sm font-semibold text-[#1C1410] flex-1 uppercase">{d.country}</span>
           </div>
         ))}
@@ -156,7 +158,7 @@ function DocumentsCard() {
   return (
     <div
       className="w-full bg-[#FAF8F3] rounded-2xl border border-[#DDD4C0] overflow-hidden flex flex-row"
-      style={{ ...shadow, minHeight: '340px' }}
+      style={{ ...shadow, minHeight: '460px' }}
     >
       <div className="w-2/5 border-r border-[#DDD4C0] flex flex-col">
         <div className="bg-[#1B3828] px-4 py-3">
@@ -197,7 +199,7 @@ function ChatCard() {
   const base = 'w-full bg-[#FAF8F3] rounded-2xl border border-[#DDD4C0] overflow-hidden';
   const shadow = { boxShadow: '0 24px 64px rgba(27,56,40,0.14)' };
   return (
-    <div className={base} style={shadow}>
+    <div className={base} style={{ ...shadow, minHeight: '460px' }}>
       <div className="bg-[#1B3828] px-5 py-3 flex items-center justify-between">
         <p className="text-[#EED98A] font-black text-sm uppercase tracking-wide">Committee Chat</p>
         <span className="flex items-center gap-1 bg-[#3D7A52] text-white text-[9px] font-mono px-2 py-0.5 rounded-full uppercase tracking-widest">
@@ -231,7 +233,7 @@ function ArchiveCard() {
   const base = 'w-full bg-[#FAF8F3] rounded-2xl border border-[#DDD4C0] overflow-hidden';
   const shadow = { boxShadow: '0 24px 64px rgba(27,56,40,0.14)' };
   return (
-    <div className={base} style={shadow}>
+    <div className={base} style={{ ...shadow, minHeight: '460px' }}>
       <div className="bg-[#1B3828] px-5 py-3 flex items-center justify-between">
         <p className="text-[#EED98A] font-black text-sm uppercase tracking-wide">Session Archive</p>
         <span className="bg-[#3D7A52] text-white text-[9px] font-mono px-2 py-0.5 rounded-full uppercase tracking-widest">Coming Soon</span>
@@ -240,11 +242,11 @@ function ArchiveCard() {
         <div className="w-14 h-14 rounded-2xl bg-[#EDE7D8] border border-[#DDD4C0] flex items-center justify-center mb-4">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1B3828" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M9 21V9"/></svg>
         </div>
-        <h3 className="font-black text-[#1C1410] uppercase text-sm tracking-wide mb-1">Your Committee Dashboard</h3>
-        <p className="text-[#6A5A4A] text-xs leading-relaxed mb-5 max-w-xs">Track sessions, statistics, and delegate progress all in one place.</p>
+        <h3 className="font-black text-[#1C1410] uppercase text-sm tracking-wide mb-2">Your Committee Dashboard</h3>
+        <p className="text-[#6A5A4A] text-xs leading-relaxed mb-6 max-w-xs">Track sessions, statistics, and delegate progress all in one place.</p>
         <div className="flex flex-col gap-2.5 w-full">
           {['Saved Sessions', 'Session Statistics', 'My Progress'].map((label) => (
-            <div key={label} className="flex items-center gap-3 bg-[#1B3828] rounded-xl px-4 py-3.5 cursor-default">
+            <div key={label} className="flex items-center gap-3 bg-[#1B3828] rounded-xl px-4 py-3.5">
               <div className="w-2 h-2 rounded-full bg-[#EED98A] flex-shrink-0" />
               <span className="text-sm font-bold text-[#EED98A] uppercase tracking-wide flex-1 text-left">{label}</span>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#EED98A" strokeWidth="2.5"><path d="M9 18l6-6-6-6"/></svg>
@@ -275,8 +277,13 @@ function FeatureCarousel({
 }) {
   const featureIds = ['roll-call', 'motions', 'speakers', 'documents', 'chat', 'archive'];
   const sectionRef = useRef<HTMLDivElement>(null);
-  const isHijacked = useRef(false);
   const lastScrollTime = useRef(0);
+  const activeIndexRef = useRef(0);
+
+  // Keep activeIndexRef in sync
+  useEffect(() => {
+    activeIndexRef.current = featureIds.indexOf(activeFeature);
+  }, [activeFeature]);
 
   useEffect(() => {
     const handleWheel = (e: WheelEvent) => {
@@ -284,69 +291,55 @@ function FeatureCarousel({
       if (!section) return;
 
       const rect = section.getBoundingClientRect();
-      const inView = rect.top <= 80 && rect.bottom >= window.innerHeight * 0.5;
+      const inView = rect.top <= 100 && rect.bottom >= window.innerHeight * 0.4;
+      if (!inView) return;
 
-      if (!inView) {
-        isHijacked.current = false;
-        return;
-      }
-
-      const now = Date.now();
-      if (now - lastScrollTime.current < 600) {
-        e.preventDefault();
-        e.stopPropagation();
-        return;
-      }
-      lastScrollTime.current = now;
-
-      const currentIndex = featureIds.indexOf(activeFeature);
+      const currentIndex = activeIndexRef.current;
       const scrollingDown = e.deltaY > 0;
       const scrollingUp = e.deltaY < 0;
 
-      // At last feature scrolling down — release
-      if (scrollingDown && currentIndex >= featureIds.length - 1) {
-        isHijacked.current = false;
-        return;
-      }
+      // Release at boundaries so page can scroll
+      if (scrollingDown && currentIndex >= featureIds.length - 1) return;
+      if (scrollingUp && currentIndex <= 0) return;
 
-      // At first feature scrolling up — release
-      if (scrollingUp && currentIndex <= 0) {
-        isHijacked.current = false;
-        return;
-      }
-
-      // Otherwise hijack
+      // Hijack scroll
       e.preventDefault();
       e.stopPropagation();
-      isHijacked.current = true;
+
+      // Throttle — 700ms between transitions
+      const now = Date.now();
+      if (now - lastScrollTime.current < 700) return;
+      lastScrollTime.current = now;
 
       if (scrollingDown) {
-        setActiveFeature(featureIds[Math.min(currentIndex + 1, featureIds.length - 1)]);
+        const next = Math.min(currentIndex + 1, featureIds.length - 1);
+        setActiveFeature(featureIds[next]);
       } else if (scrollingUp) {
-        setActiveFeature(featureIds[Math.max(currentIndex - 1, 0)]);
+        const prev = Math.max(currentIndex - 1, 0);
+        setActiveFeature(featureIds[prev]);
       }
     };
 
     window.addEventListener('wheel', handleWheel, { passive: false });
     return () => window.removeEventListener('wheel', handleWheel);
-  }, [activeFeature]);
+  }, []); // Empty deps — uses ref for current index, avoids stale closure
 
   return (
-    <div ref={sectionRef} className="flex-1 flex justify-center items-start pl-16 relative" style={{ minHeight: '480px' }}>
+    <div ref={sectionRef} className="relative" style={{ height: '520px' }}>
       {featureIds.map((id) => (
         <div
           key={id}
-          className="absolute inset-0 flex justify-center items-start"
+          className="absolute inset-0"
           style={{
             opacity: id === activeFeature ? 1 : 0,
-            transform: id === activeFeature ? 'translateY(0) scale(1)' : 'translateY(20px) scale(0.97)',
-            transition: 'opacity 0.4s cubic-bezier(0.4,0,0.2,1), transform 0.4s cubic-bezier(0.4,0,0.2,1)',
+            transform: id === activeFeature
+              ? 'translateY(0px) scale(1)'
+              : 'translateY(24px) scale(0.97)',
+            transition: 'opacity 0.45s cubic-bezier(0.4,0,0.2,1), transform 0.45s cubic-bezier(0.4,0,0.2,1)',
             pointerEvents: id === activeFeature ? 'auto' : 'none',
           }}
         >
-          <div className="w-full max-w-xl">
-            <FeatureCard id={id} />
-          </div>
+          <FeatureCard id={id} />
         </div>
       ))}
     </div>
@@ -633,9 +626,11 @@ export default function LandingPage() {
                 </div>
               </div>
 
-              {/* RIGHT — scroll-hijacked carousel */}
-              <div className="flex-1 py-12 flex items-start justify-center">
-                <FeatureCarousel activeFeature={activeFeature} setActiveFeature={setActiveFeature} />
+              {/* RIGHT — wheel hijack carousel */}
+              <div className="flex-1 py-12 flex justify-center items-start pl-8">
+                <div className="w-full" style={{ maxWidth: '520px' }}>
+                  <FeatureCarousel activeFeature={activeFeature} setActiveFeature={setActiveFeature} />
+                </div>
               </div>
 
             </div>
