@@ -432,11 +432,10 @@ export default function LandingPage() {
           <footer
             className="relative z-10 border-t border-[#EDE7D8] px-6 py-8 flex flex-col md:flex-row items-center justify-between gap-4"
             style={{
-              backgroundColor: '#F6F1E9',
-              backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`,
+              backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='0.18'/%3E%3C/svg%3E")`,
               backgroundRepeat: 'repeat',
               backgroundSize: '300px 300px',
-              mixBlendMode: 'normal',
+              backgroundColor: '#F6F1E9',
             }}
           >
             <div className="flex items-center gap-2">
