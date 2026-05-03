@@ -22,7 +22,7 @@ export default function ConferencesPage() {
 
       {/* Main content */}
       <section className="relative z-10 flex-1 flex items-center justify-center px-8 py-20">
-        <div className="flex flex-col md:flex-row items-center gap-8 max-w-5xl w-full" style={{ paddingLeft: '6vw' }}>
+        <div className="flex flex-col md:flex-row items-center gap-8 mx-auto">
 
           {/* Otter image */}
           <div className="shrink-0 flex items-center justify-center" style={{ width: 420 }}>
