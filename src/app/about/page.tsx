@@ -36,13 +36,13 @@ const inputStyle: React.CSSProperties = {
   borderRadius: '10px',
 };
 
-const PhotoPlaceholder = ({ label }: { label: string }) => (
-  <div className="rounded-2xl overflow-hidden flex items-center justify-center"
-    style={{ width: 280, height: 340, background: 'linear-gradient(160deg, #DDD4C0 0%, #CFC6B0 100%)', border: '1px solid rgba(28, 20, 16, 0.12)' }}>
-    <div style={{ textAlign: 'center', opacity: 0.5 }}>
-      <div style={{ width: 64, height: 64, borderRadius: '50%', border: '2px dashed #9A8A78', margin: '0 auto 12px' }} />
-      <p className="text-[#9A8A78] text-xs font-mono tracking-widest">{label}</p>
-    </div>
+const FounderPhoto = ({ src, name }: { src: string; name: string }) => (
+  <div style={{ width: 260, height: 260, borderRadius: '50%', overflow: 'hidden', flexShrink: 0, border: '2px solid rgba(196, 168, 130, 0.15)' }}>
+    <img
+      src={src}
+      alt={name}
+      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', mixBlendMode: 'normal' }}
+    />
   </div>
 );
 
@@ -67,11 +67,7 @@ export default function AboutPage() {
       {/* Banner */}
       <section className="relative z-10 w-full flex items-end"
         style={{ height: 340, background: 'linear-gradient(135deg, #1B3828 0%, #2A5A3C 50%, #1B3828 100%)', borderBottom: '1px solid rgba(27, 56, 40, 0.3)' }}>
-        <div className="absolute inset-0 flex items-center justify-center flex-col gap-3" style={{ opacity: 0.2 }}>
-          <div style={{ width: 64, height: 64, borderRadius: '50%', border: '2px dashed #EED98A' }} />
-          <p className="text-[#EED98A] text-xs font-mono tracking-widest uppercase">Photo of Peter & Christian — coming soon</p>
-        </div>
-        <div className="relative z-10 w-full text-center px-12 pb-10">
+<div className="relative z-10 w-full text-center px-12 pb-10">
           <p className="font-black text-white tracking-tight leading-none" style={{ fontSize: 'clamp(36px, 5vw, 72px)' }}>
             made by those who{' '}
             <span style={{ fontFamily: "'Playfair Display', serif", fontStyle: 'italic', fontWeight: 400, color: '#EED98A' }}>love</span>
@@ -83,7 +79,7 @@ export default function AboutPage() {
       {/* Founders */}
       <section className="relative z-10 py-24 px-6 max-w-6xl mx-auto w-full">
         <div className="flex flex-col md:flex-row items-center gap-16 mb-28">
-          <div className="shrink-0"><PhotoPlaceholder label="PETER" /></div>
+          <div className="shrink-0"><FounderPhoto src="/Peter.png" name="Peter Zakhar" /></div>
           <div className="flex-1">
             <p className="text-xs font-mono tracking-[0.18em] text-[#9A8A78] mb-2 uppercase">Co-Founder</p>
             <h2 className="text-4xl font-black text-[#1C1410] mb-1">Peter Zakhar</h2>
@@ -92,11 +88,11 @@ export default function AboutPage() {
           </div>
         </div>
         <div className="flex flex-col md:flex-row-reverse items-center gap-16">
-          <div className="shrink-0"><PhotoPlaceholder label="CHRISTIAN" /></div>
+          <div className="shrink-0"><FounderPhoto src="/Christian.png" name="Christian Galindo Haas" /></div>
           <div className="flex-1">
             <p className="text-xs font-mono tracking-[0.18em] text-[#9A8A78] mb-2 uppercase">Co-Founder</p>
-            <h2 className="text-4xl font-black text-[#1C1410] mb-1">Christian</h2>
-            <p className="text-[#B6871F] text-sm font-semibold mb-6 tracking-wide">Backend Development</p>
+            <h2 className="text-4xl font-black text-[#1C1410] mb-1">Christian Galindo Haas</h2>
+            <p className="text-[#B6871F] text-sm font-semibold mb-6 tracking-wide">Backend Development & Business Dev</p>
             <p className="text-[#6A5A4A] leading-relaxed text-base">{LOREM}</p>
           </div>
         </div>
