@@ -255,7 +255,7 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
       {/* Header */}
       <header className="border-b border-[#DDD4C0] bg-[#FAF8F3] px-4 h-11 flex items-center gap-3 shrink-0">
         <Link href="/">
-          <img src="/gavelling-logo.png" alt="Gavelling" className="w-[16vw] h-auto max-h-9 object-contain" onError={(e)=>{(e.target as HTMLImageElement).style.display="none"}} />
+          <img src="/GavellingLogo.png" alt="Gavelling" className="w-[16vw] h-auto max-h-9 object-contain" onError={(e)=>{(e.target as HTMLImageElement).style.display="none"}} />
         </Link>
         <span className="font-bold text-[#1C1410] text-sm truncate">{committee.name}</span>
         <span className="text-[#9A8A78] text-xs hidden sm:block truncate flex-1">{committee.topic}</span>

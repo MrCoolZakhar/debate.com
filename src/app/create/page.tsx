@@ -190,7 +190,7 @@ function CreatePageInner() {
     <div className="h-screen bg-[#F6F1E9] flex flex-col overflow-hidden">
       <nav className="border-b border-[#DDD4C0] bg-[#FAF8F3] px-6 h-14 flex items-center justify-between shrink-0">
         <Link href="/" className="flex items-center gap-2">
-          <img src="/gavelling-logo.png" alt="Gavelling" className="w-[16vw] h-auto max-h-9 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+          <img src="/GavellingLogo.png" alt="Gavelling" className="w-[16vw] h-auto max-h-9 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
         </Link>
       </nav>
 
@@ -199,7 +199,7 @@ function CreatePageInner() {
           <div className="flex-1 flex flex-col items-center justify-center px-8 py-6">
             {/* Gavelling logo — large, above card selection */}
             <img
-              src="/gavelling-logo.png"
+              src="/GavellingLogo.png"
               alt="Gavelling"
               className="mb-6 object-contain"
               style={{ width: 'min(320px, 40vw)', height: 'auto' }}

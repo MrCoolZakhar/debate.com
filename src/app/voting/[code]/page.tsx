@@ -277,7 +277,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     <header className="border-b border-[#DDD4C0] bg-[#FAF8F3] px-6 h-12 flex items-center gap-4 shrink-0">
       <Link href="/">
         <img
-          src="/gavelling-logo.png"
+          src="/GavellingLogo.png"
           alt="Gavelling"
           className="w-[16vw] h-auto max-h-8 object-contain"
           onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}

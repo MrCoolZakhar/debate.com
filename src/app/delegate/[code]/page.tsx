@@ -810,7 +810,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
       {/* Header */}
       <header className="border-b border-[#DDD4C0] bg-[#FAF8F3] px-4 h-14 flex items-center gap-3 shrink-0">
         <Link href="/" className="flex items-center gap-2">
-          <img src="/gavelling-logo.png" alt="Gavelling" className="w-[16vw] h-auto max-h-9 object-contain" onError={(e)=>{(e.target as HTMLImageElement).style.display="none"}} />
+          <img src="/GavellingLogo.png" alt="Gavelling" className="w-[16vw] h-auto max-h-9 object-contain" onError={(e)=>{(e.target as HTMLImageElement).style.display="none"}} />
         </Link>
         <div className="flex-1 min-w-0">
           <div className="font-bold text-[#1C1410] text-sm truncate">{committee.name}</div>

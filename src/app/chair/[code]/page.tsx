@@ -1686,7 +1686,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     <div className="h-screen bg-[#F6F1E9] flex flex-col overflow-hidden">
       <header className="border-b border-[#DDD4C0] bg-[#FAF8F3] px-4 h-11 flex items-center gap-2">
         <Link href="/">
-          <img src="/gavelling-logo.png" alt="Gavelling" className="w-[14vw] h-auto max-h-8 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+          <img src="/GavellingLogo.png" alt="Gavelling" className="w-[14vw] h-auto max-h-8 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
         </Link>
 
         {committee.phase !== 'pre-session' && !sessionEnded ? (

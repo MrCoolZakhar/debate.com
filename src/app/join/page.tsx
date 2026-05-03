@@ -147,7 +147,7 @@ function JoinPageInner() {
     <div className="min-h-screen bg-[#F6F1E9] flex flex-col">
       <nav className="border-b border-[#DDD4C0] px-6 h-16 flex items-center justify-between bg-[#FAF8F3]">
         <Link href="/" className="flex items-center gap-3">
-          <img src="/gavelling-logo.png" alt="Gavelling" className="w-[16vw] h-auto max-h-9 object-contain" />
+          <img src="/GavellingLogo.png" alt="Gavelling" className="w-[16vw] h-auto max-h-9 object-contain" />
         </Link>
         <Link href="/create" className="text-sm text-[#1B3828] hover:text-[#6A5A4A] transition-colors">
           Chair? Create Committee →

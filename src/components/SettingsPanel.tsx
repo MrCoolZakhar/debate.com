@@ -196,7 +196,7 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
         <div className="flex items-center justify-between px-5 py-4 border-b border-[#DDD4C0] shrink-0">
           <div className="flex flex-col">
             <img
-              src="/gavelling-logo.png"
+              src="/GavellingLogo.png"
               alt=""
               className="w-24 h-auto object-contain mb-1"
               style={{ filter: 'grayscale(1) brightness(0.6)' }}

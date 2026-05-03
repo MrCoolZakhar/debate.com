@@ -53,7 +53,7 @@ export default function GrainDevPage() {
         {/* Nav */}
         <nav className="relative z-10 px-8 h-16 flex items-center shrink-0" style={{ borderBottom: `1px solid ${bd}`, backgroundColor: nav }}>
           <img
-            src="/gavelling-logo.png"
+            src="/GavellingLogo.png"
             alt="Gavelling"
             className="w-[16vw] h-auto max-h-9 object-contain"
             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
