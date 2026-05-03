@@ -234,29 +234,23 @@ function ArchiveCard() {
     <div className={base} style={shadow}>
       <div className="bg-[#1B3828] px-5 py-3 flex items-center justify-between">
         <p className="text-[#EED98A] font-black text-sm uppercase tracking-wide">Session Archive</p>
-        <span className="bg-[#B6871F] text-white text-[9px] font-mono px-2 py-0.5 rounded-full uppercase tracking-widest flex items-center gap-1">
-          <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1a5 5 0 1 1 0 10A5 5 0 0 1 12 1zm0 12c5.33 0 8 2.67 8 4v2H4v-2c0-1.33 2.67-4 8-4z" /></svg>
-          Premium
-        </span>
+        <span className="bg-[#3D7A52] text-white text-[9px] font-mono px-2 py-0.5 rounded-full uppercase tracking-widest">Coming Soon</span>
       </div>
-      <div className="px-5 py-8 flex flex-col items-center text-center">
-        <div className="w-16 h-16 rounded-2xl bg-[#EDE7D8] border border-[#DDD4C0] flex items-center justify-center mb-4">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#1B3828" strokeWidth="1.5">
-            <rect x="3" y="3" width="18" height="18" rx="3" />
-            <path d="M3 9h18M9 21V9" />
-          </svg>
+      <div className="px-5 py-6 flex flex-col items-center text-center">
+        <div className="w-14 h-14 rounded-2xl bg-[#EDE7D8] border border-[#DDD4C0] flex items-center justify-center mb-4">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1B3828" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M9 21V9"/></svg>
         </div>
-        <h3 className="font-black text-[#1C1410] uppercase text-sm tracking-wide mb-2">Coming Soon</h3>
-        <p className="text-[#6A5A4A] text-xs leading-relaxed mb-5 max-w-xs">Save sessions, replay debates, and track delegate performance over time. Full statistics and analytics for every committee.</p>
-        <div className="grid grid-cols-3 gap-2 w-full mb-4">
-          {['Sessions Saved', 'Delegates Tracked', 'Hours Logged'].map(stat => (
-            <div key={stat} className="bg-[#EDE7D8] rounded-xl p-2.5 text-center opacity-50">
-              <p className="font-black text-[#1B3828] text-lg">—</p>
-              <p className="text-[9px] text-[#9A8A78] font-mono uppercase tracking-wide mt-0.5">{stat}</p>
+        <h3 className="font-black text-[#1C1410] uppercase text-sm tracking-wide mb-1">Your Committee Dashboard</h3>
+        <p className="text-[#6A5A4A] text-xs leading-relaxed mb-5 max-w-xs">Track sessions, statistics, and delegate progress all in one place.</p>
+        <div className="flex flex-col gap-2.5 w-full">
+          {['Saved Sessions', 'Session Statistics', 'My Progress'].map((label) => (
+            <div key={label} className="flex items-center gap-3 bg-[#1B3828] rounded-xl px-4 py-3.5 cursor-default">
+              <div className="w-2 h-2 rounded-full bg-[#EED98A] flex-shrink-0" />
+              <span className="text-sm font-bold text-[#EED98A] uppercase tracking-wide flex-1 text-left">{label}</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#EED98A" strokeWidth="2.5"><path d="M9 18l6-6-6-6"/></svg>
             </div>
           ))}
         </div>
-        <button className="px-6 py-2.5 bg-[#B6871F] rounded-xl text-white font-bold text-xs uppercase tracking-wide opacity-60 cursor-not-allowed">Unlock with Premium</button>
       </div>
     </div>
   );
@@ -282,6 +276,7 @@ function FeatureCarousel({
   const featureIds = ['roll-call', 'motions', 'speakers', 'documents', 'chat', 'archive'];
   const sectionRef = useRef<HTMLDivElement>(null);
   const isHijacked = useRef(false);
+  const lastScrollTime = useRef(0);
 
   useEffect(() => {
     const handleWheel = (e: WheelEvent) => {
@@ -295,6 +290,14 @@ function FeatureCarousel({
         isHijacked.current = false;
         return;
       }
+
+      const now = Date.now();
+      if (now - lastScrollTime.current < 600) {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+      lastScrollTime.current = now;
 
       const currentIndex = featureIds.indexOf(activeFeature);
       const scrollingDown = e.deltaY > 0;
@@ -329,7 +332,7 @@ function FeatureCarousel({
   }, [activeFeature]);
 
   return (
-    <div ref={sectionRef} className="flex-1 flex justify-center items-start pl-16 relative" style={{ minHeight: '520px' }}>
+    <div ref={sectionRef} className="flex-1 flex justify-center items-start pl-16 relative" style={{ minHeight: '480px' }}>
       {featureIds.map((id) => (
         <div
           key={id}
@@ -341,7 +344,7 @@ function FeatureCarousel({
             pointerEvents: id === activeFeature ? 'auto' : 'none',
           }}
         >
-          <div className="w-full max-w-md">
+          <div className="w-full max-w-xl">
             <FeatureCard id={id} />
           </div>
         </div>
@@ -582,27 +585,27 @@ export default function LandingPage() {
 
           {/* ── FEATURE SHOWCASE SECTION ── */}
           <section id="features" className="relative z-10 bg-[#EDE7D8] px-8 md:px-20 scroll-reveal">
-            <div className="max-w-6xl mx-auto flex flex-col md:flex-row gap-20">
+            <div className="max-w-6xl mx-auto flex flex-col md:flex-row gap-12">
 
               {/* LEFT — sticky text + pills */}
-              <div className="w-80 flex-shrink-0 sticky top-24 self-start py-24">
+              <div className="w-72 flex-shrink-0 sticky top-16 self-start py-12">
 
                 <div className="inline-flex items-center gap-2 bg-[#EAF1EC] border border-[#C8D8C0] text-[#1B3828] text-xs font-semibold px-4 py-1.5 rounded-full mb-6 w-fit tracking-widest uppercase" style={{ fontFamily: "'DM Mono', monospace" }}>
                   <span className="w-1.5 h-1.5 rounded-full bg-[#3D7A52]" />
                   Built for Chairs
                 </div>
 
-                <h2 className="font-black uppercase tracking-wide leading-tight mb-5" style={{ fontSize: 'clamp(24px, 3vw, 42px)' }}>
+                <h2 className="font-black uppercase tracking-wide leading-tight mb-5" style={{ fontSize: 'clamp(20px, 2.4vw, 34px)' }}>
                   <span className="text-[#1B3828]">Everything chairs need</span><br />
                   <span className="text-[#B8844A]">to run committees.</span>
                 </h2>
 
-                <p className="text-[#6A5A4A] text-base mb-8 leading-relaxed">
+                <p className="text-[#6A5A4A] text-sm mb-6 leading-relaxed">
                   One dashboard. Every tool. From opening session to final voting.
                 </p>
 
                 {/* Pills — flex-col so each pill is independent height */}
-                <div className="flex flex-col gap-2.5">
+                <div className="flex flex-col gap-1.5">
                   {[
                     { id: 'roll-call', icon: <Mic size={15} className="text-[#EED98A]" />, label: 'Roll Call' },
                     { id: 'motions', icon: <Scale size={15} className="text-[#EED98A]" />, label: 'Motions & Voting' },
@@ -615,8 +618,8 @@ export default function LandingPage() {
                       key={f.id}
                       className={`flex items-center gap-3 rounded-xl px-4 cursor-pointer transition-all duration-300 border ${
                         activeFeature === f.id
-                          ? 'bg-[#2A5A3C] border-[#3D7A52] py-3.5 shadow-lg shadow-[#1B3828]/20'
-                          : 'bg-[#1B3828] border-[#1B3828] py-2.5 hover:bg-[#2A5A3C]'
+                          ? 'bg-[#2A5A3C] border-[#3D7A52] py-2.5 shadow-lg shadow-[#1B3828]/20'
+                          : 'bg-[#1B3828] border-[#1B3828] py-2 hover:bg-[#2A5A3C]'
                       }`}
                       onClick={() => {
                         setActiveFeature(f.id);
@@ -631,7 +634,7 @@ export default function LandingPage() {
               </div>
 
               {/* RIGHT — scroll-hijacked carousel */}
-              <div className="flex-1 py-24 flex items-start justify-center">
+              <div className="flex-1 py-12 flex items-start justify-center">
                 <FeatureCarousel activeFeature={activeFeature} setActiveFeature={setActiveFeature} />
               </div>
 
