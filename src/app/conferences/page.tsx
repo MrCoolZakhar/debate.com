@@ -22,7 +22,7 @@ export default function ConferencesPage() {
 
       {/* Main content */}
       <section className="relative z-10 flex-1 flex items-center justify-center px-8 py-20">
-        <div className="flex flex-col md:flex-row items-center gap-16 max-w-4xl w-full" style={{ paddingLeft: '6vw' }}>
+        <div className="flex flex-col md:flex-row items-center gap-8 max-w-5xl w-full" style={{ paddingLeft: '6vw' }}>
 
           {/* Otter image */}
           <div className="shrink-0 flex items-center justify-center" style={{ width: 420 }}>
@@ -34,21 +34,21 @@ export default function ConferencesPage() {
           </div>
 
           {/* Text + CTA */}
-          <div className="flex flex-col items-start gap-6">
+          <div className="flex flex-col items-start gap-6" style={{ maxWidth: 600 }}>
             <h1
-              className="font-black text-[#1C1410] tracking-tight leading-none"
+              className="font-black text-[#1C1410] tracking-tight leading-none whitespace-nowrap"
               style={{ fontSize: 'clamp(40px, 6vw, 72px)' }}
             >
               COMING SOON
             </h1>
 
-            <p className="text-[#6A5A4A] leading-relaxed" style={{ fontSize: '17px', maxWidth: 480 }}>
+            <p className="text-[#6A5A4A] leading-relaxed" style={{ fontSize: '17px' }}>
               The otters are working hard to bring you MUN Conferences on Gavelling. We expect to roll out the first conferences starting in{' '}
               <span className="text-[#1C1410] font-semibold">August 2026</span>.
             </p>
 
-            <p className="text-[#9A8A78] leading-relaxed text-sm" style={{ maxWidth: 480 }}>
-              If you are a conference organiser and would like to organise your MUN conference fee-free on Gavelling, feel free to book an intro call with us below.
+            <p className="text-[#9A8A78] leading-relaxed text-sm">
+              If you are a conference organiser and would like to organise your MUN conference <span className="font-bold text-[#6A5A4A]">fee-free</span> on Gavelling, book an intro call with us below.
             </p>
 
             <a
