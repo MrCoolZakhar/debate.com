@@ -254,41 +254,10 @@ export default function PreRegisterModal({ open = true }: { open?: boolean }) {
                 style={{
                   width: '100%',
                   height: '100%',
-                  objectFit: 'cover',
+                  objectFit: 'contain',
                   display: 'block',
                 }}
-                onError={(e) => {
-                  (e.currentTarget as HTMLImageElement).style.display = 'none';
-                  const placeholder = e.currentTarget.nextElementSibling as HTMLElement;
-                  if (placeholder) placeholder.style.display = 'flex';
-                }}
               />
-              {/* Fallback placeholder shown until GavelHero.png is added */}
-              <div
-                className="absolute inset-0 items-center justify-center"
-                style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '0 32px' }}
-              >
-                <div
-                  style={{
-                    width: 64,
-                    height: 64,
-                    borderRadius: '50%',
-                    border: '2px dashed rgba(27, 56, 40, 0.3)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <GiftIcon size={24} style={{ color: 'rgba(27, 56, 40, 0.4)' }} />
-                </div>
-                <p
-                  className="text-center text-sm italic leading-relaxed"
-                  style={{ color: 'rgba(27, 56, 40, 0.45)' }}
-                >
-                  Add <strong style={{ fontStyle: 'normal' }}>GavelHero.png</strong> to{' '}
-                  <code style={{ fontSize: 11 }}>/public</code> to show the illustration here
-                </p>
-              </div>
             </div>
 
             {/* Mobile image */}
