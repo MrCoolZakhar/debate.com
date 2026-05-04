@@ -58,7 +58,7 @@ export default function PreRegisterModal({ open = true }: { open?: boolean }) {
           >
             {/* Green header band */}
             <div
-              className="relative flex flex-col gap-5 px-8 pt-10 pb-8 shrink-0"
+              className="relative flex flex-col gap-4 px-8 pt-8 pb-7 shrink-0"
               style={{
                 background: 'linear-gradient(150deg, #1B3828 0%, #142B1C 65%, #0E1E13 100%)',
               }}
@@ -97,7 +97,7 @@ export default function PreRegisterModal({ open = true }: { open?: boolean }) {
               {/* Heading */}
               <h2
                 className="relative font-black text-white tracking-tight leading-[0.92]"
-                style={{ fontSize: 'clamp(32px, 4vw, 52px)' }}
+                style={{ fontSize: 'clamp(24px, 3vw, 38px)', whiteSpace: 'nowrap' }}
               >
                 The committee room,{' '}
                 <span
@@ -116,11 +116,6 @@ export default function PreRegisterModal({ open = true }: { open?: boolean }) {
             {/* Body */}
             <div className="flex flex-col justify-between gap-6 flex-1 px-8 py-8">
               <div className="flex flex-col gap-6">
-                {/* Subheading */}
-                <p className="text-base leading-relaxed" style={{ color: '#6A5A4A' }}>
-                  Gavelling brings professional MUN committee management to every conference — chair tools, delegate flows, live voting, and more.
-                </p>
-
                 {/* Scarcity alert */}
                 <Alert style={{ backgroundColor: 'rgba(27, 56, 40, 0.06)', border: '1px solid rgba(27, 56, 40, 0.18)' }}>
                   <GiftIcon size={16} style={{ color: '#1B3828' }} />
