@@ -384,6 +384,7 @@ export default function LandingPage() {
   const router = useRouter();
   const [joinCode, setJoinCode] = useState('');
   const [activeFeature, setActiveFeature] = useState('roll-call');
+  const [showPreRegister, setShowPreRegister] = useState(false);
 
   const handleJoin = () => {
     const code = joinCode.trim().toUpperCase();
@@ -438,7 +439,7 @@ export default function LandingPage() {
       `}</style>
 
       <div className="min-h-screen bg-[#EDE7D8] flex flex-col relative overflow-x-hidden">
-        <div className="relative z-10 flex flex-col min-h-screen">
+        <div className="relative z-10 flex flex-col">
 
           {/* Grain overlay */}
           <div
@@ -452,7 +453,7 @@ export default function LandingPage() {
             }}
           />
 
-          <SiteNav />
+          <SiteNav onPreRegister={() => setShowPreRegister(true)} />
 
           {/* Hero */}
           <section className="relative z-10 h-[calc(100vh-72px)] flex flex-col items-center justify-center overflow-hidden">
@@ -677,7 +678,7 @@ export default function LandingPage() {
         </div>
       </div>
 
-      <PreRegisterModal />
+      <PreRegisterModal open={showPreRegister} onClose={() => setShowPreRegister(false)} />
     </>
   );
 }

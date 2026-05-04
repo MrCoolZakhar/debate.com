@@ -17,7 +17,7 @@ const PROGRESS_VALUE = (SPOTS_CLAIMED / SPOTS_TOTAL) * 100;
 
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
 
-export default function PreRegisterModal({ open = true }: { open?: boolean }) {
+export default function PreRegisterModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [email, setEmail]         = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading]     = useState(false);
@@ -32,7 +32,7 @@ export default function PreRegisterModal({ open = true }: { open?: boolean }) {
   };
 
   return (
-    <Dialog open={open}>
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogPortal>
         <DialogOverlay className="bg-black/40 backdrop-blur-sm" />
         <RadixDialog.Content
@@ -50,6 +50,16 @@ export default function PreRegisterModal({ open = true }: { open?: boolean }) {
           )}
         >
           <DialogTitle className="sr-only">Pre-register for Gavelling</DialogTitle>
+
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 text-[#9A8A78] hover:text-[#1C1410] transition-colors z-10"
+            aria-label="Close"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M18 6L6 18M6 6l12 12"/>
+            </svg>
+          </button>
 
           {/* ── Left column ── */}
           <div

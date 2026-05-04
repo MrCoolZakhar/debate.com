@@ -11,7 +11,7 @@ const NAV_LINKS = [
   { label: 'CONTACT', href: '/contact' },
 ];
 
-export default function SiteNav() {
+export default function SiteNav({ onPreRegister }: { onPreRegister?: () => void }) {
   const pathname = usePathname();
   const [hovered, setHovered] = useState<string | null>(null);
 
@@ -70,8 +70,8 @@ export default function SiteNav() {
         })}
       </div>
 
-      <Link
-        href="/pre-register"
+      <button
+        onClick={onPreRegister}
         onMouseEnter={(e) => {
           const el = e.currentTarget as HTMLElement;
           el.style.backgroundColor = '#1B3828';
@@ -94,13 +94,13 @@ export default function SiteNav() {
           color: '#1B3828',
           border: '1.5px solid rgba(27, 56, 40, 0.5)',
           borderRadius: '9999px',
-          textDecoration: 'none',
+          cursor: 'pointer',
           transition: 'all 200ms ease',
           backgroundColor: 'transparent',
         }}
       >
         PRE-REGISTER
-      </Link>
+      </button>
     </nav>
   );
 }
