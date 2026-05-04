@@ -41,7 +41,7 @@ export default function PreRegisterModal({ open = true }: { open?: boolean }) {
           aria-describedby={undefined}
           className={cn(
             'fixed top-1/2 left-1/2 z-50 -translate-x-1/2 -translate-y-1/2 outline-none',
-            'w-[95vw] max-w-[95vw] max-h-[90vh]',
+            'w-[900px] h-[580px]',
             'rounded-2xl shadow-2xl overflow-hidden',
             'flex flex-col md:flex-row',
             'data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
@@ -114,7 +114,7 @@ export default function PreRegisterModal({ open = true }: { open?: boolean }) {
             </div>
 
             {/* Body */}
-            <div className="flex flex-col justify-between gap-6 flex-1 px-8 py-8">
+            <div className="flex flex-col flex-1 px-8 py-8" style={{ gap: 0 }}>
               <div className="flex flex-col gap-6">
                 {/* Scarcity alert */}
                 <Alert style={{ backgroundColor: 'rgba(27, 56, 40, 0.06)', border: '1px solid rgba(27, 56, 40, 0.18)' }}>
@@ -146,6 +146,9 @@ export default function PreRegisterModal({ open = true }: { open?: boolean }) {
                   </p>
                 </div>
               </div>
+
+              {/* Spacer */}
+              <div className="flex-1" />
 
               {/* Form */}
               <div className="flex flex-col gap-3">
