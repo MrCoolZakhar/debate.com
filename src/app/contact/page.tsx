@@ -122,10 +122,11 @@ export default function ContactPage() {
                   justifyContent: 'center',
                 }}
               >
-                {/* IMAGE SLOT — replace with <Image> or <img src="/contact-hero.jpg"> */}
-                <p style={{ fontSize: 11, color: 'rgba(238, 217, 138, 0.25)', fontFamily: 'monospace', letterSpacing: '0.1em', textTransform: 'uppercase', textAlign: 'center', padding: '0 24px' }}>
-                  Image slot · contact-hero.jpg
-                </p>
+                <img
+                  src="/contact-hero.png"
+                  alt=""
+                  style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+                />
               </div>
 
               {/* Quote */}
