@@ -41,7 +41,6 @@ export default function ContactPage() {
   const [subject, setSubject]     = useState('general');
   const [form, setForm]           = useState({ name: '', email: '', message: '' });
   const [submitted, setSubmitted] = useState(false);
-  const [hoveredCard, setHoveredCard] = useState<string | null>(null);
 
   const canSubmit = form.name.trim() && form.email.trim() && form.message.trim();
 
@@ -68,7 +67,7 @@ export default function ContactPage() {
 
           {/* Left — editorial green panel */}
           <div
-            className="relative flex flex-col justify-between px-10 py-16 md:px-14 md:py-20 md:sticky md:top-0 md:h-screen"
+            className="relative flex flex-col px-10 py-12 md:px-14 md:py-14 md:sticky md:top-0 md:h-screen"
             style={{
               background: 'linear-gradient(160deg, #1B3828 0%, #142B1C 60%, #0E1E13 100%)',
               flexBasis: '44%',
@@ -87,74 +86,51 @@ export default function ContactPage() {
               }}
             />
 
-            <div className="relative z-10 flex flex-col h-full justify-between">
-              <div>
-                {/* Eyebrow */}
-                <p
-                  className="font-mono tracking-[0.22em] uppercase mb-8"
-                  style={{ fontSize: 11, color: 'rgba(238, 217, 138, 0.45)' }}
+            <div className="relative z-10 flex flex-col h-full">
+              {/* Heading */}
+              <h1
+                className="font-black text-white tracking-tight leading-[0.9]"
+                style={{ fontSize: 'clamp(62px, 7.5vw, 110px)' }}
+              >
+                The Floor<br />
+                Is{' '}
+                <span
+                  style={{
+                    fontFamily: "'Playfair Display', serif",
+                    fontStyle: 'italic',
+                    fontWeight: 400,
+                    color: '#EED98A',
+                  }}
                 >
-                  The chair recognizes you
+                  Yours.
+                </span>
+              </h1>
+
+              {/* Image slot */}
+              <div
+                style={{
+                  flex: 1,
+                  marginTop: 32,
+                  marginBottom: 24,
+                  borderRadius: 16,
+                  overflow: 'hidden',
+                  backgroundColor: 'rgba(255,255,255,0.05)',
+                  border: '1px solid rgba(238, 217, 138, 0.1)',
+                  minHeight: 180,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                {/* IMAGE SLOT — replace with <Image> or <img src="/contact-hero.jpg"> */}
+                <p style={{ fontSize: 11, color: 'rgba(238, 217, 138, 0.25)', fontFamily: 'monospace', letterSpacing: '0.1em', textTransform: 'uppercase', textAlign: 'center', padding: '0 24px' }}>
+                  Image slot · contact-hero.jpg
                 </p>
-
-                {/* Heading */}
-                <h1
-                  className="font-black text-white tracking-tight leading-[0.9] mb-8"
-                  style={{ fontSize: 'clamp(48px, 5.5vw, 84px)' }}
-                >
-                  The Floor<br />
-                  Is{' '}
-                  <span
-                    style={{
-                      fontFamily: "'Playfair Display', serif",
-                      fontStyle: 'italic',
-                      fontWeight: 400,
-                      color: '#EED98A',
-                    }}
-                  >
-                    Yours.
-                  </span>
-                </h1>
-
-                {/* Subtext */}
-                <p
-                  className="leading-relaxed mb-12"
-                  style={{ fontSize: 16, color: 'rgba(245, 240, 232, 0.58)', maxWidth: 360 }}
-                >
-                  Whether you're scaling a conference, chairing your first committee,
-                  or covering MUN for a story — we read every message.
-                </p>
-
-                {/* Reasons */}
-                <div className="flex flex-col gap-6">
-                  {[
-                    { label: 'Conference Organisers', sub: 'Host your MUN fee-free on Gavelling' },
-                    { label: 'Delegates & Chairs',    sub: 'Questions, ideas, or just saying hi' },
-                    { label: 'Press & Partnerships',  sub: 'Press kit available on request' },
-                  ].map((item) => (
-                    <div key={item.label} className="flex items-start gap-4">
-                      <div
-                        className="shrink-0"
-                        style={{
-                          width: 6,
-                          height: 6,
-                          borderRadius: '50%',
-                          backgroundColor: '#EED98A',
-                          marginTop: 7,
-                        }}
-                      />
-                      <div>
-                        <p className="font-bold text-white text-sm leading-snug">{item.label}</p>
-                        <p className="text-xs mt-0.5" style={{ color: 'rgba(238, 217, 138, 0.45)' }}>{item.sub}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
               </div>
 
               {/* Quote */}
               <div
-                className="mt-16 pt-8"
+                className="pt-6"
                 style={{ borderTop: '1px solid rgba(238, 217, 138, 0.1)' }}
               >
                 <p
@@ -177,7 +153,7 @@ export default function ContactPage() {
 
           {/* Right — form */}
           <div
-            className="flex-1 flex flex-col justify-center px-10 py-16 md:px-14 md:py-20"
+            className="flex-1 flex flex-col justify-start overflow-y-auto px-10 py-10 md:px-14 md:pt-16"
             style={{ backgroundColor: '#EDE7D8' }}
           >
             {submitted ? (
@@ -227,7 +203,7 @@ export default function ContactPage() {
                 </button>
               </div>
             ) : (
-              <div className="flex flex-col gap-8 max-w-lg w-full">
+              <div className="flex flex-col gap-6 max-w-lg w-full">
 
                 <div>
                   <p className="text-xs font-mono tracking-[0.2em] text-[#9A8A78] mb-2 uppercase">Raise your motion</p>
@@ -237,7 +213,7 @@ export default function ContactPage() {
                 {/* Subject pills */}
                 <div className="flex flex-col gap-2.5">
                   <Label style={labelStyle}>Subject</Label>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-row flex-nowrap gap-2 overflow-x-auto">
                     {SUBJECTS.map((s) => {
                       const active = subject === s.id;
                       return (
@@ -254,6 +230,8 @@ export default function ContactPage() {
                             border: `1.5px solid ${active ? '#1B3828' : 'rgba(28, 20, 16, 0.14)'}`,
                             cursor: 'pointer',
                             transition: 'all 180ms ease',
+                            whiteSpace: 'nowrap',
+                            flexShrink: 0,
                           }}
                         >
                           {s.label}
@@ -296,7 +274,7 @@ export default function ContactPage() {
                     placeholder={PLACEHOLDERS[subject]}
                     value={form.message}
                     onChange={(e) => setForm({ ...form, message: e.target.value })}
-                    rows={6}
+                    rows={4}
                     style={{ ...inputStyle, resize: 'none' }}
                   />
                 </div>
@@ -342,91 +320,63 @@ export default function ContactPage() {
                   <p className="text-xs" style={{ color: '#9A8A78' }}>We reply within 48 hrs</p>
                 </div>
 
+                {/* Other ways to reach us — inline */}
+                <div style={{ marginTop: 40, borderTop: '1px solid rgba(28, 20, 16, 0.1)', paddingTop: 28 }}>
+                  <p style={{ fontSize: 10, fontFamily: 'monospace', letterSpacing: '0.2em', textTransform: 'uppercase', color: '#9A8A78', marginBottom: 16 }}>
+                    Other ways to reach us
+                  </p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+                    {/* Email */}
+                    <a href="mailto:wearegavelling@gmail.com" style={{ display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none' }}>
+                      <div style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(27, 56, 40, 0.08)', border: '1px solid rgba(27, 56, 40, 0.14)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1B3828" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="2" y="4" width="20" height="16" rx="2" />
+                          <polyline points="2,4 12,13 22,4" />
+                        </svg>
+                      </div>
+                      <div>
+                        <p style={{ fontSize: 11, fontWeight: 700, color: '#1B3828', letterSpacing: '0.02em' }}>wearegavelling@gmail.com</p>
+                        <p style={{ fontSize: 11, color: '#9A8A78', marginTop: 1 }}>Drop us a line directly</p>
+                      </div>
+                    </a>
+
+                    {/* Instagram */}
+                    <a href="https://instagram.com/wearegavelling" target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none' }}>
+                      <div style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(27, 56, 40, 0.08)', border: '1px solid rgba(27, 56, 40, 0.14)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1B3828" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="2" y="2" width="20" height="20" rx="5" />
+                          <circle cx="12" cy="12" r="4" />
+                          <circle cx="17.5" cy="6.5" r="0.5" fill="#1B3828" />
+                        </svg>
+                      </div>
+                      <div>
+                        <p style={{ fontSize: 11, fontWeight: 700, color: '#1B3828', letterSpacing: '0.02em' }}>@wearegavelling</p>
+                        <p style={{ fontSize: 11, color: '#9A8A78', marginTop: 1 }}>Follow the debate</p>
+                      </div>
+                    </a>
+
+                    {/* Book a call */}
+                    <a href="https://calendly.com/wearegavelling" target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none' }}>
+                      <div style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(27, 56, 40, 0.08)', border: '1px solid rgba(27, 56, 40, 0.14)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1B3828" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="3" y="4" width="18" height="18" rx="2" />
+                          <line x1="16" y1="2" x2="16" y2="6" />
+                          <line x1="8" y1="2" x2="8" y2="6" />
+                          <line x1="3" y1="10" x2="21" y2="10" />
+                        </svg>
+                      </div>
+                      <div>
+                        <p style={{ fontSize: 11, fontWeight: 700, color: '#1B3828', letterSpacing: '0.02em' }}>Book a call</p>
+                        <p style={{ fontSize: 11, color: '#9A8A78', marginTop: 1 }}>30 mins, no agenda required</p>
+                      </div>
+                    </a>
+
+                  </div>
+                </div>
+
               </div>
             )}
-          </div>
-        </section>
-
-        {/* ── Other ways to reach us ── */}
-        <section
-          className="relative z-10 border-t"
-          style={{ borderColor: '#DDD4C0', backgroundColor: '#E6DFCF' }}
-        >
-          <div className="max-w-6xl mx-auto px-8 py-16">
-            <p className="text-xs font-mono tracking-[0.2em] text-[#9A8A78] mb-10 uppercase text-center">
-              Other ways to reach us
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-              {[
-                {
-                  id:      'email',
-                  eyebrow: 'Direct Line',
-                  heading: 'hello@gavelling.com',
-                  body:    'For everything else — drop us a line directly.',
-                  cta:     'Open in Mail',
-                  href:    'mailto:hello@gavelling.com',
-                },
-                {
-                  id:      'call',
-                  eyebrow: 'Conference Organisers',
-                  heading: 'Book an intro call',
-                  body:    "Run your MUN conference on Gavelling, completely fee-free. Let's talk.",
-                  cta:     'Book a 30-min call →',
-                  href:    '#',
-                },
-                {
-                  id:      'social',
-                  eyebrow: 'Follow the Debate',
-                  heading: '@gavelling',
-                  body:    'Updates, MUN tips, and the occasional gavel meme. Come find us.',
-                  cta:     'Find us online →',
-                  href:    '#',
-                },
-              ].map((channel) => {
-                const hl = hoveredCard === channel.id;
-                return (
-                  <a
-                    key={channel.id}
-                    href={channel.href}
-                    onClick={channel.href === '#' ? (e) => e.preventDefault() : undefined}
-                    onMouseEnter={() => setHoveredCard(channel.id)}
-                    onMouseLeave={() => setHoveredCard(null)}
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 10,
-                      padding: '26px 26px 22px',
-                      borderRadius: 18,
-                      backgroundColor: hl ? '#EDE7D8' : 'rgba(255, 255, 255, 0.42)',
-                      border: `1px solid ${hl ? 'rgba(27, 56, 40, 0.18)' : 'rgba(221, 212, 192, 0.9)'}`,
-                      textDecoration: 'none',
-                      transition: 'all 220ms ease',
-                      transform: hl ? 'translateY(-3px)' : 'translateY(0)',
-                      boxShadow: hl
-                        ? '0 8px 28px rgba(28, 20, 16, 0.09)'
-                        : '0 2px 8px rgba(28, 20, 16, 0.04)',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <p
-                      className="font-mono tracking-[0.16em] uppercase"
-                      style={{ fontSize: 10, color: '#9A8A78' }}
-                    >
-                      {channel.eyebrow}
-                    </p>
-                    <p className="font-black text-[#1C1410] leading-tight" style={{ fontSize: 17 }}>
-                      {channel.heading}
-                    </p>
-                    <p className="text-sm leading-relaxed" style={{ color: '#6A5A4A', flex: 1 }}>
-                      {channel.body}
-                    </p>
-                    <p className="text-sm font-bold" style={{ color: '#1B3828', marginTop: 6 }}>
-                      {channel.cta}
-                    </p>
-                  </a>
-                );
-              })}
-            </div>
           </div>
         </section>
 
