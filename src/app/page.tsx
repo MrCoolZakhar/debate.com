@@ -12,42 +12,6 @@ const steps = [
   { step: '03', title: 'Run the Session', desc: 'Manage roll call, speakers list, motions, and voting — all in one place.' },
 ];
 
-const featureColumns = [
-  {
-    role: 'For Chairs',
-    features: [
-      'General Speakers List with live countdown',
-      'Moderated & Unmoderated Caucus tools',
-      'Right of Reply as independent overlay',
-      'Motions queue sorted by precedence',
-      'Working Paper & Draft Resolution flow',
-      'Session suspend & resume with full state',
-    ],
-  },
-  {
-    role: 'For Delegates',
-    features: [
-      'Live session view on any device',
-      'GSL join requests sent to chair',
-      'Queue position with floor indicator',
-      'Document viewing & WP submission',
-      'Speaking history & stats',
-      'Real-time status updates',
-    ],
-  },
-  {
-    role: 'For Faculty Advisors',
-    features: [
-      'Read-only observer view',
-      'Nudge delegates via emoji',
-      'Live queue & speaker monitoring',
-      'Delegate card breakdowns',
-      'Last motion tracking per delegate',
-      'No setup or account required',
-    ],
-  },
-];
-
 // ── Individual feature card components ──────────────────────────────────────
 
 function RollCallCard() {
@@ -612,43 +576,6 @@ export default function LandingPage() {
                 </div>
               </div>
 
-            </div>
-          </section>
-
-          {/* All Free Features — 3 columns by role */}
-          <section className="relative z-10 bg-[#EDE7D8] py-24 px-6 scroll-reveal">
-            <div className="max-w-6xl mx-auto">
-              <div className="text-center mb-16">
-                <p className="scroll-reveal text-xs font-mono tracking-[0.2em] text-[#9A8A78] mb-3 uppercase">No paywalls. No catch.</p>
-                <h2 className="scroll-reveal font-black text-[#1C1410] uppercase tracking-wider leading-none" style={{ fontSize: 'clamp(40px, 6vw, 80px)' }}>All Free Features</h2>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                {featureColumns.map((col) => (
-                  <div key={col.role} className="scroll-reveal rounded-2xl p-8"
-                    style={{ backgroundColor: 'rgba(221, 212, 192, 0.35)', border: '1px solid rgba(221, 212, 192, 0.8)' }}>
-                    <h3 className="font-black text-[#1C1410] mb-6 pb-4 text-lg uppercase tracking-wider"
-                      style={{ borderBottom: '1px solid rgba(182, 135, 31, 0.3)' }}>
-                      {col.role}
-                    </h3>
-                    <ul className="space-y-3">
-                      {col.features.map((f) => (
-                        <li key={f} className="flex items-start gap-3">
-                          <span className="mt-[5px] shrink-0 w-1.5 h-1.5 rounded-full" style={{ backgroundColor: '#B6871F' }} />
-                          <span className="text-sm leading-relaxed text-[#6A5A4A]">{f}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
-              </div>
-              <div className="scroll-reveal text-center mt-16">
-                <button
-                  onClick={() => router.push('/create')}
-                  className="bg-[#1B3828] hover:bg-[#2A5A3C] active:scale-[0.98] text-[#EED98A] px-8 py-4 rounded-2xl font-black text-base uppercase tracking-wide transition-all shadow-lg shadow-[#1B3828]/20"
-                >
-                  START FOR FREE →
-                </button>
-              </div>
             </div>
           </section>
 
