@@ -153,11 +153,11 @@ export default function ContactPage() {
 
           {/* Right — form */}
           <div
-            className="flex-1 flex flex-col justify-start overflow-y-auto px-10 py-10 md:px-14 md:pt-16"
+            className="flex-1 flex flex-col justify-start px-10 py-10 md:px-14 md:pt-10"
             style={{ backgroundColor: '#EDE7D8' }}
           >
             {submitted ? (
-              <div className="flex flex-col items-start gap-6 max-w-lg">
+              <div className="flex flex-col items-start gap-6">
                 <div
                   className="w-14 h-14 rounded-2xl flex items-center justify-center"
                   style={{
@@ -203,7 +203,7 @@ export default function ContactPage() {
                 </button>
               </div>
             ) : (
-              <div className="flex flex-col gap-6 max-w-lg w-full">
+              <div className="flex flex-col gap-5 w-full">
 
                 <div>
                   <p className="text-xs font-mono tracking-[0.2em] text-[#9A8A78] mb-2 uppercase">Raise your motion</p>
@@ -321,11 +321,11 @@ export default function ContactPage() {
                 </div>
 
                 {/* Other ways to reach us — inline */}
-                <div style={{ marginTop: 40, borderTop: '1px solid rgba(28, 20, 16, 0.1)', paddingTop: 28 }}>
-                  <p style={{ fontSize: 10, fontFamily: 'monospace', letterSpacing: '0.2em', textTransform: 'uppercase', color: '#9A8A78', marginBottom: 16 }}>
+                <div style={{ marginTop: 20, borderTop: '1px solid rgba(28, 20, 16, 0.1)', paddingTop: 20 }}>
+                  <p style={{ fontSize: 10, fontFamily: 'monospace', letterSpacing: '0.2em', textTransform: 'uppercase', color: '#9A8A78', marginBottom: 12 }}>
                     Other ways to reach us
                   </p>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
 
                     {/* Email */}
                     <a href="mailto:wearegavelling@gmail.com" style={{ display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none' }}>
