@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { Mic, Scale, List, FileText, MessageSquare, Save } from 'lucide-react';
 import { getFlagUrl, getCountryByName } from '@/lib/countries';
 import SiteNav from '@/components/SiteNav';
-import PreRegisterModal from '@/components/PreRegisterModal';
 
 const steps = [
   { step: '01', title: 'Create a Committee', desc: 'Chair enters committee name, topic, and delegates. Pick a preset or builds custom.' },
@@ -384,8 +383,6 @@ export default function LandingPage() {
   const router = useRouter();
   const [joinCode, setJoinCode] = useState('');
   const [activeFeature, setActiveFeature] = useState('roll-call');
-  const [showPreRegister, setShowPreRegister] = useState(false);
-
   const handleJoin = () => {
     const code = joinCode.trim().toUpperCase();
     if (code.length >= 4) {
@@ -453,7 +450,7 @@ export default function LandingPage() {
             }}
           />
 
-          <SiteNav onPreRegister={() => setShowPreRegister(true)} />
+          <SiteNav />
 
           {/* Hero */}
           <section className="relative z-10 h-[calc(100vh-72px)] flex flex-col items-center justify-center overflow-hidden">
@@ -678,7 +675,6 @@ export default function LandingPage() {
         </div>
       </div>
 
-      <PreRegisterModal open={showPreRegister} onClose={() => setShowPreRegister(false)} />
     </>
   );
 }
