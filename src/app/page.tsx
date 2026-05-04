@@ -527,14 +527,9 @@ export default function LandingPage() {
             <div className="max-w-6xl mx-auto flex flex-col md:flex-row gap-12">
 
               {/* LEFT — sticky text + pills */}
-              <div className="w-72 flex-shrink-0 sticky top-16 self-start py-12">
+              <div className="w-72 flex-shrink-0 sticky top-16 self-start py-12 flex flex-col justify-center">
 
-                <div className="inline-flex items-center gap-2 bg-[#EAF1EC] border border-[#C8D8C0] text-[#1B3828] text-xs font-semibold px-4 py-1.5 rounded-full mb-6 w-fit tracking-widest uppercase" style={{ fontFamily: "'DM Mono', monospace" }}>
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#3D7A52]" />
-                  Built for Chairs
-                </div>
-
-                <h2 className="font-black uppercase tracking-wide leading-tight mb-5" style={{ fontSize: 'clamp(20px, 2.4vw, 34px)' }}>
+                <h2 className="font-black uppercase tracking-wide leading-tight mb-5" style={{ fontSize: 'clamp(28px, 3.2vw, 48px)' }}>
                   <span className="text-[#1B3828]">Everything chairs need</span><br />
                   <span className="text-[#B8844A]">to run committees.</span>
                 </h2>
@@ -570,7 +565,7 @@ export default function LandingPage() {
               </div>
 
               {/* RIGHT — wheel hijack carousel */}
-              <div className="flex-1 py-12 flex justify-center items-start pl-8">
+              <div className="flex-1 py-12 flex justify-center items-center pl-8">
                 <div className="w-full" style={{ maxWidth: '520px' }}>
                   <FeatureCarousel activeFeature={activeFeature} setActiveFeature={setActiveFeature} />
                 </div>
