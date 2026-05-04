@@ -1,11 +1,9 @@
-import SiteNav from '@/components/SiteNav';
+import PreRegisterModal from '@/components/PreRegisterModal';
+
 export default function PreRegisterPage() {
   return (
-    <div className="min-h-screen bg-[#EDE7D8] flex flex-col">
-      <SiteNav />
-      <div className="flex-1 flex items-center justify-center">
-        <p className="text-[#9A8A78] text-2xl font-bold tracking-wide">WE ARE WORKING ON THIS</p>
-      </div>
+    <div className="min-h-screen bg-[#EDE7D8]">
+      <PreRegisterModal open={true} />
     </div>
   );
 }
