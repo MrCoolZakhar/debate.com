@@ -22,7 +22,7 @@ function RollCallCard() {
     return c ? <img src={getFlagUrl(c.code)} alt={country} className="w-5 h-5 object-contain" /> : <span className="w-5 h-5 bg-[#DDD4C0] rounded-sm inline-block" />;
   };
   return (
-    <div className={base} style={{ ...shadow, minHeight: '460px' }}>
+    <div className={base} style={{ ...shadow, minHeight: '498px' }}>
       <div className="bg-[#1B3828] px-5 py-3 flex items-center justify-between">
         <p className="text-[#EED98A] font-black text-sm uppercase tracking-wide">Roll Call</p>
         <span className="bg-[#3D7A52] text-white text-[9px] font-mono px-2 py-0.5 rounded-full uppercase tracking-widest">Pre-Session</span>
@@ -67,7 +67,7 @@ function MotionsCard() {
   const base = 'w-full bg-[#FAF8F3] rounded-2xl border border-[#DDD4C0] overflow-hidden';
   const shadow = { boxShadow: '0 24px 64px rgba(27,56,40,0.14)' };
   return (
-    <div className={base} style={{ ...shadow, minHeight: '460px' }}>
+    <div className={base} style={{ ...shadow, minHeight: '498px' }}>
       <div className="bg-[#1B3828] px-5 py-3 flex items-center justify-between">
         <p className="text-[#EED98A] font-black text-sm uppercase tracking-wide">Pending Motions</p>
         <span className="bg-[#B6871F] text-white text-[9px] font-mono px-2 py-0.5 rounded-full uppercase tracking-widest">3 Motions</span>
@@ -107,7 +107,7 @@ function SpeakersCard() {
   const base = 'w-full bg-[#FAF8F3] rounded-2xl border border-[#DDD4C0] overflow-hidden';
   const shadow = { boxShadow: '0 24px 64px rgba(27,56,40,0.14)' };
   return (
-    <div className={base} style={{ ...shadow, minHeight: '460px' }}>
+    <div className={base} style={{ ...shadow, minHeight: '498px' }}>
       <div className="bg-[#1B3828] px-5 py-3 flex items-center justify-between">
         <p className="text-[#EED98A] font-black text-sm uppercase tracking-wide">General Speakers List</p>
         <span className="flex items-center gap-1 bg-[#3D7A52] text-white text-[9px] font-mono px-2 py-0.5 rounded-full uppercase tracking-widest">
@@ -159,7 +159,7 @@ function DocumentsCard() {
   return (
     <div
       className="w-full bg-[#FAF8F3] rounded-2xl border border-[#DDD4C0] overflow-hidden flex flex-row"
-      style={{ ...shadow, minHeight: '460px' }}
+      style={{ ...shadow, minHeight: '498px' }}
     >
       <div className="w-2/5 border-r border-[#DDD4C0] flex flex-col">
         <div className="bg-[#1B3828] px-4 py-3">
@@ -200,7 +200,7 @@ function ChatCard() {
   const base = 'w-full bg-[#FAF8F3] rounded-2xl border border-[#DDD4C0] overflow-hidden';
   const shadow = { boxShadow: '0 24px 64px rgba(27,56,40,0.14)' };
   return (
-    <div className={base} style={{ ...shadow, minHeight: '460px' }}>
+    <div className={base} style={{ ...shadow, minHeight: '498px' }}>
       <div className="bg-[#1B3828] px-5 py-3 flex items-center justify-between">
         <p className="text-[#EED98A] font-black text-sm uppercase tracking-wide">Committee Chat</p>
         <span className="flex items-center gap-1 bg-[#3D7A52] text-white text-[9px] font-mono px-2 py-0.5 rounded-full uppercase tracking-widest">
@@ -234,7 +234,7 @@ function ArchiveCard() {
   const base = 'w-full bg-[#FAF8F3] rounded-2xl border border-[#DDD4C0] overflow-hidden';
   const shadow = { boxShadow: '0 24px 64px rgba(27,56,40,0.14)' };
   return (
-    <div className={base} style={{ ...shadow, minHeight: '460px' }}>
+    <div className={base} style={{ ...shadow, minHeight: '498px' }}>
       <div className="bg-[#1B3828] px-5 py-3 flex items-center justify-between">
         <p className="text-[#EED98A] font-black text-sm uppercase tracking-wide">Session Archive</p>
         <span className="bg-[#3D7A52] text-white text-[9px] font-mono px-2 py-0.5 rounded-full uppercase tracking-widest">Coming Soon</span>
@@ -320,7 +320,7 @@ function FeatureCarousel({
   }, []); // Empty deps — uses ref for current index, avoids stale closure
 
   return (
-    <div ref={sectionRef} className="relative" style={{ height: '520px' }}>
+    <div ref={sectionRef} className="relative" style={{ height: '558px' }}>
       {featureIds.map((id) => (
         <div
           key={id}
@@ -523,18 +523,18 @@ export default function LandingPage() {
           </section>
 
           {/* ── FEATURE SHOWCASE SECTION ── */}
-          <section id="features" className="relative z-10 bg-[#EDE7D8] px-8 md:px-20 scroll-reveal">
-            <div className="max-w-6xl mx-auto flex flex-col md:flex-row gap-12">
+          <section id="features" className="relative z-10 bg-[#EDE7D8] px-8 md:px-16 scroll-reveal">
+            <div className="w-full flex flex-col md:flex-row gap-16 items-start">
 
               {/* LEFT — sticky text + pills */}
               <div className="w-72 flex-shrink-0 sticky top-16 self-start py-12 flex flex-col justify-center">
 
-                <h2 className="font-black uppercase tracking-wide leading-tight mb-5" style={{ fontSize: 'clamp(28px, 3.2vw, 48px)' }}>
+                <h2 className="font-black uppercase tracking-wide leading-tight mb-5" style={{ fontSize: 'clamp(34px, 4vw, 58px)' }}>
                   <span className="text-[#1B3828]">Everything chairs need</span><br />
-                  <span className="text-[#B8844A]">to run committees.</span>
+                  <span className="text-[#B8844A]">to run committees</span>
                 </h2>
 
-                <p className="text-[#6A5A4A] text-sm mb-6 leading-relaxed">
+                <p className="text-[#6A5A4A] text-base mb-6 leading-relaxed">
                   One dashboard. Every tool. From opening session to final voting.
                 </p>
 
@@ -565,8 +565,8 @@ export default function LandingPage() {
               </div>
 
               {/* RIGHT — wheel hijack carousel */}
-              <div className="flex-1 py-12 flex justify-center items-center pl-8">
-                <div className="w-full" style={{ maxWidth: '520px' }}>
+              <div className="flex-1 py-12 flex justify-center items-center">
+                <div className="w-full" style={{ maxWidth: '558px' }}>
                   <FeatureCarousel activeFeature={activeFeature} setActiveFeature={setActiveFeature} />
                 </div>
               </div>
