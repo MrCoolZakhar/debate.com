@@ -41,7 +41,7 @@ export default function PreRegisterModal({ open = true }: { open?: boolean }) {
           aria-describedby={undefined}
           className={cn(
             'fixed top-1/2 left-1/2 z-50 -translate-x-1/2 -translate-y-1/2 outline-none',
-            'w-[900px] h-[580px]',
+            'w-[1200px] h-[680px]',
             'rounded-2xl shadow-2xl overflow-hidden',
             'flex flex-col md:flex-row',
             'data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
