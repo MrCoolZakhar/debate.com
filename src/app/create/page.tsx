@@ -461,8 +461,8 @@ function CreatePageInner() {
         )}
 
         {committeeMode === 'build' && (
-          <div className="flex-1 flex flex-col overflow-hidden px-8 py-6">
-            <div className="relative flex items-center justify-center mb-6 shrink-0">
+          <div className="flex-1 flex flex-col overflow-hidden px-8 pt-4 pb-4">
+            <div className="relative flex items-center justify-center mb-4 shrink-0">
               <button
                 onClick={() => setCommitteeMode('select')}
                 className="absolute left-0 flex items-center gap-2 px-3 py-2 rounded-xl bg-[#EDE7D8] border border-[#DDD4C0] hover:bg-[#DDD4C0] text-[#6A5A4A] hover:text-[#1C1410] text-xs font-bold uppercase tracking-wide transition-all"
@@ -472,7 +472,7 @@ function CreatePageInner() {
               <h1 className="text-4xl font-black uppercase tracking-wide mb-2" style={{ color: '#1B3828', letterSpacing: '0.06em' }}>New Committee</h1>
             </div>
 
-            <div className="grid grid-cols-3 gap-4 mb-3 shrink-0 mt-3">
+            <div className="grid grid-cols-3 gap-4 mb-3 shrink-0 mt-2">
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wide mb-1.5" style={{ color: '#1B3828' }}>Committee Name</label>
                 <CommitteeNameInput value={committeeName} onChange={(v) => { setCommitteeName(v); setIsUNSC(false); }} onPresetSelect={handleCommitteePreset} />
