@@ -503,7 +503,7 @@ function CreatePageInner() {
             <div className="flex-1 grid grid-cols-2 gap-6 min-h-0">
               <div className="flex flex-col gap-4 min-h-0">
                 <div className="shrink-0">
-                  <label className="block text-xs font-bold uppercase tracking-wide mb-1.5" style={{ color: '#1B3828' }}>Search &amp; Add</label>
+                  <label className="block text-xs font-bold uppercase tracking-wide mb-2" style={{ color: '#1B3828' }}>Search &amp; Add</label>
                   <div className="relative">
                     <div className="flex items-center bg-white/70 border border-[#C8BAA8] focus-within:border-[#1B3828] focus-within:ring-2 focus-within:ring-[#1B3828]/10 rounded-xl overflow-visible transition-all">
                       <input type="text" value={search} onChange={(e) => setSearch(e.target.value)}
