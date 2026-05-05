@@ -45,7 +45,7 @@ function StatusSlider({ status, onCycle }: { status: DelegateStatus; onCycle: ()
         <span className={`text-[10px] font-bold text-center ${status === 'present' ? 'text-white' : 'text-white/40'}`}>P</span>
         <span className={`text-[10px] font-bold text-center ${status === 'present-voting' ? 'text-white' : 'text-white/40'}`}>PV</span>
       </div>
-      <div className={`absolute top-[2px] w-[27px] h-[26px] rounded-full transition-all duration-200 shadow-sm ${thumbPos} ${thumbColor}`} />
+      <div className={`absolute top-[2px] w-[26px] h-[26px] rounded-full transition-all duration-200 ${thumbPos} ${thumbColor}`} />
     </button>
   );
 }
@@ -484,8 +484,8 @@ function RollCallPanelInner({
                   backgroundColor: !matchesSearch ? 'transparent'
                     : isCurrentSpeaker ? 'rgba(238,217,138,0.12)'
                     : isAbsent ? 'transparent'
-                    : effectiveStatus === 'present' ? 'rgba(61,122,82,0.25)'
-                    : 'rgba(182,135,31,0.2)',
+                    : effectiveStatus === 'present' ? 'rgba(61,122,82,0.22)'
+                    : 'rgba(182,135,31,0.18)',
                   borderColor: !matchesSearch ? 'transparent'
                     : isCurrentSpeaker ? 'rgba(238,217,138,0.5)'
                     : isAbsent ? 'transparent'
@@ -493,7 +493,7 @@ function RollCallPanelInner({
                     : 'rgba(182,135,31,0.4)',
                 }}
                 onMouseEnter={(e) => { if (!isAbsent) (e.currentTarget as HTMLElement).style.backgroundColor = effectiveStatus === 'present' ? 'rgba(61,122,82,0.38)' : effectiveStatus === 'present-voting' ? 'rgba(182,135,31,0.32)' : 'rgba(238,217,138,0.08)'; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = !matchesSearch ? 'transparent' : isCurrentSpeaker ? 'rgba(238,217,138,0.12)' : isAbsent ? 'transparent' : effectiveStatus === 'present' ? 'rgba(61,122,82,0.25)' : 'rgba(182,135,31,0.2)'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = !matchesSearch ? 'transparent' : isCurrentSpeaker ? 'rgba(238,217,138,0.12)' : isAbsent ? 'transparent' : effectiveStatus === 'present' ? 'rgba(61,122,82,0.22)' : 'rgba(182,135,31,0.18)'; }}
               >
                 <div className="relative shrink-0">
                   {isRoomOrderTdT && queuePos !== null ? (

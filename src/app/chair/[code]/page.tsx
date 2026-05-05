@@ -45,7 +45,7 @@ function formatTime(seconds: number) {
 
 function GavelLoader() {
   return (
-    <div className="min-h-screen bg-[#F6F1E9] flex flex-col items-center justify-center gap-4">
+    <div className="min-h-screen flex flex-col items-center justify-center gap-4" style={{ backgroundColor: '#EDE7D8' }}>
       <style>{`
         @keyframes gavel-strike {
           0%   { transform: rotate(-30deg); }
@@ -1399,7 +1399,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
 
   if (!committee) {
     return (
-      <div className="min-h-screen bg-[#F6F1E9] flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#EDE7D8' }}>
         <div className="text-center">
           <p className="text-[#1C1410] text-xl font-bold mb-4">Committee not found</p>
           <Link href="/create" className="bg-[#1B3828] text-white px-6 py-3 rounded-xl font-semibold hover:bg-[#2A5A3C] transition-colors">Create Committee</Link>
@@ -1683,7 +1683,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   };
 
   return (
-    <div className="h-screen bg-[#F6F1E9] flex flex-col overflow-hidden">
+    <div className="h-screen flex flex-col overflow-hidden relative" style={{ backgroundColor: '#EDE7D8' }}>
+      <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
       <header className="border-b border-[#DDD4C0] bg-[#FAF8F3] px-4 h-11 flex items-center gap-2">
         <Link href="/">
           <img src="/GavellingLogo.png" alt="Gavelling" className="w-[14vw] h-auto max-h-8 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
