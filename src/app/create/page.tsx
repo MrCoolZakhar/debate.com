@@ -7,7 +7,7 @@ import { createCommittee as createCommitteeInDB } from '@/lib/committeeService';
 import { useSettingsStore } from '@/lib/settingsStore';
 import { UN_COUNTRIES, getFlagUrl, getCountryByName } from '@/lib/countries';
 import { UNSC_MEMBERS, WHO_MEMBERS, IMF_MEMBERS, WORLD_BANK_MEMBERS, UNEP_MEMBERS } from '@/lib/presets';
-import { Emoji, InstitutionLogo } from '@/components/Emoji';
+import { Mic, Globe, Zap, PenLine, ChevronLeft } from 'lucide-react';
 
 const COMMITTEE_PRESETS = [
   { name: 'UN Security Council', acronym: 'UNSC', icon: '🛡️', members: UNSC_MEMBERS },
@@ -71,7 +71,6 @@ function CommitteeNameInput({ value, onChange, onPresetSelect }: {
   const [open, setOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Always compute matches from value — not gated on `open`
   const matches = value.trim()
     ? COMMITTEE_PRESETS.filter((p) =>
         p.name.toLowerCase().includes(value.toLowerCase()) ||
@@ -97,7 +96,7 @@ function CommitteeNameInput({ value, onChange, onPresetSelect }: {
           if (e.key === 'Escape') setOpen(false);
         }}
         placeholder="e.g. Human Rights Council or HRC"
-        className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] transition-colors"
+        className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] focus:ring-2 focus:ring-[#1B3828]/10 transition-all text-sm"
       />
       {open && matches.length > 0 && (
         <div className="absolute top-full left-0 right-0 mt-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl overflow-hidden z-30 shadow-xl">
@@ -109,7 +108,6 @@ function CommitteeNameInput({ value, onChange, onPresetSelect }: {
                 i === 0 ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'
               }`}
             >
-              <span className="text-lg"><Emoji size="1.125rem">{p.icon}</Emoji></span>
               <span className="text-sm flex-1">{p.name}</span>
               <span className="text-xs text-[#9A8A78] shrink-0">{p.acronym}</span>
               {i === 0 && <span className="text-xs text-[#9A8A78] shrink-0">↵</span>}
@@ -188,44 +186,71 @@ function CreatePageInner() {
 
   return (
     <div className="h-screen bg-[#F6F1E9] flex flex-col overflow-hidden">
-      <nav className="border-b border-[#DDD4C0] bg-[#FAF8F3] px-6 h-14 flex items-center justify-between shrink-0">
+      {/* Fix 7 — Nav */}
+      <nav
+        className="border-b border-[#DDD4C0] px-6 h-14 flex items-center justify-between shrink-0"
+        style={{ backgroundColor: '#FAF8F3' }}
+      >
         <Link href="/" className="flex items-center gap-2">
           <img src="/GavellingLogo.png" alt="Gavelling" className="w-[16vw] h-auto max-h-9 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
         </Link>
       </nav>
 
       <div className="flex-1 flex overflow-hidden">
+        {/* Fix 2 — Committee type select screen */}
         {committeeMode === 'select' && (
           <div className="flex-1 flex flex-col items-center justify-center px-8 py-6">
-            {/* Gavelling logo — large, above card selection */}
             <img
               src="/GavellingLogo.png"
               alt="Gavelling"
-              className="mb-6 object-contain"
-              style={{ width: 'min(320px, 40vw)', height: 'auto' }}
+              className="mb-8 object-contain"
+              style={{ width: 'min(220px, 30vw)', height: 'auto' }}
               onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
             />
-            <h1 className="text-2xl font-black text-[#1C1410] mb-2">Choose Committee Type</h1>
-            <p className="text-[#6A5A4A] text-sm mb-8">Select the type of committee you want to run.</p>
-            <div className="flex flex-row gap-4 w-full max-w-4xl">
-              <div className="flex-1 flex flex-col items-center justify-center bg-[#EDE7D8] border border-[#DDD4C0] rounded-3xl p-8 min-h-[300px] opacity-50 cursor-not-allowed relative transition-all hover:scale-[1.02]">
-                <span className="mb-4"><Emoji size="3.75rem">🗣️</Emoji></span>
-                <h2 className="text-xl font-black text-[#1C1410] mb-2">Regular Debate</h2>
-                <p className="text-[#6A5A4A] text-sm text-center mb-4">Traditional parliamentary debate</p>
-                <span className="px-3 py-1 bg-[#DDD4C0] border border-[#C8BAA8] text-[#9A8A78] rounded-full text-xs font-semibold">Coming Soon</span>
+            <p className="text-xs font-bold tracking-[0.18em] text-[#9A8A78] uppercase mb-3" style={{ fontFamily: "'DM Mono', monospace" }}>
+              Select Committee Type
+            </p>
+            <h1 className="text-3xl font-black text-[#1C1410] uppercase tracking-wide mb-10 text-center">
+              What are you running?
+            </h1>
+
+            <div className="flex flex-row gap-5 w-full max-w-3xl">
+              {/* Regular Debate — disabled */}
+              <div className="flex-1 flex flex-col items-center justify-center bg-[#EDE7D8] border border-[#DDD4C0] rounded-2xl p-8 min-h-[260px] opacity-40 cursor-not-allowed relative">
+                <div className="w-16 h-16 rounded-2xl bg-[#DDD4C0] flex items-center justify-center mb-5 text-[#9A8A78]">
+                  <Mic size={32} strokeWidth={1.5} />
+                </div>
+                <h2 className="text-base font-black text-[#1C1410] uppercase tracking-wide mb-2">Regular Debate</h2>
+                <p className="text-[#9A8A78] text-xs text-center mb-4 leading-relaxed">Traditional parliamentary debate</p>
+                <span className="px-3 py-1 bg-[#DDD4C0] border border-[#C8BAA8] text-[#9A8A78] rounded-full text-[10px] font-bold uppercase tracking-wide" style={{ fontFamily: "'DM Mono', monospace" }}>Coming Soon</span>
               </div>
-              <div onClick={() => setCommitteeMode('build')}
-                className="flex-1 flex flex-col items-center justify-center bg-[#EDE7D8] border-2 border-[#1B3828] rounded-3xl p-8 min-h-[300px] cursor-pointer hover:bg-[#DDD4C0] hover:border-[#6A5A4A] hover:scale-[1.04] transition-all group">
-                <span className="mb-4"><Emoji size="3.75rem">🌍</Emoji></span>
-                <h2 className="text-xl font-black text-[#1C1410] mb-2">Model United Nations</h2>
-                <p className="text-[#6A5A4A] text-sm text-center mb-4">United Nations committee simulation</p>
-                <span className="px-4 py-2 bg-[#1B3828] group-hover:bg-[#2A5A3C] text-white rounded-xl text-sm font-bold transition-colors">Start →</span>
+
+              {/* Model United Nations — active */}
+              <div
+                onClick={() => setCommitteeMode('build')}
+                className="flex-1 flex flex-col items-center justify-center rounded-2xl p-8 min-h-[260px] cursor-pointer transition-all group"
+                style={{ backgroundColor: '#1B3828', border: '2px solid #3D7A52', boxShadow: '0 20px 60px rgba(27,56,40,0.35)' }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+              >
+                <div className="w-16 h-16 rounded-2xl bg-[#EED98A]/15 border border-[#EED98A]/25 flex items-center justify-center mb-5 text-[#EED98A]">
+                  <Globe size={32} strokeWidth={1.5} />
+                </div>
+                <h2 className="text-base font-black text-[#EED98A] uppercase tracking-wide mb-2">Model United Nations</h2>
+                <p className="text-[#EED98A]/60 text-xs text-center mb-5 leading-relaxed">United Nations committee simulation</p>
+                <span className="px-5 py-2.5 bg-[#EED98A] text-[#1B3828] rounded-xl text-xs font-black uppercase tracking-wide transition-colors">
+                  Start →
+                </span>
               </div>
-              <div className="flex-1 flex flex-col items-center justify-center bg-[#EDE7D8] border border-[#DDD4C0] rounded-3xl p-8 min-h-[300px] opacity-50 cursor-not-allowed relative transition-all hover:scale-[1.02]">
-                <span className="mb-4"><Emoji size="3.75rem">⚡</Emoji></span>
-                <h2 className="text-xl font-black text-[#1C1410] mb-2">Crisis Committee</h2>
-                <p className="text-[#6A5A4A] text-sm text-center mb-4">Fast-paced crisis scenarios</p>
-                <span className="px-3 py-1 bg-[#DDD4C0] border border-[#C8BAA8] text-[#9A8A78] rounded-full text-xs font-semibold">Coming H2 2026</span>
+
+              {/* Crisis Committee — disabled */}
+              <div className="flex-1 flex flex-col items-center justify-center bg-[#EDE7D8] border border-[#DDD4C0] rounded-2xl p-8 min-h-[260px] opacity-40 cursor-not-allowed relative">
+                <div className="w-16 h-16 rounded-2xl bg-[#DDD4C0] flex items-center justify-center mb-5 text-[#9A8A78]">
+                  <Zap size={32} strokeWidth={1.5} />
+                </div>
+                <h2 className="text-base font-black text-[#1C1410] uppercase tracking-wide mb-2">Crisis Committee</h2>
+                <p className="text-[#9A8A78] text-xs text-center mb-4 leading-relaxed">Fast-paced crisis scenarios</p>
+                <span className="px-3 py-1 bg-[#DDD4C0] border border-[#C8BAA8] text-[#9A8A78] rounded-full text-[10px] font-bold uppercase tracking-wide" style={{ fontFamily: "'DM Mono', monospace" }}>Coming H2 2026</span>
               </div>
             </div>
           </div>
@@ -233,44 +258,59 @@ function CreatePageInner() {
 
         {committeeMode === 'build' && (
           <div className="flex-1 flex flex-col overflow-hidden px-8 py-6">
-            <div className="flex items-center gap-3 mb-6 shrink-0">
-              <button onClick={() => setCommitteeMode('select')} className="text-sm text-[#6A5A4A] hover:text-[#1C1410] transition-colors">← Back</button>
-              <span className="text-2xl">✏️</span>
-              <h1 className="text-2xl font-black text-[#1C1410]">New Committee</h1>
+            {/* Fix 3 — Header */}
+            <div className="flex items-center gap-4 mb-6 shrink-0">
+              <button
+                onClick={() => setCommitteeMode('select')}
+                className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[#EDE7D8] border border-[#DDD4C0] hover:bg-[#DDD4C0] text-[#6A5A4A] hover:text-[#1C1410] text-xs font-bold uppercase tracking-wide transition-all"
+              >
+                <ChevronLeft size={14} /> Back
+              </button>
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-[#1B3828] flex items-center justify-center text-[#EED98A]">
+                  <PenLine size={15} />
+                </div>
+                <h1 className="text-xl font-black text-[#1C1410] uppercase tracking-wide">New Committee</h1>
+              </div>
             </div>
 
+            {/* Fix 3 — Form inputs */}
             <div className="grid grid-cols-3 gap-4 mb-3 shrink-0">
               <div>
-                <label className="block text-xs font-semibold text-[#6A5A4A] mb-1.5">Committee Name</label>
+                <label className="block text-[10px] font-bold tracking-[0.12em] text-[#9A8A78] uppercase mb-2">Committee Name</label>
                 <CommitteeNameInput value={committeeName} onChange={(v) => { setCommitteeName(v); setIsUNSC(false); }} onPresetSelect={handleCommitteePreset} />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-[#6A5A4A] mb-1.5">
-                  Chair Name <span className="text-[#9A8A78] font-normal">(optional)</span>
+                <label className="block text-[10px] font-bold tracking-[0.12em] text-[#9A8A78] uppercase mb-2">
+                  Chair Name <span className="text-[#9A8A78] font-normal normal-case tracking-normal">( optional)</span>
                 </label>
                 <input type="text" value={chairNames[0]} onChange={(e) => setChairNames([e.target.value])}
                   placeholder="e.g. John Smith"
-                  className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] transition-colors" />
+                  className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] focus:ring-2 focus:ring-[#1B3828]/10 transition-all text-sm" />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-[#6A5A4A] mb-1.5">Topic / Agenda Item</label>
+                <label className="block text-[10px] font-bold tracking-[0.12em] text-[#9A8A78] uppercase mb-2">Topic / Agenda Item</label>
                 <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)}
                   placeholder="e.g. The right to education"
-                  className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] transition-colors" />
+                  className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] focus:ring-2 focus:ring-[#1B3828]/10 transition-all text-sm" />
               </div>
             </div>
+
+            {/* Fix 4 — UNSC warning banner */}
             {isUNSC && (
-              <div className="mb-3 px-4 py-2.5 bg-amber-900/20 border border-amber-700/40 rounded-xl text-amber-300 text-xs shrink-0">
-                <Emoji size="1em">🛡️</Emoji> <strong>UNSC detected:</strong> P5 nations (China, France, Russia, UK, USA) will have veto voting power. You can configure this in <strong>Settings</strong> after the session starts.
+              <div className="mb-3 px-4 py-2.5 rounded-xl text-xs font-medium shrink-0 flex items-center gap-2" style={{ backgroundColor: 'rgba(182,135,31,0.12)', border: '1px solid rgba(182,135,31,0.35)', color: '#1C1410' }}>
+                <span className="font-black text-[#B6871F]" style={{ fontFamily: "'DM Mono', monospace" }}>UNSC</span>
+                <span><strong>Veto power active:</strong> P5 nations (China, France, Russia, UK, USA) will have veto voting. Configure in <strong>Settings</strong> after session starts.</span>
               </div>
             )}
 
             <div className="flex-1 grid grid-cols-2 gap-6 min-h-0">
+              {/* Fix 5 — Left column */}
               <div className="flex flex-col gap-4 min-h-0">
                 <div className="shrink-0">
-                  <label className="block text-xs font-semibold text-[#6A5A4A] mb-1.5">Search &amp; Add</label>
+                  <label className="block text-[10px] font-bold tracking-[0.12em] text-[#9A8A78] uppercase mb-2">Search &amp; Add</label>
                   <div className="relative">
-                    <div className="flex items-center bg-[#FAF8F3] border border-[#DDD4C0] focus-within:border-[#1B3828] rounded-xl overflow-visible transition-colors">
+                    <div className="flex items-center bg-[#FAF8F3] border border-[#DDD4C0] focus-within:border-[#1B3828] focus-within:ring-2 focus-within:ring-[#1B3828]/10 rounded-xl overflow-visible transition-all">
                       <input type="text" value={search} onChange={(e) => setSearch(e.target.value)}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
@@ -299,7 +339,7 @@ function CreatePageInner() {
                         {search.trim() && !delegates.includes(search.trim()) && !available.some((c) => c.name.toLowerCase() === search.trim().toLowerCase()) && (
                           <button onMouseDown={(e) => { e.preventDefault(); addDelegate(search.trim()); setSearch(''); }}
                             className="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors text-[#1C1410] hover:bg-[#DDD4C0] border-t border-[#DDD4C0]">
-                            <Emoji size="1.25rem">🌐</Emoji>
+                            <Globe size={18} strokeWidth={1.5} className="text-[#9A8A78] shrink-0" />
                             <span className="text-sm flex-1">{search.trim()}</span>
                             <span className="text-[10px] text-[#1B3828] shrink-0 font-semibold">Add custom</span>
                           </button>
@@ -310,27 +350,26 @@ function CreatePageInner() {
                 </div>
 
                 <div className="shrink-0">
-                  <label className="block text-xs font-semibold text-[#6A5A4A] mb-2">Quick Bundles</label>
+                  <label className="block text-[10px] font-bold tracking-[0.12em] text-[#9A8A78] uppercase mb-2">Quick Bundles</label>
                   <div className="flex flex-wrap gap-2">
                     {Object.entries(BUNDLES).map(([key, bundle]) => (
                       <button key={key} onClick={() => addBundle(key)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-[#EDE7D8] border border-[#DDD4C0] hover:border-[#1B3828] rounded-lg text-xs font-semibold text-[#6A5A4A] hover:text-[#1C1410] transition-all">
-                        <span>{bundle.icon}</span>
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FAF8F3] border border-[#DDD4C0] hover:bg-[#1B3828] hover:text-[#EED98A] hover:border-[#1B3828] rounded-lg text-xs font-bold uppercase tracking-wide text-[#6A5A4A] transition-all">
                         <span>{bundle.label}</span>
-                        <span className="text-[#9A8A78]">+{bundle.members.length}</span>
+                        <span className="text-[#9A8A78] font-mono text-[10px] ml-1">+{bundle.members.length}</span>
                       </button>
                     ))}
                   </div>
                 </div>
 
                 <div className="flex-1 flex flex-col min-h-0">
-                  <label className="block text-xs font-semibold text-[#6A5A4A] mb-1.5">Paste Country List</label>
+                  <label className="block text-[10px] font-bold tracking-[0.12em] text-[#9A8A78] uppercase mb-2">Paste Country List</label>
                   <textarea value={pasteText} onChange={(e) => { setPasteText(e.target.value); setPasteError(''); }}
                     placeholder={'France\nGermany\nBrazil, India...'}
-                    className="flex-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] transition-colors text-sm resize-none min-h-0" />
+                    className="flex-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] focus:ring-2 focus:ring-[#1B3828]/10 transition-all text-sm resize-none min-h-0" />
                   <div className="flex items-center gap-3 mt-2">
                     <button onClick={handlePaste} disabled={!pasteText.trim()}
-                      className="px-4 py-2 bg-[#EDE7D8] hover:bg-[#DDD4C0] disabled:opacity-40 border border-[#DDD4C0] text-[#6A5A4A] rounded-lg text-xs font-semibold transition-colors">
+                      className="px-4 py-2 bg-[#1B3828] hover:bg-[#2A5A3C] disabled:opacity-30 disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-[#EED98A] rounded-lg text-xs font-bold uppercase tracking-wide transition-all">
                       Auto-match &amp; Add →
                     </button>
                     {pasteError && <p className="text-xs text-yellow-400 flex-1">{pasteError}</p>}
@@ -338,22 +377,23 @@ function CreatePageInner() {
                 </div>
               </div>
 
+              {/* Fix 6 — Delegates panel */}
               <div className="flex flex-col min-h-0">
                 <div className="flex items-center justify-between mb-2 shrink-0">
-                  <label className="text-xs font-semibold text-[#6A5A4A]">Selected Delegates</label>
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs font-bold text-[#1C1410]">{delegates.length} added</span>
-                    {delegates.length > 0 && (
-                      <button onClick={() => setDelegates([])} className="text-xs text-[#9A8A78] hover:text-red-500 transition-colors">Clear all</button>
-                    )}
+                  <div className="flex items-center gap-2">
+                    <label className="text-[10px] font-bold tracking-[0.12em] text-[#9A8A78] uppercase">Selected Delegates</label>
+                    <span className="text-[10px] font-bold text-[#1B3828] bg-[#EED98A]/30 px-2 py-0.5 rounded-full" style={{ fontFamily: "'DM Mono', monospace" }}>{delegates.length}</span>
                   </div>
+                  {delegates.length > 0 && (
+                    <button onClick={() => setDelegates([])} className="text-[10px] font-bold text-[#9A8A78] hover:text-[#8B2020] uppercase tracking-wide transition-colors">Clear all</button>
+                  )}
                 </div>
 
                 <div className="flex-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl overflow-hidden mb-4 min-h-0">
                   {delegates.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-full text-[#9A8A78] text-sm gap-2">
-                      <Emoji size="1.875rem">🌍</Emoji>
-                      <span>No delegates added yet</span>
+                    <div className="flex flex-col items-center justify-center h-full gap-2">
+                      <Globe size={28} strokeWidth={1.5} className="text-[#DDD4C0]" />
+                      <span className="text-[#9A8A78] text-sm font-medium">No delegates added yet</span>
                     </div>
                   ) : (
                     <div className="overflow-y-auto h-full">
@@ -361,7 +401,10 @@ function CreatePageInner() {
                         const found = getCountryByName(name);
                         return (
                           <div key={name} className="flex items-center gap-3 px-4 py-2.5 border-b border-[#DDD4C0]/50 last:border-0 hover:bg-[#DDD4C0] transition-colors group">
-                            {found ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <Emoji size="1.125rem">🌐</Emoji>}
+                            {found
+                              ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                              : <Globe size={16} strokeWidth={1.5} className="text-[#9A8A78] shrink-0" />
+                            }
                             <span className="text-sm text-[#1C1410] flex-1 truncate">{name}</span>
                             <button onClick={() => setDelegates((p) => p.filter((d) => d !== name))}
                               className="text-[#9A8A78] group-hover:text-red-500 transition-colors text-sm opacity-0 group-hover:opacity-100">✕</button>
@@ -372,9 +415,18 @@ function CreatePageInner() {
                   )}
                 </div>
 
-                <button onClick={handleCreate} disabled={!canProceed || creating}
-                  className="w-full bg-[#2A5A3C] hover:bg-[#3D7A52] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-[#1C1410] py-4 rounded-xl font-bold transition-colors text-base shrink-0">
-                  {creating ? 'Creating...' : canProceed ? 'Start Session →' : 'Enter committee name, chair, and topic above'}
+                {/* Fix 6 — Start Session button */}
+                <button
+                  onClick={handleCreate}
+                  disabled={!canProceed || creating}
+                  className="w-full py-4 rounded-xl font-black text-sm uppercase tracking-widest transition-all shrink-0"
+                  style={{
+                    backgroundColor: canProceed && !creating ? '#1B3828' : '#DDD4C0',
+                    color: canProceed && !creating ? '#EED98A' : '#9A8A78',
+                    boxShadow: canProceed && !creating ? '0 8px 24px rgba(27,56,40,0.25)' : 'none',
+                  }}
+                >
+                  {creating ? 'CREATING...' : canProceed ? 'START SESSION →' : 'ENTER COMMITTEE NAME & TOPIC ABOVE'}
                 </button>
               </div>
             </div>
