@@ -564,19 +564,23 @@ function CreatePageInner() {
                 </div>
 
                 <div className="flex-1 flex flex-col min-h-0">
-                  <label className="block text-xs font-bold uppercase tracking-wide mb-1.5" style={{ color: '#1B3828' }}>Paste Country List</label>
-                  <textarea value={pasteText} onChange={(e) => { setPasteText(e.target.value); setPasteError(''); }}
-                    placeholder={'France\nGermany\nBrazil, India...'}
-                    className="flex-1 bg-white/70 border border-[#C8BAA8] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] focus:ring-2 focus:ring-[#1B3828]/10 transition-all text-sm resize-none min-h-0" />
-                  <div className="flex items-center gap-3 mt-2">
-                    <button onClick={handlePaste} disabled={!pasteText.trim()}
-                      className="px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
-                      style={{ backgroundColor: '#1B3828', color: '#EED98A' }}
-                      onMouseEnter={(e) => { if (!pasteText.trim()) return; (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; (e.currentTarget as HTMLElement).style.boxShadow = '0 0 0 3px rgba(238,217,138,0.2)'; }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}>
-                      Auto-match &amp; Add →
-                    </button>
-                    {pasteError && <p className="text-xs text-[#B6871F] flex-1">{pasteError}</p>}
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-bold uppercase tracking-wide" style={{ color: '#1B3828' }}>Paste Country List</label>
+                    {pasteError && <p className="text-xs" style={{ color: '#B6871F' }}>{pasteError}</p>}
+                  </div>
+                  <div className="relative flex-1 min-h-0">
+                    <textarea value={pasteText} onChange={(e) => { setPasteText(e.target.value); setPasteError(''); }}
+                      placeholder={'France\nGermany\nBrazil, India...'}
+                      className="w-full h-full bg-white/70 border border-[#C8BAA8] rounded-xl px-4 py-3 pb-12 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] focus:ring-2 focus:ring-[#1B3828]/10 transition-all text-sm resize-none" />
+                    <div className="absolute bottom-3 left-3">
+                      <button onClick={handlePaste} disabled={!pasteText.trim()}
+                        className="px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
+                        style={{ backgroundColor: '#1B3828', color: '#EED98A' }}
+                        onMouseEnter={(e) => { if (!pasteText.trim()) return; (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; (e.currentTarget as HTMLElement).style.boxShadow = '0 0 0 3px rgba(238,217,138,0.2)'; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}>
+                        Auto-match &amp; Add →
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
