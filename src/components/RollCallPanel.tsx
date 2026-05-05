@@ -22,10 +22,10 @@ export function FlagCircle({ country, size = 'md' }: { country: string; size?: '
   };
   const box = dim[size];
   return (
-    <div className={`relative ${box} rounded-full overflow-hidden bg-[#DDD4C0] shrink-0 flex items-center justify-center`}>
+    <div className={`relative ${box} rounded-full overflow-hidden shrink-0 flex items-center justify-center`} style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}>
       {found
         ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-[85%] h-[85%] object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-        : <span className="text-lg">🌐</span>}
+        : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>}
     </div>
   );
 }
@@ -33,19 +33,19 @@ export function FlagCircle({ country, size = 'md' }: { country: string; size?: '
 // ── 3-state slider ────────────────────────────────────────────────────────────
 function StatusSlider({ status, onCycle }: { status: DelegateStatus; onCycle: () => void }) {
   const thumbPos = status === 'absent' ? 'left-[2px]' : status === 'present' ? 'left-[31px]' : 'left-[60px]';
-  const thumbColor = status === 'absent' ? 'bg-red-300' : status === 'present' ? 'bg-[#3D6B35]' : 'bg-[#2A5A3C]';
+  const thumbColor = status === 'absent' ? 'bg-[#8B2020]' : status === 'present' ? 'bg-[#3D7A52]' : 'bg-[#B6871F]';
   return (
     <button
       onClick={(e) => { e.stopPropagation(); onCycle(); }}
-      className="relative w-[90px] h-[30px] rounded-full bg-[#EDE7D8] border-2 border-[#C8BAA8] hover:border-[#7B4A1E]/60 cursor-pointer shrink-0 select-none transition-colors"
+      className="relative w-[90px] h-[30px] rounded-full cursor-pointer shrink-0 select-none transition-colors" style={{ backgroundColor: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.18)' }}
       title="Tap to cycle: Absent → Present → PV"
     >
       <div className="absolute inset-0 grid grid-cols-3 items-center pointer-events-none">
-        <span className={`text-[10px] font-bold text-center ${status === 'absent' ? 'text-red-900' : 'text-[#9A8A78]'}`}>A</span>
-        <span className={`text-[10px] font-bold text-center ${status === 'present' ? 'text-[#1C1410]' : 'text-[#9A8A78]'}`}>P</span>
-        <span className={`text-[10px] font-bold text-center ${status === 'present-voting' ? 'text-[#1C1410]' : 'text-[#9A8A78]'}`}>PV</span>
+        <span className={`text-[10px] font-bold text-center ${status === 'absent' ? 'text-white' : 'text-white/40'}`}>A</span>
+        <span className={`text-[10px] font-bold text-center ${status === 'present' ? 'text-white' : 'text-white/40'}`}>P</span>
+        <span className={`text-[10px] font-bold text-center ${status === 'present-voting' ? 'text-white' : 'text-white/40'}`}>PV</span>
       </div>
-      <div className={`absolute top-[3px] w-[26px] h-[24px] rounded-full transition-all duration-200 ${thumbPos} ${thumbColor}`} />
+      <div className={`absolute top-[2px] w-[27px] h-[26px] rounded-full transition-all duration-200 shadow-sm ${thumbPos} ${thumbColor}`} />
     </button>
   );
 }
@@ -56,14 +56,14 @@ function ViewToggle({ view, onChange }: { view: 'az' | 'queue'; onChange: (v: 'a
   return (
     <button
       onClick={() => onChange(isQueue ? 'az' : 'queue')}
-      className="relative w-[104px] h-[28px] rounded-full bg-[#EDE7D8] border-2 border-[#C8BAA8] cursor-pointer select-none shrink-0"
+      className="relative w-[104px] h-[28px] rounded-full cursor-pointer select-none shrink-0" style={{ backgroundColor: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)' }}
       title="Toggle A-Z / Queue view"
     >
       <div className="absolute inset-0 grid grid-cols-2 items-center pointer-events-none z-10">
-        <span className={`text-[10px] font-bold text-center ${!isQueue ? 'text-[#1C1410]' : 'text-[#9A8A78]'}`}>A-Z</span>
-        <span className={`text-[10px] font-bold text-center ${isQueue ? 'text-[#B6871F]' : 'text-[#9A8A78]'}`}>QUEUE</span>
+        <span className={`text-[10px] font-bold text-center ${!isQueue ? 'text-white' : 'text-white/40'}`}>A-Z</span>
+        <span className={`text-[10px] font-bold text-center ${isQueue ? 'text-[#EED98A]' : 'text-white/40'}`}>QUEUE</span>
       </div>
-      <div className={`absolute top-[2px] w-[50px] h-[24px] rounded-full transition-all duration-200 ${isQueue ? 'left-[52px] bg-[#1B3828]' : 'left-[2px] bg-[#DDD4C0]'}`} />
+      <div className={`absolute top-[2px] w-[50px] h-[24px] rounded-full transition-all duration-200 ${isQueue ? 'left-[52px]' : 'left-[2px]'}`} style={{ backgroundColor: isQueue ? '#B6871F' : 'rgba(255,255,255,0.18)' }} />
     </button>
   );
 }
@@ -99,7 +99,7 @@ function AddCountryInput({ committee, onAdd, onQueryChange }: { committee: Commi
 
   return (
     <div className="relative">
-      <div className="flex items-center bg-[#FAF8F3] border border-[#DDD4C0] focus-within:border-[#1B3828] rounded-xl overflow-hidden transition-colors">
+      <div className="flex items-center rounded-xl overflow-hidden transition-all" style={{ backgroundColor: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)' }}>
         <input
           ref={inputRef}
           type="text"
@@ -114,7 +114,7 @@ function AddCountryInput({ committee, onAdd, onQueryChange }: { committee: Commi
             if (e.key === 'Escape') updateQuery('');
           }}
           placeholder="Filter or add country / observer…"
-          className="flex-1 bg-transparent px-3 py-2.5 text-[#1C1410] text-sm placeholder-[#9A8A78] focus:outline-none"
+          className="flex-1 bg-transparent px-3 py-2.5 text-sm focus:outline-none placeholder-white/30" style={{ color: '#EDE7D8' }}
         />
         {query && (topKnown || trimmed) && (
           <span className="text-[10px] text-[#9A8A78] px-2 truncate max-w-[80px]">
@@ -218,7 +218,7 @@ function MajorityPie({ arcFill, color, label }: {
   return (
     <div className="flex items-center gap-1">
       <svg width="32" height="32" viewBox="0 0 32 32">
-        <circle cx="16" cy="16" r={r} fill="none" stroke="#DDD4C0" strokeWidth="5" />
+        <circle cx="16" cy="16" r={r} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="5" />
         <circle cx="16" cy="16" r={r} fill="none" stroke={color} strokeWidth="5"
           strokeDasharray={circ}
           strokeDashoffset={circ * (1 - Math.min(arcFill, 1))}
@@ -227,7 +227,7 @@ function MajorityPie({ arcFill, color, label }: {
           style={{ transition: 'stroke-dashoffset 0.3s' }}
         />
       </svg>
-      <span className="text-xs font-bold text-[#1C1410]">{label}</span>
+      <span className="text-xs font-bold" style={{ color: '#EDE7D8' }}>{label}</span>
     </div>
   );
 }
@@ -388,11 +388,11 @@ function RollCallPanelInner({
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="px-4 pt-4 pb-3 border-b-2 border-[#3D2A15] shrink-0">
-        <p className="text-lg font-black text-[#1C1410] leading-tight truncate mb-0.5">{committee.name}</p>
+      <div className="px-4 pt-4 pb-3 shrink-0 relative z-10" style={{ borderBottom: '1px solid rgba(61,122,82,0.4)' }}>
+        <p className="text-lg font-black leading-tight truncate mb-0.5" style={{ color: '#EED98A' }}>{committee.name}</p>
         {committee.topic && (
-          <p className="text-xs text-[#6A5A4A] leading-snug line-clamp-2 mb-2">
-            <span className="text-[#9A8A78] font-semibold">Topic: </span>{committee.topic}
+          <p className="text-xs leading-snug line-clamp-2 mb-2" style={{ color: 'rgba(238,217,138,0.55)' }}>
+            <span className="font-semibold" style={{ color: 'rgba(238,217,138,0.7)' }}>Topic: </span>{committee.topic}
           </p>
         )}
         <div className="flex items-center justify-between">
@@ -405,9 +405,9 @@ function RollCallPanelInner({
         </div>
         {showBulkActions && (
           <div className="flex gap-1.5 mt-2">
-            <button onClick={handleClear} className="text-[10px] font-semibold px-2.5 py-1.5 rounded-lg bg-[#DDD4C0] text-[#8B2020] hover:bg-red-950/40 transition-colors">Clear All</button>
-            <button onClick={handleAllPresent} className="text-[10px] font-semibold px-2.5 py-1.5 rounded-lg bg-[#DDD4C0] text-[#EED98A] hover:bg-[#1B3828]/20 transition-colors">All Present</button>
-            <button onClick={handleAllPresentVoting} className="text-[10px] font-semibold px-2.5 py-1.5 rounded-lg bg-[#DDD4C0] text-[#EED98A] hover:bg-[#1B3828]/30 transition-colors">All P+V</button>
+            <button onClick={handleClear} className="text-[10px] font-bold uppercase tracking-wide px-2.5 py-1.5 rounded-lg transition-colors" style={{ backgroundColor: 'rgba(139,32,32,0.25)', color: '#F4A0A0', border: '1px solid rgba(139,32,32,0.4)' }}>Clear All</button>
+            <button onClick={handleAllPresent} className="text-[10px] font-bold uppercase tracking-wide px-2.5 py-1.5 rounded-lg transition-colors" style={{ backgroundColor: 'rgba(61,122,82,0.3)', color: '#EDE7D8', border: '1px solid rgba(61,122,82,0.4)' }}>All Present</button>
+            <button onClick={handleAllPresentVoting} className="text-[10px] font-bold uppercase tracking-wide px-2.5 py-1.5 rounded-lg transition-colors" style={{ backgroundColor: 'rgba(182,135,31,0.25)', color: '#EED98A', border: '1px solid rgba(182,135,31,0.35)' }}>All P+V</button>
           </div>
         )}
       </div>
@@ -465,21 +465,35 @@ function RollCallPanelInner({
                 onDragEnd={() => { dragIndexRef.current = null; setDragOverIndex(null); }}
                 className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all ${
                   !matchesSearch
-                    ? 'border border-transparent opacity-25'
+                    ? 'opacity-20'
                     : isCurrentSpeaker
-                    ? 'bg-[#1B3828]/20 border-2 border-[#1B3828]'
+                    ? 'border-2'
                     : isAbsent
-                    ? 'border border-transparent opacity-40'
+                    ? 'opacity-35'
                     : effectiveStatus === 'present'
-                    ? 'bg-[#1B3828]/30 border border-[#3D7A52]/30'
-                    : 'bg-[#B6871F]/15 border border-[#B6871F]/30'
+                    ? 'border'
+                    : 'border'
                 } ${
                   (!isRollCallPhase && onAddToList && !isAbsent) || isRollCallPhase
-                    ? 'cursor-pointer hover:bg-[#DDD4C0]/50'
+                    ? 'cursor-pointer'
                     : isAbsent && !isRollCallPhase
                     ? 'cursor-not-allowed'
                     : ''
                 } ${isDraggable ? 'cursor-grab' : ''}`}
+                style={{
+                  backgroundColor: !matchesSearch ? 'transparent'
+                    : isCurrentSpeaker ? 'rgba(238,217,138,0.12)'
+                    : isAbsent ? 'transparent'
+                    : effectiveStatus === 'present' ? 'rgba(61,122,82,0.25)'
+                    : 'rgba(182,135,31,0.2)',
+                  borderColor: !matchesSearch ? 'transparent'
+                    : isCurrentSpeaker ? 'rgba(238,217,138,0.5)'
+                    : isAbsent ? 'transparent'
+                    : effectiveStatus === 'present' ? 'rgba(61,122,82,0.4)'
+                    : 'rgba(182,135,31,0.4)',
+                }}
+                onMouseEnter={(e) => { if (!isAbsent) (e.currentTarget as HTMLElement).style.backgroundColor = effectiveStatus === 'present' ? 'rgba(61,122,82,0.38)' : effectiveStatus === 'present-voting' ? 'rgba(182,135,31,0.32)' : 'rgba(238,217,138,0.08)'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = !matchesSearch ? 'transparent' : isCurrentSpeaker ? 'rgba(238,217,138,0.12)' : isAbsent ? 'transparent' : effectiveStatus === 'present' ? 'rgba(61,122,82,0.25)' : 'rgba(182,135,31,0.2)'; }}
               >
                 <div className="relative shrink-0">
                   {isRoomOrderTdT && queuePos !== null ? (
@@ -500,11 +514,11 @@ function RollCallPanelInner({
                     </div>
                   )}
                 </div>
-                <span className={`flex-1 line-clamp-2 break-words whitespace-normal leading-tight max-w-[100px] ${isUpNext ? 'text-lg font-bold' : 'text-base'} ${!isAbsent ? 'text-[#1C1410] font-medium' : 'text-[#9A8A78]'}`}>
+                <span className={`flex-1 line-clamp-2 break-words whitespace-normal leading-tight max-w-[100px] ${isUpNext ? 'text-lg font-bold' : 'text-base'} ${!isAbsent ? 'font-medium' : 'opacity-50'}`} style={{ color: '#EDE7D8' }}>
                   {d.country}
                 </span>
                 {isAbsent && !isRollCallPhase && (
-                  <span className="text-[10px] text-[#9A8A78] shrink-0 font-mono ml-auto">absent</span>
+                  <span className="text-[10px] shrink-0 font-mono ml-auto uppercase tracking-wide" style={{ color: 'rgba(237,231,216,0.35)' }}>absent</span>
                 )}
                 {isRollCallPhase && (
                   <div onClick={(e) => e.stopPropagation()} className={`ml-auto shrink-0 ${isReadOnly ? 'pointer-events-none opacity-50' : ''}`}>
@@ -517,13 +531,13 @@ function RollCallPanelInner({
         })}
       </div>
 
-      <div className="border-t border-[#DDD4C0] px-3 py-3 space-y-2 shrink-0 overflow-visible">
+      <div className="px-3 py-3 space-y-2 shrink-0 overflow-visible relative z-10" style={{ borderTop: '1px solid rgba(61,122,82,0.3)' }}>
         <AddCountryInput committee={committee} onAdd={handleAddDelegate} onQueryChange={setSearch} />
         {(committee.phase === 'pre-session' || committee.phase === 'roll-call') && (
           <button
             onClick={handleBeginSession}
             disabled={present < 1}
-            className="w-full bg-[#2A5A3C] hover:bg-[#3D7A52] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-[#1C1410] py-3 rounded-xl text-sm font-bold transition-all shadow-md shadow-[#3D6B35]/20 active:scale-[0.98]"
+            className="w-full disabled:opacity-40 disabled:cursor-not-allowed py-3 rounded-xl text-sm font-black uppercase tracking-widest transition-all active:scale-[0.98]" style={{ backgroundColor: '#EED98A', color: '#1B3828' }} onMouseEnter={(e) => { if ((e.currentTarget as HTMLButtonElement).disabled) return; (e.currentTarget as HTMLElement).style.backgroundColor = '#F5E89E'; (e.currentTarget as HTMLElement).style.boxShadow = '0 0 0 3px rgba(238,217,138,0.25)'; }} onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#EED98A'; (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}
           >
             {present >= 1 ? 'Begin Session →' : 'Add at least 1 delegate'}
           </button>
