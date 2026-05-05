@@ -197,61 +197,115 @@ function CreatePageInner() {
       </nav>
 
       <div className="flex-1 flex overflow-hidden">
-        {/* Fix 2 — Committee type select screen */}
         {committeeMode === 'select' && (
           <div className="flex-1 flex flex-col items-center justify-center px-8 py-6">
-            <img
-              src="/GavellingLogo.png"
-              alt="Gavelling"
-              className="mb-8 object-contain"
-              style={{ width: 'min(220px, 30vw)', height: 'auto' }}
-              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-            />
-            <p className="text-xs font-bold tracking-[0.18em] text-[#9A8A78] uppercase mb-3" style={{ fontFamily: "'DM Mono', monospace" }}>
-              Select Committee Type
+
+            {/* Header */}
+            <p className="text-xs font-bold tracking-[0.22em] uppercase mb-3" style={{ fontFamily: "'DM Mono', monospace", color: '#9A8A78' }}>
+              Committee Format
             </p>
-            <h1 className="text-3xl font-black text-[#1C1410] uppercase tracking-wide mb-10 text-center">
-              What are you running?
+            <h1 className="font-black uppercase tracking-wide text-center mb-2" style={{ fontSize: 'clamp(28px, 3.5vw, 44px)', color: '#1C1410' }}>
+              Select Committee Type
             </h1>
+            <p className="text-sm text-center mb-12 max-w-sm leading-relaxed" style={{ color: '#9A8A78' }}>
+              Choose a format to get started. More committee types coming soon.
+            </p>
 
-            <div className="flex flex-row gap-5 w-full max-w-3xl">
-              {/* Regular Debate — disabled */}
-              <div className="flex-1 flex flex-col items-center justify-center bg-[#EDE7D8] border border-[#DDD4C0] rounded-2xl p-8 min-h-[260px] opacity-40 cursor-not-allowed relative">
-                <div className="w-16 h-16 rounded-2xl bg-[#DDD4C0] flex items-center justify-center mb-5 text-[#9A8A78]">
-                  <Mic size={32} strokeWidth={1.5} />
-                </div>
-                <h2 className="text-base font-black text-[#1C1410] uppercase tracking-wide mb-2">Regular Debate</h2>
-                <p className="text-[#9A8A78] text-xs text-center mb-4 leading-relaxed">Traditional parliamentary debate</p>
-                <span className="px-3 py-1 bg-[#DDD4C0] border border-[#C8BAA8] text-[#9A8A78] rounded-full text-[10px] font-bold uppercase tracking-wide" style={{ fontFamily: "'DM Mono', monospace" }}>Coming Soon</span>
-              </div>
+            {/* Cards — podium layout */}
+            <div className="flex flex-row items-center gap-6 w-full max-w-4xl" style={{ perspective: '1000px' }}>
 
-              {/* Model United Nations — active */}
+              {/* Regular Debate — coming soon, left */}
               <div
-                onClick={() => setCommitteeMode('build')}
-                className="flex-1 flex flex-col items-center justify-center rounded-2xl p-8 min-h-[260px] cursor-pointer transition-all group"
-                style={{ backgroundColor: '#1B3828', border: '2px solid #3D7A52', boxShadow: '0 20px 60px rgba(27,56,40,0.35)' }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+                className="flex-1 flex flex-col items-center justify-center rounded-2xl p-8 cursor-not-allowed transition-all"
+                style={{
+                  backgroundColor: '#FAF8F3',
+                  border: '1.5px solid #DDD4C0',
+                  minHeight: '320px',
+                  transform: 'scale(0.93) translateY(18px)',
+                  boxShadow: '0 8px 24px rgba(27,56,40,0.06)',
+                }}
               >
-                <div className="w-16 h-16 rounded-2xl bg-[#EED98A]/15 border border-[#EED98A]/25 flex items-center justify-center mb-5 text-[#EED98A]">
-                  <Globe size={32} strokeWidth={1.5} />
+                <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-5" style={{ backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0' }}>
+                  <Mic size={28} strokeWidth={1.5} style={{ color: '#9A8A78' }} />
                 </div>
-                <h2 className="text-base font-black text-[#EED98A] uppercase tracking-wide mb-2">Model United Nations</h2>
-                <p className="text-[#EED98A]/60 text-xs text-center mb-5 leading-relaxed">United Nations committee simulation</p>
-                <span className="px-5 py-2.5 bg-[#EED98A] text-[#1B3828] rounded-xl text-xs font-black uppercase tracking-wide transition-colors">
-                  Start →
+                <h2 className="font-black uppercase tracking-wide mb-2 text-center" style={{ fontSize: '15px', color: '#1C1410' }}>Regular Debate</h2>
+                <p className="text-xs text-center mb-5 leading-relaxed" style={{ color: '#9A8A78', maxWidth: '160px' }}>Traditional parliamentary debate format</p>
+                <span
+                  className="px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest"
+                  style={{ fontFamily: "'DM Mono', monospace", backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0', color: '#9A8A78' }}
+                >
+                  Coming Soon
                 </span>
               </div>
 
-              {/* Crisis Committee — disabled */}
-              <div className="flex-1 flex flex-col items-center justify-center bg-[#EDE7D8] border border-[#DDD4C0] rounded-2xl p-8 min-h-[260px] opacity-40 cursor-not-allowed relative">
-                <div className="w-16 h-16 rounded-2xl bg-[#DDD4C0] flex items-center justify-center mb-5 text-[#9A8A78]">
-                  <Zap size={32} strokeWidth={1.5} />
+              {/* Model United Nations — active, center, elevated */}
+              <div
+                onClick={() => setCommitteeMode('build')}
+                className="flex flex-col items-center justify-center rounded-2xl p-10 cursor-pointer transition-all group relative"
+                style={{
+                  backgroundColor: '#1B3828',
+                  border: '2px solid #3D7A52',
+                  minHeight: '400px',
+                  width: '340px',
+                  flexShrink: 0,
+                  boxShadow: '0 32px 80px rgba(27,56,40,0.40), 0 0 0 1px rgba(61,122,82,0.3)',
+                  zIndex: 10,
+                }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; (e.currentTarget as HTMLElement).style.boxShadow = '0 40px 96px rgba(27,56,40,0.50), 0 0 0 1px rgba(61,122,82,0.4)'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; (e.currentTarget as HTMLElement).style.boxShadow = '0 32px 80px rgba(27,56,40,0.40), 0 0 0 1px rgba(61,122,82,0.3)'; }}
+              >
+                {/* Subtle grain on the active card */}
+                <div
+                  className="pointer-events-none absolute inset-0 rounded-2xl"
+                  style={{
+                    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`,
+                    backgroundRepeat: 'repeat',
+                    backgroundSize: '300px 300px',
+                    mixBlendMode: 'overlay',
+                    opacity: 0.06,
+                  }}
+                />
+                <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-6" style={{ backgroundColor: 'rgba(238,217,138,0.15)', border: '1px solid rgba(238,217,138,0.25)' }}>
+                  <Globe size={32} strokeWidth={1.5} style={{ color: '#EED98A' }} />
                 </div>
-                <h2 className="text-base font-black text-[#1C1410] uppercase tracking-wide mb-2">Crisis Committee</h2>
-                <p className="text-[#9A8A78] text-xs text-center mb-4 leading-relaxed">Fast-paced crisis scenarios</p>
-                <span className="px-3 py-1 bg-[#DDD4C0] border border-[#C8BAA8] text-[#9A8A78] rounded-full text-[10px] font-bold uppercase tracking-wide" style={{ fontFamily: "'DM Mono', monospace" }}>Coming H2 2026</span>
+                <h2 className="font-black uppercase tracking-wide mb-2 text-center" style={{ fontSize: '18px', color: '#EED98A' }}>
+                  Model United<br />Nations
+                </h2>
+                <p className="text-xs text-center mb-8 leading-relaxed" style={{ color: 'rgba(238,217,138,0.55)', maxWidth: '180px' }}>
+                  United Nations committee simulation
+                </p>
+                <span
+                  className="px-6 py-3 rounded-xl font-black uppercase tracking-widest text-xs transition-colors"
+                  style={{ backgroundColor: '#EED98A', color: '#1B3828' }}
+                >
+                  START →
+                </span>
               </div>
+
+              {/* Crisis Committee — coming soon, right */}
+              <div
+                className="flex-1 flex flex-col items-center justify-center rounded-2xl p-8 cursor-not-allowed transition-all"
+                style={{
+                  backgroundColor: '#FAF8F3',
+                  border: '1.5px solid #DDD4C0',
+                  minHeight: '320px',
+                  transform: 'scale(0.93) translateY(18px)',
+                  boxShadow: '0 8px 24px rgba(27,56,40,0.06)',
+                }}
+              >
+                <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-5" style={{ backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0' }}>
+                  <Zap size={28} strokeWidth={1.5} style={{ color: '#9A8A78' }} />
+                </div>
+                <h2 className="font-black uppercase tracking-wide mb-2 text-center" style={{ fontSize: '15px', color: '#1C1410' }}>Crisis Committee</h2>
+                <p className="text-xs text-center mb-5 leading-relaxed" style={{ color: '#9A8A78', maxWidth: '160px' }}>Fast-paced crisis scenarios and directives</p>
+                <span
+                  className="px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest"
+                  style={{ fontFamily: "'DM Mono', monospace", backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0', color: '#9A8A78' }}
+                >
+                  Coming H2 2026
+                </span>
+              </div>
+
             </div>
           </div>
         )}
