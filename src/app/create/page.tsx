@@ -461,36 +461,31 @@ function CreatePageInner() {
 
         {committeeMode === 'build' && (
           <div className="flex-1 flex flex-col overflow-hidden px-8 py-6">
-            <div className="flex items-center gap-4 mb-6 shrink-0">
+            <div className="relative flex items-center justify-center mb-6 shrink-0">
               <button
                 onClick={() => setCommitteeMode('select')}
-                className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[#EDE7D8] border border-[#DDD4C0] hover:bg-[#DDD4C0] text-[#6A5A4A] hover:text-[#1C1410] text-xs font-bold uppercase tracking-wide transition-all"
+                className="absolute left-0 flex items-center gap-2 px-3 py-2 rounded-xl bg-[#EDE7D8] border border-[#DDD4C0] hover:bg-[#DDD4C0] text-[#6A5A4A] hover:text-[#1C1410] text-xs font-bold uppercase tracking-wide transition-all"
               >
                 <ChevronLeft size={14} /> Back
               </button>
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-[#1B3828] flex items-center justify-center text-[#EED98A]">
-                  <PenLine size={15} />
-                </div>
-                <h1 className="text-xl font-black text-[#1C1410] uppercase tracking-wide">New Committee</h1>
-              </div>
+              <h1 className="text-2xl font-black uppercase tracking-wide" style={{ color: '#1B3828' }}>New Committee</h1>
             </div>
 
             <div className="grid grid-cols-3 gap-4 mb-3 shrink-0">
               <div>
-                <label className="block text-[10px] font-bold tracking-[0.14em] uppercase text-[#9A8A78] mb-1.5" style={{ fontFamily: "'DM Mono', monospace" }}>Committee Name</label>
+                <label className="block text-xs font-bold uppercase tracking-wide mb-1.5" style={{ color: '#1B3828' }}>Committee Name</label>
                 <CommitteeNameInput value={committeeName} onChange={(v) => { setCommitteeName(v); setIsUNSC(false); }} onPresetSelect={handleCommitteePreset} />
               </div>
               <div>
-                <label className="block text-[10px] font-bold tracking-[0.14em] uppercase text-[#9A8A78] mb-1.5" style={{ fontFamily: "'DM Mono', monospace" }}>
-                  Chair Name <span className="text-[#9A8A78] font-normal normal-case tracking-normal">(optional)</span>
+                <label className="block text-xs font-bold uppercase tracking-wide mb-1.5" style={{ color: '#1B3828' }}>
+                  Chair Name <span className="font-normal" style={{ color: '#9A8A78' }}>(optional)</span>
                 </label>
                 <input type="text" value={chairNames[0]} onChange={(e) => setChairNames([e.target.value])}
                   placeholder="e.g. John Smith"
                   className="w-full bg-white/70 border border-[#C8BAA8] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] focus:ring-2 focus:ring-[#1B3828]/10 transition-all text-sm" />
               </div>
               <div>
-                <label className="block text-[10px] font-bold tracking-[0.14em] uppercase text-[#9A8A78] mb-1.5" style={{ fontFamily: "'DM Mono', monospace" }}>Topic</label>
+                <label className="block text-xs font-bold uppercase tracking-wide mb-1.5" style={{ color: '#1B3828' }}>Topic</label>
                 <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)}
                   placeholder="e.g. The right to education"
                   className="w-full bg-white/70 border border-[#C8BAA8] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] focus:ring-2 focus:ring-[#1B3828]/10 transition-all text-sm" />
@@ -498,16 +493,16 @@ function CreatePageInner() {
             </div>
 
             {isUNSC && (
-              <div className="mb-3 px-4 py-2.5 rounded-xl text-xs font-medium shrink-0 flex items-center gap-2" style={{ backgroundColor: 'rgba(182,135,31,0.12)', border: '1px solid rgba(182,135,31,0.35)', color: '#1C1410' }}>
-                <span className="font-black text-[#B6871F]" style={{ fontFamily: "'DM Mono', monospace" }}>UNSC</span>
-                <span><strong>Veto power active:</strong> P5 nations (China, France, Russia, UK, USA) will have veto voting. Configure in <strong>Settings</strong> after session starts.</span>
+              <div className="mb-3 px-4 py-3 rounded-xl text-xs shrink-0 flex items-center gap-3" style={{ backgroundColor: '#1B3828', border: '1px solid #3D7A52', color: 'rgba(238,217,138,0.85)' }}>
+                <span className="font-black shrink-0 px-2 py-0.5 rounded-md text-[10px]" style={{ fontFamily: "'DM Mono', monospace", backgroundColor: 'rgba(238,217,138,0.15)', color: '#EED98A', border: '1px solid rgba(238,217,138,0.25)' }}>UNSC</span>
+                <span><strong style={{ color: '#EED98A' }}>Veto power active:</strong> P5 nations (China, France, Russia, UK, USA) will have veto voting. Configure in <strong style={{ color: '#EED98A' }}>Settings</strong> after session starts.</span>
               </div>
             )}
 
-            <div className="flex-1 grid grid-cols-2 gap-6 min-h-0 rounded-2xl overflow-hidden" style={{ background: 'linear-gradient(to right, rgba(27,56,40,0.03) 0%, transparent 50%)' }}>
+            <div className="flex-1 grid grid-cols-2 gap-6 min-h-0">
               <div className="flex flex-col gap-4 min-h-0">
                 <div className="shrink-0">
-                  <label className="block text-[10px] font-bold tracking-[0.14em] uppercase text-[#9A8A78] mb-1.5" style={{ fontFamily: "'DM Mono', monospace" }}>Search &amp; Add</label>
+                  <label className="block text-xs font-bold uppercase tracking-wide mb-1.5" style={{ color: '#1B3828' }}>Search &amp; Add</label>
                   <div className="relative">
                     <div className="flex items-center bg-white/70 border border-[#C8BAA8] focus-within:border-[#1B3828] focus-within:ring-2 focus-within:ring-[#1B3828]/10 rounded-xl overflow-visible transition-all">
                       <input type="text" value={search} onChange={(e) => setSearch(e.target.value)}
@@ -549,23 +544,26 @@ function CreatePageInner() {
                 </div>
 
                 <div className="shrink-0">
-                  <label className="block text-[10px] font-bold tracking-[0.14em] uppercase text-[#9A8A78] mb-2" style={{ fontFamily: "'DM Mono', monospace" }}>Quick Bundles</label>
+                  <label className="block text-xs font-bold uppercase tracking-wide mb-2" style={{ color: '#1B3828' }}>Quick Bundles</label>
                   <div className="flex flex-wrap gap-2">
                     {Object.entries(BUNDLES).map(([key, bundle]) => (
                       <button key={key} onClick={() => addBundle(key)}
-                        className="group flex items-center gap-1.5 px-3 py-1.5 bg-[#FAF8F3] border border-[#DDD4C0] hover:bg-[#1B3828] hover:text-[#EED98A] hover:border-[#1B3828] rounded-lg text-xs font-bold uppercase tracking-wide text-[#6A5A4A] transition-all shadow-sm">
+                        className="group flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide transition-all"
+                        style={{ backgroundColor: '#1B3828', color: '#EED98A', border: '1px solid #3D7A52' }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}>
                         {bundle.logoPath ? (
                           <img src={bundle.logoPath} alt={bundle.label} width={16} height={16} className="rounded-sm shrink-0 object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                         ) : null}
                         <span>{bundle.label}</span>
-                        <span className="text-[#9A8A78] font-mono text-[10px] ml-1 group-hover:text-[#EED98A]/60">+{bundle.members.length}</span>
+                        <span className="font-mono text-[10px] ml-1" style={{ color: 'rgba(238,217,138,0.55)' }}>+{bundle.members.length}</span>
                       </button>
                     ))}
                   </div>
                 </div>
 
                 <div className="flex-1 flex flex-col min-h-0">
-                  <label className="block text-[10px] font-bold tracking-[0.14em] uppercase text-[#9A8A78] mb-1.5" style={{ fontFamily: "'DM Mono', monospace" }}>Paste Country List</label>
+                  <label className="block text-xs font-bold uppercase tracking-wide mb-1.5" style={{ color: '#1B3828' }}>Paste Country List</label>
                   <textarea value={pasteText} onChange={(e) => { setPasteText(e.target.value); setPasteError(''); }}
                     placeholder={'France\nGermany\nBrazil, India...'}
                     className="flex-1 bg-white/70 border border-[#C8BAA8] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] focus:ring-2 focus:ring-[#1B3828]/10 transition-all text-sm resize-none min-h-0" />
@@ -582,7 +580,7 @@ function CreatePageInner() {
               <div className="flex flex-col min-h-0">
                 <div className="flex items-center justify-between mb-2 shrink-0">
                   <div className="flex items-center gap-2">
-                    <label className="text-[10px] font-bold tracking-[0.14em] uppercase text-[#9A8A78]" style={{ fontFamily: "'DM Mono', monospace" }}>Selected Delegates</label>
+                    <label className="text-xs font-bold uppercase tracking-wide" style={{ color: '#1B3828' }}>Selected Delegates</label>
                     <span className="text-[10px] font-bold text-[#1B3828] bg-[#EED98A]/30 px-2 py-0.5 rounded-full" style={{ fontFamily: "'DM Mono', monospace" }}>{delegates.length}</span>
                   </div>
                   {delegates.length > 0 && (
@@ -592,9 +590,11 @@ function CreatePageInner() {
 
                 <div className="flex-1 bg-white/60 border border-[#C8BAA8] rounded-xl overflow-hidden mb-4 min-h-0">
                   {delegates.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-full gap-2">
-                      <Globe size={28} strokeWidth={1.5} className="text-[#DDD4C0]" />
-                      <span className="text-[#9A8A78] text-sm font-medium">No delegates added yet</span>
+                    <div className="flex flex-col items-center justify-center h-full gap-3 px-8">
+                      <div className="w-full max-w-[220px] border-2 border-dashed rounded-2xl px-6 py-8 flex flex-col items-center gap-2" style={{ borderColor: 'rgba(182,135,31,0.25)' }}>
+                        <p className="text-xs font-bold uppercase tracking-wide text-center" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>No delegates yet</p>
+                        <p className="text-xs text-center leading-relaxed" style={{ color: '#9A8A78' }}>Search countries or use Quick Bundles to add delegates</p>
+                      </div>
                     </div>
                   ) : (
                     <div className="overflow-y-auto h-full">
