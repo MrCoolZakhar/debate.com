@@ -570,7 +570,10 @@ function CreatePageInner() {
                     className="flex-1 bg-white/70 border border-[#C8BAA8] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] focus:ring-2 focus:ring-[#1B3828]/10 transition-all text-sm resize-none min-h-0" />
                   <div className="flex items-center gap-3 mt-2">
                     <button onClick={handlePaste} disabled={!pasteText.trim()}
-                      className="px-4 py-2 bg-[#1B3828] hover:bg-[#2A5A3C] disabled:opacity-30 disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-[#EED98A] rounded-lg text-xs font-bold uppercase tracking-wide transition-all active:scale-95">
+                      className="px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
+                      style={{ backgroundColor: '#1B3828', color: '#EED98A' }}
+                      onMouseEnter={(e) => { if (!pasteText.trim()) return; (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; (e.currentTarget as HTMLElement).style.boxShadow = '0 0 0 3px rgba(238,217,138,0.2)'; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}>
                       Auto-match &amp; Add →
                     </button>
                     {pasteError && <p className="text-xs text-[#B6871F] flex-1">{pasteError}</p>}
@@ -618,11 +621,20 @@ function CreatePageInner() {
                 <button
                   onClick={handleCreate}
                   disabled={!canProceed || creating}
-                  className="w-full py-4 rounded-xl font-black text-sm uppercase tracking-widest transition-all shrink-0"
+                  className="w-full py-4 rounded-xl font-black text-xs uppercase tracking-widest transition-all shrink-0"
                   style={{
                     backgroundColor: canProceed && !creating ? '#1B3828' : '#DDD4C0',
                     color: canProceed && !creating ? '#EED98A' : '#9A8A78',
                     boxShadow: canProceed && !creating ? '0 8px 24px rgba(27,56,40,0.25)' : 'none',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!canProceed || creating) return;
+                    (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C';
+                    (e.currentTarget as HTMLElement).style.boxShadow = '0 0 0 3px rgba(238,217,138,0.2), 0 8px 24px rgba(27,56,40,0.25)';
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828';
+                    (e.currentTarget as HTMLElement).style.boxShadow = '0 8px 24px rgba(27,56,40,0.25)';
                   }}
                 >
                   {creating ? 'CREATING...' : canProceed ? 'START SESSION →' : 'ENTER COMMITTEE NAME & TOPIC ABOVE'}
