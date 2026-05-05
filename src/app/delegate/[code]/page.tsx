@@ -8,6 +8,7 @@ import ChatPanel from '@/components/ChatPanel';
 import { useSettingsStore } from '@/lib/settingsStore';
 import { getFlagUrl, getCountryByName } from '@/lib/countries';
 import { Emoji } from '@/components/Emoji';
+import { FlagImg } from '@/components/FlagImg';
 import {
   getCommitteeByCode,
   subscribeToCommittee,
@@ -460,6 +461,12 @@ function StatisticsTab({ committee, country }: { committee: Committee; country: 
     .map(([c, s]) => ({ country: c, seconds: s }));
   const myRank = ranking.findIndex((r) => r.country === country) + 1;
 
+  // Points per country for leaderboard
+  const pointsByCountry: Record<string, number> = {};
+  ranking.slice(0, 10).forEach(({ country: c }) => {
+    pointsByCountry[c] = calcPoints(logs, committee, c).total;
+  });
+
   return (
     <div className="p-4 max-w-2xl mx-auto space-y-5">
       {/* Score card */}
@@ -469,8 +476,9 @@ function StatisticsTab({ committee, country }: { committee: Committee; country: 
           <span className="text-6xl font-black text-[#1C1410]">{total}</span>
           <span className="text-lg text-[#6A5A4A] font-medium mb-1">pts</span>
         </div>
-        <div className="inline-block bg-[#1B3828]/20 border border-[#1B3828]/30 text-[#B6871F] text-sm font-bold px-3 py-1 rounded-full">
-          {tier}
+        <div className="inline-flex items-center gap-1.5 bg-[#7B4A1E]/20 border border-[#7B4A1E]/30 text-[#B8844A] text-sm font-bold px-3 py-1 rounded-full">
+          <span>{tier.match(/\p{Emoji}/u)?.[0] ?? ''}</span>
+          <span>{tier.replace(/\p{Emoji}/gu, '').trim()}</span>
         </div>
 
         {/* Score breakdown */}
@@ -522,11 +530,18 @@ function StatisticsTab({ committee, country }: { committee: Committee; country: 
       {ranking.length > 0 && (
         <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-2xl p-5">
           <div className="text-xs font-mono text-[#9A8A78] mb-3">COMMITTEE SPEAKING TIME</div>
+          {/* Column headers */}
+          <div className="flex items-center gap-2 text-[10px] text-[#7A5A38] font-mono mb-1.5 px-2">
+            <span className="w-4 shrink-0" />
+            <span className="flex-1">Country</span>
+            <span className="w-16 text-right">Time</span>
+            <span className="w-8 text-right">Pts</span>
+          </div>
           <div className="space-y-1.5">
             {ranking.slice(0, 10).map((r, i) => (
               <div key={r.country} className={`flex items-center gap-2 text-sm ${r.country === country ? 'bg-[#1B3828]/10 border border-[#1B3828]/20 rounded-lg px-2 py-1' : 'px-2 py-1'}`}>
                 <span className="text-[#9A8A78] text-xs w-4 font-mono shrink-0">{i + 1}</span>
-                <span className="text-base shrink-0">{flagFor(r.country)}</span>
+                <FlagImg code={getCountryByName(r.country)?.code ?? ''} size={20} className="shrink-0" />
                 <span className={`flex-1 truncate ${r.country === country ? 'text-[#B6871F] font-bold' : 'text-[#6A5A4A]'}`}>{r.country}</span>
                 <div className="flex items-center gap-2">
                   <div className="w-16 h-1.5 bg-[#DDD4C0] rounded-full overflow-hidden">
@@ -534,6 +549,9 @@ function StatisticsTab({ committee, country }: { committee: Committee; country: 
                   </div>
                   <span className="text-xs font-mono text-[#9A8A78] w-10 text-right">{formatTime(r.seconds)}</span>
                 </div>
+                <span className="text-xs font-bold text-[#B8844A] w-8 text-right shrink-0">
+                  {pointsByCountry[r.country] ?? 0}
+                </span>
               </div>
             ))}
           </div>
@@ -731,7 +749,6 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   const handleStatusChange = async (newStatus: DelegateStatus) => {
     if (!myDelegate) return;
     if (changesLeft <= 0) return;
-    // Apply immediately in local state (no waiting for DB round-trip)
     setCommittee((prev) => prev ? {
       ...prev,
       delegates: prev.delegates.map((d) => d.id === myDelegate.id ? { ...d, status: newStatus } : d),
@@ -759,12 +776,13 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     requestGslSpot(committee.id, myDelegate.id, myDelegate.country);
   };
 
+  // Section 7 — shortened tab labels
   const tabs: { key: DelegateTab; label: string }[] = [
-    { key: 'session', label: 'Session' },
-    { key: 'motions', label: 'Motions' },
-    { key: 'resolutions', label: 'Resolutions' },
-    { key: 'documents', label: 'Documents' },
-    { key: 'stats', label: 'Stats' },
+    { key: 'session',     label: 'Session' },
+    { key: 'motions',     label: 'Motions' },
+    { key: 'resolutions', label: 'DRs' },
+    { key: 'documents',   label: 'Docs' },
+    { key: 'stats',       label: 'Stats' },
   ];
 
   // ── Absent banner (blocks active interaction)
@@ -889,11 +907,11 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
           Session has ended — view only
         </div>
       )}
-      {/* Tab nav */}
+      {/* Tab nav — Section 7: shorter labels, text-sm */}
       <div className="flex border-b border-[#DDD4C0] bg-[#FAF8F3] shrink-0">
         {tabs.map((t) => (
           <button key={t.key} onClick={() => setTab(t.key)}
-            className={`flex-1 py-3 text-xl font-bold capitalize transition-colors ${
+            className={`flex-1 py-3 text-sm font-bold capitalize transition-colors ${
               tab === t.key ? 'text-[#1C1410] border-b-2 border-[#1B3828]' : 'text-[#9A8A78] hover:text-[#6A5A4A]'
             }`}>
             {t.label}
@@ -924,15 +942,20 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
             {/* Moderated caucus special view */}
             {committee.phase === 'moderated-caucus' && committee.caucus && (
               <div className="p-4 max-w-2xl mx-auto space-y-4">
-                {/* Big flag outside card */}
-                <div className="text-8xl select-none text-center leading-none">{flagFor(country)}</div>
+                {/* Section 1: FlagImg replaces text-8xl emoji */}
+                <div className="flex justify-center">
+                  <FlagImg code={getCountryByName(country)?.code ?? ''} size={88} className="rounded-full shadow-lg" />
+                </div>
                 <div className="bg-purple-900/20 border border-purple-700/30 rounded-xl p-5 text-center">
                   <p className="text-5xl font-black text-[#B6871F] tracking-tight">MODERATED CAUCUS</p>
                   <p className="text-3xl text-[#6A5A4A] mt-2">{committee.caucus.purpose}</p>
                   {committee.caucus.currentSpeaker && (
                     <div className="mt-4">
                       <div className="text-xs text-[#9A8A78] mb-2 font-mono">NOW SPEAKING</div>
-                      <div className="text-6xl">{flagFor(committee.caucus.currentSpeaker)}</div>
+                      {/* Section 1: FlagImg replaces text-6xl emoji */}
+                      <div className="flex justify-center">
+                        <FlagImg code={getCountryByName(committee.caucus.currentSpeaker)?.code ?? ''} size={64} />
+                      </div>
                       <div className={`text-xl font-bold mt-1 ${committee.caucus.currentSpeaker === country ? 'text-[#B6871F]' : 'text-[#1C1410]'}`}>
                         {committee.caucus.currentSpeaker}{committee.caucus.currentSpeaker === country && ' (You)'}
                       </div>
@@ -954,7 +977,8 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                       {committee.caucusQueue.slice(0, 8).map((s, i) => (
                         <div key={s.delegateId} className={`flex items-center gap-3 py-1.5 px-2 rounded-lg text-sm ${s.country === country ? 'bg-[#1B3828]/20 border border-[#1B3828]/30' : ''}`}>
                           <span className="text-[#9A8A78] text-xs w-4 font-mono shrink-0">{i + 1}</span>
-                          <span className="text-lg shrink-0">{flagFor(s.country)}</span>
+                          {/* Section 1: FlagImg replaces text-lg emoji */}
+                          <FlagImg code={getCountryByName(s.country)?.code ?? ''} size={20} className="shrink-0" />
                           <span className={s.country === country ? 'text-[#B6871F] font-bold' : 'text-[#6A5A4A]'}>
                             {s.country}{s.country === country && ' (You)'}
                           </span>
@@ -966,7 +990,31 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
               </div>
             )}
 
-            {committee.phase !== 'moderated-caucus' && (
+            {/* Section 3: Unmoderated caucus dedicated view */}
+            {committee.phase === 'unmoderated-caucus' && committee.caucus && (
+              <div className="p-4 max-w-2xl mx-auto space-y-4">
+                <div className="flex justify-center">
+                  <FlagImg code={getCountryByName(country)?.code ?? ''} size={88} className="rounded-full shadow-lg" />
+                </div>
+                <div className="bg-purple-900/20 border border-purple-700/30 rounded-xl p-6 text-center space-y-3">
+                  <p className="text-4xl font-black text-[#B8844A] tracking-tight">UNMODERATED CAUCUS</p>
+                  {committee.caucus.purpose && (
+                    <p className="text-xl text-[#C4A882]">{committee.caucus.purpose}</p>
+                  )}
+                  <div className="text-5xl font-black font-mono text-white">
+                    {formatTime(committee.caucus.remainingTime)}
+                  </div>
+                  <div className="h-2 bg-[#2E1E0F] rounded-full overflow-hidden">
+                    <div className="h-full bg-purple-500 rounded-full transition-all"
+                      style={{ width: `${committee.caucus.totalTime > 0 ? (committee.caucus.remainingTime / committee.caucus.totalTime) * 100 : 0}%` }} />
+                  </div>
+                  <p className="text-[#7A5A38] text-sm">Get networking — use this time to lobby and draft.</p>
+                </div>
+              </div>
+            )}
+
+            {/* Section 3: exclude both moderated and unmoderated caucus phases */}
+            {committee.phase !== 'moderated-caucus' && committee.phase !== 'unmoderated-caucus' && (
             <div className={`p-4 space-y-4 max-w-2xl mx-auto ${isAbsent ? 'opacity-60 pointer-events-none select-none' : ''}`}>
               {(() => {
                 type C = { bg: string; border: string; text: string; msg: string };
@@ -985,63 +1033,82 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                   </div>
                 );
               })()}
-              {/* Big flag OUTSIDE the status card */}
-              <div className="text-8xl select-none text-center leading-none">{flagFor(country)}</div>
-              {/* Status card */}
+
+              {/* Section 1: FlagImg replaces text-8xl emoji in main session */}
+              <div className="flex justify-center">
+                <FlagImg code={getCountryByName(country)?.code ?? ''} size={88} className="rounded-full shadow-lg" />
+              </div>
+
+              {/* Section 5: Voting card */}
+              {committee.phase === 'voting' && (() => {
+                const activeDoc = (committee.documents ?? []).find(
+                  (d) => d.status === 'on-floor' || d.status === 'introduced'
+                );
+                return (
+                  <div className="bg-[#7B4A1E]/20 border border-[#7B4A1E]/40 rounded-xl p-5 text-center space-y-2">
+                    <p className="text-xs font-mono text-[#7A5A38]">VOTING PROCEDURE</p>
+                    <p className="text-2xl font-black text-[#B8844A]">🗳️ Vote in Progress</p>
+                    {activeDoc && (
+                      <>
+                        <p className="text-sm font-mono text-[#7B4A1E]">{activeDoc.docCode}</p>
+                        <p className="text-base font-bold text-white">{activeDoc.title}</p>
+                      </>
+                    )}
+                    <p className="text-xs text-[#7A5A38] mt-2">
+                      Your chair is conducting the vote. Check the voting screen for results.
+                    </p>
+                  </div>
+                );
+              })()}
+
+              {/* Status card — Section 2: removed flag-with-ring from inside */}
               <div className={`rounded-xl p-5 border ${
                 isCurrentSpeaker ? 'bg-[#1B3828]/20 border-[#1B3828]/50' :
-                committee.phase === 'unmoderated-caucus' ? 'bg-purple-900/20 border-purple-700/30' :
                 'bg-[#EDE7D8] border-[#DDD4C0]'
               }`}>
-                <div className="flex gap-4 items-start">
-                  {/* Current speaker's flag inside card with thick ring */}
-                  <div className={`text-4xl select-none shrink-0 leading-none ${committee.currentSpeaker ? 'ring-4 ring-[#1B3828] rounded-full p-1' : ''}`}>
-                    {committee.currentSpeaker ? flagFor(committee.currentSpeaker.country) : ''}
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-mono text-[#9A8A78] mb-2">SESSION STATUS</div>
+                  <div className={`text-2xl font-black mb-1 ${isCurrentSpeaker ? 'text-[#B6871F]' : isAdjourned ? 'text-red-400' : 'text-[#1C1410]'}`}>
+                    {isCurrentSpeaker ? <><Emoji size="1em">🎙️</Emoji>{' You Have the Floor'}</> : phaseDisplay}
                   </div>
-                  <div className="flex-1 min-w-0">
-                <div className="text-xs font-mono text-[#9A8A78] mb-2">SESSION STATUS</div>
-                <div className={`text-2xl font-black mb-1 ${isCurrentSpeaker ? 'text-[#B6871F]' : isAdjourned ? 'text-red-400' : 'text-[#1C1410]'}`}>
-                  {isCurrentSpeaker ? <><Emoji size="1em">🎙️</Emoji>{' You Have the Floor'}</> : phaseDisplay}
-                </div>
 
-
-                {!isCurrentSpeaker && committee.currentSpeaker && committee.phase === 'speakers-list' && (
-                  <div className="mt-3">
-                    <div className="text-xs text-[#9A8A78] mb-1">NOW SPEAKING</div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-2xl">{flagFor(committee.currentSpeaker.country)}</span>
-                      <span className="font-bold text-[#1C1410]">{committee.currentSpeaker.country}</span>
-                    </div>
-                    {/* No progress bar here — only shown when isCurrentSpeaker above */}
-                  </div>
-                )}
-
-                {committee.caucus && (
-                  <div className="mt-3">
-                    <div className="text-sm text-[#6A5A4A] mb-2">
-                      {committee.caucus.type === 'moderated' ? 'Moderated' : 'Unmoderated'} Caucus
-                      {committee.caucus.purpose && ` — ${committee.caucus.purpose}`}
-                    </div>
-                    <div className="text-3xl font-black font-mono text-[#1C1410]">
-                      {formatTime(committee.caucus.remainingTime)}
-                    </div>
-                    <div className="h-2 bg-[#DDD4C0] rounded-full overflow-hidden mt-2">
-                      <div className="h-full bg-purple-500 rounded-full transition-all"
-                        style={{ width: `${(committee.caucus.remainingTime / committee.caucus.totalTime) * 100}%` }} />
-                    </div>
-                    {committee.caucus.currentSpeaker && (
-                      <div className="mt-3 text-sm flex items-center gap-2">
-                        <span className="text-[#6A5A4A]">Speaking:</span>
-                        <span className="text-xl">{flagFor(committee.caucus.currentSpeaker)}</span>
-                        <span className={`font-bold ${committee.caucus.currentSpeaker === country ? 'text-[#B6871F]' : 'text-[#1C1410]'}`}>
-                          {committee.caucus.currentSpeaker}{committee.caucus.currentSpeaker === country && ' (You)'}
-                        </span>
+                  {!isCurrentSpeaker && committee.currentSpeaker && committee.phase === 'speakers-list' && (
+                    <div className="mt-3">
+                      <div className="text-xs text-[#9A8A78] mb-1">NOW SPEAKING</div>
+                      <div className="flex items-center gap-2">
+                        {/* Section 1: FlagImg replaces text-2xl */}
+                        <FlagImg code={getCountryByName(committee.currentSpeaker.country)?.code ?? ''} size={24} />
+                        <span className="font-bold text-[#1C1410]">{committee.currentSpeaker.country}</span>
                       </div>
-                    )}
-                  </div>
-                )}
-                  </div>{/* end flex-1 */}
-                </div>{/* end flex gap-4 */}
+                    </div>
+                  )}
+
+                  {committee.caucus && (
+                    <div className="mt-3">
+                      <div className="text-sm text-[#6A5A4A] mb-2">
+                        {committee.caucus.type === 'moderated' ? 'Moderated' : 'Unmoderated'} Caucus
+                        {committee.caucus.purpose && ` — ${committee.caucus.purpose}`}
+                      </div>
+                      <div className="text-3xl font-black font-mono text-[#1C1410]">
+                        {formatTime(committee.caucus.remainingTime)}
+                      </div>
+                      <div className="h-2 bg-[#DDD4C0] rounded-full overflow-hidden mt-2">
+                        <div className="h-full bg-purple-500 rounded-full transition-all"
+                          style={{ width: `${(committee.caucus.remainingTime / committee.caucus.totalTime) * 100}%` }} />
+                      </div>
+                      {committee.caucus.currentSpeaker && (
+                        <div className="mt-3 text-sm flex items-center gap-2">
+                          <span className="text-[#6A5A4A]">Speaking:</span>
+                          {/* Section 1: FlagImg replaces text-xl */}
+                          <FlagImg code={getCountryByName(committee.caucus.currentSpeaker)?.code ?? ''} size={20} />
+                          <span className={`font-bold ${committee.caucus.currentSpeaker === country ? 'text-[#B6871F]' : 'text-[#1C1410]'}`}>
+                            {committee.caucus.currentSpeaker}{committee.caucus.currentSpeaker === country && ' (You)'}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Speakers list */}
@@ -1080,7 +1147,8 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                       {committee.speakersList.map((s, i) => (
                         <div key={s.delegateId} className={`flex items-center gap-3 py-1.5 px-2 rounded-lg text-sm ${s.country === country ? 'bg-[#1B3828]/20 border border-[#1B3828]/30' : ''}`}>
                           <span className="text-[#9A8A78] text-xs w-4 font-mono shrink-0">{i + 1}</span>
-                          <span className="text-lg shrink-0">{flagFor(s.country)}</span>
+                          {/* Section 1: FlagImg replaces text-lg */}
+                          <FlagImg code={getCountryByName(s.country)?.code ?? ''} size={20} className="shrink-0" />
                           <span className={s.country === country ? 'text-[#B6871F] font-bold' : 'text-[#6A5A4A]'}>
                             {s.country}{s.country === country && ' (You)'}
                           </span>
@@ -1095,7 +1163,8 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
               <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl p-4">
                 <div className="text-xs text-[#9A8A78] font-mono mb-3">YOUR DELEGATION</div>
                 <div className="flex items-center gap-3 mb-3">
-                  <span className="text-3xl">{flagFor(country)}</span>
+                  {/* Section 1: FlagImg replaces text-3xl */}
+                  <FlagImg code={getCountryByName(country)?.code ?? ''} size={36} />
                   <div>
                     <div className="font-bold text-[#1C1410]">{country}</div>
                     <div className={`text-xs font-medium mt-0.5 ${
@@ -1145,7 +1214,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                 )}
               </div>
             </div>
-            )}{/* end committee.phase !== 'moderated-caucus' */}
+            )}{/* end phase !== moderated-caucus && !== unmoderated-caucus */}
           </div>
         )}
 
@@ -1176,13 +1245,16 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
           </div>
         )}
 
-        {/* ── Resolutions tab ── */}
+        {/* ── Resolutions tab — Section 4: filter to on-floor+ only ── */}
         {tab === 'resolutions' && (
           <div className="p-4 max-w-2xl mx-auto space-y-3">
             <h2 className="text-lg font-bold text-[#1C1410]">Draft Resolutions</h2>
             {(() => {
-              const drs = (committee.documents ?? []).filter((d) => d.type === 'draft-resolution');
-              if (drs.length === 0) return <div className="text-center py-8 text-[#9A8A78]">No draft resolutions submitted</div>;
+              const drs = (committee.documents ?? []).filter(
+                (d) => d.type === 'draft-resolution' &&
+                  ['introduced', 'on-floor', 'passed', 'failed'].includes(d.status)
+              );
+              if (drs.length === 0) return <div className="text-center py-8 text-[#7A5A38]">No draft resolutions on the floor yet</div>;
               return drs.map((doc) => {
                 const isPresenting = doc.status === 'introduced';
                 const isPassed = doc.status === 'passed';
@@ -1199,7 +1271,6 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                       {isFailed && <span className="shrink-0 text-xs font-bold text-red-400 bg-red-950/40 border border-red-800/40 px-2 py-0.5 rounded-full">Failed</span>}
                       {isPresenting && <span className="shrink-0 text-xs font-bold text-purple-400 bg-purple-950/40 border border-purple-800/40 px-2 py-0.5 rounded-full animate-pulse">Now Presenting</span>}
                       {isPendingVote && <span className="shrink-0 text-xs font-bold text-yellow-400 bg-yellow-950/40 border border-yellow-800/40 px-2 py-0.5 rounded-full">Pending Vote</span>}
-                      {doc.status === 'submitted' && <span className="shrink-0 text-xs font-bold text-[#9A8A78] px-2 py-0.5 rounded-full">Submitted</span>}
                     </div>
                     <div className="text-xs text-[#9A8A78]">
                       {doc.sponsors.map((s, i) => (

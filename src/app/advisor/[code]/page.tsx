@@ -2,7 +2,7 @@
 
 import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useCommitteeStore } from '@/lib/store';
+import { getCommitteeByCode, subscribeToCommittee, sendMessage as sendMessageDB } from '@/lib/committeeService';
 import { useSettingsStore, DEFAULT_MOTION_NAMES } from '@/lib/settingsStore';
 import { Committee } from '@/lib/types';
 import { FlagCircle } from '@/components/RollCallPanel';
@@ -32,7 +32,6 @@ function ExpandedDelegateCard({
   committee: Committee;
   onClose: () => void;
 }) {
-  const { sendMessage } = useCommitteeStore();
   const { getSettings } = useSettingsStore();
   const mn = { ...DEFAULT_MOTION_NAMES, ...(getSettings(committee.code).motionNames ?? {}) };
   const [nudgeSent, setNudgeSent] = useState<string | null>(null);
@@ -40,7 +39,6 @@ function ExpandedDelegateCard({
   const queueIndex = committee.speakersList.findIndex((s) => s.delegateId === delegate.id);
   const isCurrentSpeaker = committee.currentSpeaker?.delegateId === delegate.id;
 
-  // Find last motion raised by this country (check pendingMotions by proposedBy)
   const lastMotion = [...(committee.pendingMotions ?? [])].reverse().find(
     (m) => m.proposedBy === delegate.country
   );
@@ -60,7 +58,7 @@ function ExpandedDelegateCard({
     : <Emoji size="4.5rem">🌐</Emoji>;
 
   const handleNudge = (emoji: string) => {
-    sendMessage(committee.id, 'Faculty Advisor', `${emoji} to ${delegate.country}`, false);
+    sendMessageDB(committee.id, 'Faculty Advisor', `${emoji} to ${delegate.country}`, false);
     setNudgeSent(emoji);
     setTimeout(() => setNudgeSent(null), 1500);
   };
@@ -95,7 +93,6 @@ function ExpandedDelegateCard({
       className="relative bg-[#EDE7D8] border border-[#1B3828]/60 rounded-2xl p-6 flex flex-col gap-4 transition-all duration-200"
       onClick={(e) => e.stopPropagation()}
     >
-      {/* X button */}
       <button
         onClick={onClose}
         className="absolute top-3 right-3 text-[#9A8A78] hover:text-[#1C1410] text-xl leading-none"
@@ -104,14 +101,12 @@ function ExpandedDelegateCard({
         ×
       </button>
 
-      {/* Flag + name */}
       <div className="flex flex-col items-center gap-2 pt-2">
         {flagEl}
         <h2 className="text-3xl font-black text-[#1C1410] text-center">{delegate.country}</h2>
         <span className={`text-sm font-bold ${statusColor}`}>{statusLabel}</span>
       </div>
 
-      {/* Info rows */}
       <div className="space-y-3 w-full">
         <div className="bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3">
           <p className="text-xs text-[#9A8A78] font-mono uppercase tracking-wider mb-1">Last Motion Raised</p>
@@ -124,7 +119,6 @@ function ExpandedDelegateCard({
         </div>
       </div>
 
-      {/* Nudge buttons */}
       <div>
         <p className="text-xs text-[#9A8A78] font-mono uppercase tracking-wider mb-2">Send Nudge</p>
         <div className="flex gap-2 flex-wrap">
@@ -210,15 +204,25 @@ function NormalDelegateCard({ delegate, committee, onSelect }: { delegate: Commi
 
 export default function AdvisorPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = use(params);
-  const { committees } = useCommitteeStore();
   const { getSettings } = useSettingsStore();
   const [committee, setCommittee] = useState<Committee | null>(null);
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
 
   useEffect(() => {
-    const found = Object.values(committees).find((c) => c.code === code.toUpperCase());
-    setCommittee(found ?? null);
-  }, [committees, code]);
+    const upperCode = code.toUpperCase();
+    let unsub: (() => void) | null = null;
+
+    getCommitteeByCode(upperCode).then((c) => {
+      if (!c) return;
+      setCommittee(c);
+      unsub = subscribeToCommittee(c.id, async () => {
+        const updated = await getCommitteeByCode(upperCode);
+        if (updated) setCommittee(updated);
+      });
+    });
+
+    return () => { unsub?.(); };
+  }, [code]);
 
   if (!committee) {
     return (
@@ -232,15 +236,37 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
   }
 
   const present = committee.delegates.filter((d) => d.status !== 'absent').length;
-  const progress = committee.currentSpeaker
-    ? (committee.speakerTimeRemaining / committee.speakerTimeLimit) * 100
-    : 100;
+
+  const isModeratedCaucus = committee.phase === 'moderated-caucus';
+  const isUnmoderatedCaucus = committee.phase === 'unmoderated-caucus';
+  const isCaucus = isModeratedCaucus || isUnmoderatedCaucus;
+
   const advisorMotionNames = { ...DEFAULT_MOTION_NAMES, ...(getSettings(committee.code).motionNames ?? {}) };
   const advisorPhaseDisplay = (() => {
     if (committee.phase === 'moderated-caucus') return advisorMotionNames.moderated;
     if (committee.phase === 'unmoderated-caucus') return advisorMotionNames.unmoderated;
     return committee.phase.replace(/-/g, ' ');
   })();
+
+  const caucus = committee.caucus as {
+    type: string;
+    purpose?: string;
+    totalTime: number;
+    remainingTime: number;
+    speakingTime: number;
+    speakerTimeRemaining: number;
+    currentSpeaker: string | null;
+  } | null;
+
+  const gslProgress = committee.currentSpeaker
+    ? (committee.speakerTimeRemaining / committee.speakerTimeLimit) * 100
+    : 100;
+
+  const caucusSpeakerProgress = caucus && caucus.speakingTime > 0
+    ? (caucus.speakerTimeRemaining / caucus.speakingTime) * 100
+    : 100;
+
+  const displayQueue = isCaucus ? (committee.caucusQueue ?? []) : committee.speakersList;
 
   const sortedDelegates = [...committee.delegates].sort((a, b) => a.country.localeCompare(b.country));
   const selectedDelegate = selectedCountry
@@ -267,8 +293,8 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
       <div className="border-b border-[#DDD4C0] bg-[#FAF8F3] px-4 py-1.5 flex items-center gap-6 shrink-0">
         <span className="text-xs text-[#6A5A4A] font-mono">{present} / {committee.delegates.length} present</span>
         <span className="text-xs text-[#6A5A4A]">Phase: <span className="text-[#1C1410] font-semibold capitalize">{advisorPhaseDisplay}</span></span>
-        {committee.speakersList.length > 0 && (
-          <span className="text-xs text-[#6A5A4A]">{committee.speakersList.length} in queue</span>
+        {displayQueue.length > 0 && (
+          <span className="text-xs text-[#6A5A4A]">{displayQueue.length} in queue</span>
         )}
       </div>
 
@@ -276,39 +302,95 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
         {/* Left: Current speaker + queue */}
         <div className="w-80 border-r border-[#DDD4C0] bg-[#F6F1E9] flex flex-col overflow-hidden shrink-0">
           <div className="px-4 py-3 border-b border-[#DDD4C0] shrink-0">
-            <p className="text-xs text-[#9A8A78] font-mono uppercase tracking-wider">Now Speaking</p>
+            <p className="text-xs text-[#9A8A78] font-mono uppercase tracking-wider">
+              {isCaucus ? (caucus?.type === 'moderated' ? 'Caucus Speaker' : 'Caucus') : 'Now Speaking'}
+            </p>
           </div>
 
-          {committee.currentSpeaker ? (
+          {/* Moderated caucus — show caucus current speaker */}
+          {isModeratedCaucus && (
+            caucus?.currentSpeaker ? (
+              <div className="flex flex-col items-center px-4 py-6 border-b border-[#DDD4C0] shrink-0">
+                <FlagCircle country={caucus.currentSpeaker} size="xl" />
+                <h2 className="text-2xl font-black text-[#1C1410] mt-4 mb-1 text-center">{caucus.currentSpeaker}</h2>
+                <div className={`text-5xl font-black font-mono tabular-nums mt-2 ${
+                  caucus.speakerTimeRemaining <= 10 ? 'text-red-400' : caucus.speakerTimeRemaining <= 30 ? 'text-yellow-400' : 'text-[#1C1410]'
+                }`}>
+                  {formatTime(caucus.speakerTimeRemaining)}
+                </div>
+                <div className="w-full max-w-xs h-1.5 bg-[#DDD4C0] rounded-full overflow-hidden mt-3">
+                  <div className={`h-full rounded-full transition-all ${caucusSpeakerProgress > 50 ? 'bg-[#B6871F]' : caucusSpeakerProgress > 20 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                    style={{ width: `${caucusSpeakerProgress}%` }} />
+                </div>
+                {caucus.purpose && (
+                  <p className="text-xs text-[#9A8A78] mt-3 text-center">{caucus.purpose}</p>
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center px-4 py-6 border-b border-[#DDD4C0] shrink-0">
+                <div className="mb-2"><Emoji size="2.5rem">🎙️</Emoji></div>
+                <p className="text-[#6A5A4A] text-sm text-center">No speaker yet</p>
+                {caucus?.purpose && (
+                  <p className="text-xs text-[#9A8A78] mt-2 text-center">{caucus.purpose}</p>
+                )}
+              </div>
+            )
+          )}
+
+          {/* Unmoderated caucus — show countdown + purpose */}
+          {isUnmoderatedCaucus && (
             <div className="flex flex-col items-center px-4 py-6 border-b border-[#DDD4C0] shrink-0">
-              <FlagCircle country={committee.currentSpeaker.country} size="xl" />
-              <h2 className="text-2xl font-black text-[#1C1410] mt-4 mb-1 text-center">{committee.currentSpeaker.country}</h2>
-              <div className={`text-5xl font-black font-mono tabular-nums mt-2 ${
-                committee.speakerTimeRemaining <= 10 ? 'text-red-400' : committee.speakerTimeRemaining <= 30 ? 'text-yellow-400' : 'text-[#1C1410]'
+              <div className={`text-5xl font-black font-mono tabular-nums ${
+                (caucus?.remainingTime ?? 0) <= 30 ? 'text-red-400' : (caucus?.remainingTime ?? 0) <= 60 ? 'text-yellow-400' : 'text-[#1C1410]'
               }`}>
-                {formatTime(committee.speakerTimeRemaining)}
+                {formatTime(caucus?.remainingTime ?? 0)}
               </div>
-              <div className="w-full max-w-xs h-1.5 bg-[#DDD4C0] rounded-full overflow-hidden mt-3">
-                <div className={`h-full rounded-full transition-all ${progress > 50 ? 'bg-[#B6871F]' : progress > 20 ? 'bg-yellow-500' : 'bg-red-500'}`}
-                  style={{ width: `${progress}%` }} />
+              <p className="text-xs text-[#9A8A78] mt-2 font-mono uppercase tracking-wider">
+                {caucus?.type === 'consultation' ? advisorMotionNames.consultation :
+                 caucus?.type === 'tour' ? advisorMotionNames.tour :
+                 advisorMotionNames.unmoderated}
+              </p>
+              {caucus?.purpose && (
+                <p className="text-sm text-[#6A5A4A] mt-3 text-center">{caucus.purpose}</p>
+              )}
+            </div>
+          )}
+
+          {/* GSL — show currentSpeaker */}
+          {!isCaucus && (
+            committee.currentSpeaker ? (
+              <div className="flex flex-col items-center px-4 py-6 border-b border-[#DDD4C0] shrink-0">
+                <FlagCircle country={committee.currentSpeaker.country} size="xl" />
+                <h2 className="text-2xl font-black text-[#1C1410] mt-4 mb-1 text-center">{committee.currentSpeaker.country}</h2>
+                <div className={`text-5xl font-black font-mono tabular-nums mt-2 ${
+                  committee.speakerTimeRemaining <= 10 ? 'text-red-400' : committee.speakerTimeRemaining <= 30 ? 'text-yellow-400' : 'text-[#1C1410]'
+                }`}>
+                  {formatTime(committee.speakerTimeRemaining)}
+                </div>
+                <div className="w-full max-w-xs h-1.5 bg-[#DDD4C0] rounded-full overflow-hidden mt-3">
+                  <div className={`h-full rounded-full transition-all ${gslProgress > 50 ? 'bg-[#B6871F]' : gslProgress > 20 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                    style={{ width: `${gslProgress}%` }} />
+                </div>
               </div>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center px-4 py-6 border-b border-[#DDD4C0] shrink-0">
-              <div className="mb-2"><Emoji size="2.5rem">🎙️</Emoji></div>
-              <p className="text-[#6A5A4A] text-sm text-center">No current speaker</p>
-            </div>
+            ) : (
+              <div className="flex flex-col items-center px-4 py-6 border-b border-[#DDD4C0] shrink-0">
+                <div className="mb-2"><Emoji size="2.5rem">🎙️</Emoji></div>
+                <p className="text-[#6A5A4A] text-sm text-center">No current speaker</p>
+              </div>
+            )
           )}
 
           {/* Queue */}
           <div className="flex-1 overflow-y-auto">
             <div className="px-4 py-2 border-b border-[#DDD4C0]">
-              <p className="text-xs text-[#9A8A78] font-mono uppercase tracking-wider">Up Next ({committee.speakersList.length})</p>
+              <p className="text-xs text-[#9A8A78] font-mono uppercase tracking-wider">
+                Up Next ({displayQueue.length})
+              </p>
             </div>
-            {committee.speakersList.length === 0 ? (
+            {displayQueue.length === 0 ? (
               <div className="px-4 py-4 text-xs text-[#9A8A78]">No speakers queued</div>
             ) : (
-              committee.speakersList.map((s, i) => (
+              displayQueue.map((s, i) => (
                 <div key={s.delegateId} className="flex items-center gap-3 px-4 py-2.5 border-b border-[#DDD4C0]/40">
                   <span className="text-xs text-[#9A8A78] font-mono w-5">{i + 1}</span>
                   <FlagCircle country={s.country} size="xs" />
@@ -339,7 +421,6 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
             </>
           ) : (
             <div className="flex gap-4">
-              {/* Expanded card — ~50% width */}
               <div className="w-1/2 shrink-0 transition-all duration-200">
                 {selectedDelegate && (
                   <ExpandedDelegateCard
@@ -350,7 +431,6 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
                 )}
               </div>
 
-              {/* Other delegates — small cards wrapping flex row */}
               <div className="flex-1 overflow-y-auto">
                 <p className="text-xs text-[#9A8A78] font-mono uppercase tracking-wider mb-3">
                   Other Delegates ({otherDelegates.length})
