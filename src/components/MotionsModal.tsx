@@ -56,11 +56,11 @@ function DisruptivenessBadge({ type }: { type: PendingMotionType }) {
     unmoderated: 'Disruptive', moderated: 'Least disruptive',
   };
   const colors: Record<PendingMotionType, string> = {
-    'end-debate': 'bg-red-900/40 text-red-400 border-red-800/40',
-    'suspend-debate': 'bg-orange-900/40 text-orange-400 border-orange-800/40',
-    consultation: 'bg-red-900/40 text-red-400 border-red-800/40',
-    tour: 'bg-orange-900/40 text-orange-400 border-orange-800/40',
-    unmoderated: 'bg-yellow-900/40 text-yellow-400 border-yellow-800/40',
+    'end-debate': 'bg-[#8B2020]/20 text-[#8B2020] border-[#8B2020]/40',
+    'suspend-debate': 'bg-[#B8844A]/15 text-[#B8844A] border-orange-800/40',
+    consultation: 'bg-[#8B2020]/20 text-[#8B2020] border-[#8B2020]/40',
+    tour: 'bg-[#B8844A]/15 text-[#B8844A] border-orange-800/40',
+    unmoderated: 'bg-[#B6871F]/10 text-[#B6871F] border-[#B6871F]/30',
     moderated: 'bg-[#1B3828]/30 text-[#EED98A] border-[#1B3828]/40',
   };
   return <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${colors[type]}`}>{labels[type]}</span>;
@@ -98,7 +98,7 @@ function ProposerInput({ candidates, value, onChange, blockedCountries }: {
   return (
     <div className="relative">
       {value && !open ? (
-        <div className="flex items-center gap-3 bg-green-950/30 border border-green-800/30 rounded-xl px-4 py-3">
+        <div className="flex items-center gap-3 bg-[#1B3828]/30 border border-[#3D7A52]/30 rounded-xl px-4 py-3">
           {(() => { const f = getCountryByName(value); return f ? <img src={getFlagUrl(f.code)} alt={f.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <Emoji size="1.125rem">🌐</Emoji>; })()}
           <span className="text-sm text-[#1C1410] flex-1">{value}</span>
           <button onClick={() => { setOpen(true); setQuery(''); onChange(''); inputRef.current?.focus(); }} className="text-xs text-[#9A8A78] hover:text-[#1C1410] transition-colors">change</button>
@@ -129,7 +129,7 @@ function ProposerInput({ candidates, value, onChange, blockedCountries }: {
                 {found ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <Emoji size="1.125rem">🌐</Emoji>}
                 <span className="text-sm flex-1">{country}</span>
                 {isBlocked
-                  ? <span className="text-xs text-orange-400 shrink-0 font-semibold">Motion on floor</span>
+                  ? <span className="text-xs text-[#B8844A] shrink-0 font-semibold">Motion on floor</span>
                   : i === 0 && <span className="ml-auto text-xs text-[#9A8A78]">Enter ↵</span>}
               </button>
             );
@@ -240,11 +240,11 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
           {/* Special debate control buttons — half size, red, stacked */}
           <div className="flex flex-col gap-1 self-stretch">
             <button type="button" onClick={() => setType('suspend-debate')}
-              className={`px-2 flex-1 rounded-lg border text-xs font-bold transition-colors ${type === 'suspend-debate' ? 'bg-red-800 border-red-700 text-white' : 'border-red-900/50 bg-red-950/30 text-red-400 hover:bg-red-900/40'}`}>
+              className={`px-2 flex-1 rounded-lg border text-xs font-bold transition-colors ${type === 'suspend-debate' ? 'bg-[#8B2020] border-red-700 text-white' : 'border-[#8B2020]/40 bg-[#8B2020]/20 text-[#8B2020] hover:bg-[#8B2020]/20'}`}>
               Suspend
             </button>
             <button type="button" onClick={() => setType('end-debate')}
-              className={`px-2 flex-1 rounded-lg border text-xs font-bold transition-colors ${type === 'end-debate' ? 'bg-red-800 border-red-700 text-white' : 'border-red-900/50 bg-red-950/30 text-red-400 hover:bg-red-900/40'}`}>
+              className={`px-2 flex-1 rounded-lg border text-xs font-bold transition-colors ${type === 'end-debate' ? 'bg-[#8B2020] border-red-700 text-white' : 'border-[#8B2020]/40 bg-[#8B2020]/20 text-[#8B2020] hover:bg-[#8B2020]/20'}`}>
               End Debate
             </button>
           </div>
@@ -346,7 +346,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
             {type === 'moderated' && (
               <>
                 <div>
-                  <label className="block text-lg font-semibold text-[#6A5A4A] mb-2">Topic <span className="text-red-500">*</span></label>
+                  <label className="block text-lg font-semibold text-[#6A5A4A] mb-2">Topic <span className="text-[#8B2020]">*</span></label>
                   <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)}
                     placeholder="e.g. Humanitarian response in conflict zones"
                     className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-4 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] transition-colors" />
@@ -421,11 +421,11 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
       {type && (
         <div className="px-7 pb-7 pt-3 border-t border-white/10 shrink-0">
           {belowQuorum && (
-            <div className="mb-4 p-3 bg-red-950/30 border border-red-900/40 rounded-xl text-xs text-red-400">
+            <div className="mb-4 p-3 bg-[#8B2020]/20 border border-[#8B2020]/40 rounded-xl text-xs text-[#8B2020]">
               ⚠️ Quorum not met. Motions cannot be raised until the required number of delegates are present.
             </div>
           )}
-          {error && <p className="text-red-400 text-sm font-medium mb-3">{error}</p>}
+          {error && <p className="text-[#8B2020] text-sm font-medium mb-3">{error}</p>}
           <button onClick={submit} disabled={!canSubmit() || belowQuorum}
             className="w-full bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white py-5 rounded-2xl text-base font-black transition-colors">
             {editingMotion ? 'Edit Motion →' : 'Raise Motion →'}
@@ -576,12 +576,12 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
         {isPrimary && (
           <div className="flex gap-2 mt-auto">
             <button onClick={() => onAccepted(m)}
-              className="flex-1 bg-green-700 hover:bg-green-600 text-white py-2.5 rounded-xl font-bold text-sm transition-colors">
+              className="flex-1 bg-[#2A5A3C] hover:bg-[#3D7A52] text-white py-2.5 rounded-xl font-bold text-sm transition-colors">
               ✓ Accept
             </button>
             <button onClick={() => onRemove(m.id)}
               disabled={pendingIds.has(m.id)}
-              className={`flex-1 bg-[#DDD4C0] hover:bg-red-950/40 hover:text-red-500 text-[#6A5A4A] border border-[#DDD4C0] hover:border-red-800/40 py-2.5 rounded-xl font-bold text-sm transition-colors ${pendingIds.has(m.id) ? 'opacity-40 cursor-not-allowed' : ''}`}>
+              className={`flex-1 bg-[#DDD4C0] hover:bg-red-950/40 hover:text-[#8B2020] text-[#6A5A4A] border border-[#DDD4C0] hover:border-[#8B2020]/40 py-2.5 rounded-xl font-bold text-sm transition-colors ${pendingIds.has(m.id) ? 'opacity-40 cursor-not-allowed' : ''}`}>
               ✗ Reject
             </button>
             <button onClick={(e) => { e.stopPropagation(); onEdit(m.id); }}
@@ -869,7 +869,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
               setSpecialVoteMotion(null);
               onClose();
             }}
-            className="px-16 py-8 rounded-3xl bg-green-700 hover:bg-green-600 text-white text-2xl font-black transition-colors">
+            className="px-16 py-8 rounded-3xl bg-[#2A5A3C] hover:bg-[#3D7A52] text-white text-2xl font-black transition-colors">
             Yes
           </button>
           <button
@@ -880,7 +880,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
               setSpecialVoteMotion(null);
               onClose();
             }}
-            className="px-16 py-8 rounded-3xl bg-red-800 hover:bg-red-700 text-white text-2xl font-black transition-colors">
+            className="px-16 py-8 rounded-3xl bg-[#8B2020] hover:bg-[#7A1C1C] text-white text-2xl font-black transition-colors">
             No
           </button>
         </div>
@@ -974,7 +974,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
                               )}
                             </div>
                           </div>
-                          <button onClick={() => handleRemove(m.id)} className="text-[#9A8A78] hover:text-red-500 text-sm transition-colors mt-0.5">✕</button>
+                          <button onClick={() => handleRemove(m.id)} className="text-[#9A8A78] hover:text-[#8B2020] text-sm transition-colors mt-0.5">✕</button>
                         </div>
                       </div>
                     );

@@ -321,7 +321,7 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, lastSpeakerDelegate
               )}
               {!isCurrent && (
                 <button onClick={() => onRemove(s.delegateId)}
-                  className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full text-white text-[10px] hidden group-hover:flex items-center justify-center">✕</button>
+                  className="absolute -top-1 -right-1 w-4 h-4 bg-[#8B2020] rounded-full text-white text-[10px] hidden group-hover:flex items-center justify-center">✕</button>
               )}
             </div>
           );
@@ -384,7 +384,7 @@ function CaucusQueueSidebar({ committee, onRemove, onReorder, lastSpeakerDelegat
                 )}
                 <button
                   onClick={() => onRemove(s.delegateId)}
-                  className="text-[#9A8A78] hover:text-red-500 transition-colors text-xs opacity-0 group-hover:opacity-100 shrink-0"
+                  className="text-[#9A8A78] hover:text-[#8B2020] transition-colors text-xs opacity-0 group-hover:opacity-100 shrink-0"
                 >✕</button>
               </div>
             );
@@ -420,7 +420,7 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
     <div className="flex gap-2">
       <div className="relative flex-1">
       {isFull ? (
-        <div className="pointer-events-none flex items-center justify-center px-4 py-3 bg-[#FAF8F3] border border-yellow-700/30 rounded-xl">
+        <div className="pointer-events-none flex items-center justify-center px-4 py-3 bg-[#FAF8F3] border border-[#B6871F]/30 rounded-xl">
           <p className="text-sm text-amber-400 font-semibold text-center">
             Queue full — {maxSpeakers} speaker{maxSpeakers !== 1 ? 's' : ''} fit in remaining time
           </p>
@@ -464,7 +464,7 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
                     : <Emoji size="1.125rem">🌐</Emoji>}
                 </span>
                 <span className="text-sm flex-1">{d.country}</span>
-                {spoke && <span className="text-[10px] text-yellow-500 shrink-0">already spoke</span>}
+                {spoke && <span className="text-[10px] text-[#B6871F] shrink-0">already spoke</span>}
                 {isFirst && !spoke && (
                   <div className="flex items-center gap-1 shrink-0">
                     {onAddFirst && (
@@ -492,7 +492,7 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
       </div>
       {onEndCaucus && (
         <button onClick={onEndCaucus}
-          className="shrink-0 px-5 py-3 rounded-xl font-black text-sm bg-red-600 hover:bg-red-700 text-white transition-colors">
+          className="shrink-0 px-5 py-3 rounded-xl font-black text-sm bg-[#8B2020] hover:bg-[#7A1C1C] text-white transition-colors">
           End Caucus
         </button>
       )}
@@ -571,22 +571,22 @@ function UnmoderatedCaucusView({ committee, setCommittee }: { committee: Committ
         {formatTime(caucus.remainingTime)}
       </div>
       <div className="w-full max-w-sm h-2 bg-[#DDD4C0] rounded-full overflow-hidden mb-8">
-        <div className="h-full bg-purple-500 rounded-full transition-all" style={{ width: `${caucus.totalTime > 0 ? (caucus.remainingTime / caucus.totalTime) * 100 : 0}%` }} />
+        <div className="h-full bg-[#B6871F] rounded-full transition-all" style={{ width: `${caucus.totalTime > 0 ? (caucus.remainingTime / caucus.totalTime) * 100 : 0}%` }} />
       </div>
       <div className="flex gap-3 flex-wrap justify-center">
-        <button onClick={() => setRunning((r) => !r)} className={`px-8 py-3 rounded-xl font-bold transition-colors ${running ? 'bg-yellow-600 hover:bg-yellow-500 text-white' : 'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'}`}>
+        <button onClick={() => setRunning((r) => !r)} className={`px-8 py-3 rounded-xl font-bold transition-colors ${running ? 'bg-[#B6871F] hover:bg-[#B6871F]/80 text-white' : 'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'}`}>
           {running ? '⏸ Pause' : '▶ Resume'}
         </button>
-        <button onClick={() => setShowExtendUnmod((v) => !v)} className="px-4 py-3 rounded-xl font-bold bg-[#DDD4C0] hover:bg-emerald-950/50 text-[#6A5A4A] hover:text-emerald-400 transition-colors border border-[#DDD4C0] hover:border-emerald-900/50">
+        <button onClick={() => setShowExtendUnmod((v) => !v)} className="px-4 py-3 rounded-xl font-bold bg-[#DDD4C0] hover:bg-[#3D7A52]/60 text-[#6A5A4A] hover:text-[#EED98A] transition-colors border border-[#DDD4C0] hover:border-[#3D7A52]/40">
           Extend
         </button>
-        <button onClick={handleEndCaucus} className="px-8 py-3 rounded-xl font-black bg-red-600 hover:bg-red-700 text-white transition-colors">
+        <button onClick={handleEndCaucus} className="px-8 py-3 rounded-xl font-black bg-[#8B2020] hover:bg-[#7A1C1C] text-white transition-colors">
           End Caucus
         </button>
       </div>
       {showExtendUnmod && (
         <div className="flex items-center gap-2 mt-4 flex-wrap justify-center">
-          <span className="text-xs text-emerald-400 font-semibold shrink-0">Extend by</span>
+          <span className="text-xs text-[#EED98A] font-semibold shrink-0">Extend by</span>
           {(() => {
             const halfMins = caucus.totalTime / 120;
             const rawSuggestions = [5, 10, halfMins];
@@ -607,7 +607,7 @@ function UnmoderatedCaucusView({ committee, setCommittee }: { committee: Committ
                   return { ...c, caucus: updated };
                 }, true);
                 setShowExtendUnmod(false);
-              }} className="px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-900/30 hover:bg-emerald-800/40 border border-emerald-700/30 text-emerald-300 transition-colors">
+              }} className="px-2.5 py-1 rounded-lg text-xs font-bold bg-[#2A5A3C]/60 hover:bg-[#3D7A52]/60 border border-[#3D7A52]/40 text-[#EED98A] transition-colors">
                 {m % 1 === 0 ? `${m}m` : `${m}m`}
               </button>
             ));
@@ -625,7 +625,7 @@ function UnmoderatedCaucusView({ committee, setCommittee }: { committee: Committ
               return { ...c, caucus: updated };
             }, true);
             setShowExtendUnmod(false);
-          }} className="px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-900/30 hover:bg-emerald-800/40 border border-emerald-700/30 text-emerald-300 transition-colors">
+          }} className="px-2.5 py-1 rounded-lg text-xs font-bold bg-[#2A5A3C]/60 hover:bg-[#3D7A52]/60 border border-[#3D7A52]/40 text-[#EED98A] transition-colors">
             + custom
           </button>
         </div>
@@ -769,7 +769,7 @@ function ModeratedCaucusMain({
                 </span>
               )}
               {spokenCountries.length > 0 && (
-                <span className="text-yellow-500 text-lg font-medium leading-snug">
+                <span className="text-[#B6871F] text-lg font-medium leading-snug">
                   {spokenCountries.length} delegate{spokenCountries.length !== 1 ? 's' : ''} spoke
                 </span>
               )}
@@ -804,15 +804,15 @@ function ModeratedCaucusMain({
               </div>
               <h1 className="text-5xl font-black text-[#1C1410] mt-2 mb-1 text-center">{committee.caucus!.currentSpeaker}</h1>
               <div className={`text-8xl font-black font-mono mt-2 mb-3 tabular-nums ${
-                extraTimeAdded ? 'text-emerald-400' :
+                extraTimeAdded ? 'text-[#EED98A]' :
                 speakerTimeRemaining <= 10 ? 'text-red-500' :
-                speakerTimeRemaining <= 30 ? 'text-yellow-600' : 'text-[#1C1410]'
+                speakerTimeRemaining <= 30 ? 'text-[#B6871F]' : 'text-[#1C1410]'
               }`}>
                 {formatTime(speakerTimeRemaining)}
-                {extraTimeAdded && <span className="text-base ml-2 font-normal text-emerald-400">+time</span>}
+                {extraTimeAdded && <span className="text-base ml-2 font-normal text-[#EED98A]">+time</span>}
               </div>
               <div className="w-full max-w-2xl h-2 bg-[#DDD4C0] rounded-full overflow-hidden mb-3">
-                <div className={`h-full rounded-full transition-all ${caucusProgress > 50 ? 'bg-[#B6871F]' : caucusProgress > 20 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{ width: `${caucusProgress}%` }} />
+                <div className={`h-full rounded-full transition-all ${caucusProgress > 50 ? 'bg-[#B6871F]' : caucusProgress > 20 ? 'bg-[#B6871F]' : 'bg-red-500'}`} style={{ width: `${caucusProgress}%` }} />
               </div>
             </div>
             {!sessionEnded && (
@@ -822,7 +822,7 @@ function ModeratedCaucusMain({
                   ↺
                 </button>
                 <button onClick={handleToggleTimer}
-                  className={`flex-1 py-3 px-6 rounded-xl font-bold text-base transition-colors ${timerRunning ? 'bg-yellow-600 hover:bg-yellow-500 text-white' : 'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'}`}>
+                  className={`flex-1 py-3 px-6 rounded-xl font-bold text-base transition-colors ${timerRunning ? 'bg-[#B6871F] hover:bg-[#B6871F]/80 text-white' : 'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'}`}>
                   {timerRunning ? '⏸ Pause' : '▶ Start'}
                 </button>
                 <button onClick={handleNextCaucusSpeaker} disabled={queue.length === 0}
@@ -830,12 +830,12 @@ function ModeratedCaucusMain({
                   Next →
                 </button>
                 <button onClick={() => setActivePopover(activePopover === 'extraTime' ? null : 'extraTime')} title="Add time"
-                  className={`px-3 py-3 border rounded-xl font-bold text-sm transition-colors ${activePopover === 'extraTime' ? 'bg-emerald-900/40 border-emerald-700/50 text-emerald-300' : 'bg-[#DDD4C0] hover:bg-emerald-950/50 hover:border-emerald-800/50 border-[#C8BAA8] text-[#6A5A4A]'}`}>
+                  className={`px-3 py-3 border rounded-xl font-bold text-sm transition-colors ${activePopover === 'extraTime' ? 'bg-[#2A5A3C]/60 border-[#3D7A52]/40 text-[#EED98A]' : 'bg-[#DDD4C0] hover:bg-[#3D7A52]/60 hover:border-[#3D7A52]/40 border-[#C8BAA8] text-[#6A5A4A]'}`}>
                   +⏱
                 </button>
                 {!isTdT && (
                   <button onClick={() => setActivePopover(activePopover === 'rightToReply' ? null : 'rightToReply')}
-                    className={`px-3 py-3 border rounded-xl font-bold text-xs transition-colors ${activePopover === 'rightToReply' ? 'bg-orange-600 border-orange-500 text-[#1C1410]' : 'bg-orange-900/40 hover:bg-orange-800/50 border-orange-700/40 text-orange-300'}`}>
+                    className={`px-3 py-3 border rounded-xl font-bold text-xs transition-colors ${activePopover === 'rightToReply' ? 'bg-[#B8844A] border-[#B8844A] text-[#1C1410]' : 'bg-[#B8844A]/15 hover:bg-[#B8844A]/25 border-[#B8844A]/30 text-[#B8844A]'}`}>
                     Right of Reply
                   </button>
                 )}
@@ -941,7 +941,7 @@ function ModeratedCaucusMain({
                 )}
               </div>
               <button onClick={handleEndCaucus}
-                className="px-8 py-3 rounded-lg font-black text-sm bg-red-600 hover:bg-red-700 text-white transition-colors">
+                className="px-8 py-3 rounded-lg font-black text-sm bg-[#8B2020] hover:bg-[#7A1C1C] text-white transition-colors">
                 End Caucus
               </button>
             </div>
@@ -1781,13 +1781,13 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                   <span className="font-mono text-lg">{flagEl}</span>
                   <span className="text-[#1C1410] font-semibold">{m.proposedBy}</span>
                   <span className="text-[#6A5A4A] text-xs">wants to join as</span>
-                  <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${desiredStatus === 'present-voting' ? 'bg-blue-900/40 text-blue-300' : 'bg-green-900/40 text-green-300'}`}>
+                  <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${desiredStatus === 'present-voting' ? 'bg-[#1B3828]/40 text-[#EED98A]' : 'bg-[#1B3828]/50 text-[#EED98A]'}`}>
                     {desiredStatus === 'present-voting' ? 'P+V' : 'P'}
                   </span>
                   <button onClick={() => handleApproveJoinRequest(m.id, delegateId, desiredStatus)}
-                    className="ml-2 px-3 py-1 bg-green-800/50 hover:bg-green-700/60 border border-green-700/50 text-green-300 text-xs rounded-lg font-semibold transition-colors">Approve</button>
+                    className="ml-2 px-3 py-1 bg-[#1B3828]/50 hover:bg-[#2A5A3C]/60 border border-[#3D7A52]/40 text-[#EED98A] text-xs rounded-lg font-semibold transition-colors">Approve</button>
                   <button onClick={() => handleDenyJoinRequest(m.id)}
-                    className="px-3 py-1 bg-red-950/50 hover:bg-red-900/60 border border-red-900/50 text-red-400 text-xs rounded-lg font-semibold transition-colors">Deny</button>
+                    className="px-3 py-1 bg-[#8B2020]/20 hover:bg-[#7A1C1C]/40 border border-[#8B2020]/40 text-[#8B2020] text-xs rounded-lg font-semibold transition-colors">Deny</button>
                 </div>
               );
             })}
@@ -1795,7 +1795,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       )}
       {/* GSL speak request banner */}
       {(committee.pendingMotions ?? []).filter((m) => (m.type as string) === 'gsl-request').length > 0 && (
-        <div className="shrink-0 bg-[#0E1A0E] border-b border-green-800/40 px-4 py-2 flex flex-wrap gap-4">
+        <div className="shrink-0 bg-[#1B3828] border-b border-[#3D7A52]/40 px-4 py-2 flex flex-wrap gap-4">
           {(committee.pendingMotions ?? [])
             .filter((m) => (m.type as string) === 'gsl-request')
             .map((m) => {
@@ -1807,14 +1807,14 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 : <Emoji size="1.125rem">🌐</Emoji>;
               return (
                 <div key={m.id} className="flex items-center gap-3 text-sm">
-                  <span className="text-green-400 font-bold shrink-0">🎙️ GSL Request</span>
+                  <span className="text-[#EED98A] font-bold shrink-0">🎙️ GSL Request</span>
                   <span className="font-mono text-lg">{flagEl}</span>
                   <span className="text-[#1C1410] font-semibold">{m.proposedBy}</span>
                   <span className="text-[#6A5A4A] text-xs">wants to speak</span>
                   <button onClick={() => handleApproveGslRequest(m.id, delegateId, m.proposedBy)}
-                    className="ml-2 px-3 py-1 bg-green-800/50 hover:bg-green-700/60 border border-green-700/50 text-green-300 text-xs rounded-lg font-semibold transition-colors">Add to GSL</button>
+                    className="ml-2 px-3 py-1 bg-[#1B3828]/50 hover:bg-[#2A5A3C]/60 border border-[#3D7A52]/40 text-[#EED98A] text-xs rounded-lg font-semibold transition-colors">Add to GSL</button>
                   <button onClick={() => handleDenyGslRequest(m.id)}
-                    className="px-3 py-1 bg-red-950/50 hover:bg-red-900/60 border border-red-900/50 text-red-400 text-xs rounded-lg font-semibold transition-colors">Deny</button>
+                    className="px-3 py-1 bg-[#8B2020]/20 hover:bg-[#7A1C1C]/40 border border-[#8B2020]/40 text-[#8B2020] text-xs rounded-lg font-semibold transition-colors">Deny</button>
                 </div>
               );
             })}
@@ -2103,19 +2103,19 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                           </div>
                           <h1 className="text-5xl font-black text-[#1C1410] mt-2 mb-1 text-center">{committee.currentSpeaker.country}</h1>
                           <div className={`text-8xl font-black font-mono mt-2 mb-3 tabular-nums ${
-                            extraTimeAdded ? 'text-emerald-400' :
+                            extraTimeAdded ? 'text-[#EED98A]' :
                             speakerTimeRemaining <= 10 ? 'text-red-500' :
-                            speakerTimeRemaining <= 30 ? 'text-yellow-600' : 'text-[#1C1410]'
+                            speakerTimeRemaining <= 30 ? 'text-[#B6871F]' : 'text-[#1C1410]'
                           }`}>
                             {formatTime(speakerTimeRemaining)}
-                            {extraTimeAdded && <span className="text-base ml-2 font-normal text-emerald-400">+time</span>}
+                            {extraTimeAdded && <span className="text-base ml-2 font-normal text-[#EED98A]">+time</span>}
                           </div>
                           <div className="w-full max-w-2xl h-2 bg-[#DDD4C0] rounded-full overflow-hidden mb-3">
-                            <div className={`h-full rounded-full transition-all ${progress > 50 ? 'bg-[#B6871F]' : progress > 20 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{ width: `${progress}%` }} />
+                            <div className={`h-full rounded-full transition-all ${progress > 50 ? 'bg-[#B6871F]' : progress > 20 ? 'bg-[#B6871F]' : 'bg-red-500'}`} style={{ width: `${progress}%` }} />
                           </div>
                         </div>
                         {isLastGSLSpeaker && (
-                          <div className="mb-2 px-4 py-2 bg-yellow-900/30 border border-yellow-700/40 rounded-lg text-yellow-400 text-xs text-center">
+                          <div className="mb-2 px-4 py-2 bg-[#B6871F]/10 border border-[#B6871F]/30 rounded-lg text-[#B6871F] text-xs text-center">
                             Add at least one more delegate before starting — the GSL can never be empty.
                           </div>
                         )}
@@ -2131,7 +2131,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                           <button onClick={handleToggleTimer}
                             disabled={isLastGSLSpeaker}
                             className={`flex-1 py-3 px-6 rounded-xl font-bold text-base transition-colors ${
-                              timerRunning ? 'bg-yellow-600 hover:bg-yellow-500 text-white' :
+                              timerRunning ? 'bg-[#B6871F] hover:bg-[#B6871F]/80 text-white' :
                               isLastGSLSpeaker ? 'bg-[#DDD4C0] text-[#9A8A78] cursor-not-allowed' :
                               'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'
                             }`}>
@@ -2147,8 +2147,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                             title="Add time"
                             className={`px-3 py-3 border rounded-xl font-bold text-sm transition-colors ${
                               activePopover === 'extraTime'
-                                ? 'bg-emerald-900/40 border-emerald-700/50 text-emerald-300'
-                                : 'bg-[#DDD4C0] hover:bg-emerald-950/50 hover:border-emerald-800/50 border-[#C8BAA8] text-[#6A5A4A]'
+                                ? 'bg-[#2A5A3C]/60 border-[#3D7A52]/40 text-[#EED98A]'
+                                : 'bg-[#DDD4C0] hover:bg-[#3D7A52]/60 hover:border-[#3D7A52]/40 border-[#C8BAA8] text-[#6A5A4A]'
                             }`}>
                             +⏱
                           </button>
@@ -2157,8 +2157,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                             onClick={() => setActivePopover(activePopover === 'rightToReply' ? null : 'rightToReply')}
                             className={`px-3 py-3 border rounded-xl font-bold text-xs transition-colors ${
                               activePopover === 'rightToReply'
-                                ? 'bg-orange-600 border-orange-500 text-[#1C1410]'
-                                : 'bg-orange-900/40 hover:bg-orange-800/50 border-orange-700/40 text-orange-300'
+                                ? 'bg-[#B8844A] border-[#B8844A] text-[#1C1410]'
+                                : 'bg-[#B8844A]/15 hover:bg-[#B8844A]/25 border-[#B8844A]/30 text-[#B8844A]'
                             }`}>
                             Right of Reply
                           </button>
@@ -2178,7 +2178,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                         <h2 className="text-3xl font-black text-[#1C1410] mb-2">No Current Speaker</h2>
                         <p className="text-[#6A5A4A] mb-4 text-center">Add delegates below, then call the first speaker.</p>
                         {committee.speakersList.length === 1 && (
-                          <div className="mb-4 px-4 py-2 bg-yellow-900/30 border border-yellow-700/40 rounded-lg text-yellow-400 text-xs text-center">
+                          <div className="mb-4 px-4 py-2 bg-[#B6871F]/10 border border-[#B6871F]/30 rounded-lg text-[#B6871F] text-xs text-center">
                             Only 1 delegate on the list — add more before starting.
                           </div>
                         )}
@@ -2209,7 +2209,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                     </div>
                   </div>
                   {belowQuorum && (
-                    <p className="text-xs text-red-400 text-center py-2">
+                    <p className="text-xs text-[#8B2020] text-center py-2">
                       ⚠️ Below quorum — speakers cannot be added until {Math.ceil(quorumFraction * totalCount)} delegates are present.
                     </p>
                   )}
@@ -2250,15 +2250,15 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           className="fixed z-50"
           style={{ top: '50%', right: '2rem', transform: 'translateY(-50%)' }}
         >
-          <div className="bg-[#EDE7D8] border border-emerald-700/40 rounded-xl p-3 w-72 shadow-2xl">
+          <div className="bg-[#EDE7D8] border border-[#3D7A52]/40 rounded-xl p-3 w-72 shadow-2xl">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-emerald-400 font-semibold">Add time</span>
+              <span className="text-xs text-[#EED98A] font-semibold">Add time</span>
               <button onClick={() => setActivePopover(null)} className="text-[#9A8A78] hover:text-[#1C1410] text-sm">✕</button>
             </div>
             <div className="flex gap-2 mb-2">
               {[15, 30, 60].map((s) => (
                 <button key={s} onClick={() => handleAddExtraTime(s)}
-                  className="flex-1 py-2 bg-emerald-900/30 hover:bg-emerald-800/40 border border-emerald-700/30 text-emerald-300 text-xs rounded-lg font-bold transition-colors">
+                  className="flex-1 py-2 bg-[#2A5A3C]/60 hover:bg-[#3D7A52]/60 border border-[#3D7A52]/40 text-[#EED98A] text-xs rounded-lg font-bold transition-colors">
                   {s === 60 ? '1m' : `${s}s`}
                 </button>
               ))}
@@ -2271,12 +2271,12 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 onKeyDown={(e) => { if (e.key === 'Enter') { const n = parseInt(extraTimeSecs); if (n > 0) handleAddExtraTime(n); } }}
                 placeholder="Custom sec…"
                 style={{ MozAppearance: 'textfield' } as React.CSSProperties}
-                className="flex-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-2 py-1.5 text-[#1C1410] text-xs focus:outline-none focus:border-emerald-700/50 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                className="flex-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-2 py-1.5 text-[#1C1410] text-xs focus:outline-none focus:border-[#3D7A52] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
               />
               <button
                 onClick={() => { const n = parseInt(extraTimeSecs); if (n > 0) handleAddExtraTime(n); }}
                 disabled={!extraTimeSecs || parseInt(extraTimeSecs) <= 0}
-                className="px-3 py-1.5 bg-emerald-800/50 hover:bg-emerald-700/60 disabled:opacity-40 text-emerald-300 text-xs rounded-lg font-semibold transition-colors">
+                className="px-3 py-1.5 bg-[#2A5A3C]/60 hover:bg-[#3D7A52]/60 disabled:opacity-40 text-[#EED98A] text-xs rounded-lg font-semibold transition-colors">
                 Add ↵
               </button>
             </div>
@@ -2291,9 +2291,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           className="fixed z-50"
           style={{ top: '50%', right: '2rem', transform: 'translateY(-50%)' }}
         >
-          <div className="bg-[#EDE7D8] border border-orange-700/40 rounded-xl p-4 w-72 shadow-2xl">
+          <div className="bg-[#EDE7D8] border border-[#B8844A]/30 rounded-xl p-4 w-72 shadow-2xl">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-orange-400 font-semibold">Right of Reply</span>
+              <span className="text-xs text-[#B8844A] font-semibold">Right of Reply</span>
               <button onClick={() => {
                 setActivePopover(null);
                 setRtrOpen(false);
@@ -2317,7 +2317,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                       onClick={() => setRtrSeconds(s)}
                       className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-colors border ${
                         rtrSeconds === s
-                          ? 'bg-orange-600 border-orange-500 text-[#1C1410]'
+                          ? 'bg-[#B8844A] border-[#B8844A] text-[#1C1410]'
                           : 'bg-[#DDD4C0] border-[#DDD4C0] text-[#6A5A4A] hover:border-orange-700/50'
                       }`}
                     >
@@ -2344,7 +2344,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                     setRtrOpen(true);
                   }}
                   disabled={!rtrCountry}
-                  className="w-full py-2 bg-orange-600 hover:bg-orange-500 disabled:opacity-40 disabled:cursor-not-allowed text-[#1C1410] text-xs rounded-lg font-bold transition-colors"
+                  className="w-full py-2 bg-[#B8844A] hover:bg-[#B8844A]/80 disabled:opacity-40 disabled:cursor-not-allowed text-[#1C1410] text-xs rounded-lg font-bold transition-colors"
                 >
                   Grant Right of Reply
                 </button>
@@ -2360,16 +2360,16 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                       : <Emoji size="1.25rem">🌐</Emoji>;
                   })()}
                   <span className="text-sm text-[#1C1410] font-bold flex-1">{rtrCountry}</span>
-                  <span className="text-xs text-orange-400 font-mono">Right of Reply</span>
+                  <span className="text-xs text-[#B8844A] font-mono">Right of Reply</span>
                 </div>
                 <div className={`text-5xl font-black font-mono text-center mb-3 tabular-nums ${
-                  rtrTimeRemaining <= 5 ? 'text-red-500' : rtrTimeRemaining <= 10 ? 'text-yellow-500' : 'text-orange-300'
+                  rtrTimeRemaining <= 5 ? 'text-red-500' : rtrTimeRemaining <= 10 ? 'text-[#B6871F]' : 'text-[#B8844A]'
                 }`}>
                   {Math.floor(rtrTimeRemaining / 60)}:{String(rtrTimeRemaining % 60).padStart(2, '0')}
                 </div>
                 <div className="w-full h-1.5 bg-[#DDD4C0] rounded-full overflow-hidden mb-3">
                   <div
-                    className={`h-full rounded-full transition-all ${rtrTimeRemaining / rtrSeconds > 0.5 ? 'bg-orange-500' : rtrTimeRemaining / rtrSeconds > 0.2 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                    className={`h-full rounded-full transition-all ${rtrTimeRemaining / rtrSeconds > 0.5 ? 'bg-[#B8844A]' : rtrTimeRemaining / rtrSeconds > 0.2 ? 'bg-[#B6871F]' : 'bg-red-500'}`}
                     style={{ width: `${(rtrTimeRemaining / rtrSeconds) * 100}%` }}
                   />
                 </div>
@@ -2377,7 +2377,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                   <button
                     onClick={() => setRtrTimerActive((r) => !r)}
                     className={`flex-1 py-2 rounded-lg font-bold text-xs transition-colors ${
-                      rtrTimerActive ? 'bg-yellow-600 hover:bg-yellow-500 text-white' : 'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'
+                      rtrTimerActive ? 'bg-[#B6871F] hover:bg-[#B6871F]/80 text-white' : 'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'
                     }`}
                   >
                     {rtrTimerActive ? '⏸ Pause' : '▶ Start'}

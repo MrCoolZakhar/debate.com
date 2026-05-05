@@ -38,17 +38,17 @@ export default function CaucusPanel({ committee }: { committee: Committee }) {
   return (
     <div className="flex flex-col gap-4">
       {/* Caucus header */}
-      <div className={`rounded-xl p-5 border ${caucus.type === 'moderated' ? 'bg-blue-900/20 border-blue-700/40' : 'bg-purple-900/20 border-purple-700/40'}`}>
+      <div className={`rounded-xl p-5 border ${caucus.type === 'moderated' ? 'bg-[#1B3828]/40 border-[#3D7A52]/40' : 'bg-[#1B3828]/40 border-[#3D7A52]/30'}`}>
         <div className="flex items-center justify-between mb-4">
           <div>
-            <div className={`text-xs font-mono mb-1 ${caucus.type === 'moderated' ? 'text-blue-400' : 'text-purple-400'}`}>
+            <div className={`text-xs font-mono mb-1 ${caucus.type === 'moderated' ? 'text-[#EED98A]' : 'text-[#EED98A]'}`}>
               {caucus.type === 'moderated' ? 'MODERATED CAUCUS' : 'UNMODERATED CAUCUS'}
             </div>
             {caucus.purpose && <div className="text-[#1C1410] font-semibold text-sm">{caucus.purpose}</div>}
           </div>
           <button
             onClick={endCaucus.bind(null, committee.id)}
-            className="text-xs text-red-400 hover:text-red-300 transition-colors border border-red-800/40 px-3 py-1 rounded-lg"
+            className="text-xs text-[#8B2020] hover:text-[#8B2020] transition-colors border border-[#8B2020]/40 px-3 py-1 rounded-lg"
           >
             End Caucus
           </button>
@@ -57,16 +57,16 @@ export default function CaucusPanel({ committee }: { committee: Committee }) {
         <div className="text-5xl font-black font-mono text-[#1C1410] mb-2">
           {formatTime(caucus.remainingTime)}
         </div>
-        <div className="h-2 bg-[#1a1f2e] rounded-full overflow-hidden mb-4">
+        <div className="h-2 bg-[#DDD4C0]/30 rounded-full overflow-hidden mb-4">
           <div
-            className={`h-full rounded-full transition-all ${caucus.type === 'moderated' ? 'bg-blue-500' : 'bg-purple-500'}`}
+            className={`h-full rounded-full transition-all ${caucus.type === 'moderated' ? 'bg-[#2A5A3C]' : 'bg-[#B6871F]'}`}
             style={{ width: `${totalProgress}%` }}
           />
         </div>
         <button
           onClick={() => setRunning((r) => !r)}
           className={`px-6 py-2 rounded-lg font-semibold text-sm transition-colors ${
-            running ? 'bg-yellow-600 hover:bg-yellow-500 text-white' : 'bg-green-600 hover:bg-green-500 text-white'
+            running ? 'bg-[#B6871F] hover:bg-[#B6871F]/80 text-white' : 'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'
           }`}
         >
           {running ? '⏸ Pause' : '▶ Resume'}
@@ -75,21 +75,21 @@ export default function CaucusPanel({ committee }: { committee: Committee }) {
 
       {/* Moderated caucus speaker management */}
       {caucus.type === 'moderated' && (
-        <div className="bg-[#0f1526] border border-[#1e2540] rounded-xl p-4">
-          <div className="text-xs text-[#4a5580] font-mono mb-3">CAUCUS SPEAKERS</div>
+        <div className="bg-[#1B3828] border border-[#3D7A52]/30 rounded-xl p-4">
+          <div className="text-xs text-[#9A8A78] font-mono mb-3">CAUCUS SPEAKERS</div>
 
           {caucus.currentSpeaker && (
-            <div className="mb-4 p-3 bg-blue-950/30 border border-blue-800/30 rounded-lg">
-              <div className="text-xs text-blue-400 mb-1">NOW SPEAKING</div>
+            <div className="mb-4 p-3 bg-[#B6871F]/15 border border-[#B6871F]/30 rounded-lg">
+              <div className="text-xs text-[#EED98A] mb-1">NOW SPEAKING</div>
               <div className="text-[#1C1410] font-bold">{caucus.currentSpeaker}</div>
               <div className="flex justify-between items-end mt-2 mb-1">
-                <span className={`text-2xl font-mono font-bold ${caucus.speakerTimeRemaining <= 5 ? 'text-red-400' : 'text-[#1C1410]'}`}>
+                <span className={`text-2xl font-mono font-bold ${caucus.speakerTimeRemaining <= 5 ? 'text-[#8B2020]' : 'text-[#1C1410]'}`}>
                   {formatTime(caucus.speakerTimeRemaining)}
                 </span>
               </div>
-              <div className="h-1.5 bg-[#1a1f2e] rounded-full overflow-hidden">
+              <div className="h-1.5 bg-[#DDD4C0]/30 rounded-full overflow-hidden">
                 <div
-                  className={`h-full rounded-full transition-all ${speakerProgress > 50 ? 'bg-blue-500' : speakerProgress > 20 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                  className={`h-full rounded-full transition-all ${speakerProgress > 50 ? 'bg-[#2A5A3C]' : speakerProgress > 20 ? 'bg-[#B6871F]' : 'bg-red-500'}`}
                   style={{ width: `${speakerProgress}%` }}
                 />
               </div>
@@ -100,7 +100,7 @@ export default function CaucusPanel({ committee }: { committee: Committee }) {
             <select
               value={selectedSpeaker}
               onChange={(e) => setSelectedSpeaker(e.target.value)}
-              className="flex-1 bg-[#141929] border border-[#1e2540] rounded-lg px-3 py-2 text-[#1C1410] text-sm focus:outline-none focus:border-blue-600"
+              className="flex-1 bg-[#1B3828] border border-[#3D7A52]/30 rounded-lg px-3 py-2 text-[#1C1410] text-sm focus:outline-none focus:border-[#3D7A52]"
             >
               <option value="">Select speaker...</option>
               {committee.delegates.filter((d) => d.status !== 'absent').map((d) => (
@@ -110,7 +110,7 @@ export default function CaucusPanel({ committee }: { committee: Committee }) {
             <button
               onClick={() => { if (selectedSpeaker) { nextCaucusSpeaker(committee.id, selectedSpeaker); setSelectedSpeaker(''); } }}
               disabled={!selectedSpeaker}
-              className="bg-blue-600 hover:bg-blue-500 disabled:bg-blue-900 disabled:text-blue-700 text-[#1C1410] px-4 py-2 rounded-lg text-sm font-semibold transition-colors"
+              className="bg-[#2A5A3C] hover:bg-[#3D7A52] disabled:bg-[#1B3828]/40 disabled:text-[#9A8A78] text-[#1C1410] px-4 py-2 rounded-lg text-sm font-semibold transition-colors"
             >
               Call
             </button>

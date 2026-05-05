@@ -33,7 +33,7 @@ export function FlagCircle({ country, size = 'md' }: { country: string; size?: '
 // ── 3-state slider ────────────────────────────────────────────────────────────
 function StatusSlider({ status, onCycle }: { status: DelegateStatus; onCycle: () => void }) {
   const thumbPos = status === 'absent' ? 'left-[2px]' : status === 'present' ? 'left-[31px]' : 'left-[60px]';
-  const thumbColor = status === 'absent' ? 'bg-red-300' : status === 'present' ? 'bg-green-500' : 'bg-blue-500';
+  const thumbColor = status === 'absent' ? 'bg-red-300' : status === 'present' ? 'bg-green-500' : 'bg-[#2A5A3C]';
   return (
     <button
       onClick={(e) => { e.stopPropagation(); onCycle(); }}
@@ -195,7 +195,7 @@ function FullListPopup({
                 {onRemove && (
                   <button
                     onClick={() => onRemove(s.delegateId)}
-                    className="text-[#9A8A78] hover:text-red-500 transition-colors text-xs opacity-0 group-hover:opacity-100 shrink-0"
+                    className="text-[#9A8A78] hover:text-[#8B2020] transition-colors text-xs opacity-0 group-hover:opacity-100 shrink-0"
                   >✕</button>
                 )}
               </div>
@@ -405,9 +405,9 @@ function RollCallPanelInner({
         </div>
         {showBulkActions && (
           <div className="flex gap-1.5 mt-2">
-            <button onClick={handleClear} className="text-[10px] font-semibold px-2.5 py-1.5 rounded-lg bg-[#DDD4C0] text-red-400 hover:bg-red-950/40 transition-colors">Clear All</button>
-            <button onClick={handleAllPresent} className="text-[10px] font-semibold px-2.5 py-1.5 rounded-lg bg-[#DDD4C0] text-green-400 hover:bg-green-950/40 transition-colors">All Present</button>
-            <button onClick={handleAllPresentVoting} className="text-[10px] font-semibold px-2.5 py-1.5 rounded-lg bg-[#DDD4C0] text-blue-400 hover:bg-blue-950/40 transition-colors">All P+V</button>
+            <button onClick={handleClear} className="text-[10px] font-semibold px-2.5 py-1.5 rounded-lg bg-[#DDD4C0] text-[#8B2020] hover:bg-red-950/40 transition-colors">Clear All</button>
+            <button onClick={handleAllPresent} className="text-[10px] font-semibold px-2.5 py-1.5 rounded-lg bg-[#DDD4C0] text-[#EED98A] hover:bg-[#1B3828]/20 transition-colors">All Present</button>
+            <button onClick={handleAllPresentVoting} className="text-[10px] font-semibold px-2.5 py-1.5 rounded-lg bg-[#DDD4C0] text-[#EED98A] hover:bg-blue-950/40 transition-colors">All P+V</button>
           </div>
         )}
       </div>
@@ -471,8 +471,8 @@ function RollCallPanelInner({
                     : isAbsent
                     ? 'border border-transparent opacity-40'
                     : effectiveStatus === 'present'
-                    ? 'bg-green-950/30 border border-green-800/30'
-                    : 'bg-blue-950/30 border border-blue-800/30'
+                    ? 'bg-[#1B3828]/30 border border-[#3D7A52]/30'
+                    : 'bg-[#B6871F]/15 border border-[#B6871F]/30'
                 } ${
                   (!isRollCallPhase && onAddToList && !isAbsent) || isRollCallPhase
                     ? 'cursor-pointer hover:bg-[#DDD4C0]/50'
