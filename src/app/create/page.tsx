@@ -137,13 +137,17 @@ function CardVideo({ src, active }: { src: string; active: boolean }) {
       muted
       playsInline
       className="absolute inset-0 w-full h-full object-cover object-top"
-      style={{ opacity: active ? 0.22 : 0.13, transition: 'opacity 0.4s ease' }}
+      style={{ opacity: active ? 0.22 : 0.09, transition: 'opacity 0.4s ease' }}
     />
   );
 }
 
 function SelectScreen({ onSelect }: { onSelect: () => void }) {
-  const [hovered, setHovered] = React.useState<string | null>('mun');
+  const [hovered, setHovered] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    setHovered('mun');
+  }, []);
 
   const cards = [
     {
@@ -153,13 +157,13 @@ function SelectScreen({ onSelect }: { onSelect: () => void }) {
       subtitle: 'Traditional parliamentary debate format',
       badge: 'Coming Soon',
       active: false,
-      bg: '#FAF8F3',
-      border: 'rgba(221,212,192,0.8)',
-      titleColor: '#1C1410',
-      subtitleColor: '#9A8A78',
-      badgeBg: '#EDE7D8',
-      badgeBorder: '#DDD4C0',
-      badgeColor: '#9A8A78',
+      bg: '#1B3828',
+      border: 'rgba(182,135,31,0.5)',
+      titleColor: '#EED98A',
+      subtitleColor: 'rgba(238,217,138,0.5)',
+      badgeBg: 'rgba(238,217,138,0.12)',
+      badgeBorder: 'rgba(182,135,31,0.5)',
+      badgeColor: '#EED98A',
     },
     {
       id: 'mun',
@@ -183,13 +187,13 @@ function SelectScreen({ onSelect }: { onSelect: () => void }) {
       subtitle: 'Fast-paced crisis scenarios and directives',
       badge: 'Coming H2 2026',
       active: false,
-      bg: '#FAF8F3',
-      border: 'rgba(221,212,192,0.8)',
-      titleColor: '#1C1410',
-      subtitleColor: '#9A8A78',
-      badgeBg: '#EDE7D8',
-      badgeBorder: '#DDD4C0',
-      badgeColor: '#9A8A78',
+      bg: '#1B3828',
+      border: 'rgba(182,135,31,0.5)',
+      titleColor: '#EED98A',
+      subtitleColor: 'rgba(238,217,138,0.5)',
+      badgeBg: 'rgba(238,217,138,0.12)',
+      badgeBorder: 'rgba(182,135,31,0.5)',
+      badgeColor: '#EED98A',
     },
   ];
 
@@ -226,7 +230,7 @@ function SelectScreen({ onSelect }: { onSelect: () => void }) {
       {/* Subtitle */}
       <p
         className="text-center mb-12 relative"
-        style={{ fontSize: '16px', color: '#6A5A4A', maxWidth: '380px', lineHeight: 1.65 }}
+        style={{ fontSize: '16px', color: '#6A5A4A', maxWidth: '560px', lineHeight: 1.65, whiteSpace: 'nowrap' }}
       >
         Choose a format to get started. More committee types arriving soon.
       </p>
@@ -244,14 +248,14 @@ function SelectScreen({ onSelect }: { onSelect: () => void }) {
               className="relative flex flex-col items-center rounded-2xl overflow-hidden"
               style={{
                 backgroundColor: card.bg,
-                border: `1.5px solid ${card.border}`,
+                border: card.id === 'mun' ? `1.5px solid ${card.border}` : `1.5px dashed ${card.border}`,
                 borderTop: isMun
                   ? '1.5px solid rgba(61,122,82,0.5)'
                   : '1.5px solid rgba(255,255,255,0.9)',
-                width: active ? '268px' : isMun ? '268px' : '210px',
-                minHeight: active ? '440px' : isMun ? '440px' : '360px',
-                marginBottom: active ? '0px' : isMun ? '0px' : '24px',
-                padding: active ? '40px 32px 36px' : isMun ? '40px 32px 36px' : '32px 24px 28px',
+                width: active ? '268px' : '220px',
+                minHeight: active ? '440px' : '340px',
+                marginBottom: active ? '0px' : '20px',
+                padding: active ? '40px 32px 36px' : '28px 22px 26px',
                 boxShadow: active || isMun
                   ? '0 0 0 1px rgba(61,122,82,0.12), 0 8px 16px rgba(27,56,40,0.18), 0 24px 48px rgba(27,56,40,0.26), 0 48px 80px rgba(27,56,40,0.20)'
                   : '0 2px 4px rgba(27,56,40,0.04), 0 8px 20px rgba(27,56,40,0.07), 0 1px 0 rgba(255,255,255,0.85) inset',
@@ -284,7 +288,7 @@ function SelectScreen({ onSelect }: { onSelect: () => void }) {
                   height: '70%',
                   background: isMun
                     ? 'linear-gradient(to top, #1B3828 55%, transparent 100%)'
-                    : 'linear-gradient(to top, #FAF8F3 55%, transparent 100%)',
+                    : 'linear-gradient(to top, #1B3828 55%, transparent 100%)',
                   zIndex: 1,
                 }}
               />
