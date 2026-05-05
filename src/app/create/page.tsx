@@ -236,7 +236,7 @@ function SelectScreen({ onSelect }: { onSelect: () => void }) {
       </p>
 
       {/* Cards row */}
-      <div className="flex flex-row items-end justify-center gap-5 relative" style={{ maxWidth: '900px', width: '100%' }}>
+      <div className="flex flex-row items-end justify-center gap-5 relative" style={{ maxWidth: '900px', width: '100%', height: '460px' }}>
         {cards.map((card) => {
           const active = isHovered(card.id);
           const isMun = card.id === 'mun';
@@ -252,14 +252,16 @@ function SelectScreen({ onSelect }: { onSelect: () => void }) {
                 borderTop: isMun
                   ? '1.5px solid rgba(61,122,82,0.5)'
                   : '1.5px solid rgba(255,255,255,0.9)',
-                width: active ? '268px' : '220px',
-                minHeight: active ? '440px' : '340px',
-                marginBottom: active ? '0px' : '20px',
-                padding: active ? '40px 32px 36px' : '28px 22px 26px',
+                width: '260px',
+                height: '420px',
+                marginBottom: '0px',
+                padding: '40px 28px 36px',
+                transform: active ? 'scale(1.08) translateY(-8px)' : 'scale(1) translateY(0px)',
+                transformOrigin: 'bottom center',
                 boxShadow: active || isMun
                   ? '0 0 0 1px rgba(61,122,82,0.12), 0 8px 16px rgba(27,56,40,0.18), 0 24px 48px rgba(27,56,40,0.26), 0 48px 80px rgba(27,56,40,0.20)'
                   : '0 2px 4px rgba(27,56,40,0.04), 0 8px 20px rgba(27,56,40,0.07), 0 1px 0 rgba(255,255,255,0.85) inset',
-                transition: 'all 0.4s cubic-bezier(0.4,0,0.2,1)',
+                transition: 'transform 0.18s cubic-bezier(0.2,0,0,1), box-shadow 0.18s cubic-bezier(0.2,0,0,1)',
                 cursor: 'default',
                 zIndex: active ? 10 : isMun ? 10 : 1,
               }}
