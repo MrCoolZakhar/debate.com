@@ -185,25 +185,43 @@ function CreatePageInner() {
   };
 
   return (
-    <div className="h-screen bg-[#F6F1E9] flex flex-col overflow-hidden">
-      {/* Fix 7 — Nav */}
-      <nav
-        className="border-b border-[#DDD4C0] px-6 h-14 flex items-center justify-between shrink-0"
-        style={{ backgroundColor: '#FAF8F3' }}
-      >
+    <div className="h-screen flex flex-col overflow-hidden relative" style={{ backgroundColor: '#EDE7D8' }}>
+      {/* Grain texture — matches landing page */}
+      <div
+        className="pointer-events-none fixed inset-0 z-[1]"
+        style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`,
+          backgroundRepeat: 'repeat',
+          backgroundSize: '300px 300px',
+          mixBlendMode: 'multiply',
+          opacity: 0.18,
+        }}
+      />
+      <nav className="relative z-20 border-b border-[#DDD4C0]/60 px-8 md:px-14 flex items-center justify-between shrink-0" style={{ height: '72px', backgroundColor: '#EDE7D8' }}>
         <Link href="/" className="flex items-center gap-2">
-          <img src="/GavellingLogo.png" alt="Gavelling" className="w-[16vw] h-auto max-h-9 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+          <img src="/GavellingLogo.png" alt="Gavelling" className="h-10 w-auto object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
         </Link>
       </nav>
 
       <div className="flex-1 flex overflow-hidden">
         {committeeMode === 'select' && (
-          <div className="flex-1 flex flex-col items-center justify-center px-8 py-6">
+          <div className="flex-1 flex flex-col items-center justify-center px-8 py-6 relative z-10">
+            {/* Soft radial glow behind cards */}
+            <div
+              className="pointer-events-none absolute inset-0"
+              style={{
+                background: 'radial-gradient(ellipse 60% 50% at 50% 65%, rgba(27,56,40,0.09) 0%, transparent 70%)',
+              }}
+            />
 
             {/* Header */}
-            <p className="text-xs font-bold tracking-[0.22em] uppercase mb-3" style={{ fontFamily: "'DM Mono', monospace", color: '#9A8A78' }}>
-              Committee Format
-            </p>
+            <div className="flex items-center gap-3 mb-3">
+              <div className="h-px w-10 bg-[#B6871F]/40" />
+              <p className="text-xs font-bold tracking-[0.22em] uppercase" style={{ fontFamily: "'DM Mono', monospace", color: '#9A8A78' }}>
+                Committee Format
+              </p>
+              <div className="h-px w-10 bg-[#B6871F]/40" />
+            </div>
             <h1 className="font-black uppercase tracking-wide text-center mb-2" style={{ fontSize: 'clamp(28px, 3.5vw, 44px)', color: '#1C1410' }}>
               Select Committee Type
             </h1>
