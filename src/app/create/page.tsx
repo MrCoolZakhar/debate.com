@@ -100,23 +100,24 @@ function CommitteeNameInput({ value, onChange, onPresetSelect }: {
         className="w-full bg-white/70 border border-[#C8BAA8] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] focus:ring-2 focus:ring-[#1B3828]/10 transition-all text-sm"
       />
       {open && matches.length > 0 && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-white/70 border border-[#C8BAA8] rounded-xl overflow-hidden z-30 shadow-xl">
+        <div className="absolute top-full left-0 right-0 mt-1 rounded-xl overflow-hidden z-30" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', boxShadow: '0 8px 32px rgba(27,56,40,0.14), 0 2px 8px rgba(27,56,40,0.08)' }}>
           {matches.slice(0, 6).map((p, i) => (
             <button
               key={p.name}
               onMouseDown={(e) => { e.preventDefault(); onPresetSelect(p); setOpen(false); }}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
-                i === 0 ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'
+              className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors border-b border-[#DDD4C0]/50 last:border-0 ${
+                i === 0 ? 'text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#EDE7D8]'
               }`}
+              style={i === 0 ? { backgroundColor: 'rgba(27,56,40,0.07)' } : {}}
             >
               {(p as { logoPath?: string }).logoPath ? (
                 <img src={(p as { logoPath?: string }).logoPath} alt={p.acronym} width={18} height={18} className="rounded-sm shrink-0 object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
               ) : (
-                <span className="w-[18px] h-[18px] rounded shrink-0 bg-[#DDD4C0] inline-block" />
+                <div className="w-[22px] h-[22px] rounded-md shrink-0 flex items-center justify-center text-[9px] font-black" style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'DM Mono', monospace" }}>{p.acronym.slice(0,2)}</div>
               )}
               <span className="text-sm flex-1">{p.name}</span>
-              <span className="text-xs text-[#9A8A78] shrink-0">{p.acronym}</span>
-              {i === 0 && <span className="text-xs text-[#9A8A78] shrink-0">↵</span>}
+              <span className="text-[10px] font-bold shrink-0" style={{ fontFamily: "'DM Mono', monospace", color: '#1B3828' }}>{p.acronym}</span>
+              {i === 0 && <span className="text-[10px] shrink-0" style={{ color: '#9A8A78' }}>↵</span>}
             </button>
           ))}
         </div>
@@ -468,7 +469,7 @@ function CreatePageInner() {
               >
                 <ChevronLeft size={14} /> Back
               </button>
-              <h1 className="text-2xl font-black uppercase tracking-wide" style={{ color: '#1B3828' }}>New Committee</h1>
+              <h1 className="text-4xl font-black uppercase tracking-wide" style={{ color: '#1B3828', letterSpacing: '0.06em' }}>New Committee</h1>
             </div>
 
             <div className="grid grid-cols-3 gap-4 mb-3 shrink-0">
@@ -549,14 +550,14 @@ function CreatePageInner() {
                     {Object.entries(BUNDLES).map(([key, bundle]) => (
                       <button key={key} onClick={() => addBundle(key)}
                         className="group flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide transition-all"
-                        style={{ backgroundColor: '#1B3828', color: '#EED98A', border: '1px solid #3D7A52' }}
-                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}>
+                        style={{ backgroundColor: '#FAF8F3', color: '#1B3828', border: '1px solid #DDD4C0' }}
+                        onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = '#1B3828'; el.style.color = '#EED98A'; el.style.borderColor = '#1B3828'; }}
+                        onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = '#FAF8F3'; el.style.color = '#1B3828'; el.style.borderColor = '#DDD4C0'; }}>
                         {bundle.logoPath ? (
                           <img src={bundle.logoPath} alt={bundle.label} width={16} height={16} className="rounded-sm shrink-0 object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                         ) : null}
                         <span>{bundle.label}</span>
-                        <span className="font-mono text-[10px] ml-1" style={{ color: 'rgba(238,217,138,0.55)' }}>+{bundle.members.length}</span>
+                        <span className="font-mono text-[10px] ml-1 group-hover:opacity-60" style={{ color: '#9A8A78' }}>+{bundle.members.length}</span>
                       </button>
                     ))}
                   </div>
@@ -590,11 +591,9 @@ function CreatePageInner() {
 
                 <div className="flex-1 bg-white/60 border border-[#C8BAA8] rounded-xl overflow-hidden mb-4 min-h-0">
                   {delegates.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-full gap-3 px-8">
-                      <div className="w-full max-w-[220px] border-2 border-dashed rounded-2xl px-6 py-8 flex flex-col items-center gap-2" style={{ borderColor: 'rgba(182,135,31,0.25)' }}>
-                        <p className="text-xs font-bold uppercase tracking-wide text-center" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>No delegates yet</p>
-                        <p className="text-xs text-center leading-relaxed" style={{ color: '#9A8A78' }}>Search countries or use Quick Bundles to add delegates</p>
-                      </div>
+                    <div className="flex flex-col items-center justify-center h-full gap-2 px-8">
+                      <p className="text-sm font-bold text-center" style={{ color: '#1B3828' }}>No delegates yet</p>
+                      <p className="text-xs text-center leading-relaxed" style={{ color: '#9A8A78', maxWidth: '200px' }}>Search countries or use Quick Bundles above to get started</p>
                     </div>
                   ) : (
                     <div className="overflow-y-auto h-full">
