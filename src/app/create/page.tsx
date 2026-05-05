@@ -8,33 +8,34 @@ import { useSettingsStore } from '@/lib/settingsStore';
 import { UN_COUNTRIES, getFlagUrl, getCountryByName } from '@/lib/countries';
 import { UNSC_MEMBERS, WHO_MEMBERS, IMF_MEMBERS, WORLD_BANK_MEMBERS, UNEP_MEMBERS } from '@/lib/presets';
 import { Globe, PenLine, ChevronLeft } from 'lucide-react';
+import { FlagImg } from '@/components/FlagImg';
 
 const COMMITTEE_PRESETS = [
-  { name: 'UN Security Council', acronym: 'UNSC', icon: '🛡️', members: UNSC_MEMBERS },
-  { name: 'UN Environment Programme', acronym: 'UNEP', icon: '🌿', members: UNEP_MEMBERS },
-  { name: 'World Health Organization', acronym: 'WHO', icon: '🏥', members: WHO_MEMBERS },
-  { name: 'International Monetary Fund', acronym: 'IMF', icon: '💵', members: IMF_MEMBERS },
-  { name: 'World Bank', acronym: 'WB', icon: '🏦', members: WORLD_BANK_MEMBERS },
-  { name: 'UN General Assembly', acronym: 'GA/UNGA', icon: '🌍', members: UN_COUNTRIES.map((c) => c.name) },
-  { name: 'UN Human Rights Council', acronym: 'UNHRC', icon: '⚖️', members: ['Afghanistan','Albania','Algeria','Argentina','Armenia','Bangladesh','Benin','Bolivia','Brazil','Bulgaria','Cameroon','Chile','China','Cuba','Czech Republic','Estonia','Finland','France','Gambia','Germany','Honduras','Iceland','India','Indonesia','Japan','Kazakhstan','Kenya','Libya','Luxembourg','Malawi','Malaysia','Maldives','Marshall Islands','Mexico','Montenegro','Morocco','Namibia','Nepal','Netherlands','Pakistan','Paraguay','Peru','Poland','Qatar','Romania','Senegal','Sierra Leone','Somalia','South Africa','Sudan','Togo','Ukraine','United Arab Emirates','United Kingdom','United States','Uruguay','Venezuela','Vietnam'] },
-  { name: 'Economic and Social Council', acronym: 'ECOSOC', icon: '💰', members: ['Algeria','Argentina','Armenia','Australia','Austria','Azerbaijan','Bahrain','Bangladesh','Benin','Bolivia','Brazil','Bulgaria','Burundi','Canada','Chile','China','Colombia','Congo','Czech Republic','Denmark','Ecuador','Egypt','El Salvador','Estonia','Ethiopia','France','Germany','Ghana','Greece','Guatemala','Guinea','Haiti','Honduras','Hungary','India','Indonesia','Iran','Ireland','Israel','Italy','Jamaica','Japan','Jordan','Kazakhstan','Kenya','Lesotho','Libya','Malaysia','Maldives','Mali','Malta','Mexico','Mongolia','Morocco','Mozambique','Netherlands','New Zealand','Niger','Norway','Pakistan','Panama','Paraguay','Peru','Philippines','Poland','Qatar','Romania','Russia','Rwanda','Saudi Arabia','Serbia','South Africa','South Korea','Spain','Sweden','Switzerland','Tanzania','Thailand','Togo','Turkey','Uganda','Ukraine','United Kingdom','United States','Uzbekistan','Venezuela','Vietnam','Zimbabwe'] },
-  { name: 'NATO', acronym: 'NATO', icon: '⚔️', members: ['Albania','Belgium','Bulgaria','Canada','Croatia','Czech Republic','Denmark','Estonia','Finland','France','Germany','Greece','Hungary','Iceland','Italy','Latvia','Lithuania','Luxembourg','Montenegro','Netherlands','North Macedonia','Norway','Poland','Portugal','Romania','Slovakia','Slovenia','Spain','Sweden','Turkey','United Kingdom','United States'] },
-  { name: 'G20', acronym: 'G20', icon: '💼', members: ['Argentina','Australia','Brazil','Canada','China','France','Germany','India','Indonesia','Italy','Japan','Mexico','South Korea','Russia','Saudi Arabia','South Africa','Turkey','United Kingdom','United States'] },
-  { name: 'European Union', acronym: 'EU', icon: '🇪🇺', members: ['Austria','Belgium','Bulgaria','Croatia','Cyprus','Czech Republic','Denmark','Estonia','Finland','France','Germany','Greece','Hungary','Ireland','Italy','Latvia','Lithuania','Luxembourg','Malta','Netherlands','Poland','Portugal','Romania','Slovakia','Slovenia','Spain','Sweden'] },
-  { name: 'African Union', acronym: 'AU', icon: '🌍', members: ['Algeria','Angola','Benin','Botswana','Burkina Faso','Burundi','Cabo Verde','Cameroon','Central African Republic','Chad','Comoros','Congo','Côte d\'Ivoire','DR Congo','Djibouti','Egypt','Equatorial Guinea','Eritrea','Eswatini','Ethiopia','Gabon','Gambia','Ghana','Guinea','Guinea-Bissau','Kenya','Lesotho','Liberia','Libya','Madagascar','Malawi','Mali','Mauritania','Mauritius','Morocco','Mozambique','Namibia','Niger','Nigeria','Rwanda','São Tomé and Príncipe','Senegal','Seychelles','Sierra Leone','Somalia','South Africa','South Sudan','Sudan','Tanzania','Togo','Tunisia','Uganda','Zambia','Zimbabwe'] },
-  { name: 'Arab League', acronym: 'LAS', icon: '🌙', members: ['Algeria','Bahrain','Comoros','Djibouti','Egypt','Iraq','Jordan','Kuwait','Lebanon','Libya','Mauritania','Morocco','Oman','Palestine','Qatar','Saudi Arabia','Somalia','Sudan','Syria','Tunisia','United Arab Emirates','Yemen'] },
-  { name: 'ASEAN', acronym: 'ASEAN', icon: '🌺', members: ['Brunei','Cambodia','Indonesia','Laos','Malaysia','Myanmar','Philippines','Singapore','Thailand','Timor-Leste','Vietnam'] },
+  { name: 'UN Security Council', acronym: 'UNSC', members: UNSC_MEMBERS },
+  { name: 'UN Environment Programme', acronym: 'UNEP', members: UNEP_MEMBERS },
+  { name: 'World Health Organization', acronym: 'WHO', members: WHO_MEMBERS },
+  { name: 'International Monetary Fund', acronym: 'IMF', logoPath: '/logos/IMF.png', members: IMF_MEMBERS },
+  { name: 'World Bank', acronym: 'WB', members: WORLD_BANK_MEMBERS },
+  { name: 'UN General Assembly', acronym: 'GA/UNGA', members: UN_COUNTRIES.map((c) => c.name) },
+  { name: 'UN Human Rights Council', acronym: 'UNHRC', members: ['Afghanistan','Albania','Algeria','Argentina','Armenia','Bangladesh','Benin','Bolivia','Brazil','Bulgaria','Cameroon','Chile','China','Cuba','Czech Republic','Estonia','Finland','France','Gambia','Germany','Honduras','Iceland','India','Indonesia','Japan','Kazakhstan','Kenya','Libya','Luxembourg','Malawi','Malaysia','Maldives','Marshall Islands','Mexico','Montenegro','Morocco','Namibia','Nepal','Netherlands','Pakistan','Paraguay','Peru','Poland','Qatar','Romania','Senegal','Sierra Leone','Somalia','South Africa','Sudan','Togo','Ukraine','United Arab Emirates','United Kingdom','United States','Uruguay','Venezuela','Vietnam'] },
+  { name: 'Economic and Social Council', acronym: 'ECOSOC', members: ['Algeria','Argentina','Armenia','Australia','Austria','Azerbaijan','Bahrain','Bangladesh','Benin','Bolivia','Brazil','Bulgaria','Burundi','Canada','Chile','China','Colombia','Congo','Czech Republic','Denmark','Ecuador','Egypt','El Salvador','Estonia','Ethiopia','France','Germany','Ghana','Greece','Guatemala','Guinea','Haiti','Honduras','Hungary','India','Indonesia','Iran','Ireland','Israel','Italy','Jamaica','Japan','Jordan','Kazakhstan','Kenya','Lesotho','Libya','Malaysia','Maldives','Mali','Malta','Mexico','Mongolia','Morocco','Mozambique','Netherlands','New Zealand','Niger','Norway','Pakistan','Panama','Paraguay','Peru','Philippines','Poland','Qatar','Romania','Russia','Rwanda','Saudi Arabia','Serbia','South Africa','South Korea','Spain','Sweden','Switzerland','Tanzania','Thailand','Togo','Turkey','Uganda','Ukraine','United Kingdom','United States','Uzbekistan','Venezuela','Vietnam','Zimbabwe'] },
+  { name: 'NATO', acronym: 'NATO', logoPath: '/logos/nato.png', members: ['Albania','Belgium','Bulgaria','Canada','Croatia','Czech Republic','Denmark','Estonia','Finland','France','Germany','Greece','Hungary','Iceland','Italy','Latvia','Lithuania','Luxembourg','Montenegro','Netherlands','North Macedonia','Norway','Poland','Portugal','Romania','Slovakia','Slovenia','Spain','Sweden','Turkey','United Kingdom','United States'] },
+  { name: 'G20', acronym: 'G20', members: ['Argentina','Australia','Brazil','Canada','China','France','Germany','India','Indonesia','Italy','Japan','Mexico','South Korea','Russia','Saudi Arabia','South Africa','Turkey','United Kingdom','United States'] },
+  { name: 'European Union', acronym: 'EU', logoPath: '/logos/eu.png', members: ['Austria','Belgium','Bulgaria','Croatia','Cyprus','Czech Republic','Denmark','Estonia','Finland','France','Germany','Greece','Hungary','Ireland','Italy','Latvia','Lithuania','Luxembourg','Malta','Netherlands','Poland','Portugal','Romania','Slovakia','Slovenia','Spain','Sweden'] },
+  { name: 'African Union', acronym: 'AU', members: ['Algeria','Angola','Benin','Botswana','Burkina Faso','Burundi','Cabo Verde','Cameroon','Central African Republic','Chad','Comoros','Congo','Côte d\'Ivoire','DR Congo','Djibouti','Egypt','Equatorial Guinea','Eritrea','Eswatini','Ethiopia','Gabon','Gambia','Ghana','Guinea','Guinea-Bissau','Kenya','Lesotho','Liberia','Libya','Madagascar','Malawi','Mali','Mauritania','Mauritius','Morocco','Mozambique','Namibia','Niger','Nigeria','Rwanda','São Tomé and Príncipe','Senegal','Seychelles','Sierra Leone','Somalia','South Africa','South Sudan','Sudan','Tanzania','Togo','Tunisia','Uganda','Zambia','Zimbabwe'] },
+  { name: 'Arab League', acronym: 'LAS', logoPath: '/logos/arab-league.png', members: ['Algeria','Bahrain','Comoros','Djibouti','Egypt','Iraq','Jordan','Kuwait','Lebanon','Libya','Mauritania','Morocco','Oman','Palestine','Qatar','Saudi Arabia','Somalia','Sudan','Syria','Tunisia','United Arab Emirates','Yemen'] },
+  { name: 'ASEAN', acronym: 'ASEAN', logoPath: '/logos/asean.png', members: ['Brunei','Cambodia','Indonesia','Laos','Malaysia','Myanmar','Philippines','Singapore','Thailand','Timor-Leste','Vietnam'] },
 ];
 
-const BUNDLES: Record<string, { label: string; icon: string; members: string[] }> = {
-  P5:        { label: 'P5',         icon: '🛡️', members: ['China', 'France', 'Russia', 'United Kingdom', 'United States'] },
-  G7:        { label: 'G7',         icon: '💼', members: ['Canada', 'France', 'Germany', 'Italy', 'Japan', 'United Kingdom', 'United States'] },
-  BRICS:     { label: 'BRICS+',     icon: '🌏', members: ['Brazil', 'Russia', 'India', 'China', 'South Africa', 'Egypt', 'Ethiopia', 'Iran', 'Saudi Arabia', 'United Arab Emirates'] },
-  G20:       { label: 'G20',        icon: '🌐', members: ['Argentina', 'Australia', 'Brazil', 'Canada', 'China', 'France', 'Germany', 'India', 'Indonesia', 'Italy', 'Japan', 'Mexico', 'South Korea', 'Russia', 'Saudi Arabia', 'South Africa', 'Turkey', 'United Kingdom', 'United States'] },
-  EU:        { label: 'EU',         icon: '🇪🇺', members: ['Austria', 'Belgium', 'Bulgaria', 'Croatia', 'Cyprus', 'Czech Republic', 'Denmark', 'Estonia', 'Finland', 'France', 'Germany', 'Greece', 'Hungary', 'Ireland', 'Italy', 'Latvia', 'Lithuania', 'Luxembourg', 'Malta', 'Netherlands', 'Poland', 'Portugal', 'Romania', 'Slovakia', 'Slovenia', 'Spain', 'Sweden'] },
-  NATO:      { label: 'NATO',       icon: '⚔️', members: ['Albania', 'Belgium', 'Bulgaria', 'Canada', 'Croatia', 'Czech Republic', 'Denmark', 'Estonia', 'Finland', 'France', 'Germany', 'Greece', 'Hungary', 'Iceland', 'Italy', 'Latvia', 'Lithuania', 'Luxembourg', 'Montenegro', 'Netherlands', 'North Macedonia', 'Norway', 'Poland', 'Portugal', 'Romania', 'Slovakia', 'Slovenia', 'Spain', 'Sweden', 'Turkey', 'United Kingdom', 'United States'] },
-  ASEAN:     { label: 'ASEAN',      icon: '🌺', members: ['Brunei', 'Cambodia', 'Indonesia', 'Laos', 'Malaysia', 'Myanmar', 'Philippines', 'Singapore', 'Thailand', 'Timor-Leste', 'Vietnam'] },
-  ArabLeague:{ label: 'Arab League',icon: '🌙', members: ['Algeria', 'Bahrain', 'Comoros', 'Djibouti', 'Egypt', 'Iraq', 'Jordan', 'Kuwait', 'Lebanon', 'Libya', 'Mauritania', 'Morocco', 'Oman', 'Palestine', 'Qatar', 'Saudi Arabia', 'Somalia', 'Sudan', 'Syria', 'Tunisia', 'United Arab Emirates', 'Yemen'] },
+const BUNDLES: Record<string, { label: string; acronym: string; logoPath?: string; members: string[] }> = {
+  P5:         { label: 'P5',          acronym: 'UNSC',                                       members: ['China', 'France', 'Russia', 'United Kingdom', 'United States'] },
+  G7:         { label: 'G7',          acronym: 'G7',                                         members: ['Canada', 'France', 'Germany', 'Italy', 'Japan', 'United Kingdom', 'United States'] },
+  BRICS:      { label: 'BRICS+',      acronym: 'BRICS',                                      members: ['Brazil', 'Russia', 'India', 'China', 'South Africa', 'Egypt', 'Ethiopia', 'Iran', 'Saudi Arabia', 'United Arab Emirates'] },
+  G20:        { label: 'G20',         acronym: 'G20',                                        members: ['Argentina', 'Australia', 'Brazil', 'Canada', 'China', 'France', 'Germany', 'India', 'Indonesia', 'Italy', 'Japan', 'Mexico', 'South Korea', 'Russia', 'Saudi Arabia', 'South Africa', 'Turkey', 'United Kingdom', 'United States'] },
+  EU:         { label: 'EU',          acronym: 'EU',   logoPath: '/logos/eu.png',            members: ['Austria', 'Belgium', 'Bulgaria', 'Croatia', 'Cyprus', 'Czech Republic', 'Denmark', 'Estonia', 'Finland', 'France', 'Germany', 'Greece', 'Hungary', 'Ireland', 'Italy', 'Latvia', 'Lithuania', 'Luxembourg', 'Malta', 'Netherlands', 'Poland', 'Portugal', 'Romania', 'Slovakia', 'Slovenia', 'Spain', 'Sweden'] },
+  NATO:       { label: 'NATO',        acronym: 'NATO', logoPath: '/logos/nato.png',          members: ['Albania', 'Belgium', 'Bulgaria', 'Canada', 'Croatia', 'Czech Republic', 'Denmark', 'Estonia', 'Finland', 'France', 'Germany', 'Greece', 'Hungary', 'Iceland', 'Italy', 'Latvia', 'Lithuania', 'Luxembourg', 'Montenegro', 'Netherlands', 'North Macedonia', 'Norway', 'Poland', 'Portugal', 'Romania', 'Slovakia', 'Slovenia', 'Spain', 'Sweden', 'Turkey', 'United Kingdom', 'United States'] },
+  ASEAN:      { label: 'ASEAN',       acronym: 'ASEAN', logoPath: '/logos/asean.png',        members: ['Brunei', 'Cambodia', 'Indonesia', 'Laos', 'Malaysia', 'Myanmar', 'Philippines', 'Singapore', 'Thailand', 'Timor-Leste', 'Vietnam'] },
+  ArabLeague: { label: 'Arab League', acronym: 'LAS',  logoPath: '/logos/arab-league.png',  members: ['Algeria', 'Bahrain', 'Comoros', 'Djibouti', 'Egypt', 'Iraq', 'Jordan', 'Kuwait', 'Lebanon', 'Libya', 'Mauritania', 'Morocco', 'Oman', 'Palestine', 'Qatar', 'Saudi Arabia', 'Somalia', 'Sudan', 'Syria', 'Tunisia', 'United Arab Emirates', 'Yemen'] },
 };
 
 const COUNTRY_ACRONYMS: Record<string, string> = {
@@ -108,6 +109,11 @@ function CommitteeNameInput({ value, onChange, onPresetSelect }: {
                 i === 0 ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'
               }`}
             >
+              {(p as { logoPath?: string }).logoPath ? (
+                <img src={(p as { logoPath?: string }).logoPath} alt={p.acronym} width={18} height={18} className="rounded-sm shrink-0 object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+              ) : (
+                <span className="w-[18px] h-[18px] rounded shrink-0 bg-[#DDD4C0] inline-block" />
+              )}
               <span className="text-sm flex-1">{p.name}</span>
               <span className="text-xs text-[#9A8A78] shrink-0">{p.acronym}</span>
               {i === 0 && <span className="text-xs text-[#9A8A78] shrink-0">↵</span>}
@@ -288,9 +294,7 @@ function SelectScreen({ onSelect }: { onSelect: () => void }) {
                 className="pointer-events-none absolute bottom-0 left-0 right-0"
                 style={{
                   height: '70%',
-                  background: isMun
-                    ? 'linear-gradient(to top, #1B3828 55%, transparent 100%)'
-                    : 'linear-gradient(to top, #1B3828 55%, transparent 100%)',
+                  background: 'linear-gradient(to top, #1B3828 55%, transparent 100%)',
                   zIndex: 1,
                 }}
               />
@@ -457,7 +461,6 @@ function CreatePageInner() {
 
         {committeeMode === 'build' && (
           <div className="flex-1 flex flex-col overflow-hidden px-8 py-6">
-            {/* Fix 3 — Header */}
             <div className="flex items-center gap-4 mb-6 shrink-0">
               <button
                 onClick={() => setCommitteeMode('select')}
@@ -473,29 +476,27 @@ function CreatePageInner() {
               </div>
             </div>
 
-            {/* Fix 3 — Form inputs */}
             <div className="grid grid-cols-3 gap-4 mb-3 shrink-0">
               <div>
-                <label className="block text-[10px] font-bold tracking-[0.12em] text-[#9A8A78] uppercase mb-2">Committee Name</label>
+                <label className="block text-sm font-semibold text-[#7B4A1E] mb-1.5">Committee Name</label>
                 <CommitteeNameInput value={committeeName} onChange={(v) => { setCommitteeName(v); setIsUNSC(false); }} onPresetSelect={handleCommitteePreset} />
               </div>
               <div>
-                <label className="block text-[10px] font-bold tracking-[0.12em] text-[#9A8A78] uppercase mb-2">
-                  Chair Name <span className="text-[#9A8A78] font-normal normal-case tracking-normal">( optional)</span>
+                <label className="block text-sm font-semibold text-[#7B4A1E] mb-1.5">
+                  Chair Name <span className="text-[#7A5A38] font-normal">(optional)</span>
                 </label>
                 <input type="text" value={chairNames[0]} onChange={(e) => setChairNames([e.target.value])}
                   placeholder="e.g. John Smith"
                   className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] focus:ring-2 focus:ring-[#1B3828]/10 transition-all text-sm" />
               </div>
               <div>
-                <label className="block text-[10px] font-bold tracking-[0.12em] text-[#9A8A78] uppercase mb-2">Topic / Agenda Item</label>
+                <label className="block text-sm font-semibold text-[#7B4A1E] mb-1.5">Topic</label>
                 <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)}
                   placeholder="e.g. The right to education"
                   className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] focus:ring-2 focus:ring-[#1B3828]/10 transition-all text-sm" />
               </div>
             </div>
 
-            {/* Fix 4 — UNSC warning banner */}
             {isUNSC && (
               <div className="mb-3 px-4 py-2.5 rounded-xl text-xs font-medium shrink-0 flex items-center gap-2" style={{ backgroundColor: 'rgba(182,135,31,0.12)', border: '1px solid rgba(182,135,31,0.35)', color: '#1C1410' }}>
                 <span className="font-black text-[#B6871F]" style={{ fontFamily: "'DM Mono', monospace" }}>UNSC</span>
@@ -504,10 +505,9 @@ function CreatePageInner() {
             )}
 
             <div className="flex-1 grid grid-cols-2 gap-6 min-h-0">
-              {/* Fix 5 — Left column */}
               <div className="flex flex-col gap-4 min-h-0">
                 <div className="shrink-0">
-                  <label className="block text-[10px] font-bold tracking-[0.12em] text-[#9A8A78] uppercase mb-2">Search &amp; Add</label>
+                  <label className="block text-sm font-semibold text-[#7B4A1E] mb-1.5">Search &amp; Add</label>
                   <div className="relative">
                     <div className="flex items-center bg-[#FAF8F3] border border-[#DDD4C0] focus-within:border-[#1B3828] focus-within:ring-2 focus-within:ring-[#1B3828]/10 rounded-xl overflow-visible transition-all">
                       <input type="text" value={search} onChange={(e) => setSearch(e.target.value)}
@@ -549,26 +549,29 @@ function CreatePageInner() {
                 </div>
 
                 <div className="shrink-0">
-                  <label className="block text-[10px] font-bold tracking-[0.12em] text-[#9A8A78] uppercase mb-2">Quick Bundles</label>
+                  <label className="block text-sm font-semibold text-[#7B4A1E] mb-2">Quick Bundles</label>
                   <div className="flex flex-wrap gap-2">
                     {Object.entries(BUNDLES).map(([key, bundle]) => (
                       <button key={key} onClick={() => addBundle(key)}
                         className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FAF8F3] border border-[#DDD4C0] hover:bg-[#1B3828] hover:text-[#EED98A] hover:border-[#1B3828] rounded-lg text-xs font-bold uppercase tracking-wide text-[#6A5A4A] transition-all">
+                        {bundle.logoPath ? (
+                          <img src={bundle.logoPath} alt={bundle.label} width={16} height={16} className="rounded-sm shrink-0 object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                        ) : null}
                         <span>{bundle.label}</span>
-                        <span className="text-[#9A8A78] font-mono text-[10px] ml-1">+{bundle.members.length}</span>
+                        <span className="text-[#9A8A78] font-mono text-[10px] ml-1 group-hover:text-[#EED98A]/60">+{bundle.members.length}</span>
                       </button>
                     ))}
                   </div>
                 </div>
 
                 <div className="flex-1 flex flex-col min-h-0">
-                  <label className="block text-[10px] font-bold tracking-[0.12em] text-[#9A8A78] uppercase mb-2">Paste Country List</label>
+                  <label className="block text-sm font-semibold text-[#7B4A1E] mb-1.5">Paste Country List</label>
                   <textarea value={pasteText} onChange={(e) => { setPasteText(e.target.value); setPasteError(''); }}
                     placeholder={'France\nGermany\nBrazil, India...'}
                     className="flex-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] focus:ring-2 focus:ring-[#1B3828]/10 transition-all text-sm resize-none min-h-0" />
                   <div className="flex items-center gap-3 mt-2">
                     <button onClick={handlePaste} disabled={!pasteText.trim()}
-                      className="px-4 py-2 bg-[#1B3828] hover:bg-[#2A5A3C] disabled:opacity-30 disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-[#EED98A] rounded-lg text-xs font-bold uppercase tracking-wide transition-all">
+                      className="px-4 py-2 bg-[#1B3828] hover:bg-[#2A5A3C] disabled:opacity-30 disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-[#EED98A] rounded-lg text-xs font-bold uppercase tracking-wide transition-all active:scale-95">
                       Auto-match &amp; Add →
                     </button>
                     {pasteError && <p className="text-xs text-yellow-400 flex-1">{pasteError}</p>}
@@ -576,11 +579,10 @@ function CreatePageInner() {
                 </div>
               </div>
 
-              {/* Fix 6 — Delegates panel */}
               <div className="flex flex-col min-h-0">
                 <div className="flex items-center justify-between mb-2 shrink-0">
                   <div className="flex items-center gap-2">
-                    <label className="text-[10px] font-bold tracking-[0.12em] text-[#9A8A78] uppercase">Selected Delegates</label>
+                    <label className="text-sm font-semibold text-[#7B4A1E]">Selected Delegates</label>
                     <span className="text-[10px] font-bold text-[#1B3828] bg-[#EED98A]/30 px-2 py-0.5 rounded-full" style={{ fontFamily: "'DM Mono', monospace" }}>{delegates.length}</span>
                   </div>
                   {delegates.length > 0 && (
@@ -614,7 +616,6 @@ function CreatePageInner() {
                   )}
                 </div>
 
-                {/* Fix 6 — Start Session button */}
                 <button
                   onClick={handleCreate}
                   disabled={!canProceed || creating}
@@ -638,7 +639,7 @@ function CreatePageInner() {
 
 export default function CreatePage() {
   return (
-    <Suspense fallback={<div className="h-screen bg-[#F6F1E9] flex items-center justify-center"><span className="text-[#9A8A78]">Loading...</span></div>}>
+    <Suspense fallback={<div className="h-screen bg-[#EDE7D8] flex items-center justify-center"><span className="text-[#9A8A78]">Loading...</span></div>}>
       <CreatePageInner />
     </Suspense>
   );

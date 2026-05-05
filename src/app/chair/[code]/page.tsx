@@ -1880,7 +1880,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         {!showChat && committee.phase !== 'pre-session' && (
           <>
             {showRollCall && (
-              <aside className="w-[22rem] border-r border-[#DDD4C0] bg-[#F6F1E9] flex flex-col overflow-hidden shrink-0">
+              <aside className="w-[22rem] border-r border-[#3D2A15] bg-[#EDE7D8] flex flex-col overflow-hidden shrink-0">
                 {caucusMaxReachedMsg && (
                   <div className="shrink-0 px-3 py-2 bg-amber-900/20 border-b border-amber-700/40 text-amber-300 text-xs text-center font-semibold">
                     Maximum speakers reached — add more delegates if time remains after current speakers.

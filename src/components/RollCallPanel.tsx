@@ -33,11 +33,11 @@ export function FlagCircle({ country, size = 'md' }: { country: string; size?: '
 // ── 3-state slider ────────────────────────────────────────────────────────────
 function StatusSlider({ status, onCycle }: { status: DelegateStatus; onCycle: () => void }) {
   const thumbPos = status === 'absent' ? 'left-[2px]' : status === 'present' ? 'left-[31px]' : 'left-[60px]';
-  const thumbColor = status === 'absent' ? 'bg-red-300' : status === 'present' ? 'bg-green-500' : 'bg-[#2A5A3C]';
+  const thumbColor = status === 'absent' ? 'bg-red-300' : status === 'present' ? 'bg-[#3D6B35]' : 'bg-[#2A5A3C]';
   return (
     <button
       onClick={(e) => { e.stopPropagation(); onCycle(); }}
-      className="relative w-[90px] h-[30px] rounded-full bg-[#EDE7D8] border border-[#DDD4C0] cursor-pointer shrink-0 select-none"
+      className="relative w-[90px] h-[30px] rounded-full bg-[#EDE7D8] border border-[#DDD4C0] hover:border-[#7B4A1E]/50 cursor-pointer shrink-0 select-none transition-colors"
       title="Tap to cycle: Absent → Present → PV"
     >
       <div className="absolute inset-0 grid grid-cols-3 items-center pointer-events-none">
@@ -388,7 +388,7 @@ function RollCallPanelInner({
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="px-4 pt-4 pb-3 border-b border-[#DDD4C0] shrink-0">
+      <div className="px-4 pt-4 pb-3 border-b border-[#3D2A15] shrink-0">
         <p className="text-lg font-black text-[#1C1410] leading-tight truncate mb-0.5">{committee.name}</p>
         {committee.topic && (
           <p className="text-xs text-[#6A5A4A] leading-snug line-clamp-2 mb-2">
@@ -523,7 +523,7 @@ function RollCallPanelInner({
           <button
             onClick={handleBeginSession}
             disabled={present < 1}
-            className="w-full bg-[#2A5A3C] hover:bg-[#3D7A52] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-[#1C1410] py-3 rounded-xl text-sm font-bold transition-colors"
+            className="w-full bg-[#2A5A3C] hover:bg-[#3D7A52] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-[#1C1410] py-3 rounded-xl text-sm font-bold transition-all shadow-md shadow-[#3D6B35]/20 active:scale-[0.98]"
           >
             {present >= 1 ? 'Begin Session →' : 'Add at least 1 delegate'}
           </button>
