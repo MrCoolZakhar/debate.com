@@ -28,10 +28,10 @@ const COMMITTEE_PRESETS = [
 ];
 
 const BUNDLES: Record<string, { label: string; acronym: string; logoPath?: string; members: string[] }> = {
-  P5:         { label: 'P5',          acronym: 'UNSC',                                       members: ['China', 'France', 'Russia', 'United Kingdom', 'United States'] },
-  G7:         { label: 'G7',          acronym: 'G7',                                         members: ['Canada', 'France', 'Germany', 'Italy', 'Japan', 'United Kingdom', 'United States'] },
-  BRICS:      { label: 'BRICS+',      acronym: 'BRICS',                                      members: ['Brazil', 'Russia', 'India', 'China', 'South Africa', 'Egypt', 'Ethiopia', 'Iran', 'Saudi Arabia', 'United Arab Emirates'] },
-  G20:        { label: 'G20',         acronym: 'G20',                                        members: ['Argentina', 'Australia', 'Brazil', 'Canada', 'China', 'France', 'Germany', 'India', 'Indonesia', 'Italy', 'Japan', 'Mexico', 'South Korea', 'Russia', 'Saudi Arabia', 'South Africa', 'Turkey', 'United Kingdom', 'United States'] },
+  P5:         { label: 'P5',          acronym: 'UNSC', logoPath: '/logos/un.png',            members: ['China', 'France', 'Russia', 'United Kingdom', 'United States'] },
+  G7:         { label: 'G7',          acronym: 'G7',   logoPath: '/logos/g7.png',            members: ['Canada', 'France', 'Germany', 'Italy', 'Japan', 'United Kingdom', 'United States'] },
+  BRICS:      { label: 'BRICS+',      acronym: 'BRICS', logoPath: '/logos/brics.png',        members: ['Brazil', 'Russia', 'India', 'China', 'South Africa', 'Egypt', 'Ethiopia', 'Iran', 'Saudi Arabia', 'United Arab Emirates'] },
+  G20:        { label: 'G20',         acronym: 'G20',  logoPath: '/logos/g20.png',           members: ['Argentina', 'Australia', 'Brazil', 'Canada', 'China', 'France', 'Germany', 'India', 'Indonesia', 'Italy', 'Japan', 'Mexico', 'South Korea', 'Russia', 'Saudi Arabia', 'South Africa', 'Turkey', 'United Kingdom', 'United States'] },
   EU:         { label: 'EU',          acronym: 'EU',   logoPath: '/logos/eu.png',            members: ['Austria', 'Belgium', 'Bulgaria', 'Croatia', 'Cyprus', 'Czech Republic', 'Denmark', 'Estonia', 'Finland', 'France', 'Germany', 'Greece', 'Hungary', 'Ireland', 'Italy', 'Latvia', 'Lithuania', 'Luxembourg', 'Malta', 'Netherlands', 'Poland', 'Portugal', 'Romania', 'Slovakia', 'Slovenia', 'Spain', 'Sweden'] },
   NATO:       { label: 'NATO',        acronym: 'NATO', logoPath: '/logos/nato.png',          members: ['Albania', 'Belgium', 'Bulgaria', 'Canada', 'Croatia', 'Czech Republic', 'Denmark', 'Estonia', 'Finland', 'France', 'Germany', 'Greece', 'Hungary', 'Iceland', 'Italy', 'Latvia', 'Lithuania', 'Luxembourg', 'Montenegro', 'Netherlands', 'North Macedonia', 'Norway', 'Poland', 'Portugal', 'Romania', 'Slovakia', 'Slovenia', 'Spain', 'Sweden', 'Turkey', 'United Kingdom', 'United States'] },
   ASEAN:      { label: 'ASEAN',       acronym: 'ASEAN', logoPath: '/logos/asean.png',        members: ['Brunei', 'Cambodia', 'Indonesia', 'Laos', 'Malaysia', 'Myanmar', 'Philippines', 'Singapore', 'Thailand', 'Timor-Leste', 'Vietnam'] },
@@ -97,10 +97,10 @@ function CommitteeNameInput({ value, onChange, onPresetSelect }: {
           if (e.key === 'Escape') setOpen(false);
         }}
         placeholder="e.g. Human Rights Council or HRC"
-        className="w-full bg-[#FAF8F3] border-2 border-[#C8BAA8] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] focus:ring-2 focus:ring-[#1B3828]/10 transition-all text-sm"
+        className="w-full bg-white/70 border border-[#C8BAA8] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] focus:ring-2 focus:ring-[#1B3828]/10 transition-all text-sm"
       />
       {open && matches.length > 0 && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-[#FAF8F3] border-2 border-[#C8BAA8] rounded-xl overflow-hidden z-30 shadow-xl">
+        <div className="absolute top-full left-0 right-0 mt-1 bg-white/70 border border-[#C8BAA8] rounded-xl overflow-hidden z-30 shadow-xl">
           {matches.slice(0, 6).map((p, i) => (
             <button
               key={p.name}
@@ -478,22 +478,22 @@ function CreatePageInner() {
 
             <div className="grid grid-cols-3 gap-4 mb-3 shrink-0">
               <div>
-                <label className="block text-sm font-semibold text-[#7B4A1E] mb-1.5">Committee Name</label>
+                <label className="block text-[10px] font-bold tracking-[0.14em] uppercase text-[#9A8A78] mb-1.5" style={{ fontFamily: "'DM Mono', monospace" }}>Committee Name</label>
                 <CommitteeNameInput value={committeeName} onChange={(v) => { setCommitteeName(v); setIsUNSC(false); }} onPresetSelect={handleCommitteePreset} />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-[#7B4A1E] mb-1.5">
-                  Chair Name <span className="text-[#7A5A38] font-normal">(optional)</span>
+                <label className="block text-[10px] font-bold tracking-[0.14em] uppercase text-[#9A8A78] mb-1.5" style={{ fontFamily: "'DM Mono', monospace" }}>
+                  Chair Name <span className="text-[#9A8A78] font-normal normal-case tracking-normal">(optional)</span>
                 </label>
                 <input type="text" value={chairNames[0]} onChange={(e) => setChairNames([e.target.value])}
                   placeholder="e.g. John Smith"
-                  className="w-full bg-[#FAF8F3] border-2 border-[#C8BAA8] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] focus:ring-2 focus:ring-[#1B3828]/10 transition-all text-sm" />
+                  className="w-full bg-white/70 border border-[#C8BAA8] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] focus:ring-2 focus:ring-[#1B3828]/10 transition-all text-sm" />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-[#7B4A1E] mb-1.5">Topic</label>
+                <label className="block text-[10px] font-bold tracking-[0.14em] uppercase text-[#9A8A78] mb-1.5" style={{ fontFamily: "'DM Mono', monospace" }}>Topic</label>
                 <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)}
                   placeholder="e.g. The right to education"
-                  className="w-full bg-[#FAF8F3] border-2 border-[#C8BAA8] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] focus:ring-2 focus:ring-[#1B3828]/10 transition-all text-sm" />
+                  className="w-full bg-white/70 border border-[#C8BAA8] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] focus:ring-2 focus:ring-[#1B3828]/10 transition-all text-sm" />
               </div>
             </div>
 
@@ -504,12 +504,12 @@ function CreatePageInner() {
               </div>
             )}
 
-            <div className="flex-1 grid grid-cols-2 gap-6 min-h-0">
+            <div className="flex-1 grid grid-cols-2 gap-6 min-h-0 rounded-2xl overflow-hidden" style={{ background: 'linear-gradient(to right, rgba(27,56,40,0.03) 0%, transparent 50%)' }}>
               <div className="flex flex-col gap-4 min-h-0">
                 <div className="shrink-0">
-                  <label className="block text-sm font-semibold text-[#7B4A1E] mb-1.5">Search &amp; Add</label>
+                  <label className="block text-[10px] font-bold tracking-[0.14em] uppercase text-[#9A8A78] mb-1.5" style={{ fontFamily: "'DM Mono', monospace" }}>Search &amp; Add</label>
                   <div className="relative">
-                    <div className="flex items-center bg-[#FAF8F3] border-2 border-[#C8BAA8] focus-within:border-[#1B3828] focus-within:ring-2 focus-within:ring-[#1B3828]/10 rounded-xl overflow-visible transition-all">
+                    <div className="flex items-center bg-white/70 border border-[#C8BAA8] focus-within:border-[#1B3828] focus-within:ring-2 focus-within:ring-[#1B3828]/10 rounded-xl overflow-visible transition-all">
                       <input type="text" value={search} onChange={(e) => setSearch(e.target.value)}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
@@ -526,7 +526,7 @@ function CreatePageInner() {
                       )}
                     </div>
                     {search && (available.length > 0 || search.trim()) && (
-                      <div className="absolute top-full left-0 right-0 mt-1 bg-[#FAF8F3] border-2 border-[#C8BAA8] rounded-xl overflow-hidden z-20 shadow-xl">
+                      <div className="absolute top-full left-0 right-0 mt-1 bg-white/70 border border-[#C8BAA8] rounded-xl overflow-hidden z-20 shadow-xl">
                         {available.slice(0, 5).map((c, i) => (
                           <button key={c.code} onMouseDown={(e) => { e.preventDefault(); addDelegate(c.name); setSearch(''); }}
                             className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${i === 0 ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'}`}>
@@ -549,11 +549,11 @@ function CreatePageInner() {
                 </div>
 
                 <div className="shrink-0">
-                  <label className="block text-sm font-semibold text-[#7B4A1E] mb-2">Quick Bundles</label>
+                  <label className="block text-[10px] font-bold tracking-[0.14em] uppercase text-[#9A8A78] mb-2" style={{ fontFamily: "'DM Mono', monospace" }}>Quick Bundles</label>
                   <div className="flex flex-wrap gap-2">
                     {Object.entries(BUNDLES).map(([key, bundle]) => (
                       <button key={key} onClick={() => addBundle(key)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FAF8F3] border-2 border-[#C8BAA8] hover:bg-[#1B3828] hover:text-[#EED98A] hover:border-[#1B3828] rounded-lg text-xs font-bold uppercase tracking-wide text-[#6A5A4A] transition-all">
+                        className="group flex items-center gap-1.5 px-3 py-1.5 bg-[#FAF8F3] border border-[#DDD4C0] hover:bg-[#1B3828] hover:text-[#EED98A] hover:border-[#1B3828] rounded-lg text-xs font-bold uppercase tracking-wide text-[#6A5A4A] transition-all shadow-sm">
                         {bundle.logoPath ? (
                           <img src={bundle.logoPath} alt={bundle.label} width={16} height={16} className="rounded-sm shrink-0 object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                         ) : null}
@@ -565,10 +565,10 @@ function CreatePageInner() {
                 </div>
 
                 <div className="flex-1 flex flex-col min-h-0">
-                  <label className="block text-sm font-semibold text-[#7B4A1E] mb-1.5">Paste Country List</label>
+                  <label className="block text-[10px] font-bold tracking-[0.14em] uppercase text-[#9A8A78] mb-1.5" style={{ fontFamily: "'DM Mono', monospace" }}>Paste Country List</label>
                   <textarea value={pasteText} onChange={(e) => { setPasteText(e.target.value); setPasteError(''); }}
                     placeholder={'France\nGermany\nBrazil, India...'}
-                    className="flex-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] focus:ring-2 focus:ring-[#1B3828]/10 transition-all text-sm resize-none min-h-0" />
+                    className="flex-1 bg-white/70 border border-[#C8BAA8] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] focus:ring-2 focus:ring-[#1B3828]/10 transition-all text-sm resize-none min-h-0" />
                   <div className="flex items-center gap-3 mt-2">
                     <button onClick={handlePaste} disabled={!pasteText.trim()}
                       className="px-4 py-2 bg-[#1B3828] hover:bg-[#2A5A3C] disabled:opacity-30 disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-[#EED98A] rounded-lg text-xs font-bold uppercase tracking-wide transition-all active:scale-95">
@@ -582,7 +582,7 @@ function CreatePageInner() {
               <div className="flex flex-col min-h-0">
                 <div className="flex items-center justify-between mb-2 shrink-0">
                   <div className="flex items-center gap-2">
-                    <label className="text-sm font-semibold text-[#7B4A1E]">Selected Delegates</label>
+                    <label className="text-[10px] font-bold tracking-[0.14em] uppercase text-[#9A8A78]" style={{ fontFamily: "'DM Mono', monospace" }}>Selected Delegates</label>
                     <span className="text-[10px] font-bold text-[#1B3828] bg-[#EED98A]/30 px-2 py-0.5 rounded-full" style={{ fontFamily: "'DM Mono', monospace" }}>{delegates.length}</span>
                   </div>
                   {delegates.length > 0 && (
@@ -590,7 +590,7 @@ function CreatePageInner() {
                   )}
                 </div>
 
-                <div className="flex-1 bg-[#FAF8F3] border-2 border-[#C8BAA8] rounded-xl overflow-hidden mb-4 min-h-0">
+                <div className="flex-1 bg-white/60 border border-[#C8BAA8] rounded-xl overflow-hidden mb-4 min-h-0">
                   {delegates.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full gap-2">
                       <Globe size={28} strokeWidth={1.5} className="text-[#DDD4C0]" />
@@ -601,7 +601,7 @@ function CreatePageInner() {
                       {delegates.map((name) => {
                         const found = getCountryByName(name);
                         return (
-                          <div key={name} className="flex items-center gap-3 px-4 py-2.5 border-b border-[#DDD4C0]/50 last:border-0 hover:bg-[#DDD4C0] transition-colors group">
+                          <div key={name} className="flex items-center gap-3 px-4 py-2.5 border-b border-[#DDD4C0]/50 last:border-0 hover:bg-[#1B3828]/06 transition-colors group">
                             {found
                               ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                               : <Globe size={16} strokeWidth={1.5} className="text-[#9A8A78] shrink-0" />
