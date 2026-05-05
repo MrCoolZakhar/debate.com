@@ -621,7 +621,7 @@ function CreatePageInner() {
                 <button
                   onClick={handleCreate}
                   disabled={!canProceed || creating}
-                  className="w-full py-4 rounded-xl font-black text-xs uppercase tracking-widest transition-all shrink-0"
+                  className="w-full py-4 rounded-xl font-black text-sm uppercase tracking-widest transition-all shrink-0"
                   style={{
                     backgroundColor: canProceed && !creating ? '#1B3828' : '#DDD4C0',
                     color: canProceed && !creating ? '#EED98A' : '#9A8A78',
