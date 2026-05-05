@@ -113,7 +113,7 @@ function CommitteeNameInput({ value, onChange, onPresetSelect }: {
               {(p as { logoPath?: string }).logoPath ? (
                 <img src={(p as { logoPath?: string }).logoPath} alt={p.acronym} width={18} height={18} className="rounded-sm shrink-0 object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
               ) : (
-                <div className="w-[22px] h-[22px] rounded-md shrink-0 flex items-center justify-center text-[9px] font-black" style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'DM Mono', monospace" }}>{p.acronym.slice(0,2)}</div>
+                <div className="w-[22px] h-[22px] rounded-md shrink-0" style={{ backgroundColor: 'rgba(27,56,40,0.08)' }} />
               )}
               <span className="text-sm flex-1">{p.name}</span>
               <span className="text-[10px] font-bold shrink-0" style={{ fontFamily: "'DM Mono', monospace", color: '#1B3828' }}>{p.acronym}</span>
@@ -469,10 +469,10 @@ function CreatePageInner() {
               >
                 <ChevronLeft size={14} /> Back
               </button>
-              <h1 className="text-4xl font-black uppercase tracking-wide" style={{ color: '#1B3828', letterSpacing: '0.06em' }}>New Committee</h1>
+              <h1 className="text-4xl font-black uppercase tracking-wide mb-2" style={{ color: '#1B3828', letterSpacing: '0.06em' }}>New Committee</h1>
             </div>
 
-            <div className="grid grid-cols-3 gap-4 mb-3 shrink-0">
+            <div className="grid grid-cols-3 gap-4 mb-3 shrink-0 mt-3">
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wide mb-1.5" style={{ color: '#1B3828' }}>Committee Name</label>
                 <CommitteeNameInput value={committeeName} onChange={(v) => { setCommitteeName(v); setIsUNSC(false); }} onPresetSelect={handleCommitteePreset} />
@@ -496,7 +496,7 @@ function CreatePageInner() {
             {isUNSC && (
               <div className="mb-3 px-4 py-3 rounded-xl text-xs shrink-0 flex items-center gap-3" style={{ backgroundColor: '#1B3828', border: '1px solid #3D7A52', color: 'rgba(238,217,138,0.85)' }}>
                 <span className="font-black shrink-0 px-2 py-0.5 rounded-md text-[10px]" style={{ fontFamily: "'DM Mono', monospace", backgroundColor: 'rgba(238,217,138,0.15)', color: '#EED98A', border: '1px solid rgba(238,217,138,0.25)' }}>UNSC</span>
-                <span><strong style={{ color: '#EED98A' }}>Veto power active:</strong> P5 nations (China, France, Russia, UK, USA) will have veto voting. Configure in <strong style={{ color: '#EED98A' }}>Settings</strong> after session starts.</span>
+                <span><strong style={{ color: '#EED98A' }}>Veto power active:</strong> P5 nations (China, France, Russia, UK, USA) will have veto voting. Customize in <strong style={{ color: '#EED98A' }}>Settings</strong> after session starts.</span>
               </div>
             )}
 
@@ -592,7 +592,7 @@ function CreatePageInner() {
                 <div className="flex-1 bg-white/60 border border-[#C8BAA8] rounded-xl overflow-hidden mb-4 min-h-0">
                   {delegates.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full gap-2 px-8">
-                      <p className="text-sm font-bold text-center" style={{ color: '#1B3828' }}>No delegates yet</p>
+                      <p className="text-base font-black uppercase tracking-wide text-center" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>No Delegates Yet</p>
                       <p className="text-xs text-center leading-relaxed" style={{ color: '#9A8A78', maxWidth: '200px' }}>Search countries or use Quick Bundles above to get started</p>
                     </div>
                   ) : (
@@ -600,12 +600,12 @@ function CreatePageInner() {
                       {delegates.map((name) => {
                         const found = getCountryByName(name);
                         return (
-                          <div key={name} className="flex items-center gap-3 px-4 py-2.5 border-b border-[#DDD4C0]/50 last:border-0 hover:bg-[#1B3828]/06 transition-colors group">
+                          <div key={name} className="flex items-center gap-3 px-4 py-2.5 border-b border-[#DDD4C0]/50 last:border-0 transition-colors group" onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }} onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = ''; }}>
                             {found
                               ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                               : <Globe size={16} strokeWidth={1.5} className="text-[#9A8A78] shrink-0" />
                             }
-                            <span className="text-sm text-[#1C1410] flex-1 truncate">{name}</span>
+                            <span className="text-sm flex-1 truncate font-medium" style={{ color: '#1C1410' }}>{name}</span>
                             <button onClick={() => setDelegates((p) => p.filter((d) => d !== name))}
                               className="text-[#9A8A78] group-hover:text-red-500 transition-colors text-sm opacity-0 group-hover:opacity-100">✕</button>
                           </div>
