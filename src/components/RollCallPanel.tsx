@@ -32,12 +32,12 @@ export function FlagCircle({ country, size = 'md' }: { country: string; size?: '
 
 // ── 3-state slider ────────────────────────────────────────────────────────────
 function StatusSlider({ status, onCycle }: { status: DelegateStatus; onCycle: () => void }) {
-  const thumbPos = status === 'absent' ? 'left-[2px]' : status === 'present' ? 'left-[31px]' : 'left-[60px]';
+  const thumbPos = status === 'absent' ? 'left-[2px]' : status === 'present' ? 'left-[32px]' : 'left-[62px]';
   const thumbColor = status === 'absent' ? 'bg-[#8B2020]' : status === 'present' ? 'bg-[#3D7A52]' : 'bg-[#B6871F]';
   return (
     <button
       onClick={(e) => { e.stopPropagation(); onCycle(); }}
-      className="relative w-[90px] h-[30px] rounded-full cursor-pointer shrink-0 select-none transition-colors" style={{ backgroundColor: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.18)' }}
+      className="relative w-[90px] h-[30px] rounded-full cursor-pointer shrink-0 select-none transition-all" style={{ backgroundColor: 'rgba(255,255,255,0.10)', border: '1.5px solid rgba(255,255,255,0.22)' }}
       title="Tap to cycle: Absent → Present → PV"
     >
       <div className="absolute inset-0 grid grid-cols-3 items-center pointer-events-none">
@@ -45,7 +45,7 @@ function StatusSlider({ status, onCycle }: { status: DelegateStatus; onCycle: ()
         <span className={`text-[10px] font-bold text-center ${status === 'present' ? 'text-white' : 'text-white/40'}`}>P</span>
         <span className={`text-[10px] font-bold text-center ${status === 'present-voting' ? 'text-white' : 'text-white/40'}`}>PV</span>
       </div>
-      <div className={`absolute top-[2px] w-[26px] h-[26px] rounded-full transition-all duration-200 ${thumbPos} ${thumbColor}`} />
+      <div className={`absolute top-[2px] w-[26px] h-[26px] rounded-full transition-all duration-200 shadow-sm ${thumbPos} ${thumbColor}`} />
     </button>
   );
 }
@@ -537,7 +537,7 @@ function RollCallPanelInner({
           <button
             onClick={handleBeginSession}
             disabled={present < 1}
-            className="w-full disabled:opacity-40 disabled:cursor-not-allowed py-3 rounded-xl text-sm font-black uppercase tracking-widest transition-all active:scale-[0.98]" style={{ backgroundColor: '#EED98A', color: '#1B3828' }} onMouseEnter={(e) => { if ((e.currentTarget as HTMLButtonElement).disabled) return; (e.currentTarget as HTMLElement).style.backgroundColor = '#F5E89E'; (e.currentTarget as HTMLElement).style.boxShadow = '0 0 0 3px rgba(238,217,138,0.25)'; }} onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#EED98A'; (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}
+            className="w-full disabled:opacity-40 disabled:cursor-not-allowed py-3 rounded-xl text-sm font-black uppercase tracking-widest transition-all active:scale-[0.98]" style={{ backgroundColor: '#EDE7D8', color: '#1B3828' }} onMouseEnter={(e) => { if ((e.currentTarget as HTMLButtonElement).disabled) return; (e.currentTarget as HTMLElement).style.backgroundColor = '#DDD4C0'; (e.currentTarget as HTMLElement).style.boxShadow = '0 0 0 3px rgba(237,231,216,0.3)'; }} onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#EDE7D8'; (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}
           >
             {present >= 1 ? 'Begin Session →' : 'Add at least 1 delegate'}
           </button>
