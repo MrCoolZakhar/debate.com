@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, Suspense } from 'react';
+import React, { useState, useRef, useEffect, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createCommittee as createCommitteeInDB } from '@/lib/committeeService';
@@ -119,6 +119,247 @@ function CommitteeNameInput({ value, onChange, onPresetSelect }: {
   );
 }
 
+function CardVideo({ src, active }: { src: string; active: boolean }) {
+  const ref = React.useRef<HTMLVideoElement>(null);
+  React.useEffect(() => {
+    if (!ref.current) return;
+    if (active) {
+      ref.current.play().catch(() => {});
+    } else {
+      ref.current.pause();
+    }
+  }, [active]);
+  return (
+    <video
+      ref={ref}
+      src={src}
+      loop
+      muted
+      playsInline
+      className="absolute inset-0 w-full h-full object-cover object-top"
+      style={{ opacity: active ? 0.22 : 0.13, transition: 'opacity 0.4s ease' }}
+    />
+  );
+}
+
+function SelectScreen({ onSelect }: { onSelect: () => void }) {
+  const [hovered, setHovered] = React.useState<string | null>('mun');
+
+  const cards = [
+    {
+      id: 'debate',
+      video: '/card_debate.mp4',
+      title: 'Regular\nDebate',
+      subtitle: 'Traditional parliamentary debate format',
+      badge: 'Coming Soon',
+      active: false,
+      bg: '#FAF8F3',
+      border: 'rgba(221,212,192,0.8)',
+      titleColor: '#1C1410',
+      subtitleColor: '#9A8A78',
+      badgeBg: '#EDE7D8',
+      badgeBorder: '#DDD4C0',
+      badgeColor: '#9A8A78',
+    },
+    {
+      id: 'mun',
+      video: '/card_mun.mp4',
+      title: 'Model United\nNations',
+      subtitle: 'United Nations committee simulation',
+      badge: null,
+      active: true,
+      bg: '#1B3828',
+      border: 'rgba(61,122,82,0.7)',
+      titleColor: '#EED98A',
+      subtitleColor: 'rgba(238,217,138,0.5)',
+      badgeBg: null,
+      badgeBorder: null,
+      badgeColor: null,
+    },
+    {
+      id: 'crisis',
+      video: '/card_crisis.mp4',
+      title: 'Crisis\nCommittee',
+      subtitle: 'Fast-paced crisis scenarios and directives',
+      badge: 'Coming H2 2026',
+      active: false,
+      bg: '#FAF8F3',
+      border: 'rgba(221,212,192,0.8)',
+      titleColor: '#1C1410',
+      subtitleColor: '#9A8A78',
+      badgeBg: '#EDE7D8',
+      badgeBorder: '#DDD4C0',
+      badgeColor: '#9A8A78',
+    },
+  ];
+
+  const isHovered = (id: string) => hovered === id;
+
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center px-8 relative z-10 overflow-hidden">
+
+      {/* Bottom surface shadow */}
+      <div
+        className="pointer-events-none absolute bottom-0 left-0 right-0"
+        style={{
+          height: '200px',
+          background: 'linear-gradient(to top, rgba(27,56,40,0.14) 0%, rgba(27,56,40,0.05) 45%, transparent 100%)',
+        }}
+      />
+
+      {/* Radial glow */}
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background: 'radial-gradient(ellipse 60% 45% at 50% 72%, rgba(27,56,40,0.09) 0%, transparent 70%)',
+        }}
+      />
+
+      {/* Headline */}
+      <h1
+        className="font-black uppercase tracking-wide text-center mb-4 relative"
+        style={{ fontSize: 'clamp(30px, 3.8vw, 52px)', lineHeight: 1.05, color: '#1B3828' }}
+      >
+        Select Committee Type
+      </h1>
+
+      {/* Subtitle */}
+      <p
+        className="text-center mb-12 relative"
+        style={{ fontSize: '16px', color: '#6A5A4A', maxWidth: '380px', lineHeight: 1.65 }}
+      >
+        Choose a format to get started. More committee types arriving soon.
+      </p>
+
+      {/* Cards row */}
+      <div className="flex flex-row items-end justify-center gap-5 relative" style={{ maxWidth: '900px', width: '100%' }}>
+        {cards.map((card) => {
+          const active = isHovered(card.id);
+          const isMun = card.id === 'mun';
+          return (
+            <div
+              key={card.id}
+              onMouseEnter={() => setHovered(card.id)}
+              onMouseLeave={() => setHovered('mun')}
+              className="relative flex flex-col items-center rounded-2xl overflow-hidden"
+              style={{
+                backgroundColor: card.bg,
+                border: `1.5px solid ${card.border}`,
+                borderTop: isMun
+                  ? '1.5px solid rgba(61,122,82,0.5)'
+                  : '1.5px solid rgba(255,255,255,0.9)',
+                width: active ? '268px' : isMun ? '268px' : '210px',
+                minHeight: active ? '440px' : isMun ? '440px' : '360px',
+                marginBottom: active ? '0px' : isMun ? '0px' : '24px',
+                padding: active ? '40px 32px 36px' : isMun ? '40px 32px 36px' : '32px 24px 28px',
+                boxShadow: active || isMun
+                  ? '0 0 0 1px rgba(61,122,82,0.12), 0 8px 16px rgba(27,56,40,0.18), 0 24px 48px rgba(27,56,40,0.26), 0 48px 80px rgba(27,56,40,0.20)'
+                  : '0 2px 4px rgba(27,56,40,0.04), 0 8px 20px rgba(27,56,40,0.07), 0 1px 0 rgba(255,255,255,0.85) inset',
+                transition: 'all 0.4s cubic-bezier(0.4,0,0.2,1)',
+                cursor: 'default',
+                zIndex: active ? 10 : isMun ? 10 : 1,
+              }}
+            >
+              {/* Grain on MUN card */}
+              {isMun && (
+                <div
+                  className="pointer-events-none absolute inset-0"
+                  style={{
+                    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`,
+                    backgroundRepeat: 'repeat',
+                    backgroundSize: '300px 300px',
+                    mixBlendMode: 'overlay',
+                    opacity: 0.07,
+                  }}
+                />
+              )}
+
+              {/* Video background */}
+              <CardVideo src={card.video} active={active} />
+
+              {/* Bottom fade so text is readable over video */}
+              <div
+                className="pointer-events-none absolute bottom-0 left-0 right-0"
+                style={{
+                  height: '70%',
+                  background: isMun
+                    ? 'linear-gradient(to top, #1B3828 55%, transparent 100%)'
+                    : 'linear-gradient(to top, #FAF8F3 55%, transparent 100%)',
+                  zIndex: 1,
+                }}
+              />
+
+              {/* Content — sits above video fade */}
+              <div className="relative flex flex-col items-center w-full flex-1" style={{ zIndex: 2 }}>
+                <div className="flex-1" style={{ minHeight: active ? '140px' : '100px', transition: 'min-height 0.4s ease' }} />
+
+                <h2
+                  className="font-black uppercase tracking-wide mb-2 text-center whitespace-pre-line"
+                  style={{
+                    fontSize: active ? '15px' : '12px',
+                    color: card.titleColor,
+                    letterSpacing: '0.08em',
+                    lineHeight: 1.3,
+                    transition: 'font-size 0.3s ease',
+                  }}
+                >
+                  {card.title}
+                </h2>
+
+                <p
+                  className="text-center leading-relaxed mb-0"
+                  style={{
+                    fontSize: active ? '12px' : '11px',
+                    color: card.subtitleColor,
+                    maxWidth: '180px',
+                    transition: 'all 0.3s ease',
+                  }}
+                >
+                  {card.subtitle}
+                </p>
+
+                <div className="flex justify-center w-full mt-6">
+                  {isMun ? (
+                    <button
+                      onClick={onSelect}
+                      className="px-10 py-3 rounded-xl font-black uppercase tracking-widest text-xs transition-all"
+                      style={{ backgroundColor: '#EED98A', color: '#1B3828', letterSpacing: '0.12em' }}
+                      onMouseEnter={(e) => {
+                        (e.currentTarget as HTMLElement).style.backgroundColor = '#F5E89E';
+                        (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)';
+                        (e.currentTarget as HTMLElement).style.boxShadow = '0 8px 24px rgba(238,217,138,0.35)';
+                      }}
+                      onMouseLeave={(e) => {
+                        (e.currentTarget as HTMLElement).style.backgroundColor = '#EED98A';
+                        (e.currentTarget as HTMLElement).style.transform = 'translateY(0)';
+                        (e.currentTarget as HTMLElement).style.boxShadow = 'none';
+                      }}
+                    >
+                      START →
+                    </button>
+                  ) : (
+                    <span
+                      className="px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest"
+                      style={{
+                        fontFamily: "'DM Mono', monospace",
+                        backgroundColor: card.badgeBg ?? '#EDE7D8',
+                        border: `1px solid ${card.badgeBorder ?? '#DDD4C0'}`,
+                        color: card.badgeColor ?? '#9A8A78',
+                      }}
+                    >
+                      {card.badge}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function CreatePageInner() {
   const router = useRouter();
   const { updateSetting } = useSettingsStore();
@@ -205,190 +446,7 @@ function CreatePageInner() {
 
       <div className="flex-1 flex overflow-hidden">
         {committeeMode === 'select' && (
-          <div className="flex-1 flex flex-col items-center justify-center px-8 relative z-10 overflow-hidden" style={{ paddingBottom: '0' }}>
-
-            {/* Bottom vignette */}
-            <div
-              className="pointer-events-none absolute bottom-0 left-0 right-0"
-              style={{
-                height: '180px',
-                background: 'linear-gradient(to top, rgba(27,56,40,0.13) 0%, rgba(27,56,40,0.05) 40%, transparent 100%)',
-              }}
-            />
-
-            {/* Radial glow behind cards */}
-            <div
-              className="pointer-events-none absolute inset-0"
-              style={{
-                background: 'radial-gradient(ellipse 60% 45% at 50% 70%, rgba(27,56,40,0.08) 0%, transparent 70%)',
-              }}
-            />
-
-            {/* Eyebrow */}
-            <div className="flex items-center gap-3 mb-4 relative">
-              <div className="h-px w-10" style={{ backgroundColor: 'rgba(182,135,31,0.4)' }} />
-              <p className="text-xs font-bold tracking-[0.22em] uppercase" style={{ fontFamily: "'DM Mono', monospace", color: '#9A8A78' }}>
-                Committee Format
-              </p>
-              <div className="h-px w-10" style={{ backgroundColor: 'rgba(182,135,31,0.4)' }} />
-            </div>
-
-            {/* Headline */}
-            <h1
-              className="font-black uppercase tracking-wide text-center mb-4 relative"
-              style={{ fontSize: 'clamp(30px, 3.8vw, 52px)', lineHeight: 1.05, color: '#1B3828' }}
-            >
-              Select Committee Type
-            </h1>
-
-            {/* Subtitle */}
-            <p
-              className="text-center mb-10 relative"
-              style={{ fontSize: '16px', color: '#6A5A4A', maxWidth: '380px', lineHeight: 1.65 }}
-            >
-              Choose a format to get started. More committee types arriving soon.
-            </p>
-
-            {/* Cards — podium, items-end so side cards sit lower */}
-            <div
-              className="flex flex-row items-end justify-center gap-6 relative"
-              style={{ width: '100%', maxWidth: '860px', paddingBottom: '0' }}
-            >
-
-              {/* Regular Debate — coming soon */}
-              <div
-                className="flex flex-col items-center rounded-2xl relative overflow-hidden"
-                style={{
-                  backgroundColor: '#FAF8F3',
-                  border: '1.5px solid #DDD4C0',
-                  borderTop: '1.5px solid rgba(255,255,255,0.9)',
-                  width: '210px',
-                  flexShrink: 0,
-                  minHeight: '360px',
-                  padding: '32px 24px 28px',
-                  marginBottom: '28px',
-                  boxShadow: '0 2px 4px rgba(27,56,40,0.04), 0 8px 20px rgba(27,56,40,0.07), 0 20px 48px rgba(27,56,40,0.09), 0 1px 0 rgba(255,255,255,0.85) inset',
-                  cursor: 'not-allowed',
-                }}
-              >
-                <div className="mb-5 flex items-center justify-center" style={{ width: '64px', height: '64px' }}>
-                  <svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <rect width="64" height="64" rx="16" fill="#EDE7D8"/>
-                    <rect x="28" y="13" width="8" height="16" rx="4" stroke="#C8BAA8" strokeWidth="1.75" fill="none"/>
-                    <path d="M21 26c0 6.075 4.925 11 11 11s11-4.925 11-11" stroke="#C8BAA8" strokeWidth="1.75" strokeLinecap="round" fill="none"/>
-                    <line x1="32" y1="37" x2="32" y2="46" stroke="#C8BAA8" strokeWidth="1.75" strokeLinecap="round"/>
-                    <line x1="25" y1="46" x2="39" y2="46" stroke="#C8BAA8" strokeWidth="1.75" strokeLinecap="round"/>
-                  </svg>
-                </div>
-                <h2 className="font-black uppercase tracking-wide mb-2 text-center" style={{ fontSize: '12px', color: '#1C1410', letterSpacing: '0.09em' }}>Regular Debate</h2>
-                <p className="text-xs text-center leading-relaxed" style={{ color: '#9A8A78', marginBottom: '0' }}>Traditional parliamentary debate format</p>
-                <div className="flex-1" />
-                <span
-                  className="px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest mt-6"
-                  style={{ fontFamily: "'DM Mono', monospace", backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0', color: '#9A8A78' }}
-                >
-                  Coming Soon
-                </span>
-              </div>
-
-              {/* Model United Nations — active, elevated center */}
-              <div
-                className="flex flex-col items-center rounded-2xl relative overflow-hidden"
-                style={{
-                  backgroundColor: '#1B3828',
-                  border: '1.5px solid rgba(61,122,82,0.7)',
-                  borderTop: '1.5px solid rgba(61,122,82,0.5)',
-                  width: '268px',
-                  flexShrink: 0,
-                  minHeight: '440px',
-                  padding: '40px 32px 36px',
-                  boxShadow: '0 0 0 1px rgba(61,122,82,0.15), 0 8px 16px rgba(27,56,40,0.2), 0 24px 48px rgba(27,56,40,0.28), 0 48px 96px rgba(27,56,40,0.22), 0 1px 0 rgba(255,255,255,0.06) inset',
-                  zIndex: 10,
-                }}
-              >
-                {/* Grain */}
-                <div
-                  className="pointer-events-none absolute inset-0 rounded-2xl"
-                  style={{
-                    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`,
-                    backgroundRepeat: 'repeat',
-                    backgroundSize: '300px 300px',
-                    mixBlendMode: 'overlay',
-                    opacity: 0.07,
-                  }}
-                />
-                <div className="mb-6 flex items-center justify-center" style={{ width: '80px', height: '80px' }}>
-                  <svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <rect width="80" height="80" rx="20" fill="rgba(238,217,138,0.13)"/>
-                    <circle cx="40" cy="40" r="18" stroke="#EED98A" strokeWidth="1.5" fill="none"/>
-                    <ellipse cx="40" cy="40" rx="9" ry="18" stroke="#EED98A" strokeWidth="1.5" fill="none" opacity="0.55"/>
-                    <line x1="22" y1="40" x2="58" y2="40" stroke="#EED98A" strokeWidth="1.5" opacity="0.55"/>
-                    <line x1="24" y1="32" x2="56" y2="32" stroke="#EED98A" strokeWidth="1" opacity="0.3"/>
-                    <line x1="24" y1="48" x2="56" y2="48" stroke="#EED98A" strokeWidth="1" opacity="0.3"/>
-                    <line x1="40" y1="22" x2="40" y2="58" stroke="#EED98A" strokeWidth="1.5" opacity="0.55"/>
-                  </svg>
-                </div>
-                <h2 className="font-black uppercase tracking-wide mb-2 text-center relative" style={{ fontSize: '15px', color: '#EED98A', letterSpacing: '0.08em', lineHeight: 1.3 }}>
-                  Model United<br />Nations
-                </h2>
-                <p className="text-xs text-center leading-relaxed relative" style={{ color: 'rgba(238,217,138,0.5)', marginBottom: '0' }}>
-                  United Nations committee simulation
-                </p>
-                <div className="flex-1" />
-                <button
-                  onClick={() => setCommitteeMode('build')}
-                  className="relative mt-8 px-10 py-3 rounded-xl font-black uppercase tracking-widest text-xs transition-all"
-                  style={{ backgroundColor: '#EED98A', color: '#1B3828', letterSpacing: '0.12em' }}
-                  onMouseEnter={(e) => {
-                    (e.currentTarget as HTMLElement).style.backgroundColor = '#F5E89E';
-                    (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)';
-                    (e.currentTarget as HTMLElement).style.boxShadow = '0 8px 24px rgba(238,217,138,0.35)';
-                  }}
-                  onMouseLeave={(e) => {
-                    (e.currentTarget as HTMLElement).style.backgroundColor = '#EED98A';
-                    (e.currentTarget as HTMLElement).style.transform = 'translateY(0)';
-                    (e.currentTarget as HTMLElement).style.boxShadow = 'none';
-                  }}
-                >
-                  START →
-                </button>
-              </div>
-
-              {/* Crisis Committee — coming soon */}
-              <div
-                className="flex flex-col items-center rounded-2xl relative overflow-hidden"
-                style={{
-                  backgroundColor: '#FAF8F3',
-                  border: '1.5px solid #DDD4C0',
-                  borderTop: '1.5px solid rgba(255,255,255,0.9)',
-                  width: '210px',
-                  flexShrink: 0,
-                  minHeight: '360px',
-                  padding: '32px 24px 28px',
-                  marginBottom: '28px',
-                  boxShadow: '0 2px 4px rgba(27,56,40,0.04), 0 8px 20px rgba(27,56,40,0.07), 0 20px 48px rgba(27,56,40,0.09), 0 1px 0 rgba(255,255,255,0.85) inset',
-                  cursor: 'not-allowed',
-                }}
-              >
-                <div className="mb-5 flex items-center justify-center" style={{ width: '64px', height: '64px' }}>
-                  <svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <rect width="64" height="64" rx="16" fill="#EDE7D8"/>
-                    <path d="M37 12L22 34h14l-9 18 19-26H33l4-14z" stroke="#C8BAA8" strokeWidth="1.75" strokeLinejoin="round" strokeLinecap="round" fill="none"/>
-                  </svg>
-                </div>
-                <h2 className="font-black uppercase tracking-wide mb-2 text-center" style={{ fontSize: '12px', color: '#1C1410', letterSpacing: '0.09em' }}>Crisis Committee</h2>
-                <p className="text-xs text-center leading-relaxed" style={{ color: '#9A8A78', marginBottom: '0' }}>Fast-paced crisis scenarios and directives</p>
-                <div className="flex-1" />
-                <span
-                  className="px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest mt-6"
-                  style={{ fontFamily: "'DM Mono', monospace", backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0', color: '#9A8A78' }}
-                >
-                  Coming H2 2026
-                </span>
-              </div>
-
-            </div>
-          </div>
+          <SelectScreen onSelect={() => setCommitteeMode('build')} />
         )}
 
         {committeeMode === 'build' && (
