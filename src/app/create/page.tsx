@@ -97,10 +97,10 @@ function CommitteeNameInput({ value, onChange, onPresetSelect }: {
           if (e.key === 'Escape') setOpen(false);
         }}
         placeholder="e.g. Human Rights Council or HRC"
-        className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] focus:ring-2 focus:ring-[#1B3828]/10 transition-all text-sm"
+        className="w-full bg-[#FAF8F3] border-2 border-[#C8BAA8] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] focus:ring-2 focus:ring-[#1B3828]/10 transition-all text-sm"
       />
       {open && matches.length > 0 && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl overflow-hidden z-30 shadow-xl">
+        <div className="absolute top-full left-0 right-0 mt-1 bg-[#FAF8F3] border-2 border-[#C8BAA8] rounded-xl overflow-hidden z-30 shadow-xl">
           {matches.slice(0, 6).map((p, i) => (
             <button
               key={p.name}
@@ -487,13 +487,13 @@ function CreatePageInner() {
                 </label>
                 <input type="text" value={chairNames[0]} onChange={(e) => setChairNames([e.target.value])}
                   placeholder="e.g. John Smith"
-                  className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] focus:ring-2 focus:ring-[#1B3828]/10 transition-all text-sm" />
+                  className="w-full bg-[#FAF8F3] border-2 border-[#C8BAA8] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] focus:ring-2 focus:ring-[#1B3828]/10 transition-all text-sm" />
               </div>
               <div>
                 <label className="block text-sm font-semibold text-[#7B4A1E] mb-1.5">Topic</label>
                 <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)}
                   placeholder="e.g. The right to education"
-                  className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] focus:ring-2 focus:ring-[#1B3828]/10 transition-all text-sm" />
+                  className="w-full bg-[#FAF8F3] border-2 border-[#C8BAA8] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] focus:ring-2 focus:ring-[#1B3828]/10 transition-all text-sm" />
               </div>
             </div>
 
@@ -509,7 +509,7 @@ function CreatePageInner() {
                 <div className="shrink-0">
                   <label className="block text-sm font-semibold text-[#7B4A1E] mb-1.5">Search &amp; Add</label>
                   <div className="relative">
-                    <div className="flex items-center bg-[#FAF8F3] border border-[#DDD4C0] focus-within:border-[#1B3828] focus-within:ring-2 focus-within:ring-[#1B3828]/10 rounded-xl overflow-visible transition-all">
+                    <div className="flex items-center bg-[#FAF8F3] border-2 border-[#C8BAA8] focus-within:border-[#1B3828] focus-within:ring-2 focus-within:ring-[#1B3828]/10 rounded-xl overflow-visible transition-all">
                       <input type="text" value={search} onChange={(e) => setSearch(e.target.value)}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
@@ -526,7 +526,7 @@ function CreatePageInner() {
                       )}
                     </div>
                     {search && (available.length > 0 || search.trim()) && (
-                      <div className="absolute top-full left-0 right-0 mt-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl overflow-hidden z-20 shadow-xl">
+                      <div className="absolute top-full left-0 right-0 mt-1 bg-[#FAF8F3] border-2 border-[#C8BAA8] rounded-xl overflow-hidden z-20 shadow-xl">
                         {available.slice(0, 5).map((c, i) => (
                           <button key={c.code} onMouseDown={(e) => { e.preventDefault(); addDelegate(c.name); setSearch(''); }}
                             className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${i === 0 ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'}`}>
@@ -553,7 +553,7 @@ function CreatePageInner() {
                   <div className="flex flex-wrap gap-2">
                     {Object.entries(BUNDLES).map(([key, bundle]) => (
                       <button key={key} onClick={() => addBundle(key)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FAF8F3] border border-[#DDD4C0] hover:bg-[#1B3828] hover:text-[#EED98A] hover:border-[#1B3828] rounded-lg text-xs font-bold uppercase tracking-wide text-[#6A5A4A] transition-all">
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FAF8F3] border-2 border-[#C8BAA8] hover:bg-[#1B3828] hover:text-[#EED98A] hover:border-[#1B3828] rounded-lg text-xs font-bold uppercase tracking-wide text-[#6A5A4A] transition-all">
                         {bundle.logoPath ? (
                           <img src={bundle.logoPath} alt={bundle.label} width={16} height={16} className="rounded-sm shrink-0 object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                         ) : null}
@@ -574,7 +574,7 @@ function CreatePageInner() {
                       className="px-4 py-2 bg-[#1B3828] hover:bg-[#2A5A3C] disabled:opacity-30 disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-[#EED98A] rounded-lg text-xs font-bold uppercase tracking-wide transition-all active:scale-95">
                       Auto-match &amp; Add →
                     </button>
-                    {pasteError && <p className="text-xs text-yellow-400 flex-1">{pasteError}</p>}
+                    {pasteError && <p className="text-xs text-[#B6871F] flex-1">{pasteError}</p>}
                   </div>
                 </div>
               </div>
@@ -590,7 +590,7 @@ function CreatePageInner() {
                   )}
                 </div>
 
-                <div className="flex-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl overflow-hidden mb-4 min-h-0">
+                <div className="flex-1 bg-[#FAF8F3] border-2 border-[#C8BAA8] rounded-xl overflow-hidden mb-4 min-h-0">
                   {delegates.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full gap-2">
                       <Globe size={28} strokeWidth={1.5} className="text-[#DDD4C0]" />

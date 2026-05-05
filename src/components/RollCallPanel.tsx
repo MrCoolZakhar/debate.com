@@ -37,7 +37,7 @@ function StatusSlider({ status, onCycle }: { status: DelegateStatus; onCycle: ()
   return (
     <button
       onClick={(e) => { e.stopPropagation(); onCycle(); }}
-      className="relative w-[90px] h-[30px] rounded-full bg-[#EDE7D8] border border-[#DDD4C0] hover:border-[#7B4A1E]/50 cursor-pointer shrink-0 select-none transition-colors"
+      className="relative w-[90px] h-[30px] rounded-full bg-[#EDE7D8] border-2 border-[#C8BAA8] hover:border-[#7B4A1E]/60 cursor-pointer shrink-0 select-none transition-colors"
       title="Tap to cycle: Absent → Present → PV"
     >
       <div className="absolute inset-0 grid grid-cols-3 items-center pointer-events-none">
@@ -56,7 +56,7 @@ function ViewToggle({ view, onChange }: { view: 'az' | 'queue'; onChange: (v: 'a
   return (
     <button
       onClick={() => onChange(isQueue ? 'az' : 'queue')}
-      className="relative w-[104px] h-[28px] rounded-full bg-[#EDE7D8] border border-[#DDD4C0] cursor-pointer select-none shrink-0"
+      className="relative w-[104px] h-[28px] rounded-full bg-[#EDE7D8] border-2 border-[#C8BAA8] cursor-pointer select-none shrink-0"
       title="Toggle A-Z / Queue view"
     >
       <div className="absolute inset-0 grid grid-cols-2 items-center pointer-events-none z-10">
@@ -175,7 +175,7 @@ function FullListPopup({
       style={{ background: 'rgba(5, 8, 20, 0.80)', backdropFilter: 'blur(4px)' }}
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden max-h-[80vh] flex flex-col">
+      <div className="bg-[#EDE7D8] border-2 border-[#C8BAA8] rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden max-h-[80vh] flex flex-col">
         <div className="flex items-center justify-between px-5 py-4 border-b border-[#DDD4C0] shrink-0">
           <h3 className="font-black text-[#1C1410] text-base">{title}</h3>
           <div className="flex items-center gap-3">
@@ -388,7 +388,7 @@ function RollCallPanelInner({
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="px-4 pt-4 pb-3 border-b border-[#3D2A15] shrink-0">
+      <div className="px-4 pt-4 pb-3 border-b-2 border-[#3D2A15] shrink-0">
         <p className="text-lg font-black text-[#1C1410] leading-tight truncate mb-0.5">{committee.name}</p>
         {committee.topic && (
           <p className="text-xs text-[#6A5A4A] leading-snug line-clamp-2 mb-2">
@@ -397,9 +397,9 @@ function RollCallPanelInner({
         )}
         <div className="flex items-center justify-between">
           <div className="flex gap-1.5">
-            <MajorityPie arcFill={1} color="#4A90D9" label={`${present}`} />
-            <MajorityPie arcFill={2 / 3} color="#E8A94A" label={`${Math.ceil(present * 2 / 3)}`} />
-            <MajorityPie arcFill={0.5} color="#2A5A3C" label={`${Math.floor(present / 2) + 1}`} />
+            <MajorityPie arcFill={1} color="#2A5A3C" label={`${present}`} />
+            <MajorityPie arcFill={2 / 3} color="#B6871F" label={`${Math.ceil(present * 2 / 3)}`} />
+            <MajorityPie arcFill={0.5} color="#8A7A6A" label={`${Math.floor(present / 2) + 1}`} />
           </div>
           {showViewToggle && <ViewToggle view={listView} onChange={setListView} />}
         </div>
@@ -407,7 +407,7 @@ function RollCallPanelInner({
           <div className="flex gap-1.5 mt-2">
             <button onClick={handleClear} className="text-[10px] font-semibold px-2.5 py-1.5 rounded-lg bg-[#DDD4C0] text-[#8B2020] hover:bg-red-950/40 transition-colors">Clear All</button>
             <button onClick={handleAllPresent} className="text-[10px] font-semibold px-2.5 py-1.5 rounded-lg bg-[#DDD4C0] text-[#EED98A] hover:bg-[#1B3828]/20 transition-colors">All Present</button>
-            <button onClick={handleAllPresentVoting} className="text-[10px] font-semibold px-2.5 py-1.5 rounded-lg bg-[#DDD4C0] text-[#EED98A] hover:bg-blue-950/40 transition-colors">All P+V</button>
+            <button onClick={handleAllPresentVoting} className="text-[10px] font-semibold px-2.5 py-1.5 rounded-lg bg-[#DDD4C0] text-[#EED98A] hover:bg-[#1B3828]/30 transition-colors">All P+V</button>
           </div>
         )}
       </div>
