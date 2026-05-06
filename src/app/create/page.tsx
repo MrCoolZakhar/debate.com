@@ -162,6 +162,7 @@ function SelectScreen({ onSelect }: { onSelect: () => void }) {
       video: '/card_debate.mp4',
       title: 'Regular\nDebate',
       subtitle: 'Traditional parliamentary debate format',
+      subLabel: null as string | null,
       badge: 'Coming Soon',
       active: false,
       bg: '#1B3828',
@@ -176,7 +177,8 @@ function SelectScreen({ onSelect }: { onSelect: () => void }) {
       id: 'mun',
       video: '/card_mun.mp4',
       title: 'Model United\nNations',
-      subtitle: 'United Nations committee simulation',
+      subtitle: 'A UN committee, from opening speech to passed resolution',
+      subLabel: null as string | null,
       badge: null,
       active: true,
       bg: '#1B3828',
@@ -192,7 +194,8 @@ function SelectScreen({ onSelect }: { onSelect: () => void }) {
       video: '/card_crisis.mp4',
       title: 'Crisis\nCommittee',
       subtitle: 'Fast-paced crisis scenarios and directives',
-      badge: 'Coming H2 2026',
+      subLabel: 'Coming Late 2026' as string | null,
+      badge: 'Coming Late 2026',
       active: false,
       bg: '#1B3828',
       border: 'rgba(182,135,31,0.5)',
@@ -316,6 +319,12 @@ function SelectScreen({ onSelect }: { onSelect: () => void }) {
                 >
                   {card.title}
                 </h2>
+
+                {card.subLabel && (
+                  <p className="text-xs text-center mb-1" style={{ color: '#7A5A38' }}>
+                    {card.subLabel}
+                  </p>
+                )}
 
                 <p
                   className="text-center leading-relaxed mb-0"
