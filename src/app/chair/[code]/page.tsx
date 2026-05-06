@@ -1691,52 +1691,29 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         </Link>
 
         {committee.phase !== 'pre-session' && !sessionEnded ? (
-          <div className="flex flex-1 min-w-0 h-full items-center">
-            {/* Roll Call */}
+          <div className="flex flex-1 min-w-0 h-full">
             <button onClick={() => setShowSliders((v) => !v)}
-              className="flex-1 text-[13px] font-bold px-3 relative h-full transition-all duration-200"
-              style={{ color: showSliders ? '#1B3828' : 'rgba(28,20,16,0.55)', backgroundColor: showSliders ? 'rgba(27,56,40,0.07)' : 'transparent', fontWeight: showSliders ? 900 : 700 }}
-              onMouseEnter={(e) => { if (!showSliders) { const el = e.currentTarget as HTMLElement; el.style.color = '#1B3828'; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; el.style.transform = 'translateY(-1px)'; } }}
-              onMouseLeave={(e) => { if (!showSliders) { const el = e.currentTarget as HTMLElement; el.style.color = 'rgba(28,20,16,0.55)'; el.style.backgroundColor = 'transparent'; el.style.transform = 'translateY(0)'; } }}>
+              className={`flex-1 text-base font-bold px-3 transition-colors border-b-2 ${showSliders ? 'text-[#1C1410] border-[#1B3828]' : 'text-[#9A8A78] border-transparent hover:text-[#6A5A4A]'}`}>
               Roll Call
-              <span style={{ position: 'absolute', bottom: '4px', left: '12px', right: '12px', height: showSliders ? '2px' : '1px', backgroundColor: '#B6871F', transform: showSliders ? 'scaleX(1)' : 'scaleX(0)', transformOrigin: 'left', transition: 'transform 200ms ease', borderRadius: '2px' }} />
             </button>
-            <div style={{ width: '1px', height: '28px', backgroundColor: 'rgba(28,20,16,0.2)', margin: '0 2px', flexShrink: 0 }} />
-            {/* Motions */}
             <button onClick={handleMotionsClick}
-              className="flex-1 text-[13px] font-bold px-3 relative h-full transition-all duration-200"
-              style={{ color: showMotions ? '#1B3828' : 'rgba(28,20,16,0.55)', backgroundColor: showMotions ? 'rgba(27,56,40,0.07)' : 'transparent', fontWeight: showMotions ? 900 : 700 }}
-              onMouseEnter={(e) => { if (!showMotions) { const el = e.currentTarget as HTMLElement; el.style.color = '#1B3828'; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; el.style.transform = 'translateY(-1px)'; } }}
-              onMouseLeave={(e) => { if (!showMotions) { const el = e.currentTarget as HTMLElement; el.style.color = 'rgba(28,20,16,0.55)'; el.style.backgroundColor = 'transparent'; el.style.transform = 'translateY(0)'; } }}>
+              className={`flex-1 text-base font-bold px-3 transition-colors border-b-2 relative ${showMotions ? 'text-[#1C1410] border-[#1B3828]' : 'text-[#9A8A78] border-transparent hover:text-[#6A5A4A]'}`}>
               Motions
               {(committee.pendingMotions ?? []).filter((m) => m.type !== ('join-request' as string) && (m.type as string) !== 'gsl-request').length > 0 && (
                 <span className="absolute top-1 right-1 w-4 h-4 bg-[#1B3828] rounded-full text-white text-[10px] flex items-center justify-center">
                   {(committee.pendingMotions ?? []).filter((m) => m.type !== ('join-request' as string) && (m.type as string) !== 'gsl-request').length}
                 </span>
               )}
-              <span style={{ position: 'absolute', bottom: '4px', left: '12px', right: '12px', height: showMotions ? '2px' : '1px', backgroundColor: '#B6871F', transform: showMotions ? 'scaleX(1)' : 'scaleX(0)', transformOrigin: 'left', transition: 'transform 200ms ease', borderRadius: '2px' }} />
             </button>
-            <div style={{ width: '1px', height: '28px', backgroundColor: 'rgba(28,20,16,0.2)', margin: '0 2px', flexShrink: 0 }} />
-            {/* Documents */}
             <button onClick={handleDocumentsClick}
-              className="flex-1 text-[13px] font-bold px-3 relative h-full transition-all duration-200"
-              style={{ color: showDocuments ? '#1B3828' : 'rgba(28,20,16,0.55)', backgroundColor: showDocuments ? 'rgba(27,56,40,0.07)' : 'transparent', fontWeight: showDocuments ? 900 : 700 }}
-              onMouseEnter={(e) => { if (!showDocuments) { const el = e.currentTarget as HTMLElement; el.style.color = '#1B3828'; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; el.style.transform = 'translateY(-1px)'; } }}
-              onMouseLeave={(e) => { if (!showDocuments) { const el = e.currentTarget as HTMLElement; el.style.color = 'rgba(28,20,16,0.55)'; el.style.backgroundColor = 'transparent'; el.style.transform = 'translateY(0)'; } }}>
+              className={`flex-1 text-base font-bold px-3 transition-colors border-b-2 relative ${showDocuments ? 'text-[#1C1410] border-[#1B3828]' : 'text-[#9A8A78] border-transparent hover:text-[#6A5A4A]'}`}>
               Documents
               {(() => { const n = (committee.documents ?? []).filter((d) => d.status === 'submitted').length; return n > 0 ? <span className="absolute top-1 right-1 w-4 h-4 bg-[#1B3828] rounded-full text-white text-[10px] flex items-center justify-center">{n}</span> : null; })()}
-              <span style={{ position: 'absolute', bottom: '4px', left: '12px', right: '12px', height: showDocuments ? '2px' : '1px', backgroundColor: '#B6871F', transform: showDocuments ? 'scaleX(1)' : 'scaleX(0)', transformOrigin: 'left', transition: 'transform 200ms ease', borderRadius: '2px' }} />
             </button>
-            <div style={{ width: '1px', height: '28px', backgroundColor: 'rgba(28,20,16,0.2)', margin: '0 2px', flexShrink: 0 }} />
-            {/* Chat */}
             <button onClick={() => { if (!isPreSession) handleToggleChat(); }}
-              className="flex-1 text-[13px] font-bold px-3 relative h-full transition-all duration-200"
-              style={{ color: showChat ? '#1B3828' : 'rgba(28,20,16,0.55)', backgroundColor: showChat ? 'rgba(27,56,40,0.07)' : 'transparent', fontWeight: showChat ? 900 : 700 }}
-              onMouseEnter={(e) => { if (!showChat) { const el = e.currentTarget as HTMLElement; el.style.color = '#1B3828'; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; el.style.transform = 'translateY(-1px)'; } }}
-              onMouseLeave={(e) => { if (!showChat) { const el = e.currentTarget as HTMLElement; el.style.color = 'rgba(28,20,16,0.55)'; el.style.backgroundColor = 'transparent'; el.style.transform = 'translateY(0)'; } }}>
+              className={`flex-1 text-base font-bold px-3 transition-colors border-b-2 relative ${showChat ? 'text-[#1C1410] border-[#1B3828]' : 'text-[#9A8A78] border-transparent hover:text-[#6A5A4A]'}`}>
               Chat
               {(() => { const unread = committee.messages.filter((m) => !m.content.startsWith('__log__:')).length - chatReadCount; return unread > 0 && !showChat ? <span className="absolute top-1 right-1 w-4 h-4 bg-[#1B3828] rounded-full text-white text-[10px] flex items-center justify-center">{unread}</span> : null; })()}
-              <span style={{ position: 'absolute', bottom: '4px', left: '12px', right: '12px', height: showChat ? '2px' : '1px', backgroundColor: '#B6871F', transform: showChat ? 'scaleX(1)' : 'scaleX(0)', transformOrigin: 'left', transition: 'transform 200ms ease', borderRadius: '2px' }} />
             </button>
           </div>
         ) : (
