@@ -793,11 +793,11 @@ function ModeratedCaucusMain({
                   })()}</span>
                 </div>
               ) : (
-                <div className="relative shrink-0" style={{ width: '168px', height: '168px', borderRadius: '16px', overflow: 'hidden' }}>
+                <div style={{ width: '200px', height: '150px', borderRadius: '12px', overflow: 'hidden', border: '1.5px solid rgba(28,20,16,0.10)', backgroundColor: '#F0EBE1', flexShrink: 0 }}>
                   {(() => {
                     const f = getCountryByName(committee.caucus!.currentSpeaker!);
                     return f
-                      ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ width: '100%', height: '100%', objectFit: 'cover', position: 'absolute', top: 0, left: 0 }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                      ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                       : <Emoji size="5rem" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>🌐</Emoji>;
                   })()}
                 </div>
@@ -2117,11 +2117,11 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                         })()}
                         <div className="flex flex-col items-center gap-0">
                           {/* Current speaker flag */}
-                          <div className="relative shrink-0" style={{ width: '168px', height: '168px', borderRadius: '16px', overflow: 'hidden', border: '1.5px solid rgba(28,20,16,0.10)' }}>
+                          <div style={{ width: '200px', height: '150px', borderRadius: '12px', overflow: 'hidden', border: '1.5px solid rgba(28,20,16,0.10)', backgroundColor: '#F0EBE1', flexShrink: 0 }}>
                             {(() => {
                               const f = getCountryByName(committee.currentSpeaker.country);
                               return f
-                                ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ width: '100%', height: '100%', objectFit: 'cover', position: 'absolute', top: 0, left: 0 }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                                ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                                 : <Emoji size="5rem" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>🌐</Emoji>;
                             })()}
                           </div>
