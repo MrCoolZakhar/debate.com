@@ -468,37 +468,37 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
           <div className="flex gap-3 w-full max-w-3xl mb-4">
             <button
               onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'for')}
-              className="flex-1 bg-green-800/40 hover:bg-green-700/60 border border-green-600/50 text-green-300 font-black text-base py-6 rounded-2xl transition-colors"
+              className="flex-1 bg-[#2A7A3C] hover:bg-[#3D8A52] border border-[#2A7A3C] text-white font-black text-base py-6 rounded-2xl transition-colors"
             >
               In Favour
             </button>
             <button
               onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'for-rights')}
-              className="flex-1 bg-amber-900/30 hover:bg-amber-800/50 border border-amber-600/40 text-amber-300 font-black text-sm py-6 rounded-2xl transition-colors leading-snug"
+              className="flex-1 bg-[#1B5C2E] hover:bg-[#2A7A3C] border border-[#3D7A52] text-[#EED98A] font-black text-sm py-6 rounded-2xl transition-colors leading-snug"
             >
               In Favour<br />with Rights
             </button>
             {(rollCallStatuses[currentDelegate.id] ?? currentDelegate.status) === 'present' ? (
               <button
                 onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'abstain')}
-                className="flex-1 bg-[#DDD4C0]/60 hover:bg-[#C8BAA8]/80 border border-[#9A8A78]/50 text-[#6A5A4A] font-black text-base py-6 rounded-2xl transition-colors"
+                className="flex-1 bg-[#DDD4C0] hover:bg-[#C8BAA8] border border-[#C8BAA8] text-[#6A5A4A] font-black text-base py-6 rounded-2xl transition-colors"
               >
                 Abstain
               </button>
             ) : (
-              <button disabled className="flex-1 bg-[#DDD4C0]/30 border border-[#9A8A78]/20 text-[#9A8A78] font-black text-base py-6 rounded-2xl opacity-40 cursor-not-allowed">
+              <button disabled className="flex-1 bg-[#EDE7D8] border border-[#DDD4C0] text-[#9A8A78] font-black text-base py-6 rounded-2xl opacity-40 cursor-not-allowed">
                 Abstain (P+V)
               </button>
             )}
             <button
               onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'against-rights')}
-              className="flex-1 bg-orange-900/30 hover:bg-orange-800/50 border border-orange-600/40 text-orange-300 font-black text-sm py-6 rounded-2xl transition-colors leading-snug"
+              className="flex-1 bg-[#7A2020] hover:bg-[#8B3030] border border-[#7A2020] text-[#EED98A] font-black text-sm py-6 rounded-2xl transition-colors leading-snug"
             >
               Against<br />with Rights
             </button>
             <button
               onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'against')}
-              className="flex-1 bg-red-800/40 hover:bg-red-700/60 border border-red-600/50 text-red-300 font-black text-base py-6 rounded-2xl transition-colors"
+              className="flex-1 bg-[#8B2020] hover:bg-[#A03030] border border-[#8B2020] text-white font-black text-base py-6 rounded-2xl transition-colors"
             >
               Against
             </button>
