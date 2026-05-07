@@ -835,8 +835,8 @@ function ModeratedCaucusMain({
                   NEXT →
                 </button>
                 <button onClick={() => setActivePopover(activePopover === 'extraTime' ? null : 'extraTime')} title="Add time"
-                  className="px-4 py-3 border rounded-xl font-black text-xs uppercase tracking-wide transition-colors bg-[#EDE7D8] hover:bg-[#DDD4C0] border-[#DDD4C0] text-[#1B3828]">
-                  ADD TIME
+                  className="px-3 py-2 border rounded-xl font-black text-[9px] uppercase tracking-wide transition-colors bg-[#EDE7D8] hover:bg-[#DDD4C0] border-[#DDD4C0] text-[#1B3828] leading-tight text-center w-[52px]">
+                  ADD<br />TIME
                 </button>
                 {!isTdT && (
                   <button onClick={() => setActivePopover(activePopover === 'rightToReply' ? null : 'rightToReply')}
@@ -2097,7 +2097,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                   {/* GSL content area — overflow-hidden is intentional. Never use overflow-y-auto here:
                       it creates a scroll context that causes browser scrollbars to appear, cutting off
                       the flag queue at top and the Right of Reply button at bottom. */}
-                  <div className="flex-1 flex flex-col items-center justify-center px-4 pb-8 pt-2 overflow-hidden">
+                  <div className="flex-1 flex flex-col items-center justify-center px-4 py-4 overflow-hidden">
                     {committee.currentSpeaker ? (
                       <>
                         {(() => {
@@ -2175,8 +2175,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                           <button
                             onClick={() => setActivePopover(activePopover === 'extraTime' ? null : 'extraTime')}
                             title="Add time"
-                            className="px-4 py-3 border rounded-xl font-black text-xs uppercase tracking-wide transition-colors bg-[#EDE7D8] hover:bg-[#DDD4C0] border-[#DDD4C0] text-[#1B3828]">
-                            ADD TIME
+                            className="px-3 py-2 border rounded-xl font-black text-[9px] uppercase tracking-wide transition-colors bg-[#EDE7D8] hover:bg-[#DDD4C0] border-[#DDD4C0] text-[#1B3828] leading-tight text-center w-[52px]">
+                            ADD<br />TIME
                           </button>
                           {/* Right of Reply button */}
                           <button
@@ -2279,7 +2279,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
             <div className="flex gap-2 mb-2">
               {[15, 30, 60].map((s) => (
                 <button key={s} onClick={() => { handleAddExtraTime(s); setActivePopover(null); }}
-                  className="flex-1 py-2 bg-[#1B3828] hover:bg-[#2A5A3C] border border-[#3D7A52]/40 text-[#EED98A] text-xs rounded-lg font-black uppercase tracking-wide transition-colors">
+                  className="flex-1 py-2 bg-[#EDE7D8] hover:bg-[#1B3828] border border-[#DDD4C0] hover:border-[#1B3828] text-[#1B3828] hover:text-[#EED98A] text-xs rounded-lg font-black uppercase tracking-wide transition-colors">
                   +{s}s
                 </button>
               ))}
@@ -2321,8 +2321,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                       onClick={() => setRtrSeconds(s)}
                       className={`flex-1 py-1.5 rounded-lg text-xs font-black uppercase tracking-wide transition-colors border ${
                         rtrSeconds === s
-                          ? 'bg-[#1B3828] border-[#1B3828] text-[#EED98A]'
-                          : 'bg-[#EDE7D8] border-[#DDD4C0] text-[#1B3828] hover:bg-[#DDD4C0]'
+                          ? 'bg-[#B8844A] border-[#B8844A] text-[#1C1410]'
+                          : 'bg-[#EDE7D8] border-[#DDD4C0] text-[#6A5A4A] hover:border-[#B8844A]/50'
                       }`}
                     >
                       {s}s
@@ -2337,7 +2337,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                     setRtrOpen(true);
                   }}
                   disabled={!rtrCountry}
-                  className="w-full py-2 bg-[#1B3828] hover:bg-[#2A5A3C] disabled:opacity-40 disabled:cursor-not-allowed text-[#EED98A] text-xs rounded-lg font-black uppercase tracking-wide transition-colors"
+                  className="w-full py-2 bg-[#B8844A] hover:bg-[#B8844A]/80 disabled:opacity-40 disabled:cursor-not-allowed text-[#1C1410] text-xs rounded-lg font-black uppercase tracking-wide transition-colors"
                 >
                   GRANT
                 </button>
