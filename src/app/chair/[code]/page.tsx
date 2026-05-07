@@ -793,7 +793,7 @@ function ModeratedCaucusMain({
                   })()}</span>
                 </div>
               ) : (
-                <div style={{ width: '168px', height: '126px', borderRadius: '12px', overflow: 'hidden', border: '1.5px solid rgba(28,20,16,0.10)', backgroundColor: '#F0EBE1', flexShrink: 0 }}>
+                <div style={{ width: '168px', height: '126px', borderRadius: '12px', overflow: 'hidden', border: '1.5px solid rgba(28,20,16,0.10)', flexShrink: 0 }}>
                   {(() => {
                     const f = getCountryByName(committee.caucus!.currentSpeaker!);
                     return f
@@ -2117,7 +2117,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                         })()}
                         <div className="flex flex-col items-center gap-0">
                           {/* Current speaker flag */}
-                          <div style={{ width: '168px', height: '126px', borderRadius: '12px', overflow: 'hidden', border: '1.5px solid rgba(28,20,16,0.10)', backgroundColor: '#F0EBE1', flexShrink: 0 }}>
+                          <div style={{ width: '168px', height: '126px', borderRadius: '12px', overflow: 'hidden', border: '1.5px solid rgba(28,20,16,0.10)', flexShrink: 0 }}>
                             {(() => {
                               const f = getCountryByName(committee.currentSpeaker.country);
                               return f
