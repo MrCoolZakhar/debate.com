@@ -340,7 +340,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                   <button
                     onClick={() => cycleStatus(d.id)}
                     className="relative w-[90px] h-[30px] rounded-full cursor-pointer shrink-0 select-none transition-all"
-                    style={{ backgroundColor: 'rgba(255,255,255,0.10)', border: '1.5px solid rgba(255,255,255,0.22)' }}
+                    style={{ backgroundColor: 'rgba(27,56,40,0.85)', border: '1.5px solid rgba(27,56,40,0.5)' }}
                     title="Tap to cycle: Absent → Present → PV"
                   >
                     <div className="absolute inset-0 grid grid-cols-3 items-center pointer-events-none">
@@ -449,7 +449,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
           <div className="flex-1 flex flex-col items-center justify-center min-h-0">
             <div
               style={{ fontSize: 'min(22vw, 18vh)', lineHeight: '1' }}
-              className="select-none mb-3 flex items-center justify-center"
+              className="select-none mb-3 flex items-center justify-center p-3 rounded-3xl border-4 border-[#1B3828]/30 bg-[#1B3828]/05"
             >
               {getFlag(currentDelegate.country)}
             </div>
@@ -505,17 +505,17 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
           </div>
 
           {/* Scale */}
-          <div className="mb-4 w-full">
+          <div className="mb-4 w-full flex justify-center">
             <VoteScale forCount={forCount} againstCount={againstCount} totalVoted={votes.length} />
           </div>
 
-          {/* Upcoming voters — always rendered, invisible when empty to prevent layout shift */}
-          <div className={`mt-4 w-full max-w-2xl ${upcomingDelegates.length === 0 ? 'invisible' : ''}`}>
+          {/* Upcoming voters — fixed height, invisible when empty so layout never shifts */}
+          <div className={`mt-4 w-full max-w-2xl h-[110px] shrink-0 ${upcomingDelegates.length === 0 ? 'invisible' : ''}`}>
             <p className="text-[10px] text-[#9A8A78] font-mono text-center mb-2 tracking-widest">UP NEXT</p>
-            <div className="flex items-center justify-center gap-4" style={{ minHeight: '72px' }}>
+            <div className="flex items-center justify-center gap-4 h-[80px]">
               {upcomingDelegates.map((d, i) => (
                 <div key={d.id} className="flex flex-col items-center gap-1" style={{ opacity: Math.max(0.2, 1 - i * 0.18) }}>
-                  <span style={{ fontSize: i === 0 ? '4rem' : `${Math.max(1.2, 2.8 - i * 0.2)}rem`, lineHeight: '1' }}>
+                  <span style={{ fontSize: i === 0 ? '3.5rem' : `${Math.max(1.2, 2.4 - i * 0.2)}rem`, lineHeight: '1' }}>
                     {getFlag(d.country)}
                   </span>
                   <span className="text-[9px] text-[#9A8A78] text-center max-w-[52px] truncate">{d.country}</span>
@@ -609,7 +609,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             </div>
           </div>
 
-          <div className="w-full max-w-md space-y-1 mb-4 overflow-y-auto" style={{ maxHeight: '220px' }}>
+          <div className="w-full max-w-md space-y-1 mb-4 mt-6 overflow-y-auto" style={{ maxHeight: '220px' }}>
             {orderedRights.map((v, i) => (
               <div
                 key={v.delegateId}
