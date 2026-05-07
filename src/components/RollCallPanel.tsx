@@ -24,7 +24,7 @@ export function FlagCircle({ country, size = 'md' }: { country: string; size?: '
   return (
     <div className={`relative ${box} rounded-full overflow-hidden shrink-0 flex items-center justify-center`} style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}>
       {found
-        ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-[85%] h-[85%] object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+        ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-[85%] h-[85%] object-contain" style={{ border: '1.5px solid rgba(28,20,16,0.10)', borderRadius: 'inherit' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
         : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>}
     </div>
   );

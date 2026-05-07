@@ -327,7 +327,7 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, lastSpeakerDelegate
           );
         })}
       </div>
-      <div className="text-center h-5 flex items-center justify-center">
+      <div className="text-center h-4 flex items-center justify-center">
         {overflow > 0 && (
           <span className="text-xs font-medium" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}>+{overflow} more in queue</span>
         )}
@@ -2098,7 +2098,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                   {/* GSL content area — overflow-hidden is intentional. Never use overflow-y-auto here:
                       it creates a scroll context that causes browser scrollbars to appear, cutting off
                       the flag queue at top and the Right of Reply button at bottom. */}
-                  <div className="flex-1 flex flex-col items-center justify-center px-4 pt-2 pb-16 overflow-hidden">
+                  <div className="flex-1 flex flex-col items-center justify-center px-4 py-4 overflow-hidden">
                     {committee.currentSpeaker ? (
                       <>
                         {(() => {
@@ -2115,9 +2115,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                             />
                           );
                         })()}
-                        <div className="flex flex-col items-center">
+                        <div className="flex flex-col items-center gap-0">
                           {/* Current speaker flag */}
-                          <div className="relative shrink-0" style={{ width: '168px', height: '168px', borderRadius: '16px', overflow: 'hidden' }}>
+                          <div className="relative shrink-0" style={{ width: '168px', height: '168px', borderRadius: '16px', overflow: 'hidden', border: '1.5px solid rgba(28,20,16,0.10)' }}>
                             {(() => {
                               const f = getCountryByName(committee.currentSpeaker.country);
                               return f
@@ -2125,14 +2125,14 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                                 : <Emoji size="5rem" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>🌐</Emoji>;
                             })()}
                           </div>
-                          <h1 className="text-5xl font-black text-[#1C1410] mt-2 mb-1 text-center">{committee.currentSpeaker.country}</h1>
-                          <div className={`text-8xl font-black font-mono mt-2 mb-3 tabular-nums ${
+                          <h1 className="text-5xl font-black text-[#1C1410] mt-1 mb-0 text-center">{committee.currentSpeaker.country}</h1>
+                          <div className={`text-8xl font-black font-mono mt-0 mb-2 tabular-nums ${
                             speakerTimeRemaining <= 10 ? 'text-[#B8844A]' : 'text-[#1C1410]'
                           }`}>
                             {formatTime(speakerTimeRemaining)}
                             {extraTimeAdded && <span className="text-base ml-2 font-normal text-[#1C1410]">+time</span>}
                           </div>
-                          <div className="w-full max-w-2xl h-2 bg-[#DDD4C0] rounded-full overflow-hidden mb-3">
+                          <div className="w-full max-w-2xl h-2 bg-[#DDD4C0] rounded-full overflow-hidden mb-2">
                             <div className={`h-full rounded-full transition-all ${progress > 20 ? 'bg-[#B6871F]' : 'bg-[#B8844A]'}`} style={{ width: `${progress}%` }} />
                           </div>
                         </div>
@@ -2142,7 +2142,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                           </div>
                         )}
                         {!sessionEnded && (
-                        <div className="flex gap-2 w-full max-w-sm mt-1 flex-wrap justify-center">
+                        <div className="flex gap-2 w-full max-w-sm mt-2 flex-wrap justify-center">
                           {/* Restart button */}
                           <button onClick={handleRestartTime}
                             title="Restart time"
