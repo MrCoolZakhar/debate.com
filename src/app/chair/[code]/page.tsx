@@ -312,8 +312,8 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, lastSpeakerDelegate
               {!isRoomOrderTdT && (
                 <span className="line-clamp-2 break-words whitespace-normal leading-tight max-w-[80px] text-xs font-semibold text-center" style={{ color: '#1C1410' }}>{abbrevCountry(s.country)}</span>
               )}
-              {isCurrent && <span className="text-sm font-black uppercase tracking-wide" style={{ color: '#B8844A' }}>Speaking</span>}
-              {!isCurrent && i === 0 && <span className="text-xs font-bold uppercase tracking-wide" style={{ color: '#B8844A' }}>Up next</span>}
+              {isCurrent && <span className="text-sm font-semibold" style={{ color: '#B8844A' }}>Speaking</span>}
+              {!isCurrent && i === 0 && <span className="text-xs font-semibold" style={{ color: '#B8844A' }}>Up next</span>}
               {!isCurrent && lastSpeakerDelegateId && s.delegateId === lastSpeakerDelegateId && i !== 0 && (
                 <span className="text-xs font-bold text-[#9A8A78] bg-[#DDD4C0] px-1.5 py-0.5 rounded">Last</span>
               )}
@@ -803,7 +803,7 @@ function ModeratedCaucusMain({
               <h1 className="text-5xl font-black text-[#1C1410] mt-2 mb-1 text-center">{committee.caucus!.currentSpeaker}</h1>
               <div className={`text-8xl font-black font-mono mt-2 mb-3 tabular-nums ${
                 extraTimeAdded ? 'text-[#EED98A]' :
-                speakerTimeRemaining <= 10 ? 'text-red-500' : 'text-[#1C1410]'
+                speakerTimeRemaining <= 10 ? 'text-[#B8844A]' : 'text-[#1C1410]'
               }`}>
                 {formatTime(speakerTimeRemaining)}
                 {extraTimeAdded && <span className="text-base ml-2 font-normal text-[#EED98A]">+time</span>}
@@ -2089,7 +2089,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                   {/* GSL content area — overflow-hidden is intentional. Never use overflow-y-auto here:
                       it creates a scroll context that causes browser scrollbars to appear, cutting off
                       the flag queue at top and the Right of Reply button at bottom. */}
-                  <div className="flex-1 flex flex-col items-center justify-center px-4 py-4 overflow-hidden">
+                  <div className="flex-1 flex flex-col items-center justify-center px-4 pb-8 pt-2 overflow-hidden">
                     {committee.currentSpeaker ? (
                       <>
                         {(() => {
@@ -2119,13 +2119,13 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                           <h1 className="text-5xl font-black text-[#1C1410] mt-2 mb-1 text-center">{committee.currentSpeaker.country}</h1>
                           <div className={`text-8xl font-black font-mono mt-2 mb-3 tabular-nums ${
                             extraTimeAdded ? 'text-[#EED98A]' :
-                            speakerTimeRemaining <= 10 ? 'text-red-500' : 'text-[#1C1410]'
+                            speakerTimeRemaining <= 10 ? 'text-[#B8844A]' : 'text-[#1C1410]'
                           }`}>
                             {formatTime(speakerTimeRemaining)}
                             {extraTimeAdded && <span className="text-base ml-2 font-normal text-[#EED98A]">+time</span>}
                           </div>
                           <div className="w-full max-w-2xl h-2 bg-[#DDD4C0] rounded-full overflow-hidden mb-3">
-                            <div className={`h-full rounded-full transition-all ${progress > 50 ? 'bg-[#B6871F]' : progress > 20 ? 'bg-[#B6871F]' : 'bg-red-500'}`} style={{ width: `${progress}%` }} />
+                            <div className={`h-full rounded-full transition-all ${progress > 20 ? 'bg-[#B6871F]' : 'bg-[#B8844A]'}`} style={{ width: `${progress}%` }} />
                           </div>
                         </div>
                         {isLastGSLSpeaker && (

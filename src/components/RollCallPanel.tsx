@@ -60,7 +60,7 @@ function ViewToggle({ view, onChange }: { view: 'az' | 'queue'; onChange: (v: 'a
       style={{ backgroundColor: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)' }}
       title="Toggle A-Z / Queue view"
     >
-      <div className={`absolute top-[2px] w-[50px] h-[24px] rounded-full transition-all duration-200 ${isQueue ? 'left-[52px]' : 'left-[2px]'}`}
+      <div className={`absolute top-[1px] w-[51px] h-[26px] rounded-full transition-all duration-200 ${isQueue ? 'left-[51px]' : 'left-[1px]'}`}
         style={{ backgroundColor: 'rgba(255,255,255,0.22)' }} />
       <div className="absolute inset-0 flex items-center pointer-events-none z-10">
         <span className={`w-[52px] text-[10px] font-bold text-center leading-none ${!isQueue ? 'text-white' : 'text-white/40'}`}>A-Z</span>
