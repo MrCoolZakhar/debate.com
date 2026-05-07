@@ -307,7 +307,7 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, lastSpeakerDelegate
                   <span className="text-3xl font-black text-[#B6871F]">{i + 2}</span>
                 </div>
               ) : (
-                <div style={{ width: '72px', height: '54px', borderRadius: '8px', overflow: 'hidden', border: '1.5px solid rgba(28,20,16,0.10)', backgroundColor: '#F0EBE1', flexShrink: 0 }}>
+                <div style={{ width: '72px', height: '54px', borderRadius: '8px', overflow: 'hidden', boxShadow: '0 0 0 1.5px rgba(28,20,16,0.20)', backgroundColor: '#F0EBE1', flexShrink: 0 }}>
                   {(() => { const f = getCountryByName(s.country); return f ? <img src={getFlagUrl(f.code)} alt={s.country} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : null; })()}
                 </div>
               )}
@@ -793,7 +793,7 @@ function ModeratedCaucusMain({
                   })()}</span>
                 </div>
               ) : (
-                <div style={{ width: '168px', height: '112px', borderRadius: '12px', overflow: 'hidden', border: '1.5px solid rgba(28,20,16,0.10)', flexShrink: 0 }}>
+                <div style={{ width: '168px', height: '112px', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 0 0 2.5px rgba(28,20,16,0.22)', flexShrink: 0 }}>
                   {(() => {
                     const f = getCountryByName(committee.caucus!.currentSpeaker!);
                     return f
@@ -2130,7 +2130,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                         })()}
                         <div className="flex flex-col items-center">
                           {/* Current speaker flag */}
-                          <div style={{ width: '168px', height: '112px', borderRadius: '12px', overflow: 'hidden', border: '1.5px solid rgba(28,20,16,0.10)', flexShrink: 0 }}>
+                          <div style={{ width: '168px', height: '112px', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 0 0 2.5px rgba(28,20,16,0.22)', flexShrink: 0 }}>
                             {(() => {
                               const f = getCountryByName(committee.currentSpeaker.country);
                               return f
