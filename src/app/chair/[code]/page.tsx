@@ -327,7 +327,7 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, lastSpeakerDelegate
           );
         })}
       </div>
-      <div className="text-center h-16 flex items-center justify-center">
+      <div className="text-center h-10 flex items-start justify-center pt-1">
         {overflow > 0 && (
           <span className="text-xs font-medium" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}>+{overflow} more in queue</span>
         )}
