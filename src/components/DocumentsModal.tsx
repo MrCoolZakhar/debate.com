@@ -734,8 +734,12 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate }
           ) : (
             <div className="px-7 pb-7 space-y-3">
               {tab === 'draft-resolution' && (committee.documents ?? []).some((d) => d.type === 'draft-resolution' && d.status === 'introduced') && (
-                <button onClick={() => router.push(`/voting/${committee.code}`)}
-                  className="w-full bg-purple-900/40 hover:bg-purple-800/50 border border-purple-700/40 hover:border-purple-600/60 text-purple-300 hover:text-[#1C1410] py-3 rounded-xl font-bold text-sm transition-colors">
+                <button
+                  onClick={() => router.push(`/voting/${committee.code}`)}
+                  className="w-full bg-[#1B3828] hover:bg-[#2A5A3C] border border-[#1B3828] text-[#EED98A] py-3 rounded-xl font-black text-sm transition-colors"
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = '0 8px 24px rgba(27,56,40,0.25)'; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}
+                >
                   <Emoji size="1em">🗳</Emoji> Go to Voting
                 </button>
               )}
