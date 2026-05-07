@@ -315,9 +315,9 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       });
     };
     const thumbPos = (status: DelegateStatus) =>
-      status === 'absent' ? 'left-[2px]' : status === 'present' ? 'left-[31px]' : 'left-[60px]';
+      status === 'absent' ? 'left-[2px]' : status === 'present' ? 'left-[32px]' : 'left-[62px]';
     const thumbColor = (status: DelegateStatus) =>
-      status === 'absent' ? 'bg-red-300' : status === 'present' ? 'bg-green-500' : 'bg-blue-500';
+      status === 'absent' ? 'bg-[#8B2020]' : status === 'present' ? 'bg-[#3D7A52]' : 'bg-[#B6871F]';
     const presentCount = Object.values(rollCallStatuses).filter((s) => s !== 'absent').length;
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(5, 4, 3, 0.92)', backdropFilter: 'blur(4px)' }}>
@@ -330,23 +330,25 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             {sorted.map((d) => {
               const status = rollCallStatuses[d.id] ?? d.status;
               return (
-                <div key={d.id} className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all ${
-                  status === 'absent' ? 'opacity-40 border border-transparent' :
-                  status === 'present' ? 'bg-green-950/30 border border-green-800/30' :
-                  'bg-blue-950/30 border border-blue-800/30'
-                }`}>
+                <div
+                  key={d.id}
+                  className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all ${status === 'absent' ? 'opacity-40' : ''}`}
+                  style={{ backgroundColor: status === 'present' ? 'rgba(61,122,82,0.22)' : status === 'present-voting' ? 'rgba(182,135,31,0.18)' : 'transparent', border: status === 'present' ? '1px solid rgba(61,122,82,0.4)' : status === 'present-voting' ? '1px solid rgba(182,135,31,0.35)' : '1px solid transparent' }}
+                >
                   {(() => { const f = getCountryByName(d.country); return f ? <img src={getFlagUrl(f.code)} alt={f.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <Emoji size="1.25rem">🌐</Emoji>; })()}
                   <span className="flex-1 text-sm text-[#1C1410] truncate">{d.country}</span>
                   <button
                     onClick={() => cycleStatus(d.id)}
-                    className={`relative w-[90px] h-[30px] rounded-full bg-[#EDE7D8] border border-[#DDD4C0] cursor-pointer shrink-0 select-none`}
+                    className="relative w-[90px] h-[30px] rounded-full cursor-pointer shrink-0 select-none transition-all"
+                    style={{ backgroundColor: 'rgba(255,255,255,0.10)', border: '1.5px solid rgba(255,255,255,0.22)' }}
+                    title="Tap to cycle: Absent → Present → PV"
                   >
                     <div className="absolute inset-0 grid grid-cols-3 items-center pointer-events-none">
-                      <span className={`text-[10px] font-bold text-center ${status === 'absent' ? 'text-red-900' : 'text-[#9A8A78]'}`}>A</span>
-                      <span className={`text-[10px] font-bold text-center ${status === 'present' ? 'text-[#1C1410]' : 'text-[#9A8A78]'}`}>P</span>
-                      <span className={`text-[10px] font-bold text-center ${status === 'present-voting' ? 'text-[#1C1410]' : 'text-[#9A8A78]'}`}>PV</span>
+                      <span className={`text-[10px] font-bold text-center ${status === 'absent' ? 'text-white' : 'text-white/40'}`}>A</span>
+                      <span className={`text-[10px] font-bold text-center ${status === 'present' ? 'text-white' : 'text-white/40'}`}>P</span>
+                      <span className={`text-[10px] font-bold text-center ${status === 'present-voting' ? 'text-white' : 'text-white/40'}`}>PV</span>
                     </div>
-                    <div className={`absolute top-[3px] w-[26px] h-[24px] rounded-full transition-all duration-200 ${thumbPos(status)} ${thumbColor(status)}`} />
+                    <div className={`absolute top-[2px] w-[26px] h-[22px] rounded-full transition-all duration-200 shadow-sm ${thumbPos(status)} ${thumbColor(status)}`} />
                   </button>
                 </div>
               );
