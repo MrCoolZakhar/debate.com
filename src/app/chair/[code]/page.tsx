@@ -327,7 +327,7 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, lastSpeakerDelegate
           );
         })}
       </div>
-      <div className="text-center h-4 flex items-center justify-center">
+      <div className="text-center h-10 flex items-center justify-center">
         {overflow > 0 && (
           <span className="text-xs font-medium" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}>+{overflow} more in queue</span>
         )}
@@ -2098,7 +2098,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                   {/* GSL content area — overflow-hidden is intentional. Never use overflow-y-auto here:
                       it creates a scroll context that causes browser scrollbars to appear, cutting off
                       the flag queue at top and the Right of Reply button at bottom. */}
-                  <div className="flex-1 flex flex-col items-center justify-center px-4 py-4 overflow-hidden">
+                  <div className="flex-1 flex flex-col items-center justify-start px-4 pt-10 pb-4 overflow-hidden">
                     {committee.currentSpeaker ? (
                       <>
                         {(() => {
