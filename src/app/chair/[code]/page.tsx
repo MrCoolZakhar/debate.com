@@ -802,11 +802,10 @@ function ModeratedCaucusMain({
               )}
               <h1 className="text-5xl font-black text-[#1C1410] mt-2 mb-1 text-center">{committee.caucus!.currentSpeaker}</h1>
               <div className={`text-8xl font-black font-mono mt-2 mb-3 tabular-nums ${
-                extraTimeAdded ? 'text-[#EED98A]' :
                 speakerTimeRemaining <= 10 ? 'text-[#B8844A]' : 'text-[#1C1410]'
               }`}>
                 {formatTime(speakerTimeRemaining)}
-                {extraTimeAdded && <span className="text-base ml-2 font-normal text-[#EED98A]">+time</span>}
+                {extraTimeAdded && <span className="text-base ml-2 font-normal text-[#1C1410]">+time</span>}
               </div>
               <div className="w-full max-w-2xl h-2 bg-[#DDD4C0] rounded-full overflow-hidden mb-3">
                 <div className={`h-full rounded-full transition-all ${caucusProgress > 50 ? 'bg-[#B6871F]' : caucusProgress > 20 ? 'bg-[#B6871F]' : 'bg-red-500'}`} style={{ width: `${caucusProgress}%` }} />
@@ -819,7 +818,7 @@ function ModeratedCaucusMain({
                   ↺
                 </button>
                 <button onClick={handleToggleTimer}
-                  className={`flex-1 py-3 px-6 rounded-xl font-bold text-base transition-colors ${timerRunning ? 'bg-[#B6871F] hover:bg-[#B6871F]/80 text-white' : 'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'}`}>
+                  className={`flex-1 py-3 px-6 rounded-xl font-bold text-base transition-colors focus:outline-none ${timerRunning ? 'bg-[#B6871F] hover:bg-[#B6871F]/80 text-white' : 'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'}`}>
                   {timerRunning ? (
   <span className="flex items-center justify-center gap-2">
     <span className="flex gap-[3px] items-center">
@@ -831,7 +830,7 @@ function ModeratedCaucusMain({
 ) : '▶ START'}
                 </button>
                 <button onClick={handleNextCaucusSpeaker} disabled={queue.length === 0}
-                  className="flex-1 bg-[#DDD4C0] hover:bg-[#C8BAA8] disabled:opacity-40 text-[#1C1410] py-3 px-6 rounded-xl font-bold text-base transition-colors">
+                  className="flex-1 bg-[#DDD4C0] hover:bg-[#C8BAA8] disabled:opacity-40 text-[#1C1410] py-3 px-6 rounded-xl font-bold text-base transition-colors focus:outline-none">
                   NEXT →
                 </button>
                 <button onClick={() => setActivePopover(activePopover === 'extraTime' ? null : 'extraTime')} title="Add time"
@@ -2126,11 +2125,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                           </div>
                           <h1 className="text-5xl font-black text-[#1C1410] mt-2 mb-1 text-center">{committee.currentSpeaker.country}</h1>
                           <div className={`text-8xl font-black font-mono mt-2 mb-3 tabular-nums ${
-                            extraTimeAdded ? 'text-[#EED98A]' :
                             speakerTimeRemaining <= 10 ? 'text-[#B8844A]' : 'text-[#1C1410]'
                           }`}>
                             {formatTime(speakerTimeRemaining)}
-                            {extraTimeAdded && <span className="text-base ml-2 font-normal text-[#EED98A]">+time</span>}
+                            {extraTimeAdded && <span className="text-base ml-2 font-normal text-[#1C1410]">+time</span>}
                           </div>
                           <div className="w-full max-w-2xl h-2 bg-[#DDD4C0] rounded-full overflow-hidden mb-3">
                             <div className={`h-full rounded-full transition-all ${progress > 20 ? 'bg-[#B6871F]' : 'bg-[#B8844A]'}`} style={{ width: `${progress}%` }} />
@@ -2152,7 +2150,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                           {/* Start/Pause */}
                           <button onClick={handleToggleTimer}
                             disabled={isLastGSLSpeaker}
-                            className={`flex-1 py-3 px-6 rounded-xl font-bold text-base transition-colors ${
+                            className={`flex-1 py-3 px-6 rounded-xl font-bold text-base transition-colors focus:outline-none ${
                               timerRunning ? 'bg-[#B6871F] hover:bg-[#B6871F]/80 text-white' :
                               isLastGSLSpeaker ? 'bg-[#DDD4C0] text-[#9A8A78] cursor-not-allowed' :
                               'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'
@@ -2168,7 +2166,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
 ) : '▶ START'}
                           </button>
                           <button onClick={handleNextSpeaker} disabled={committee.speakersList.length === 0}
-                            className="flex-1 bg-[#DDD4C0] hover:bg-[#C8BAA8] disabled:opacity-40 text-[#1C1410] py-3 px-6 rounded-xl font-bold text-base transition-colors">
+                            className="flex-1 bg-[#DDD4C0] hover:bg-[#C8BAA8] disabled:opacity-40 text-[#1C1410] py-3 px-6 rounded-xl font-bold text-base transition-colors focus:outline-none">
                             NEXT →
                           </button>
                           {/* Add Time button */}
@@ -2283,6 +2281,23 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                   +{s}s
                 </button>
               ))}
+            </div>
+            <div className="flex gap-2 items-center">
+              <input
+                type="number"
+                value={extraTimeSecs}
+                onChange={(e) => setExtraTimeSecs(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { const n = parseInt(extraTimeSecs); if (n > 0) { handleAddExtraTime(n); setActivePopover(null); } } }}
+                placeholder="Custom sec…"
+                style={{ MozAppearance: 'textfield' } as React.CSSProperties}
+                className="flex-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-2 py-1.5 text-[#1C1410] text-xs focus:outline-none focus:border-[#1B3828] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              />
+              <button
+                onClick={() => { const n = parseInt(extraTimeSecs); if (n > 0) { handleAddExtraTime(n); setActivePopover(null); } }}
+                disabled={!extraTimeSecs || parseInt(extraTimeSecs) <= 0}
+                className="px-3 py-1.5 bg-[#1B3828] hover:bg-[#2A5A3C] disabled:opacity-40 text-[#EED98A] text-xs rounded-lg font-black transition-colors">
+                ADD
+              </button>
             </div>
           </div>
         </div>
