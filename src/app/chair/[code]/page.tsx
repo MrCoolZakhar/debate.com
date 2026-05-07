@@ -307,9 +307,14 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, lastSpeakerDelegate
                   <span className="text-3xl font-black text-[#B6871F]">{i + 2}</span>
                 </div>
               ) : (
-                <div style={{ borderRadius: '10px', overflow: 'hidden', border: '1.5px solid rgba(28,20,16,0.12)' }}>
-                  <FlagCircle country={s.country} size="xl" />
-                </div>
+                {(() => {
+                  const f = getCountryByName(s.country);
+                  return (
+                    <div style={{ width: '72px', height: '54px', borderRadius: '8px', overflow: 'hidden', border: '1.5px solid rgba(28,20,16,0.10)', backgroundColor: '#F0EBE1', flexShrink: 0 }}>
+                      {f && <img src={getFlagUrl(f.code)} alt={f.code} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />}
+                    </div>
+                  );
+                })()}
               )}
               {!isRoomOrderTdT && (
                 <span className="line-clamp-2 break-words whitespace-normal leading-tight max-w-[80px] text-xs font-semibold text-center" style={{ color: '#1C1410' }}>{abbrevCountry(s.country)}</span>
