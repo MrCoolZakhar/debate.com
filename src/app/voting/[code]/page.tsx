@@ -480,8 +480,8 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
           {/* Current voter */}
           <div className="flex-1 flex flex-col items-center justify-center min-h-0">
             <div
-              style={{ fontSize: 'min(33vw, 27vh)', lineHeight: '1', display: 'flex' }}
-              className="select-none mb-3 rounded-3xl border-4 border-[#1B3828]/40 overflow-hidden"
+              style={{ fontSize: 'min(33vw, 27vh)', lineHeight: '1' }}
+              className="select-none mb-3"
             >
               {getFlag(currentDelegate.country)}
             </div>
@@ -642,45 +642,44 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
           </div>
 
           <div className="w-full max-w-md space-y-1 mb-4 mt-6 overflow-y-auto" style={{ maxHeight: '220px' }}>
-            {orderedRights.map((v, i) => (
-              <div
-                key={v.delegateId}
-                draggable={i > rightsIndex}
-                onDragStart={() => { dragIndexRef.current = i; }}
-                onDragOver={(e) => { if (i > rightsIndex) e.preventDefault(); }}
-                onDrop={() => {
-                  const from = dragIndexRef.current;
-                  if (from === null || from === i || from <= rightsIndex || i <= rightsIndex) return;
-                  setOrderedRights((prev) => {
-                    const arr = [...prev];
-                    const [item] = arr.splice(from, 1);
-                    arr.splice(i, 0, item);
-                    return arr;
-                  });
-                  dragIndexRef.current = null;
-                }}
-                className={`flex items-center gap-3 px-4 py-2 rounded-lg text-sm transition-all ${
-                  i === rightsIndex
-                    ? 'bg-[#1B3828] border border-[#3D7A52] text-[#EED98A]'
-                    : i < rightsIndex
-                    ? 'bg-[#EDE7D8] border border-[#DDD4C0] text-[#9A8A78] opacity-50'
-                    : 'bg-[#FAF8F3] border border-[#DDD4C0] text-[#1C1410] opacity-80 cursor-grab'
-                }`}
-              >
-                {i > rightsIndex && <span className="text-[#9A8A78] text-xs">⠿</span>}
-                <span className="text-xs w-5 font-mono text-right opacity-60">{i + 1}</span>
-                <span>{getFlag(v.country)} {v.country}</span>
-                <span className={`ml-auto text-xs font-semibold ${
-                  i < rightsIndex   ? 'text-[#9A8A78]' :
-                  i === rightsIndex ? 'text-[#EED98A]' :
-                  v.choice === 'for-rights' ? 'text-[#2A7A3C]' : 'text-[#8B2020]'
-                }`}>
-                  {i < rightsIndex ? 'Done' :
-                   i === rightsIndex ? 'Speaking' :
-                   v.choice === 'for-rights' ? 'For w/ Rights' : 'Against w/ Rights'}
-                </span>
-              </div>
-            ))}
+            {orderedRights.slice(rightsIndex).map((v, relIdx) => {
+              const absIdx = rightsIndex + relIdx;
+              const isCurrent = relIdx === 0;
+              return (
+                <div
+                  key={v.delegateId}
+                  draggable={!isCurrent}
+                  onDragStart={() => { dragIndexRef.current = absIdx; }}
+                  onDragOver={(e) => { if (!isCurrent) e.preventDefault(); }}
+                  onDrop={() => {
+                    const from = dragIndexRef.current;
+                    if (from === null || from === absIdx || from <= rightsIndex || absIdx <= rightsIndex) return;
+                    setOrderedRights((prev) => {
+                      const arr = [...prev];
+                      const [item] = arr.splice(from, 1);
+                      arr.splice(absIdx, 0, item);
+                      return arr;
+                    });
+                    dragIndexRef.current = null;
+                  }}
+                  className={`flex items-center gap-3 px-4 py-2 rounded-lg text-sm transition-all ${
+                    isCurrent
+                      ? 'bg-[#1B3828] border border-[#3D7A52] text-[#EED98A]'
+                      : 'bg-[#FAF8F3] border border-[#DDD4C0] text-[#1C1410] opacity-80 cursor-grab'
+                  }`}
+                >
+                  {!isCurrent && <span className="text-[#9A8A78] text-xs">⠿</span>}
+                  <span className="text-xs w-5 font-mono text-right opacity-60">{absIdx + 1}</span>
+                  <span>{getFlag(v.country)} {v.country}</span>
+                  <span className={`ml-auto text-xs font-semibold ${
+                    isCurrent ? 'text-[#EED98A]' :
+                    v.choice === 'for-rights' ? 'text-[#2A7A3C]' : 'text-[#8B2020]'
+                  }`}>
+                    {isCurrent ? 'Speaking' : v.choice === 'for-rights' ? 'For w/ Rights' : 'Against w/ Rights'}
+                  </span>
+                </div>
+              );
+            })}
           </div>
 
           <button
