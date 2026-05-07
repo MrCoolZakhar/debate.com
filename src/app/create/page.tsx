@@ -192,7 +192,7 @@ function SelectScreen({ onSelect }: { onSelect: () => void }) {
       video: '/card_crisis.mp4',
       title: 'Crisis\nCommittee',
       subtitle: 'Fast-paced crisis scenarios and directives',
-      badge: 'Coming H2 2026',
+      badge: 'Coming Late 2026',
       active: false,
       bg: '#1B3828',
       border: 'rgba(182,135,31,0.5)',
@@ -317,9 +317,7 @@ function SelectScreen({ onSelect }: { onSelect: () => void }) {
                   {card.title}
                 </h2>
 
-                {card.id === 'crisis' && (
-                  <p className="text-xs text-center mb-1" style={{ color: '#7A5A38' }}>Coming Late 2026</p>
-                )}
+
                 <p
                   className="text-center leading-relaxed mb-0"
                   style={{

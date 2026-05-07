@@ -1697,7 +1697,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         {committee.phase !== 'pre-session' && !sessionEnded ? (
           <div className="flex flex-1 min-w-0 h-full items-center">
             <button onClick={() => setShowSliders((v) => !v)}
-              className="flex-1 text-[13px] px-3 relative h-full transition-all duration-200"
+              className="flex-1 text-[18px] px-3 relative h-full transition-all duration-200"
               style={{ color: showSliders ? '#1B3828' : 'rgba(28,20,16,0.55)', backgroundColor: showSliders ? 'rgba(27,56,40,0.07)' : 'transparent', fontWeight: showSliders ? 900 : 700 }}
               onMouseEnter={(e) => { if (!showSliders) { const el = e.currentTarget as HTMLElement; el.style.color = '#1B3828'; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; el.style.transform = 'translateY(-1px)'; } }}
               onMouseLeave={(e) => { if (!showSliders) { const el = e.currentTarget as HTMLElement; el.style.color = 'rgba(28,20,16,0.55)'; el.style.backgroundColor = 'transparent'; el.style.transform = 'translateY(0)'; } }}>
@@ -1706,7 +1706,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
             </button>
             <div style={{ width: '1px', height: '28px', backgroundColor: 'rgba(28,20,16,0.2)', margin: '0 2px', flexShrink: 0 }} />
             <button onClick={handleMotionsClick}
-              className="flex-1 text-[13px] px-3 relative h-full transition-all duration-200"
+              className="flex-1 text-[18px] px-3 relative h-full transition-all duration-200"
               style={{ color: showMotions ? '#1B3828' : 'rgba(28,20,16,0.55)', backgroundColor: showMotions ? 'rgba(27,56,40,0.07)' : 'transparent', fontWeight: showMotions ? 900 : 700 }}
               onMouseEnter={(e) => { if (!showMotions) { const el = e.currentTarget as HTMLElement; el.style.color = '#1B3828'; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; el.style.transform = 'translateY(-1px)'; } }}
               onMouseLeave={(e) => { if (!showMotions) { const el = e.currentTarget as HTMLElement; el.style.color = 'rgba(28,20,16,0.55)'; el.style.backgroundColor = 'transparent'; el.style.transform = 'translateY(0)'; } }}>
@@ -1720,7 +1720,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
             </button>
             <div style={{ width: '1px', height: '28px', backgroundColor: 'rgba(28,20,16,0.2)', margin: '0 2px', flexShrink: 0 }} />
             <button onClick={handleDocumentsClick}
-              className="flex-1 text-[13px] px-3 relative h-full transition-all duration-200"
+              className="flex-1 text-[18px] px-3 relative h-full transition-all duration-200"
               style={{ color: showDocuments ? '#1B3828' : 'rgba(28,20,16,0.55)', backgroundColor: showDocuments ? 'rgba(27,56,40,0.07)' : 'transparent', fontWeight: showDocuments ? 900 : 700 }}
               onMouseEnter={(e) => { if (!showDocuments) { const el = e.currentTarget as HTMLElement; el.style.color = '#1B3828'; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; el.style.transform = 'translateY(-1px)'; } }}
               onMouseLeave={(e) => { if (!showDocuments) { const el = e.currentTarget as HTMLElement; el.style.color = 'rgba(28,20,16,0.55)'; el.style.backgroundColor = 'transparent'; el.style.transform = 'translateY(0)'; } }}>
@@ -1730,7 +1730,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
             </button>
             <div style={{ width: '1px', height: '28px', backgroundColor: 'rgba(28,20,16,0.2)', margin: '0 2px', flexShrink: 0 }} />
             <button onClick={() => { if (!isPreSession) handleToggleChat(); }}
-              className="flex-1 text-[13px] px-3 relative h-full transition-all duration-200"
+              className="flex-1 text-[18px] px-3 relative h-full transition-all duration-200"
               style={{ color: showChat ? '#1B3828' : 'rgba(28,20,16,0.55)', backgroundColor: showChat ? 'rgba(27,56,40,0.07)' : 'transparent', fontWeight: showChat ? 900 : 700 }}
               onMouseEnter={(e) => { if (!showChat) { const el = e.currentTarget as HTMLElement; el.style.color = '#1B3828'; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; el.style.transform = 'translateY(-1px)'; } }}
               onMouseLeave={(e) => { if (!showChat) { const el = e.currentTarget as HTMLElement; el.style.color = 'rgba(28,20,16,0.55)'; el.style.backgroundColor = 'transparent'; el.style.transform = 'translateY(0)'; } }}>
