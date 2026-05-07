@@ -56,14 +56,16 @@ function ViewToggle({ view, onChange }: { view: 'az' | 'queue'; onChange: (v: 'a
   return (
     <button
       onClick={() => onChange(isQueue ? 'az' : 'queue')}
-      className="relative w-[104px] h-[28px] rounded-full cursor-pointer select-none shrink-0" style={{ backgroundColor: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)' }}
+      className="relative w-[104px] h-[28px] rounded-full cursor-pointer select-none shrink-0"
+      style={{ backgroundColor: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)' }}
       title="Toggle A-Z / Queue view"
     >
+      <div className={`absolute top-[2px] w-[50px] h-[24px] rounded-full transition-all duration-200 ${isQueue ? 'left-[52px]' : 'left-[2px]'}`}
+        style={{ backgroundColor: 'rgba(255,255,255,0.22)' }} />
       <div className="absolute inset-0 flex items-center pointer-events-none z-10">
-        <span className={`w-[52px] text-[10px] font-bold text-center ${!isQueue ? 'text-white' : 'text-white/40'}`}>A-Z</span>
-        <span className={`w-[52px] text-[10px] font-bold text-center ${isQueue ? 'text-[#EED98A]' : 'text-white/40'}`}>QUEUE</span>
+        <span className={`w-[52px] text-[10px] font-bold text-center leading-none ${!isQueue ? 'text-white' : 'text-white/40'}`}>A-Z</span>
+        <span className={`w-[52px] text-[10px] font-bold text-center leading-none ${isQueue ? 'text-white' : 'text-white/40'}`}>QUEUE</span>
       </div>
-      <div className={`absolute top-[2px] w-[50px] h-[24px] rounded-full transition-all duration-200 ${isQueue ? 'left-[52px]' : 'left-[2px]'}`} style={{ backgroundColor: isQueue ? '#B6871F' : 'rgba(255,255,255,0.18)' }} />
     </button>
   );
 }
@@ -189,7 +191,10 @@ function FullListPopup({
           ) : (
             list.map((s, i) => (
               <div key={s.delegateId} className="flex items-center gap-3 px-4 py-2.5 border-b border-[#DDD4C0]/40 group hover:bg-[#DDD4C0]/30 transition-colors">
-                <span className="text-xs text-[#9A8A78] font-mono w-6 text-right shrink-0">{i + 1}</span>
+                <span className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black shrink-0"
+                  style={{ backgroundColor: 'rgba(238,217,138,0.15)', color: '#EED98A', border: '1px solid rgba(238,217,138,0.25)' }}>
+                  {i + 1}
+                </span>
                 <FlagCircle country={s.country} size="xs" />
                 <span className="text-sm text-[#1C1410] flex-1 truncate">{s.country}</span>
                 {onRemove && (
@@ -505,12 +510,9 @@ function RollCallPanelInner({
                   )}
                   {/* Queue position bubble — omitted when isRoomOrderTdT since position is already the primary display */}
                   {queuePos !== null && !isRoomOrderTdT && (
-                    <div className={`absolute -top-1 -right-1 min-w-[18px] h-[18px] px-0.5 rounded-full text-[#1C1410] flex items-center justify-center font-black leading-none ${
-                      queuePos === 1 && committee.currentSpeaker?.delegateId === d.id
-                        ? 'bg-[#B6871F] text-[10px]'
-                        : 'bg-[#1B3828] text-[13px]'
-                    }`}>
-                      {queuePos === 1 && (committee.currentSpeaker?.delegateId === d.id || committee.caucus?.currentSpeaker === d.country) ? '🎙' : queuePos <= 99 ? queuePos : '99+'}
+                    <div className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-0.5 rounded-full flex items-center justify-center font-black leading-none text-[10px]"
+                      style={{ backgroundColor: '#EDE7D8', color: '#1B3828', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }}>
+                      {queuePos === 1 && (committee.currentSpeaker?.delegateId === d.id || committee.caucus?.currentSpeaker === d.country) ? '★' : queuePos <= 99 ? queuePos : '99+'}
                     </div>
                   )}
                 </div>
