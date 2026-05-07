@@ -479,13 +479,25 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
         <div className="flex-1 flex flex-col items-center py-6 px-4 overflow-hidden">
           {/* Current voter */}
           <div className="flex-1 flex flex-col items-center justify-center min-h-0">
-            <div
-              style={{ fontSize: 'min(33vw, 27vh)', lineHeight: '1' }}
-              className="select-none mb-3 flex items-center justify-center"
-            >
-              <span style={{ display: 'inline-flex', borderRadius: '6px', overflow: 'hidden', boxShadow: '0 0 0 2.5px rgba(28,20,16,0.22)' }}>
-                {getFlag(currentDelegate.country)}
-              </span>
+            <div className="select-none mb-3 flex items-center justify-center">
+              {(() => {
+                const f = getCountryByName(currentDelegate.country);
+                return f ? (
+                  <img
+                    src={getFlagUrl(f.code)}
+                    alt={f.code}
+                    style={{
+                      width: 'min(22vw, 18vh)',
+                      height: 'auto',
+                      display: 'block',
+                      borderRadius: '10px',
+                      outline: '2.5px solid rgba(28,20,16,0.22)',
+                      outlineOffset: '0px',
+                    }}
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                  />
+                ) : <Emoji size="min(22vw, 18vh)">🌐</Emoji>;
+              })()}
             </div>
             <h1
               style={{ fontSize: 'min(5.5vw, 5vh)' }}
@@ -608,13 +620,25 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             <p className="text-xs text-amber-400 font-mono tracking-widest mb-6">
               RIGHTS SPEAKERS — {rightsIndex + 1} OF {orderedRights.length}
             </p>
-            <div
-              style={{ fontSize: 'min(18vw, 16vh)', lineHeight: '1' }}
-              className="select-none mb-3 flex items-center justify-center"
-            >
-              <span style={{ display: 'inline-flex', borderRadius: '6px', overflow: 'hidden', boxShadow: '0 0 0 2.5px rgba(28,20,16,0.22)' }}>
-                {getFlag(orderedRights[rightsIndex].country)}
-              </span>
+            <div className="select-none mb-3 flex items-center justify-center">
+              {(() => {
+                const f = getCountryByName(orderedRights[rightsIndex].country);
+                return f ? (
+                  <img
+                    src={getFlagUrl(f.code)}
+                    alt={f.code}
+                    style={{
+                      width: 'min(18vw, 16vh)',
+                      height: 'auto',
+                      display: 'block',
+                      borderRadius: '10px',
+                      outline: '2.5px solid rgba(28,20,16,0.22)',
+                      outlineOffset: '0px',
+                    }}
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                  />
+                ) : <Emoji size="min(18vw, 16vh)">🌐</Emoji>;
+              })()}
             </div>
             <h1
               style={{ fontSize: 'min(5vw, 4vh)' }}
