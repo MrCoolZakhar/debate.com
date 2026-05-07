@@ -307,15 +307,15 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, lastSpeakerDelegate
                   <span className="text-3xl font-black text-[#B6871F]">{i + 2}</span>
                 </div>
               ) : (
-                <div className={`rounded-full ${isCurrent ? 'ring-4 ring-[#1B3828]' : ''}`}>
+                <div style={{ borderRadius: '10px', overflow: 'hidden', border: '1.5px solid rgba(28,20,16,0.12)' }}>
                   <FlagCircle country={s.country} size="xl" />
                 </div>
               )}
               {!isRoomOrderTdT && (
-                <span className="line-clamp-2 break-words whitespace-normal leading-tight max-w-[80px] text-xs font-semibold text-[#6A5A4A] text-center">{abbrevCountry(s.country)}</span>
+                <span className="line-clamp-2 break-words whitespace-normal leading-tight max-w-[80px] text-xs font-semibold text-center" style={{ color: '#1C1410' }}>{abbrevCountry(s.country)}</span>
               )}
-              {isCurrent && <span className="text-sm font-bold text-[#B6871F]">Speaking</span>}
-              {!isCurrent && i === 0 && <span className="text-sm font-bold text-[#B6871F]">Up next</span>}
+              {isCurrent && <span className="text-sm font-black uppercase tracking-wide" style={{ color: '#1B3828' }}>Speaking</span>}
+              {!isCurrent && i === 0 && <span className="text-xs font-bold uppercase tracking-wide" style={{ color: '#9A8A78' }}>Up next</span>}
               {!isCurrent && lastSpeakerDelegateId && s.delegateId === lastSpeakerDelegateId && i !== 0 && (
                 <span className="text-xs font-bold text-[#9A8A78] bg-[#DDD4C0] px-1.5 py-0.5 rounded">Last</span>
               )}
@@ -327,8 +327,10 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, lastSpeakerDelegate
           );
         })}
       </div>
-      <div className="text-center text-xs text-[#9A8A78] mt-2 h-4">
-        {overflow > 0 ? `+${overflow} more in queue` : ''}
+      <div className="text-center h-5 flex items-center justify-center">
+        {overflow > 0 && (
+          <span className="text-xs font-medium" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}>+{overflow} more in queue</span>
+        )}
       </div>
     </div>
   );
@@ -783,25 +785,23 @@ function ModeratedCaucusMain({
               />
             )}
             <div className="flex flex-col items-center">
-              <div className="ring-4 ring-[#1B3828] rounded-full">
-                {isRoomOrderTdT ? (
-                  <div className="relative w-36 h-36 rounded-full bg-[#DDD4C0] shrink-0 flex items-center justify-center">
-                    <span className="text-6xl font-black text-[#B6871F]">{(() => {
-                      const match = committee.caucus!.currentSpeaker?.match(/(\d+)$/);
-                      return match ? match[1] : '?';
-                    })()}</span>
-                  </div>
-                ) : (
-                  <div className="relative w-36 h-36 rounded-full overflow-hidden bg-[#DDD4C0] shrink-0">
-                    {(() => {
-                      const f = getCountryByName(committee.caucus!.currentSpeaker!);
-                      return f
-                        ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ width: '7rem', height: '7rem', objectFit: 'contain', position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                        : <Emoji size="5rem" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>🌐</Emoji>;
-                    })()}
-                  </div>
-                )}
-              </div>
+              {isRoomOrderTdT ? (
+                <div className="relative w-36 h-36 rounded-full bg-[#DDD4C0] shrink-0 flex items-center justify-center">
+                  <span className="text-6xl font-black text-[#B6871F]">{(() => {
+                    const match = committee.caucus!.currentSpeaker?.match(/(\d+)$/);
+                    return match ? match[1] : '?';
+                  })()}</span>
+                </div>
+              ) : (
+                <div className="relative shrink-0" style={{ width: '168px', height: '168px', borderRadius: '16px', overflow: 'hidden', border: '2px solid rgba(28,20,16,0.15)', boxShadow: '0 8px 32px rgba(27,56,40,0.18)' }}>
+                  {(() => {
+                    const f = getCountryByName(committee.caucus!.currentSpeaker!);
+                    return f
+                      ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ width: '100%', height: '100%', objectFit: 'cover', position: 'absolute', top: 0, left: 0 }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                      : <Emoji size="5rem" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>🌐</Emoji>;
+                  })()}
+                </div>
+              )}
               <h1 className="text-5xl font-black text-[#1C1410] mt-2 mb-1 text-center">{committee.caucus!.currentSpeaker}</h1>
               <div className={`text-8xl font-black font-mono mt-2 mb-3 tabular-nums ${
                 extraTimeAdded ? 'text-[#EED98A]' :
@@ -823,11 +823,11 @@ function ModeratedCaucusMain({
                 </button>
                 <button onClick={handleToggleTimer}
                   className={`flex-1 py-3 px-6 rounded-xl font-bold text-base transition-colors ${timerRunning ? 'bg-[#B6871F] hover:bg-[#B6871F]/80 text-white' : 'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'}`}>
-                  {timerRunning ? '⏸ Pause' : '▶ Start'}
+                  {timerRunning ? '⏸ PAUSE' : '▶ START'}
                 </button>
                 <button onClick={handleNextCaucusSpeaker} disabled={queue.length === 0}
                   className="flex-1 bg-[#DDD4C0] hover:bg-[#C8BAA8] disabled:opacity-40 text-[#1C1410] py-3 px-6 rounded-xl font-bold text-base transition-colors">
-                  Next →
+                  NEXT →
                 </button>
                 <button onClick={() => setActivePopover(activePopover === 'extraTime' ? null : 'extraTime')} title="Add time"
                   className={`px-3 py-3 border rounded-xl font-bold text-sm transition-colors ${activePopover === 'extraTime' ? 'bg-[#2A5A3C]/60 border-[#3D7A52]/40 text-[#EED98A]' : 'bg-[#DDD4C0] hover:bg-[#3D7A52]/60 hover:border-[#3D7A52]/40 border-[#C8BAA8] text-[#6A5A4A]'}`}>
@@ -863,13 +863,12 @@ function ModeratedCaucusMain({
                 isRoomOrderTdT={isRoomOrderTdT}
               />
             )}
-            <div className="mb-6"><Emoji size="4.375rem">🎙</Emoji></div>
-            <h2 className="text-3xl font-black text-[#1C1410] mb-2">No Current Speaker</h2>
-            <p className="text-[#6A5A4A] mb-4 text-center">Add delegates below, then call the first speaker.</p>
+            <h2 className="text-5xl font-black mb-3 text-center" style={{ color: '#1B3828' }}>No Current Speaker</h2>
+            <p className="mb-4 text-center text-sm" style={{ color: '#9A8A78' }}>Add delegates below, then call the first speaker.</p>
             {!sessionEnded && (
               <button onClick={handleNextCaucusSpeaker} disabled={queue.length === 0}
                 className="bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white px-8 py-3 rounded-xl font-bold transition-colors">
-                Call First Speaker
+                CALL FIRST SPEAKER
               </button>
             )}
           </>
@@ -877,7 +876,7 @@ function ModeratedCaucusMain({
       </div>
 
       {!sessionEnded && (
-        <div className="border-t border-[#DDD4C0] bg-[#F6F1E9] px-6 py-4">
+        <div className="border-t border-[#DDD4C0] px-6 py-2.5" style={{ backgroundColor: '#F6F1E9' }}>
           {/* Total timer bar — hidden for Tour de Table */}
           {!isTdT && (
             <div className="flex items-center gap-3 mb-4">
@@ -2093,15 +2092,13 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                         })()}
                         <div className="flex flex-col items-center">
                           {/* Current speaker flag */}
-                          <div className="ring-4 ring-[#1B3828] rounded-full">
-                            <div className="relative w-36 h-36 rounded-full overflow-hidden bg-[#DDD4C0] shrink-0">
-                              {(() => {
-                                const f = getCountryByName(committee.currentSpeaker.country);
-                                return f
-                                  ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ width: '7rem', height: '7rem', objectFit: 'contain', position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                                  : <Emoji size="5rem" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>🌐</Emoji>;
-                              })()}
-                            </div>
+                          <div className="relative shrink-0" style={{ width: '168px', height: '168px', borderRadius: '16px', overflow: 'hidden', border: '2px solid rgba(28,20,16,0.15)', boxShadow: '0 8px 32px rgba(27,56,40,0.18)' }}>
+                            {(() => {
+                              const f = getCountryByName(committee.currentSpeaker.country);
+                              return f
+                                ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ width: '100%', height: '100%', objectFit: 'cover', position: 'absolute', top: 0, left: 0 }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                                : <Emoji size="5rem" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>🌐</Emoji>;
+                            })()}
                           </div>
                           <h1 className="text-5xl font-black text-[#1C1410] mt-2 mb-1 text-center">{committee.currentSpeaker.country}</h1>
                           <div className={`text-8xl font-black font-mono mt-2 mb-3 tabular-nums ${
@@ -2137,11 +2134,11 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                               isLastGSLSpeaker ? 'bg-[#DDD4C0] text-[#9A8A78] cursor-not-allowed' :
                               'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'
                             }`}>
-                            {timerRunning ? '⏸ Pause' : '▶ Start'}
+                            {timerRunning ? '⏸ PAUSE' : '▶ START'}
                           </button>
                           <button onClick={handleNextSpeaker} disabled={committee.speakersList.length === 0}
                             className="flex-1 bg-[#DDD4C0] hover:bg-[#C8BAA8] disabled:opacity-40 text-[#1C1410] py-3 px-6 rounded-xl font-bold text-base transition-colors">
-                            Next →
+                            NEXT →
                           </button>
                           {/* Add Time button */}
                           <button
@@ -2176,9 +2173,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                             onRemove={handleRemoveFromSpeakersList}
                           />
                         )}
-                        <div className="mb-6"><Emoji size="4.375rem">🎙</Emoji></div>
-                        <h2 className="text-3xl font-black text-[#1C1410] mb-2">No Current Speaker</h2>
-                        <p className="text-[#6A5A4A] mb-4 text-center">Add delegates below, then call the first speaker.</p>
+                        <h2 className="text-5xl font-black mb-3 text-center" style={{ color: '#1B3828' }}>No Current Speaker</h2>
+                        <p className="mb-4 text-center text-sm" style={{ color: '#9A8A78' }}>Add delegates below, then call the first speaker.</p>
                         {committee.speakersList.length === 1 && (
                           <div className="mb-4 px-4 py-2 bg-[#B6871F]/10 border border-[#B6871F]/30 rounded-lg text-[#B6871F] text-xs text-center">
                             Only 1 delegate on the list — add more before starting.
@@ -2187,7 +2183,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                         {!sessionEnded && (
                           <button onClick={handleNextSpeaker} disabled={committee.speakersList.length < 2}
                             className="bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white px-8 py-3 rounded-xl font-bold transition-colors">
-                            Call First Speaker
+                            CALL FIRST SPEAKER
                           </button>
                         )}
                       </>
@@ -2195,7 +2191,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                   </div>
                 </div>{/* end flex-row */}
                 {!sessionEnded && (
-                <div className="border-t border-[#DDD4C0] bg-[#F6F1E9] px-6 py-4">
+                <div className="border-t border-[#DDD4C0] px-6 py-2.5" style={{ backgroundColor: '#F6F1E9' }}>
                   <div className="flex items-center gap-3 mb-4">
                     <span className="text-xs text-[#9A8A78] font-mono shrink-0">TIME</span>
                     <div className="flex gap-1.5">

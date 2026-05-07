@@ -59,9 +59,9 @@ function ViewToggle({ view, onChange }: { view: 'az' | 'queue'; onChange: (v: 'a
       className="relative w-[104px] h-[28px] rounded-full cursor-pointer select-none shrink-0" style={{ backgroundColor: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)' }}
       title="Toggle A-Z / Queue view"
     >
-      <div className="absolute inset-0 grid grid-cols-2 items-center pointer-events-none z-10">
-        <span className={`text-[10px] font-bold text-center ${!isQueue ? 'text-white' : 'text-white/40'}`}>A-Z</span>
-        <span className={`text-[10px] font-bold text-center ${isQueue ? 'text-[#EED98A]' : 'text-white/40'}`}>QUEUE</span>
+      <div className="absolute inset-0 flex items-center pointer-events-none z-10">
+        <span className={`w-[52px] text-[10px] font-bold text-center ${!isQueue ? 'text-white' : 'text-white/40'}`}>A-Z</span>
+        <span className={`w-[52px] text-[10px] font-bold text-center ${isQueue ? 'text-[#EED98A]' : 'text-white/40'}`}>QUEUE</span>
       </div>
       <div className={`absolute top-[2px] w-[50px] h-[24px] rounded-full transition-all duration-200 ${isQueue ? 'left-[52px]' : 'left-[2px]'}`} style={{ backgroundColor: isQueue ? '#B6871F' : 'rgba(255,255,255,0.18)' }} />
     </button>
