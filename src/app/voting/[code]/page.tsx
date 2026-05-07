@@ -444,7 +444,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
 
       {/* ── Active voting: one delegate at a time ── */}
       {phase === 'voting' && currentDelegate && (
-        <div className="flex-1 flex flex-col items-center justify-between py-6 px-4 overflow-hidden">
+        <div className="flex-1 flex flex-col items-center py-6 px-4 overflow-hidden">
           {/* Current voter */}
           <div className="flex-1 flex flex-col items-center justify-center min-h-0">
             <div
@@ -505,30 +505,24 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
           </div>
 
           {/* Scale */}
-          <VoteScale forCount={forCount} againstCount={againstCount} totalVoted={votes.length} />
+          <div className="mb-4 w-full">
+            <VoteScale forCount={forCount} againstCount={againstCount} totalVoted={votes.length} />
+          </div>
 
-          {/* Upcoming voters */}
-          {upcomingDelegates.length > 0 && (
-            <div className="mt-4 w-full max-w-2xl">
-              <p className="text-[10px] text-[#9A8A78] font-mono text-center mb-2 tracking-widest">UP NEXT</p>
-              <div className="flex items-center justify-center gap-4">
-                {upcomingDelegates.map((d, i) => (
-                  <div
-                    key={d.id}
-                    className="flex flex-col items-center gap-1"
-                    style={{ opacity: Math.max(0.2, 1 - i * 0.18) }}
-                  >
-                    <span style={{ fontSize: i === 0 ? '4rem' : `${Math.max(1.2, 2.8 - i * 0.2)}rem`, lineHeight: '1' }}>
-                      {getFlag(d.country)}
-                    </span>
-                    <span className="text-[9px] text-[#9A8A78] text-center max-w-[52px] truncate">
-                      {d.country}
-                    </span>
-                  </div>
-                ))}
-              </div>
+          {/* Upcoming voters — always rendered, invisible when empty to prevent layout shift */}
+          <div className={`mt-4 w-full max-w-2xl ${upcomingDelegates.length === 0 ? 'invisible' : ''}`}>
+            <p className="text-[10px] text-[#9A8A78] font-mono text-center mb-2 tracking-widest">UP NEXT</p>
+            <div className="flex items-center justify-center gap-4" style={{ minHeight: '72px' }}>
+              {upcomingDelegates.map((d, i) => (
+                <div key={d.id} className="flex flex-col items-center gap-1" style={{ opacity: Math.max(0.2, 1 - i * 0.18) }}>
+                  <span style={{ fontSize: i === 0 ? '4rem' : `${Math.max(1.2, 2.8 - i * 0.2)}rem`, lineHeight: '1' }}>
+                    {getFlag(d.country)}
+                  </span>
+                  <span className="text-[9px] text-[#9A8A78] text-center max-w-[52px] truncate">{d.country}</span>
+                </div>
+              ))}
             </div>
-          )}
+          </div>
         </div>
       )}
 
