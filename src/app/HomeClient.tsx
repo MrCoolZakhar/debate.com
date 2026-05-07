@@ -377,6 +377,22 @@ export default function HomeClient() {
 
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            '@context': 'https://schema.org',
+            '@type': 'WebApplication',
+            name: 'Gavelling',
+            url: 'https://gavelling.com',
+            description: 'Modern MUN committee software. Manage roll call, speakers lists, motions, and voting — all in one place.',
+            applicationCategory: 'EducationalApplication',
+            operatingSystem: 'Web',
+            offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+            author: { '@type': 'Organization', name: 'Gavelling', url: 'https://gavelling.com', email: 'wearegavelling@gmail.com' },
+          }),
+        }}
+      />
       <style>{`
         @keyframes fadeUp {
           from { opacity: 0; transform: translateY(24px); }
