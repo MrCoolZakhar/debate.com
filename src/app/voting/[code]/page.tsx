@@ -482,21 +482,17 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             <div className="select-none mb-3 flex items-center justify-center">
               {(() => {
                 const f = getCountryByName(currentDelegate.country);
+                const size = 'min(22vw, 18vh)';
                 return f ? (
-                  <img
-                    src={getFlagUrl(f.code)}
-                    alt={f.code}
-                    style={{
-                      width: 'min(22vw, 18vh)',
-                      height: 'auto',
-                      display: 'block',
-                      borderRadius: '10px',
-                      outline: '2.5px solid rgba(28,20,16,0.22)',
-                      outlineOffset: '0px',
-                    }}
-                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-                  />
-                ) : <Emoji size="min(22vw, 18vh)">🌐</Emoji>;
+                  <div style={{ width: size, aspectRatio: '3 / 2', borderRadius: '10px', overflow: 'hidden', boxShadow: '0 0 0 2.5px rgba(28,20,16,0.22)', flexShrink: 0 }}>
+                    <img
+                      src={getFlagUrl(f.code)}
+                      alt={f.code}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                      onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                    />
+                  </div>
+                ) : <Emoji size={size}>🌐</Emoji>;
               })()}
             </div>
             <h1
@@ -623,21 +619,17 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             <div className="select-none mb-3 flex items-center justify-center">
               {(() => {
                 const f = getCountryByName(orderedRights[rightsIndex].country);
+                const size = 'min(18vw, 16vh)';
                 return f ? (
-                  <img
-                    src={getFlagUrl(f.code)}
-                    alt={f.code}
-                    style={{
-                      width: 'min(18vw, 16vh)',
-                      height: 'auto',
-                      display: 'block',
-                      borderRadius: '10px',
-                      outline: '2.5px solid rgba(28,20,16,0.22)',
-                      outlineOffset: '0px',
-                    }}
-                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-                  />
-                ) : <Emoji size="min(18vw, 16vh)">🌐</Emoji>;
+                  <div style={{ width: size, aspectRatio: '3 / 2', borderRadius: '10px', overflow: 'hidden', boxShadow: '0 0 0 2.5px rgba(28,20,16,0.22)', flexShrink: 0 }}>
+                    <img
+                      src={getFlagUrl(f.code)}
+                      alt={f.code}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                      onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                    />
+                  </div>
+                ) : <Emoji size={size}>🌐</Emoji>;
               })()}
             </div>
             <h1
@@ -722,74 +714,98 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       {/* ── Final result ── */}
       {phase === 'result' && (
         <div className="flex-1 flex flex-col items-center justify-center px-8 gap-6">
-          <p className="text-xs font-mono text-[#9A8A78] tracking-widest">
-            FINAL RESULT — {selectedDoc.docCode}
+          <p className="text-xs font-mono text-[#9A8A78] tracking-widest uppercase">
+            Final Result — {selectedDoc.docCode}
           </p>
-          <div className={`rounded-3xl border px-16 py-12 text-center ${
-            passed ? 'bg-green-950/30 border-green-700/40' : 'bg-red-950/30 border-red-700/40'
-          }`}>
-            <div className={`text-6xl font-black mb-3 ${passed ? 'text-green-400' : 'text-red-400'}`}>
+
+          {/* Main result bubble */}
+          <div
+            className="rounded-3xl px-16 py-12 text-center w-full max-w-xl"
+            style={{
+              backgroundColor: passed ? '#1B3828' : '#8B2020',
+              boxShadow: passed
+                ? '0 24px 64px rgba(27,56,40,0.30)'
+                : '0 24px 64px rgba(139,32,32,0.30)',
+            }}
+          >
+            <div className="text-6xl font-black mb-3" style={{ color: passed ? '#EED98A' : '#FFD0D0' }}>
               {passed ? '✓ PASSED' : '✗ FAILED'}
             </div>
-            <p className="text-xl font-bold text-[#1C1410] mb-6">{selectedDoc.title}</p>
+            <p className="text-xl font-bold mb-6" style={{ color: passed ? 'rgba(238,217,138,0.75)' : 'rgba(255,208,208,0.75)' }}>
+              {selectedDoc.title}
+            </p>
             <div className="flex justify-center gap-10">
               <div className="text-center">
-                <div className="text-4xl font-black text-green-400">{forCount}</div>
-                <div className="text-[#6A5A4A] mt-1">For</div>
+                <div className="text-4xl font-black" style={{ color: '#6EE7A0' }}>{forCount}</div>
+                <div className="text-sm mt-1" style={{ color: passed ? 'rgba(238,217,138,0.6)' : 'rgba(255,208,208,0.6)' }}>For</div>
               </div>
               <div className="text-center">
-                <div className="text-4xl font-black text-red-400">{againstCount}</div>
-                <div className="text-[#6A5A4A] mt-1">Against</div>
+                <div className="text-4xl font-black" style={{ color: '#FCA5A5' }}>{againstCount}</div>
+                <div className="text-sm mt-1" style={{ color: passed ? 'rgba(238,217,138,0.6)' : 'rgba(255,208,208,0.6)' }}>Against</div>
               </div>
               {abstainCount > 0 && (
                 <div className="text-center">
-                  <div className="text-4xl font-black text-[#6A5A4A]">{abstainCount}</div>
-                  <div className="text-[#9A8A78] mt-1">Abstain</div>
+                  <div className="text-4xl font-black" style={{ color: 'rgba(255,255,255,0.5)' }}>{abstainCount}</div>
+                  <div className="text-sm mt-1" style={{ color: passed ? 'rgba(238,217,138,0.6)' : 'rgba(255,208,208,0.6)' }}>Abstain</div>
                 </div>
               )}
               {withRights.length > 0 && (
                 <div className="text-center">
-                  <div className="text-4xl font-black text-amber-400">{withRights.length}</div>
-                  <div className="text-[#6A5A4A] mt-1">w/ Rights</div>
+                  <div className="text-4xl font-black" style={{ color: '#FCD34D' }}>{withRights.length}</div>
+                  <div className="text-sm mt-1" style={{ color: passed ? 'rgba(238,217,138,0.6)' : 'rgba(255,208,208,0.6)' }}>w/ Rights</div>
                 </div>
               )}
             </div>
             {p5Veto && (
-              <p className="text-red-400 text-sm mt-4 font-semibold flex items-center gap-1 justify-center"><Emoji size="1em">🛡️</Emoji> P5 veto exercised</p>
+              <p className="text-sm mt-4 font-semibold flex items-center gap-1 justify-center" style={{ color: '#FCA5A5' }}>
+                <Emoji size="1em">🛡️</Emoji> P5 veto exercised
+              </p>
             )}
             {unanimousFail && (
-              <p className="text-red-400 text-sm mt-4 font-semibold">
+              <p className="text-sm mt-4 font-semibold" style={{ color: '#FCA5A5' }}>
                 ⚠️ Unanimous vote required — one or more delegates voted against or abstained
               </p>
             )}
             {!p5Veto && !unanimousFail && settings.substantiveThreshold === 'supermajority-2-3' && (
-              <p className={`text-sm mt-3 font-semibold ${thresholdMet ? 'text-green-400' : 'text-red-400'}`}>
+              <p className="text-sm mt-3 font-semibold" style={{ color: thresholdMet ? '#6EE7A0' : '#FCA5A5' }}>
                 2/3 supermajority required · {forCount}/{totalDecisive} ({totalDecisive > 0 ? Math.round(forCount / totalDecisive * 100) : 0}%)
               </p>
             )}
             {!p5Veto && !unanimousFail && settings.substantiveThreshold === 'consensus' && (
-              <p className={`text-sm mt-3 font-semibold ${thresholdMet ? 'text-green-400' : 'text-red-400'}`}>
+              <p className="text-sm mt-3 font-semibold" style={{ color: thresholdMet ? '#6EE7A0' : '#FCA5A5' }}>
                 Consensus required · {againstCount} voted against
               </p>
             )}
           </div>
+
           <VoteScale forCount={forCount} againstCount={againstCount} totalVoted={votes.length} />
+
+          {/* Action buttons */}
           <div className="flex gap-3">
             <button
               onClick={() => startNewVote(selectedDoc.id)}
-              className="bg-[#DDD4C0] hover:bg-[#EDE7D8] border border-[#DDD4C0] text-[#6A5A4A] py-3 px-6 rounded-xl font-bold transition-colors"
+              className="py-3 px-6 rounded-xl font-bold transition-colors"
+              style={{ backgroundColor: '#DDD4C0', color: '#1B3828', border: '1.5px solid #C8BAA8' }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#C8BAA8'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#DDD4C0'; }}
             >
               Vote Again
             </button>
             <button
               onClick={() => setSelectedDocId(null)}
-              className="bg-[#DDD4C0] hover:bg-[#EDE7D8] border border-[#DDD4C0] text-[#6A5A4A] py-3 px-6 rounded-xl font-bold transition-colors"
+              className="py-3 px-6 rounded-xl font-black transition-colors"
+              style={{ backgroundColor: '#1B3828', color: '#EED98A', boxShadow: '0 4px 16px rgba(27,56,40,0.25)' }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
             >
               Move to Next DR →
             </button>
             <button
               onClick={handleEndDebate}
-              className="bg-red-950/50 hover:bg-red-900/60 border border-red-900/50 text-red-400 py-3 px-6 rounded-xl font-bold transition-colors"
+              className="py-3 px-6 rounded-xl font-bold transition-colors"
+              style={{ backgroundColor: '#8B2020', color: 'white', border: '1.5px solid #A03030' }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#A03030'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#8B2020'; }}
             >
               End Debate
             </button>
