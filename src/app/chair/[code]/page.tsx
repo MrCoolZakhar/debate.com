@@ -319,7 +319,7 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, lastSpeakerDelegate
               )}
               {!isCurrent && (
                 <button onClick={() => onRemove(s.delegateId)}
-                  className="absolute -top-1 -right-1 w-4 h-4 bg-[#8B2020] rounded-full text-white text-[10px] hidden group-hover:flex items-center justify-center">✕</button>
+                  className="absolute -top-1 -right-1 w-5 h-5 bg-[#EDE7D8] border border-[#DDD4C0] rounded-full text-[#1C1410] text-[10px] font-black hidden group-hover:flex items-center justify-center shadow-sm">✕</button>
               )}
             </div>
           );
@@ -835,13 +835,13 @@ function ModeratedCaucusMain({
                   NEXT →
                 </button>
                 <button onClick={() => setActivePopover(activePopover === 'extraTime' ? null : 'extraTime')} title="Add time"
-                  className={`px-3 py-3 border rounded-xl font-bold text-sm transition-colors ${activePopover === 'extraTime' ? 'bg-[#2A5A3C]/60 border-[#3D7A52]/40 text-[#EED98A]' : 'bg-[#DDD4C0] hover:bg-[#3D7A52]/60 hover:border-[#3D7A52]/40 border-[#C8BAA8] text-[#6A5A4A]'}`}>
-                  +⏱
+                  className="px-4 py-3 border rounded-xl font-black text-xs uppercase tracking-wide transition-colors bg-[#EDE7D8] hover:bg-[#DDD4C0] border-[#DDD4C0] text-[#1B3828]">
+                  ADD TIME
                 </button>
                 {!isTdT && (
                   <button onClick={() => setActivePopover(activePopover === 'rightToReply' ? null : 'rightToReply')}
-                    className={`px-3 py-3 border rounded-xl font-bold text-xs transition-colors ${activePopover === 'rightToReply' ? 'bg-[#B8844A] border-[#B8844A] text-[#1C1410]' : 'bg-[#B8844A]/15 hover:bg-[#B8844A]/25 border-[#B8844A]/30 text-[#B8844A]'}`}>
-                    Right of Reply
+                    className="px-3 py-3 border rounded-xl font-black text-xs uppercase tracking-wide transition-colors bg-[#B8844A]/15 hover:bg-[#B8844A]/25 border-[#B8844A]/30 text-[#B8844A]">
+                    Right to Reply
                   </button>
                 )}
               </div>
@@ -2175,22 +2175,14 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                           <button
                             onClick={() => setActivePopover(activePopover === 'extraTime' ? null : 'extraTime')}
                             title="Add time"
-                            className={`px-3 py-3 border rounded-xl font-bold text-sm transition-colors ${
-                              activePopover === 'extraTime'
-                                ? 'bg-[#2A5A3C]/60 border-[#3D7A52]/40 text-[#EED98A]'
-                                : 'bg-[#DDD4C0] hover:bg-[#3D7A52]/60 hover:border-[#3D7A52]/40 border-[#C8BAA8] text-[#6A5A4A]'
-                            }`}>
-                            +⏱
+                            className="px-4 py-3 border rounded-xl font-black text-xs uppercase tracking-wide transition-colors bg-[#EDE7D8] hover:bg-[#DDD4C0] border-[#DDD4C0] text-[#1B3828]">
+                            ADD TIME
                           </button>
                           {/* Right of Reply button */}
                           <button
                             onClick={() => setActivePopover(activePopover === 'rightToReply' ? null : 'rightToReply')}
-                            className={`px-3 py-3 border rounded-xl font-bold text-xs transition-colors ${
-                              activePopover === 'rightToReply'
-                                ? 'bg-[#B8844A] border-[#B8844A] text-[#1C1410]'
-                                : 'bg-[#B8844A]/15 hover:bg-[#B8844A]/25 border-[#B8844A]/30 text-[#B8844A]'
-                            }`}>
-                            Right of Reply
+                            className="px-3 py-3 border rounded-xl font-black text-xs uppercase tracking-wide transition-colors bg-[#B8844A]/15 hover:bg-[#B8844A]/25 border-[#B8844A]/30 text-[#B8844A]">
+                            Right to Reply
                           </button>
                         </div>
                         )}
@@ -2281,33 +2273,16 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         >
           <div className="bg-[#EDE7D8] border border-[#3D7A52]/40 rounded-xl p-3 w-72 shadow-2xl">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-[#EED98A] font-semibold">Add time</span>
-              <button onClick={() => setActivePopover(null)} className="text-[#9A8A78] hover:text-[#1C1410] text-sm">✕</button>
+              <span className="text-xs font-black uppercase tracking-wide" style={{ color: '#1B3828' }}>ADD TIME</span>
+              <button onClick={() => setActivePopover(null)} className="text-[#1C1410] hover:text-[#8B2020] text-sm font-bold">✕</button>
             </div>
             <div className="flex gap-2 mb-2">
               {[15, 30, 60].map((s) => (
-                <button key={s} onClick={() => handleAddExtraTime(s)}
-                  className="flex-1 py-2 bg-[#2A5A3C]/60 hover:bg-[#3D7A52]/60 border border-[#3D7A52]/40 text-[#EED98A] text-xs rounded-lg font-bold transition-colors">
-                  {s === 60 ? '1m' : `${s}s`}
+                <button key={s} onClick={() => { handleAddExtraTime(s); setActivePopover(null); }}
+                  className="flex-1 py-2 bg-[#1B3828] hover:bg-[#2A5A3C] border border-[#3D7A52]/40 text-[#EED98A] text-xs rounded-lg font-black uppercase tracking-wide transition-colors">
+                  +{s}s
                 </button>
               ))}
-            </div>
-            <div className="flex gap-2 items-center">
-              <input
-                type="number"
-                value={extraTimeSecs}
-                onChange={(e) => setExtraTimeSecs(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') { const n = parseInt(extraTimeSecs); if (n > 0) handleAddExtraTime(n); } }}
-                placeholder="Custom sec…"
-                style={{ MozAppearance: 'textfield' } as React.CSSProperties}
-                className="flex-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-2 py-1.5 text-[#1C1410] text-xs focus:outline-none focus:border-[#3D7A52] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-              />
-              <button
-                onClick={() => { const n = parseInt(extraTimeSecs); if (n > 0) handleAddExtraTime(n); }}
-                disabled={!extraTimeSecs || parseInt(extraTimeSecs) <= 0}
-                className="px-3 py-1.5 bg-[#2A5A3C]/60 hover:bg-[#3D7A52]/60 disabled:opacity-40 text-[#EED98A] text-xs rounded-lg font-semibold transition-colors">
-                Add ↵
-              </button>
             </div>
           </div>
         </div>
@@ -2322,14 +2297,14 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         >
           <div className="bg-[#EDE7D8] border border-[#B8844A]/30 rounded-xl p-4 w-72 shadow-2xl">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-[#B8844A] font-semibold">Right of Reply</span>
+              <span className="text-xs font-black uppercase tracking-wide" style={{ color: '#B8844A' }}>RIGHT TO REPLY</span>
               <button onClick={() => {
                 setActivePopover(null);
                 setRtrOpen(false);
                 setRtrTimerActive(false);
                 setRtrCountry('');
                 setRtrTimeRemaining(rtrSeconds);
-              }} className="text-[#9A8A78] hover:text-[#1C1410] text-sm">✕</button>
+              }} className="text-[#1C1410] hover:text-[#8B2020] text-sm font-bold">✕</button>
             </div>
             {!rtrOpen ? (
               // ── Setup view ────────────────────────────────────
@@ -2340,30 +2315,19 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                   onChange={(v) => setRtrCountry(v)}
                 />
                 <div className="flex gap-2 mt-2 mb-2">
-                  {[15, 20, 30].map((s) => (
+                  {[15, 30, 60].map((s) => (
                     <button
                       key={s}
                       onClick={() => setRtrSeconds(s)}
-                      className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-colors border ${
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-black uppercase tracking-wide transition-colors border ${
                         rtrSeconds === s
-                          ? 'bg-[#B8844A] border-[#B8844A] text-[#1C1410]'
-                          : 'bg-[#DDD4C0] border-[#DDD4C0] text-[#6A5A4A] hover:border-orange-700/50'
+                          ? 'bg-[#1B3828] border-[#1B3828] text-[#EED98A]'
+                          : 'bg-[#EDE7D8] border-[#DDD4C0] text-[#1B3828] hover:bg-[#DDD4C0]'
                       }`}
                     >
                       {s}s
                     </button>
                   ))}
-                  <div className="flex items-center gap-1">
-                    <input
-                      type="number"
-                      min={5} max={300}
-                      value={rtrSeconds}
-                      onChange={(e) => setRtrSeconds(parseInt(e.target.value) || 30)}
-                      style={{ MozAppearance: 'textfield' } as React.CSSProperties}
-                      className="w-14 bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-2 py-1.5 text-[#1C1410] text-xs focus:outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                    />
-                    <span className="text-xs text-[#9A8A78]">s</span>
-                  </div>
                 </div>
                 <button
                   onClick={() => {
@@ -2373,9 +2337,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                     setRtrOpen(true);
                   }}
                   disabled={!rtrCountry}
-                  className="w-full py-2 bg-[#B8844A] hover:bg-[#B8844A]/80 disabled:opacity-40 disabled:cursor-not-allowed text-[#1C1410] text-xs rounded-lg font-bold transition-colors"
+                  className="w-full py-2 bg-[#1B3828] hover:bg-[#2A5A3C] disabled:opacity-40 disabled:cursor-not-allowed text-[#EED98A] text-xs rounded-lg font-black uppercase tracking-wide transition-colors"
                 >
-                  Grant Right of Reply
+                  GRANT
                 </button>
               </>
             ) : (
@@ -2389,7 +2353,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                       : <Emoji size="1.25rem">🌐</Emoji>;
                   })()}
                   <span className="text-sm text-[#1C1410] font-bold flex-1">{rtrCountry}</span>
-                  <span className="text-xs text-[#B8844A] font-mono">Right of Reply</span>
+                  <span className="text-xs font-black uppercase tracking-wide" style={{ color: '#B8844A' }}>RIGHT TO REPLY</span>
                 </div>
                 <div className={`text-5xl font-black font-mono text-center mb-3 tabular-nums ${
                   rtrTimeRemaining <= 5 ? 'text-red-500' : rtrTimeRemaining <= 10 ? 'text-[#B6871F]' : 'text-[#B8844A]'
