@@ -661,6 +661,19 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     try { localStorage.setItem(`chat-read-${committee.code}`, JSON.stringify(chatReadCounts)); } catch {}
   }, [chatReadCounts, committee?.code]);
 
+  // Prevent browser back button from leaving an active session.
+  // When sessionEnded or sessionSuspended become true the effect re-runs,
+  // the cleanup removes the listener, and the early return skips re-adding it.
+  useEffect(() => {
+    if (sessionEnded || sessionSuspended) return;
+    window.history.pushState(null, '', window.location.href);
+    const handlePopState = () => {
+      window.history.pushState(null, '', window.location.href);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [sessionEnded, sessionSuspended]);
+
   useEffect(() => {
     if (!sessionEnded && !sessionSuspended) return;
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') router.push('/'); };

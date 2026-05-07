@@ -1324,6 +1324,19 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [committee?.id]);
 
+  // Prevent browser back button from leaving an active session.
+  // When sessionEnded or sessionSuspended become true the effect re-runs,
+  // the cleanup removes the listener, and the early return skips re-adding it.
+  useEffect(() => {
+    if (sessionEnded || sessionSuspended) return;
+    window.history.pushState(null, '', window.location.href);
+    const handlePopState = () => {
+      window.history.pushState(null, '', window.location.href);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [sessionEnded, sessionSuspended]);
+
   useEffect(() => {
     if (!sessionEnded && !sessionSuspended) return;
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') router.push('/'); };
