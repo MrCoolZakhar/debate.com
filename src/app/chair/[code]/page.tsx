@@ -307,15 +307,13 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, lastSpeakerDelegate
                   <span className="text-3xl font-black text-[#B6871F]">{i + 2}</span>
                 </div>
               ) : (
-                <div style={{ borderRadius: '10px', overflow: 'hidden', border: '1.5px solid rgba(28,20,16,0.12)' }}>
-                  <FlagCircle country={s.country} size="xl" />
-                </div>
+                <FlagCircle country={s.country} size="xl" />
               )}
               {!isRoomOrderTdT && (
                 <span className="line-clamp-2 break-words whitespace-normal leading-tight max-w-[80px] text-xs font-semibold text-center" style={{ color: '#1C1410' }}>{abbrevCountry(s.country)}</span>
               )}
-              {isCurrent && <span className="text-sm font-black uppercase tracking-wide" style={{ color: '#1B3828' }}>Speaking</span>}
-              {!isCurrent && i === 0 && <span className="text-xs font-bold uppercase tracking-wide" style={{ color: '#9A8A78' }}>Up next</span>}
+              {isCurrent && <span className="text-sm font-black uppercase tracking-wide" style={{ color: '#B8844A' }}>Speaking</span>}
+              {!isCurrent && i === 0 && <span className="text-xs font-bold uppercase tracking-wide" style={{ color: '#B8844A' }}>Up next</span>}
               {!isCurrent && lastSpeakerDelegateId && s.delegateId === lastSpeakerDelegateId && i !== 0 && (
                 <span className="text-xs font-bold text-[#9A8A78] bg-[#DDD4C0] px-1.5 py-0.5 rounded">Last</span>
               )}
@@ -793,7 +791,7 @@ function ModeratedCaucusMain({
                   })()}</span>
                 </div>
               ) : (
-                <div className="relative shrink-0" style={{ width: '168px', height: '168px', borderRadius: '16px', overflow: 'hidden', border: '2px solid rgba(28,20,16,0.15)', boxShadow: '0 8px 32px rgba(27,56,40,0.18)' }}>
+                <div className="relative shrink-0" style={{ width: '168px', height: '168px', borderRadius: '16px', overflow: 'hidden' }}>
                   {(() => {
                     const f = getCountryByName(committee.caucus!.currentSpeaker!);
                     return f
@@ -805,8 +803,7 @@ function ModeratedCaucusMain({
               <h1 className="text-5xl font-black text-[#1C1410] mt-2 mb-1 text-center">{committee.caucus!.currentSpeaker}</h1>
               <div className={`text-8xl font-black font-mono mt-2 mb-3 tabular-nums ${
                 extraTimeAdded ? 'text-[#EED98A]' :
-                speakerTimeRemaining <= 10 ? 'text-red-500' :
-                speakerTimeRemaining <= 30 ? 'text-[#B6871F]' : 'text-[#1C1410]'
+                speakerTimeRemaining <= 10 ? 'text-red-500' : 'text-[#1C1410]'
               }`}>
                 {formatTime(speakerTimeRemaining)}
                 {extraTimeAdded && <span className="text-base ml-2 font-normal text-[#EED98A]">+time</span>}
@@ -823,7 +820,7 @@ function ModeratedCaucusMain({
                 </button>
                 <button onClick={handleToggleTimer}
                   className={`flex-1 py-3 px-6 rounded-xl font-bold text-base transition-colors ${timerRunning ? 'bg-[#B6871F] hover:bg-[#B6871F]/80 text-white' : 'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'}`}>
-                  {timerRunning ? '⏸ PAUSE' : '▶ START'}
+                  {timerRunning ? '❙❙ PAUSE' : '▶ START'}
                 </button>
                 <button onClick={handleNextCaucusSpeaker} disabled={queue.length === 0}
                   className="flex-1 bg-[#DDD4C0] hover:bg-[#C8BAA8] disabled:opacity-40 text-[#1C1410] py-3 px-6 rounded-xl font-bold text-base transition-colors">
@@ -876,7 +873,7 @@ function ModeratedCaucusMain({
       </div>
 
       {!sessionEnded && (
-        <div className="border-t border-[#DDD4C0] px-6 py-2.5" style={{ backgroundColor: '#F6F1E9' }}>
+        <div className="border-t border-[#DDD4C0] px-6 py-2" style={{ backgroundColor: '#F6F1E9' }}>
           {/* Total timer bar — hidden for Tour de Table */}
           {!isTdT && (
             <div className="flex items-center gap-3 mb-4">
@@ -2111,7 +2108,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                         })()}
                         <div className="flex flex-col items-center">
                           {/* Current speaker flag */}
-                          <div className="relative shrink-0" style={{ width: '168px', height: '168px', borderRadius: '16px', overflow: 'hidden', border: '2px solid rgba(28,20,16,0.15)', boxShadow: '0 8px 32px rgba(27,56,40,0.18)' }}>
+                          <div className="relative shrink-0" style={{ width: '168px', height: '168px', borderRadius: '16px', overflow: 'hidden' }}>
                             {(() => {
                               const f = getCountryByName(committee.currentSpeaker.country);
                               return f
@@ -2122,8 +2119,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                           <h1 className="text-5xl font-black text-[#1C1410] mt-2 mb-1 text-center">{committee.currentSpeaker.country}</h1>
                           <div className={`text-8xl font-black font-mono mt-2 mb-3 tabular-nums ${
                             extraTimeAdded ? 'text-[#EED98A]' :
-                            speakerTimeRemaining <= 10 ? 'text-red-500' :
-                            speakerTimeRemaining <= 30 ? 'text-[#B6871F]' : 'text-[#1C1410]'
+                            speakerTimeRemaining <= 10 ? 'text-red-500' : 'text-[#1C1410]'
                           }`}>
                             {formatTime(speakerTimeRemaining)}
                             {extraTimeAdded && <span className="text-base ml-2 font-normal text-[#EED98A]">+time</span>}
@@ -2153,7 +2149,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                               isLastGSLSpeaker ? 'bg-[#DDD4C0] text-[#9A8A78] cursor-not-allowed' :
                               'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'
                             }`}>
-                            {timerRunning ? '⏸ PAUSE' : '▶ START'}
+                            {timerRunning ? '❙❙ PAUSE' : '▶ START'}
                           </button>
                           <button onClick={handleNextSpeaker} disabled={committee.speakersList.length === 0}
                             className="flex-1 bg-[#DDD4C0] hover:bg-[#C8BAA8] disabled:opacity-40 text-[#1C1410] py-3 px-6 rounded-xl font-bold text-base transition-colors">
@@ -2210,7 +2206,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                   </div>
                 </div>{/* end flex-row */}
                 {!sessionEnded && (
-                <div className="border-t border-[#DDD4C0] px-6 py-2.5" style={{ backgroundColor: '#F6F1E9' }}>
+                <div className="border-t border-[#DDD4C0] px-6 py-2" style={{ backgroundColor: '#F6F1E9' }}>
                   <div className="flex items-center gap-3 mb-4">
                     <span className="text-xs text-[#9A8A78] font-mono shrink-0">TIME</span>
                     <div className="flex gap-1.5">
