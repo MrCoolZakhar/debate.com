@@ -33,6 +33,86 @@ interface DelegateVote {
 
 type VotingPhase = 'voting' | 'rights-speakers' | 'result';
 
+// ── Roll call modal — defined OUTSIDE VotingPage so React never remounts it ──
+// (defining it inside caused new function type each render → unmount/remount → no CSS transitions)
+function RollCallModal({
+  delegates,
+  rollCallStatuses,
+  onCycleStatus,
+  onConfirm,
+}: {
+  delegates: Committee['delegates'];
+  rollCallStatuses: Record<string, DelegateStatus>;
+  onCycleStatus: (id: string) => void;
+  onConfirm: () => void;
+}) {
+  const sorted = [...delegates].sort((a, b) => a.country.localeCompare(b.country));
+  const thumbPos = (status: DelegateStatus) =>
+    status === 'absent' ? 'left-[2px]' : status === 'present' ? 'left-[32px]' : 'left-[62px]';
+  const thumbColor = (status: DelegateStatus) =>
+    status === 'absent' ? 'bg-[#8B2020]' : status === 'present' ? 'bg-[#3D7A52]' : 'bg-[#B6871F]';
+  const presentCount = Object.values(rollCallStatuses).filter((s) => s !== 'absent').length;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(5,4,3,0.92)', backdropFilter: 'blur(4px)' }}>
+      <div className="rounded-2xl w-full max-w-md shadow-2xl flex flex-col" style={{ maxHeight: '85vh', backgroundColor: '#1B3828', border: '1px solid rgba(255,255,255,0.12)' }}>
+        <div className="px-5 py-4 shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.12)' }}>
+          <h2 className="text-base font-black text-white">Roll Call</h2>
+          <p className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.5)' }}>
+            {presentCount} of {delegates.length} delegates present — confirm before voting
+          </p>
+        </div>
+        <div className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
+          {sorted.map((d) => {
+            const status = rollCallStatuses[d.id] ?? d.status;
+            return (
+              <div
+                key={d.id}
+                className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all"
+                style={{
+                  backgroundColor: status === 'present' ? 'rgba(61,122,82,0.22)' : status === 'present-voting' ? 'rgba(182,135,31,0.18)' : 'transparent',
+                  opacity: status === 'absent' ? 0.4 : 1,
+                  border: status === 'present' ? '1px solid rgba(61,122,82,0.4)' : status === 'present-voting' ? '1px solid rgba(182,135,31,0.35)' : '1px solid transparent',
+                }}
+              >
+                <div className="w-9 h-9 rounded-full bg-[#DDD4C0] border border-[#C8BAA8] flex items-center justify-center shrink-0 overflow-hidden">
+                  {(() => { const f = getCountryByName(d.country); return f ? <img src={getFlagUrl(f.code)} alt={f.code} className="w-6 h-6 object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <Emoji size="1.25rem">🌐</Emoji>; })()}
+                </div>
+                <span className="flex-1 text-sm text-white truncate">{d.country}</span>
+                <button
+                  onClick={() => onCycleStatus(d.id)}
+                  className="relative w-[90px] h-[30px] rounded-full cursor-pointer shrink-0 select-none"
+                  style={{ backgroundColor: 'rgba(255,255,255,0.10)', border: '1.5px solid rgba(255,255,255,0.22)' }}
+                  title="Tap to cycle: Absent → Present → PV"
+                >
+                  <div className="absolute inset-0 grid grid-cols-3 items-center pointer-events-none">
+                    <span className={`text-[10px] font-bold text-center ${status === 'absent' ? 'text-white' : 'text-white/40'}`}>A</span>
+                    <span className={`text-[10px] font-bold text-center ${status === 'present' ? 'text-white' : 'text-white/40'}`}>P</span>
+                    <span className={`text-[10px] font-bold text-center ${status === 'present-voting' ? 'text-white' : 'text-white/40'}`}>PV</span>
+                  </div>
+                  <div className={`absolute top-[2px] w-[26px] h-[22px] rounded-full transition-all duration-200 shadow-sm ${thumbPos(status)} ${thumbColor(status)}`} />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+        <div className="px-4 py-4 shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.12)' }}>
+          <button
+            onClick={onConfirm}
+            disabled={presentCount === 0}
+            className="w-full py-3 rounded-xl font-black text-sm transition-colors"
+            style={{
+              backgroundColor: presentCount > 0 ? '#EDE7D8' : 'rgba(255,255,255,0.15)',
+              color: presentCount > 0 ? '#1C1410' : 'rgba(255,255,255,0.4)',
+            }}
+          >
+            {presentCount > 0 ? `Start Voting with ${presentCount} delegates →` : 'Mark at least 1 delegate present'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function getFlag(country: string) {
   const found = getCountryByName(country);
   return found
@@ -304,68 +384,13 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   );
 
   // ── Roll call modal (blocks until dismissed) ─────────────────────────────
-  const RollCallModal = () => {
-    const sorted = [...committee.delegates].sort((a, b) => a.country.localeCompare(b.country));
-    const cycleStatus = (id: string) => {
-      setRollCallStatuses((prev) => {
-        const cur = prev[id] ?? 'absent';
-        const next: DelegateStatus = cur === 'absent' ? 'present' : cur === 'present' ? 'present-voting' : 'absent';
-        setDelegateStatusInDB(id, next);
-        return { ...prev, [id]: next };
-      });
-    };
-    const thumbPos = (status: DelegateStatus) =>
-      status === 'absent' ? 'left-[2px]' : status === 'present' ? 'left-[32px]' : 'left-[62px]';
-    const thumbColor = (status: DelegateStatus) =>
-      status === 'absent' ? 'bg-[#8B2020]' : status === 'present' ? 'bg-[#3D7A52]' : 'bg-[#B6871F]';
-    const presentCount = Object.values(rollCallStatuses).filter((s) => s !== 'absent').length;
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(5, 4, 3, 0.92)', backdropFilter: 'blur(4px)' }}>
-        <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-2xl w-full max-w-md shadow-2xl flex flex-col" style={{ maxHeight: '85vh' }}>
-          <div className="px-5 py-4 border-b border-[#DDD4C0] shrink-0">
-            <h2 className="text-base font-black text-[#1C1410]">Roll Call</h2>
-            <p className="text-xs text-[#9A8A78] mt-0.5">{presentCount} of {committee.delegates.length} delegates present — confirm before voting</p>
-          </div>
-          <div className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
-            {sorted.map((d) => {
-              const status = rollCallStatuses[d.id] ?? d.status;
-              return (
-                <div
-                  key={d.id}
-                  className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all ${status === 'absent' ? 'opacity-40' : ''}`}
-                  style={{ backgroundColor: status === 'present' ? 'rgba(61,122,82,0.22)' : status === 'present-voting' ? 'rgba(182,135,31,0.18)' : 'transparent', border: status === 'present' ? '1px solid rgba(61,122,82,0.4)' : status === 'present-voting' ? '1px solid rgba(182,135,31,0.35)' : '1px solid transparent' }}
-                >
-                  {(() => { const f = getCountryByName(d.country); return f ? <img src={getFlagUrl(f.code)} alt={f.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <Emoji size="1.25rem">🌐</Emoji>; })()}
-                  <span className="flex-1 text-sm text-[#1C1410] truncate">{d.country}</span>
-                  <button
-                    onClick={() => cycleStatus(d.id)}
-                    className="relative w-[90px] h-[30px] rounded-full cursor-pointer shrink-0 select-none transition-all"
-                    style={{ backgroundColor: 'rgba(27,56,40,0.85)', border: '1.5px solid rgba(27,56,40,0.5)' }}
-                    title="Tap to cycle: Absent → Present → PV"
-                  >
-                    <div className="absolute inset-0 grid grid-cols-3 items-center pointer-events-none">
-                      <span className={`text-[10px] font-bold text-center ${status === 'absent' ? 'text-white' : 'text-white/40'}`}>A</span>
-                      <span className={`text-[10px] font-bold text-center ${status === 'present' ? 'text-white' : 'text-white/40'}`}>P</span>
-                      <span className={`text-[10px] font-bold text-center ${status === 'present-voting' ? 'text-white' : 'text-white/40'}`}>PV</span>
-                    </div>
-                    <div className={`absolute top-[2px] w-[26px] h-[22px] rounded-full transition-all duration-200 shadow-sm ${thumbPos(status)} ${thumbColor(status)}`} />
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-          <div className="px-4 py-4 border-t border-[#DDD4C0] shrink-0">
-            <button
-              onClick={() => setRollCallDone(true)}
-              disabled={presentCount === 0}
-              className="w-full bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white py-3 rounded-xl font-black text-sm transition-colors"
-            >
-              {presentCount > 0 ? `Start Voting with ${presentCount} delegates →` : 'Mark at least 1 delegate present'}
-            </button>
-          </div>
-        </div>
-      </div>
-    );
+  const cycleRollCallStatus = (id: string) => {
+    setRollCallStatuses((prev) => {
+      const cur = prev[id] ?? 'absent';
+      const next: DelegateStatus = cur === 'absent' ? 'present' : cur === 'present' ? 'present-voting' : 'absent';
+      setDelegateStatusInDB(id, next);
+      return { ...prev, [id]: next };
+    });
   };
 
   // ── Doc selection screen ──────────────────────────────────────────────────
@@ -373,7 +398,14 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     return (
       <div className="min-h-screen bg-[#F6F1E9] flex flex-col">
         <Header />
-        {!rollCallDone && <RollCallModal />}
+        {!rollCallDone && (
+          <RollCallModal
+            delegates={committee.delegates}
+            rollCallStatuses={rollCallStatuses}
+            onCycleStatus={cycleRollCallStatus}
+            onConfirm={() => setRollCallDone(true)}
+          />
+        )}
         {showSettings && <SettingsPanel committee={committee} onClose={() => setShowSettings(false)} />}
         <div className="flex-1 flex items-center justify-center">
           <div className="w-96 space-y-3">
@@ -448,8 +480,8 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
           {/* Current voter */}
           <div className="flex-1 flex flex-col items-center justify-center min-h-0">
             <div
-              style={{ fontSize: 'min(22vw, 18vh)', lineHeight: '1' }}
-              className="select-none mb-3 flex items-center justify-center p-3 rounded-3xl border-4 border-[#1B3828]/30 bg-[#1B3828]/05"
+              style={{ fontSize: 'min(33vw, 27vh)', lineHeight: '1', display: 'flex' }}
+              className="select-none mb-3 rounded-3xl border-4 border-[#1B3828]/40 overflow-hidden"
             >
               {getFlag(currentDelegate.country)}
             </div>
