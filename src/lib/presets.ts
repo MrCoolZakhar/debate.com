@@ -31,11 +31,11 @@ export const WHO_MEMBERS = [
   'Vietnam','Yemen','Zambia','Zimbabwe',
 ];
 
-export const IMF_MEMBERS = WHO_MEMBERS;
+export const IMF_MEMBERS: string[] = [];
 
-export const WORLD_BANK_MEMBERS = WHO_MEMBERS;
+export const WORLD_BANK_MEMBERS: string[] = [];
 
-export const UNEP_MEMBERS = WHO_MEMBERS;
+export const UNEP_MEMBERS: string[] = [];
 
 // Current UNSC members (2026) — P5 + 10 elected
 export const UNSC_MEMBERS = [
