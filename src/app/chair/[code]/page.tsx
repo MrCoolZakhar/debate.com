@@ -2098,7 +2098,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                   {/* GSL content area — overflow-hidden is intentional. Never use overflow-y-auto here:
                       it creates a scroll context that causes browser scrollbars to appear, cutting off
                       the flag queue at top and the Right of Reply button at bottom. */}
-                  <div className="flex-1 flex flex-col items-center justify-start px-4 pt-10 pb-4 overflow-hidden">
+                  <div className="flex-1 flex flex-col items-center justify-start px-4 pt-5 pb-2 overflow-hidden">
                     {committee.currentSpeaker ? (
                       <>
                         {(() => {
@@ -2125,8 +2125,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                                 : <Emoji size="5rem" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>🌐</Emoji>;
                             })()}
                           </div>
-                          <h1 className="text-5xl font-black text-[#1C1410] mt-1 mb-0 text-center">{committee.currentSpeaker.country}</h1>
-                          <div className={`text-8xl font-black font-mono mt-0 mb-2 tabular-nums ${
+                          <h1 className="text-5xl font-black text-[#1C1410] mt-2 mb-2 text-center">{committee.currentSpeaker.country}</h1>
+                          <div className={`text-8xl font-black font-mono mt-0 mb-4 tabular-nums ${
                             speakerTimeRemaining <= 10 ? 'text-[#B8844A]' : 'text-[#1C1410]'
                           }`}>
                             {formatTime(speakerTimeRemaining)}
@@ -2142,7 +2142,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                           </div>
                         )}
                         {!sessionEnded && (
-                        <div className="flex gap-2 w-full max-w-sm mt-2 flex-wrap justify-center">
+                        <div className="flex gap-2 w-full max-w-sm mt-4 flex-wrap justify-center">
                           {/* Restart button */}
                           <button onClick={handleRestartTime}
                             title="Restart time"
