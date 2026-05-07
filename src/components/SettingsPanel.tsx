@@ -202,7 +202,7 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
               style={{ filter: 'grayscale(1) brightness(0.6)' }}
               onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
             />
-            <h2 className="text-base font-black text-[#1C1410]">Session Settings</h2>
+            <h2 className="text-base font-black text-[#1C1410]">SESSION SETTINGS</h2>
             <p className="text-xs text-[#9A8A78] mt-0.5">{committee.name} · {committee.code}</p>
           </div>
           <button onClick={onClose} className="text-[#9A8A78] hover:text-[#1C1410] transition-colors text-xl leading-none">✕</button>

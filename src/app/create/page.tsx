@@ -176,7 +176,7 @@ function SelectScreen({ onSelect }: { onSelect: () => void }) {
       id: 'mun',
       video: '/card_mun.mp4',
       title: 'Model United\nNations',
-      subtitle: 'United Nations committee simulation',
+      subtitle: 'A UN committee, from opening speech to passed resolution',
       badge: null,
       active: true,
       bg: '#1B3828',
@@ -317,6 +317,9 @@ function SelectScreen({ onSelect }: { onSelect: () => void }) {
                   {card.title}
                 </h2>
 
+                {card.id === 'crisis' && (
+                  <p className="text-xs text-center mb-1" style={{ color: '#7A5A38' }}>Coming Late 2026</p>
+                )}
                 <p
                   className="text-center leading-relaxed mb-0"
                   style={{
