@@ -820,7 +820,15 @@ function ModeratedCaucusMain({
                 </button>
                 <button onClick={handleToggleTimer}
                   className={`flex-1 py-3 px-6 rounded-xl font-bold text-base transition-colors ${timerRunning ? 'bg-[#B6871F] hover:bg-[#B6871F]/80 text-white' : 'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'}`}>
-                  {timerRunning ? '❙❙ PAUSE' : '▶ START'}
+                  {timerRunning ? (
+  <span className="flex items-center justify-center gap-2">
+    <span className="flex gap-[3px] items-center">
+      <span className="w-[3px] h-[13px] rounded-sm bg-current inline-block" />
+      <span className="w-[3px] h-[13px] rounded-sm bg-current inline-block" />
+    </span>
+    <span>PAUSE</span>
+  </span>
+) : '▶ START'}
                 </button>
                 <button onClick={handleNextCaucusSpeaker} disabled={queue.length === 0}
                   className="flex-1 bg-[#DDD4C0] hover:bg-[#C8BAA8] disabled:opacity-40 text-[#1C1410] py-3 px-6 rounded-xl font-bold text-base transition-colors">
@@ -2149,7 +2157,15 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                               isLastGSLSpeaker ? 'bg-[#DDD4C0] text-[#9A8A78] cursor-not-allowed' :
                               'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'
                             }`}>
-                            {timerRunning ? '❙❙ PAUSE' : '▶ START'}
+                            {timerRunning ? (
+  <span className="flex items-center justify-center gap-2">
+    <span className="flex gap-[3px] items-center">
+      <span className="w-[3px] h-[13px] rounded-sm bg-current inline-block" />
+      <span className="w-[3px] h-[13px] rounded-sm bg-current inline-block" />
+    </span>
+    <span>PAUSE</span>
+  </span>
+) : '▶ START'}
                           </button>
                           <button onClick={handleNextSpeaker} disabled={committee.speakersList.length === 0}
                             className="flex-1 bg-[#DDD4C0] hover:bg-[#C8BAA8] disabled:opacity-40 text-[#1C1410] py-3 px-6 rounded-xl font-bold text-base transition-colors">
