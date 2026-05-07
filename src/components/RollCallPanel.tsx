@@ -516,7 +516,7 @@ function RollCallPanelInner({
                     </div>
                   )}
                 </div>
-                <span className={`flex-1 line-clamp-2 break-words whitespace-normal leading-tight max-w-[100px] ${isUpNext ? 'text-lg font-bold' : 'text-base'} ${!isAbsent ? 'font-medium' : 'opacity-50'}`} style={{ color: '#EDE7D8' }}>
+                <span className={`flex-1 truncate ${isUpNext ? 'text-lg font-bold' : 'text-base'} ${!isAbsent ? 'font-medium' : 'opacity-50'}`} style={{ color: '#EDE7D8' }}>
                   {d.country}
                 </span>
                 {isAbsent && !isRollCallPhase && (
