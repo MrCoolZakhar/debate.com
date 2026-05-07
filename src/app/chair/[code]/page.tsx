@@ -2125,7 +2125,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                                 : <Emoji size="5rem" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>🌐</Emoji>;
                             })()}
                           </div>
-                          <h1 className="text-5xl font-black text-[#1C1410] mt-2 mb-2 text-center">{committee.currentSpeaker.country}</h1>
+                          <h1 className="text-5xl font-black text-[#1C1410] mt-2 mb-5 text-center">{committee.currentSpeaker.country}</h1>
                           <div className={`text-8xl font-black font-mono mt-0 mb-4 tabular-nums ${
                             speakerTimeRemaining <= 10 ? 'text-[#B8844A]' : 'text-[#1C1410]'
                           }`}>
