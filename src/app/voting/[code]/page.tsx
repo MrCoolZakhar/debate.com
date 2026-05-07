@@ -609,7 +609,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             </div>
           </div>
 
-          <div className="w-full max-w-md space-y-1 mb-4">
+          <div className="w-full max-w-md space-y-1 mb-4 overflow-y-auto" style={{ maxHeight: '220px' }}>
             {orderedRights.map((v, i) => (
               <div
                 key={v.delegateId}
@@ -627,21 +627,21 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                   });
                   dragIndexRef.current = null;
                 }}
-                className={`flex items-center gap-3 px-4 py-2 rounded-lg text-sm transition-opacity ${
+                className={`flex items-center gap-3 px-4 py-2 rounded-lg text-sm transition-all ${
                   i === rightsIndex
-                    ? 'bg-amber-900/20 border border-amber-700/30 opacity-100'
+                    ? 'bg-[#1B3828] border border-[#3D7A52] text-[#EED98A]'
                     : i < rightsIndex
-                    ? 'opacity-30'
-                    : 'opacity-60 cursor-grab'
+                    ? 'bg-[#EDE7D8] border border-[#DDD4C0] text-[#9A8A78] opacity-50'
+                    : 'bg-[#FAF8F3] border border-[#DDD4C0] text-[#1C1410] opacity-80 cursor-grab'
                 }`}
               >
                 {i > rightsIndex && <span className="text-[#9A8A78] text-xs">⠿</span>}
-                <span className="text-[#9A8A78] text-xs w-5 font-mono text-right">{i + 1}</span>
-                <span className="text-[#1C1410]">{getFlag(v.country)} {v.country}</span>
-                <span className={`ml-auto text-xs ${
-                  i < rightsIndex ? 'text-[#9A8A78]' :
-                  i === rightsIndex ? 'text-amber-400 font-bold' :
-                  'text-[#9A8A78]'
+                <span className="text-xs w-5 font-mono text-right opacity-60">{i + 1}</span>
+                <span>{getFlag(v.country)} {v.country}</span>
+                <span className={`ml-auto text-xs font-semibold ${
+                  i < rightsIndex   ? 'text-[#9A8A78]' :
+                  i === rightsIndex ? 'text-[#EED98A]' :
+                  v.choice === 'for-rights' ? 'text-[#2A7A3C]' : 'text-[#8B2020]'
                 }`}>
                   {i < rightsIndex ? 'Done' :
                    i === rightsIndex ? 'Speaking' :
