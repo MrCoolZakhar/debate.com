@@ -307,7 +307,9 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, lastSpeakerDelegate
                   <span className="text-3xl font-black text-[#B6871F]">{i + 2}</span>
                 </div>
               ) : (
-                <FlagCircle country={s.country} size="xl" />
+                <div style={{ borderRadius: '10px', overflow: 'hidden', border: '1.5px solid rgba(28,20,16,0.12)' }}>
+                  <FlagCircle country={s.country} size="xl" />
+                </div>
               )}
               {!isRoomOrderTdT && (
                 <span className="line-clamp-2 break-words whitespace-normal leading-tight max-w-[80px] text-xs font-semibold text-center" style={{ color: '#1C1410' }}>{abbrevCountry(s.country)}</span>
@@ -2096,7 +2098,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                   {/* GSL content area — overflow-hidden is intentional. Never use overflow-y-auto here:
                       it creates a scroll context that causes browser scrollbars to appear, cutting off
                       the flag queue at top and the Right of Reply button at bottom. */}
-                  <div className="flex-1 flex flex-col items-center justify-center px-4 py-4 overflow-hidden">
+                  <div className="flex-1 flex flex-col items-center justify-center px-4 pt-2 pb-16 overflow-hidden">
                     {committee.currentSpeaker ? (
                       <>
                         {(() => {
