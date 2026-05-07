@@ -797,7 +797,7 @@ function ModeratedCaucusMain({
                   {(() => {
                     const f = getCountryByName(committee.caucus!.currentSpeaker!);
                     return f
-                      ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '4px' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                      ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                       : <Emoji size="5rem" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>🌐</Emoji>;
                   })()}
                 </div>
@@ -2121,7 +2121,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                             {(() => {
                               const f = getCountryByName(committee.currentSpeaker.country);
                               return f
-                                ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '4px' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                                ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                                 : <Emoji size="5rem" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>🌐</Emoji>;
                             })()}
                           </div>
