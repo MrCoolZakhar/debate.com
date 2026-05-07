@@ -168,6 +168,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   // Local delegate statuses for roll call modal (mirrors committee.delegates)
   const [rollCallStatuses, setRollCallStatuses] = useState<Record<string, DelegateStatus>>({});
   const [rightsTimerLimit, setRightsTimerLimit] = useState(60);
+  const [showEndDebateConfirm, setShowEndDebateConfirm] = useState(false);
   const [orderedRights, setOrderedRights] = useState<DelegateVote[]>([]);
   const dragIndexRef = useRef<number | null>(null);
   const resultPersistedRef = useRef(false);
@@ -368,13 +369,19 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       </div>
       <button
         onClick={handleBackToSession}
-        className="text-xs px-3 py-1 rounded-lg bg-[#DDD4C0] text-[#6A5A4A] hover:text-[#1C1410] transition-colors shrink-0"
+        className="text-xs px-3 py-1.5 rounded-lg font-black transition-colors shrink-0"
+        style={{ backgroundColor: '#1B3828', color: '#EED98A' }}
+        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
       >
         ← Back to Session
       </button>
       <button
-        onClick={handleEndDebate}
-        className="text-xs px-3 py-1 rounded-lg bg-red-950/50 text-red-400 hover:bg-red-900/60 border border-red-900/50 transition-colors shrink-0"
+        onClick={() => setShowEndDebateConfirm(true)}
+        className="text-xs px-3 py-1.5 rounded-lg font-black transition-colors shrink-0"
+        style={{ backgroundColor: '#8B2020', color: 'white' }}
+        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#A03030'; }}
+        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#8B2020'; }}
       >
         End Debate
       </button>
@@ -482,9 +489,9 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             <div className="select-none mb-3 flex items-center justify-center">
               {(() => {
                 const f = getCountryByName(currentDelegate.country);
-                const size = 'min(22vw, 18vh)';
+                const size = 'min(33vw, 27vh)';
                 return f ? (
-                  <div style={{ width: size, aspectRatio: '3 / 2', borderRadius: '10px', overflow: 'hidden', boxShadow: '0 0 0 2.5px rgba(28,20,16,0.22)', flexShrink: 0 }}>
+                  <div style={{ width: size, aspectRatio: '3 / 2', borderRadius: '14px', overflow: 'hidden', boxShadow: '0 0 0 3.75px rgba(28,20,16,0.22)', flexShrink: 0 }}>
                     <img
                       src={getFlagUrl(f.code)}
                       alt={f.code}
@@ -619,9 +626,9 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             <div className="select-none mb-3 flex items-center justify-center">
               {(() => {
                 const f = getCountryByName(orderedRights[rightsIndex].country);
-                const size = 'min(18vw, 16vh)';
+                const size = 'min(27vw, 24vh)';
                 return f ? (
-                  <div style={{ width: size, aspectRatio: '3 / 2', borderRadius: '10px', overflow: 'hidden', boxShadow: '0 0 0 2.5px rgba(28,20,16,0.22)', flexShrink: 0 }}>
+                  <div style={{ width: size, aspectRatio: '3 / 2', borderRadius: '14px', overflow: 'hidden', boxShadow: '0 0 0 3.75px rgba(28,20,16,0.22)', flexShrink: 0 }}>
                     <img
                       src={getFlagUrl(f.code)}
                       alt={f.code}
@@ -801,7 +808,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
               Move to Next DR →
             </button>
             <button
-              onClick={handleEndDebate}
+              onClick={() => setShowEndDebateConfirm(true)}
               className="py-3 px-6 rounded-xl font-bold transition-colors"
               style={{ backgroundColor: '#8B2020', color: 'white', border: '1.5px solid #A03030' }}
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#A03030'; }}
@@ -813,6 +820,58 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
         </div>
       )}
       {showSettings && <SettingsPanel committee={committee} onClose={() => setShowSettings(false)} />}
+
+      {/* ── End Debate confirmation modal ── */}
+      {showEndDebateConfirm && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ background: 'rgba(5,4,3,0.80)', backdropFilter: 'blur(6px)' }}
+          onClick={() => setShowEndDebateConfirm(false)}
+        >
+          <div
+            className="rounded-2xl w-full max-w-sm mx-4 shadow-2xl flex flex-col overflow-hidden"
+            style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Top bar */}
+            <div className="px-6 pt-6 pb-4" style={{ borderBottom: '1px solid #EDE7D8' }}>
+              <div className="flex items-center gap-3 mb-1">
+                <div
+                  className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-xl"
+                  style={{ backgroundColor: '#8B2020' }}
+                >
+                  🔨
+                </div>
+                <h2 className="text-lg font-black text-[#1C1410]">End Debate?</h2>
+              </div>
+              <p className="text-sm text-[#6A5A4A] leading-relaxed mt-2">
+                This will permanently adjourn the committee. All delegates will be shown a session-closed screen and no further changes can be made.
+              </p>
+            </div>
+            {/* Buttons */}
+            <div className="px-6 py-4 flex gap-3">
+              <button
+                onClick={() => setShowEndDebateConfirm(false)}
+                className="flex-1 py-3 rounded-xl font-bold text-sm transition-colors"
+                style={{ backgroundColor: '#EDE7D8', color: '#1C1410', border: '1.5px solid #DDD4C0' }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#DDD4C0'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#EDE7D8'; }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => { setShowEndDebateConfirm(false); handleEndDebate(); }}
+                className="flex-1 py-3 rounded-xl font-black text-sm transition-colors"
+                style={{ backgroundColor: '#8B2020', color: 'white' }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#A03030'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#8B2020'; }}
+              >
+                Yes, End Debate
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
