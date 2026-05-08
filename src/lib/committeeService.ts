@@ -84,33 +84,41 @@ export async function createCommittee(
   chairNames: string[],
   delegateNames: string[],
 ): Promise<{ code: string; chairJoinSuffix: string } | null> {
-  const code = generateCode();
-  const chairJoinSuffix = Math.floor(1000 + Math.random() * 9000).toString();
+  const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 15000));
+  const createPromise = async (): Promise<{ code: string; chairJoinSuffix: string } | null> => {
+    const code = generateCode();
+    const chairJoinSuffix = Math.floor(1000 + Math.random() * 9000).toString();
 
-  const { data: committeeRow, error: committeeError } = await supabase
-    .from('committees')
-    .insert({
-      code, name, topic, chair_names: chairNames, phase: 'pre-session', speaker_time_limit: 90,
-      settings: { chairJoinSuffix, separateChairCode: true },
-    })
-    .select()
-    .single();
+    const { data: committeeRow, error: committeeError } = await supabase
+      .from('committees')
+      .insert({
+        code, name, topic, chair_names: chairNames, phase: 'pre-session', speaker_time_limit: 90,
+        settings: { chairJoinSuffix, separateChairCode: true },
+      })
+      .select()
+      .single();
 
-  if (committeeError || !committeeRow) {
-    console.error('Error creating committee:', committeeError);
-    return null;
-  }
+    if (committeeError || !committeeRow) {
+      console.error('Error creating committee:', committeeError);
+      return null;
+    }
 
-  if (delegateNames.length > 0) {
-    const delegateRows = delegateNames.map((country) => ({ committee_id: committeeRow.id, country, status: 'absent' }));
-    const { error: delegateError } = await supabase.from('delegates').insert(delegateRows);
-    if (delegateError) console.error('Error inserting delegates:', delegateError);
-  }
+    if (delegateNames.length > 0) {
+      const delegateRows = delegateNames.map((country) => ({ committee_id: committeeRow.id, country, status: 'absent' }));
+      const BATCH_SIZE = 50;
+      for (let i = 0; i < delegateRows.length; i += BATCH_SIZE) {
+        const batch = delegateRows.slice(i, i + BATCH_SIZE);
+        const { error: delegateError } = await supabase.from('delegates').insert(batch);
+        if (delegateError) console.error('Error inserting delegates batch:', delegateError);
+      }
+    }
 
-  await supabase.from('current_speaker').insert({
-    committee_id: committeeRow.id, delegate_id: null, country: null, time_remaining: 90,
-  });
-  return { code, chairJoinSuffix };
+    await supabase.from('current_speaker').insert({
+      committee_id: committeeRow.id, delegate_id: null, country: null, time_remaining: 90,
+    });
+    return { code, chairJoinSuffix };
+  };
+  return Promise.race([createPromise(), timeoutPromise]);
 }
 
 export async function getCommitteeByCode(code: string): Promise<Committee | null> {
@@ -666,7 +674,7 @@ export async function suspendDebate(committeeId: string): Promise<void> {
 }
 
 export async function endDebate(committeeId: string): Promise<void> {
-  const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString();
+  const expiresAt = new Date(Date.now() + 1 * 60 * 60 * 1000).toISOString();
   const { error } = await supabase.from('committees')
     .update({ ended_at: new Date().toISOString(), expires_at: expiresAt, phase: 'adjourned' })
     .eq('id', committeeId);

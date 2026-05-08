@@ -862,7 +862,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
                 suspendDebateInDB(committee.id);
               } else {
                 const now = new Date();
-                const expires = new Date(now.getTime() + 72 * 60 * 60 * 1000);
+                const expires = new Date(now.getTime() + 1 * 60 * 60 * 1000);
                 onCommitteeUpdate?.((c) => ({ ...c, endedAt: now.toISOString(), expiresAt: expires.toISOString(), phase: 'adjourned' as const }));
                 endDebateInDB(committee.id);
               }

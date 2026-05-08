@@ -390,13 +390,19 @@ function CreatePageInner() {
     const names = chairNames.map((n) => n.trim()).filter(Boolean);
     if (!committeeName.trim() || !topic.trim()) return;
     setCreating(true);
-    const result = await createCommitteeInDB(committeeName.trim(), topic.trim(), names.length > 0 ? names : ['Chair'], delegates);
-    if (result) {
-      updateSetting(result.code, 'chairJoinSuffix', result.chairJoinSuffix);
-      updateSetting(result.code, 'separateChairCode', true);
-      router.push(`/chair/${result.code}`);
-    } else {
-      alert('Something went wrong creating the committee. Please try again.');
+    try {
+      const result = await createCommitteeInDB(committeeName.trim(), topic.trim(), names.length > 0 ? names : ['Chair'], delegates);
+      if (result) {
+        updateSetting(result.code, 'chairJoinSuffix', result.chairJoinSuffix);
+        updateSetting(result.code, 'separateChairCode', true);
+        router.push(`/chair/${result.code}`);
+      } else {
+        alert('Failed to create committee. Please try again.');
+        setCreating(false);
+      }
+    } catch (err) {
+      console.error('Create committee error:', err);
+      alert('Something went wrong. Please try again.');
       setCreating(false);
     }
   };
