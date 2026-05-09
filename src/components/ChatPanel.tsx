@@ -45,10 +45,17 @@ export default function ChatPanel({
   committee,
   senderName,
   isChair = false,
+  onClose,
+  readOnly = false,
 }: {
   committee: Committee;
   senderName: string;
   isChair?: boolean;
+  onClose?: () => void;
+  readOnly?: boolean;
+  initialReadCounts?: Record<string, number>;
+  onReadCountsChange?: React.Dispatch<React.SetStateAction<Record<string, number>>>;
+  speakerCard?: React.ReactNode;
 }) {
   const [activeConv, setActiveConv] = useState<ConvKey>('everyone');
   const [showThread, setShowThread] = useState(false); // mobile: false=list, true=thread
@@ -382,6 +389,9 @@ export default function ChatPanel({
 
         {/* Compose */}
         <div className="px-3 pb-3 pt-2 border-t border-[#2E1E0F] shrink-0">
+          {readOnly ? (
+            <p className="text-xs text-[#7A5A38] text-center py-2">Session ended — chat is view only</p>
+          ) : (
           <div className="flex gap-2">
             <input
               ref={inputRef}
@@ -406,6 +416,7 @@ export default function ChatPanel({
               {sending ? '…' : '→'}
             </button>
           </div>
+          )}
         </div>
       </div>
     </div>
