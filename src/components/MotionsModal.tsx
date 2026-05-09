@@ -520,7 +520,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
           dragIndexRef.current = null;
         }}
         onDragEnd={() => { dragIndexRef.current = null; }}
-        className={`bg-[#EDE7D8] rounded-2xl flex flex-col cursor-grab ${
+        className={`bg-transparent rounded-2xl flex flex-col cursor-grab ${
           large
             ? `p-6 space-y-3 flex-1 min-w-0 border-2 ${isPrimary ? 'border-[#1B3828]' : 'border-[#DDD4C0]'}`
             : 'p-4 space-y-2 border border-[#DDD4C0]'
