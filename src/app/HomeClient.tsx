@@ -600,7 +600,7 @@ export default function HomeClient() {
               backgroundColor: '#F6F1E9',
             }}
           >
-            <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="flex flex-col items-center gap-4 md:grid md:grid-cols-3 md:gap-0 md:items-center">
               <img
                 src="/GavellingLogo.png"
                 alt="Gavelling"
@@ -608,7 +608,7 @@ export default function HomeClient() {
                 style={{ filter: 'brightness(0) saturate(100%) invert(18%) sepia(25%) saturate(800%) hue-rotate(100deg) brightness(85%)' }}
                 onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
               />
-              <div className="flex items-center gap-4">
+              <div className="flex items-center justify-center gap-4">
                 <a href="https://www.instagram.com/wearegavelling/" target="_blank" rel="noopener noreferrer"
                   aria-label="Instagram"
                   style={{ color: '#9A8A78', transition: 'color 0.15s' }}
@@ -624,7 +624,7 @@ export default function HomeClient() {
                   </svg>
                 </span>
               </div>
-              <p className="text-xs font-semibold text-[#1B3828]">© {new Date().getFullYear()} Gavelling. Built for the MUN community.</p>
+              <p className="text-xs font-semibold text-[#1B3828] md:text-right">© {new Date().getFullYear()} Gavelling. Built for the MUN community.</p>
             </div>
           </footer>
 
