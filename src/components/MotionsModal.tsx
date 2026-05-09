@@ -98,10 +98,10 @@ function ProposerInput({ candidates, value, onChange, blockedCountries }: {
   return (
     <div className="relative">
       {value && !open ? (
-        <div className="flex items-center gap-3 bg-[#1B3828]/30 border border-[#3D7A52]/30 rounded-xl px-4 py-3">
-          {(() => { const f = getCountryByName(value); return f ? <img src={getFlagUrl(f.code)} alt={f.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <Emoji size="1.125rem">🌐</Emoji>; })()}
-          <span className="text-sm text-[#1C1410] flex-1">{value}</span>
-          <button onClick={() => { setOpen(true); setQuery(''); onChange(''); inputRef.current?.focus(); }} className="text-xs text-[#9A8A78] hover:text-[#1C1410] transition-colors">change</button>
+        <div className="flex items-center gap-3 bg-[#1B3828]/10 border-2 border-[#3D7A52]/40 rounded-xl px-4 py-3">
+          {(() => { const f = getCountryByName(value); return f ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ borderRadius: '6px', border: '1.5px solid rgba(28,20,16,0.10)', objectFit: 'cover' }} className="w-7 h-5 inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : null; })()}
+          <span className="text-sm text-[#1C1410] flex-1 font-semibold">{value}</span>
+          <button onClick={() => { setOpen(true); setQuery(''); onChange(''); inputRef.current?.focus(); }} className="text-xs font-bold transition-colors focus:outline-none" style={{ color: '#2A5A3C' }}>CHANGE</button>
         </div>
       ) : (
         <div className="flex items-center bg-[#FAF8F3] border border-[#DDD4C0] focus-within:border-[#1B3828] rounded-xl overflow-hidden transition-colors">
@@ -223,7 +223,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
       {/* PERMANENT NOTE: No scroll in raise motion form. If content doesn't fit, reduce spacing
           or lay fields side-by-side — never re-add overflow-y-auto here. */}
       <div className="flex-1 px-7 pt-0 pb-4 space-y-4">
-        <h2 className="text-3xl font-black text-[#1C1410]">{editingMotion ? 'Edit Motion' : 'Raise a Motion'}</h2>
+        <h2 className="text-3xl font-black tracking-wide" style={{ color: '#1B3828' }}>{editingMotion ? 'EDIT MOTION' : 'RAISE A MOTION'}</h2>
 
         {/* Type tabs — always shown */}
         <div className="flex gap-1.5 flex-wrap items-stretch">
@@ -255,7 +255,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
             {/* For moderated caucus: Topic first, then Proposed By */}
             {type !== 'moderated' && (
               <div>
-                <label className="block text-lg font-semibold text-[#6A5A4A] mb-2">Proposed by</label>
+                <label className="block text-lg font-semibold mb-2" style={{ color: '#3D7A52' }}>Proposed by</label>
                 <ProposerInput candidates={presentCountries} value={proposer} onChange={setProposer} blockedCountries={countriesWithMotions} />
               </div>
             )}
@@ -349,10 +349,10 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
                   <label className="block text-lg font-semibold text-[#6A5A4A] mb-2">Topic <span className="text-[#8B2020]">*</span></label>
                   <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)}
                     placeholder="e.g. Humanitarian response in conflict zones"
-                    className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-4 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] transition-colors" />
+                    className="w-full bg-[#FAF8F3] border-2 border-[#DDD4C0] rounded-xl px-4 py-4 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] transition-colors" />
                 </div>
                 <div>
-                  <label className="block text-lg font-semibold text-[#6A5A4A] mb-2">Proposed by</label>
+                  <label className="block text-lg font-semibold mb-2" style={{ color: '#3D7A52' }}>Proposed by</label>
                   <ProposerInput candidates={presentCountries} value={proposer} onChange={setProposer} blockedCountries={countriesWithMotions} />
                 </div>
                 {/* Total time + speaking time — side by side to avoid scroll */}
@@ -399,14 +399,11 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
                       ))}
                     </div>
                     {speakerCount !== null && (
-                      <div className="mt-3 rounded-xl bg-white/10 border border-white/20 px-4 py-3">
-                        <p className="text-[#1C1410] font-black text-2xl leading-tight">
-                          {speakerCount} <span className="text-base font-semibold text-[#6A5A4A]">delegates can speak</span>
-                        </p>
+                      <div className="mt-3 rounded-lg bg-white border border-[#DDD4C0] px-3 py-2 inline-flex items-baseline gap-1.5">
+                        <span className="font-black text-xl leading-tight" style={{ color: '#1B3828' }}>{speakerCount}</span>
+                        <span className="text-sm font-semibold" style={{ color: '#6A5A4A' }}>{speakerCount === 1 ? 'delegate' : 'delegates'} can speak</span>
                         {unusedSecs > 0 && (
-                          <p className="text-amber-400 text-sm font-semibold mt-1">
-                            ⚠ {unusedSecs}s of caucus time will be unused
-                          </p>
+                          <span className="text-xs font-semibold ml-1" style={{ color: '#B8844A' }}>({unusedSecs}s unused)</span>
                         )}
                       </div>
                     )}
@@ -427,8 +424,8 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
           )}
           {error && <p className="text-[#8B2020] text-sm font-medium mb-3">{error}</p>}
           <button onClick={submit} disabled={!canSubmit() || belowQuorum}
-            className="w-full bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white py-5 rounded-2xl text-base font-black transition-colors">
-            {editingMotion ? 'Edit Motion →' : 'Raise Motion →'}
+            className="w-full bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white py-5 rounded-2xl text-base font-black transition-colors focus:outline-none" style={{ letterSpacing: '0.05em' }}>
+            {editingMotion ? 'EDIT MOTION →' : 'RAISE MOTION →'}
           </button>
         </div>
       )}
@@ -529,28 +526,27 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
       >
         {/* Header: icon + type label + flag in top-right */}
         <div className="flex items-center gap-2">
-          <Emoji size={large ? '2.5rem' : '1.5rem'}>{meta.icon}</Emoji>
           <span className={`font-black text-[#1C1410] flex-1 ${large ? 'text-3xl' : 'text-lg'}`}>{meta.label}</span>
-          {f ? <img src={getFlagUrl(f.code)} alt={f.code} className={large ? 'w-10 h-10 object-contain inline-block' : 'w-6 h-6 object-contain inline-block'} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <Emoji size={large ? '2.5rem' : '1.5rem'}>🌐</Emoji>}
+          {f ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ borderRadius: '8px', border: '1.5px solid rgba(28,20,16,0.10)', objectFit: 'cover' }} className={large ? 'w-14 h-10 inline-block' : 'w-8 h-6 inline-block'} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : null}
         </div>
 
         {/* Topic inline */}
         {m.topic && (
-          <p className={`${large ? 'text-2xl' : 'text-base'} text-[#6A5A4A]`}>
-            <span className="text-[#9A8A78] font-semibold">Topic: </span>{m.topic}
+          <p className={`${large ? 'text-2xl' : 'text-base'} font-semibold`} style={{ color: '#1C1410' }}>
+            <span className="font-bold" style={{ color: '#1B3828' }}>Topic: </span>{m.topic}
           </p>
         )}
 
         {/* Timings — emphasised */}
         {m.type !== 'tour' && m.totalTime > 0 && (
           <div className="flex items-center gap-2 flex-wrap">
-            <span className={`font-black ${large ? 'text-base text-[#1C1410]' : 'text-xs text-[#6A5A4A]'}`}>
+            <span className={`font-black ${large ? 'text-base' : 'text-xs'}`} style={{ color: '#1B3828' }}>
               {fmtTime(totalMins, totalSecs)}
               {m.type === 'moderated' && m.speakingTime > 0 && (
-                <span className="text-[#1B3828]"> — {fmtTime(speakMins, speakSecs)}</span>
+                <span style={{ color: '#1C1410' }}> — {fmtTime(speakMins, speakSecs)}</span>
               )}
               {m.type === 'moderated' && m.speakingTime > 0 && m.totalTime > 0 && (
-                <span className="text-[#9A8A78]"> · {Math.floor(m.totalTime / m.speakingTime)} speakers{m.totalTime % m.speakingTime !== 0 ? ' ⚠' : ''}</span>
+                <span style={{ color: '#9A8A78' }}> · {Math.floor(m.totalTime / m.speakingTime)} speakers{m.totalTime % m.speakingTime !== 0 ? ' ⚠' : ''}</span>
               )}
             </span>
           </div>
@@ -568,26 +564,26 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
 
         {/* Required votes */}
         <div className="flex items-center gap-2 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-3 py-1.5">
-          <span className="text-xs text-[#9A8A78]">{fraction}</span>
-          <span className="text-xs text-[#1C1410] font-bold ml-auto">Needs {needed} of {present}</span>
+          <span className="text-xs font-semibold" style={{ color: '#1B3828' }}>{fraction}</span>
+          <span className="text-xs font-bold ml-auto" style={{ color: '#1C1410' }}>Needs {needed} of {present}</span>
         </div>
 
         {/* Accept/Reject/Edit — ONLY on the primary (idx===0) card being voted upon */}
         {isPrimary && (
           <div className="flex gap-2 mt-auto">
             <button onClick={() => onAccepted(m)}
-              className="flex-1 bg-[#2A5A3C] hover:bg-[#3D7A52] text-white py-2.5 rounded-xl font-bold text-sm transition-colors">
-              ✓ Accept
+              className="flex-1 bg-[#2A5A3C] hover:bg-[#3D7A52] text-white py-2.5 rounded-xl font-bold text-sm transition-colors focus:outline-none" style={{ fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}>
+              ✓ ACCEPT
             </button>
             <button onClick={() => onRemove(m.id)}
               disabled={pendingIds.has(m.id)}
-              className={`flex-1 bg-[#DDD4C0] hover:bg-red-950/40 hover:text-[#8B2020] text-[#6A5A4A] border border-[#DDD4C0] hover:border-[#8B2020]/40 py-2.5 rounded-xl font-bold text-sm transition-colors ${pendingIds.has(m.id) ? 'opacity-40 cursor-not-allowed' : ''}`}>
-              ✗ Reject
+              className={`flex-1 bg-[#DDD4C0] hover:bg-red-950/40 hover:text-[#8B2020] text-[#6A5A4A] border border-[#DDD4C0] hover:border-[#8B2020]/40 py-2.5 rounded-xl font-bold text-sm transition-colors focus:outline-none ${pendingIds.has(m.id) ? 'opacity-40 cursor-not-allowed' : ''}`} style={{ fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}>
+              ✗ REJECT
             </button>
             <button onClick={(e) => { e.stopPropagation(); onEdit(m.id); }}
               title="Edit motion"
-              className="bg-[#C8BAA8] hover:bg-[#1B3828] border border-[#1B3828] hover:border-[#B6871F] text-[#6A5A4A] hover:text-white py-2.5 px-5 rounded-xl font-bold text-lg transition-colors shrink-0">
-              ⚙
+              className="bg-[#B6871F]/20 hover:bg-[#B6871F]/40 border border-[#B6871F]/50 hover:border-[#B6871F] text-[#B6871F] py-2.5 px-4 rounded-xl font-bold text-sm transition-colors shrink-0 focus:outline-none" style={{ fontFamily: "'DM Mono', monospace" }}>
+              EDIT
             </button>
           </div>
         )}
@@ -598,10 +594,9 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
   return (
     <div className="px-7 pb-7 space-y-3 flex flex-col h-full overflow-hidden">
       <div className="flex items-center shrink-0">
-        <h2 className="text-2xl font-black text-[#1C1410]">Vote on Motions</h2>
+        <h2 className="text-2xl font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>VOTE ON MOTIONS</h2>
       </div>
-      <div className="flex items-center gap-2 px-3 py-2 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl text-xs text-[#9A8A78] shrink-0">
-        <Emoji size="1em">💡</Emoji>
+      <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs shrink-0 font-semibold" style={{ backgroundColor: '#1B3828', color: '#EED98A' }}>
         <span>Drag motions to reorder them. Most disruptive is voted on first by default.</span>
       </div>
       <div className="flex gap-4 flex-1 min-h-0">
@@ -614,9 +609,10 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
           {rest.map((m, i) => renderCard(m, false, i + 1))}
           <button
             onClick={onBack}
-            className="w-full bg-[#2A5A3C] hover:bg-[#3D7A52] text-white py-3 rounded-2xl font-black text-sm transition-colors shrink-0"
+            className="w-full bg-[#2A5A3C] hover:bg-[#3D7A52] text-white py-3 rounded-2xl font-black text-sm transition-colors shrink-0 focus:outline-none"
+            style={{ letterSpacing: '0.05em' }}
           >
-            + Raise a Motion
+            + RAISE A MOTION
           </button>
         </div>
       </div>
