@@ -123,7 +123,7 @@ export default function ContactClient() {
                 }}
               >
                 <img
-                  src="/contact-hero.png"
+                  src="/Contact-Hero.png"
                   alt=""
                   style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
                 />
