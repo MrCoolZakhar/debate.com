@@ -12,7 +12,11 @@ const NAV_LINKS = [
   { label: 'CONTACT', href: '/contact' },
 ];
 
-export default function SiteNav() {
+interface SiteNavProps {
+  logoOverride?: { src: string; alt: string };
+}
+
+export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
   const pathname = usePathname();
   const [hovered, setHovered] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
@@ -21,8 +25,12 @@ export default function SiteNav() {
     <>
       <nav className="relative z-20 flex items-center justify-between px-8 md:px-14 shrink-0" style={{ height: '72px' }}>
         <Link href="/">
-          <img src="/GavellingLogo.png" alt="Gavelling" className="h-10 w-auto object-contain"
-            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+          <img
+            src={logoOverride?.src ?? '/GavellingLogo.png'}
+            alt={logoOverride?.alt ?? 'Gavelling'}
+            className="h-10 w-auto object-contain"
+            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+          />
         </Link>
 
         <div className="flex items-center">

@@ -18,6 +18,7 @@ export default function ConferencesClient() {
         }}
       />
 
+      {/* TODO: pass logoOverride={{ src: '/Conferences.png', alt: 'Conferences' }} once /public/Conferences.png is added to the branch */}
       <SiteNav />
 
       {/* Main content */}
@@ -27,7 +28,7 @@ export default function ConferencesClient() {
           {/* Otter image */}
           <div className="shrink-0 flex items-center justify-center" style={{ width: 420 }}>
             <img
-              src="/WIP.png"
+              src="/WIP.webp"
               alt="An otter with a half-eaten gavel — work in progress"
               style={{ width: '100%', height: 'auto', objectFit: 'contain', mixBlendMode: 'multiply' }}
             />
@@ -52,8 +53,9 @@ export default function ConferencesClient() {
             </p>
 
             <a
-              href="#"
-              onClick={(e) => e.preventDefault()}
+              href="https://calendar.app.google/8VnuxHW7eG7iVZYX7"
+              target="_blank"
+              rel="noopener noreferrer"
               onMouseEnter={(e) => {
                 const el = e.currentTarget as HTMLElement;
                 el.style.backgroundColor = '#2A5A3C';
@@ -83,7 +85,7 @@ export default function ConferencesClient() {
                 cursor: 'pointer',
               }}
             >
-              Book an Intro Call →
+              BOOK AN INTRO CALL →
             </a>
           </div>
         </div>
