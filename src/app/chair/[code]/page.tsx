@@ -861,22 +861,24 @@ function ModeratedCaucusMain({
                 </span>
               )}
             </div>
-            {queue.length > 0 && (
-              <DraggableSpeakersQueue
-                list={queue}
-                onReorder={handleCaucusReorderQueue}
-                onRemove={handleCaucusRemoveFromQueue}
-                isRoomOrderTdT={isRoomOrderTdT}
-              />
-            )}
-            <h2 className="text-5xl font-black mb-3 text-center" style={{ color: '#1B3828' }}>No Current Speaker</h2>
-            <p className="mb-4 text-center text-sm" style={{ color: '#9A8A78' }}>Add delegates below, then call the first speaker.</p>
-            {!sessionEnded && (
-              <button onClick={handleNextCaucusSpeaker} disabled={queue.length === 0}
-                className="bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white px-8 py-3 rounded-xl font-bold transition-colors">
-                CALL FIRST SPEAKER
-              </button>
-            )}
+            <div className="flex-1 flex flex-col items-center justify-center w-full text-center">
+              {queue.length > 0 && (
+                <DraggableSpeakersQueue
+                  list={queue}
+                  onReorder={handleCaucusReorderQueue}
+                  onRemove={handleCaucusRemoveFromQueue}
+                  isRoomOrderTdT={isRoomOrderTdT}
+                />
+              )}
+              <h2 className="text-5xl font-black mb-3 text-center" style={{ color: '#1B3828' }}>No Current Speaker</h2>
+              <p className="mb-4 text-center text-sm" style={{ color: '#9A8A78' }}>Add delegates below, then call the first speaker.</p>
+              {!sessionEnded && (
+                <button onClick={handleNextCaucusSpeaker} disabled={queue.length === 0}
+                  className="bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white px-8 py-3 rounded-xl font-bold transition-colors focus:outline-none">
+                  CALL FIRST SPEAKER
+                </button>
+              )}
+            </div>
           </>
         )}
       </div>
@@ -2202,26 +2204,28 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                       </>
                     ) : (
                       <>
-                        {committee.speakersList.length > 0 && (
-                          <DraggableSpeakersQueue
-                            list={committee.speakersList}
-                            onReorder={handleReorderSpeakersList}
-                            onRemove={handleRemoveFromSpeakersList}
-                          />
-                        )}
-                        <h2 className="text-5xl font-black mb-3 text-center" style={{ color: '#1B3828' }}>No Current Speaker</h2>
-                        <p className="mb-4 text-center text-sm" style={{ color: '#9A8A78' }}>Add delegates below, then call the first speaker.</p>
-                        {committee.speakersList.length === 1 && (
-                          <div className="mb-4 px-4 py-2 bg-[#B6871F]/10 border border-[#B6871F]/30 rounded-lg text-[#B6871F] text-xs text-center">
-                            Only 1 delegate on the list — add more before starting.
-                          </div>
-                        )}
-                        {!sessionEnded && (
-                          <button onClick={handleNextSpeaker} disabled={committee.speakersList.length < 2}
-                            className="bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white px-8 py-3 rounded-xl font-bold transition-colors">
-                            CALL FIRST SPEAKER
-                          </button>
-                        )}
+                        <div className="flex-1 flex flex-col items-center justify-center w-full text-center">
+                          {committee.speakersList.length > 0 && (
+                            <DraggableSpeakersQueue
+                              list={committee.speakersList}
+                              onReorder={handleReorderSpeakersList}
+                              onRemove={handleRemoveFromSpeakersList}
+                            />
+                          )}
+                          <h2 className="text-5xl font-black mb-3 text-center" style={{ color: '#1B3828' }}>No Current Speaker</h2>
+                          <p className="mb-4 text-center text-sm" style={{ color: '#9A8A78' }}>Add delegates below, then call the first speaker.</p>
+                          {committee.speakersList.length === 1 && (
+                            <div className="mb-4 px-4 py-2 bg-[#B6871F]/10 border border-[#B6871F]/30 rounded-lg text-[#B6871F] text-xs text-center">
+                              Only 1 delegate on the list — add more before starting.
+                            </div>
+                          )}
+                          {!sessionEnded && (
+                            <button onClick={handleNextSpeaker} disabled={committee.speakersList.length < 2}
+                              className="bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white px-8 py-3 rounded-xl font-bold transition-colors focus:outline-none">
+                              CALL FIRST SPEAKER
+                            </button>
+                          )}
+                        </div>
                       </>
                     )}
                   </div>
