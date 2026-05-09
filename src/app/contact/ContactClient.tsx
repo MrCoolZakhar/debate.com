@@ -42,23 +42,31 @@ export default function ContactClient() {
   const [form, setForm]           = useState({ name: '', email: '', message: '' });
   const [submitted, setSubmitted] = useState(false);
   const [sending, setSending]     = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const canSubmit = form.name.trim() && form.email.trim() && form.message.trim();
 
   const handleSubmit = async () => {
     if (!canSubmit || sending) return;
     setSending(true);
+    setSubmitError(null);
     try {
-      await fetch('/api/contact', {
+      const res = await fetch('/api/contact', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: form.name, email: form.email, message: form.message, subject }),
       });
-    } catch {
-      // Email failed silently — still show success to user
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setSubmitError(`Error ${res.status}: ${body.error ?? 'Unknown error'}`);
+        setSending(false);
+        return;
+      }
+      setSubmitted(true);
+    } catch (err) {
+      setSubmitError(`Network error: ${err instanceof Error ? err.message : 'Could not reach server'}`);
     } finally {
       setSending(false);
-      setSubmitted(true);
     }
   };
 
@@ -283,6 +291,13 @@ export default function ContactClient() {
                     style={{ ...inputStyle, resize: 'none' }}
                   />
                 </div>
+
+                {/* Submit error */}
+                {submitError && (
+                  <p className="text-xs font-mono text-red-500 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                    {submitError}
+                  </p>
+                )}
 
                 {/* Submit */}
                 <div className="flex items-center gap-5">
