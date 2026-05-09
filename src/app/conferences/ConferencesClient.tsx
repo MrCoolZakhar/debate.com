@@ -18,8 +18,7 @@ export default function ConferencesClient() {
         }}
       />
 
-      {/* TODO: pass logoOverride={{ src: '/Conferences.png', alt: 'Conferences' }} once /public/Conferences.png is added to the branch */}
-      <SiteNav />
+      <SiteNav logoOverride={{ src: '/Conferences.png', alt: 'Conferences' }} />
 
       {/* Main content */}
       <section className="relative z-10 flex-1 flex items-center justify-center px-8 py-20">
