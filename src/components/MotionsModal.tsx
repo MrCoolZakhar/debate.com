@@ -289,24 +289,26 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
                       ))}
                     </div>
                   </div>
-                  <div>
+                  <div style={{ minHeight: '110px' }}>
                     <label className="block text-lg font-semibold text-[#6A5A4A] mb-2">Speaking order</label>
                     <div className="flex gap-3">
                       <button onClick={() => setTourOrder('asc')}
-                        className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-colors ${tourOrder === 'asc' ? 'bg-[#1B3828] text-white' : 'bg-[#EDE7D8] border border-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
+                        className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-colors focus:outline-none ${tourOrder === 'asc' ? 'bg-[#1B3828] text-white' : 'bg-[#EDE7D8] border border-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
                         A → Z
                       </button>
                       <button onClick={() => setTourOrder('desc')}
-                        className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-colors ${tourOrder === 'desc' ? 'bg-[#1B3828] text-white' : 'bg-[#EDE7D8] border border-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
+                        className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-colors focus:outline-none ${tourOrder === 'desc' ? 'bg-[#1B3828] text-white' : 'bg-[#EDE7D8] border border-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
                         Z → A
                       </button>
                       <button onClick={() => setTourOrder('custom')}
-                        className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-colors ${tourOrder === 'custom' ? 'bg-[#1B3828] text-white' : 'bg-[#EDE7D8] border border-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
+                        className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-colors focus:outline-none ${tourOrder === 'custom' ? 'bg-[#1B3828] text-white' : 'bg-[#EDE7D8] border border-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
                         Room Order
                       </button>
                     </div>
                     {tourOrder === 'custom' && (
-                      <p className="text-xs text-[#9A8A78] mt-2 leading-relaxed">Follows the physical room order. Call each speaker manually — the chair decides who goes next based on seating.</p>
+                      <div className="mt-2 px-3 py-2 bg-[#EDE7D8] border border-[#DDD4C0] rounded-lg">
+                        <p className="text-xs leading-relaxed" style={{ color: '#9A8A78' }}>Follows the physical room order. Call each speaker manually — the chair decides who goes next based on seating.</p>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -539,16 +541,23 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
 
         {/* Timings — emphasised */}
         {m.type !== 'tour' && m.totalTime > 0 && (
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className={`font-black ${large ? 'text-base' : 'text-xs'}`} style={{ color: '#1B3828' }}>
-              {fmtTime(totalMins, totalSecs)}
-              {m.type === 'moderated' && m.speakingTime > 0 && (
-                <span style={{ color: '#1C1410' }}> — {fmtTime(speakMins, speakSecs)}</span>
-              )}
-              {m.type === 'moderated' && m.speakingTime > 0 && m.totalTime > 0 && (
-                <span style={{ color: '#9A8A78' }}> · {Math.floor(m.totalTime / m.speakingTime)} speakers{m.totalTime % m.speakingTime !== 0 ? ' ⚠' : ''}</span>
-              )}
-            </span>
+          <div className="flex flex-col gap-0.5">
+            <p className={`${large ? 'text-sm' : 'text-xs'}`} style={{ color: '#1C1410' }}>
+              <span className="font-semibold" style={{ color: '#1B3828' }}>Total Time: </span>
+              <span className="font-black">{fmtTime(totalMins, totalSecs)}</span>
+            </p>
+            {m.type === 'moderated' && m.speakingTime > 0 && (
+              <p className={`${large ? 'text-sm' : 'text-xs'}`} style={{ color: '#1C1410' }}>
+                <span className="font-semibold" style={{ color: '#1B3828' }}>Speaker Time: </span>
+                <span className="font-black">{fmtTime(speakMins, speakSecs)}</span>
+              </p>
+            )}
+            {m.type === 'moderated' && m.speakingTime > 0 && m.totalTime > 0 && (
+              <p className={`${large ? 'text-sm' : 'text-xs'}`} style={{ color: '#1C1410' }}>
+                <span className="font-semibold" style={{ color: '#1B3828' }}>Total Speakers: </span>
+                <span className="font-black">{Math.floor(m.totalTime / m.speakingTime)} {Math.floor(m.totalTime / m.speakingTime) === 1 ? 'speaker' : 'speakers'}{m.totalTime % m.speakingTime !== 0 ? ' ⚠' : ''}</span>
+              </p>
+            )}
           </div>
         )}
         {m.type === 'tour' && (
@@ -594,7 +603,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
   return (
     <div className="px-7 pb-7 space-y-3 flex flex-col h-full overflow-hidden">
       <div className="flex items-center shrink-0">
-        <h2 className="text-2xl font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>VOTE ON MOTIONS</h2>
+        <h2 className="text-3xl font-black" style={{ color: '#1B3828' }}>VOTE ON MOTIONS</h2>
       </div>
       <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs shrink-0 font-semibold" style={{ backgroundColor: '#1B3828', color: '#EED98A' }}>
         <span>Drag motions to reorder them. Most disruptive is voted on first by default.</span>
@@ -888,7 +897,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background: 'rgba(5, 8, 20, 0.88)', backdropFilter: 'blur(4px)' }}
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-3xl w-full shadow-2xl overflow-hidden flex flex-col max-w-5xl" style={{ height: '88vh' }}>
+      <div className="bg-[#FAF8F3] border border-[#DDD4C0] rounded-3xl w-full shadow-2xl overflow-hidden flex flex-col max-w-5xl" style={{ height: '88vh' }}>
         <div className="flex items-center justify-end px-7 pt-6 pb-0 shrink-0">
           <button onClick={onClose} className="text-[#9A8A78] hover:text-[#1C1410] transition-colors text-xl leading-none">✕</button>
         </div>
