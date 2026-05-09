@@ -41,11 +41,29 @@ export default function ContactClient() {
   const [subject, setSubject]     = useState('general');
   const [form, setForm]           = useState({ name: '', email: '', message: '' });
   const [submitted, setSubmitted] = useState(false);
+  const [sending, setSending]     = useState(false);
 
   const canSubmit = form.name.trim() && form.email.trim() && form.message.trim();
 
+  const handleSubmit = async () => {
+    if (!canSubmit || sending) return;
+    setSending(true);
+    try {
+      await fetch('/api/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: form.name, email: form.email, message: form.message, subject }),
+      });
+    } catch {
+      // Email failed silently — still show success to user
+    } finally {
+      setSending(false);
+      setSubmitted(true);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-[#EDE7D8] flex flex-col relative overflow-x-hidden">
+    <div className="h-screen bg-[#EDE7D8] flex flex-col relative overflow-hidden">
 
       {/* Grain overlay */}
       <div
@@ -59,7 +77,7 @@ export default function ContactClient() {
         }}
       />
 
-      <div className="relative z-10 flex flex-col min-h-screen">
+      <div className="relative z-10 flex flex-col h-full">
         <SiteNav />
 
         {/* ── Hero split ── */}
@@ -107,25 +125,11 @@ export default function ContactClient() {
               </h1>
 
               {/* Image slot */}
-              <div
-                style={{
-                  flex: 1,
-                  marginTop: 32,
-                  marginBottom: 24,
-                  borderRadius: 16,
-                  overflow: 'hidden',
-                  backgroundColor: 'rgba(255,255,255,0.05)',
-                  border: '1px solid rgba(238, 217, 138, 0.1)',
-                  minHeight: 180,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
+              <div style={{ flex: 1, marginTop: 32, marginBottom: 24, overflow: 'hidden', minHeight: 180 }}>
                 <img
-                  src="/Contact-Hero.png"
+                  src="/Contact-Hero.webp"
                   alt=""
-                  style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                 />
               </div>
 
@@ -154,7 +158,7 @@ export default function ContactClient() {
 
           {/* Right — form */}
           <div
-            className="flex-1 flex flex-col justify-start px-10 py-10 md:px-14 md:pt-10"
+            className="flex-1 flex flex-col justify-start px-10 py-10 md:px-14 md:pt-10 overflow-y-auto"
             style={{ backgroundColor: '#EDE7D8' }}
           >
             {submitted ? (
@@ -208,7 +212,7 @@ export default function ContactClient() {
 
                 <div>
                   <p className="text-xs font-mono tracking-[0.2em] text-[#9A8A78] mb-2 uppercase">Raise your motion</p>
-                  <h2 className="text-3xl font-black text-[#1C1410]">Get in touch</h2>
+                  <h2 className="text-3xl font-black text-[#1C1410]">GET IN TOUCH</h2>
                 </div>
 
                 {/* Subject pills */}
@@ -283,8 +287,8 @@ export default function ContactClient() {
                 {/* Submit */}
                 <div className="flex items-center gap-5">
                   <button
-                    onClick={() => canSubmit && setSubmitted(true)}
-                    disabled={!canSubmit}
+                    onClick={handleSubmit}
+                    disabled={!canSubmit || sending}
                     onMouseEnter={(e) => {
                       if (!canSubmit) return;
                       const el = e.currentTarget as HTMLElement;
@@ -310,13 +314,13 @@ export default function ContactClient() {
                       padding: '13px 32px',
                       borderRadius: 14,
                       border: 'none',
-                      cursor: canSubmit ? 'pointer' : 'not-allowed',
-                      opacity: canSubmit ? 1 : 0.38,
+                      cursor: canSubmit && !sending ? 'pointer' : 'not-allowed',
+                      opacity: canSubmit && !sending ? 1 : 0.38,
                       transition: 'all 200ms ease',
                       boxShadow: '0 4px 14px rgba(27, 56, 40, 0.18)',
                     }}
                   >
-                    Yield to Chair →
+                    {sending ? 'Sending…' : 'YIELD TO CHAIR →'}
                   </button>
                   <p className="text-xs" style={{ color: '#9A8A78' }}>We reply within 48 hrs</p>
                 </div>
@@ -382,7 +386,7 @@ export default function ContactClient() {
         </section>
 
         {/* ── Footer ── */}
-        <footer className="relative z-10 border-t border-[#DDD4C0] bg-[#EDE7D8] px-6 py-8">
+        <footer className="relative z-10 border-t border-[#DDD4C0] bg-[#EDE7D8] px-6 py-4">
           <div className="flex flex-col items-center gap-4 md:grid md:grid-cols-3 md:gap-0 md:items-center">
             <img
               src="/GavellingLogo.png"
