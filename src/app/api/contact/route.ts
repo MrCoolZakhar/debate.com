@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import nodemailer from 'nodemailer';
+import { createClient } from '@supabase/supabase-js';
 
-// Force Node.js runtime — nodemailer uses Node APIs unavailable on Edge
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -12,34 +11,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
     }
 
-    const transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 465,
-      secure: true, // SSL
-      auth: {
-        user: process.env.GMAIL_USER,
-        pass: process.env.GMAIL_APP_PASSWORD,
-      },
-    });
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
 
-    await transporter.sendMail({
-      from: `"Gavelling Contact" <${process.env.GMAIL_USER}>`,
-      to: 'wearegavelling@gmail.com',
-      replyTo: email,
-      subject: `[Gavelling] ${subject ?? 'General Enquiry'} — ${name}`,
-      text: `Name: ${name}\nEmail: ${email}\nSubject: ${subject}\n\nMessage:\n${message}`,
-      html: `
-        <p><strong>Name:</strong> ${name}</p>
-        <p><strong>Email:</strong> <a href="mailto:${email}">${email}</a></p>
-        <p><strong>Subject:</strong> ${subject}</p>
-        <hr />
-        <p>${message.replace(/\n/g, '<br/>')}</p>
-      `,
-    });
+    const { error } = await supabase
+      .from('contact_submissions')
+      .insert({ name, email, subject: subject ?? 'General Enquiry', message });
+
+    if (error) {
+      console.error('[contact] supabase error', error);
+      return NextResponse.json({ error: 'Failed to save' }, { status: 500 });
+    }
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error('[contact] email error', err);
-    return NextResponse.json({ error: 'Failed to send' }, { status: 500 });
+    console.error('[contact] error', err);
+    return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 }
