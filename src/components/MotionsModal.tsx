@@ -263,7 +263,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
             {/* Tour de Table — speaking time per delegate + order */}
             {type === 'tour' && (
               <>
-                <div className="bg-transparent border border-[#DDD4C0] rounded-2xl p-4 space-y-3">
+                <div className="bg-transparent border border-[#DDD4C0] rounded-2xl p-4 space-y-3" style={{ minHeight: '300px', display: 'flex', flexDirection: 'column' }}>
                   <p className="text-[#1C1410] font-semibold text-sm">
                     All {presentCountries.length} present delegates will speak once each.
                   </p>
@@ -305,9 +305,13 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
                         Room Order
                       </button>
                     </div>
-                    {tourOrder === 'custom' && (
-                      <p className="text-xs text-[#9A8A78] mt-2 leading-relaxed">Follows the physical room order. Call each speaker manually — the chair decides who goes next based on seating.</p>
-                    )}
+                    <div style={{ height: '44px', display: 'flex', alignItems: 'center' }}>
+                      {tourOrder === 'custom' ? (
+                        <p className="text-xs text-[#9A8A78] leading-relaxed">Follows the physical room order. Call each speaker manually — the chair decides who goes next based on seating.</p>
+                      ) : (
+                        <span />
+                      )}
+                    </div>
                   </div>
                 </div>
               </>
