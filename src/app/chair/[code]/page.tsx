@@ -2091,12 +2091,12 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                       )}
                       <div className="flex justify-center gap-8 mb-8">
                         <div className="text-center">
-                          <div className="text-2xl font-black text-[#B6871F]">{formatTime(committee.caucus.totalTime)}</div>
+                          <div className="text-2xl font-black text-[#1C1410]">{formatTime(committee.caucus.totalTime)}</div>
                           <div className="text-xs text-[#9A8A78] mt-1">Total Time</div>
                         </div>
                         <div className="w-px bg-[#DDD4C0]" />
                         <div className="text-center">
-                          <div className="text-2xl font-black text-[#B6871F]">{committee.caucus.proposedBy}</div>
+                          <div className="text-2xl font-black text-[#1C1410]">{committee.caucus.proposedBy}</div>
                           <div className="text-xs text-[#9A8A78] mt-1">Proposed by</div>
                         </div>
                       </div>
