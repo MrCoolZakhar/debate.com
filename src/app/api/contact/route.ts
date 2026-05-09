@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@supabase/supabase-js';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+// Both values are public — safe to hardcode (same as NEXT_PUBLIC_ vars in the bundle)
+const supabase = createClient(
+  'https://luruhkwrgisytejswlas.supabase.co',
+  'sb_publishable_k7NdduzaXK358z8ew18ZKA_vBSieDlV'
+);
 
 export async function POST(req: NextRequest) {
   try {
