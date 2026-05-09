@@ -2000,19 +2000,19 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                           </p>
                           <div className="flex justify-center gap-8 mb-8">
                             <div className="text-center">
-                              <div className="text-2xl font-black text-[#B6871F]">
+                              <div className="text-2xl font-black text-[#1C1410]">
                                 {committee.caucusQueue?.length ?? Math.floor(committee.caucus.totalTime / (committee.caucus.speakingTime || 1))}
                               </div>
                               <div className="text-xs text-[#9A8A78] mt-1">Delegates</div>
                             </div>
                             <div className="w-px bg-[#DDD4C0]" />
                             <div className="text-center">
-                              <div className="text-2xl font-black text-[#B6871F]">{committee.caucus.speakingTime}s</div>
+                              <div className="text-2xl font-black text-[#1C1410]">{committee.caucus.speakingTime}s</div>
                               <div className="text-xs text-[#9A8A78] mt-1">Per Speaker</div>
                             </div>
                             <div className="w-px bg-[#DDD4C0]" />
                             <div className="text-center">
-                              <div className="text-2xl font-black text-[#B6871F]">{formatTime(committee.caucus.totalTime)}</div>
+                              <div className="text-2xl font-black text-[#1C1410]">{formatTime(committee.caucus.totalTime)}</div>
                               <div className="text-xs text-[#9A8A78] mt-1">Total Time</div>
                             </div>
                           </div>
@@ -2029,17 +2029,17 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                           <p className="text-[#6A5A4A] text-sm mb-6">{committee.topic}</p>
                           <div className="flex justify-center gap-8 mb-8">
                             <div className="text-center">
-                              <div className="text-2xl font-black text-[#B6871F]">{formatTime(committee.caucus.totalTime)}</div>
+                              <div className="text-2xl font-black text-[#1C1410]">{formatTime(committee.caucus.totalTime)}</div>
                               <div className="text-xs text-[#9A8A78] mt-1">Total Time</div>
                             </div>
                             <div className="w-px bg-[#DDD4C0]" />
                             <div className="text-center">
-                              <div className="text-2xl font-black text-[#B6871F]">{committee.caucus.speakingTime}s</div>
+                              <div className="text-2xl font-black text-[#1C1410]">{committee.caucus.speakingTime}s</div>
                               <div className="text-xs text-[#9A8A78] mt-1">Per Speaker</div>
                             </div>
                             <div className="w-px bg-[#DDD4C0]" />
                             <div className="text-center">
-                              <div className="text-2xl font-black text-[#B6871F]">{Math.floor(committee.caucus.totalTime / (committee.caucus.speakingTime || 1))}</div>
+                              <div className="text-2xl font-black text-[#1C1410]">{Math.floor(committee.caucus.totalTime / (committee.caucus.speakingTime || 1))}</div>
                               <div className="text-xs text-[#9A8A78] mt-1">Max Speakers</div>
                             </div>
                           </div>
