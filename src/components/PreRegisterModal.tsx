@@ -20,15 +20,32 @@ const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'
 export default function PreRegisterModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [email, setEmail]         = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [duplicate, setDuplicate] = useState(false);
   const [loading, setLoading]     = useState(false);
   const [invalid, setInvalid]     = useState(false);
+  const [apiError, setApiError]   = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!EMAIL_RE.test(email)) { setInvalid(true); return; }
     setInvalid(false);
+    setApiError(null);
     setLoading(true);
-    setTimeout(() => { setLoading(false); setSubmitted(true); }, 800);
+    try {
+      const res = await fetch('/api/pre-register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+      if (data.duplicate) { setDuplicate(true); setSubmitted(true); return; }
+      if (!res.ok) { setApiError(data.error ?? 'Something went wrong'); return; }
+      setSubmitted(true);
+    } catch {
+      setApiError('Network error — please try again');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -165,11 +182,16 @@ export default function PreRegisterModal({ open, onClose }: { open: boolean; onC
                 {submitted ? (
                   <div
                     className="flex flex-col gap-2 rounded-xl px-5 py-4"
-                    style={{ backgroundColor: 'rgba(27, 56, 40, 0.08)', border: '1px solid rgba(27, 56, 40, 0.2)' }}
+                    style={{
+                      backgroundColor: duplicate ? 'rgba(182,135,31,0.08)' : 'rgba(27, 56, 40, 0.08)',
+                      border: duplicate ? '1px solid rgba(182,135,31,0.3)' : '1px solid rgba(27, 56, 40, 0.2)',
+                    }}
                   >
-                    <div className="flex items-center gap-2.5" style={{ color: '#1B3828' }}>
+                    <div className="flex items-center gap-2.5" style={{ color: duplicate ? '#B6871F' : '#1B3828' }}>
                       <CircleCheckIcon size={20} className="shrink-0" />
-                      <span className="font-bold text-sm">You're on the list. See you in August.</span>
+                      <span className="font-bold text-sm">
+                        {duplicate ? 'Already registered — you\'re on the list!' : 'You\'re on the list. See you in August.'}
+                      </span>
                     </div>
                     <p className="text-xs pl-[28px]" style={{ color: '#9A8A78' }}>{email}</p>
                   </div>
@@ -242,6 +264,9 @@ export default function PreRegisterModal({ open, onClose }: { open: boolean; onC
                       {loading ? <Spinner style={{ color: '#EED98A' }} /> : 'Pre-register →'}
                     </button>
 
+                    {apiError && (
+                      <p className="text-xs text-center text-red-500">{apiError}</p>
+                    )}
                     <p className="text-xs text-center" style={{ color: '#9A8A78' }}>
                       No spam. We'll only email you when accounts open.
                     </p>
