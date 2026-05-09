@@ -124,12 +124,12 @@ export default function ContactClient() {
                 </span>
               </h1>
 
-              {/* Image slot */}
-              <div style={{ flex: 1, marginTop: 32, marginBottom: 24, overflow: 'hidden', minHeight: 180 }}>
+              {/* Image slot — transparent WebP; no bg, contain so alpha shows green panel behind */}
+              <div style={{ flex: 1, marginTop: 32, marginBottom: 24, minHeight: 180, display: 'flex', alignItems: 'center' }}>
                 <img
                   src="/Contact-Hero.webp"
                   alt=""
-                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                  style={{ width: '100%', height: 'auto', objectFit: 'contain', display: 'block' }}
                 />
               </div>
 
