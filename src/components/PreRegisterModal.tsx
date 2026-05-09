@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Dialog as RadixDialog } from 'radix-ui';
 import { Dialog, DialogPortal, DialogOverlay, DialogTitle } from '@/components/ui/dialog';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
@@ -11,9 +11,7 @@ import { cn } from '@/lib/utils';
 import { CalendarIcon, GiftIcon, CircleCheckIcon } from 'lucide-react';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const SPOTS_CLAIMED = 153;
 const SPOTS_TOTAL = 1000;
-const PROGRESS_VALUE = (SPOTS_CLAIMED / SPOTS_TOTAL) * 100;
 
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
 
@@ -24,6 +22,24 @@ export default function PreRegisterModal({ open, onClose }: { open: boolean; onC
   const [loading, setLoading]     = useState(false);
   const [invalid, setInvalid]     = useState(false);
   const [apiError, setApiError]   = useState<string | null>(null);
+  const [spotsClaimed, setSpotsClaimed] = useState(123);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const fetchCount = async () => {
+    try {
+      const res = await fetch('/api/pre-register');
+      if (res.ok) {
+        const data = await res.json();
+        setSpotsClaimed(data.count ?? 123);
+      }
+    } catch { /* keep current value */ }
+  };
+
+  useEffect(() => {
+    fetchCount();
+    pollRef.current = setInterval(fetchCount, 15000);
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,6 +56,7 @@ export default function PreRegisterModal({ open, onClose }: { open: boolean; onC
       const data = await res.json();
       if (data.duplicate) { setDuplicate(true); setSubmitted(true); return; }
       if (!res.ok) { setApiError(data.error ?? 'Something went wrong'); return; }
+      setSpotsClaimed((n) => n + 1);
       setSubmitted(true);
     } catch {
       setApiError('Network error — please try again');
@@ -163,13 +180,13 @@ export default function PreRegisterModal({ open, onClose }: { open: boolean; onC
 
                 {/* Progress */}
                 <div className="flex flex-col gap-2">
-                  <Progress value={PROGRESS_VALUE} />
+                  <Progress value={(spotsClaimed / SPOTS_TOTAL) * 100} />
                   <p className="text-xs" style={{ color: '#9A8A78' }}>
-                    <span className="font-semibold" style={{ color: '#1C1410' }}>{SPOTS_CLAIMED}</span>
+                    <span className="font-semibold" style={{ color: '#1C1410' }}>{spotsClaimed}</span>
                     {' '}of{' '}
                     <span className="font-semibold" style={{ color: '#1C1410' }}>{SPOTS_TOTAL.toLocaleString()}</span>
                     {' '}spots claimed ·{' '}
-                    <span className="font-semibold" style={{ color: '#1B3828' }}>{SPOTS_TOTAL - SPOTS_CLAIMED} remaining</span>
+                    <span className="font-semibold" style={{ color: '#1B3828' }}>{SPOTS_TOTAL - spotsClaimed} remaining</span>
                   </p>
                 </div>
               </div>
@@ -261,7 +278,7 @@ export default function PreRegisterModal({ open, onClose }: { open: boolean; onC
                         boxShadow: '0 4px 14px rgba(27, 56, 40, 0.25)',
                       }}
                     >
-                      {loading ? <Spinner style={{ color: '#EED98A' }} /> : 'Pre-register →'}
+                      {loading ? <Spinner style={{ color: '#EED98A' }} /> : 'PRE-REGISTER →'}
                     </button>
 
                     {apiError && (

@@ -9,6 +9,19 @@ const supabase = createClient(
   'sb_publishable_k7NdduzaXK358z8ew18ZKA_vBSieDlV'
 );
 
+export async function GET() {
+  try {
+    const { count, error } = await supabase
+      .from('pre_registrations')
+      .select('*', { count: 'exact', head: true });
+
+    if (error) return NextResponse.json({ count: 0 }, { status: 200 });
+    return NextResponse.json({ count: (count ?? 0) + 123 });
+  } catch {
+    return NextResponse.json({ count: 123 });
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const { email } = await req.json();
