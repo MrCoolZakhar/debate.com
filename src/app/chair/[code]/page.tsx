@@ -666,7 +666,7 @@ function ModeratedCaucusMain({
 
   // Extend-time UI state
   const [showExtendMod, setShowExtendMod] = useState(false);
-  const [extendMinsMod, setExtendMinsMod] = useState(1);
+  const [extendMinsMod, setExtendMinsMod] = useState<number>(1);
   const extendRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -895,40 +895,44 @@ function ModeratedCaucusMain({
               </div>
               <div className="relative" ref={extendRef}>
                 <button onClick={() => setShowExtendMod((v) => !v)}
-                  className="px-3 py-2 rounded-lg font-bold text-xs bg-amber-900/30 hover:bg-amber-800/40 text-amber-400 hover:text-amber-300 transition-colors border border-amber-700/30 hover:border-amber-600/40">
+                  className="px-3 py-2 rounded-lg font-bold text-xs bg-[#1B3828] hover:bg-[#2A5A3C] text-[#EDE7D8] transition-colors focus:outline-none">
                   Extend
                 </button>
                 {showExtendMod && (
-                  <div className="absolute bottom-full right-0 mb-2 bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl px-4 py-3 shadow-xl flex items-center gap-2 flex-wrap z-20">
-                    <span className="text-xs text-amber-400 font-semibold shrink-0">Add</span>
-                    {(() => {
-                      const halfMins = caucus.totalTime / 120;
-                      const rawSuggestions = [5, 10, halfMins];
-                      const suggestions = [...new Set(
-                        rawSuggestions
-                          .filter((m) => m > 0)
-                          .map((m) => Math.round(m * 2) / 2)
-                      )].sort((a, b) => a - b);
-                      return suggestions.map((m) => (
-                        <button key={m} onClick={() => {
-                          const addSecs = m * 60;
-                          updateLocal(setCommittee, (c) => {
-                            if (!c.caucus) return c;
-                            const newRemaining = c.caucus.remainingTime + addSecs;
-                            const newTotal = c.caucus.totalTime + addSecs;
-                            const updated = { ...c.caucus, remainingTime: newRemaining, totalTime: newTotal };
-                            updateCaucusInDB(committee.id, updated);
-                            return { ...c, caucus: updated };
-                          }, true);
-                          setShowExtendMod(false);
-                        }} className="px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-900/30 hover:bg-amber-800/40 border border-amber-700/30 text-amber-300 transition-colors">
-                          {m % 1 === 0 ? `${m}m` : `${m}m`}
-                        </button>
-                      ));
-                    })()}
-                    <input type="number" min={1} value={extendMinsMod} onChange={(e) => setExtendMinsMod(parseInt(e.target.value) || 1)}
-                      className="w-10 bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-2 py-1 text-[#1C1410] text-xs text-center focus:outline-none" />
-                    <span className="text-xs text-[#9A8A78]">m</span>
+                  <div className="absolute bottom-full right-0 mb-2 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3 shadow-xl z-20" style={{ minWidth: '180px' }}>
+                    <p className="text-xs font-black text-[#1B3828] uppercase tracking-widest text-center mb-2">Add</p>
+                    <div className="flex gap-1.5 mb-2 justify-center">
+                      {(() => {
+                        const halfMins = caucus.totalTime / 120;
+                        const rawSuggestions = [5, 10, halfMins];
+                        const suggestions = [...new Set(
+                          rawSuggestions
+                            .filter((m) => m > 0)
+                            .map((m) => Math.round(m * 2) / 2)
+                        )].sort((a, b) => a - b);
+                        return suggestions.map((m) => (
+                          <button key={m} onClick={() => {
+                            const addSecs = m * 60;
+                            updateLocal(setCommittee, (c) => {
+                              if (!c.caucus) return c;
+                              const newRemaining = c.caucus.remainingTime + addSecs;
+                              const newTotal = c.caucus.totalTime + addSecs;
+                              const updated = { ...c.caucus, remainingTime: newRemaining, totalTime: newTotal };
+                              updateCaucusInDB(committee.id, updated);
+                              return { ...c, caucus: updated };
+                            }, true);
+                            setShowExtendMod(false);
+                          }} className="flex-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-transparent border border-[#DDD4C0] text-[#1B3828] hover:border-[#1B3828] transition-colors focus:outline-none">
+                            {m % 1 === 0 ? `${m}m` : `${m}m`}
+                          </button>
+                        ));
+                      })()}
+                    </div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <input type="number" min={1} value={extendMinsMod === 0 ? '' : extendMinsMod} onChange={(e) => setExtendMinsMod(e.target.value === '' ? 0 : parseInt(e.target.value) || 0)}
+                        className="flex-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-2 py-1.5 text-[#1C1410] text-xs text-center focus:outline-none focus:border-[#1B3828]" />
+                      <span className="text-xs text-[#9A8A78] shrink-0">m</span>
+                    </div>
                     <button onClick={() => {
                       const addSecs = extendMinsMod * 60;
                       if (addSecs <= 0) return;
@@ -941,8 +945,8 @@ function ModeratedCaucusMain({
                         return { ...c, caucus: updated };
                       }, true);
                       setShowExtendMod(false);
-                    }} className="px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-900/30 hover:bg-amber-800/40 border border-amber-700/30 text-amber-300 transition-colors shrink-0">
-                      + Add
+                    }} className="w-full py-1.5 rounded-lg text-xs font-black bg-[#1B3828] hover:bg-[#2A5A3C] text-[#EDE7D8] transition-colors focus:outline-none">
+                      + ADD
                     </button>
                   </div>
                 )}
