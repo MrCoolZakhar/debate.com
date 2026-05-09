@@ -289,7 +289,7 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, lastSpeakerDelegate
         {displayItems.map((s, i) => {
           const isCurrent = currentSpeakerDelegateId && s.delegateId === currentSpeakerDelegateId;
           return (
-            <div key={s.delegateId} className="flex flex-col items-center gap-1 relative group cursor-grab shrink-0"
+            <div key={`${s.delegateId}-${i}`} className="flex flex-col items-center gap-1 relative group cursor-grab shrink-0"
               draggable={!isCurrent}
               onDragStart={() => { if (!isCurrent) dragIndexRef.current = i; }}
               onDragOver={(e) => e.preventDefault()}
@@ -304,7 +304,7 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, lastSpeakerDelegate
               }}>
               {isRoomOrderTdT ? (
                 <div className={`w-20 h-20 rounded-full bg-[#DDD4C0] border border-[#C8BAA8] flex items-center justify-center ${isCurrent ? 'ring-4 ring-[#1B3828]' : ''}`}>
-                  <span className="text-3xl font-black text-[#B6871F]">{i + 2}</span>
+                  <span className="text-3xl font-black" style={{ color: '#1B3828' }}>{i + 2}</span>
                 </div>
               ) : (
                 <div style={{ width: '72px', height: '54px', borderRadius: '8px', overflow: 'hidden', boxShadow: '0 0 0 1.5px rgba(28,20,16,0.20)', backgroundColor: '#F0EBE1', flexShrink: 0 }}>
@@ -576,48 +576,62 @@ function UnmoderatedCaucusView({ committee, setCommittee }: { committee: Committ
         <div className="h-full bg-[#B6871F] rounded-full transition-all" style={{ width: `${caucus.totalTime > 0 ? (caucus.remainingTime / caucus.totalTime) * 100 : 0}%` }} />
       </div>
       <div className="flex gap-3 flex-wrap justify-center">
-        <button onClick={() => setRunning((r) => !r)} className={`px-8 py-3 rounded-xl font-bold transition-colors ${running ? 'bg-[#B6871F] hover:bg-[#B6871F]/80 text-white' : 'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'}`}>
-          {running ? '⏸ Pause' : '▶ Resume'}
+        <button onClick={() => setRunning((r) => !r)} className={`flex-1 py-3 px-6 rounded-xl font-bold text-base transition-colors focus:outline-none ${running ? 'bg-[#B6871F] hover:bg-[#B6871F]/80 text-white' : 'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'}`}>
+          {running ? (
+            <span className="flex items-center justify-center gap-2">
+              <span className="flex gap-[3px] items-center">
+                <span className="w-[3px] h-[13px] rounded-sm bg-current inline-block" />
+                <span className="w-[3px] h-[13px] rounded-sm bg-current inline-block" />
+              </span>
+              <span>PAUSE</span>
+            </span>
+          ) : '▶ START'}
         </button>
-        <button onClick={() => setShowExtendUnmod((v) => !v)} className="px-4 py-3 rounded-xl font-bold bg-[#DDD4C0] hover:bg-[#3D7A52]/60 text-[#6A5A4A] hover:text-[#EED98A] transition-colors border border-[#DDD4C0] hover:border-[#3D7A52]/40">
+        <button onClick={() => setShowExtendUnmod((v) => !v)} className="px-4 py-3 rounded-xl font-bold bg-[#1B3828] hover:bg-[#2A5A3C] text-[#EDE7D8] transition-colors focus:outline-none">
           Extend
         </button>
-        <button onClick={handleEndCaucus} className="px-8 py-3 rounded-xl font-black bg-[#8B2020] hover:bg-[#7A1C1C] text-white transition-colors">
-          End Caucus
+        <button onClick={handleEndCaucus} className="px-8 py-3 rounded-xl font-black bg-[#8B2020] hover:bg-[#7A1C1C] text-white transition-colors focus:outline-none">
+          END CAUCUS
         </button>
       </div>
       {showExtendUnmod && (
-        <div className="flex items-center gap-2 mt-4 flex-wrap justify-center">
-          <span className="text-xs text-[#EED98A] font-semibold shrink-0">Extend by</span>
-          {(() => {
-            const halfMins = caucus.totalTime / 120;
-            const rawSuggestions = [5, 10, halfMins];
-            const suggestions = [...new Set(
-              rawSuggestions
-                .filter((m) => m > 0)
-                .map((m) => Math.round(m * 2) / 2)
-            )].sort((a, b) => a - b);
-            return suggestions.map((m) => (
-              <button key={m} onClick={() => {
-                const addSecs = m * 60;
-                updateLocal(setCommittee, (c) => {
-                  if (!c.caucus) return c;
-                  const newRemaining = c.caucus.remainingTime + addSecs;
-                  const newTotal = c.caucus.totalTime + addSecs;
-                  const updated = { ...c.caucus, remainingTime: newRemaining, totalTime: newTotal };
-                  updateCaucusInDB(committee.id, updated);
-                  return { ...c, caucus: updated };
-                }, true);
-                setShowExtendUnmod(false);
-              }} className="px-2.5 py-1 rounded-lg text-xs font-bold bg-[#2A5A3C]/60 hover:bg-[#3D7A52]/60 border border-[#3D7A52]/40 text-[#EED98A] transition-colors">
-                {m % 1 === 0 ? `${m}m` : `${m}m`}
-              </button>
-            ));
-          })()}
-          <input type="number" min={1} value={extendMinsUnmod} onChange={(e) => setExtendMinsUnmod(parseInt(e.target.value) || 1)}
-            className="w-12 bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-2 py-1 text-[#1C1410] text-xs focus:outline-none" />
+        <div className="mt-4 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3 shadow-xl" style={{ minWidth: '180px' }}>
+          <p className="text-xs font-black text-[#1B3828] uppercase tracking-widest text-center mb-2">Add</p>
+          <div className="flex gap-1.5 mb-2 justify-center">
+            {(() => {
+              const halfMins = caucus.totalTime / 120;
+              const rawSuggestions = [5, 10, halfMins];
+              const suggestions = [...new Set(
+                rawSuggestions
+                  .filter((m) => m > 0)
+                  .map((m) => Math.round(m * 2) / 2)
+              )].sort((a, b) => a - b);
+              return suggestions.map((m) => (
+                <button key={m} onClick={() => {
+                  const addSecs = m * 60;
+                  updateLocal(setCommittee, (c) => {
+                    if (!c.caucus) return c;
+                    const newRemaining = c.caucus.remainingTime + addSecs;
+                    const newTotal = c.caucus.totalTime + addSecs;
+                    const updated = { ...c.caucus, remainingTime: newRemaining, totalTime: newTotal };
+                    updateCaucusInDB(committee.id, updated);
+                    return { ...c, caucus: updated };
+                  }, true);
+                  setShowExtendUnmod(false);
+                }} className="flex-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-transparent border border-[#DDD4C0] text-[#1B3828] hover:border-[#1B3828] transition-colors focus:outline-none">
+                  {m % 1 === 0 ? `${m}m` : `${m}m`}
+                </button>
+              ));
+            })()}
+          </div>
+          <div className="flex items-center gap-2 mb-2">
+            <input type="number" min={1} value={extendMinsUnmod === 0 ? '' : extendMinsUnmod} onChange={(e) => setExtendMinsUnmod(e.target.value === '' ? 0 : parseInt(e.target.value) || 0)}
+              className="flex-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-2 py-1.5 text-[#1C1410] text-xs text-center focus:outline-none focus:border-[#1B3828]" />
+            <span className="text-xs text-[#9A8A78] shrink-0">m</span>
+          </div>
           <button onClick={() => {
             const addSecs = extendMinsUnmod * 60;
+            if (addSecs <= 0) return;
             updateLocal(setCommittee, (c) => {
               if (!c.caucus) return c;
               const newRemaining = c.caucus.remainingTime + addSecs;
@@ -627,8 +641,8 @@ function UnmoderatedCaucusView({ committee, setCommittee }: { committee: Committ
               return { ...c, caucus: updated };
             }, true);
             setShowExtendUnmod(false);
-          }} className="px-2.5 py-1 rounded-lg text-xs font-bold bg-[#2A5A3C]/60 hover:bg-[#3D7A52]/60 border border-[#3D7A52]/40 text-[#EED98A] transition-colors">
-            + custom
+          }} className="w-full py-1.5 rounded-lg text-xs font-black bg-[#1B3828] hover:bg-[#2A5A3C] text-[#EDE7D8] transition-colors focus:outline-none">
+            + ADD
           </button>
         </div>
       )}
@@ -761,17 +775,17 @@ function ModeratedCaucusMain({
         {committee.caucus?.currentSpeaker ? (
           <>
             {/* Absolute overlay: motion name + topic — does not affect centred layout */}
-            <div className="absolute left-0 top-1/2 -translate-y-1/2 flex flex-col gap-2 max-w-[200px] pl-4 pointer-events-none select-none">
-              <span className="text-[#1C1410] font-black text-2xl leading-tight uppercase">
+            <div className="absolute left-0 top-1/2 -translate-y-1/2 flex flex-col gap-1.5 max-w-[160px] pl-4 pointer-events-none select-none">
+              <span className="text-[#1C1410] font-black text-lg leading-tight uppercase">
                 {committee.caucus?.motionLabel ?? caucusTitle}
               </span>
               {committee.caucus?.purpose && (
-                <span className="text-[#1C1410]/70 text-lg font-medium leading-snug">
-                  {committee.caucus.purpose}
+                <span className="text-[#1C1410]/70 text-sm font-medium leading-snug">
+                  {committee.caucus.purpose.replace(/^Tour de Table\s*[\(\-]?\s*/i, '').replace(/^\(/, '').replace(/\)$/, '') || committee.caucus.purpose}
                 </span>
               )}
               {spokenCountries.length > 0 && (
-                <span className="text-[#B6871F] text-lg font-medium leading-snug">
+                <span className="text-sm font-medium leading-snug" style={{ color: '#1C1410' }}>
                   {spokenCountries.length} delegate{spokenCountries.length !== 1 ? 's' : ''} spoke
                 </span>
               )}
@@ -787,9 +801,9 @@ function ModeratedCaucusMain({
             <div className="flex flex-col items-center">
               {isRoomOrderTdT ? (
                 <div className="relative w-36 h-36 rounded-full bg-[#DDD4C0] shrink-0 flex items-center justify-center">
-                  <span className="text-6xl font-black text-[#B6871F]">{(() => {
+                  <span className="text-6xl font-black" style={{ color: '#1B3828' }}>{(() => {
                     const match = committee.caucus!.currentSpeaker?.match(/(\d+)$/);
-                    return match ? match[1] : '?';
+                    return match ? match[1] : '1';
                   })()}</span>
                 </div>
               ) : (
@@ -851,13 +865,13 @@ function ModeratedCaucusMain({
         ) : (
           <>
             {/* Absolute overlay: motion name + topic — does not affect centred layout */}
-            <div className="absolute left-0 top-1/2 -translate-y-1/2 flex flex-col gap-2 max-w-[200px] pl-4 pointer-events-none select-none">
-              <span className="text-[#1C1410] font-black text-2xl leading-tight uppercase">
+            <div className="absolute left-0 top-1/2 -translate-y-1/2 flex flex-col gap-1.5 max-w-[160px] pl-4 pointer-events-none select-none">
+              <span className="text-[#1C1410] font-black text-lg leading-tight uppercase">
                 {committee.caucus?.motionLabel ?? caucusTitle}
               </span>
               {committee.caucus?.purpose && (
-                <span className="text-[#1C1410]/70 text-lg font-medium leading-snug">
-                  {committee.caucus.purpose}
+                <span className="text-[#1C1410]/70 text-sm font-medium leading-snug">
+                  {committee.caucus.purpose.replace(/^Tour de Table\s*[\(\-]?\s*/i, '').replace(/^\(/, '').replace(/\)$/, '') || committee.caucus.purpose}
                 </span>
               )}
             </div>
@@ -1994,9 +2008,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                     <div className="bg-[#EDE7D8] border border-[#1B3828]/40 rounded-3xl px-12 py-10 max-w-lg w-full shadow-2xl">
                       {isTdTParent ? (
                         <>
-                          <div className="mb-5"><Emoji size="3rem">🔄</Emoji></div>
-                          <p className="text-xs font-mono text-[#9A8A78] tracking-widest mb-3">TOUR DE TABLE STARTING</p>
-                          <h1 className="text-3xl font-black text-[#1C1410] mb-2">Tour de Table</h1>
+                          <p className="text-xs font-mono tracking-widest mb-3 font-bold" style={{ color: '#1B3828' }}>TOUR DE TABLE STARTING</p>
+                          <h1 className="text-5xl font-black mb-2" style={{ color: '#1B3828' }}>Tour de Table</h1>
                           <p className="text-[#6A5A4A] text-sm mb-6">
                             {committee.caucus.purpose?.includes('Room Order')
                               ? 'Room Order — chair calls each speaker'
@@ -2027,9 +2040,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                         </>
                       ) : (
                         <>
-                          <div className="mb-5"><Emoji size="3rem">🎙️</Emoji></div>
-                          <p className="text-xs font-mono text-[#9A8A78] tracking-widest mb-3">MODERATED CAUCUS STARTING</p>
-                          <h1 className="text-3xl font-black text-[#1C1410] mb-2">{committee.caucus.purpose || 'Moderated Caucus'}</h1>
+                          <p className="text-xs font-mono tracking-widest mb-3 font-bold" style={{ color: '#1B3828' }}>MODERATED CAUCUS STARTING</p>
+                          <h1 className="text-5xl font-black mb-2" style={{ color: '#1B3828' }}>{committee.caucus.purpose || 'Moderated Caucus'}</h1>
                           <p className="text-[#6A5A4A] text-sm mb-6">{committee.topic}</p>
                           <div className="flex justify-center gap-8 mb-8">
                             <div className="text-center">
@@ -2077,13 +2089,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 unmodLoading ? (
                   <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
                     <div className="bg-[#EDE7D8] border border-[#DDD4C0]/40 rounded-3xl px-12 py-10 max-w-lg w-full shadow-2xl">
-                      <div className="text-5xl mb-5">
-                        {committee.caucus.motionLabel?.includes('Consultation') ? '🤝' : '💬'}
-                      </div>
-                      <p className="text-xs font-mono text-[#9A8A78] tracking-widest mb-3">
+                      <p className="text-xs font-mono tracking-widest mb-3 font-bold" style={{ color: '#1B3828' }}>
                         {(committee.caucus.motionLabel ?? 'UNMODERATED CAUCUS').toUpperCase()} STARTING
                       </p>
-                      <h1 className="text-3xl font-black text-[#1C1410] mb-2">
+                      <h1 className="text-5xl font-black mb-2" style={{ color: '#1B3828' }}>
                         {committee.caucus.motionLabel ?? 'Unmoderated Caucus'}
                       </h1>
                       {committee.caucus.purpose && (
