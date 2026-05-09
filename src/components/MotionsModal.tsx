@@ -231,7 +231,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
             {enabledTypes.map((t) => (
               <button key={t} type="button" onClick={() => setType(t)}
                 className={`px-3 py-2 rounded-xl border font-bold text-base transition-all flex-1 min-w-[120px] ${
-                  type === t ? 'bg-[#1B3828] border-[#2A5A3C] text-white' : 'bg-[#EDE7D8] border-[#DDD4C0] text-[#6A5A4A] hover:border-[#1B3828]'
+                  type === t ? 'bg-[#1B3828] border-[#2A5A3C] text-white' : 'bg-transparent border-[#DDD4C0] text-[#6A5A4A] hover:border-[#1B3828]'
                 }`}>
                 {typeMeta[t].label}
               </button>
