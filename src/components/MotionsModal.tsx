@@ -263,7 +263,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
             {/* Tour de Table — speaking time per delegate + order */}
             {type === 'tour' && (
               <>
-                <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-2xl p-4 space-y-3">
+                <div className="bg-transparent border border-[#DDD4C0] rounded-2xl p-4 space-y-3">
                   <p className="text-[#1C1410] font-semibold text-sm">
                     All {presentCountries.length} present delegates will speak once each.
                   </p>
@@ -283,32 +283,30 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
                     <div className="flex gap-2 mt-2">
                       {[30, 45, 60, 90, 120].map((t) => (
                         <button key={t} onClick={() => setSpeakingTimeStr(String(t))}
-                          className={`text-xs px-2.5 py-1.5 rounded-lg transition-colors ${speakingTime === t ? 'bg-[#1B3828] text-white font-bold' : 'bg-[#EDE7D8] border border-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
+                          className={`text-xs px-2.5 py-1.5 rounded-lg transition-colors ${speakingTime === t ? 'bg-[#1B3828] text-white font-bold' : 'bg-transparent border border-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
                           {t}s
                         </button>
                       ))}
                     </div>
                   </div>
-                  <div style={{ minHeight: '110px' }}>
+                  <div style={{ minHeight: '108px' }}>
                     <label className="block text-lg font-semibold text-[#6A5A4A] mb-2">Speaking order</label>
                     <div className="flex gap-3">
                       <button onClick={() => setTourOrder('asc')}
-                        className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-colors focus:outline-none ${tourOrder === 'asc' ? 'bg-[#1B3828] text-white' : 'bg-[#EDE7D8] border border-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
+                        className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-colors focus:outline-none ${tourOrder === 'asc' ? 'bg-[#1B3828] text-white' : 'bg-transparent border border-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
                         A → Z
                       </button>
                       <button onClick={() => setTourOrder('desc')}
-                        className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-colors focus:outline-none ${tourOrder === 'desc' ? 'bg-[#1B3828] text-white' : 'bg-[#EDE7D8] border border-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
+                        className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-colors focus:outline-none ${tourOrder === 'desc' ? 'bg-[#1B3828] text-white' : 'bg-transparent border border-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
                         Z → A
                       </button>
                       <button onClick={() => setTourOrder('custom')}
-                        className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-colors focus:outline-none ${tourOrder === 'custom' ? 'bg-[#1B3828] text-white' : 'bg-[#EDE7D8] border border-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
+                        className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-colors focus:outline-none ${tourOrder === 'custom' ? 'bg-[#1B3828] text-white' : 'bg-transparent border border-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
                         Room Order
                       </button>
                     </div>
                     {tourOrder === 'custom' && (
-                      <div className="mt-2 px-3 py-2 bg-[#EDE7D8] border border-[#DDD4C0] rounded-lg">
-                        <p className="text-xs leading-relaxed" style={{ color: '#9A8A78' }}>Follows the physical room order. Call each speaker manually — the chair decides who goes next based on seating.</p>
-                      </div>
+                      <p className="text-xs text-[#9A8A78] mt-2 leading-relaxed">Follows the physical room order. Call each speaker manually — the chair decides who goes next based on seating.</p>
                     )}
                   </div>
                 </div>
