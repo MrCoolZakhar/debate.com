@@ -27,8 +27,6 @@ const AMBASSADORS = [
   { name: 'Ambassador Fifteen',  country: 'Sweden',         initials: 'AS' },
 ];
 
-const LOREM = `Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.`;
-
 const inputStyle: React.CSSProperties = {
   backgroundColor: 'rgba(221, 212, 192, 0.4)',
   border: '1px solid rgba(28, 20, 16, 0.2)',
@@ -79,21 +77,21 @@ export default function AboutClient() {
       {/* Founders */}
       <section className="relative z-10 py-24 px-6 max-w-6xl mx-auto w-full">
         <div className="flex flex-col md:flex-row items-center gap-16 mb-28">
-          <div className="shrink-0"><FounderPhoto src="/PeterPic.png" name="Peter Zakhar" /></div>
+          <div className="shrink-0"><FounderPhoto src="/PeterPic.jpg" name="Peter Zakhar" /></div>
           <div className="flex-1">
             <p className="text-xs font-mono tracking-[0.18em] text-[#9A8A78] mb-2 uppercase">Co-Founder</p>
             <h2 className="text-4xl font-black text-[#1C1410] mb-1">Peter Zakhar</h2>
             <p className="text-[#B6871F] text-sm font-semibold mb-6 tracking-wide">Business Development & Frontend</p>
-            <p className="text-[#6A5A4A] leading-relaxed text-base">{LOREM}</p>
+            <p className="text-[#6A5A4A] leading-relaxed text-base">Peter is not scared of risky ideas. He listens, asks and acts immediately on any Gavelling related feedback. He is not just a figure with good ideas, but someone who has actively trained his own delegation to win over 100 awards in a single year. Ultimately, fun, adventure and creativity knows no bounds for Peter, having travelled to over 40 countries at 22.</p>
           </div>
         </div>
         <div className="flex flex-col md:flex-row-reverse items-center gap-16">
-          <div className="shrink-0"><FounderPhoto src="/Christian.png" name="Christian Galindo Haas" /></div>
+          <div className="shrink-0"><FounderPhoto src="/Christian.jpg" name="Christian Galindo" /></div>
           <div className="flex-1">
             <p className="text-xs font-mono tracking-[0.18em] text-[#9A8A78] mb-2 uppercase">Co-Founder</p>
-            <h2 className="text-4xl font-black text-[#1C1410] mb-1">Christian Galindo Haas</h2>
-            <p className="text-[#B6871F] text-sm font-semibold mb-6 tracking-wide">Backend Development & Business Dev</p>
-            <p className="text-[#6A5A4A] leading-relaxed text-base">{LOREM}</p>
+            <h2 className="text-4xl font-black text-[#1C1410] mb-1">Christian Galindo</h2>
+            <p className="text-[#B6871F] text-sm font-semibold mb-6 tracking-wide">Business Development & Backend</p>
+            <p className="text-[#6A5A4A] leading-relaxed text-base">Christian is constantly looking for change and progress; having lived in 9 countries at 21 years old. He applies this same mindset to Gavelling: voicing new ideas, taking feedback, and looking for positive change. His constant journey for new challenges led him to train delegates across continents to win awards at a 90% rate in global conferences.</p>
           </div>
         </div>
       </section>
@@ -103,7 +101,7 @@ export default function AboutClient() {
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-16">
             <p className="text-xs font-mono tracking-[0.2em] text-[#9A8A78] mb-3 uppercase">Representing the world</p>
-            <h2 className="text-4xl font-black text-[#1C1410]">Global Ambassadors</h2>
+            <h2 className="text-4xl font-black text-[#1C1410]">GLOBAL AMBASSADORS</h2>
           </div>
           <div className="grid grid-cols-5 gap-8">
             {AMBASSADORS.map((amb) => (
@@ -116,7 +114,6 @@ export default function AboutClient() {
                 </Avatar>
                 <div className="text-center">
                   <p className="text-[#1C1410] text-xs font-bold leading-tight">{amb.name}</p>
-                  <p className="text-[#9A8A78] text-xs mt-0.5">{amb.country}</p>
                 </div>
               </div>
             ))}
@@ -126,25 +123,29 @@ export default function AboutClient() {
 
       {/* Ambassador CTA */}
       <section className="relative z-10" style={{ borderTop: '1px solid rgba(221, 212, 192, 0.8)' }}>
-        <button
-          onClick={() => { setOpen(true); setSubmitted(false); }}
-          className="w-full group transition-all duration-300"
-          style={{ background: 'linear-gradient(135deg, #1B3828 0%, #2A5A3C 100%)', padding: '64px 48px', cursor: 'pointer', textAlign: 'center' }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'linear-gradient(135deg, #2A5A3C 0%, #1B3828 100%)'; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'linear-gradient(135deg, #1B3828 0%, #2A5A3C 100%)'; }}
+        <div
+          className="w-full text-center"
+          style={{ background: 'linear-gradient(135deg, #1B3828 0%, #2A5A3C 100%)', padding: '64px 48px' }}
         >
-          <p className="font-black text-white mb-4 group-hover:text-[#EED98A] transition-colors duration-300"
+          <p className="font-black text-white mb-4"
             style={{ fontSize: 'clamp(28px, 4vw, 52px)', letterSpacing: '-0.02em' }}>
             Start Gavelling with us
           </p>
           <p className="text-[#EED98A]/60 text-base max-w-xl mx-auto leading-relaxed">
             Are you chairing conferences in your country and there are no ambassadors from where you are from? Apply and get your merch package.
           </p>
-          <div className="inline-flex items-center gap-2 mt-8 px-8 py-3 rounded-full font-bold text-sm tracking-wide"
-            style={{ border: '1.5px solid rgba(238, 217, 138, 0.4)', color: '#EED98A' }}>
+          <button
+            onClick={() => { setOpen(true); setSubmitted(false); }}
+            className="inline-flex items-center gap-2 mt-8 px-8 py-3 rounded-full font-bold text-sm tracking-wide transition-all duration-150"
+            style={{ border: '1.5px solid rgba(238, 217, 138, 0.4)', color: '#EED98A', background: 'transparent', cursor: 'pointer' }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(238, 217, 138, 0.12)'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
+            onMouseDown={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(238, 217, 138, 0.25)'; (e.currentTarget as HTMLButtonElement).style.color = '#FFFFFF'; }}
+            onMouseUp={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(238, 217, 138, 0.12)'; (e.currentTarget as HTMLButtonElement).style.color = '#EED98A'; }}
+          >
             Apply Now →
-          </div>
-        </button>
+          </button>
+        </div>
       </section>
 
       {/* Dialog */}
@@ -204,11 +205,29 @@ export default function AboutClient() {
       </Dialog>
 
       {/* Footer */}
-      <footer className="relative z-10 border-t border-[#DDD4C0] bg-[#EDE7D8] px-6 py-8 flex flex-col md:flex-row items-center justify-between gap-4">
-        <img src="/GavellingLogo.png" alt="Gavelling" className="h-7 w-auto"
-          style={{ filter: 'brightness(0) saturate(100%) invert(18%) sepia(25%) saturate(800%) hue-rotate(100deg) brightness(85%)' }}
-          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-        <p className="text-xs text-[#9A8A78]">© {new Date().getFullYear()} Gavelling. Built for the MUN community.</p>
+      <footer className="relative z-10 border-t border-[#DDD4C0] bg-[#EDE7D8] px-6 py-8">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+          <img src="/GavellingLogo.png" alt="Gavelling" className="h-7 w-auto"
+            style={{ filter: 'brightness(0) saturate(100%) invert(18%) sepia(25%) saturate(800%) hue-rotate(100deg) brightness(85%)' }}
+            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+          <div className="flex items-center gap-4">
+            <a href="https://www.instagram.com/wearegavelling/" target="_blank" rel="noopener noreferrer"
+              aria-label="Instagram"
+              style={{ color: '#9A8A78', transition: 'color 0.15s' }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#1B3828'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#9A8A78'; }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>
+              </svg>
+            </a>
+            <span aria-label="LinkedIn (coming soon)" style={{ color: '#C8BFB0', cursor: 'default' }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/>
+              </svg>
+            </span>
+          </div>
+          <p className="text-xs text-[#9A8A78]">© {new Date().getFullYear()} Gavelling. Built for the MUN community.</p>
+        </div>
       </footer>
     </div>
   );

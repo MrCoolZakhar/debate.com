@@ -90,19 +90,33 @@ export default function ConferencesClient() {
       </section>
 
       {/* Footer */}
-      <footer
-        className="relative z-10 border-t border-[#DDD4C0] bg-[#EDE7D8] px-6 py-8 flex flex-col md:flex-row items-center justify-between gap-4"
-      >
-        <img
-          src="/GavellingLogo.png"
-          alt="Gavelling"
-          className="h-7 w-auto"
-          style={{ filter: 'brightness(0) saturate(100%) invert(18%) sepia(25%) saturate(800%) hue-rotate(100deg) brightness(85%)' }}
-          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-        />
-        <p className="text-xs text-[#9A8A78]">
-          © {new Date().getFullYear()} Gavelling. Built for the MUN community.
-        </p>
+      <footer className="relative z-10 border-t border-[#DDD4C0] bg-[#EDE7D8] px-6 py-8">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+          <img
+            src="/GavellingLogo.png"
+            alt="Gavelling"
+            className="h-7 w-auto"
+            style={{ filter: 'brightness(0) saturate(100%) invert(18%) sepia(25%) saturate(800%) hue-rotate(100deg) brightness(85%)' }}
+            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+          />
+          <div className="flex items-center gap-4">
+            <a href="https://www.instagram.com/wearegavelling/" target="_blank" rel="noopener noreferrer"
+              aria-label="Instagram"
+              style={{ color: '#9A8A78', transition: 'color 0.15s' }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#1B3828'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#9A8A78'; }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>
+              </svg>
+            </a>
+            <span aria-label="LinkedIn (coming soon)" style={{ color: '#C8BFB0', cursor: 'default' }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/>
+              </svg>
+            </span>
+          </div>
+          <p className="text-xs text-[#9A8A78]">© {new Date().getFullYear()} Gavelling. Built for the MUN community.</p>
+        </div>
       </footer>
     </div>
   );
