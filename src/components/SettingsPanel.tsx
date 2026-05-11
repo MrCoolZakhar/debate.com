@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useSettingsStore, CommitteeSettings } from '@/lib/settingsStore';
 import { Committee } from '@/lib/types';
-import { updateCommitteeCode } from '@/lib/committeeService';
+import { updateCommitteeCode, updateCommitteeChairSuffixInDB } from '@/lib/committeeService';
 import { getFlagEmoji, getCountryByName } from '@/lib/countries';
 
 type SettingsTab = 'voting' | 'motions' | 'access' | 'points';
@@ -84,7 +84,11 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
   // Auto-generate chairJoinSuffix when separateChairCode is enabled and suffix is empty
   useEffect(() => {
     if (s.separateChairCode && s.chairJoinSuffix === '') {
-      upd('chairJoinSuffix', Math.floor(1000 + Math.random() * 9000).toString());
+      const newSuffix = Math.floor(1000 + Math.random() * 9000).toString();
+      upd('chairJoinSuffix', newSuffix);
+      updateCommitteeChairSuffixInDB(committee.id, newSuffix);
+    } else if (s.separateChairCode && s.chairJoinSuffix !== '') {
+      updateCommitteeChairSuffixInDB(committee.id, s.chairJoinSuffix);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [s.separateChairCode, s.chairJoinSuffix]);
