@@ -20,8 +20,8 @@ type PresentationStage = 'setup' | 'reading' | 'presentation' | 'qa' | 'vote' | 
 
 const STATUS_META: Record<DocumentStatus, { label: string; color: string }> = {
   submitted:   { label: 'Submitted',  color: 'bg-[#1B3828]/20 text-[#1B3828] border-[#1B3828]/30' },
-  'on-floor':  { label: 'On Floor',   color: 'bg-yellow-950/40 text-yellow-600 border-yellow-800/40' },
-  introduced:  { label: 'Introduced', color: 'bg-[#1B3828]/10 text-[#2A5A3C] border-[#1B3828]/20' },
+  'on-floor':  { label: 'On Floor',   color: 'bg-transparent text-[#B8844A] border-[#B8844A]/50' },
+  introduced:  { label: 'Introduced', color: 'bg-transparent text-[#B8844A] border-[#B8844A]/50' },
   passed:      { label: 'Passed',     color: 'bg-[#1B3828] text-[#EED98A] border-[#1B3828]' },
   failed:      { label: 'Failed',     color: 'bg-red-950/40 text-red-500 border-red-800/40' },
 };
@@ -132,7 +132,7 @@ function StageTimer({
         {doc.type === 'working-paper' ? 'WORKING PAPER' : 'DRAFT RESOLUTION'} · {doc.docCode}
       </p>
       <h2 className="text-2xl font-black mb-1" style={{ color: '#1C1410' }}>{doc.title}</h2>
-      <p className="text-sm font-black mb-6 mt-1" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>{label}</p>
+      <p className="text-xs font-black mb-6 mt-1 tracking-widest uppercase" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>{label}</p>
 
       {!done ? (
         <>
@@ -142,7 +142,15 @@ function StageTimer({
           <div className="w-full max-w-sm h-2 bg-[#DDD4C0] rounded-full overflow-hidden mb-8">
             <div className="h-full rounded-full transition-all" style={{ width: `${progress}%`, backgroundColor: '#1B3828' }} />
           </div>
-          <div className="flex gap-3 flex-wrap justify-center">
+          <div className="flex gap-3 flex-wrap justify-center items-center">
+            <button onClick={onBack}
+              className="w-10 h-10 rounded-xl font-bold transition-colors focus:outline-none flex items-center justify-center"
+              style={{ backgroundColor: 'transparent', color: '#6A5A4A', border: '1px solid #DDD4C0' }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; (e.currentTarget as HTMLElement).style.color = '#6A5A4A'; }}
+              title="Back">
+              ←
+            </button>
             <button onClick={() => { setRunning((r) => !r); setStarted(true); }}
               className="px-8 py-3 rounded-xl font-bold transition-colors focus:outline-none"
               style={{ backgroundColor: running ? '#B8844A' : '#2A5A3C', color: 'white', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}>
@@ -154,25 +162,19 @@ function StageTimer({
               ) : started ? '▶ RESUME' : '▶ START'}
             </button>
             <button onClick={onToggleDocument}
-              className="px-6 py-3 rounded-xl font-bold transition-colors focus:outline-none"
-              style={{ backgroundColor: showDocument ? '#1B3828' : 'transparent', color: showDocument ? 'white' : '#6A5A4A', border: showDocument ? 'none' : '1px solid #DDD4C0', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}
-              onMouseEnter={(e) => { if (!showDocument) (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
-              onMouseLeave={(e) => { if (!showDocument) (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}>
+              className="px-5 py-3 rounded-xl font-bold transition-colors focus:outline-none text-sm"
+              style={{ backgroundColor: showDocument ? '#1B3828' : 'transparent', color: showDocument ? 'white' : '#6A5A4A', border: showDocument ? 'none' : '1px solid #DDD4C0', fontFamily: "'Outfit', sans-serif" }}
+              onMouseEnter={(e) => { if (!showDocument) { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; (e.currentTarget as HTMLElement).style.color = '#1B3828'; } }}
+              onMouseLeave={(e) => { if (!showDocument) { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; (e.currentTarget as HTMLElement).style.color = '#6A5A4A'; } }}>
               {showDocument ? 'HIDE DOC' : 'SHOW DOC'}
             </button>
-            <button onClick={onBack}
-              className="px-6 py-3 rounded-xl font-bold transition-colors focus:outline-none"
-              style={{ backgroundColor: 'transparent', color: '#6A5A4A', border: '1px solid #DDD4C0', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}>
-              ← BACK
-            </button>
             <button onClick={onComplete}
-              className="px-6 py-3 rounded-xl font-bold transition-colors focus:outline-none"
-              style={{ backgroundColor: 'transparent', color: '#6A5A4A', border: '1px solid #DDD4C0', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}>
-              SKIP →
+              className="w-10 h-10 rounded-xl font-bold transition-colors focus:outline-none flex items-center justify-center"
+              style={{ backgroundColor: 'transparent', color: '#6A5A4A', border: '1px solid #DDD4C0' }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; (e.currentTarget as HTMLElement).style.color = '#6A5A4A'; }}
+              title="Skip">
+              →
             </button>
           </div>
         </>
@@ -407,9 +409,13 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
 
   return (
     <div className="space-y-4 px-7 pb-7">
-      <div className="flex items-center gap-3">
-        <button onClick={onDone} className="text-sm text-[#6A5A4A] hover:text-[#1C1410] transition-colors">← Back</button>
-        <h2 className="text-xl font-black text-[#1C1410]">Submit {type === 'working-paper' ? 'Working Paper' : 'Draft Resolution'}</h2>
+      <div className="flex flex-col items-center gap-1 relative">
+        <button onClick={onDone} className="absolute left-0 top-1/2 -translate-y-1/2 text-sm transition-colors focus:outline-none" style={{ color: '#9A8A78' }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#1C1410'; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}>← Back</button>
+        <h2 className="text-xl font-black text-center uppercase tracking-wide" style={{ color: '#1B3828' }}>
+          {type === 'working-paper' ? 'SUBMIT WORKING PAPER' : 'SUBMIT DRAFT RESOLUTION'}
+        </h2>
       </div>
       <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl px-4 py-2.5">
         <span className="text-xs text-[#9A8A78] font-mono">DOCUMENT CODE</span>
@@ -784,8 +790,8 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate }
                 ))
               )}
               <button onClick={() => setShowForm(true)}
-                className="w-full bg-[#EDE7D8] hover:bg-[#DDD4C0] border border-[#DDD4C0] hover:border-[#1B3828] text-[#1C1410] py-3.5 rounded-2xl font-bold transition-all mt-2 text-center focus:outline-none" style={{ fontFamily: "'Outfit', sans-serif", letterSpacing: '0.04em' }}>
-                + SUBMIT NEW {tab === 'working-paper' ? 'WORKING PAPER' : 'DRAFT RESOLUTION'}
+                className="w-full bg-[#EDE7D8] hover:bg-[#DDD4C0] border border-[#DDD4C0] hover:border-[#1B3828] text-[#1C1410] py-3.5 rounded-2xl font-bold transition-all mt-2 text-center focus:outline-none" style={{ fontFamily: "'Outfit', sans-serif" }}>
+                + Submit New {tab === 'working-paper' ? 'Working Paper' : 'Draft Resolution'}
               </button>
             </div>
           )}
