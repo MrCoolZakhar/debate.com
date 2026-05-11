@@ -19,11 +19,11 @@ type DocTab = 'working-paper' | 'draft-resolution';
 type PresentationStage = 'setup' | 'reading' | 'presentation' | 'qa' | 'vote' | null;
 
 const STATUS_META: Record<DocumentStatus, { label: string; color: string }> = {
-  submitted:   { label: 'Submitted',  color: 'bg-blue-950/40 text-blue-400 border-blue-800/40' },
-  'on-floor':  { label: 'On Floor',   color: 'bg-yellow-950/40 text-yellow-400 border-yellow-800/40' },
-  introduced:  { label: 'Introduced', color: 'bg-purple-950/40 text-purple-400 border-purple-800/40' },
-  passed:      { label: 'Passed',     color: 'bg-green-950/40 text-green-400 border-green-800/40' },
-  failed:      { label: 'Failed',     color: 'bg-red-950/40 text-red-400 border-red-800/40' },
+  submitted:   { label: 'Submitted',  color: 'bg-[#1B3828]/20 text-[#1B3828] border-[#1B3828]/30' },
+  'on-floor':  { label: 'On Floor',   color: 'bg-yellow-950/40 text-yellow-600 border-yellow-800/40' },
+  introduced:  { label: 'Introduced', color: 'bg-[#1B3828]/10 text-[#2A5A3C] border-[#1B3828]/20' },
+  passed:      { label: 'Passed',     color: 'bg-[#1B3828] text-[#EED98A] border-[#1B3828]' },
+  failed:      { label: 'Failed',     color: 'bg-red-950/40 text-red-500 border-red-800/40' },
 };
 
 const STATUS_NEXT: Partial<Record<DocumentStatus, DocumentStatus>> = {
@@ -97,11 +97,11 @@ function formatTime(seconds: number) {
 // ── Countdown Timer (reading / presentation / Q&A) ────────────────────────────
 function StageTimer({
   label, color, totalSeconds, doc, showDocument,
-  onComplete, onToggleDocument,
+  onComplete, onToggleDocument, onBack,
 }: {
   label: React.ReactNode; color: string; totalSeconds: number;
   doc: CommitteeDocument; showDocument: boolean;
-  onComplete: () => void; onToggleDocument: () => void;
+  onComplete: () => void; onToggleDocument: () => void; onBack: () => void;
 }) {
   const [remaining, setRemaining] = useState(totalSeconds);
   const [running, setRunning] = useState(false);
@@ -128,42 +128,62 @@ function StageTimer({
   return (
     <div className={`flex-1 flex ${showDocument ? 'flex-row items-stretch' : 'flex-col items-center justify-center px-8 py-8 text-center'}`}>
       <div className={`flex flex-col items-center justify-center text-center ${showDocument ? 'w-1/2 px-6 py-8 border-r border-[#DDD4C0]' : 'w-full px-8 py-8'}`}>
-      <p className="text-xs font-mono tracking-widest mb-2 text-[#9A8A78]">
+      <p className="text-xs font-mono tracking-widest mb-2" style={{ color: '#9A8A78' }}>
         {doc.type === 'working-paper' ? 'WORKING PAPER' : 'DRAFT RESOLUTION'} · {doc.docCode}
       </p>
-      <h2 className="text-2xl font-black text-[#1C1410] mb-1">{doc.title}</h2>
-      <p className={`text-sm font-bold mb-6 mt-1 ${color}`}>{label}</p>
+      <h2 className="text-2xl font-black mb-1" style={{ color: '#1C1410' }}>{doc.title}</h2>
+      <p className="text-sm font-black mb-6 mt-1" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>{label}</p>
 
       {!done ? (
         <>
-          <div className={`text-8xl font-black font-mono tabular-nums mb-4 ${remaining <= 30 ? 'text-red-500' : remaining <= 60 ? 'text-yellow-500' : 'text-[#1C1410]'}`}>
+          <div className="text-8xl font-black font-mono tabular-nums mb-4" style={{ color: remaining <= 30 ? '#B8844A' : '#1C1410' }}>
             {formatTime(remaining)}
           </div>
           <div className="w-full max-w-sm h-2 bg-[#DDD4C0] rounded-full overflow-hidden mb-8">
-            <div className={`h-full rounded-full transition-all ${color.includes('purple') ? 'bg-purple-500' : color.includes('blue') ? 'bg-blue-500' : 'bg-[#B6871F]'}`}
-              style={{ width: `${progress}%` }} />
+            <div className="h-full rounded-full transition-all" style={{ width: `${progress}%`, backgroundColor: '#1B3828' }} />
           </div>
           <div className="flex gap-3 flex-wrap justify-center">
             <button onClick={() => { setRunning((r) => !r); setStarted(true); }}
-              className={`px-8 py-3 rounded-xl font-bold transition-colors ${running ? 'bg-yellow-600 hover:bg-yellow-500 text-white' : 'bg-green-600 hover:bg-green-500 text-white'}`}>
-              {running ? '⏸ Pause' : started ? '▶ Resume' : '▶ Start'}
+              className="px-8 py-3 rounded-xl font-bold transition-colors focus:outline-none"
+              style={{ backgroundColor: running ? '#B8844A' : '#2A5A3C', color: 'white', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}>
+              {running ? (
+                <span className="flex items-center gap-2">
+                  <span className="flex gap-[3px]"><span className="w-[3px] h-[13px] rounded-sm bg-white inline-block" /><span className="w-[3px] h-[13px] rounded-sm bg-white inline-block" /></span>
+                  PAUSE
+                </span>
+              ) : started ? '▶ RESUME' : '▶ START'}
             </button>
             <button onClick={onToggleDocument}
-              className={`px-6 py-3 rounded-xl font-bold transition-colors ${showDocument ? 'bg-[#1B3828] text-white' : 'bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#6A5A4A] border border-[#DDD4C0]'}`}>
-              {showDocument ? '📄 Hide Doc' : '📄 Show Doc'}
+              className="px-6 py-3 rounded-xl font-bold transition-colors focus:outline-none"
+              style={{ backgroundColor: showDocument ? '#1B3828' : 'transparent', color: showDocument ? 'white' : '#6A5A4A', border: showDocument ? 'none' : '1px solid #DDD4C0', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}
+              onMouseEnter={(e) => { if (!showDocument) (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
+              onMouseLeave={(e) => { if (!showDocument) (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}>
+              {showDocument ? 'HIDE DOC' : 'SHOW DOC'}
+            </button>
+            <button onClick={onBack}
+              className="px-6 py-3 rounded-xl font-bold transition-colors focus:outline-none"
+              style={{ backgroundColor: 'transparent', color: '#6A5A4A', border: '1px solid #DDD4C0', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}>
+              ← BACK
             </button>
             <button onClick={onComplete}
-              className="px-6 py-3 rounded-xl font-bold bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#6A5A4A] border border-[#DDD4C0] transition-colors">
-              Skip →
+              className="px-6 py-3 rounded-xl font-bold transition-colors focus:outline-none"
+              style={{ backgroundColor: 'transparent', color: '#6A5A4A', border: '1px solid #DDD4C0', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}>
+              SKIP →
             </button>
           </div>
         </>
       ) : (
         <>
-          <p className="text-[#6A5A4A] text-lg mb-8">{label} complete.</p>
+          <p className="text-lg mb-8" style={{ color: '#6A5A4A' }}>{label} complete.</p>
           <button onClick={onComplete}
-            className="px-10 py-4 rounded-2xl font-black text-lg bg-[#1B3828] hover:bg-[#2A5A3C] text-white transition-colors">
-            Continue →
+            className="px-10 py-4 rounded-2xl font-black text-lg transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828', color: 'white' }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}>
+            CONTINUE →
           </button>
         </>
       )}
@@ -362,7 +382,7 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
   const [fileUrl, setFileUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const docCode = autoDocCode(type, committee.documents ?? []);
-  const canSubmit = !limitReached && title.trim() && sponsors.length > 0;
+  const canSubmit = !limitReached && title.trim() && sponsors.length > 0 && !!fileUrl;
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return;
@@ -409,10 +429,10 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
           className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] transition-colors text-sm" />
       </div>
       <div>
-        <label className="block text-sm font-semibold text-[#6A5A4A] mb-1.5">Attachment</label>
+        <label className="block text-sm font-semibold text-[#6A5A4A] mb-1.5">Attachment <span className="text-red-500">*</span></label>
         {fileName ? (
           <div className="flex items-center gap-2 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3">
-            <span className="text-sm text-[#1C1410] flex-1 truncate"><Emoji size="1em">📎</Emoji> {fileName}</span>
+            <span className="text-sm text-[#1C1410] flex-1 truncate">📎 {fileName}</span>
             <button onClick={() => { setFileName(null); setFileUrl(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
               className="text-[#9A8A78] hover:text-red-500 transition-colors text-sm">✕</button>
           </div>
@@ -458,15 +478,18 @@ function TimingSetup({ doc, onStart, onSkip }: {
 
       <div className="w-full max-w-sm space-y-4">
         {[
-          { key: 'reading', label: <><Emoji size="1em">📖</Emoji>{' Reading Time'}</>, value: readingMins, set: setReadingMins, color: 'text-[#B6871F]', note: 'Delegates read the document' },
-          { key: 'presentation', label: <><Emoji size="1em">🎤</Emoji>{' Presentation'}</>, value: presentationMins, set: setPresentationMins, color: 'text-purple-400', note: 'Sponsors present the document' },
-          { key: 'qa', label: <><Emoji size="1em">❓</Emoji>{' Q&A'}</>, value: qaMins, set: setQaMins, color: 'text-blue-400', note: isWP ? 'Optional for Working Papers' : 'Questions from delegates' },
-        ].map(({ key, label, value, set, color, note }) => (
+          { key: 'reading', label: 'READING TIME', value: readingMins, set: setReadingMins, note: 'Delegates read the document' },
+          { key: 'presentation', label: 'PRESENTATION', value: presentationMins, set: setPresentationMins, note: 'Sponsors present the document' },
+          { key: 'qa', label: 'Q&A', value: qaMins, set: setQaMins, note: isWP ? 'Optional for Working Papers' : 'Questions from delegates' },
+        ].map(({ key, label, value, set, note }) => (
           <div key={key} className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl p-4">
             <div className="flex items-center justify-between mb-1">
-              <span className={`font-bold text-sm ${color}`}>{label}</span>
+              <span className="font-black text-sm" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>{label}</span>
               <div className="flex items-center gap-2">
-                <input type="number" min={0} max={60} value={value} onChange={(e) => set(Math.max(0, parseInt(e.target.value) || 0))}
+                <input type="number" min={0} max={60}
+                  value={value === 0 ? '' : value}
+                  onChange={(e) => set(e.target.value === '' ? 0 : Math.max(0, parseInt(e.target.value) || 0))}
+                  onBlur={(e) => { if (e.target.value === '') set(0); }}
                   className="w-16 bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-2 py-1 text-[#1C1410] text-sm text-center focus:outline-none focus:border-[#1B3828]" />
                 <span className="text-sm text-[#9A8A78]">min</span>
               </div>
@@ -477,12 +500,12 @@ function TimingSetup({ doc, onStart, onSkip }: {
 
         <div className="flex gap-3 pt-2">
           <button onClick={() => onStart(readingMins, presentationMins, qaMins)}
-            className="flex-1 bg-[#1B3828] hover:bg-[#2A5A3C] text-white py-3.5 rounded-2xl font-black transition-colors">
-            Start →
+            className="flex-1 bg-[#1B3828] hover:bg-[#2A5A3C] text-white py-3.5 rounded-2xl font-black transition-colors focus:outline-none" style={{ letterSpacing: '0.05em' }}>
+            START →
           </button>
           <button onClick={onSkip}
-            className="px-6 py-3.5 rounded-2xl font-bold bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#6A5A4A] border border-[#DDD4C0] transition-colors">
-            Skip
+            className="px-6 py-3.5 rounded-2xl font-bold bg-transparent border border-[#DDD4C0] hover:border-[#1B3828] transition-colors focus:outline-none" style={{ color: '#6A5A4A' }}>
+            SKIP
           </button>
         </div>
       </div>
@@ -518,14 +541,16 @@ function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation
           </div>
           <p className="text-sm font-bold text-[#1C1410] leading-snug">{doc.title}</p>
         </div>
-        <button onClick={() => onRemove(doc.id)} className="text-[#9A8A78] hover:text-red-500 transition-colors text-sm shrink-0" title="Delete"><Emoji size="1em">🗑</Emoji></button>
+        <button onClick={() => onRemove(doc.id)} className="text-[#9A8A78] hover:text-red-500 transition-colors text-sm shrink-0 focus:outline-none" title="Delete">✕</button>
       </div>
       <div className="text-xs text-[#6A5A4A]"><span className="font-semibold">Sponsors: </span>{doc.sponsors.join(', ') || '—'}</div>
-      {doc.readingMinutes && <div className="text-xs text-[#B6871F] flex items-center gap-1 flex-wrap"><Emoji size="1em">📖</Emoji> {doc.readingMinutes}m reading{doc.presentationMinutes ? <>{' · '}<Emoji size="1em">🎤</Emoji>{` ${doc.presentationMinutes}m presentation`}</> : ''}{doc.qaMinutes ? <>{' · '}<Emoji size="1em">❓</Emoji>{` ${doc.qaMinutes}m Q&A`}</> : ''}</div>}
+      {doc.readingMinutes && <div className="text-xs flex items-center gap-1 flex-wrap" style={{ color: '#1C1410' }}>{doc.readingMinutes}m reading{doc.presentationMinutes ? ` · ${doc.presentationMinutes}m presentation` : ''}{doc.qaMinutes ? ` · ${doc.qaMinutes}m Q&A` : ''}</div>}
       {doc.fileUrl && doc.fileName && (
         <div className="text-xs space-y-2">
-          <button onClick={() => setShowPdf((v) => !v)} className="text-blue-400 hover:text-blue-300 transition-colors">
-            <Emoji size="1em">📎</Emoji> {doc.fileName} {showPdf ? '▲' : '▼'}
+          <button onClick={() => setShowPdf((v) => !v)} className="transition-colors focus:outline-none" style={{ color: '#1B3828' }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#2A5A3C'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}>
+            📎 {doc.fileName} {showPdf ? '▲' : '▼'}
           </button>
           {showPdf && (
             <iframe src={doc.fileUrl} title={doc.fileName} className="w-full rounded-lg border border-[#DDD4C0]" style={{ height: '480px' }} />
@@ -649,8 +674,8 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate }
           <div className="flex items-center gap-3">
             <span className="text-sm font-bold text-[#1C1410]">{activeDoc.docCode}</span>
             {['reading', 'presentation', 'qa'].map((s) => (
-              <span key={s} className={`text-xs px-2 py-0.5 rounded-full ${stage === s ? 'bg-[#1B3828] text-white' : 'bg-[#DDD4C0] text-[#9A8A78]'}`}>
-                {s === 'reading' ? <><Emoji size="1em">📖</Emoji>{' Reading'}</> : s === 'presentation' ? <><Emoji size="1em">🎤</Emoji>{' Presentation'}</> : <><Emoji size="1em">❓</Emoji>{' Q&A'}</>}
+              <span key={s} className={`text-xs px-2 py-0.5 rounded-full font-bold`} style={{ backgroundColor: stage === s ? '#1B3828' : '#DDD4C0', color: stage === s ? '#EED98A' : '#9A8A78', fontFamily: "'DM Mono', monospace" }}>
+                {s === 'reading' ? 'READING' : s === 'presentation' ? 'PRESENTATION' : 'Q&A'}
               </span>
             ))}
           </div>
@@ -658,25 +683,28 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate }
         </div>
 
         {stage === 'reading' && timings.reading > 0 && (
-          <StageTimer label={<><Emoji size="1em">📖</Emoji>{' Reading Time'}</>} color="text-[#B6871F]"
+          <StageTimer label="READING TIME" color="text-[#1B3828]"
             totalSeconds={timings.reading * 60} doc={activeDoc}
             showDocument={showDocContent}
             onComplete={() => advanceFromStage('reading')}
-            onToggleDocument={() => setShowDocContent((v) => !v)} />
+            onToggleDocument={() => setShowDocContent((v) => !v)}
+            onBack={() => setStage('setup')} />
         )}
         {stage === 'presentation' && timings.presentation > 0 && (
-          <StageTimer label={<><Emoji size="1em">🎤</Emoji>{' Presentation'}</>} color="text-purple-400"
+          <StageTimer label="PRESENTATION" color="text-[#1B3828]"
             totalSeconds={timings.presentation * 60} doc={activeDoc}
             showDocument={showDocContent}
             onComplete={() => advanceFromStage('presentation')}
-            onToggleDocument={() => setShowDocContent((v) => !v)} />
+            onToggleDocument={() => setShowDocContent((v) => !v)}
+            onBack={() => setStage('reading')} />
         )}
         {stage === 'qa' && timings.qa > 0 && (
-          <StageTimer label={<><Emoji size="1em">❓</Emoji>{' Q&A'}</>} color="text-blue-400"
+          <StageTimer label="Q&A" color="text-[#1B3828]"
             totalSeconds={timings.qa * 60} doc={activeDoc}
             showDocument={showDocContent}
             onComplete={() => advanceFromStage('qa')}
-            onToggleDocument={() => setShowDocContent((v) => !v)} />
+            onToggleDocument={() => setShowDocContent((v) => !v)}
+            onBack={() => setStage('presentation')} />
         )}
         {stage === 'vote' && (
           <DocumentVote doc={activeDoc} committee={committee}
@@ -692,7 +720,7 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate }
     return (
       <div className="fixed inset-0 z-50 bg-[#F6F1E9] flex flex-col">
         <div className="flex items-center justify-between px-6 pt-4 pb-2 border-b border-[#DDD4C0] shrink-0">
-          <span className="text-sm font-bold text-[#1C1410]">Documents — Introduce</span>
+          <span className="text-sm font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>DOCUMENTS — INTRODUCE</span>
           <button onClick={() => { setStage(null); setActiveDoc(null); }} className="text-[#9A8A78] hover:text-[#1C1410] transition-colors text-xl">✕</button>
         </div>
         <TimingSetup doc={activeDoc} onStart={handleTimingConfirmed} onSkip={handleSkipToVote} />
@@ -740,14 +768,13 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate }
                   onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = '0 8px 24px rgba(27,56,40,0.25)'; }}
                   onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}
                 >
-                  <Emoji size="1em">🗳</Emoji> Go to Voting
+                  GO TO VOTING
                 </button>
               )}
               {docs.length === 0 ? (
                 <div className="text-center py-10">
-                  <div className="mb-3"><Emoji size="2.5rem">{tab === 'working-paper' ? '📄' : '📜'}</Emoji></div>
-                  <p className="text-[#6A5A4A] font-semibold">No {tab === 'working-paper' ? 'working papers' : 'draft resolutions'} yet.</p>
-                  <p className="text-sm text-[#9A8A78] mt-1">Submit the first one below.</p>
+                  <p className="text-2xl font-black mb-1" style={{ color: '#1B3828' }}>No {tab === 'working-paper' ? 'working papers' : 'draft resolutions'} yet.</p>
+                  <p className="text-sm mt-1" style={{ color: '#9A8A78' }}>Submit the first one below.</p>
                 </div>
               ) : (
                 docs.map((doc) => (
@@ -757,8 +784,8 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate }
                 ))
               )}
               <button onClick={() => setShowForm(true)}
-                className="w-full bg-[#EDE7D8] hover:bg-[#DDD4C0] border border-[#DDD4C0] hover:border-[#1B3828] text-[#1C1410] py-3.5 rounded-2xl font-bold transition-all mt-2">
-                + Submit New {tab === 'working-paper' ? 'Working Paper' : 'Draft Resolution'}
+                className="w-full bg-[#EDE7D8] hover:bg-[#DDD4C0] border border-[#DDD4C0] hover:border-[#1B3828] text-[#1C1410] py-3.5 rounded-2xl font-bold transition-all mt-2 text-center focus:outline-none" style={{ fontFamily: "'Outfit', sans-serif", letterSpacing: '0.04em' }}>
+                + SUBMIT NEW {tab === 'working-paper' ? 'WORKING PAPER' : 'DRAFT RESOLUTION'}
               </button>
             </div>
           )}
