@@ -22,6 +22,7 @@ function JoinPageInner() {
   const [code, setCode] = useState(searchParams.get('code') ?? '');
   const [country, setCountry] = useState('');
   const [error, setError] = useState('');
+  const [suffixError, setSuffixError] = useState('');
   const [lookingUp, setLookingUp] = useState(false);
   const [foundCommittee, setFoundCommittee] = useState<Committee | null>(null);
   // Chair name selection — after committee found in chair mode
@@ -51,17 +52,20 @@ function JoinPageInner() {
     // For chair codes with suffix (e.g. "ABC123-1234"), try stripping the suffix first
     const tryBase = upper.includes('-') ? upper.slice(0, upper.lastIndexOf('-')) : null;
 
-    // Validate chair suffix and conditionally set the found committee
+    // Always show the committee, but flag a suffix mismatch separately
     const trySetCommittee = (found: Committee) => {
-      if (currentMode === 'chair' && upper.includes('-')) {
+      setFoundCommittee(found);
+      if (upper.includes('-')) {
         const suffix = upper.slice(upper.lastIndexOf('-') + 1);
         const expectedSuffix = found.dbChairJoinSuffix ?? getSettings(found.code).chairJoinSuffix;
-        if (suffix !== expectedSuffix) {
-          setError('Invalid chair code — check the code provided by your co-chair.');
-          return false;
+        if (expectedSuffix && suffix !== expectedSuffix) {
+          setSuffixError('Incorrect chair code — double-check the code from your co-chair.');
+        } else {
+          setSuffixError('');
         }
+      } else {
+        setSuffixError('');
       }
-      setFoundCommittee(found);
       return true;
     };
 
@@ -96,6 +100,7 @@ function JoinPageInner() {
     const upper = val.toUpperCase().slice(0, 20);
     setCode(upper);
     setError('');
+    setSuffixError('');
     setFoundCommittee(null);
     setLookingUp(false);
 
@@ -181,6 +186,9 @@ function JoinPageInner() {
               )}
             </div>
             {error && <p className="text-red-500 text-sm mt-2 text-center font-semibold">{error}</p>}
+            {suffixError && !error && (
+              <p className="text-sm mt-2 text-center font-semibold px-3 py-2 rounded-xl" style={{ color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.2)' }}>{suffixError}</p>
+            )}
           </div>
 
           {/* Committee found card */}
@@ -314,6 +322,7 @@ function JoinPageInner() {
                 : mode === 'chair'
                 ? (!foundCommittee ||
                     ((foundCommittee.dbSeparateChairCode ?? getSettings(foundCommittee.code).separateChairCode) && !code.includes('-')) ||
+                    !!suffixError ||
                     (chairNameMode === 'select' ? !chairName : !newChairName.trim()))
                 : !foundCommittee
             }
