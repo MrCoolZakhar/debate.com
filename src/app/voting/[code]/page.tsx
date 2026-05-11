@@ -499,7 +499,11 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                       onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
                     />
                   </div>
-                ) : <Emoji size={size}>🌐</Emoji>;
+                ) : (
+                  <div style={{ width: size, aspectRatio: '3 / 2', borderRadius: '14px', overflow: 'hidden', boxShadow: '0 0 0 3.75px rgba(28,20,16,0.22)', flexShrink: 0, position: 'relative', backgroundColor: 'rgba(221,212,192,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Emoji size="5rem">🌐</Emoji>
+                  </div>
+                );
               })()}
             </div>
             <h1
@@ -636,7 +640,11 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                       onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
                     />
                   </div>
-                ) : <Emoji size={size}>🌐</Emoji>;
+                ) : (
+                  <div style={{ width: size, aspectRatio: '3 / 2', borderRadius: '14px', overflow: 'hidden', boxShadow: '0 0 0 3.75px rgba(28,20,16,0.22)', flexShrink: 0, position: 'relative', backgroundColor: 'rgba(221,212,192,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Emoji size="5rem">🌐</Emoji>
+                  </div>
+                );
               })()}
             </div>
             <h1
