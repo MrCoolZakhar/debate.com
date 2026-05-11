@@ -1810,12 +1810,14 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       {!sessionEnded && sessionSuspended && (
         <div className="flex border-b border-[#DDD4C0] bg-[#FAF8F3] shrink-0">
           <button onClick={() => setSuspendTab('suspend')}
-            className={`flex-1 py-2.5 text-sm font-bold transition-colors border-b-2 ${suspendTab === 'suspend' ? 'text-[#1C1410] border-[#1B3828]' : 'text-[#9A8A78] border-transparent hover:text-[#6A5A4A]'}`}>
-            ⏸ Suspend View
+            className={`flex-1 py-2.5 text-sm font-black transition-colors border-b-2 focus:outline-none tracking-wide`}
+            style={{ color: suspendTab === 'suspend' ? '#1B3828' : '#9A8A78', borderBottomColor: suspendTab === 'suspend' ? '#1B3828' : 'transparent', fontFamily: "'Outfit', sans-serif" }}>
+            SUSPEND VIEW
           </button>
           <button onClick={() => setSuspendTab('session')}
-            className={`flex-1 py-2.5 text-sm font-bold transition-colors border-b-2 ${suspendTab === 'session' ? 'text-[#1C1410] border-[#1B3828]' : 'text-[#9A8A78] border-transparent hover:text-[#6A5A4A]'}`}>
-            🪑 Session View
+            className={`flex-1 py-2.5 text-sm font-black transition-colors border-b-2 focus:outline-none tracking-wide`}
+            style={{ color: suspendTab === 'session' ? '#1B3828' : '#9A8A78', borderBottomColor: suspendTab === 'session' ? '#1B3828' : 'transparent', fontFamily: "'Outfit', sans-serif" }}>
+            SESSION VIEW
           </button>
         </div>
       )}
@@ -1825,7 +1827,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         </div>
       )}
       {!sessionEnded && sessionSuspended && suspendTab === 'session' && (
-        <div className="shrink-0 bg-amber-900/20 border-b border-amber-700/40 px-4 py-2 text-center text-amber-300 text-sm font-semibold">
+        <div className="shrink-0 px-4 py-2 text-center text-sm font-bold" style={{ backgroundColor: '#1B3828', borderBottom: '1px solid #3D7A52', color: '#EED98A', fontFamily: "'Outfit', sans-serif" }}>
           Session is suspended — delegates cannot see this view
         </div>
       )}
@@ -1895,24 +1897,25 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
             const anotherChairResuming = committee.resumingChair && committee.resumingChair !== (myChairName || committee.chairNames[0]);
             return (
               <>
-                <div className="text-5xl mb-6">⏸️</div>
-                <h1 className="text-5xl font-black text-[#1C1410] mb-4">Session Adjourned</h1>
-                <p className="text-xl text-[#6A5A4A] mb-12">This session has been temporarily suspended.</p>
+                <h1 className="text-6xl font-black mb-4 tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>SESSION ADJOURNED</h1>
+                <p className="text-xl mb-12" style={{ color: '#6A5A4A' }}>This session has been temporarily suspended.</p>
                 {anotherChairResuming ? (
                   <>
-                    <button disabled className="px-12 py-5 bg-[#DDD4C0] text-[#9A8A78] text-xl font-black rounded-2xl cursor-not-allowed">
-                      Resume Session
+                    <button disabled className="px-12 py-5 rounded-2xl cursor-not-allowed font-black text-xl" style={{ backgroundColor: '#DDD4C0', color: '#9A8A78' }}>
+                      RESUME SESSION
                     </button>
-                    <p className="text-sm text-[#B6871F] mt-4">{committee.resumingChair} is resuming the session…</p>
+                    <p className="text-sm mt-4" style={{ color: '#B8844A' }}>{committee.resumingChair} is resuming the session…</p>
                   </>
                 ) : (
                   <button
                     onClick={handleResumeClick}
-                    className="px-12 py-5 bg-[#1B3828] hover:bg-[#2A5A3C] text-white text-xl font-black rounded-2xl transition-colors">
-                    Resume Session
+                    className="px-12 py-5 text-white text-xl font-black rounded-2xl transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}>
+                    RESUME SESSION
                   </button>
                 )}
-                <p className="text-xs text-[#9A8A78] mt-8">Press ESC to return to main menu</p>
+                <p className="text-xs mt-8" style={{ color: '#9A8A78' }}>Press ESC to return to main menu</p>
               </>
             );
           })()}
