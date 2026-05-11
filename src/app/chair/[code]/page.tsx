@@ -1027,7 +1027,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const [speakerTimeLimit, setSpeakerTimeLimitLocal] = useState(90);
   const [showSettings, setShowSettings] = useState(false);
   const [showChat, setShowChat] = useState(false);
-  const [chatReadCount, setChatReadCount] = useState(0);
+  const [chatReadCounts, setChatReadCounts] = useState<Record<string, number>>({});
   // Only one of these can be open at a time
   const [activePopover, setActivePopover] = useState<'extraTime' | 'rightToReply' | null>(null);
   const [extraTimeSecs, setExtraTimeSecs] = useState('');
@@ -1717,7 +1717,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const handleToggleChat = () => {
     const newShow = !showChat;
     setShowChat(newShow);
-    if (newShow) setChatReadCount(committee?.messages.filter(m => !m.content.startsWith('__log__:')).length ?? 0);
+    if (newShow) {
+      const count = committee?.messages.filter(m => !m.content.startsWith('__log__:')).length ?? 0;
+      setChatReadCounts(prev => ({ ...prev, everyone: count }));
+    }
   };
 
   return (
@@ -1769,7 +1772,13 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               onMouseEnter={(e) => { if (!showChat) { const el = e.currentTarget as HTMLElement; el.style.color = '#1B3828'; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; el.style.transform = 'translateY(-1px)'; } }}
               onMouseLeave={(e) => { if (!showChat) { const el = e.currentTarget as HTMLElement; el.style.color = '#1C1410'; el.style.backgroundColor = 'transparent'; el.style.transform = 'translateY(0)'; } }}>
               Chat
-              {(() => { const unread = committee.messages.filter((m) => !m.content.startsWith('__log__:')).length - chatReadCount; return unread > 0 && !showChat ? <span className="absolute top-1 right-1 w-4 h-4 bg-[#1B3828] rounded-full text-white text-[10px] flex items-center justify-center">{unread}</span> : null; })()}
+              {(() => {
+                const nonLogMsgs = committee.messages.filter((m) => !m.content.startsWith('__log__:'));
+                const totalUnread = Math.max(0, nonLogMsgs.length - (chatReadCounts['everyone'] ?? 0));
+                return totalUnread > 0 && !showChat
+                  ? <span className="absolute top-1 right-1 w-4 h-4 bg-[#1B3828] rounded-full text-white text-[10px] flex items-center justify-center">{totalUnread}</span>
+                  : null;
+              })()}
               <span style={{ position: 'absolute', bottom: '4px', left: '12px', right: '12px', height: '2px', backgroundColor: '#B6871F', transform: showChat ? 'scaleX(1)' : 'scaleX(0)', transformOrigin: 'left', transition: 'transform 200ms ease', borderRadius: '2px' }} />
             </button>
           </div>
@@ -1914,10 +1923,11 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           <div className="flex-1 flex overflow-hidden">
             <ChatPanel
               committee={committee}
-              senderName={myChairName || (committee.chairNames[0] ?? 'Chair')}
+              senderName={myChairName || 'Chair'}
               isChair={true}
               onClose={() => setShowChat(false)}
               readOnly={sessionEnded}
+              onConvRead={(key: string, count: number) => setChatReadCounts(prev => ({ ...prev, [key]: count }))}
             />
           </div>
         )}

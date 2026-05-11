@@ -47,12 +47,14 @@ export default function ChatPanel({
   isChair = false,
   onClose,
   readOnly = false,
+  onConvRead,
 }: {
   committee: Committee;
   senderName: string;
   isChair?: boolean;
   onClose?: () => void;
   readOnly?: boolean;
+  onConvRead?: (key: string, count: number) => void;
   initialReadCounts?: Record<string, number>;
   onReadCountsChange?: React.Dispatch<React.SetStateAction<Record<string, number>>>;
   speakerCard?: React.ReactNode;
@@ -62,6 +64,7 @@ export default function ChatPanel({
   const [msg, setMsg] = useState('');
   const [sending, setSending] = useState(false);
   const [showNewDM, setShowNewDM] = useState(false);
+  const [draftConv, setDraftConv] = useState<ConvKey | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -151,10 +154,35 @@ export default function ChatPanel({
     }
 
     result.push(...countryConvs);
+
+    if (draftConv && !result.find((c) => c.key === draftConv)) {
+      result.push({
+        key: draftConv,
+        label: draftConv,
+        emoji: flagFor(draftConv),
+        messages: [],
+      });
+    }
+
     return result;
-  }, [committee.messages, senderName, isChair, chairNames]);
+  }, [committee.messages, senderName, isChair, chairNames, draftConv]);
 
   const activeConvObj = conversations.find((c) => c.key === activeConv) ?? conversations[0];
+
+  // ── Clear draftConv once real messages arrive ─────────────────────────────
+  useEffect(() => {
+    if (!draftConv) return;
+    const hasMessages = conversations.find((c) => c.key === draftConv)?.messages.length ?? 0;
+    if (hasMessages > 0) setDraftConv(null);
+  }, [conversations, draftConv]);
+
+  // ── Notify parent when active conv messages change ────────────────────────
+  useEffect(() => {
+    if (activeConvObj) {
+      onConvRead?.(activeConv, activeConvObj.messages.length);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeConvObj?.messages.length]);
 
   // ── Auto-scroll on new messages ───────────────────────────────────────────
   useEffect(() => {
@@ -191,6 +219,9 @@ export default function ChatPanel({
     setActiveConv(key);
     setShowThread(true);
     setShowNewDM(false);
+    const conv = conversations.find((c) => c.key === key);
+    if (conv) onConvRead?.(key, conv.messages.length);
+    if (!conv) setDraftConv(key);
   };
 
   const goBack = () => {
