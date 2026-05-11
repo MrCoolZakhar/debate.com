@@ -566,14 +566,27 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
           <div className={`mt-4 w-full max-w-2xl h-[110px] shrink-0 ${upcomingDelegates.length === 0 ? 'invisible' : ''}`}>
             <p className="text-[10px] text-[#9A8A78] font-mono text-center mb-2 tracking-widest">UP NEXT</p>
             <div className="flex items-center justify-center gap-4 h-[80px]">
-              {upcomingDelegates.map((d, i) => (
-                <div key={d.id} className="flex flex-col items-center gap-1" style={{ opacity: Math.max(0.2, 1 - i * 0.18) }}>
-                  <span style={{ fontSize: i === 0 ? '3.5rem' : `${Math.max(1.2, 2.4 - i * 0.2)}rem`, lineHeight: '1' }}>
-                    {getFlag(d.country)}
-                  </span>
-                  <span className="text-[9px] text-[#9A8A78] text-center max-w-[52px] truncate">{d.country}</span>
-                </div>
-              ))}
+              {upcomingDelegates.map((d, i) => {
+                const qf = getCountryByName(d.country);
+                const qHeight = i === 0 ? 52 : Math.max(20, 38 - i * 5);
+                const qWidth = Math.round(qHeight * 1.5);
+                const qRadius = i === 0 ? 8 : 5;
+                const qShadow = `0 0 0 ${i === 0 ? 2.5 : 1.5}px rgba(28,20,16,0.22)`;
+                return (
+                  <div key={d.id} className="flex flex-col items-center gap-1" style={{ opacity: Math.max(0.2, 1 - i * 0.18) }}>
+                    {qf ? (
+                      <div style={{ width: qWidth, height: qHeight, borderRadius: qRadius, overflow: 'hidden', boxShadow: qShadow, flexShrink: 0 }}>
+                        <img src={getFlagUrl(qf.code)} alt={qf.code} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                      </div>
+                    ) : (
+                      <div style={{ width: qWidth, height: qHeight, borderRadius: qRadius, overflow: 'hidden', boxShadow: qShadow, flexShrink: 0, position: 'relative', backgroundColor: 'rgba(221,212,192,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Emoji size={`${Math.round(qHeight * 0.65)}px`}>🌐</Emoji>
+                      </div>
+                    )}
+                    <span className="text-[9px] text-[#9A8A78] text-center max-w-[52px] truncate">{d.country}</span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
