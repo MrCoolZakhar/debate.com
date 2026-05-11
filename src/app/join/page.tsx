@@ -128,10 +128,7 @@ function JoinPageInner() {
   const resetMode = (m: JoinMode) => {
     setMode(m);
     setError('');
-    setCode('');
-    setFoundCommittee(null);
     setCountry('');
-    setLookingUp(false);
     setChairName('');
     setChairNameMode('select');
     setNewChairName('');
@@ -154,15 +151,15 @@ function JoinPageInner() {
         </Link>
       </nav>
 
-      <div className="flex-1 flex items-center justify-center px-6 py-12">
-        <div className="w-full max-w-xl">
+      <div className="flex-1 flex items-center justify-center px-6 py-6">
+        <div className="w-full max-w-lg">
 
           {/* Title */}
-          <h1 className="text-4xl font-black text-center mb-1 tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>JOIN A SESSION</h1>
-          <p className="text-center text-sm mb-8" style={{ color: '#9A8A78' }}>Enter your session code below</p>
+          <h1 className="text-3xl font-black text-center mb-0.5 tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>JOIN A SESSION</h1>
+          <p className="text-center text-sm mb-5" style={{ color: '#9A8A78' }}>Enter your session code below</p>
 
           {/* Code input — always first */}
-          <div className="mb-8">
+          <div className="mb-5">
             <div className="relative">
               <input
                 type="text"
@@ -170,7 +167,7 @@ function JoinPageInner() {
                 onChange={(e) => handleCodeChange(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter' && foundCommittee) handleJoin(); }}
                 placeholder="ABC123 or ABC123-4821"
-                className="w-full rounded-2xl px-6 py-5 font-mono text-2xl tracking-widest text-center uppercase focus:outline-none transition-colors"
+                className="w-full rounded-2xl px-6 py-3.5 font-mono text-xl tracking-widest text-center uppercase focus:outline-none transition-colors"
                 style={{ backgroundColor: '#FAF8F3', border: '2px solid #DDD4C0', color: '#1C1410' }}
                 onFocus={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
                 onBlur={(e) => { (e.currentTarget as HTMLElement).style.borderColor = foundCommittee ? '#1B3828' : '#DDD4C0'; }}
@@ -188,17 +185,14 @@ function JoinPageInner() {
 
           {/* Committee found card */}
           {foundCommittee && (
-            <div className="mb-8 rounded-2xl p-4 text-center" style={{ backgroundColor: 'rgba(27,56,40,0.08)', border: '1.5px solid rgba(27,56,40,0.25)' }}>
-              <p className="text-xs font-mono font-bold mb-1" style={{ color: '#1B3828' }}>✓ COMMITTEE FOUND</p>
-              <p className="font-black text-lg" style={{ color: '#1C1410' }}>{foundCommittee.name}</p>
-              {foundCommittee.topic && <p className="text-sm mt-0.5" style={{ color: '#6A5A4A' }}>{foundCommittee.topic}</p>}
-              <p className="text-xs mt-1" style={{ color: '#9A8A78' }}>{foundCommittee.delegates.length} delegates registered</p>
-              {foundCommittee.endedAt && (
-                <p className="text-xs mt-2 font-semibold" style={{ color: '#B8844A' }}>This session has ended — view only access.</p>
-              )}
-              {!foundCommittee.endedAt && foundCommittee.suspendedAt && mode === 'delegate' && (
-                <p className="text-xs mt-2 font-semibold" style={{ color: '#B8844A' }}>Session is currently adjourned — you will see a waiting screen.</p>
-              )}
+            <div className="mb-5 rounded-xl px-4 py-2.5 flex items-center gap-3" style={{ backgroundColor: 'rgba(27,56,40,0.08)', border: '1.5px solid rgba(27,56,40,0.25)' }}>
+              <span className="text-xs font-mono font-black shrink-0" style={{ color: '#1B3828' }}>✓</span>
+              <div className="min-w-0">
+                <p className="font-black text-sm truncate" style={{ color: '#1C1410' }}>{foundCommittee.name}{foundCommittee.topic ? <span className="font-normal text-xs ml-1.5" style={{ color: '#9A8A78' }}>· {foundCommittee.topic}</span> : ''}</p>
+                <p className="text-xs" style={{ color: '#9A8A78' }}>{foundCommittee.delegates.length} delegates registered</p>
+                {foundCommittee.endedAt && <p className="text-xs font-semibold mt-0.5" style={{ color: '#B8844A' }}>Session ended — view only.</p>}
+                {!foundCommittee.endedAt && foundCommittee.suspendedAt && mode === 'delegate' && <p className="text-xs font-semibold mt-0.5" style={{ color: '#B8844A' }}>Session adjourned — waiting screen.</p>}
+              </div>
             </div>
           )}
 
@@ -212,7 +206,7 @@ function JoinPageInner() {
               { key: 'advisor', label: 'FACULTY ADVISOR', desc: 'Observer view for advisors' },
             ];
             return (
-              <div className="grid grid-cols-3 gap-4 mb-8">
+              <div className="grid grid-cols-3 gap-4 mb-5">
                 {roleCards.map(({ key, label, desc }) => {
                   const enabled = !hasCode || (key === 'chair' ? isChairCode : !isChairCode);
                   const isActive = mode === key && enabled;
@@ -223,8 +217,8 @@ function JoinPageInner() {
                       disabled={!enabled}
                       className="flex flex-col items-center justify-end gap-2 rounded-2xl transition-all focus:outline-none"
                       style={{
-                        height: '180px',
-                        padding: '0 0 20px 0',
+                        height: '130px',
+                        padding: '0 0 16px 0',
                         backgroundColor: '#1B3828',
                         opacity: enabled ? 1 : 0.35,
                         border: isActive ? '2px solid #EED98A' : '2px solid transparent',
@@ -247,7 +241,7 @@ function JoinPageInner() {
             const requireName = getSettings(foundCommittee.code).requireDelegationName;
             if (!requireName) return null;
             return (
-              <div className="mb-6">
+              <div className="mb-4">
                 <label className="block text-sm font-semibold mb-2" style={{ color: '#1C1410' }}>Your Country / Delegation</label>
                 <select
                   value={country}
@@ -266,7 +260,7 @@ function JoinPageInner() {
 
           {/* Chair name selection */}
           {foundCommittee && mode === 'chair' && (
-            <div className="mb-6">
+            <div className="mb-4">
               <label className="block text-sm font-semibold mb-2" style={{ color: '#1C1410' }}>Which chair are you?</label>
               {foundCommittee.chairNames.length > 0 && (
                 <div className="space-y-2 mb-3">
