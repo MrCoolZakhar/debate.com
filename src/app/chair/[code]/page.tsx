@@ -1911,13 +1911,15 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       ) : (
       <div className="flex-1 flex overflow-hidden">
         {showChat && !sessionEnded && (
-          <ChatPanel
-            committee={committee}
-            senderName={committee.chairNames[0] ?? 'Chair'}
-            isChair={true}
-            onClose={() => setShowChat(false)}
-            readOnly={sessionEnded}
-          />
+          <div className="flex-1 flex overflow-hidden">
+            <ChatPanel
+              committee={committee}
+              senderName={myChairName || (committee.chairNames[0] ?? 'Chair')}
+              isChair={true}
+              onClose={() => setShowChat(false)}
+              readOnly={sessionEnded}
+            />
+          </div>
         )}
         {!showChat && committee.phase === 'pre-session' && (
           <div className="flex-1 flex items-center justify-center px-6 py-8">
