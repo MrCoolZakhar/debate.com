@@ -203,6 +203,11 @@ export default function ChatPanel({
     .filter((d) => d.country !== senderName && !chairNames.includes(d.country))
     .sort((a, b) => a.country.localeCompare(b.country));
 
+  // Co-chairs available for DM (chair view only) — other chairs in the committee
+  const coChairCandidates = isChair
+    ? chairNames.filter((n) => n !== senderName).map((n) => ({ id: n, country: n, isCoChair: true }))
+    : [];
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -262,38 +267,52 @@ export default function ChatPanel({
           })}
         </div>
 
-        {/* New private message (delegate only) */}
-        {!isChair && (
-          <div className="relative z-10 px-3 py-3 shrink-0" style={{ borderTop: '1px solid rgba(61,122,82,0.4)' }}>
-            {showNewDM ? (
-              <div className="space-y-1">
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xs font-semibold" style={{ color: '#EED98A' }}>New message to…</span>
-                  <button onClick={() => setShowNewDM(false)} className="text-xs focus:outline-none" style={{ color: '#A8C5B0' }}>✕</button>
-                </div>
-                <div className="max-h-36 overflow-y-auto space-y-0.5">
-                  {dmCandidates.map((d) => (
-                    <button key={d.id} onClick={() => selectConv(d.country)}
-                      className="w-full text-left px-2 py-1.5 rounded-lg text-sm transition-colors focus:outline-none"
-                      style={{ color: '#EDE7D8' }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(238,217,138,0.1)'; }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}>
-                      <span className="truncate">{d.country}</span>
-                    </button>
-                  ))}
-                </div>
+        {/* New private message — available to both chairs and delegates */}
+        <div className="relative z-10 px-3 py-3 shrink-0" style={{ borderTop: '1px solid rgba(61,122,82,0.4)' }}>
+          {showNewDM ? (
+            <div className="space-y-1">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-semibold" style={{ color: '#EED98A' }}>New message to…</span>
+                <button onClick={() => setShowNewDM(false)} className="text-xs focus:outline-none" style={{ color: '#A8C5B0' }}>✕</button>
               </div>
-            ) : (
-              <button onClick={() => setShowNewDM(true)}
-                className="w-full text-xs py-2 rounded-lg transition-colors focus:outline-none font-semibold"
-                style={{ color: '#EED98A', border: '1px solid rgba(238,217,138,0.3)' }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#EED98A'; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(238,217,138,0.3)'; }}>
-                + New private message
-              </button>
-            )}
-          </div>
-        )}
+              <div className="max-h-48 overflow-y-auto space-y-0.5">
+                {isChair && coChairCandidates.length > 0 && (
+                  <>
+                    <p className="text-[10px] font-black uppercase tracking-widest px-2 py-1" style={{ color: 'rgba(238,217,138,0.5)' }}>Co-Chairs</p>
+                    {coChairCandidates.map((c) => (
+                      <button key={c.id} onClick={() => selectConv(c.country)}
+                        className="w-full text-left px-2 py-1.5 rounded-lg text-sm transition-colors focus:outline-none flex items-center gap-2"
+                        style={{ color: '#EDE7D8' }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(238,217,138,0.1)'; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}>
+                        <span className="text-[10px] font-black px-1.5 py-0.5 rounded" style={{ backgroundColor: 'rgba(238,217,138,0.2)', color: '#EED98A' }}>CHAIR</span>
+                        <span className="truncate">{c.country}</span>
+                      </button>
+                    ))}
+                    {dmCandidates.length > 0 && <p className="text-[10px] font-black uppercase tracking-widest px-2 py-1 mt-1" style={{ color: 'rgba(238,217,138,0.5)' }}>Delegates</p>}
+                  </>
+                )}
+                {dmCandidates.map((d) => (
+                  <button key={d.id} onClick={() => selectConv(d.country)}
+                    className="w-full text-left px-2 py-1.5 rounded-lg text-sm transition-colors focus:outline-none"
+                    style={{ color: '#EDE7D8' }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(238,217,138,0.1)'; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}>
+                    <span className="truncate">{d.country}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <button onClick={() => setShowNewDM(true)}
+              className="w-full text-xs py-2 rounded-lg transition-colors focus:outline-none font-semibold"
+              style={{ color: '#EED98A', border: '1px solid rgba(238,217,138,0.3)' }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#EED98A'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(238,217,138,0.3)'; }}>
+              + New message
+            </button>
+          )}
+        </div>
       </div>
 
       {/* ── Right pane: thread ────────────────────────────────────────────── */}
