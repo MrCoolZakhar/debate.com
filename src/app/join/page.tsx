@@ -158,12 +158,12 @@ function JoinPageInner() {
         </Link>
       </nav>
 
-      <div className="relative z-10 flex-1 flex items-center justify-center px-6 py-6">
+      <div className="relative z-10 flex-1 flex items-center justify-center px-6 py-4">
         <div className="w-full max-w-lg">
 
           {/* Title */}
-          <h1 className="text-3xl font-black text-center mb-0.5 tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>JOIN A SESSION</h1>
-          <p className="text-center text-sm mb-5" style={{ color: '#9A8A78' }}>Enter your session code below</p>
+          <h1 className="text-5xl font-black text-center mb-0.5 tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '-0.01em' }}>JOIN A SESSION</h1>
+          <p className="text-center text-sm mb-4" style={{ color: '#9A8A78' }}>Enter your session code below</p>
 
           {/* Code input — always first */}
           <div className="mb-5">
@@ -225,16 +225,19 @@ function JoinPageInner() {
                       key={key}
                       onClick={() => { if (enabled) resetMode(key); }}
                       disabled={!enabled}
-                      className="flex flex-col items-center justify-end gap-2 rounded-2xl transition-all focus:outline-none"
+                      className="flex flex-col items-center justify-end gap-1.5 transition-all focus:outline-none"
                       style={{
-                        height: '130px',
-                        padding: '0 0 16px 0',
+                        height: '160px',
+                        padding: '0 0 18px 0',
                         backgroundColor: '#1B3828',
                         opacity: enabled ? 1 : 0.35,
-                        border: isActive ? '2px solid #EED98A' : '2px solid transparent',
+                        border: isActive ? '2px solid #EED98A' : '2px solid rgba(61,122,82,0.4)',
+                        borderRadius: '20px',
                         cursor: enabled ? 'pointer' : 'not-allowed',
                         transform: isActive ? 'scale(1.04)' : 'scale(1)',
-                        boxShadow: isActive ? '0 8px 32px rgba(27,56,40,0.25)' : '0 2px 8px rgba(27,56,40,0.10)',
+                        boxShadow: isActive ? '0 12px 40px rgba(27,56,40,0.35)' : '0 4px 16px rgba(27,56,40,0.15)',
+                        overflow: 'hidden',
+                        position: 'relative',
                       }}
                     >
                       <span className="font-black text-sm tracking-wide" style={{ color: isActive ? '#EED98A' : '#A8C5B0', fontFamily: "'Outfit', sans-serif" }}>{label}</span>
