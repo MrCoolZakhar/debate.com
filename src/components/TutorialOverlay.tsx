@@ -31,26 +31,26 @@ const GR = (t: string) => <span style={{ color: '#2A5A3C', fontWeight: 700 }}>{t
 const STEPS: TutorialStep[] = [
   {
     id: 'questionnaire', kind: 'questionnaire',
-    otterImage: '/Otter.Tutorial.Intro.png', bubbleText: '',
+    otterImage: '/Otter.Tutorial.Intro.webp', bubbleText: '',
   },
 
   {
     id: 'welcome', kind: 'spotlight',
-    otterImage: '/Otter.Tutorial.png',
+    otterImage: '/Otter.Tutorial.webp',
     spotlightTargets: [],
     bubbleText: <>Welcome to your <strong>committee room</strong>. {GR('Speakers')}, {GR('timers')}, {GR('voting')}, {GR('motions')}, {GR('chat')}, {GR('documents')} — all bundled in one place, built to run your <strong>entire MUN session</strong> from the first gavel to the last.</>,
   },
 
   {
     id: 'speakers-bottom-bar', kind: 'spotlight',
-    otterImage: '/Otter.Tutorial.png',
+    otterImage: '/Otter.Tutorial.webp',
     spotlightTargets: ['speakers-bottom-bar'], spotlightRadius: 12,
     bubbleText: <>This bar is how you <strong>add delegates</strong> to the speakers list. Type any {G('country name')} and press {G('Enter')}.</>,
   },
 
   {
     id: 'sidebar-view-toggle', kind: 'action',
-    otterImage: '/Otter.Tutorial.png',
+    otterImage: '/Otter.Tutorial.webp',
     spotlightTargets: ['sidebar-view-toggle'], spotlightRadius: 99,
     bubbleText: <>The sidebar has two views — {G('A-Z')} and {G('QUEUE')}. Switch to <strong>QUEUE</strong> to see the speaking order.</>,
     domActionDone: () => {
@@ -61,7 +61,7 @@ const STEPS: TutorialStep[] = [
 
   {
     id: 'speakers-action', kind: 'action',
-    otterImage: '/Otter.Tutorial.png',
+    otterImage: '/Otter.Tutorial.webp',
     spotlightTargets: ['speakers-bottom-bar', 'speakers-sidebar', 'speakers-autocomplete'],
     spotlightRadius: 12,
     bubbleText: <>Add <strong>any 3 countries</strong> to the speakers list — use the {G('input bar')} below or click delegates in the {G('sidebar')}. Both work!</>,
@@ -70,7 +70,7 @@ const STEPS: TutorialStep[] = [
 
   {
     id: 'call-first-speaker', kind: 'action',
-    otterImage: '/Otter.Tutorial.png',
+    otterImage: '/Otter.Tutorial.webp',
     spotlightTargets: ['call-first-speaker'], spotlightRadius: 14,
     bubbleText: <>Now click <strong>CALL FIRST SPEAKER</strong> to bring the {G('first delegate')} to the floor!</>,
     actionDone: (c) => !!c.currentSpeaker,
@@ -78,66 +78,66 @@ const STEPS: TutorialStep[] = [
 
   {
     id: 'timer', kind: 'spotlight',
-    otterImage: '/Otter.Tutorial.png',
+    otterImage: '/Otter.Tutorial.webp',
     spotlightTargets: ['timer'], spotlightRadius: 12,
     bubbleText: <>The <strong>speaking timer</strong> counts down for the current delegate. Turns {G('amber')} when time runs low.</>,
   },
 
   {
     id: 'add-time', kind: 'spotlight',
-    otterImage: '/Otter.Tutorial.png',
+    otterImage: '/Otter.Tutorial.webp',
     spotlightTargets: ['add-time-button'], spotlightRadius: 12,
     bubbleText: <>Need to grant more time? Hit {G('+time')}. You can also <strong>restart the clock</strong> entirely.</>,
   },
 
   {
     id: 'rtr', kind: 'spotlight',
-    otterImage: '/Otter.Tutorial.png',
+    otterImage: '/Otter.Tutorial.webp',
     spotlightTargets: ['rtr-button'], spotlightRadius: 12,
     bubbleText: <>{GR('Right to Reply')} lets an accused delegate respond briefly <strong>without re-entering the queue</strong>. Use it sparingly.</>,
   },
 
   {
     id: 'tab-rollcall', kind: 'spotlight',
-    otterImage: '/Otter.Tutorial.png',
+    otterImage: '/Otter.Tutorial.webp',
     spotlightTargets: ['tab-rollcall'], spotlightRadius: 6,
     bubbleText: <>{G('Roll Call')} — update delegate <strong>attendance</strong> at any point during the session.</>,
   },
   {
     id: 'tab-motions', kind: 'spotlight',
-    otterImage: '/Otter.Tutorial.png',
+    otterImage: '/Otter.Tutorial.webp',
     spotlightTargets: ['tab-motions'], spotlightRadius: 6,
     bubbleText: <>{G('Motions')} — caucuses, <strong>closure of debate</strong>, and procedural votes all flow through here.</>,
   },
   {
     id: 'tab-documents', kind: 'spotlight',
-    otterImage: '/Otter.Tutorial.png',
+    otterImage: '/Otter.Tutorial.webp',
     spotlightTargets: ['tab-documents'], spotlightRadius: 6,
     bubbleText: <>{G('Documents')} — <strong>Draft Resolutions</strong> and amendments submitted by delegates appear here for review.</>,
   },
   {
     id: 'tab-chat', kind: 'spotlight',
-    otterImage: '/Otter.Tutorial.png',
+    otterImage: '/Otter.Tutorial.webp',
     spotlightTargets: ['tab-chat'], spotlightRadius: 6,
     bubbleText: <>{G('Chat')} — message <strong>all delegates</strong> at once or DM individuals. Great for quiet announcements.</>,
   },
   {
     id: 'tab-settings', kind: 'spotlight',
-    otterImage: '/Otter.Tutorial.png',
+    otterImage: '/Otter.Tutorial.webp',
     spotlightTargets: ['tab-settings'], spotlightRadius: 6,
     bubbleText: <>{G('Settings')} — configure <strong>voting rules</strong>, motion types, speaking times, and access controls.</>,
   },
 
   {
     id: 'join-code', kind: 'spotlight',
-    otterImage: '/Otter.Tutorial.png',
+    otterImage: '/Otter.Tutorial.webp',
     spotlightTargets: ['join-code'], spotlightRadius: 8,
     bubbleText: <>Your <strong>session code</strong>. Delegates enter this at {G('gavelling.com')} to join in real time. {GR('Click to copy')}.</>,
   },
 
   {
     id: 'goodbye', kind: 'goodbye',
-    otterImage: '/Otter.Tutorial.Outro.png',
+    otterImage: '/Otter.Tutorial.Outro.webp',
     bubbleText: <>Have fun exploring! And always {G('give us feedback')} — it&apos;s how Gavelling gets better. Text us on IG {GR('@wearegavelling')} any time 🎉</>,
   },
 ];
@@ -201,6 +201,12 @@ export default function TutorialOverlay({ committee, onEnd }: Props) {
     }
   }, []);
 
+  // Preload all otter images on mount so they never flash when a step arrives
+  useEffect(() => {
+    const srcs = [...new Set(STEPS.map(s => s.otterImage))];
+    srcs.forEach(src => { const img = new window.Image(); img.src = src; });
+  }, []);
+
   const advance = useCallback(() => {
     setStepIdx(i => {
       const next = i + 1;
@@ -230,7 +236,7 @@ export default function TutorialOverlay({ committee, onEnd }: Props) {
         style={{ background: 'rgba(27,56,40,0.88)', backdropFilter: 'blur(4px)' }}>
         <div className="bg-[#F6F1E9] rounded-3xl shadow-2xl px-12 py-10 max-w-md w-full text-center flex flex-col items-center gap-6"
           style={{ border: '2px solid rgba(27,56,40,0.2)' }}>
-          <img src="/Otter.Tutorial.Intro.png" alt="Gavin"
+          <img src="/Otter.Tutorial.Intro.webp" alt="Gavin"
             style={{ width: 260, height: 260, objectFit: 'cover', objectPosition: 'center', borderRadius: 0 }} />
           <h2 className="text-3xl font-black text-[#1C1410] tracking-tight">HAVE YOU USED GAVELLING BEFORE?</h2>
           <p className="text-sm text-[#9A8A78]">Gavin has a short interactive run-through prepared for you.</p>
@@ -339,17 +345,22 @@ export default function TutorialOverlay({ committee, onEnd }: Props) {
           <defs>
             <mask id={`tmask-${step.id}`}>
               <rect x={0} y={0} width={vw} height={vh} fill="white" />
-              {spotlightRects.map((rect, i) =>
-                rect ? (
+              {spotlightRects.map((rect, i) => {
+                if (!rect) return null;
+                // Cap at half element height so pill buttons get circular
+                // corners (matching border-radius: 9999px visually) rather
+                // than SVG's elliptical clamping artefact.
+                const cr = Math.min(r, rect.height / 2);
+                return (
                   <rect
                     key={i}
                     x={rect.left} y={rect.top}
                     width={rect.width} height={rect.height}
-                    rx={r} ry={r}
+                    rx={cr} ry={cr}
                     fill="black"
                   />
-                ) : null
-              )}
+                );
+              })}
             </mask>
           </defs>
           <rect x={0} y={0} width={vw} height={vh}
@@ -359,19 +370,21 @@ export default function TutorialOverlay({ committee, onEnd }: Props) {
       )}
 
       {/* Pulsating gold ring on action step targets */}
-      {isAction && spotlightRects.map((rect, i) =>
-        rect ? (
+      {isAction && spotlightRects.map((rect, i) => {
+        if (!rect) return null;
+        const cr = Math.min(r, rect.height / 2);
+        return (
           <div key={`pulse-${i}`} style={{
             position: 'fixed',
             top: rect.top, left: rect.left,
             width: rect.width, height: rect.height,
-            borderRadius: r,
+            borderRadius: cr,
             zIndex: 9992,
             pointerEvents: 'none',
             animation: 'tutorial-pulse 1.6s ease-in-out infinite',
           }} />
-        ) : null
-      )}
+        );
+      })}
 
       {/* Click-to-advance catcher — spotlight steps only */}
       {!isAction && (
