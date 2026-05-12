@@ -5,8 +5,8 @@ let _client: SupabaseClient | null = null;
 function getClient(): SupabaseClient {
   if (!_client) {
     _client = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      'https://luruhkwrgisytejswlas.supabase.co',
+      'sb_publishable_k7NdduzaXK358z8ew18ZKA_vBSieDlV',
     );
   }
   return _client;
