@@ -201,8 +201,8 @@ export default function TutorialOverlay({ committee, onEnd }: Props) {
         style={{ background: 'rgba(27,56,40,0.88)', backdropFilter: 'blur(4px)' }}>
         <div className="bg-[#F6F1E9] rounded-3xl shadow-2xl px-12 py-10 max-w-md w-full text-center flex flex-col items-center gap-6"
           style={{ border: '2px solid rgba(27,56,40,0.2)' }}>
-          <img src="/Otter.Tutorial.png" alt="Gavin"
-            style={{ width: 220, height: 320, objectFit: 'contain', objectPosition: 'center', borderRadius: 0 }} />
+          <img src="/Otter.Tutorial.Intro.png" alt="Gavin"
+            style={{ width: 260, height: 260, objectFit: 'cover', objectPosition: 'center', borderRadius: 0 }} />
           <h2 className="text-2xl font-black text-[#1C1410]">Have you used Gavelling before?</h2>
           <p className="text-sm text-[#9A8A78]">Selecting <strong>No</strong> starts a short interactive run-through with Gavin.</p>
           <div className="flex gap-4 w-full">
