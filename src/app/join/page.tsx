@@ -146,8 +146,10 @@ function JoinPageInner() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#F6F1E9] flex flex-col">
-      <nav className="border-b border-[#DDD4C0] px-6 h-16 flex items-center justify-between bg-[#FAF8F3]">
+    <div className="min-h-screen flex flex-col relative" style={{ backgroundColor: '#EDE7D8' }}>
+      {/* Grain texture */}
+      <div className="pointer-events-none fixed inset-0 z-0" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
+      <nav className="relative z-10 border-b border-[#DDD4C0]/60 px-6 h-16 flex items-center justify-between" style={{ backgroundColor: '#EDE7D8' }}>
         <Link href="/" className="flex items-center gap-3">
           <img src="/GavellingLogo.png" alt="Gavelling" className="w-[16vw] h-auto max-h-9 object-contain" />
         </Link>
@@ -156,7 +158,7 @@ function JoinPageInner() {
         </Link>
       </nav>
 
-      <div className="flex-1 flex items-center justify-center px-6 py-6">
+      <div className="relative z-10 flex-1 flex items-center justify-center px-6 py-6">
         <div className="w-full max-w-lg">
 
           {/* Title */}
@@ -359,7 +361,7 @@ function JoinPageInner() {
 export default function JoinPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-[#F6F1E9] flex flex-col items-center justify-center gap-4">
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 relative" style={{ backgroundColor: '#EDE7D8' }}>
         <style>{`@keyframes gavel-strike { 0% { transform: rotate(-30deg); } 35% { transform: rotate(15deg); } 50% { transform: rotate(10deg); } 65% { transform: rotate(15deg); } 100% { transform: rotate(-30deg); } } .gavel-anim { animation: gavel-strike 1s ease-in-out infinite; transform-origin: 85% 85%; }`}</style>
         <svg className="gavel-anim" width="72" height="72" viewBox="0 0 72 72" fill="none" xmlns="http://www.w3.org/2000/svg">
           <rect x="38" y="38" width="8" height="28" rx="3" transform="rotate(-45 38 38)" fill="#1B3828" />
