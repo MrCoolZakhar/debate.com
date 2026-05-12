@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import type { Committee } from '@/lib/types';
 
 interface Props {
@@ -8,13 +8,13 @@ interface Props {
   onEnd: () => void;
 }
 
-type StepKind = 'questionnaire' | 'spotlight' | 'action';
+type StepKind = 'questionnaire' | 'spotlight' | 'action' | 'goodbye';
 
 interface TutorialStep {
   id: string;
   kind: StepKind;
   otterImage: string;
-  bubbleText: string;
+  bubbleText: React.ReactNode;
   // Array of data-tutorial values — all light up simultaneously
   spotlightTargets?: string[];
   spotlightRadius?: number;
@@ -24,108 +24,121 @@ interface TutorialStep {
   domActionDone?: () => boolean;
 }
 
+// ─── Rich text helpers ────────────────────────────────────────────────────────
+const G  = (t: string) => <span style={{ color: '#B6871F', fontWeight: 700 }}>{t}</span>; // gold
+const GR = (t: string) => <span style={{ color: '#2A5A3C', fontWeight: 700 }}>{t}</span>; // green
+
 const STEPS: TutorialStep[] = [
   {
     id: 'questionnaire', kind: 'questionnaire',
-    otterImage: '/Otter.Tutorial.png', bubbleText: '',
+    otterImage: '/Otter.Tutorial.Intro.png', bubbleText: '',
   },
+
   {
     id: 'welcome', kind: 'spotlight',
     otterImage: '/Otter.Tutorial.png',
-    spotlightTargets: [],   // no hole — full overlay, click anywhere to advance
-    bubbleText: "Welcome to your committee room. Speakers, timers, voting, motions, chat, documents — everything bundled in one place, built to run your entire MUN session from the first gavel to the last. Let's walk through it together.",
+    spotlightTargets: [],
+    bubbleText: <>Welcome to your <strong>committee room</strong>. {GR('Speakers')}, {GR('timers')}, {GR('voting')}, {GR('motions')}, {GR('chat')}, {GR('documents')} — all bundled in one place, built to run your <strong>entire MUN session</strong> from the first gavel to the last.</>,
   },
-  // Speakers list — bottom bar first
+
   {
     id: 'speakers-bottom-bar', kind: 'spotlight',
     otterImage: '/Otter.Tutorial.png',
     spotlightTargets: ['speakers-bottom-bar'], spotlightRadius: 12,
-    bubbleText: "This input bar adds delegates to the speakers list. Type any country name and press Enter.",
+    bubbleText: <>This bar is how you <strong>add delegates</strong> to the speakers list. Type any {G('country name')} and press {G('Enter')}.</>,
   },
-  // Sidebar — spotlight just the A-Z/QUEUE toggle, action to switch to queue view
+
   {
     id: 'sidebar-view-toggle', kind: 'action',
     otterImage: '/Otter.Tutorial.png',
     spotlightTargets: ['sidebar-view-toggle'], spotlightRadius: 99,
-    bubbleText: "The sidebar has two views: A-Z and QUEUE. Switch to QUEUE to see the speaking order.",
+    bubbleText: <>The sidebar has two views — {G('A-Z')} and {G('QUEUE')}. Switch to <strong>QUEUE</strong> to see the speaking order.</>,
     domActionDone: () => {
       const el = document.querySelector('[data-tutorial="sidebar-view-toggle"]');
       return el?.getAttribute('data-current-view') === 'queue';
     },
   },
-  // Add 3 speakers — both bottom bar and sidebar light up; autocomplete auto-joins when typing
+
   {
     id: 'speakers-action', kind: 'action',
     otterImage: '/Otter.Tutorial.png',
     spotlightTargets: ['speakers-bottom-bar', 'speakers-sidebar', 'speakers-autocomplete'],
     spotlightRadius: 12,
-    bubbleText: "Add any 3 countries to the speakers list — use the input bar below or click delegates in the sidebar.",
+    bubbleText: <>Add <strong>any 3 countries</strong> to the speakers list — use the {G('input bar')} below or click delegates in the {G('sidebar')}. Both work!</>,
     actionDone: (c) => c.speakersList.length >= 3,
   },
-  // Must call first speaker before RTR and add-time are visible
+
   {
     id: 'call-first-speaker', kind: 'action',
     otterImage: '/Otter.Tutorial.png',
     spotlightTargets: ['call-first-speaker'], spotlightRadius: 14,
-    bubbleText: "Click CALL FIRST SPEAKER to bring the first delegate to the floor!",
+    bubbleText: <>Now click <strong>CALL FIRST SPEAKER</strong> to bring the {G('first delegate')} to the floor!</>,
     actionDone: (c) => !!c.currentSpeaker,
   },
-  // Timer and controls (only visible once a speaker is active)
+
   {
     id: 'timer', kind: 'spotlight',
     otterImage: '/Otter.Tutorial.png',
     spotlightTargets: ['timer'], spotlightRadius: 12,
-    bubbleText: "The speaking timer counts down for the current delegate. It turns amber when time runs low.",
+    bubbleText: <>The <strong>speaking timer</strong> counts down for the current delegate. Turns {G('amber')} when time runs low.</>,
   },
+
   {
     id: 'add-time', kind: 'spotlight',
     otterImage: '/Otter.Tutorial.png',
     spotlightTargets: ['add-time-button'], spotlightRadius: 12,
-    bubbleText: "Grant more time with +time, or restart the clock from the beginning.",
+    bubbleText: <>Need to grant more time? Hit {G('+time')}. You can also <strong>restart the clock</strong> entirely.</>,
   },
+
   {
     id: 'rtr', kind: 'spotlight',
     otterImage: '/Otter.Tutorial.png',
     spotlightTargets: ['rtr-button'], spotlightRadius: 12,
-    bubbleText: "Right to Reply lets an accused delegate respond briefly without re-entering the queue.",
+    bubbleText: <>{GR('Right to Reply')} lets an accused delegate respond briefly <strong>without re-entering the queue</strong>. Use it sparingly.</>,
   },
-  // Top bar — one tab at a time
+
   {
     id: 'tab-rollcall', kind: 'spotlight',
     otterImage: '/Otter.Tutorial.png',
     spotlightTargets: ['tab-rollcall'], spotlightRadius: 6,
-    bubbleText: "Roll Call — update delegate attendance at any point during the session.",
+    bubbleText: <>{G('Roll Call')} — update delegate <strong>attendance</strong> at any point during the session.</>,
   },
   {
     id: 'tab-motions', kind: 'spotlight',
     otterImage: '/Otter.Tutorial.png',
     spotlightTargets: ['tab-motions'], spotlightRadius: 6,
-    bubbleText: "Motions — caucuses, closure of debate, and procedural votes all flow through here.",
+    bubbleText: <>{G('Motions')} — caucuses, <strong>closure of debate</strong>, and procedural votes all flow through here.</>,
   },
   {
     id: 'tab-documents', kind: 'spotlight',
     otterImage: '/Otter.Tutorial.png',
     spotlightTargets: ['tab-documents'], spotlightRadius: 6,
-    bubbleText: "Documents — Draft Resolutions and amendments submitted by delegates appear here for your review.",
+    bubbleText: <>{G('Documents')} — <strong>Draft Resolutions</strong> and amendments submitted by delegates appear here for review.</>,
   },
   {
     id: 'tab-chat', kind: 'spotlight',
     otterImage: '/Otter.Tutorial.png',
     spotlightTargets: ['tab-chat'], spotlightRadius: 6,
-    bubbleText: "Chat — message all delegates at once or DM individuals. Great for announcements.",
+    bubbleText: <>{G('Chat')} — message <strong>all delegates</strong> at once or DM individuals. Great for quiet announcements.</>,
   },
   {
     id: 'tab-settings', kind: 'spotlight',
     otterImage: '/Otter.Tutorial.png',
     spotlightTargets: ['tab-settings'], spotlightRadius: 6,
-    bubbleText: "Settings — voting rules, motion types, speaking times, and access controls for your committee.",
+    bubbleText: <>{G('Settings')} — configure <strong>voting rules</strong>, motion types, speaking times, and access controls.</>,
   },
-  // Join code
+
   {
     id: 'join-code', kind: 'spotlight',
     otterImage: '/Otter.Tutorial.png',
     spotlightTargets: ['join-code'], spotlightRadius: 8,
-    bubbleText: "Your session code. Delegates enter this at gavelling.com to join in real time. Click it to copy.",
+    bubbleText: <>Your <strong>session code</strong>. Delegates enter this at {G('gavelling.com')} to join in real time. {GR('Click to copy')}.</>,
+  },
+
+  {
+    id: 'goodbye', kind: 'goodbye',
+    otterImage: '/Otter.Tutorial.Outro.png',
+    bubbleText: <>Have fun exploring! And always {G('give us feedback')} — it&apos;s how Gavelling gets better. Text us on IG {GR('@wearegavelling')} any time 🎉</>,
   },
 ];
 
@@ -172,6 +185,22 @@ export default function TutorialOverlay({ committee, onEnd }: Props) {
   const spotlightRects = useSpotlightRects(step.spotlightTargets);
   const isAction = step.kind === 'action';
 
+  // Inject pulse animation once
+  useEffect(() => {
+    const id = 'tutorial-pulse-style';
+    if (!document.getElementById(id)) {
+      const style = document.createElement('style');
+      style.id = id;
+      style.textContent = `
+        @keyframes tutorial-pulse {
+          0%, 100% { box-shadow: 0 0 0 2px #EED98A, 0 0 8px rgba(238,217,138,0.25); }
+          50%       { box-shadow: 0 0 0 4px rgba(238,217,138,0.6), 0 0 20px rgba(238,217,138,0.35); }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+  }, []);
+
   const advance = useCallback(() => {
     setStepIdx(i => {
       const next = i + 1;
@@ -203,20 +232,75 @@ export default function TutorialOverlay({ committee, onEnd }: Props) {
           style={{ border: '2px solid rgba(27,56,40,0.2)' }}>
           <img src="/Otter.Tutorial.Intro.png" alt="Gavin"
             style={{ width: 260, height: 260, objectFit: 'cover', objectPosition: 'center', borderRadius: 0 }} />
-          <h2 className="text-2xl font-black text-[#1C1410]">Have you used Gavelling before?</h2>
-          <p className="text-sm text-[#9A8A78]">Selecting <strong>No</strong> starts a short interactive run-through with Gavin.</p>
+          <h2 className="text-3xl font-black text-[#1C1410] tracking-tight">HAVE YOU USED GAVELLING BEFORE?</h2>
+          <p className="text-sm text-[#9A8A78]">Gavin has a short interactive run-through prepared for you.</p>
           <div className="flex gap-4 w-full">
-            <button onClick={onEnd}
-              className="flex-1 py-3 rounded-xl font-bold text-sm"
-              style={{ backgroundColor: 'rgba(27,56,40,0.08)', color: '#1B3828', border: '1.5px solid rgba(27,56,40,0.2)' }}>
-              Yes, skip tutorial
-            </button>
             <button onClick={advance}
               className="flex-1 py-3 rounded-xl font-bold text-sm"
               style={{ backgroundColor: '#1B3828', color: '#EED98A' }}>
-              No, show me around
+              SHOW ME AROUND
+            </button>
+            <button onClick={onEnd}
+              className="flex-1 py-3 rounded-xl font-bold text-sm"
+              style={{ backgroundColor: 'rgba(27,56,40,0.08)', color: '#1B3828', border: '1.5px solid rgba(27,56,40,0.2)' }}>
+              SKIP TUTORIAL
             </button>
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Goodbye slide ─────────────────────────────────────────────────────────
+  if (step.kind === 'goodbye') {
+    return (
+      <div
+        style={{ position: 'fixed', inset: 0, zIndex: 9990, background: 'rgba(0,0,0,0.52)', backdropFilter: 'blur(3px)', cursor: 'pointer' }}
+        onClick={onEnd}
+      >
+        <div style={{
+          position: 'fixed', bottom: 0, right: 32, zIndex: 9993,
+          width: 220, display: 'flex', flexDirection: 'column', alignItems: 'center',
+          pointerEvents: 'none',
+        }}>
+          {/* Bubble */}
+          <div style={{ marginBottom: 8, position: 'relative' }}>
+            <div style={{
+              padding: '12px 16px', borderRadius: 16, fontSize: 13, fontWeight: 500,
+              lineHeight: 1.5, color: '#1C1410', textAlign: 'center',
+              backgroundColor: '#FAF8F3', border: '1.5px solid rgba(27,56,40,0.18)',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.15)', maxWidth: 210,
+            }}>
+              {step.bubbleText}
+            </div>
+            <div style={{
+              position: 'absolute', bottom: -7, left: '50%',
+              transform: 'translateX(-50%) rotate(45deg)',
+              width: 14, height: 14, backgroundColor: '#FAF8F3',
+              borderRight: '1.5px solid rgba(27,56,40,0.18)',
+              borderBottom: '1.5px solid rgba(27,56,40,0.18)',
+            }} />
+          </div>
+          {/* Start Exploring button */}
+          <div style={{ pointerEvents: 'auto', marginBottom: 10 }}>
+            <button
+              onClick={(e) => { e.stopPropagation(); onEnd(); }}
+              style={{
+                padding: '7px 16px', borderRadius: 10, fontWeight: 700, fontSize: 12,
+                backgroundColor: '#1B3828', color: '#EED98A',
+                border: 'none', cursor: 'pointer',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
+              }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+            >
+              Start Exploring →
+            </button>
+          </div>
+          <img
+            src={step.otterImage} alt="Gavin"
+            style={{ width: 220, height: 330, objectFit: 'contain', objectPosition: 'bottom center', display: 'block' }}
+          />
         </div>
       </div>
     );
@@ -251,6 +335,21 @@ export default function TutorialOverlay({ committee, onEnd }: Props) {
             fill="rgba(0,0,0,0.48)"
             mask={`url(#tmask-${step.id})`} />
         </svg>
+      )}
+
+      {/* Pulsating gold ring on action step targets */}
+      {isAction && spotlightRects.map((rect, i) =>
+        rect ? (
+          <div key={`pulse-${i}`} style={{
+            position: 'fixed',
+            top: rect.top, left: rect.left,
+            width: rect.width, height: rect.height,
+            borderRadius: r,
+            zIndex: 9992,
+            pointerEvents: 'none',
+            animation: 'tutorial-pulse 1.6s ease-in-out infinite',
+          }} />
+        ) : null
       )}
 
       {/* Click-to-advance catcher — spotlight steps only */}
