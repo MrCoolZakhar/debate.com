@@ -161,7 +161,7 @@ function AddSpeakerInput({ committee, onAdd }: { committee: Committee; onAdd: (i
         {topNotOnList && query && <span className="text-xs text-[#9A8A78] px-3 truncate max-w-[120px]">↵ {topNotOnList.country}</span>}
       </div>
       {query && matches.length > 0 && (
-        <div className="absolute bottom-full left-0 right-0 mb-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl overflow-hidden shadow-xl z-10 max-h-48 overflow-y-auto">
+        <div data-tutorial="speakers-autocomplete" className="absolute bottom-full left-0 right-0 mb-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl overflow-hidden shadow-xl z-10 max-h-48 overflow-y-auto">
           {matches.slice(0, 6).map((d, i) => {
             const found = getCountryByName(d.country);
             const alreadyOnList = onList.has(d.id);

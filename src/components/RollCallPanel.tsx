@@ -55,6 +55,8 @@ function ViewToggle({ view, onChange }: { view: 'az' | 'queue'; onChange: (v: 'a
   const isQueue = view === 'queue';
   return (
     <button
+      data-tutorial="sidebar-view-toggle"
+      data-current-view={view}
       onClick={() => onChange(isQueue ? 'az' : 'queue')}
       className="relative w-[104px] h-[28px] rounded-full cursor-pointer select-none shrink-0"
       style={{ backgroundColor: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)' }}
