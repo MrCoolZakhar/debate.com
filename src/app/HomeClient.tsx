@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Mic, Scale, List, FileText, MessageSquare, Save } from 'lucide-react';
 import { getFlagUrl, getCountryByName } from '@/lib/countries';
@@ -22,7 +22,7 @@ function RollCallCard() {
     return c ? <img src={getFlagUrl(c.code)} alt={country} className="w-5 h-5 object-contain" /> : <span className="w-5 h-5 bg-[#DDD4C0] rounded-sm inline-block" />;
   };
   return (
-    <div className={base} style={{ ...shadow, minHeight: '498px' }}>
+    <div className={base} style={{ ...shadow, minHeight: '460px' }}>
       <div className="bg-[#1B3828] px-5 py-3 flex items-center justify-between">
         <p className="text-[#EED98A] font-black text-sm uppercase tracking-wide">Roll Call</p>
         <span className="bg-[#3D7A52] text-white text-[9px] font-mono px-2 py-0.5 rounded-full uppercase tracking-widest">Pre-Session</span>
@@ -67,7 +67,7 @@ function MotionsCard() {
   const base = 'w-full bg-[#FAF8F3] rounded-2xl border border-[#DDD4C0] overflow-hidden';
   const shadow = { boxShadow: '0 24px 64px rgba(27,56,40,0.14)' };
   return (
-    <div className={base} style={{ ...shadow, minHeight: '498px' }}>
+    <div className={base} style={{ ...shadow, minHeight: '460px' }}>
       <div className="bg-[#1B3828] px-5 py-3 flex items-center justify-between">
         <p className="text-[#EED98A] font-black text-sm uppercase tracking-wide">Pending Motions</p>
         <span className="bg-[#B6871F] text-white text-[9px] font-mono px-2 py-0.5 rounded-full uppercase tracking-widest">3 Motions</span>
@@ -107,7 +107,7 @@ function SpeakersCard() {
   const base = 'w-full bg-[#FAF8F3] rounded-2xl border border-[#DDD4C0] overflow-hidden';
   const shadow = { boxShadow: '0 24px 64px rgba(27,56,40,0.14)' };
   return (
-    <div className={base} style={{ ...shadow, minHeight: '498px' }}>
+    <div className={base} style={{ ...shadow, minHeight: '460px' }}>
       <div className="bg-[#1B3828] px-5 py-3 flex items-center justify-between">
         <p className="text-[#EED98A] font-black text-sm uppercase tracking-wide">General Speakers List</p>
         <span className="flex items-center gap-1 bg-[#3D7A52] text-white text-[9px] font-mono px-2 py-0.5 rounded-full uppercase tracking-widest">
@@ -159,7 +159,7 @@ function DocumentsCard() {
   return (
     <div
       className="w-full bg-[#FAF8F3] rounded-2xl border border-[#DDD4C0] overflow-hidden flex flex-row"
-      style={{ ...shadow, minHeight: '498px' }}
+      style={{ ...shadow, minHeight: '460px' }}
     >
       <div className="w-2/5 border-r border-[#DDD4C0] flex flex-col">
         <div className="bg-[#1B3828] px-4 py-3">
@@ -200,7 +200,7 @@ function ChatCard() {
   const base = 'w-full bg-[#FAF8F3] rounded-2xl border border-[#DDD4C0] overflow-hidden';
   const shadow = { boxShadow: '0 24px 64px rgba(27,56,40,0.14)' };
   return (
-    <div className={base} style={{ ...shadow, minHeight: '498px' }}>
+    <div className={base} style={{ ...shadow, minHeight: '460px' }}>
       <div className="bg-[#1B3828] px-5 py-3 flex items-center justify-between">
         <p className="text-[#EED98A] font-black text-sm uppercase tracking-wide">Committee Chat</p>
         <span className="flex items-center gap-1 bg-[#3D7A52] text-white text-[9px] font-mono px-2 py-0.5 rounded-full uppercase tracking-widest">
@@ -211,7 +211,7 @@ function ChatCard() {
         {messages.map((msg, i) => (
           <div key={i} className={`flex gap-2.5 ${msg.isChair ? 'flex-row-reverse' : 'flex-row'}`}>
             <div className={`w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-black ${msg.isChair ? 'bg-[#1B3828] text-[#EED98A]' : 'bg-[#EDE7D8] text-[#1C1410]'}`}>
-              {msg.isChair ? '🪑' : msg.sender[0]}
+              {msg.isChair ? 'CH' : msg.sender[0]}
             </div>
             <div className={`flex flex-col max-w-[75%] ${msg.isChair ? 'items-end' : 'items-start'}`}>
               <div className={`px-3 py-2 rounded-xl text-xs leading-relaxed ${msg.isChair ? 'bg-[#1B3828] text-[#EED98A]' : 'bg-[#EDE7D8] text-[#1C1410]'}`}>
@@ -234,7 +234,7 @@ function ArchiveCard() {
   const base = 'w-full bg-[#FAF8F3] rounded-2xl border border-[#DDD4C0] overflow-hidden';
   const shadow = { boxShadow: '0 24px 64px rgba(27,56,40,0.14)' };
   return (
-    <div className={base} style={{ ...shadow, minHeight: '498px' }}>
+    <div className={base} style={{ ...shadow, minHeight: '460px' }}>
       <div className="bg-[#1B3828] px-5 py-3 flex items-center justify-between">
         <p className="text-[#EED98A] font-black text-sm uppercase tracking-wide">Session Archive</p>
         <span className="bg-[#3D7A52] text-white text-[9px] font-mono px-2 py-0.5 rounded-full uppercase tracking-widest">Coming Soon</span>
@@ -271,66 +271,21 @@ function FeatureCard({ id }: { id: string }) {
 
 function FeatureCarousel({
   activeFeature,
-  setActiveFeature,
 }: {
   activeFeature: string;
   setActiveFeature: (id: string) => void;
 }) {
   const featureIds = ['roll-call', 'motions', 'speakers', 'documents', 'chat', 'archive'];
-  const sectionRef = useRef<HTMLDivElement>(null);
-  const lastScrollTime = useRef(0);
-  const activeIndexRef = useRef(0);
-
-  useEffect(() => {
-    activeIndexRef.current = featureIds.indexOf(activeFeature);
-  }, [activeFeature]);
-
-  useEffect(() => {
-    const handleWheel = (e: WheelEvent) => {
-      const section = sectionRef.current;
-      if (!section) return;
-
-      const rect = section.getBoundingClientRect();
-      const inView = rect.top <= 100 && rect.bottom >= window.innerHeight * 0.4;
-      if (!inView) return;
-
-      const currentIndex = activeIndexRef.current;
-      const scrollingDown = e.deltaY > 0;
-      const scrollingUp = e.deltaY < 0;
-
-      if (scrollingDown && currentIndex >= featureIds.length - 1) return;
-      if (scrollingUp && currentIndex <= 0) return;
-
-      e.preventDefault();
-      e.stopPropagation();
-
-      const now = Date.now();
-      if (now - lastScrollTime.current < 700) return;
-      lastScrollTime.current = now;
-
-      if (scrollingDown) {
-        setActiveFeature(featureIds[Math.min(currentIndex + 1, featureIds.length - 1)]);
-      } else if (scrollingUp) {
-        setActiveFeature(featureIds[Math.max(currentIndex - 1, 0)]);
-      }
-    };
-
-    window.addEventListener('wheel', handleWheel, { passive: false });
-    return () => window.removeEventListener('wheel', handleWheel);
-  }, []); // Empty deps — uses ref for current index, avoids stale closure
-
   return (
-    <div ref={sectionRef} className="relative" style={{ height: '558px' }}>
+    <div className="relative" style={{ height: '520px' }}>
       {featureIds.map((id) => (
         <div
           key={id}
           className="absolute inset-0"
           style={{
             opacity: id === activeFeature ? 1 : 0,
-            transform: id === activeFeature
-              ? 'translateY(0px) scale(1)'
-              : 'translateY(24px) scale(0.97)',
-            transition: 'opacity 0.45s cubic-bezier(0.4,0,0.2,1), transform 0.45s cubic-bezier(0.4,0,0.2,1)',
+            transform: id === activeFeature ? 'translateY(0px) scale(1)' : 'translateY(20px) scale(0.97)',
+            transition: 'opacity 0.4s cubic-bezier(0.4,0,0.2,1), transform 0.4s cubic-bezier(0.4,0,0.2,1)',
             pointerEvents: id === activeFeature ? 'auto' : 'none',
           }}
         >
@@ -433,7 +388,7 @@ export default function HomeClient() {
           <SiteNav />
 
           {/* Hero */}
-          <section className="relative z-10 h-[calc(100vh-72px)] flex flex-col items-center justify-center overflow-hidden">
+          <section className="relative z-10 flex flex-col items-center justify-center overflow-hidden" style={{ height: 'calc(100vh - 72px - 65px)' }}>
             <div className="absolute inset-0 z-0">
               <video autoPlay muted playsInline className="absolute inset-0 w-full h-full object-cover" style={{ opacity: 0.55 }}>
                 <source src="/hero_no_audio.webm" type="video/webm" />
@@ -540,22 +495,22 @@ export default function HomeClient() {
 
           {/* ── FEATURE SHOWCASE SECTION ── */}
           <section id="features" className="relative z-10 bg-[#EDE7D8] px-8 md:px-16 scroll-reveal">
-            <div className="w-full flex flex-col md:flex-row gap-16 items-start">
+            <div className="w-full flex flex-col md:flex-row gap-12 items-center min-h-[calc(100vh-72px)]">
 
-              {/* LEFT — sticky text + pills */}
-              <div className="w-72 flex-shrink-0 sticky top-16 self-start py-12 flex flex-col justify-center">
+              {/* LEFT — text + pills centered */}
+              <div className="w-80 flex-shrink-0 flex flex-col justify-center items-start py-8">
 
-                <h2 className="font-black uppercase tracking-wide leading-tight mb-5" style={{ fontSize: 'clamp(34px, 4vw, 58px)' }}>
+                <h2 className="font-black uppercase tracking-wide leading-tight mb-4" style={{ fontSize: 'clamp(28px, 3.2vw, 48px)' }}>
                   <span className="text-[#1B3828]">Everything chairs need</span><br />
                   <span className="text-[#B8844A]">to run committees</span>
                 </h2>
 
-                <p className="text-[#6A5A4A] text-base mb-6 leading-relaxed">
+                <p className="text-[#6A5A4A] text-sm mb-5 leading-relaxed">
                   One dashboard. Every tool. From opening session to final voting.
                 </p>
 
                 {/* Pills */}
-                <div className="flex flex-col gap-1.5">
+                <div className="flex flex-col gap-1.5 w-full">
                   {[
                     { id: 'roll-call', icon: <Mic size={15} className="text-[#EED98A]" />, label: 'Roll Call' },
                     { id: 'motions', icon: <Scale size={15} className="text-[#EED98A]" />, label: 'Motions & Voting' },
@@ -580,9 +535,9 @@ export default function HomeClient() {
                 </div>
               </div>
 
-              {/* RIGHT — wheel hijack carousel */}
-              <div className="flex-1 py-12 flex justify-center items-center">
-                <div className="w-full" style={{ maxWidth: '558px' }}>
+              {/* RIGHT — click-only carousel, wider */}
+              <div className="flex-1 flex justify-center items-center py-8">
+                <div className="w-full" style={{ maxWidth: '680px' }}>
                   <FeatureCarousel activeFeature={activeFeature} setActiveFeature={setActiveFeature} />
                 </div>
               </div>

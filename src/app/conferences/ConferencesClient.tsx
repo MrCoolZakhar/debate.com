@@ -43,7 +43,7 @@ export default function ConferencesClient() {
             </h1>
 
             <p className="text-[#6A5A4A] leading-relaxed" style={{ fontSize: '17px' }}>
-              The otters are working hard to bring you MUN Conferences on Gavelling. We expect to roll out the first conferences starting in{' '}
+              Gavin is working really hard to bring you MUN Conferences on Gavelling. We expect to roll out the first conferences starting in{' '}
               <span className="text-[#1C1410] font-semibold">August 2026</span>.
             </p>
 
