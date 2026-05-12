@@ -262,7 +262,7 @@ export default function TutorialOverlay({ committee, onEnd }: Props) {
       {/* Gavin — fixed bottom-right, portrait, touching bottom */}
       <div style={{
         position: 'fixed', bottom: 0, right: 32, zIndex: 9993,
-        width: 220,
+        width: 440,
         display: 'flex', flexDirection: 'column', alignItems: 'center',
         pointerEvents: 'none',
       }}>
@@ -270,10 +270,10 @@ export default function TutorialOverlay({ committee, onEnd }: Props) {
         {step.bubbleText && (
           <div style={{ marginBottom: 8, position: 'relative' }}>
             <div style={{
-              padding: '12px 16px', borderRadius: 16, fontSize: 13, fontWeight: 500,
+              padding: '14px 20px', borderRadius: 16, fontSize: 14, fontWeight: 500,
               lineHeight: 1.45, color: '#1C1410', textAlign: 'center',
               backgroundColor: '#FAF8F3', border: '1.5px solid rgba(27,56,40,0.18)',
-              boxShadow: '0 4px 20px rgba(0,0,0,0.15)', maxWidth: 210,
+              boxShadow: '0 4px 20px rgba(0,0,0,0.15)', maxWidth: 380,
             }}>
               {step.bubbleText}
             </div>
@@ -290,14 +290,14 @@ export default function TutorialOverlay({ committee, onEnd }: Props) {
         )}
 
         {/* End Tutorial — small, between bubble and image, pointer-events re-enabled */}
-        <div style={{ pointerEvents: 'auto', marginBottom: 10, marginTop: 4 }}>
+        <div style={{ pointerEvents: 'auto', marginBottom: 12, marginTop: 6 }}>
           <SmallEndBtn onEnd={onEnd} />
         </div>
 
         {/* Portrait image */}
         <img
           src={step.otterImage} alt="Gavin"
-          style={{ width: 220, height: 330, objectFit: 'contain', objectPosition: 'bottom center', display: 'block' }}
+          style={{ width: 440, height: 660, objectFit: 'contain', objectPosition: 'bottom center', display: 'block' }}
         />
       </div>
     </>
@@ -312,7 +312,7 @@ function SmallEndBtn({ onEnd, fixed }: { onEnd: () => void; fixed?: boolean }) {
       onClick={onEnd}
       style={{
         ...(fixed ? { position: 'fixed', top: 16, right: 16, zIndex: 9999 } : {}),
-        padding: '5px 12px', borderRadius: 8, fontWeight: 700, fontSize: 11,
+        padding: '7px 18px', borderRadius: 10, fontWeight: 700, fontSize: 13,
         backgroundColor: '#1B3828', color: '#EED98A',
         border: 'none', cursor: 'pointer',
         boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
