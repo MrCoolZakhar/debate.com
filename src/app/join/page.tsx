@@ -185,7 +185,7 @@ function JoinPageInner() {
                 </div>
               )}
             </div>
-            {error && <p className="text-red-500 text-sm mt-2 text-center font-semibold">{error}</p>}
+            {error && <p className="text-sm mt-2 text-center font-semibold" style={{ color: '#8B2020' }}>{error}</p>}
             {suffixError && !error && (
               <p className="text-sm mt-2 text-center font-semibold px-3 py-2 rounded-xl" style={{ color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.2)' }}>{suffixError}</p>
             )}
