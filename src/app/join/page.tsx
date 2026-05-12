@@ -212,7 +212,7 @@ function JoinPageInner() {
             const isChairCode = code.includes('-');
             const roleCards: { key: JoinMode; label: string; desc: string }[] = [
               { key: 'delegate', label: 'DELEGATE', desc: 'Join as a country delegation' },
-              { key: 'chair', label: 'CHAIR', desc: 'Open the chair panel' },
+              { key: 'chair', label: 'CHAIR', desc: 'Re-join chair panel or join in as a co-chair' },
               { key: 'advisor', label: 'FACULTY ADVISOR', desc: 'Observer view for advisors' },
             ];
             return (
@@ -225,10 +225,10 @@ function JoinPageInner() {
                       key={key}
                       onClick={() => { if (enabled) resetMode(key); }}
                       disabled={!enabled}
-                      className="flex flex-col items-center justify-end gap-1.5 transition-all focus:outline-none"
+                      className="flex flex-col items-center justify-center gap-1.5 transition-all focus:outline-none"
                       style={{
                         height: '160px',
-                        padding: '0 0 18px 0',
+                        padding: '0 12px',
                         backgroundColor: '#1B3828',
                         opacity: enabled ? 1 : 0.35,
                         border: isActive ? '2px solid #EED98A' : '2px solid rgba(61,122,82,0.4)',
