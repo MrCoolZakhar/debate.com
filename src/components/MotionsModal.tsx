@@ -855,7 +855,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
         <p className="text-xs font-mono tracking-widest text-[#9A8A78] mb-6">
           {typeMeta[specialVoteMotion.type].label.toUpperCase()} · {specialVoteMotion.proposedBy}
         </p>
-        <h1 className="text-5xl font-black text-[#1C1410] mb-14">Does this motion pass?</h1>
+        <h1 className="text-4xl font-black mb-14 tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>DOES THIS MOTION PASS?</h1>
         <div className="flex gap-8">
           <button
             onClick={async () => {
@@ -874,8 +874,10 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
               setSpecialVoteMotion(null);
               onClose();
             }}
-            className="px-16 py-8 rounded-3xl bg-[#2A5A3C] hover:bg-[#3D7A52] text-white text-2xl font-black transition-colors">
-            Yes
+            className="px-16 py-8 rounded-3xl text-white text-2xl font-black transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}>
+            YES
           </button>
           <button
             onClick={() => {
@@ -885,8 +887,10 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
               setSpecialVoteMotion(null);
               onClose();
             }}
-            className="px-16 py-8 rounded-3xl bg-[#8B2020] hover:bg-[#7A1C1C] text-white text-2xl font-black transition-colors">
-            No
+            className="px-16 py-8 rounded-3xl text-white text-2xl font-black transition-colors focus:outline-none" style={{ backgroundColor: '#8B2020', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#7A1C1C'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#8B2020'; }}>
+            NO
           </button>
         </div>
       </div>

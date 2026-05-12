@@ -22,6 +22,7 @@ function JoinPageInner() {
   const [code, setCode] = useState(searchParams.get('code') ?? '');
   const [country, setCountry] = useState('');
   const [error, setError] = useState('');
+  const [suffixError, setSuffixError] = useState('');
   const [lookingUp, setLookingUp] = useState(false);
   const [foundCommittee, setFoundCommittee] = useState<Committee | null>(null);
   // Chair name selection — after committee found in chair mode
@@ -51,17 +52,20 @@ function JoinPageInner() {
     // For chair codes with suffix (e.g. "ABC123-1234"), try stripping the suffix first
     const tryBase = upper.includes('-') ? upper.slice(0, upper.lastIndexOf('-')) : null;
 
-    // Validate chair suffix and conditionally set the found committee
+    // Always show the committee, but flag a suffix mismatch separately
     const trySetCommittee = (found: Committee) => {
-      if (currentMode === 'chair' && upper.includes('-')) {
+      setFoundCommittee(found);
+      if (upper.includes('-')) {
         const suffix = upper.slice(upper.lastIndexOf('-') + 1);
         const expectedSuffix = found.dbChairJoinSuffix ?? getSettings(found.code).chairJoinSuffix;
-        if (suffix !== expectedSuffix) {
-          setError('Invalid chair code — check the code provided by your co-chair.');
-          return false;
+        if (expectedSuffix && suffix !== expectedSuffix) {
+          setSuffixError('Incorrect chair code — double-check the code from your co-chair.');
+        } else {
+          setSuffixError('');
         }
+      } else {
+        setSuffixError('');
       }
-      setFoundCommittee(found);
       return true;
     };
 
@@ -96,6 +100,7 @@ function JoinPageInner() {
     const upper = val.toUpperCase().slice(0, 20);
     setCode(upper);
     setError('');
+    setSuffixError('');
     setFoundCommittee(null);
     setLookingUp(false);
 
@@ -128,10 +133,7 @@ function JoinPageInner() {
   const resetMode = (m: JoinMode) => {
     setMode(m);
     setError('');
-    setCode('');
-    setFoundCommittee(null);
     setCountry('');
-    setLookingUp(false);
     setChairName('');
     setChairNameMode('select');
     setNewChairName('');
@@ -144,8 +146,10 @@ function JoinPageInner() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#F6F1E9] flex flex-col">
-      <nav className="border-b border-[#DDD4C0] px-6 h-16 flex items-center justify-between bg-[#FAF8F3]">
+    <div className="min-h-screen flex flex-col relative" style={{ backgroundColor: '#EDE7D8' }}>
+      {/* Grain texture */}
+      <div className="pointer-events-none fixed inset-0 z-0" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
+      <nav className="relative z-10 border-b border-[#DDD4C0]/60 px-6 h-16 flex items-center justify-between" style={{ backgroundColor: '#EDE7D8' }}>
         <Link href="/" className="flex items-center gap-3">
           <img src="/GavellingLogo.png" alt="Gavelling" className="w-[16vw] h-auto max-h-9 object-contain" />
         </Link>
@@ -154,160 +158,203 @@ function JoinPageInner() {
         </Link>
       </nav>
 
-      <div className="flex-1 flex items-center justify-center px-6 py-12">
-        <div className="w-full max-w-md">
-          <h1 className="text-3xl font-black text-[#1C1410] mb-2">Join a Session</h1>
-          <p className="text-[#6A5A4A] mb-8">Enter the session code and choose your role.</p>
+      <div className="relative z-10 flex-1 flex items-center justify-center px-6 py-4">
+        <div className="w-full max-w-lg">
 
-          {/* Mode tabs */}
-          <div className="flex gap-2 mb-8">
-            {tabs.map((t) => (
-              <button key={t.key} onClick={() => resetMode(t.key)}
-                className={`flex-1 flex flex-col items-center gap-1 py-3 px-2 rounded-xl border transition-all text-center ${
-                  mode === t.key
-                    ? 'bg-[#DDD4C0] border-[#1B3828] text-[#1C1410]'
-                    : 'bg-[#EDE7D8] border-[#DDD4C0] text-[#6A5A4A] hover:border-[#1B3828]'
-                }`}>
-                <Emoji size="1.25rem">{t.icon}</Emoji>
-                <span className="text-xs font-bold">{t.label}</span>
-              </button>
-            ))}
-          </div>
+          {/* Title */}
+          <h1 className="text-5xl font-black text-center mb-0.5 tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '-0.01em' }}>JOIN A SESSION</h1>
+          <p className="text-center text-sm mb-4" style={{ color: '#9A8A78' }}>Enter your session code below</p>
 
-          <div className="space-y-5">
-            <div>
-              <label className="block text-sm font-medium text-[#1C1410] mb-2">Session Code</label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={code}
-                  onChange={(e) => handleCodeChange(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter' && foundCommittee) handleJoin(); }}
-                  placeholder="ABC123 or UNSC-2026"
-                  className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] transition-colors font-mono text-xl tracking-widest text-center uppercase"
-                  maxLength={20}
-                  autoFocus
-                />
-                {lookingUp && (
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                    <div className="w-4 h-4 border-2 border-[#1B3828] border-t-transparent rounded-full animate-spin" />
-                  </div>
-                )}
-              </div>
-              {error && <p className="text-red-400 text-sm mt-2">{error}</p>}
-              {mode === 'chair' && (
-                <p className="text-[#9A8A78] text-xs mt-2">Enter full chair code including -XXXX suffix</p>
+          {/* Code input — always first */}
+          <div className="mb-5">
+            <div className="relative">
+              <input
+                type="text"
+                value={code}
+                onChange={(e) => handleCodeChange(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && foundCommittee) handleJoin(); }}
+                placeholder="ABC123 or ABC123-4821"
+                className="w-full rounded-2xl px-6 py-3.5 font-mono text-xl tracking-widest text-center uppercase focus:outline-none transition-colors"
+                style={{ backgroundColor: '#FAF8F3', border: '2px solid #DDD4C0', color: '#1C1410' }}
+                onFocus={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
+                onBlur={(e) => { (e.currentTarget as HTMLElement).style.borderColor = foundCommittee ? '#1B3828' : '#DDD4C0'; }}
+                maxLength={20}
+                autoFocus
+              />
+              {lookingUp && (
+                <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                  <div className="w-5 h-5 border-2 border-[#1B3828] border-t-transparent rounded-full animate-spin" />
+                </div>
               )}
             </div>
-
-            {foundCommittee && (
-              <div className="bg-[#1B3828]/10 border border-[#1B3828]/30 rounded-xl p-4">
-                <div className="text-[#1B3828] text-xs font-mono mb-2">✓ COMMITTEE FOUND</div>
-                <div className="text-[#1C1410] font-bold">{foundCommittee.name}</div>
-                <div className="text-[#6A5A4A] text-sm mt-1">{foundCommittee.topic}</div>
-                <div className="text-[#9A8A78] text-xs mt-2">{foundCommittee.delegates.length} delegates registered</div>
-                {foundCommittee.endedAt && (
-                  <div className="mt-3 text-xs text-[#B6871F] bg-[#1B3828]/20 border border-[#1B3828]/30 rounded-lg px-3 py-2">
-                    This session has ended — view only access.
-                  </div>
-                )}
-                {!foundCommittee.endedAt && foundCommittee.suspendedAt && mode === 'delegate' && (
-                  <div className="mt-3 text-xs text-orange-400 bg-orange-950/20 border border-orange-800/30 rounded-lg px-3 py-2">
-                    This session is currently adjourned — you will see a waiting screen.
-                  </div>
-                )}
-              </div>
+            {error && <p className="text-sm mt-2 text-center font-semibold" style={{ color: '#8B2020' }}>{error}</p>}
+            {suffixError && !error && (
+              <p className="text-sm mt-2 text-center font-semibold px-3 py-2 rounded-xl" style={{ color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.2)' }}>{suffixError}</p>
             )}
-
-            {foundCommittee && mode === 'delegate' && (() => {
-              const requireName = getSettings(foundCommittee.code).requireDelegationName;
-              if (!requireName) return null;
-              return (
-                <div>
-                  <label className="block text-sm font-medium text-[#1C1410] mb-2">Your Country / Delegation</label>
-                  <select
-                    value={country}
-                    onChange={(e) => setCountry(e.target.value)}
-                    className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-4 py-3 text-[#1C1410] focus:outline-none focus:border-[#1B3828] transition-colors"
-                  >
-                    <option value="">Select your country...</option>
-                    {foundCommittee.delegates.map((d) => (
-                      <option key={d.country} value={d.country}>{d.country}</option>
-                    ))}
-                  </select>
-                </div>
-              );
-            })()}
-
-            {/* Chair name selection — shown when committee found in chair mode */}
-            {foundCommittee && mode === 'chair' && (
-              <div>
-                <label className="block text-sm font-medium text-[#1C1410] mb-2">Which chair are you?</label>
-                {foundCommittee.chairNames.length > 0 && (
-                  <div className="space-y-2 mb-3">
-                    {foundCommittee.chairNames.map((n) => (
-                      <button
-                        key={n}
-                        onClick={() => { setChairNameMode('select'); setChairName(n); }}
-                        className={`w-full text-left px-4 py-2.5 rounded-lg border text-sm font-semibold transition-colors ${
-                          chairNameMode === 'select' && chairName === n
-                            ? 'bg-[#1B3828] border-[#2A5A3C] text-white'
-                            : 'bg-[#FAF8F3] border-[#DDD4C0] text-[#6A5A4A] hover:border-[#1B3828]'
-                        }`}
-                      >
-                        🪑 {n}
-                      </button>
-                    ))}
-                    <button
-                      onClick={() => { setChairNameMode('new'); setChairName(''); }}
-                      className={`w-full text-left px-4 py-2.5 rounded-lg border text-sm font-semibold transition-colors ${
-                        chairNameMode === 'new'
-                          ? 'bg-[#DDD4C0] border-[#1B3828] text-[#1C1410]'
-                          : 'bg-[#FAF8F3] border-[#DDD4C0] text-[#9A8A78] hover:border-[#1B3828]'
-                      }`}
-                    >
-                      + New name
-                    </button>
-                  </div>
-                )}
-                {(chairNameMode === 'new' || foundCommittee.chairNames.length === 0) && (
-                  <input
-                    type="text"
-                    value={newChairName}
-                    onChange={(e) => setNewChairName(e.target.value)}
-                    placeholder="Enter your name…"
-                    autoFocus={chairNameMode === 'new'}
-                    className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] transition-colors"
-                  />
-                )}
-              </div>
-            )}
-
-            <button
-              onClick={handleJoin}
-              disabled={
-                mode === 'delegate'
-                  ? (!foundCommittee || (getSettings(foundCommittee?.code ?? '').requireDelegationName && !country))
-                  : mode === 'chair'
-                  ? (!foundCommittee ||
-                      ((foundCommittee.dbSeparateChairCode ?? getSettings(foundCommittee.code).separateChairCode) && !code.includes('-')) ||
-                      (chairNameMode === 'select' ? !chairName : !newChairName.trim()))
-                  : !foundCommittee
-              }
-              className="w-full bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white py-3 rounded-lg font-semibold transition-colors"
-            >
-              {mode === 'delegate'
-                ? (foundCommittee?.endedAt ? 'View Session →' : 'Join Session →')
-                : mode === 'chair' ? 'Open Chair Panel →' : 'Open Advisor View →'}
-            </button>
           </div>
 
-          <p className="text-center text-[#9A8A78] text-sm mt-8">
+          {/* Committee found card */}
+          {foundCommittee && (
+            <div className="mb-5 rounded-xl px-4 py-2.5 flex items-center gap-3" style={{ backgroundColor: 'rgba(27,56,40,0.08)', border: '1.5px solid rgba(27,56,40,0.25)' }}>
+              <span className="text-xs font-mono font-black shrink-0" style={{ color: '#1B3828' }}>✓</span>
+              <div className="min-w-0">
+                <p className="font-black text-sm truncate" style={{ color: '#1C1410' }}>{foundCommittee.name}{foundCommittee.topic ? <span className="font-normal text-xs ml-1.5" style={{ color: '#9A8A78' }}>· {foundCommittee.topic}</span> : ''}</p>
+                <p className="text-xs" style={{ color: '#9A8A78' }}>{foundCommittee.delegates.length} delegates registered</p>
+                {foundCommittee.endedAt && <p className="text-xs font-semibold mt-0.5" style={{ color: '#B8844A' }}>Session ended — view only.</p>}
+                {!foundCommittee.endedAt && foundCommittee.suspendedAt && mode === 'delegate' && <p className="text-xs font-semibold mt-0.5" style={{ color: '#B8844A' }}>Session adjourned — waiting screen.</p>}
+              </div>
+            </div>
+          )}
+
+          {/* Role cards */}
+          {(() => {
+            const hasCode = code.trim().length >= 4;
+            const isChairCode = code.includes('-');
+            const roleCards: { key: JoinMode; label: string; desc: string }[] = [
+              { key: 'delegate', label: 'DELEGATE', desc: 'Join as a country delegation' },
+              { key: 'chair', label: 'CHAIR', desc: 'Open the chair panel' },
+              { key: 'advisor', label: 'FACULTY ADVISOR', desc: 'Observer view for advisors' },
+            ];
+            return (
+              <div className="grid grid-cols-3 gap-4 mb-5">
+                {roleCards.map(({ key, label, desc }) => {
+                  const enabled = !hasCode || (key === 'chair' ? isChairCode : !isChairCode);
+                  const isActive = mode === key && enabled;
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => { if (enabled) resetMode(key); }}
+                      disabled={!enabled}
+                      className="flex flex-col items-center justify-end gap-1.5 transition-all focus:outline-none"
+                      style={{
+                        height: '160px',
+                        padding: '0 0 18px 0',
+                        backgroundColor: '#1B3828',
+                        opacity: enabled ? 1 : 0.35,
+                        border: isActive ? '2px solid #EED98A' : '2px solid rgba(61,122,82,0.4)',
+                        borderRadius: '20px',
+                        cursor: enabled ? 'pointer' : 'not-allowed',
+                        transform: isActive ? 'scale(1.04)' : 'scale(1)',
+                        boxShadow: isActive ? '0 12px 40px rgba(27,56,40,0.35)' : '0 4px 16px rgba(27,56,40,0.15)',
+                        overflow: 'hidden',
+                        position: 'relative',
+                      }}
+                    >
+                      <span className="font-black text-sm tracking-wide" style={{ color: isActive ? '#EED98A' : '#A8C5B0', fontFamily: "'Outfit', sans-serif" }}>{label}</span>
+                      <span className="text-xs px-3 text-center leading-snug" style={{ color: isActive ? 'rgba(238,217,138,0.7)' : 'rgba(168,197,176,0.6)' }}>{desc}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })()}
+
+          {/* Delegate country select */}
+          {foundCommittee && mode === 'delegate' && (() => {
+            const requireName = getSettings(foundCommittee.code).requireDelegationName;
+            if (!requireName) return null;
+            return (
+              <div className="mb-4">
+                <label className="block text-sm font-semibold mb-2" style={{ color: '#1C1410' }}>Your Country / Delegation</label>
+                <select
+                  value={country}
+                  onChange={(e) => setCountry(e.target.value)}
+                  className="w-full rounded-xl px-4 py-3 focus:outline-none transition-colors"
+                  style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #DDD4C0', color: '#1C1410' }}
+                >
+                  <option value="">Select your country...</option>
+                  {foundCommittee.delegates.map((d) => (
+                    <option key={d.country} value={d.country}>{d.country}</option>
+                  ))}
+                </select>
+              </div>
+            );
+          })()}
+
+          {/* Chair name selection */}
+          {foundCommittee && mode === 'chair' && (
+            <div className="mb-4">
+              <label className="block text-sm font-semibold mb-2" style={{ color: '#1C1410' }}>Which chair are you?</label>
+              {foundCommittee.chairNames.length > 0 && (
+                <div className="space-y-2 mb-3">
+                  {foundCommittee.chairNames.map((n) => (
+                    <button
+                      key={n}
+                      onClick={() => { setChairNameMode('select'); setChairName(n); }}
+                      className="w-full text-left px-4 py-2.5 rounded-xl border text-sm font-semibold transition-colors focus:outline-none"
+                      style={{
+                        backgroundColor: chairNameMode === 'select' && chairName === n ? '#1B3828' : '#FAF8F3',
+                        borderColor: chairNameMode === 'select' && chairName === n ? '#2A5A3C' : '#DDD4C0',
+                        color: chairNameMode === 'select' && chairName === n ? 'white' : '#6A5A4A',
+                      }}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => { setChairNameMode('new'); setChairName(''); }}
+                    className="w-full text-left px-4 py-2.5 rounded-xl border text-sm font-semibold transition-colors focus:outline-none"
+                    style={{
+                      backgroundColor: chairNameMode === 'new' ? '#DDD4C0' : '#FAF8F3',
+                      borderColor: chairNameMode === 'new' ? '#1B3828' : '#DDD4C0',
+                      color: chairNameMode === 'new' ? '#1C1410' : '#9A8A78',
+                    }}
+                  >
+                    + New name
+                  </button>
+                </div>
+              )}
+              {(chairNameMode === 'new' || foundCommittee.chairNames.length === 0) && (
+                <input
+                  type="text"
+                  value={newChairName}
+                  onChange={(e) => setNewChairName(e.target.value)}
+                  placeholder="Enter your name…"
+                  autoFocus={chairNameMode === 'new'}
+                  className="w-full rounded-xl px-4 py-3 focus:outline-none transition-colors"
+                  style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #DDD4C0', color: '#1C1410' }}
+                />
+              )}
+            </div>
+          )}
+
+          {/* Join button */}
+          <button
+            onClick={handleJoin}
+            disabled={
+              mode === 'delegate'
+                ? (!foundCommittee || (getSettings(foundCommittee?.code ?? '').requireDelegationName && !country))
+                : mode === 'chair'
+                ? (!foundCommittee ||
+                    ((foundCommittee.dbSeparateChairCode ?? getSettings(foundCommittee.code).separateChairCode) && !code.includes('-')) ||
+                    !!suffixError ||
+                    (chairNameMode === 'select' ? !chairName : !newChairName.trim()))
+                : !foundCommittee
+            }
+            className="w-full py-4 rounded-2xl font-black text-base transition-all focus:outline-none"
+            style={{ fontFamily: "'Outfit', sans-serif", letterSpacing: '0.06em' }}
+            onMouseEnter={(e) => { if (!(e.currentTarget as HTMLButtonElement).disabled) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+            onMouseLeave={(e) => { if (!(e.currentTarget as HTMLButtonElement).disabled) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+            ref={(el) => {
+              if (el) {
+                const isDisabled = el.disabled;
+                el.style.backgroundColor = isDisabled ? '#DDD4C0' : '#1B3828';
+                el.style.color = isDisabled ? '#9A8A78' : 'white';
+              }
+            }}
+          >
+            {mode === 'delegate'
+              ? (foundCommittee?.endedAt ? 'VIEW SESSION →' : 'JOIN SESSION →')
+              : mode === 'chair' ? 'OPEN CHAIR PANEL →' : 'OPEN ADVISOR VIEW →'}
+          </button>
+
+          <p className="text-center text-sm mt-6" style={{ color: '#9A8A78' }}>
             Are you a chair?{' '}
-            <Link href="/create" className="text-[#1B3828] hover:text-[#6A5A4A]">
+            <Link href="/create" className="font-semibold transition-colors" style={{ color: '#1B3828' }}>
               Create a committee instead
             </Link>
           </p>
+
         </div>
       </div>
     </div>
@@ -317,7 +364,7 @@ function JoinPageInner() {
 export default function JoinPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-[#F6F1E9] flex flex-col items-center justify-center gap-4">
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 relative" style={{ backgroundColor: '#EDE7D8' }}>
         <style>{`@keyframes gavel-strike { 0% { transform: rotate(-30deg); } 35% { transform: rotate(15deg); } 50% { transform: rotate(10deg); } 65% { transform: rotate(15deg); } 100% { transform: rotate(-30deg); } } .gavel-anim { animation: gavel-strike 1s ease-in-out infinite; transform-origin: 85% 85%; }`}</style>
         <svg className="gavel-anim" width="72" height="72" viewBox="0 0 72 72" fill="none" xmlns="http://www.w3.org/2000/svg">
           <rect x="38" y="38" width="8" height="28" rx="3" transform="rotate(-45 38 38)" fill="#1B3828" />

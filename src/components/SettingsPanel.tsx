@@ -3,27 +3,28 @@
 import { useState, useEffect } from 'react';
 import { useSettingsStore, CommitteeSettings } from '@/lib/settingsStore';
 import { Committee } from '@/lib/types';
-import { updateCommitteeCode } from '@/lib/committeeService';
+import { updateCommitteeCode, updateCommitteeChairSuffixInDB } from '@/lib/committeeService';
 import { getFlagEmoji, getCountryByName } from '@/lib/countries';
 
 type SettingsTab = 'voting' | 'motions' | 'access' | 'points';
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
-  return <p className="text-[10px] font-mono text-[#7A5A38] tracking-widest mb-1 mt-5 first:mt-0">{children}</p>;
+  return <p className="text-[10px] font-mono font-bold tracking-widest mb-1 mt-5 first:mt-0" style={{ color: '#1B3828' }}>{children}</p>;
 }
 
 function Toggle({ value, onChange, label, note }: {
   value: boolean; onChange: (v: boolean) => void; label: string; note?: string;
 }) {
   return (
-    <div className="flex items-start justify-between gap-4 py-3 border-b border-[#2E1E0F] last:border-0">
+    <div className="flex items-start justify-between gap-4 py-3 last:border-0" style={{ borderBottom: '1px solid #DDD4C0' }}>
       <div className="flex-1">
-        <div className="text-sm font-semibold text-white">{label}</div>
-        {note && <div className="text-xs text-[#7A5A38] mt-0.5 leading-snug">{note}</div>}
+        <div className="text-sm font-semibold" style={{ color: '#1C1410' }}>{label}</div>
+        {note && <div className="text-xs mt-0.5 leading-snug" style={{ color: '#9A8A78' }}>{note}</div>}
       </div>
       <button
         onClick={() => onChange(!value)}
-        className={`relative shrink-0 w-10 h-[22px] rounded-full transition-colors mt-0.5 ${value ? 'bg-[#7B4A1E]' : 'bg-[#2E1E0F]'}`}
+        className={`relative shrink-0 w-10 h-[22px] rounded-full transition-colors mt-0.5 focus:outline-none`}
+        style={{ backgroundColor: value ? '#1B3828' : '#DDD4C0' }}
       >
         <span className={`absolute top-[2px] left-[2px] w-[18px] h-[18px] rounded-full bg-white transition-transform shadow-sm ${value ? 'translate-x-[18px]' : 'translate-x-0'}`} />
       </button>
@@ -36,16 +37,17 @@ function SelectRow({ value, onChange, label, options, note }: {
   options: { value: string; label: string }[]; note?: string;
 }) {
   return (
-    <div className="py-3 border-b border-[#2E1E0F] last:border-0">
+    <div className="py-3 last:border-0" style={{ borderBottom: '1px solid #DDD4C0' }}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1">
-          <div className="text-sm font-semibold text-white">{label}</div>
-          {note && <div className="text-xs text-[#7A5A38] mt-0.5 leading-snug">{note}</div>}
+          <div className="text-sm font-semibold" style={{ color: '#1C1410' }}>{label}</div>
+          {note && <div className="text-xs mt-0.5 leading-snug" style={{ color: '#9A8A78' }}>{note}</div>}
         </div>
         <select
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="bg-[#150F09] border border-[#2E1E0F] rounded-lg px-2.5 py-1.5 text-white text-xs focus:outline-none focus:border-[#7B4A1E] shrink-0 cursor-pointer max-w-[180px]"
+          className="border rounded-lg px-2.5 py-1.5 text-xs focus:outline-none shrink-0 cursor-pointer max-w-[180px]"
+          style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', color: '#1C1410' }}
         >
           {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
@@ -82,7 +84,11 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
   // Auto-generate chairJoinSuffix when separateChairCode is enabled and suffix is empty
   useEffect(() => {
     if (s.separateChairCode && s.chairJoinSuffix === '') {
-      upd('chairJoinSuffix', Math.floor(1000 + Math.random() * 9000).toString());
+      const newSuffix = Math.floor(1000 + Math.random() * 9000).toString();
+      upd('chairJoinSuffix', newSuffix);
+      updateCommitteeChairSuffixInDB(committee.id, newSuffix);
+    } else if (s.separateChairCode && s.chairJoinSuffix !== '') {
+      updateCommitteeChairSuffixInDB(committee.id, s.chairJoinSuffix);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [s.separateChairCode, s.chairJoinSuffix]);
@@ -171,36 +177,32 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
       className="fixed inset-0 z-[60] bg-black/40 flex justify-end"
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="w-full max-w-md bg-[#120D07] border-l border-[#2E1E0F] flex flex-col h-full shadow-2xl overflow-hidden">
+      <div className="w-full max-w-md flex flex-col h-full shadow-2xl overflow-hidden" style={{ backgroundColor: '#FAF8F3', borderLeft: '1px solid #DDD4C0' }}>
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[#2E1E0F] shrink-0">
+        <div className="flex items-center justify-between px-5 py-4 shrink-0" style={{ borderBottom: '1px solid #DDD4C0', backgroundColor: '#1B3828' }}>
           <div className="flex flex-col">
-            <img
-              src="/gavelling-logo.png"
-              alt=""
-              className="w-24 h-auto object-contain mb-1"
-              style={{ filter: 'grayscale(1) brightness(0.6)' }}
-              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-            />
-            <h2 className="text-base font-black text-white">Session Settings</h2>
-            <p className="text-xs text-[#7A5A38] mt-0.5">{committee.name} · {committee.code}</p>
+            <h2 className="text-base font-black" style={{ color: '#EED98A' }}>SESSION SETTINGS</h2>
+            <p className="text-xs mt-0.5" style={{ color: 'rgba(238,217,138,0.6)', fontFamily: "'DM Mono', monospace" }}>{committee.name} · {committee.code}</p>
           </div>
-          <button onClick={onClose} className="text-[#7A5A38] hover:text-white transition-colors text-xl leading-none">✕</button>
+          <button onClick={onClose} className="text-xl leading-none transition-colors focus:outline-none" style={{ color: 'rgba(238,217,138,0.6)' }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#EED98A'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'rgba(238,217,138,0.6)'; }}>✕</button>
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-[#2E1E0F] shrink-0">
+        <div className="flex shrink-0" style={{ borderBottom: '1px solid #DDD4C0', backgroundColor: '#FAF8F3' }}>
           {tabs.map((t) => (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
-              className={`flex-1 py-2.5 text-xs font-bold transition-colors ${
-                tab === t.id
-                  ? 'text-white border-b-2 border-[#7B4A1E] -mb-px'
-                  : 'text-[#7A5A38] hover:text-[#C4A882]'
-              }`}
+              className="flex-1 py-2.5 text-xs font-bold transition-colors focus:outline-none"
+              style={{
+                color: tab === t.id ? '#1B3828' : '#9A8A78',
+                borderBottom: tab === t.id ? '2px solid #1B3828' : '2px solid transparent',
+                marginBottom: '-1px',
+              }}
             >
-              {t.label}
+              {t.label.toUpperCase()}
             </button>
           ))}
         </div>
@@ -250,29 +252,30 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
               />
 
               <SectionLabel>VETO POWER</SectionLabel>
-              <div className="space-y-3 py-3 border-b border-[#2E1E0F]">
+              <div className="space-y-3 py-3" style={{ borderBottom: '1px solid #DDD4C0' }}>
                 {([
                   { id: 'none', label: 'No veto power', desc: 'Standard majority rules apply' },
                   { id: 'p5', label: 'P5 veto power', desc: 'China, France, Russia, UK, USA each hold an individual veto. A single No defeats any resolution.' },
                   { id: 'unanimous', label: 'Unanimous decision required', desc: 'All present-and-voting delegations must vote Yes for a resolution to pass.' },
                 ] as const).map((option) => (
                   <label key={option.id} className="flex items-start gap-3 cursor-pointer" onClick={() => upd('vetoMode', option.id)}>
-                    <div className={`mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${s.vetoMode === option.id ? 'border-[#7B4A1E] bg-[#7B4A1E]' : 'border-[#3D2A15]'}`}>
+                    <div className="mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors"
+                      style={{ borderColor: s.vetoMode === option.id ? '#1B3828' : '#DDD4C0', backgroundColor: s.vetoMode === option.id ? '#1B3828' : 'transparent' }}>
                       {s.vetoMode === option.id && <div className="w-2 h-2 rounded-full bg-white" />}
                     </div>
                     <div>
-                      <div className="text-sm font-semibold text-white">{option.label}</div>
-                      <div className="text-xs text-[#7A5A38] mt-0.5 leading-snug">{option.desc}</div>
+                      <div className="text-sm font-semibold" style={{ color: '#1C1410' }}>{option.label}</div>
+                      <div className="text-xs mt-0.5 leading-snug" style={{ color: '#9A8A78' }}>{option.desc}</div>
                     </div>
                   </label>
                 ))}
               </div>
 
               {s.vetoMode === 'p5' && (
-                <div className="mt-2 p-3 bg-[#1A1209] border border-[#2E1E0F] rounded-xl">
-                  <p className="text-xs font-semibold text-[#C4A882] mb-1">P5 Delegations</p>
-                  <p className="text-xs text-white">{s.p5Delegations.join(' · ')}</p>
-                  <p className="text-xs text-[#7A5A38] mt-1">These are the permanent veto-holding delegations. A single veto vote Against defeats any substantive resolution.</p>
+                <div className="mt-2 p-3 rounded-xl" style={{ backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0' }}>
+                  <p className="text-xs font-semibold mb-1" style={{ color: '#1B3828' }}>P5 Delegations</p>
+                  <p className="text-xs font-mono" style={{ color: '#1C1410' }}>{s.p5Delegations.join(' · ')}</p>
+                  <p className="text-xs mt-1" style={{ color: '#9A8A78' }}>These are the permanent veto-holding delegations. A single veto vote Against defeats any substantive resolution.</p>
                 </div>
               )}
 
@@ -296,7 +299,7 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
           {tab === 'motions' && (
             <div>
               <SectionLabel>ENABLED MOTION TYPES</SectionLabel>
-              <p className="text-xs text-[#7A5A38] mb-3 leading-snug">Disabled motion types are hidden from the delegate motion-request interface immediately.</p>
+              <p className="text-xs mb-3 leading-snug" style={{ color: '#9A8A78' }}>Disabled motion types are hidden from the delegate motion-request interface immediately.</p>
               <Toggle
                 label="Moderated caucus"
                 value={s.motionModeratedCaucus}
@@ -324,9 +327,9 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
           {tab === 'access' && (
             <div>
               <SectionLabel>SESSION ID & JOIN CODES</SectionLabel>
-              <div className="py-3 border-b border-[#2E1E0F]">
-                <div className="text-sm font-semibold text-white mb-0.5">Custom session ID</div>
-                <div className="text-xs text-[#7A5A38] mb-2 leading-snug">
+              <div className="py-3" style={{ borderBottom: '1px solid #DDD4C0' }}>
+                <div className="text-sm font-semibold mb-0.5" style={{ color: '#1C1410' }}>Custom session ID</div>
+                <div className="text-xs mb-2 leading-snug" style={{ color: '#9A8A78' }}>
                   Human-readable identifier (e.g. UNSC-2026). Delegates re-joining will need the new ID.
                   Updates instantly — delegates can join with the new code right away.
                 </div>
@@ -342,18 +345,21 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
                     onKeyDown={(e) => { if (e.key === 'Enter') handleCodeSave(); }}
                     placeholder={committee.code}
                     maxLength={20}
-                    className="flex-1 bg-[#150F09] border border-[#2E1E0F] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#7B4A1E] font-mono"
+                    className="flex-1 rounded-lg px-3 py-2 text-sm focus:outline-none font-mono"
+                    style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #DDD4C0', color: '#1C1410' }}
+                    onFocus={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
+                    onBlur={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
                   />
                   <button
                     onClick={handleCodeSave}
                     disabled={codeSaving || !customCodeInput.trim() || customCodeInput.trim().toUpperCase() === committee.code}
-                    className={`px-3 py-2 rounded-lg text-xs font-bold transition-colors shrink-0 ${
-                      codeSaved
-                        ? 'bg-green-800 text-green-200'
-                        : 'bg-[#7B4A1E] hover:bg-[#8B5A2B] disabled:bg-[#2E1E0F] disabled:text-[#7A5A38] text-white'
-                    }`}
+                    className="px-3 py-2 rounded-lg text-xs font-bold transition-colors shrink-0 focus:outline-none"
+                    style={{
+                      backgroundColor: codeSaved ? '#3D7A52' : (!codeSaving && customCodeInput.trim() && customCodeInput.trim().toUpperCase() !== committee.code) ? '#1B3828' : '#DDD4C0',
+                      color: codeSaved ? 'white' : (!codeSaving && customCodeInput.trim() && customCodeInput.trim().toUpperCase() !== committee.code) ? '#EDE7D8' : '#9A8A78',
+                    }}
                   >
-                    {codeSaving ? '…' : codeSaved ? '✓ Saved' : 'Apply'}
+                    {codeSaving ? '…' : codeSaved ? '✓ Saved' : 'APPLY'}
                   </button>
                 </div>
                 {codeError && <p className="text-red-400 text-xs mt-1.5">{codeError}</p>}
@@ -365,17 +371,20 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
                 onChange={(v) => upd('separateChairCode', v)}
               />
               {s.separateChairCode && (
-                <div className="py-3 border-b border-[#2E1E0F]">
-                  <div className="text-xs text-[#7A5A38] mb-1.5">Chair join code</div>
+                <div className="py-3" style={{ borderBottom: '1px solid #DDD4C0' }}>
+                  <div className="text-xs mb-1.5" style={{ color: '#9A8A78' }}>Chair join code</div>
                   <div className="flex items-center gap-2">
-                    <span className="flex-1 bg-[#150F09] border border-[#2E1E0F] rounded-lg px-3 py-2 text-white text-sm font-mono tracking-wider">
+                    <span className="flex-1 rounded-lg px-3 py-2 text-sm font-mono tracking-wider" style={{ backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0', color: '#1B3828' }}>
                       {chairCode}
                     </span>
                     <button
                       onClick={() => navigator.clipboard.writeText(chairCode)}
-                      className="px-3 py-2 rounded-lg text-xs font-bold bg-[#2E1E0F] hover:bg-[#3D2A15] text-[#C4A882] transition-colors shrink-0"
+                      className="px-3 py-2 rounded-lg text-xs font-bold transition-colors shrink-0 focus:outline-none"
+                      style={{ backgroundColor: '#1B3828', color: '#EED98A' }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
                     >
-                      Copy
+                      COPY
                     </button>
                   </div>
                 </div>
@@ -421,11 +430,11 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
           {tab === 'points' && (
             <div>
               <SectionLabel>DELEGATE LEADERBOARD</SectionLabel>
-              <p className="text-xs text-[#7A5A38] mb-3 leading-snug">
+              <p className="text-xs mb-3 leading-snug" style={{ color: '#9A8A78' }}>
                 Scores: +5 attendance · +10 per WP sponsored · +20 per DR sponsored · +1 per 10s speaking · +10 per GSL speech · +8 per caucus speech
               </p>
               {committee.delegates.length === 0 && (
-                <p className="text-xs text-[#7A5A38]">No delegates in this session yet.</p>
+                <p className="text-xs" style={{ color: '#9A8A78' }}>No delegates in this session yet.</p>
               )}
               {[...committee.delegates]
                 .map((d) => ({ delegate: d, score: computeScore(d.country) }))
@@ -434,88 +443,69 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
                   const flag = getFlagEmoji(getCountryByName(d.country)?.code ?? '') || '🌐';
                   const isExpanded = expandedDelegate === d.id;
                   return (
-                    <div key={d.id} className="border-b border-[#2E1E0F] last:border-0">
+                    <div key={d.id} style={{ borderBottom: '1px solid #DDD4C0' }} className="last:border-0">
                       <button
-                        className="w-full flex items-center gap-3 py-3 text-left hover:bg-[#1A1209] transition-colors rounded-lg px-1"
+                        className="w-full flex items-center gap-3 py-3 text-left transition-colors rounded-lg px-1 focus:outline-none"
+                        style={{ color: '#1C1410' }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#EDE7D8'; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                         onClick={() => setExpandedDelegate(isExpanded ? null : d.id)}
                       >
-                        <span className="text-xs text-[#7A5A38] w-5 text-right shrink-0">{idx + 1}</span>
+                        <span className="text-xs w-5 text-right shrink-0 font-mono" style={{ color: '#9A8A78' }}>{idx + 1}</span>
                         <span className="text-lg leading-none shrink-0">{flag}</span>
-                        <span className="flex-1 text-sm font-semibold text-white truncate">{d.country}</span>
-                        <span className={`text-xs font-mono px-2 py-0.5 rounded-full shrink-0 ${d.status === 'absent' ? 'text-[#7A5A38]' : 'text-[#C4A882]'}`}>
+                        <span className="flex-1 text-sm font-semibold truncate" style={{ color: '#1C1410' }}>{d.country}</span>
+                        <span className="text-xs font-mono px-2 py-0.5 rounded-full shrink-0" style={{ backgroundColor: d.status === 'absent' ? '#DDD4C0' : '#1B3828', color: d.status === 'absent' ? '#9A8A78' : '#EED98A' }}>
                           {score.total} pts
                         </span>
-                        <span className="text-[#7A5A38] text-xs shrink-0">{isExpanded ? '▲' : '▼'}</span>
+                        <span className="text-xs shrink-0" style={{ color: '#9A8A78' }}>{isExpanded ? '▲' : '▼'}</span>
                       </button>
 
                       {isExpanded && (
-                        <div className="mx-1 mb-3 p-3 bg-[#1A1209] border border-[#2E1E0F] rounded-xl space-y-3">
-                          {/* Breakdown */}
+                        <div className="mx-1 mb-3 p-3 rounded-xl space-y-3" style={{ backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0' }}>
                           <div>
-                            <p className="text-[10px] font-mono text-[#7A5A38] tracking-widest mb-1.5">SCORE BREAKDOWN</p>
+                            <p className="text-[10px] font-mono font-bold tracking-widest mb-1.5" style={{ color: '#1B3828' }}>SCORE BREAKDOWN</p>
                             <div className="space-y-1">
-                              <div className="flex justify-between text-xs">
-                                <span className="text-[#C4A882]">Attendance</span>
-                                <span className="text-white font-mono">+{score.attendancePoints}</span>
-                              </div>
-                              <div className="flex justify-between text-xs">
-                                <span className="text-[#C4A882]">Working papers sponsored</span>
-                                <span className="text-white font-mono">+{score.wpPoints}</span>
-                              </div>
-                              <div className="flex justify-between text-xs">
-                                <span className="text-[#C4A882]">Draft resolutions sponsored</span>
-                                <span className="text-white font-mono">+{score.drPoints}</span>
-                              </div>
-                              <div className="flex justify-between text-xs">
-                                <span className="text-[#C4A882]">Speaking time</span>
-                                <span className="text-white font-mono">+{score.speakingPoints}</span>
-                              </div>
-                              <div className="flex justify-between text-xs">
-                                <span className="text-[#C4A882]">GSL speeches ({score.gslSpeeches}×)</span>
-                                <span className="text-white font-mono">+{score.gslPoints}</span>
-                              </div>
-                              <div className="flex justify-between text-xs">
-                                <span className="text-[#C4A882]">Caucus speeches ({score.caucusSpeeches}×)</span>
-                                <span className="text-white font-mono">+{score.caucusPoints}</span>
-                              </div>
-                              <div className="flex justify-between text-xs border-t border-[#2E1E0F] pt-1 mt-1">
-                                <span className="text-white font-semibold">Total</span>
-                                <span className="text-white font-mono font-bold">+{score.total}</span>
+                              {[
+                                { label: 'Attendance', value: score.attendancePoints },
+                                { label: 'Working papers sponsored', value: score.wpPoints },
+                                { label: 'Draft resolutions sponsored', value: score.drPoints },
+                                { label: 'Speaking time', value: score.speakingPoints },
+                                { label: `GSL speeches (${score.gslSpeeches}×)`, value: score.gslPoints },
+                                { label: `Caucus speeches (${score.caucusSpeeches}×)`, value: score.caucusPoints },
+                              ].map(({ label, value }) => (
+                                <div key={label} className="flex justify-between text-xs">
+                                  <span style={{ color: '#6A5A4A' }}>{label}</span>
+                                  <span className="font-mono" style={{ color: '#1C1410' }}>+{value}</span>
+                                </div>
+                              ))}
+                              <div className="flex justify-between text-xs pt-1 mt-1" style={{ borderTop: '1px solid #DDD4C0' }}>
+                                <span className="font-semibold" style={{ color: '#1B3828' }}>Total</span>
+                                <span className="font-mono font-black" style={{ color: '#1B3828' }}>+{score.total}</span>
                               </div>
                             </div>
                           </div>
 
-                          {/* Speaking history */}
                           {score.logs.length > 0 && (
                             <div>
-                              <p className="text-[10px] font-mono text-[#7A5A38] tracking-widest mb-1.5">SPEAKING HISTORY</p>
+                              <p className="text-[10px] font-mono font-bold tracking-widest mb-1.5" style={{ color: '#1B3828' }}>SPEAKING HISTORY</p>
                               <div className="space-y-1">
                                 {score.logs.map((entry, i) => (
-                                  <div key={i} className="text-xs text-[#C4A882]">
-                                    <span className="text-white">{entry.topic || '—'}</span>
-                                    <span className="text-[#7A5A38]"> · {entry.context} · {entry.seconds}s</span>
+                                  <div key={i} className="text-xs">
+                                    <span style={{ color: '#1C1410' }}>{entry.topic || '—'}</span>
+                                    <span style={{ color: '#9A8A78' }}> · {entry.context} · {entry.seconds}s</span>
                                   </div>
                                 ))}
                               </div>
                             </div>
                           )}
 
-                          {/* Tips */}
                           <div>
-                            <p className="text-[10px] font-mono text-[#7A5A38] tracking-widest mb-1.5">TIPS</p>
+                            <p className="text-[10px] font-mono font-bold tracking-widest mb-1.5" style={{ color: '#1B3828' }}>TIPS</p>
                             <div className="space-y-1">
-                              {score.gslSpeeches === 0 && (
-                                <p className="text-xs text-[#C4A882]">• Get on the General Speakers&apos; List</p>
-                              )}
-                              {score.caucusSpeeches === 0 && (
-                                <p className="text-xs text-[#C4A882]">• Request a moderated caucus and speak</p>
-                              )}
-                              {score.wpPoints === 0 && score.drPoints === 0 && (
-                                <p className="text-xs text-[#C4A882]">• Submit a working paper or draft resolution</p>
-                              )}
-                              {score.gslSpeeches > 0 && score.caucusSpeeches > 0 && (score.wpPoints > 0 || score.drPoints > 0) && (
-                                <p className="text-xs text-[#7A5A38]">Great engagement — keep it up!</p>
-                              )}
+                              {score.gslSpeeches === 0 && <p className="text-xs" style={{ color: '#6A5A4A' }}>• Get on the General Speakers&apos; List</p>}
+                              {score.caucusSpeeches === 0 && <p className="text-xs" style={{ color: '#6A5A4A' }}>• Request a moderated caucus and speak</p>}
+                              {score.wpPoints === 0 && score.drPoints === 0 && <p className="text-xs" style={{ color: '#6A5A4A' }}>• Submit a working paper or draft resolution</p>}
+                              {score.gslSpeeches > 0 && score.caucusSpeeches > 0 && (score.wpPoints > 0 || score.drPoints > 0) && <p className="text-xs" style={{ color: '#3D7A52' }}>Great engagement — keep it up!</p>}
                             </div>
                           </div>
                         </div>
@@ -527,8 +517,8 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
           )}
         </div>
 
-        <div className="px-5 py-3 border-t border-[#2E1E0F] shrink-0">
-          <p className="text-[10px] text-[#7A5A38] text-center">Changes apply instantly · No save required</p>
+        <div className="px-5 py-3 shrink-0" style={{ borderTop: '1px solid #DDD4C0' }}>
+          <p className="text-[10px] text-center font-mono" style={{ color: '#9A8A78' }}>Changes apply instantly · No save required</p>
         </div>
       </div>
     </div>

@@ -701,6 +701,23 @@ export async function updateCommitteeCode(committeeId: string, newCode: string):
 }
 
 // ============================================================
+// CHAIR JOIN SUFFIX
+// ============================================================
+
+export async function updateCommitteeChairSuffixInDB(committeeId: string, chairJoinSuffix: string): Promise<void> {
+  const { data: existing } = await supabase
+    .from('committees')
+    .select('settings')
+    .eq('id', committeeId)
+    .single();
+  const currentSettings = (existing?.settings as Record<string, unknown>) ?? {};
+  await supabase
+    .from('committees')
+    .update({ settings: { ...currentSettings, chairJoinSuffix } })
+    .eq('id', committeeId);
+}
+
+// ============================================================
 // CHAIR NAMES
 // ============================================================
 
