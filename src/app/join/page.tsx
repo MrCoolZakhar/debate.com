@@ -212,7 +212,7 @@ function JoinPageInner() {
             const isChairCode = code.includes('-');
             const roleCards: { key: JoinMode; label: string; desc: string }[] = [
               { key: 'delegate', label: 'DELEGATE', desc: 'Join as a country delegation' },
-              { key: 'chair', label: 'CHAIR', desc: 'Re-join chair panel or join in as a co-chair' },
+              { key: 'chair', label: 'CHAIR', desc: 'Re-join a chair panel committee session' },
               { key: 'advisor', label: 'FACULTY ADVISOR', desc: 'Observer view for advisors' },
             ];
             return (
