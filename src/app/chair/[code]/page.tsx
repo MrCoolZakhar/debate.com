@@ -1952,7 +1952,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         {!showChat && committee.phase !== 'pre-session' && (
           <>
             {showRollCall && (
-              <aside className="w-[22rem] flex flex-col overflow-hidden shrink-0" style={{ backgroundColor: '#1B3828', borderRight: '1px solid #3D7A52' }}>
+              <aside data-tutorial="speakers-sidebar" className="w-[22rem] flex flex-col overflow-hidden shrink-0" style={{ backgroundColor: '#1B3828', borderRight: '1px solid #3D7A52' }}>
                 {caucusMaxReachedMsg && (
                   <div className="shrink-0 px-3 py-2 bg-amber-900/20 border-b border-amber-700/40 text-amber-300 text-xs text-center font-semibold">
                     Maximum speakers reached — add more delegates if time remains after current speakers.
@@ -2280,7 +2280,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                       ⚠️ Below quorum — speakers cannot be added until {Math.ceil(quorumFraction * totalCount)} delegates are present.
                     </p>
                   )}
-                  <AddSpeakerInput committee={committee} onAdd={belowQuorum ? () => {} : handleAddToSpeakersList} />
+                  <div data-tutorial="speakers-bottom-bar">
+                    <AddSpeakerInput committee={committee} onAdd={belowQuorum ? () => {} : handleAddToSpeakersList} />
+                  </div>
                 </div>
                 )}
                 </>
