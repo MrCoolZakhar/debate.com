@@ -15,47 +15,95 @@ const steps = [
 // ── Individual feature card components ──────────────────────────────────────
 
 function RollCallCard() {
-  const base = 'w-full bg-[#FAF8F3] rounded-2xl border border-[#DDD4C0] overflow-hidden';
   const shadow = { boxShadow: '0 24px 64px rgba(27,56,40,0.14)' };
   const getFlag = (country: string) => {
     const c = getCountryByName(country);
-    return c ? <img src={getFlagUrl(c.code)} alt={country} className="w-5 h-5 object-contain" /> : <span className="w-5 h-5 bg-[#DDD4C0] rounded-sm inline-block" />;
+    return c ? <img src={getFlagUrl(c.code)} alt={country} style={{ width: '28px', height: '20px', objectFit: 'cover', borderRadius: '4px', border: '1px solid rgba(28,20,16,0.10)' }} /> : <span className="w-7 h-5 bg-[#DDD4C0] rounded inline-block" />;
   };
+  const delegates = [
+    { country: 'China', status: 'present-voting' },
+    { country: 'France', status: 'present-voting' },
+    { country: 'Germany', status: 'present' },
+    { country: 'Brazil', status: 'absent' },
+    { country: 'India', status: 'present' },
+    { country: 'Japan', status: 'present-voting' },
+    { country: 'United Kingdom', status: 'absent' },
+  ];
   return (
-    <div className={base} style={{ ...shadow, minHeight: '460px' }}>
-      <div className="bg-[#1B3828] px-5 py-3 flex items-center justify-between">
-        <p className="text-[#EED98A] font-black text-sm uppercase tracking-wide">Roll Call</p>
-        <span className="bg-[#3D7A52] text-white text-[9px] font-mono px-2 py-0.5 rounded-full uppercase tracking-widest">Pre-Session</span>
-      </div>
-      <div className="px-5 py-4">
-        <div className="flex gap-2 mb-4">
+    <div className="w-full rounded-2xl overflow-hidden flex flex-row" style={{ ...shadow, minHeight: '460px', border: '1px solid #DDD4C0' }}>
+      {/* Dark forest left panel */}
+      <div className="flex flex-col" style={{ width: '260px', backgroundColor: '#1B3828', flexShrink: 0 }}>
+        <div className="px-4 py-3" style={{ borderBottom: '1px solid rgba(61,122,82,0.4)' }}>
+          <p className="font-black text-xs uppercase tracking-widest" style={{ color: '#EED98A', fontFamily: "'DM Mono', monospace" }}>Roll Call</p>
+          <p className="text-xs mt-0.5" style={{ color: 'rgba(238,217,138,0.5)' }}>UN Security Council</p>
+        </div>
+        <div className="flex gap-1 px-3 py-2">
           {['All Present', 'All P+V', 'Clear'].map(btn => (
-            <button key={btn} className="flex-1 py-2 text-[10px] font-bold uppercase tracking-wide rounded-lg bg-[#1B3828] text-[#EED98A] border border-[#1B3828]">{btn}</button>
+            <button key={btn} className="flex-1 py-1.5 text-[9px] font-black uppercase rounded-lg" style={{ backgroundColor: 'rgba(238,217,138,0.12)', color: '#EED98A', border: '1px solid rgba(238,217,138,0.2)' }}>{btn}</button>
           ))}
         </div>
-        <div className="flex flex-col gap-1.5">
-          {[
-            { country: 'France', status: 'P+V' },
-            { country: 'Germany', status: 'P' },
-            { country: 'Brazil', status: 'P+V' },
-            { country: 'India', status: 'P' },
-            { country: 'Japan', status: 'Absent' },
-            { country: 'China', status: 'P+V' },
-          ].map(d => (
-            <div key={d.country} className="flex items-center gap-3 px-3 py-2 rounded-xl bg-[#EDE7D8]">
+        <div className="flex-1 overflow-hidden px-2 pb-2 flex flex-col gap-1">
+          {delegates.map(d => (
+            <div key={d.country} className="flex items-center gap-2 rounded-xl px-3 py-2" style={{ backgroundColor: 'rgba(255,255,255,0.05)' }}>
               {getFlag(d.country)}
-              <span className="flex-1 text-sm font-semibold text-[#1C1410] uppercase">{d.country}</span>
-              <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full ${d.status === 'Absent' ? 'bg-[#DDD4C0] text-[#9A8A78]' : d.status === 'P+V' ? 'bg-[#EED98A] text-[#1B3828]' : 'bg-[#EAF1EC] text-[#1B3828]'}`}>{d.status}</span>
+              <span className="flex-1 text-xs font-semibold truncate" style={{ color: '#EDE7D8' }}>{d.country}</span>
+              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{
+                backgroundColor: d.status === 'present-voting' ? '#EED98A' : d.status === 'present' ? 'rgba(61,122,82,0.4)' : 'rgba(255,255,255,0.08)',
+                color: d.status === 'present-voting' ? '#1B3828' : d.status === 'present' ? '#EDE7D8' : '#9A8A78',
+              }}>
+                {d.status === 'present-voting' ? 'P+V' : d.status === 'present' ? 'P' : 'Abs'}
+              </span>
             </div>
           ))}
         </div>
-        <div className="mt-4 pt-3 border-t border-[#DDD4C0] flex items-center justify-between">
-          <span className="text-xs font-mono text-[#9A8A78] uppercase tracking-wide">Quorum</span>
-          <div className="flex items-center gap-2">
-            <div className="h-2 w-32 bg-[#DDD4C0] rounded-full overflow-hidden">
-              <div className="h-full w-[83%] bg-[#1B3828] rounded-full" />
+        <div className="px-3 py-2.5" style={{ borderTop: '1px solid rgba(61,122,82,0.3)' }}>
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[9px] font-mono uppercase tracking-wide" style={{ color: 'rgba(238,217,138,0.5)' }}>Quorum</span>
+            <span className="text-[9px] font-mono font-bold" style={{ color: '#EED98A' }}>5 / 7</span>
+          </div>
+          <div className="h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}>
+            <div className="h-full rounded-full" style={{ width: `${(5 / 7) * 100}%`, backgroundColor: '#EED98A' }} />
+          </div>
+        </div>
+      </div>
+      {/* Right panel */}
+      <div className="flex-1 flex flex-col" style={{ backgroundColor: '#FAF8F3' }}>
+        <div className="px-5 py-3" style={{ borderBottom: '1px solid #DDD4C0' }}>
+          <p className="font-black text-xs uppercase tracking-widest" style={{ color: '#1C1410', fontFamily: "'DM Mono', monospace" }}>Session Status</p>
+          <p className="text-xs mt-0.5" style={{ color: '#9A8A78' }}>Pre-Session · Roll Call</p>
+        </div>
+        <div className="flex-1 px-5 py-4 flex flex-col gap-4">
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              { label: 'Present+V', count: 3, color: '#B6871F', bg: 'rgba(238,217,138,0.14)' },
+              { label: 'Present', count: 2, color: '#3D7A52', bg: 'rgba(61,122,82,0.08)' },
+              { label: 'Absent', count: 2, color: '#9A8A78', bg: 'rgba(154,138,120,0.08)' },
+            ].map(s => (
+              <div key={s.label} className="rounded-xl p-3 text-center" style={{ backgroundColor: s.bg, border: `1px solid ${s.color}33` }}>
+                <p className="font-black text-2xl" style={{ color: s.color }}>{s.count}</p>
+                <p className="text-[9px] font-semibold uppercase tracking-wide mt-0.5" style={{ color: '#9A8A78' }}>{s.label}</p>
+              </div>
+            ))}
+          </div>
+          <div className="rounded-xl px-4 py-3" style={{ backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0' }}>
+            <p className="text-[9px] font-mono uppercase tracking-wide mb-1.5" style={{ color: '#9A8A78' }}>Committee</p>
+            <p className="font-black text-sm" style={{ color: '#1C1410' }}>UN Security Council</p>
+            <p className="text-xs mt-0.5" style={{ color: '#6A5A4A' }}>Nuclear Non-Proliferation</p>
+          </div>
+          <div className="rounded-xl px-4 py-3" style={{ backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0' }}>
+            <p className="text-[9px] font-mono uppercase tracking-wide mb-2" style={{ color: '#9A8A78' }}>Quorum Status</p>
+            <div className="flex items-center gap-2 mb-1.5">
+              <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ backgroundColor: '#DDD4C0' }}>
+                <div className="h-full rounded-full" style={{ width: `${(5 / 7) * 100}%`, backgroundColor: '#1B3828' }} />
+              </div>
+              <span className="text-[10px] font-mono font-bold" style={{ color: '#1B3828' }}>5 / 7</span>
             </div>
-            <span className="text-xs font-mono text-[#1B3828] font-bold">5/6</span>
+            <p className="text-[9px]" style={{ color: '#3D7A52' }}>Quorum met — ready to begin</p>
+          </div>
+          <div className="mt-auto">
+            <button className="w-full py-3 rounded-xl font-black text-xs uppercase tracking-widest" style={{ backgroundColor: '#1B3828', color: '#EED98A' }}>
+              Begin Session →
+            </button>
           </div>
         </div>
       </div>
