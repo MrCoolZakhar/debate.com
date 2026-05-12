@@ -11,6 +11,7 @@ import { Emoji } from '@/components/Emoji';
 import { SettingsPanel } from '@/components/SettingsPanel';
 import { useSettingsStore } from '@/lib/settingsStore';
 import ChatPanel from '@/components/ChatPanel';
+import TutorialOverlay from '@/components/TutorialOverlay';
 import {
   getCommitteeByCode,
   subscribeToCommittee,
@@ -151,7 +152,7 @@ function AddSpeakerInput({ committee, onAdd }: { committee: Committee; onAdd: (i
   const topNotOnList = matches.find((d) => !onList.has(d.id)) ?? null;
   const commit = (d: typeof topNotOnList) => { if (!d || onList.has(d.id)) return; onAdd(d.id); setQuery(''); };
   return (
-    <div className="relative">
+    <div className="relative" data-tutorial="speakers-input">
       <div className="flex items-center bg-[#FAF8F3] border border-[#DDD4C0] focus-within:border-[#1B3828] rounded-xl transition-colors">
         <input ref={inputRef} type="text" value={query} onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(topNotOnList); } if (e.key === 'Escape') setQuery(''); }}
@@ -284,7 +285,7 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, lastSpeakerDelegate
   const displayItems = list.slice(0, 7);
   const overflow = qLen > 7 ? qLen - 7 : 0;
   return (
-    <div className="flex flex-col items-center w-full mb-1">
+    <div className="flex flex-col items-center w-full mb-1" data-tutorial="speakers-queue">
       <div className="flex flex-nowrap items-start gap-4 pt-2 pb-1 justify-center">
         {displayItems.map((s, i) => {
           const isCurrent = currentSpeakerDelegateId && s.delegateId === currentSpeakerDelegateId;
@@ -1019,6 +1020,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const [endedTab, setEndedTab] = useState<'ended' | 'session'>('ended');
   const [hoursRemaining, setHoursRemaining] = useState<number | null>(null);
   const [timerRunning, setTimerRunning] = useState(false);
+  const [showTutorial, setShowTutorial] = useState(false);
+  const tutorialShownRef = useRef(false);
   const [showRollCall, setShowRollCall] = useState(true);
   const [showSliders, setShowSliders] = useState(false);
   const [showMotions, setShowMotions] = useState(false);
@@ -1231,6 +1234,15 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     // (i.e. entries not currently "in flight"). Simplest safe approach: full replace.
     delegateStatusRef.current = incoming;
   }, [committee?.delegates]);
+
+  // Tutorial — fires once when phase transitions from pre-session → speakers-list
+  useEffect(() => {
+    if (!committee) return;
+    if (committee.phase === 'speakers-list' && !tutorialShownRef.current) {
+      tutorialShownRef.current = true;
+      setShowTutorial(true);
+    }
+  }, [committee?.phase]);
 
   // Stable Set references — prevents RollCallPanel re-renders when only timer ticks
   const gslListIds = useMemo(
@@ -1723,7 +1735,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   return (
     <div className="h-screen flex flex-col overflow-hidden relative" style={{ backgroundColor: '#EDE7D8' }}>
       <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
-      <header className="border-b border-[#DDD4C0] bg-[#FAF8F3] px-4 h-11 flex items-center gap-2">
+      <header className="border-b border-[#DDD4C0] bg-[#FAF8F3] px-4 h-11 flex items-center gap-2" data-tutorial="topbar">
         <Link href="/">
           <img src="/GavellingLogo.png" alt="Gavelling" className="w-[14vw] h-auto max-h-8 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
         </Link>
@@ -1779,6 +1791,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
 
 
         <button onClick={() => { navigator.clipboard.writeText(committee.code); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
+          data-tutorial="join-code"
           className="text-xs font-mono bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#1C1410] px-2.5 py-1 rounded-lg transition-colors shrink-0">
           {copied ? '✓' : committee.code}
         </button>
@@ -2154,7 +2167,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                             })()}
                           </div>
                           <h1 className="text-5xl font-black text-[#1C1410] mt-2 mb-5 text-center">{committee.currentSpeaker.country}</h1>
-                          <div className={`text-8xl font-black font-mono mt-0 mb-4 tabular-nums ${
+                          <div data-tutorial="timer" className={`text-8xl font-black font-mono mt-0 mb-4 tabular-nums ${
                             speakerTimeRemaining <= 10 ? 'text-[#B8844A]' : 'text-[#1C1410]'
                           }`}>
                             {formatTime(speakerTimeRemaining)}
@@ -2179,6 +2192,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                           </button>
                           {/* Start/Pause */}
                           <button onClick={handleToggleTimer}
+                            data-tutorial="timer-toggle"
                             disabled={isLastGSLSpeaker}
                             className={`flex-1 py-3 px-6 rounded-xl font-bold text-base transition-colors focus:outline-none ${
                               timerRunning ? 'bg-[#B6871F] hover:bg-[#B6871F]/80 text-white' :
@@ -2202,6 +2216,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                           {/* Add Time button */}
                           <button
                             onClick={() => setActivePopover(activePopover === 'extraTime' ? null : 'extraTime')}
+                            data-tutorial="add-time-button"
                             title="Add time"
                             className="px-3 py-2 border rounded-xl font-black text-[9px] uppercase tracking-wide transition-colors bg-[#EDE7D8] hover:bg-[#DDD4C0] border-[#DDD4C0] text-[#1B3828] leading-tight text-center w-[52px]">
                             ADD<br />TIME
@@ -2209,6 +2224,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                           {/* Right of Reply button */}
                           <button
                             onClick={() => setActivePopover(activePopover === 'rightToReply' ? null : 'rightToReply')}
+                            data-tutorial="rtr-button"
                             className="px-3 py-3 border rounded-xl font-black text-xs uppercase tracking-wide transition-colors bg-[#B8844A]/15 hover:bg-[#B8844A]/25 border-[#B8844A]/30 text-[#B8844A]">
                             Right to Reply
                           </button>
@@ -2337,6 +2353,12 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       {/* RTR OVERLAY — fixed position, completely outside document flow.
           Never render this inside any flex/grid container — it must not
           affect the layout of the GSL centre column in any way. */}
+      {showTutorial && committee && (
+        <TutorialOverlay
+          committee={committee}
+          onEnd={() => setShowTutorial(false)}
+        />
+      )}
       {activePopover === 'rightToReply' && (
         <div
           className="fixed z-50"
