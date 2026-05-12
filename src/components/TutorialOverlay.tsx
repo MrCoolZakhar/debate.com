@@ -259,16 +259,41 @@ export default function TutorialOverlay({ committee, onEnd }: Props) {
           onClick={advance} />
       )}
 
-      {/* Gavin — fixed bottom-right, portrait, touching bottom */}
+      {/* End Tutorial — fixed, just below the h-11 (44px) top navbar */}
+      <EndTutorialBtn onEnd={onEnd} />
+
+      {/* Gavin — fixed bottom-right, portrait touching bottom */}
+      {/*
+        PNG is 2000×2000 with 528px transparent top.
+        Rendered at 440×440 (fit-to-width) inside the 660px box, bottom-anchored:
+          - rendered image occupies container y[220..660] (from top)
+          - transparent top within rendered image: 528/2000 × 440 ≈ 116px
+          - first actual otter pixel: 220+116 = 336px from container top
+            = 660−336 = 324px from container bottom
+        Bubble bottom is set to 334px → lands ~10px above the first otter pixel.
+      */}
       <div style={{
-        position: 'fixed', bottom: 0, right: 32, zIndex: 9993,
-        width: 440,
-        display: 'flex', flexDirection: 'column', alignItems: 'center',
+        position: 'fixed', bottom: 0, right: -20, zIndex: 9993,
+        width: 440, height: 660,
         pointerEvents: 'none',
       }}>
-        {/* Speech bubble */}
+        {/* Portrait image — fills the container, content anchored to bottom */}
+        <img
+          src={step.otterImage} alt="Gavin"
+          style={{
+            position: 'absolute', bottom: 0, left: 0,
+            width: 440, height: 660,
+            objectFit: 'contain', objectPosition: 'bottom center',
+            display: 'block',
+          }}
+        />
+
+        {/* Speech bubble — pinned just above first otter pixel */}
         {step.bubbleText && (
-          <div style={{ marginBottom: 8, position: 'relative' }}>
+          <div style={{
+            position: 'absolute', bottom: 334, left: 0, right: 0,
+            display: 'flex', flexDirection: 'column', alignItems: 'center',
+          }}>
             <div style={{
               padding: '14px 20px', borderRadius: 16, fontSize: 14, fontWeight: 500,
               lineHeight: 1.45, color: '#1C1410', textAlign: 'center',
@@ -277,28 +302,16 @@ export default function TutorialOverlay({ committee, onEnd }: Props) {
             }}>
               {step.bubbleText}
             </div>
-            {/* Bubble tail */}
+            {/* Bubble tail pointing down toward otter */}
             <div style={{
-              position: 'absolute', bottom: -7, left: '50%',
-              transform: 'translateX(-50%) rotate(45deg)',
-              width: 14, height: 14,
+              width: 14, height: 14, marginTop: -1,
               backgroundColor: '#FAF8F3',
               borderRight: '1.5px solid rgba(27,56,40,0.18)',
               borderBottom: '1.5px solid rgba(27,56,40,0.18)',
+              transform: 'rotate(45deg)',
             }} />
           </div>
         )}
-
-        {/* End Tutorial — small, between bubble and image, pointer-events re-enabled */}
-        <div style={{ pointerEvents: 'auto', marginBottom: 12, marginTop: 6 }}>
-          <SmallEndBtn onEnd={onEnd} />
-        </div>
-
-        {/* Portrait image */}
-        <img
-          src={step.otterImage} alt="Gavin"
-          style={{ width: 440, height: 660, objectFit: 'contain', objectPosition: 'bottom center', display: 'block' }}
-        />
       </div>
     </>
   );
@@ -306,12 +319,12 @@ export default function TutorialOverlay({ committee, onEnd }: Props) {
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
-function SmallEndBtn({ onEnd, fixed }: { onEnd: () => void; fixed?: boolean }) {
+function EndTutorialBtn({ onEnd }: { onEnd: () => void }) {
   return (
     <button
       onClick={onEnd}
       style={{
-        ...(fixed ? { position: 'fixed', top: 16, right: 16, zIndex: 9999 } : {}),
+        position: 'fixed', top: 52, right: 16, zIndex: 9999,
         padding: '7px 18px', borderRadius: 10, fontWeight: 700, fontSize: 13,
         backgroundColor: '#1B3828', color: '#EED98A',
         border: 'none', cursor: 'pointer',
