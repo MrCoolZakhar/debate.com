@@ -194,7 +194,7 @@ function DocumentsCard() {
   const m = Math.floor(docTimer / 60);
   const s = docTimer % 60;
   const shadow = { boxShadow: '0 24px 64px rgba(27,56,40,0.14)' };
-  const pdfUrl = 'https://docs.google.com/viewer?url=https%3A%2F%2Fwww.un.org%2Fen%2Fdocs%2Fsc%2Fquick%2Fres%2F2023%2Fs-res-2728.pdf&embedded=true';
+  const pdfUrl = '/UNSC_RESOLUTION.pdf';
   return (
     <div className="w-full rounded-2xl overflow-hidden flex flex-row" style={{ ...shadow, minHeight: '460px', border: '1px solid #DDD4C0' }}>
       <div className="flex flex-col" style={{ width: '42%', borderRight: '1px solid #DDD4C0', backgroundColor: '#FAF8F3' }}>
@@ -202,8 +202,8 @@ function DocumentsCard() {
           <p className="font-black text-xs uppercase tracking-widest" style={{ color: '#EED98A', fontFamily: "'DM Mono', monospace" }}>READING TIME</p>
         </div>
         <div className="flex-1 flex flex-col items-center justify-center px-4 py-6 text-center">
-          <p className="text-[10px] font-mono tracking-widest uppercase mb-1" style={{ color: '#9A8A78' }}>S/RES/2728 (2024)</p>
-          <p className="font-black text-xs uppercase mb-4" style={{ color: '#1C1410' }}>Gaza Ceasefire Resolution</p>
+          <p className="text-[10px] font-mono tracking-widest uppercase mb-1" style={{ color: '#9A8A78' }}>S/RES/2819 (2026)</p>
+          <p className="font-black text-xs uppercase mb-4" style={{ color: '#1C1410' }}>Libya Sanctions Resolution</p>
           <p className="font-mono text-3xl font-bold tabular-nums mb-1" style={{ color: '#1C1410' }}>{m}:{s.toString().padStart(2, '0')}</p>
           <p className="text-[10px] font-mono mb-4" style={{ color: '#9A8A78' }}>Reading Time</p>
           <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: '#DDD4C0' }}>
@@ -223,7 +223,7 @@ function DocumentsCard() {
         <iframe
           src={pdfUrl}
           className="flex-1 w-full border-none"
-          title="UNSC Resolution 2728"
+          title="UNSC Resolution 2819 (2026)"
           style={{ minHeight: '380px' }}
         />
       </div>
