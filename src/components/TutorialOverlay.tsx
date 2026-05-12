@@ -258,49 +258,70 @@ export default function TutorialOverlay({ committee, onEnd }: Props) {
         style={{ position: 'fixed', inset: 0, zIndex: 9990, background: 'rgba(0,0,0,0.52)', backdropFilter: 'blur(3px)', cursor: 'pointer' }}
         onClick={onEnd}
       >
+        {/*
+          Outro PNG: 2000×2000, 475px transparent top.
+          Rendered at 440×440 (fit-to-width) inside 660px box, bottom-anchored:
+            - transparent top within rendered area: 475/2000 × 440 ≈ 105px
+            - otter head from bottom: 440 − 105 = 335px
+          Container uses absolute layout matching main tutorial Gavin.
+        */}
         <div style={{
-          position: 'fixed', bottom: 0, right: 32, zIndex: 9993,
-          width: 220, display: 'flex', flexDirection: 'column', alignItems: 'center',
+          position: 'fixed', bottom: 0, right: -20, zIndex: 9993,
+          width: 440, height: 660,
           pointerEvents: 'none',
         }}>
-          {/* Bubble */}
-          <div style={{ marginBottom: 8, position: 'relative' }}>
-            <div style={{
-              padding: '12px 16px', borderRadius: 16, fontSize: 13, fontWeight: 500,
-              lineHeight: 1.5, color: '#1C1410', textAlign: 'center',
-              backgroundColor: '#FAF8F3', border: '1.5px solid rgba(27,56,40,0.18)',
-              boxShadow: '0 4px 20px rgba(0,0,0,0.15)', maxWidth: 210,
-            }}>
-              {step.bubbleText}
-            </div>
-            <div style={{
-              position: 'absolute', bottom: -7, left: '50%',
-              transform: 'translateX(-50%) rotate(45deg)',
-              width: 14, height: 14, backgroundColor: '#FAF8F3',
-              borderRight: '1.5px solid rgba(27,56,40,0.18)',
-              borderBottom: '1.5px solid rgba(27,56,40,0.18)',
-            }} />
-          </div>
-          {/* Start Exploring button */}
-          <div style={{ pointerEvents: 'auto', marginBottom: 10 }}>
-            <button
-              onClick={(e) => { e.stopPropagation(); onEnd(); }}
-              style={{
-                padding: '7px 16px', borderRadius: 10, fontWeight: 700, fontSize: 12,
-                backgroundColor: '#1B3828', color: '#EED98A',
-                border: 'none', cursor: 'pointer',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
-              }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-            >
-              Start Exploring →
-            </button>
-          </div>
+          {/* Portrait image — anchored to bottom */}
           <img
             src={step.otterImage} alt="Gavin"
-            style={{ width: 220, height: 330, objectFit: 'contain', objectPosition: 'bottom center', display: 'block' }}
+            style={{
+              position: 'absolute', bottom: 0, left: 0,
+              width: 440, height: 660,
+              objectFit: 'contain', objectPosition: 'bottom center',
+              display: 'block',
+            }}
           />
+
+          {/* Bubble + button — pinned just above first otter pixel (335px from bottom) */}
+          <div style={{
+            position: 'absolute', bottom: 345, left: 0, right: 0,
+            display: 'flex', flexDirection: 'column', alignItems: 'center',
+            gap: 10,
+          }}>
+            <div style={{ position: 'relative' }}>
+              <div style={{
+                padding: '14px 20px', borderRadius: 16, fontSize: 14, fontWeight: 500,
+                lineHeight: 1.5, color: '#1C1410', textAlign: 'center',
+                backgroundColor: '#FAF8F3', border: '1.5px solid rgba(27,56,40,0.18)',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.15)', maxWidth: 380,
+              }}>
+                {step.bubbleText}
+              </div>
+              <div style={{
+                position: 'absolute', bottom: -7, left: '50%',
+                transform: 'translateX(-50%) rotate(45deg)',
+                width: 14, height: 14, backgroundColor: '#FAF8F3',
+                borderRight: '1.5px solid rgba(27,56,40,0.18)',
+                borderBottom: '1.5px solid rgba(27,56,40,0.18)',
+              }} />
+            </div>
+
+            {/* Start Exploring button */}
+            <div style={{ pointerEvents: 'auto', marginTop: 6 }}>
+              <button
+                onClick={(e) => { e.stopPropagation(); onEnd(); }}
+                style={{
+                  padding: '7px 18px', borderRadius: 10, fontWeight: 700, fontSize: 13,
+                  backgroundColor: '#1B3828', color: '#EED98A',
+                  border: 'none', cursor: 'pointer',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
+                }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+              >
+                Start Exploring →
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     );
