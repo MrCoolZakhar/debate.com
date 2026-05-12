@@ -1745,7 +1745,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
 
         {committee.phase !== 'pre-session' && !sessionEnded ? (
           <div className="flex flex-1 min-w-0 h-full items-center">
-            <button onClick={() => setShowSliders((v) => !v)}
+            <button data-tutorial="tab-rollcall" onClick={() => setShowSliders((v) => !v)}
               className="flex-1 text-[18px] font-bold px-3 relative h-full transition-all duration-200"
               style={{ color: showSliders ? '#1B3828' : '#1C1410', backgroundColor: showSliders ? 'rgba(27,56,40,0.07)' : 'transparent', fontWeight: showSliders ? 900 : 700 }}
               onMouseEnter={(e) => { if (!showSliders) { const el = e.currentTarget as HTMLElement; el.style.color = '#1B3828'; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; el.style.transform = 'translateY(-1px)'; } }}
@@ -1754,7 +1754,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               <span style={{ position: 'absolute', bottom: '4px', left: '12px', right: '12px', height: '2px', backgroundColor: '#B6871F', transform: showSliders ? 'scaleX(1)' : 'scaleX(0)', transformOrigin: 'left', transition: 'transform 200ms ease', borderRadius: '2px' }} />
             </button>
             <div style={{ width: '1px', height: '28px', backgroundColor: 'rgba(28,20,16,0.2)', margin: '0 2px', flexShrink: 0 }} />
-            <button onClick={handleMotionsClick}
+            <button data-tutorial="tab-motions" onClick={handleMotionsClick}
               className="flex-1 text-[18px] font-bold px-3 relative h-full transition-all duration-200"
               style={{ color: showMotions ? '#1B3828' : '#1C1410', backgroundColor: showMotions ? 'rgba(27,56,40,0.07)' : 'transparent', fontWeight: showMotions ? 900 : 700 }}
               onMouseEnter={(e) => { if (!showMotions) { const el = e.currentTarget as HTMLElement; el.style.color = '#1B3828'; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; el.style.transform = 'translateY(-1px)'; } }}
@@ -1768,7 +1768,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               <span style={{ position: 'absolute', bottom: '4px', left: '12px', right: '12px', height: '2px', backgroundColor: '#B6871F', transform: showMotions ? 'scaleX(1)' : 'scaleX(0)', transformOrigin: 'left', transition: 'transform 200ms ease', borderRadius: '2px' }} />
             </button>
             <div style={{ width: '1px', height: '28px', backgroundColor: 'rgba(28,20,16,0.2)', margin: '0 2px', flexShrink: 0 }} />
-            <button onClick={handleDocumentsClick}
+            <button data-tutorial="tab-documents" onClick={handleDocumentsClick}
               className="flex-1 text-[18px] font-bold px-3 relative h-full transition-all duration-200"
               style={{ color: showDocuments ? '#1B3828' : '#1C1410', backgroundColor: showDocuments ? 'rgba(27,56,40,0.07)' : 'transparent', fontWeight: showDocuments ? 900 : 700 }}
               onMouseEnter={(e) => { if (!showDocuments) { const el = e.currentTarget as HTMLElement; el.style.color = '#1B3828'; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; el.style.transform = 'translateY(-1px)'; } }}
@@ -1778,7 +1778,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               <span style={{ position: 'absolute', bottom: '4px', left: '12px', right: '12px', height: '2px', backgroundColor: '#B6871F', transform: showDocuments ? 'scaleX(1)' : 'scaleX(0)', transformOrigin: 'left', transition: 'transform 200ms ease', borderRadius: '2px' }} />
             </button>
             <div style={{ width: '1px', height: '28px', backgroundColor: 'rgba(28,20,16,0.2)', margin: '0 2px', flexShrink: 0 }} />
-            <button onClick={() => { if (!isPreSession) handleToggleChat(); }}
+            <button data-tutorial="tab-chat" onClick={() => { if (!isPreSession) handleToggleChat(); }}
               className="flex-1 text-[18px] font-bold px-3 relative h-full transition-all duration-200"
               style={{ color: showChat ? '#1B3828' : '#1C1410', backgroundColor: showChat ? 'rgba(27,56,40,0.07)' : 'transparent', fontWeight: showChat ? 900 : 700 }}
               onMouseEnter={(e) => { if (!showChat) { const el = e.currentTarget as HTMLElement; el.style.color = '#1B3828'; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; el.style.transform = 'translateY(-1px)'; } }}
@@ -1804,7 +1804,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           className="text-xs font-mono bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#1C1410] px-2.5 py-1 rounded-lg transition-colors shrink-0">
           {copied ? '✓' : committee.code}
         </button>
-        <button onClick={() => setShowSettings(true)} className="text-[#9A8A78] hover:text-[#1C1410] transition-colors shrink-0 text-3xl">⚙</button>
+        <button data-tutorial="tab-settings" onClick={() => setShowSettings(true)} className="text-[#9A8A78] hover:text-[#1C1410] transition-colors shrink-0 text-3xl">⚙</button>
       </header>
       {/* Ended tab bar */}
       {sessionEnded && (
@@ -2264,7 +2264,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                             </div>
                           )}
                           {!sessionEnded && (
-                            <button onClick={handleNextSpeaker} disabled={committee.speakersList.length < 2}
+                            <button data-tutorial="call-first-speaker" onClick={handleNextSpeaker} disabled={committee.speakersList.length < 2}
                               className="bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white px-8 py-3 rounded-xl font-bold transition-colors focus:outline-none">
                               CALL FIRST SPEAKER
                             </button>
