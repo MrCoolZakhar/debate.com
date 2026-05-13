@@ -43,7 +43,7 @@ function formatTime(seconds: number): string {
 
 function GavelLoader() {
   return (
-    <div className="min-h-screen bg-[#F6F1E9] flex flex-col items-center justify-center gap-4">
+    <div className="min-h-screen bg-[#EDE7D8] flex flex-col items-center justify-center gap-4">
       <style>{`
         @keyframes gavel-strike {
           0%   { transform: rotate(-30deg); }
@@ -301,8 +301,8 @@ function InlinePdfViewer({ fileUrl, fileName }: { fileUrl: string; fileName: str
   const [show, setShow] = useState(false);
   return (
     <div className="space-y-1.5">
-      <button onClick={() => setShow((v) => !v)} className="text-xs text-blue-400 hover:text-blue-300 transition-colors">
-        <Emoji size="1em">📎</Emoji> {fileName} {show ? '▲' : '▼'}
+      <button onClick={() => setShow((v) => !v)} className="text-xs transition-colors focus:outline-none" style={{ color: '#1B3828' }}>
+        📎 {fileName} {show ? '▲' : '▼'}
       </button>
       {show && (
         <iframe src={fileUrl} title={fileName} className="w-full rounded-lg border border-[#DDD4C0]" style={{ height: '400px' }} />
@@ -313,13 +313,14 @@ function InlinePdfViewer({ fileUrl, fileName }: { fileUrl: string; fileName: str
 
 // ── Delegate Doc Card (with inline PDF viewer) ────────────────────────────────
 function DelegateDocCard({ doc }: { doc: CommitteeDocument }) {
-  const statusColor = doc.status === 'passed' ? 'text-emerald-400' : doc.status === 'failed' ? 'text-red-400' : doc.status === 'introduced' ? 'text-purple-400' : doc.status === 'on-floor' ? 'text-[#B6871F]' : 'text-[#9A8A78]';
+  const statusColor = doc.status === 'passed' ? '#1B3828' : doc.status === 'failed' ? '#8B2020' : doc.status === 'introduced' ? '#B8844A' : doc.status === 'on-floor' ? '#B8844A' : '#9A8A78';
+  const statusBg = doc.status === 'passed' ? 'rgba(27,56,40,0.1)' : doc.status === 'failed' ? 'rgba(139,32,32,0.1)' : 'transparent';
   const statusLabel = doc.status === 'introduced' ? 'Being Presented' : doc.status === 'on-floor' ? 'On Floor' : doc.status === 'passed' ? 'Passed' : doc.status === 'failed' ? 'Failed' : 'Submitted';
   return (
     <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl p-3 space-y-2">
       <div className="flex items-center justify-between">
         <div className="font-semibold text-[#1C1410] text-sm">{doc.docCode} — {doc.title}</div>
-        <span className={`text-xs font-bold ml-2 shrink-0 ${statusColor}`}>{statusLabel}</span>
+        <span className="text-xs font-black ml-2 shrink-0 px-2 py-0.5 rounded-full" style={{ color: statusColor, backgroundColor: statusBg, border: `1px solid ${statusColor}30` }}>{statusLabel}</span>
       </div>
       <div className="text-xs text-[#9A8A78]">
         {doc.sponsors.map((s, i) => (
@@ -369,16 +370,16 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
 
   return (
     <div className="p-4 max-w-2xl mx-auto space-y-4">
-      <h2 className="text-lg font-bold text-[#1C1410]">Submit Document</h2>
+      <h2 className="text-lg font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>SUBMIT DOCUMENT</h2>
       {submitted && (
-        <div className="bg-green-900/30 border border-green-700/30 rounded-xl p-3 text-green-300 text-sm">
+        <div className="rounded-xl p-3 text-sm font-semibold" style={{ backgroundColor: 'rgba(27,56,40,0.1)', border: '1px solid rgba(27,56,40,0.3)', color: '#1B3828' }}>
           ✓ Document submitted to chair for review
         </div>
       )}
       <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl p-4 space-y-4">
         {/* Type selector */}
         <div>
-          <label className="text-xs text-[#6A5A4A] mb-1.5 block">Document type</label>
+          <label className="text-xs font-bold mb-1.5 block" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>DOCUMENT TYPE</label>
           <div className="flex gap-2">
             {(['working-paper', 'draft-resolution'] as DocumentType[]).map((dt) => (
               <button key={dt} onClick={() => setDocType(dt)}
@@ -391,7 +392,7 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
 
         {/* Title */}
         <div>
-          <label className="text-xs text-[#6A5A4A] mb-1.5 block">Title</label>
+          <label className="text-xs font-bold mb-1.5 block" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>TITLE</label>
           <input type="text" value={title} onChange={(e) => setTitle(e.target.value)}
             placeholder="e.g. Strengthening climate adaptation frameworks"
             className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-3 py-2 text-[#1C1410] text-sm focus:outline-none focus:border-[#1B3828]" />
@@ -399,19 +400,19 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
 
         {/* Co-sponsors */}
         <div>
-          <label className="text-xs text-[#6A5A4A] mb-1.5 block">
-            Sponsors <span className="text-[#9A8A78]">— you are automatically listed first</span>
+          <label className="text-xs font-bold mb-1.5 block" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>
+            SPONSORS <span className="font-normal" style={{ color: '#9A8A78' }}>— you are automatically listed first</span>
           </label>
           <SponsorsInput committee={committee} myCountry={country} value={coSponsors} onChange={setCoSponsors} />
         </div>
 
         {/* File */}
         <div>
-          <label className="text-xs text-[#6A5A4A] mb-1.5 block">Attach file <span className="text-[#9A8A78]">(optional)</span></label>
+          <label className="text-xs font-bold mb-1.5 block" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>ATTACHMENT <span className="font-normal" style={{ color: '#9A8A78' }}>(optional)</span></label>
           <div className="flex items-center gap-2">
             <button onClick={() => fileInputRef.current?.click()}
               className="text-xs bg-[#FAF8F3] border border-[#DDD4C0] hover:border-[#1B3828] text-[#6A5A4A] px-3 py-2 rounded-lg transition-colors">
-              {fileName ? <><Emoji size="1em">📎</Emoji>{` ${fileName}`}</> : '+ Attach file'}
+              {fileName ? `📎 ${fileName}` : '+ Attach file'}
             </button>
             {fileName && <button onClick={() => { setFileName(null); setFileUrl(null); }} className="text-xs text-[#9A8A78] hover:text-red-400">Remove</button>}
           </div>
@@ -426,8 +427,9 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
         </div>
 
         <button onClick={handleSubmit} disabled={!title.trim() || sending}
-          className="w-full bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white py-2.5 rounded-lg text-sm font-semibold transition-colors">
-          {sending ? 'Submitting…' : 'Submit to Chair →'}
+          className="w-full text-white py-3 rounded-xl text-sm font-black transition-colors focus:outline-none"
+          style={{ backgroundColor: !title.trim() || sending ? '#DDD4C0' : '#1B3828', color: !title.trim() || sending ? '#9A8A78' : 'white', letterSpacing: '0.05em' }}>
+          {sending ? 'SUBMITTING…' : 'SUBMIT TO CHAIR →'}
         </button>
       </div>
 
@@ -476,9 +478,8 @@ function StatisticsTab({ committee, country }: { committee: Committee; country: 
           <span className="text-6xl font-black text-[#1C1410]">{total}</span>
           <span className="text-lg text-[#6A5A4A] font-medium mb-1">pts</span>
         </div>
-        <div className="inline-flex items-center gap-1.5 bg-[#7B4A1E]/20 border border-[#7B4A1E]/30 text-[#B8844A] text-sm font-bold px-3 py-1 rounded-full">
-          <span>{tier.match(/\p{Emoji}/u)?.[0] ?? ''}</span>
-          <span>{tier.replace(/\p{Emoji}/gu, '').trim()}</span>
+        <div className="inline-flex items-center gap-1.5 text-sm font-black px-3 py-1 rounded-full" style={{ backgroundColor: 'rgba(27,56,40,0.1)', border: '1px solid rgba(27,56,40,0.3)', color: '#1B3828' }}>
+          {tier.replace(/\p{Emoji}/gu, '').trim()}
         </div>
 
         {/* Score breakdown */}
@@ -542,14 +543,14 @@ function StatisticsTab({ committee, country }: { committee: Committee; country: 
               <div key={r.country} className={`flex items-center gap-2 text-sm ${r.country === country ? 'bg-[#1B3828]/10 border border-[#1B3828]/20 rounded-lg px-2 py-1' : 'px-2 py-1'}`}>
                 <span className="text-[#9A8A78] text-xs w-4 font-mono shrink-0">{i + 1}</span>
                 <FlagImg code={getCountryByName(r.country)?.code ?? ''} size={20} className="shrink-0" />
-                <span className={`flex-1 truncate ${r.country === country ? 'text-[#B6871F] font-bold' : 'text-[#6A5A4A]'}`}>{r.country}</span>
+                <span className="flex-1 truncate font-semibold" style={{ color: r.country === country ? '#1B3828' : '#6A5A4A', fontWeight: r.country === country ? 700 : 400 }}>{r.country}</span>
                 <div className="flex items-center gap-2">
                   <div className="w-16 h-1.5 bg-[#DDD4C0] rounded-full overflow-hidden">
                     <div className="h-full bg-[#1B3828] rounded-full" style={{ width: `${(r.seconds / ranking[0].seconds) * 100}%` }} />
                   </div>
                   <span className="text-xs font-mono text-[#9A8A78] w-10 text-right">{formatTime(r.seconds)}</span>
                 </div>
-                <span className="text-xs font-bold text-[#B8844A] w-8 text-right shrink-0">
+                <span className="text-xs font-black w-8 text-right shrink-0" style={{ color: '#1B3828' }}>
                   {pointsByCountry[r.country] ?? 0}
                 </span>
               </div>
@@ -564,9 +565,9 @@ function StatisticsTab({ committee, country }: { committee: Committee; country: 
           <div className="text-xs font-mono text-[#9A8A78] mb-3">HOW TO IMPROVE YOUR SCORE</div>
           <div className="space-y-2">
             {tips.map((tip) => (
-              <div key={tip} className="flex gap-2 text-sm text-[#6A5A4A]">
-                <span className="shrink-0">{tip.slice(0, 2)}</span>
-                <span>{tip.slice(3)}</span>
+              <div key={tip} className="flex gap-2 text-sm" style={{ color: '#6A5A4A' }}>
+                <span className="shrink-0">→</span>
+                <span>{tip.replace(/^\p{Emoji}\s*/u, '')}</span>
               </div>
             ))}
           </div>
@@ -723,12 +724,11 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
 
   if (!committee) {
     return (
-      <div className="min-h-screen bg-[#F6F1E9] flex items-center justify-center">
+      <div className="min-h-screen bg-[#EDE7D8] flex items-center justify-center">
         <div className="text-center">
-          <div className="mb-4"><Emoji size="2.5rem">🔍</Emoji></div>
-          <h1 className="text-2xl font-bold text-[#1C1410] mb-2">Session not found</h1>
-          <p className="text-[#6A5A4A] mb-6">Code "{code}" is invalid or the session ended.</p>
-          <Link href="/join" className="bg-[#1B3828] hover:bg-[#2A5A3C] text-white px-6 py-3 rounded-lg font-semibold transition-colors">Try Again</Link>
+          <h1 className="text-2xl font-black mb-2" style={{ color: '#1B3828' }}>Session not found</h1>
+          <p className="mb-6" style={{ color: '#6A5A4A' }}>Code "{code}" is invalid or the session has ended.</p>
+          <Link href="/join" className="font-black text-white px-6 py-3 rounded-xl transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828' }}>TRY AGAIN</Link>
         </div>
       </div>
     );
@@ -792,7 +792,6 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   // Section 7 — shortened tab labels
   const tabs: { key: DelegateTab; label: string }[] = [
     { key: 'session',     label: 'Session' },
-    { key: 'motions',     label: 'Motions' },
     { key: 'resolutions', label: 'DRs' },
     { key: 'documents',   label: 'Docs' },
     { key: 'stats',       label: 'Stats' },
@@ -800,64 +799,62 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
 
   // ── Absent banner (blocks active interaction)
   const AbsentBanner = () => (
-    <div className="mx-4 mt-4 bg-[#EDE7D8] border border-[#1B3828]/40 rounded-xl p-4">
-      <div className="text-sm font-bold text-[#1C1410] mb-1">You are currently absent</div>
-      <div className="text-xs text-[#6A5A4A] mb-3">Mark yourself Present or Present & Voting to participate actively.</div>
+    <div className="mx-4 mt-4 rounded-xl p-4" style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #DDD4C0' }}>
+      <div className="text-sm font-black mb-1" style={{ color: '#1B3828' }}>YOU ARE CURRENTLY ABSENT</div>
+      <div className="text-xs mb-3" style={{ color: '#6A5A4A' }}>Mark yourself Present or Present & Voting to participate actively.</div>
       {joinStatus && !joinDenied ? (
-        <div className="text-xs text-[#1B3828] font-medium flex items-center gap-1.5">
-          <div className="w-3 h-3 border border-[#1B3828] border-t-transparent rounded-full animate-spin" />
+        <div className="text-xs font-medium flex items-center gap-1.5" style={{ color: '#1B3828' }}>
+          <div className="w-3 h-3 border border-t-transparent rounded-full animate-spin" style={{ borderColor: '#1B3828' }} />
           Join request sent — waiting for chair approval…
         </div>
       ) : (
         <div className="flex gap-2">
           <button onClick={() => handleRequestJoin('present')} disabled={joinRequesting}
-            className="flex-1 bg-[#DDD4C0] hover:bg-[#C8BAA8] border border-[#1B3828]/30 text-[#6A5A4A] py-2 rounded-lg text-xs font-semibold transition-colors">
-            Mark Present (P)
+            className="flex-1 py-2 rounded-xl text-xs font-bold transition-colors focus:outline-none"
+            style={{ backgroundColor: 'transparent', border: '1px solid #DDD4C0', color: '#6A5A4A' }}>
+            PRESENT (P)
           </button>
           <button onClick={() => handleRequestJoin('present-voting')} disabled={joinRequesting}
-            className="flex-1 bg-[#1B3828] hover:bg-[#2A5A3C] text-white py-2 rounded-lg text-xs font-semibold transition-colors">
-            Present &amp; Voting (P&V)
+            className="flex-1 py-2 rounded-xl text-xs font-black text-white transition-colors focus:outline-none"
+            style={{ backgroundColor: '#1B3828' }}>
+            PRESENT &amp; VOTING (P+V)
           </button>
         </div>
       )}
-      {joinDenied && <p className="text-red-400 text-xs mt-2">Your join request was denied by the chair.</p>}
+      {joinDenied && <p className="text-xs mt-2 font-semibold" style={{ color: '#8B2020' }}>Your join request was denied by the chair.</p>}
     </div>
   );
 
   if (sessionSuspended && (committee.suspendedAt || wasEverSuspended.current)) {
     return (
-      <div className="min-h-screen bg-[#F6F1E9] flex flex-col items-center justify-center text-center px-8">
-        <div className="text-sm font-mono text-[#9A8A78] mb-2">{committee.name} · {committee.code}</div>
-        <div className="text-5xl mb-6">⏸️</div>
-        <h1 className="text-3xl font-black text-[#1C1410] mb-4">Session is currently adjourned.</h1>
-        <p className="text-lg text-[#6A5A4A]">Please wait until the chair reopens the session.</p>
-        <p className="text-xs text-[#9A8A78] mt-8">Press ESC to return to main menu</p>
+      <div className="min-h-screen flex flex-col items-center justify-center text-center px-8" style={{ backgroundColor: '#EDE7D8' }}>
+        <p className="text-xs font-mono font-bold tracking-widest mb-2" style={{ color: '#1B3828' }}>{committee.name} · {committee.code}</p>
+        <h1 className="text-4xl font-black mb-4 tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>SESSION ADJOURNED</h1>
+        <p className="text-lg" style={{ color: '#6A5A4A' }}>Please wait until the chair reopens the session.</p>
+        <p className="text-xs mt-8" style={{ color: '#9A8A78' }}>Press ESC to return to main menu</p>
       </div>
     );
   }
 
   return (
-    <div className="h-screen bg-[#F6F1E9] flex flex-col overflow-hidden">
+    <div className="h-screen flex flex-col overflow-hidden" style={{ backgroundColor: '#EDE7D8' }}>
       {/* Header */}
-      <header className="border-b border-[#DDD4C0] bg-[#FAF8F3] px-4 h-14 flex items-center gap-3 shrink-0">
+      <header className="border-b border-[#DDD4C0] px-4 h-14 flex items-center gap-3 shrink-0" style={{ backgroundColor: '#FAF8F3' }}>
         <Link href="/" className="flex items-center gap-2">
           <img src="/GavellingLogo.png" alt="Gavelling" className="w-[16vw] h-auto max-h-9 object-contain" onError={(e)=>{(e.target as HTMLImageElement).style.display="none"}} />
         </Link>
         <div className="flex-1 min-w-0">
-          <div className="font-bold text-[#1C1410] text-sm truncate">{committee.name}</div>
-          <div className="text-xs text-[#9A8A78] truncate">{committee.topic}</div>
+          <div className="font-black text-sm truncate" style={{ color: '#1B3828' }}>{committee.name}</div>
+          <div className="text-xs truncate" style={{ color: '#9A8A78' }}>{committee.topic}</div>
         </div>
         <div className="flex items-center gap-3 shrink-0">
           <div className="text-right">
-            <div className="text-sm font-bold text-[#1C1410] flex items-center gap-1.5 justify-end">
-              <span className="text-lg">{flagFor(country)}</span>
+            <div className="text-sm font-black flex items-center gap-1.5 justify-end" style={{ color: '#1C1410' }}>
+              {(() => { const c = getCountryByName(country); return c ? <img src={getFlagUrl(c.code)} alt={country} style={{ width: '22px', height: '16px', objectFit: 'cover', borderRadius: '4px', border: '1px solid rgba(28,20,16,0.10)' }} /> : null; })()}
               {country}
-              <span className="ml-1 text-xs font-mono text-[#1B3828] bg-[#DDD4C0] px-1.5 py-0.5 rounded">{committee.code}</span>
+              <span className="ml-1 text-xs font-mono px-1.5 py-0.5 rounded" style={{ color: '#1B3828', backgroundColor: '#DDD4C0' }}>{committee.code}</span>
             </div>
-            <div className={`text-xs font-medium ${
-              isAdjourned ? 'text-red-400' :
-              committee.phase === 'voting' ? 'text-[#B6871F]' : 'text-[#9A8A78]'
-            }`}>{phaseDisplay}</div>
+            <div className="text-xs font-medium" style={{ color: isAdjourned ? '#8B2020' : committee.phase === 'voting' ? '#B8844A' : '#9A8A78' }}>{phaseDisplay}</div>
           </div>
           {!sessionEnded && (
           <button
@@ -873,7 +870,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
             }}
             className={`relative text-xs px-3 py-1.5 rounded-lg transition-colors font-semibold shrink-0 ${showChat ? 'bg-[#1B3828] text-white' : 'bg-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}
           >
-            <Emoji size="1em">💬</Emoji>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
             {!showChat && (() => {
               const total = committee.messages.filter((m) => m.sender !== country && !m.content.startsWith('__log__:') && !m.isPrivate).length;
               const unread = total - (chatReadCounts['everyone'] ?? 0);
@@ -890,44 +887,50 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
 
       {/* Ended tab bar */}
       {sessionEnded && (
-        <div className="flex border-b border-[#DDD4C0] bg-[#FAF8F3] shrink-0">
+        <div className="flex shrink-0" style={{ borderBottom: '1px solid #DDD4C0', backgroundColor: '#FAF8F3' }}>
           <button onClick={() => setEndedTab('ended')}
-            className={`flex-1 py-2.5 text-sm font-bold transition-colors border-b-2 ${endedTab === 'ended' ? 'text-[#1C1410] border-[#1B3828]' : 'text-[#9A8A78] border-transparent hover:text-[#6A5A4A]'}`}>
-            🏁 End View
+            className="flex-1 py-2.5 text-xs font-black transition-colors focus:outline-none"
+            style={{ color: endedTab === 'ended' ? '#1B3828' : '#9A8A78', borderBottom: endedTab === 'ended' ? '2px solid #1B3828' : '2px solid transparent', marginBottom: '-1px', fontFamily: "'Outfit', sans-serif" }}>
+            END VIEW
           </button>
           <button onClick={() => setEndedTab('session')}
-            className={`flex-1 py-2.5 text-sm font-bold transition-colors border-b-2 ${endedTab === 'session' ? 'text-[#1C1410] border-[#1B3828]' : 'text-[#9A8A78] border-transparent hover:text-[#6A5A4A]'}`}>
-            👁 Session View
+            className="flex-1 py-2.5 text-xs font-black transition-colors focus:outline-none"
+            style={{ color: endedTab === 'session' ? '#1B3828' : '#9A8A78', borderBottom: endedTab === 'session' ? '2px solid #1B3828' : '2px solid transparent', marginBottom: '-1px', fontFamily: "'Outfit', sans-serif" }}>
+            SESSION VIEW
           </button>
         </div>
       )}
 
       {sessionEnded && endedTab === 'ended' ? (
         <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
-          <div className="mb-6"><Emoji size="3rem">🏁</Emoji></div>
-          <h1 className="text-4xl font-black text-[#1C1410] mb-4">This committee has ended.</h1>
-          <p className="text-xl text-[#6A5A4A] mb-2">{committee.name}</p>
-          <p className="text-base text-[#9A8A78] mb-8">{committee.topic}</p>
+          <h1 className="text-4xl font-black mb-4 tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>THIS COMMITTEE HAS ENDED.</h1>
+          <p className="text-xl mb-1" style={{ color: '#6A5A4A' }}>{committee.name}</p>
+          <p className="text-base mb-8" style={{ color: '#9A8A78' }}>{committee.topic}</p>
           {hoursRemaining !== null && (
-            <p className="text-sm text-[#9A8A78]">{hoursRemaining} hour{hoursRemaining !== 1 ? 's' : ''} until committee is deleted</p>
+            <p className="text-sm" style={{ color: '#9A8A78' }}>{hoursRemaining} hour{hoursRemaining !== 1 ? 's' : ''} until committee is deleted</p>
           )}
-          <p className="text-xs text-[#9A8A78] mt-8">Press ESC to return to main menu</p>
+          <p className="text-xs mt-8" style={{ color: '#9A8A78' }}>Press ESC to return to main menu</p>
         </div>
       ) : (
       <>
       {sessionEnded && endedTab === 'session' && (
-        <div className="shrink-0 bg-amber-900/20 border-b border-amber-700/40 px-4 py-2 text-center text-amber-300 text-sm font-semibold">
+        <div className="shrink-0 px-4 py-2 text-center text-sm font-bold" style={{ backgroundColor: '#1B3828', borderBottom: '1px solid #3D7A52', color: '#EED98A' }}>
           Session has ended — view only
         </div>
       )}
       {/* Tab nav — Section 7: shorter labels, text-sm */}
-      <div className="flex border-b border-[#DDD4C0] bg-[#FAF8F3] shrink-0">
+      <div className="flex shrink-0" style={{ borderBottom: '1px solid #DDD4C0', backgroundColor: '#FAF8F3' }}>
         {tabs.map((t) => (
           <button key={t.key} onClick={() => setTab(t.key)}
-            className={`flex-1 py-3 text-sm font-bold capitalize transition-colors ${
-              tab === t.key ? 'text-[#1C1410] border-b-2 border-[#1B3828]' : 'text-[#9A8A78] hover:text-[#6A5A4A]'
-            }`}>
-            {t.label}
+            className="flex-1 py-2.5 text-xs font-black transition-colors focus:outline-none"
+            style={{
+              color: tab === t.key ? '#1B3828' : '#9A8A78',
+              borderBottom: tab === t.key ? '2px solid #1B3828' : '2px solid transparent',
+              marginBottom: '-1px',
+              fontFamily: "'Outfit', sans-serif",
+              letterSpacing: '0.04em',
+            }}>
+            {t.label.toUpperCase()}
           </button>
         ))}
       </div>
@@ -959,9 +962,9 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                 <div className="flex justify-center">
                   <FlagImg code={getCountryByName(country)?.code ?? ''} size={88} className="rounded-full shadow-lg" />
                 </div>
-                <div className="bg-purple-900/20 border border-purple-700/30 rounded-xl p-5 text-center">
-                  <p className="text-5xl font-black text-[#B6871F] tracking-tight">MODERATED CAUCUS</p>
-                  <p className="text-3xl text-[#6A5A4A] mt-2">{committee.caucus.purpose}</p>
+                <div className="rounded-xl p-5 text-center" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
+                  <p className="text-3xl font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>MODERATED CAUCUS</p>
+                  <p className="text-xl mt-2" style={{ color: '#6A5A4A' }}>{committee.caucus.purpose}</p>
                   {committee.caucus.currentSpeaker && (
                     <div className="mt-4">
                       <div className="text-xs text-[#9A8A78] mb-2 font-mono">NOW SPEAKING</div>
@@ -974,12 +977,11 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                       </div>
                     </div>
                   )}
-                  <div className="text-3xl font-black font-mono text-[#1C1410] mt-4">
+                  <div className="text-3xl font-black font-mono mt-4" style={{ color: '#1C1410' }}>
                     {formatTime(committee.caucus.remainingTime)}
                   </div>
-                  <div className="h-2 bg-[#DDD4C0] rounded-full overflow-hidden mt-2">
-                    <div className="h-full bg-purple-500 rounded-full transition-all"
-                      style={{ width: `${committee.caucus.totalTime > 0 ? (committee.caucus.remainingTime / committee.caucus.totalTime) * 100 : 0}%` }} />
+                  <div className="h-2 rounded-full overflow-hidden mt-2" style={{ backgroundColor: '#DDD4C0' }}>
+                    <div className="h-full rounded-full transition-all" style={{ width: `${committee.caucus.totalTime > 0 ? (committee.caucus.remainingTime / committee.caucus.totalTime) * 100 : 0}%`, backgroundColor: '#1B3828' }} />
                   </div>
                 </div>
                 {/* Upcoming speakers in caucus queue */}
@@ -1009,19 +1011,18 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                 <div className="flex justify-center">
                   <FlagImg code={getCountryByName(country)?.code ?? ''} size={88} className="rounded-full shadow-lg" />
                 </div>
-                <div className="bg-purple-900/20 border border-purple-700/30 rounded-xl p-6 text-center space-y-3">
-                  <p className="text-4xl font-black text-[#B8844A] tracking-tight">UNMODERATED CAUCUS</p>
+                <div className="rounded-xl p-6 text-center space-y-3" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
+                  <p className="text-3xl font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>UNMODERATED CAUCUS</p>
                   {committee.caucus.purpose && (
-                    <p className="text-xl text-[#C4A882]">{committee.caucus.purpose}</p>
+                    <p className="text-xl" style={{ color: '#6A5A4A' }}>{committee.caucus.purpose}</p>
                   )}
-                  <div className="text-5xl font-black font-mono text-white">
+                  <div className="text-5xl font-black font-mono" style={{ color: '#1C1410' }}>
                     {formatTime(committee.caucus.remainingTime)}
                   </div>
-                  <div className="h-2 bg-[#2E1E0F] rounded-full overflow-hidden">
-                    <div className="h-full bg-purple-500 rounded-full transition-all"
-                      style={{ width: `${committee.caucus.totalTime > 0 ? (committee.caucus.remainingTime / committee.caucus.totalTime) * 100 : 0}%` }} />
+                  <div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: '#DDD4C0' }}>
+                    <div className="h-full rounded-full transition-all" style={{ width: `${committee.caucus.totalTime > 0 ? (committee.caucus.remainingTime / committee.caucus.totalTime) * 100 : 0}%`, backgroundColor: '#1B3828' }} />
                   </div>
-                  <p className="text-[#7A5A38] text-sm">Get networking — use this time to lobby and draft.</p>
+                  <p className="text-sm" style={{ color: '#9A8A78' }}>Get networking — use this time to lobby and draft.</p>
                 </div>
               </div>
             )}
@@ -1030,19 +1031,18 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
             {committee.phase !== 'moderated-caucus' && committee.phase !== 'unmoderated-caucus' && (
             <div className={`p-4 space-y-4 max-w-2xl mx-auto ${isAbsent ? 'opacity-60 pointer-events-none select-none' : ''}`}>
               {(() => {
-                type C = { bg: string; border: string; text: string; msg: string };
-                const v: C = isCurrentSpeaker
-                  ? { bg: 'bg-amber-900/30', border: 'border-amber-700/40', text: 'text-amber-300', msg: 'You have the floor!' }
+                const floorStyle = isCurrentSpeaker
+                  ? { bg: '#1B3828', border: '#3D7A52', text: '#EED98A', msg: 'YOU HAVE THE FLOOR' }
                   : !isOnSpeakersList
-                  ? { bg: 'bg-gray-800/30', border: 'border-gray-600/30', text: 'text-gray-400', msg: 'Not on any speaker list' }
+                  ? { bg: '#DDD4C0', border: '#C8BAA8', text: '#9A8A78', msg: 'Not on any speaker list' }
                   : myQueueIndex === 0
-                  ? { bg: 'bg-amber-900/30', border: 'border-amber-700/40', text: 'text-amber-300', msg: "You're up next!" }
+                  ? { bg: '#FAF8F3', border: '#B8844A', text: '#B8844A', msg: "YOU'RE UP NEXT!" }
                   : myQueueIndex <= 5
-                  ? { bg: 'bg-yellow-500/20', border: 'border-yellow-500/40', text: 'text-yellow-300', msg: `${myQueueIndex} speaker${myQueueIndex !== 1 ? 's' : ''} until your speech` }
-                  : { bg: 'bg-green-900/30', border: 'border-green-700/30', text: 'text-green-300', msg: `${myQueueIndex} speakers until your speech` };
+                  ? { bg: '#FAF8F3', border: '#DDD4C0', text: '#B8844A', msg: `${myQueueIndex} speaker${myQueueIndex !== 1 ? 's' : ''} ahead of you` }
+                  : { bg: '#FAF8F3', border: '#DDD4C0', text: '#1B3828', msg: `${myQueueIndex} speakers until your speech` };
                 return (
-                  <div className={`${v.bg} border ${v.border} rounded-xl p-4 text-center`}>
-                    <div className={`${v.text} font-bold text-lg`}>{v.msg}</div>
+                  <div className="rounded-xl p-4 text-center" style={{ backgroundColor: floorStyle.bg, border: `1.5px solid ${floorStyle.border}` }}>
+                    <div className="font-black text-base tracking-wide" style={{ color: floorStyle.text, fontFamily: "'Outfit', sans-serif" }}>{floorStyle.msg}</div>
                   </div>
                 );
               })()}
@@ -1058,9 +1058,9 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                   (d) => d.status === 'on-floor' || d.status === 'introduced'
                 );
                 return (
-                  <div className="bg-[#7B4A1E]/20 border border-[#7B4A1E]/40 rounded-xl p-5 text-center space-y-2">
-                    <p className="text-xs font-mono text-[#7A5A38]">VOTING PROCEDURE</p>
-                    <p className="text-2xl font-black text-[#B8844A]">🗳️ Vote in Progress</p>
+                  <div className="rounded-xl p-5 text-center space-y-2" style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #1B3828' }}>
+                    <p className="text-xs font-mono font-bold" style={{ color: '#1B3828' }}>VOTING PROCEDURE</p>
+                    <p className="text-2xl font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>VOTE IN PROGRESS</p>
                     {activeDoc && (
                       <>
                         <p className="text-sm font-mono text-[#7B4A1E]">{activeDoc.docCode}</p>
@@ -1081,8 +1081,8 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
               }`}>
                 <div className="flex-1 min-w-0">
                   <div className="text-xs font-mono text-[#9A8A78] mb-2">SESSION STATUS</div>
-                  <div className={`text-2xl font-black mb-1 ${isCurrentSpeaker ? 'text-[#B6871F]' : isAdjourned ? 'text-red-400' : 'text-[#1C1410]'}`}>
-                    {isCurrentSpeaker ? <><Emoji size="1em">🎙️</Emoji>{' You Have the Floor'}</> : phaseDisplay}
+                  <div className="text-2xl font-black mb-1" style={{ color: isCurrentSpeaker ? '#B8844A' : isAdjourned ? '#8B2020' : '#1C1410' }}>
+                    {isCurrentSpeaker ? 'YOU HAVE THE FLOOR' : phaseDisplay}
                   </div>
 
                   {!isCurrentSpeaker && committee.currentSpeaker && committee.phase === 'speakers-list' && (
@@ -1105,9 +1105,8 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                       <div className="text-3xl font-black font-mono text-[#1C1410]">
                         {formatTime(committee.caucus.remainingTime)}
                       </div>
-                      <div className="h-2 bg-[#DDD4C0] rounded-full overflow-hidden mt-2">
-                        <div className="h-full bg-purple-500 rounded-full transition-all"
-                          style={{ width: `${(committee.caucus.remainingTime / committee.caucus.totalTime) * 100}%` }} />
+                      <div className="h-2 rounded-full overflow-hidden mt-2" style={{ backgroundColor: '#DDD4C0' }}>
+                        <div className="h-full rounded-full transition-all" style={{ width: `${(committee.caucus.remainingTime / committee.caucus.totalTime) * 100}%`, backgroundColor: '#1B3828' }} />
                       </div>
                       {committee.caucus.currentSpeaker && (
                         <div className="mt-3 text-sm flex items-center gap-2">
@@ -1131,7 +1130,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                     <div className="text-xs text-[#9A8A78] font-mono">SPEAKERS LIST</div>
                     {!isOnSpeakersList && !isCurrentSpeaker && myDelegate?.status !== 'absent' && !sessionEnded && (
                       isGslRequestPending ? (
-                        <span className="text-xs text-[#B6871F] font-medium flex items-center gap-1"><Emoji size="0.875rem">⏳</Emoji> Awaiting approval</span>
+                        <span className="text-xs font-semibold" style={{ color: '#B8844A' }}>Awaiting approval…</span>
                       ) : gslDenied ? (
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-red-400">Your request was denied</span>
@@ -1142,8 +1141,9 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                         </div>
                       ) : (
                         <button onClick={handleAddMeToSpeakers}
-                          className="text-xs bg-[#1B3828] hover:bg-[#2A5A3C] text-white px-3 py-1 rounded-lg font-medium transition-colors">
-                          + Request to Speak
+                          className="text-xs text-white px-3 py-1.5 rounded-lg font-black transition-colors focus:outline-none"
+                          style={{ backgroundColor: '#1B3828', letterSpacing: '0.04em' }}>
+                          + REQUEST TO SPEAK
                         </button>
                       )
                     )}
@@ -1196,28 +1196,28 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                       <button
                         onClick={() => handleStatusChange('present')}
                         disabled={myDelegate?.status === 'present' || changesLeft <= 0}
-                        className={`flex-1 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
-                          myDelegate?.status === 'present'
-                            ? 'bg-green-900/30 border-green-700/40 text-green-300'
-                            : changesLeft <= 0
-                            ? 'bg-[#FAF8F3] border-[#DDD4C0] text-[#9A8A78] cursor-not-allowed'
-                            : 'bg-[#FAF8F3] border-[#DDD4C0] text-[#6A5A4A] hover:border-[#1B3828]'
-                        }`}
+                        className="flex-1 py-2 rounded-xl text-xs font-bold transition-colors focus:outline-none"
+                        style={{
+                          backgroundColor: myDelegate?.status === 'present' ? '#3D7A52' : 'transparent',
+                          border: `1px solid ${myDelegate?.status === 'present' ? '#3D7A52' : '#DDD4C0'}`,
+                          color: myDelegate?.status === 'present' ? 'white' : changesLeft <= 0 ? '#9A8A78' : '#6A5A4A',
+                          cursor: changesLeft <= 0 && myDelegate?.status !== 'present' ? 'not-allowed' : 'pointer',
+                        }}
                       >
                         Present (P)
                       </button>
                       <button
                         onClick={() => handleStatusChange('present-voting')}
                         disabled={myDelegate?.status === 'present-voting' || changesLeft <= 0}
-                        className={`flex-1 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
-                          myDelegate?.status === 'present-voting'
-                            ? 'bg-[#1B3828]/30 border-[#1B3828]/40 text-[#B6871F]'
-                            : changesLeft <= 0
-                            ? 'bg-[#FAF8F3] border-[#DDD4C0] text-[#9A8A78] cursor-not-allowed'
-                            : 'bg-[#FAF8F3] border-[#DDD4C0] text-[#6A5A4A] hover:border-[#1B3828]'
-                        }`}
+                        className="flex-1 py-2 rounded-xl text-xs font-bold transition-colors focus:outline-none"
+                        style={{
+                          backgroundColor: myDelegate?.status === 'present-voting' ? '#1B3828' : 'transparent',
+                          border: `1px solid ${myDelegate?.status === 'present-voting' ? '#1B3828' : '#DDD4C0'}`,
+                          color: myDelegate?.status === 'present-voting' ? '#EED98A' : changesLeft <= 0 ? '#9A8A78' : '#6A5A4A',
+                          cursor: changesLeft <= 0 && myDelegate?.status !== 'present-voting' ? 'not-allowed' : 'pointer',
+                        }}
                       >
-                        Present &amp; Voting (P&V)
+                        Present &amp; Voting (P+V)
                       </button>
                     </div>
                     <p className="text-[10px] text-[#9A8A78] mt-1.5 text-center">
@@ -1267,7 +1267,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                 (d) => d.type === 'draft-resolution' &&
                   ['introduced', 'on-floor', 'passed', 'failed'].includes(d.status)
               );
-              if (drs.length === 0) return <div className="text-center py-8 text-[#7A5A38]">No draft resolutions on the floor yet</div>;
+              if (drs.length === 0) return <div className="text-center py-8 font-semibold" style={{ color: '#9A8A78' }}>No draft resolutions on the floor yet</div>;
               return drs.map((doc) => {
                 const isPresenting = doc.status === 'introduced';
                 const isPassed = doc.status === 'passed';
@@ -1280,10 +1280,10 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                         <span className="text-xs font-mono font-bold text-[#1B3828] mr-2">{doc.docCode}</span>
                         <span className="font-semibold text-[#1C1410] text-sm">{doc.title}</span>
                       </div>
-                      {isPassed && <span className="shrink-0 text-xs font-bold text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 px-2 py-0.5 rounded-full">Passed</span>}
-                      {isFailed && <span className="shrink-0 text-xs font-bold text-red-400 bg-red-950/40 border border-red-800/40 px-2 py-0.5 rounded-full">Failed</span>}
-                      {isPresenting && <span className="shrink-0 text-xs font-bold text-purple-400 bg-purple-950/40 border border-purple-800/40 px-2 py-0.5 rounded-full animate-pulse">Now Presenting</span>}
-                      {isPendingVote && <span className="shrink-0 text-xs font-bold text-yellow-400 bg-yellow-950/40 border border-yellow-800/40 px-2 py-0.5 rounded-full">Pending Vote</span>}
+                      {isPassed && <span className="shrink-0 text-xs font-black px-2 py-0.5 rounded-full" style={{ backgroundColor: '#1B3828', color: '#EED98A' }}>Passed</span>}
+                      {isFailed && <span className="shrink-0 text-xs font-black px-2 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(139,32,32,0.2)', color: '#8B2020', border: '1px solid rgba(139,32,32,0.3)' }}>Failed</span>}
+                      {isPresenting && <span className="shrink-0 text-xs font-black px-2 py-0.5 rounded-full animate-pulse" style={{ backgroundColor: 'transparent', color: '#B8844A', border: '1px solid #B8844A' }}>Now Presenting</span>}
+                      {isPendingVote && <span className="shrink-0 text-xs font-black px-2 py-0.5 rounded-full" style={{ backgroundColor: 'transparent', color: '#B8844A', border: '1px solid rgba(184,132,74,0.5)' }}>Pending Vote</span>}
                     </div>
                     <div className="text-xs text-[#9A8A78]">
                       {doc.sponsors.map((s, i) => (
@@ -1293,8 +1293,8 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                       ))}
                     </div>
                     {isPresenting && doc.readingMinutes && doc.readingMinutes > 0 && (
-                      <div className="text-xs text-purple-300 mt-1">
-                        📖 {doc.readingMinutes}m reading · 🎤 {doc.presentationMinutes ?? 0}m presentation{doc.qaMinutes ? ` · ❓ ${doc.qaMinutes}m Q&A` : ''}
+                      <div className="text-xs mt-1" style={{ color: '#9A8A78' }}>
+                        {doc.readingMinutes}m reading · {doc.presentationMinutes ?? 0}m presentation{doc.qaMinutes ? ` · ${doc.qaMinutes}m Q&A` : ''}
                       </div>
                     )}
                     {doc.fileUrl && doc.fileName && (
