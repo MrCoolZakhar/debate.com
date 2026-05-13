@@ -589,6 +589,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   const [committee, setCommittee] = useState<Committee | null>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<DelegateTab>('session');
+  const [docsSection, setDocsSection] = useState<'submit' | 'view'>('submit');
   const [sessionSuspended, setSessionSuspended] = useState(false);
   const [sessionEnded, setSessionEnded] = useState(false);
   const [endedTab, setEndedTab] = useState<'ended' | 'session'>('ended');
@@ -1220,7 +1221,6 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
         {tab === 'documents' && (
           <div>
             {(() => {
-              const [docsSection, setDocsSection] = React.useState<'submit' | 'view'>('submit');
               const drs = (committee.documents ?? []).filter(
                 (d) => d.type === 'draft-resolution' && ['introduced', 'on-floor', 'passed', 'failed'].includes(d.status)
               );
