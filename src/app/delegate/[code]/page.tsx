@@ -1046,9 +1046,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                   <div className="text-2xl font-black mb-1" style={{ color: isCurrentSpeaker ? '#1B3828' : isAdjourned ? '#8B2020' : '#1C1410' }}>
                     {isCurrentSpeaker ? 'YOU HAVE THE FLOOR' : phaseDisplay}
                   </div>
-                  {!isCurrentSpeaker && !isOnSpeakersList && committee.phase === 'speakers-list' && (
-                    <p className="text-sm font-semibold mt-1" style={{ color: '#9A8A78' }}>Not on the speakers list</p>
-                  )}
+                  {/* queue position text removed */}
 
                   {!isCurrentSpeaker && committee.currentSpeaker && committee.phase === 'speakers-list' && (
                     <div className="mt-3">
@@ -1057,9 +1055,9 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                         <FlagImg code={getCountryByName(committee.currentSpeaker.country)?.code ?? ''} size={24} />
                         <span className="font-bold text-[#1C1410]">{committee.currentSpeaker.country}</span>
                       </div>
-                      {isOnSpeakersList && (
-                        <p className="text-sm font-black mt-2" style={{ color: '#1B3828' }}>
-                          {myQueueIndex === 0 ? "You're up next!" : `${myQueueIndex} speaker${myQueueIndex !== 1 ? 's' : ''} ahead of you`}
+                      {isOnSpeakersList && myQueueIndex === 0 && (
+                        <p className="text-sm font-black mt-2" style={{ color: '#B8844A' }}>
+                          You're up next!
                         </p>
                       )}
                     </div>
