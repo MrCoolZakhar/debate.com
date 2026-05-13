@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useEffect, useState, useRef, useCallback, Suspense } from 'react';
+import React, { use, useEffect, useState, useRef, useCallback, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Committee, CommitteeDocument, DocumentType, PendingMotionType, SpeakingLogEntry, DelegateStatus } from '@/lib/types';
@@ -578,7 +578,7 @@ function StatisticsTab({ committee, country }: { committee: Committee; country: 
 }
 
 // ── Main Delegate Session ─────────────────────────────────────────────────────
-type DelegateTab = 'session' | 'motions' | 'resolutions' | 'documents' | 'stats';
+type DelegateTab = 'session' | 'documents' | 'chat' | 'stats';
 
 function DelegateSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const { code } = use(params);
@@ -593,7 +593,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   const [sessionEnded, setSessionEnded] = useState(false);
   const [endedTab, setEndedTab] = useState<'ended' | 'session'>('ended');
   const [hoursRemaining, setHoursRemaining] = useState<number | null>(null);
-  const [showChat, setShowChat] = useState(false);
+  const [showChat, setShowChat] = useState(false); // kept for chatReadCounts compat only
   const [chatReadCounts, setChatReadCounts] = useState<Record<string, number>>({});
 
   const committeeIdRef = useRef('');
@@ -791,10 +791,10 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
 
   // Section 7 — shortened tab labels
   const tabs: { key: DelegateTab; label: string }[] = [
-    { key: 'session',     label: 'Session' },
-    { key: 'resolutions', label: 'DRs' },
-    { key: 'documents',   label: 'Docs' },
-    { key: 'stats',       label: 'Stats' },
+    { key: 'session',   label: 'Session' },
+    { key: 'documents', label: 'Documents' },
+    { key: 'chat',      label: 'Chat' },
+    { key: 'stats',     label: 'Stats' },
   ];
 
   // ── Absent banner (blocks active interaction)
@@ -838,50 +838,54 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
 
   return (
     <div className="h-screen flex flex-col overflow-hidden" style={{ backgroundColor: '#EDE7D8' }}>
+      <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
       {/* Header */}
-      <header className="border-b border-[#DDD4C0] px-4 h-14 flex items-center gap-3 shrink-0" style={{ backgroundColor: '#FAF8F3' }}>
-        <Link href="/" className="flex items-center gap-2">
-          <img src="/GavellingLogo.png" alt="Gavelling" className="w-[16vw] h-auto max-h-9 object-contain" onError={(e)=>{(e.target as HTMLImageElement).style.display="none"}} />
+      <header className="border-b border-[#DDD4C0] bg-[#FAF8F3] px-4 h-11 flex items-center gap-2 relative z-[2] shrink-0">
+        <Link href="/">
+          <img src="/GavellingLogo.png" alt="Gavelling" className="w-[14vw] h-auto max-h-8 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
         </Link>
-        <div className="flex-1 min-w-0">
-          <div className="font-black text-sm truncate" style={{ color: '#1B3828' }}>{committee.name}</div>
-          <div className="text-xs truncate" style={{ color: '#9A8A78' }}>{committee.topic}</div>
-        </div>
-        <div className="flex items-center gap-3 shrink-0">
-          <div className="text-right">
-            <div className="text-sm font-black flex items-center gap-1.5 justify-end" style={{ color: '#1C1410' }}>
-              {(() => { const c = getCountryByName(country); return c ? <img src={getFlagUrl(c.code)} alt={country} style={{ width: '22px', height: '16px', objectFit: 'cover', borderRadius: '4px', border: '1px solid rgba(28,20,16,0.10)' }} /> : null; })()}
-              {country}
-              <span className="ml-1 text-xs font-mono px-1.5 py-0.5 rounded" style={{ color: '#1B3828', backgroundColor: '#DDD4C0' }}>{committee.code}</span>
-            </div>
-            <div className="text-xs font-medium" style={{ color: isAdjourned ? '#8B2020' : committee.phase === 'voting' ? '#B8844A' : '#9A8A78' }}>{phaseDisplay}</div>
-          </div>
-          {!sessionEnded && (
-          <button
-            onClick={() => {
-              const newShow = !showChat;
-              setShowChat(newShow);
-              if (newShow) {
-                setChatReadCounts((prev) => ({
-                  ...prev,
-                  everyone: committee.messages.filter((m) => !m.content.startsWith('__log__:') && !m.isPrivate && m.sender !== country).length,
-                }));
-              }
-            }}
-            className={`relative text-xs px-3 py-1.5 rounded-lg transition-colors font-semibold shrink-0 ${showChat ? 'bg-[#1B3828] text-white' : 'bg-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-            {!showChat && (() => {
+        <div className="flex flex-1 min-w-0 h-full items-center">
+          {(['session', 'documents', 'chat', 'stats'] as DelegateTab[]).map((t, i) => {
+            const labels: Record<DelegateTab, string> = { session: 'Session', documents: 'Documents', chat: 'Chat', stats: 'Stats' };
+            const isActive = tab === t;
+            const chatUnread = (() => {
+              if (t !== 'chat') return 0;
               const total = committee.messages.filter((m) => m.sender !== country && !m.content.startsWith('__log__:') && !m.isPrivate).length;
-              const unread = total - (chatReadCounts['everyone'] ?? 0);
-              return unread > 0 ? (
-                <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#B6871F] rounded-full text-[#1C1410] text-[9px] flex items-center justify-center font-bold">
-                  {Math.min(unread, 99)}
-                </span>
-              ) : null;
-            })()}
+              return Math.max(0, total - (chatReadCounts['everyone'] ?? 0));
+            })();
+            return (
+              <div key={t} className="flex items-center h-full">
+                {i > 0 && <div style={{ width: '1px', height: '28px', backgroundColor: 'rgba(28,20,16,0.2)', margin: '0 2px', flexShrink: 0 }} />}
+                <button
+                  onClick={() => {
+                    setTab(t);
+                    if (t === 'chat') {
+                      setChatReadCounts((prev) => ({
+                        ...prev,
+                        everyone: committee.messages.filter((m) => !m.content.startsWith('__log__:') && !m.isPrivate && m.sender !== country).length,
+                      }));
+                    }
+                  }}
+                  className="flex-1 text-[18px] font-bold px-3 relative h-full transition-all duration-200"
+                  style={{ color: isActive ? '#1B3828' : '#1C1410', backgroundColor: isActive ? 'rgba(27,56,40,0.07)' : 'transparent', fontWeight: isActive ? 900 : 700 }}
+                  onMouseEnter={(e) => { if (!isActive) { const el = e.currentTarget as HTMLElement; el.style.color = '#1B3828'; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; el.style.transform = 'translateY(-1px)'; } }}
+                  onMouseLeave={(e) => { if (!isActive) { const el = e.currentTarget as HTMLElement; el.style.color = '#1C1410'; el.style.backgroundColor = 'transparent'; el.style.transform = 'translateY(0)'; } }}>
+                  {labels[t]}
+                  {chatUnread > 0 && tab !== 'chat' && (
+                    <span className="absolute top-1 right-1 w-4 h-4 bg-[#1B3828] rounded-full text-white text-[10px] flex items-center justify-center">{chatUnread}</span>
+                  )}
+                  <span style={{ position: 'absolute', bottom: '4px', left: '12px', right: '12px', height: '2px', backgroundColor: '#B6871F', transform: isActive ? 'scaleX(1)' : 'scaleX(0)', transformOrigin: 'left', transition: 'transform 200ms ease', borderRadius: '2px' }} />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {(() => { const c = getCountryByName(country); return c ? <img src={getFlagUrl(c.code)} alt={country} style={{ width: '22px', height: '16px', objectFit: 'cover', borderRadius: '4px', border: '1px solid rgba(28,20,16,0.10)' }} /> : null; })()}
+          <button onClick={() => { navigator.clipboard.writeText(committee.code); }}
+            className="text-xs font-mono bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#1C1410] px-2.5 py-1 rounded-lg transition-colors shrink-0 focus:outline-none">
+            {committee.code}
           </button>
-          )}
         </div>
       </header>
 
@@ -918,41 +922,18 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
           Session has ended — view only
         </div>
       )}
-      {/* Tab nav — Section 7: shorter labels, text-sm */}
-      <div className="flex shrink-0" style={{ borderBottom: '1px solid #DDD4C0', backgroundColor: '#FAF8F3' }}>
-        {tabs.map((t) => (
-          <button key={t.key} onClick={() => setTab(t.key)}
-            className="flex-1 py-2.5 text-xs font-black transition-colors focus:outline-none"
-            style={{
-              color: tab === t.key ? '#1B3828' : '#9A8A78',
-              borderBottom: tab === t.key ? '2px solid #1B3828' : '2px solid transparent',
-              marginBottom: '-1px',
-              fontFamily: "'Outfit', sans-serif",
-              letterSpacing: '0.04em',
-            }}>
-            {t.label.toUpperCase()}
-          </button>
-        ))}
-      </div>
-
-      <div className="flex-1 flex overflow-hidden">
-      {showChat && !sessionEnded && (
-        <ChatPanel
-          committee={committee}
-          senderName={country}
-          isChair={false}
-          onClose={() => setShowChat(false)}
-          initialReadCounts={chatReadCounts}
-          onReadCountsChange={setChatReadCounts}
-          readOnly={sessionEnded}
-          speakerCard={null}
-        />
-      )}
-      {!showChat && <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 flex overflow-hidden relative z-[2]">
+      {tab !== 'chat' && <div className="flex-1 overflow-y-auto">
 
         {/* ── Session tab ── */}
         {tab === 'session' && (
           <div>
+            {/* Committee info strip */}
+            <div className="px-4 pt-4 pb-3 border-b border-[#DDD4C0]" style={{ backgroundColor: '#FAF8F3' }}>
+              <p className="text-xs font-mono font-bold uppercase tracking-widest mb-0.5" style={{ color: '#9A8A78' }}>Committee</p>
+              <p className="font-black text-base" style={{ color: '#1B3828' }}>{committee.name}</p>
+              {committee.topic && <p className="text-xs mt-0.5" style={{ color: '#9A8A78' }}>{committee.topic}</p>}
+            </div>
             {isAbsent && !sessionEnded && <AbsentBanner />}
 
             {/* Moderated caucus special view */}
@@ -1231,93 +1212,98 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
           </div>
         )}
 
-        {/* ── Motions tab — COMING SOON ── */}
-        {tab === 'motions' && (
-          <div className="relative flex-1 min-h-[60vh]">
-            {/* Grayed-out ghost content */}
-            <div className="p-4 space-y-3 opacity-20 pointer-events-none select-none">
-              <div className="h-8 bg-[#DDD4C0] rounded-lg w-48" />
-              {[1,2,3].map(i => (
-                <div key={i} className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl p-4 space-y-2">
-                  <div className="h-4 bg-[#DDD4C0] rounded w-32" />
-                  <div className="h-3 bg-[#DDD4C0] rounded w-24" />
-                  <div className="h-3 bg-[#DDD4C0] rounded w-40" />
-                </div>
-              ))}
-            </div>
-            {/* Overlay */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#F6F1E9]/60 backdrop-blur-sm">
-              <div className="mb-6"><Emoji size="3rem">🚧</Emoji></div>
-              <div className="text-3xl md:text-4xl font-black text-[#1C1410] tracking-tight text-center px-6">
-                FEATURE IS COMING
-              </div>
-              <p className="text-[#9A8A78] text-sm mt-3 text-center px-6">
-                Delegate motion requests will be live in the next update.
-              </p>
-            </div>
-          </div>
-        )}
+        {/* Motions tab removed */}
 
-        {/* ── Resolutions tab — Section 4: filter to on-floor+ only ── */}
-        {tab === 'resolutions' && (
-          <div className="p-4 max-w-2xl mx-auto space-y-3">
-            <h2 className="text-lg font-bold text-[#1C1410]">Draft Resolutions</h2>
-            {(() => {
-              const drs = (committee.documents ?? []).filter(
-                (d) => d.type === 'draft-resolution' &&
-                  ['introduced', 'on-floor', 'passed', 'failed'].includes(d.status)
-              );
-              if (drs.length === 0) return <div className="text-center py-8 font-semibold" style={{ color: '#9A8A78' }}>No draft resolutions on the floor yet</div>;
-              return drs.map((doc) => {
-                const isPresenting = doc.status === 'introduced';
-                const isPassed = doc.status === 'passed';
-                const isFailed = doc.status === 'failed';
-                const isPendingVote = doc.status === 'on-floor';
-                return (
-                  <div key={doc.id} className={`bg-[#EDE7D8] border rounded-xl p-4 space-y-2 ${isPassed ? 'border-emerald-800/40' : isFailed ? 'border-red-800/40' : isPresenting ? 'border-purple-800/40' : 'border-[#DDD4C0]'}`}>
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <span className="text-xs font-mono font-bold text-[#1B3828] mr-2">{doc.docCode}</span>
-                        <span className="font-semibold text-[#1C1410] text-sm">{doc.title}</span>
-                      </div>
-                      {isPassed && <span className="shrink-0 text-xs font-black px-2 py-0.5 rounded-full" style={{ backgroundColor: '#1B3828', color: '#EED98A' }}>Passed</span>}
-                      {isFailed && <span className="shrink-0 text-xs font-black px-2 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(139,32,32,0.2)', color: '#8B2020', border: '1px solid rgba(139,32,32,0.3)' }}>Failed</span>}
-                      {isPresenting && <span className="shrink-0 text-xs font-black px-2 py-0.5 rounded-full animate-pulse" style={{ backgroundColor: 'transparent', color: '#B8844A', border: '1px solid #B8844A' }}>Now Presenting</span>}
-                      {isPendingVote && <span className="shrink-0 text-xs font-black px-2 py-0.5 rounded-full" style={{ backgroundColor: 'transparent', color: '#B8844A', border: '1px solid rgba(184,132,74,0.5)' }}>Pending Vote</span>}
-                    </div>
-                    <div className="text-xs text-[#9A8A78]">
-                      {doc.sponsors.map((s, i) => (
-                        <span key={s} className={i === 0 ? 'text-[#6A5A4A] font-medium' : ''}>
-                          {i > 0 ? ', ' : ''}{flagFor(s)} {s}
-                        </span>
-                      ))}
-                    </div>
-                    {isPresenting && doc.readingMinutes && doc.readingMinutes > 0 && (
-                      <div className="text-xs mt-1" style={{ color: '#9A8A78' }}>
-                        {doc.readingMinutes}m reading · {doc.presentationMinutes ?? 0}m presentation{doc.qaMinutes ? ` · ${doc.qaMinutes}m Q&A` : ''}
-                      </div>
-                    )}
-                    {doc.fileUrl && doc.fileName && (
-                      <InlinePdfViewer fileUrl={doc.fileUrl} fileName={doc.fileName} />
-                    )}
-                  </div>
-                );
-              });
-            })()}
-          </div>
-        )}
+        {/* Resolutions tab removed — merged into Documents tab */}
 
-        {/* ── Documents tab ── */}
+        {/* ── Documents tab (merged Submit + View DRs) ── */}
         {tab === 'documents' && (
           <div>
-            {isAbsent && !sessionEnded && <AbsentBanner />}
-            {!sessionEnded ? (
-              <div className={isAbsent ? 'opacity-60 pointer-events-none select-none' : ''}>
-                <DelegateDocumentsTab committee={committee} country={country} />
-              </div>
-            ) : (
-              <div className="p-8 text-center text-[#9A8A78]">Document submission is closed — session has ended.</div>
-            )}
+            {(() => {
+              const [docsSection, setDocsSection] = React.useState<'submit' | 'view'>('submit');
+              const drs = (committee.documents ?? []).filter(
+                (d) => d.type === 'draft-resolution' && ['introduced', 'on-floor', 'passed', 'failed'].includes(d.status)
+              );
+              return (
+                <>
+                  {/* Toggle buttons */}
+                  <div className="flex gap-3 px-4 pt-4 pb-3 border-b border-[#DDD4C0]" style={{ backgroundColor: '#FAF8F3' }}>
+                    <button
+                      onClick={() => setDocsSection('submit')}
+                      className="flex-1 py-2.5 rounded-xl font-black text-sm transition-colors focus:outline-none"
+                      style={{ backgroundColor: docsSection === 'submit' ? '#1B3828' : 'transparent', color: docsSection === 'submit' ? '#EED98A' : '#6A5A4A', border: docsSection === 'submit' ? 'none' : '1px solid #DDD4C0', letterSpacing: '0.04em' }}>
+                      SUBMIT DOCUMENT
+                    </button>
+                    <button
+                      onClick={() => setDocsSection('view')}
+                      className="flex-1 py-2.5 rounded-xl font-black text-sm transition-colors focus:outline-none"
+                      style={{ backgroundColor: docsSection === 'view' ? '#1B3828' : 'transparent', color: docsSection === 'view' ? '#EED98A' : '#6A5A4A', border: docsSection === 'view' ? 'none' : '1px solid #DDD4C0', letterSpacing: '0.04em' }}>
+                      VIEW DOCUMENTS
+                    </button>
+                  </div>
+
+                  {/* Submit section */}
+                  {docsSection === 'submit' && (
+                    <>
+                      {isAbsent && !sessionEnded && <AbsentBanner />}
+                      {!sessionEnded ? (
+                        <div className={isAbsent ? 'opacity-60 pointer-events-none select-none' : ''}>
+                          <DelegateDocumentsTab committee={committee} country={country} />
+                        </div>
+                      ) : (
+                        <div className="p-8 text-center font-semibold" style={{ color: '#9A8A78' }}>Document submission is closed — session has ended.</div>
+                      )}
+                    </>
+                  )}
+
+                  {/* View DRs section */}
+                  {docsSection === 'view' && (
+                    <div className="p-4 max-w-2xl mx-auto space-y-3">
+                      <h2 className="text-lg font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>DRAFT RESOLUTIONS</h2>
+                      {drs.length === 0 ? (
+                        <div className="text-center py-8 font-semibold" style={{ color: '#9A8A78' }}>No draft resolutions on the floor yet</div>
+                      ) : (
+                        drs.map((doc) => {
+                          const isPresenting = doc.status === 'introduced';
+                          const isPassed = doc.status === 'passed';
+                          const isFailed = doc.status === 'failed';
+                          const isPendingVote = doc.status === 'on-floor';
+                          return (
+                            <div key={doc.id} className="rounded-xl p-4 space-y-2" style={{ backgroundColor: '#FAF8F3', border: `1.5px solid ${isPassed ? '#1B3828' : isFailed ? 'rgba(139,32,32,0.4)' : '#DDD4C0'}` }}>
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <span className="text-xs font-mono font-bold mr-2" style={{ color: '#1B3828' }}>{doc.docCode}</span>
+                                  <span className="font-semibold text-sm" style={{ color: '#1C1410' }}>{doc.title}</span>
+                                </div>
+                                {isPassed && <span className="shrink-0 text-xs font-black px-2 py-0.5 rounded-full" style={{ backgroundColor: '#1B3828', color: '#EED98A' }}>Passed</span>}
+                                {isFailed && <span className="shrink-0 text-xs font-black px-2 py-0.5 rounded-full" style={{ color: '#8B2020', border: '1px solid rgba(139,32,32,0.3)' }}>Failed</span>}
+                                {isPresenting && <span className="shrink-0 text-xs font-black px-2 py-0.5 rounded-full animate-pulse" style={{ color: '#B8844A', border: '1px solid #B8844A' }}>Now Presenting</span>}
+                                {isPendingVote && <span className="shrink-0 text-xs font-black px-2 py-0.5 rounded-full" style={{ color: '#B8844A', border: '1px solid rgba(184,132,74,0.5)' }}>Pending Vote</span>}
+                              </div>
+                              <div className="text-xs" style={{ color: '#9A8A78' }}>
+                                {doc.sponsors.map((s, i) => (
+                                  <span key={s} style={{ color: i === 0 ? '#6A5A4A' : '#9A8A78', fontWeight: i === 0 ? 600 : 400 }}>
+                                    {i > 0 ? ', ' : ''}{flagFor(s)} {s}
+                                  </span>
+                                ))}
+                              </div>
+                              {isPresenting && doc.readingMinutes && doc.readingMinutes > 0 && (
+                                <div className="text-xs" style={{ color: '#9A8A78' }}>
+                                  {doc.readingMinutes}m reading · {doc.presentationMinutes ?? 0}m presentation{doc.qaMinutes ? ` · ${doc.qaMinutes}m Q&A` : ''}
+                                </div>
+                              )}
+                              {doc.fileUrl && doc.fileName && (
+                                <InlinePdfViewer fileUrl={doc.fileUrl} fileName={doc.fileName} />
+                              )}
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
         )}
 
@@ -1326,6 +1312,21 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
           <StatisticsTab committee={committee} country={country} />
         )}
       </div>}
+      {/* ── Chat tab ── */}
+      {tab === 'chat' && (
+        <div className="flex-1 flex overflow-hidden" style={{ height: '100%' }}>
+          <ChatPanel
+            committee={committee}
+            senderName={country}
+            isChair={false}
+            onClose={() => setTab('session')}
+            initialReadCounts={chatReadCounts}
+            onReadCountsChange={setChatReadCounts}
+            readOnly={sessionEnded}
+            speakerCard={null}
+          />
+        </div>
+      )}
       </div>
       </>
       )}
