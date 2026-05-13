@@ -882,7 +882,6 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
           })}
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {(() => { const c = getCountryByName(country); return c ? <img src={getFlagUrl(c.code)} alt={country} style={{ width: '22px', height: '16px', objectFit: 'cover', borderRadius: '4px', border: '1px solid rgba(28,20,16,0.10)' }} /> : null; })()}
           <button onClick={() => { navigator.clipboard.writeText(committee.code); }}
             className="text-xs font-mono bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#1C1410] px-2.5 py-1 rounded-lg transition-colors shrink-0 focus:outline-none">
             {committee.code}
@@ -1015,7 +1014,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
               {/* Flag — larger, rectangular, with country name below */}
               <div className="flex flex-col items-center gap-2 py-2">
                 {(() => { const c = getCountryByName(country); return c ? <img src={getFlagUrl(c.code)} alt={country} style={{ width: '120px', height: '86px', objectFit: 'cover', borderRadius: '10px', border: '1.5px solid rgba(28,20,16,0.12)', boxShadow: '0 4px 16px rgba(27,56,40,0.12)' }} /> : null; })()}
-                <p className="font-black text-lg" style={{ color: '#1C1410' }}>{country}</p>
+                <p className="font-black text-3xl" style={{ color: '#1C1410' }}>{country}</p>
               </div>
 
               {/* Section 5: Voting card */}
@@ -1047,12 +1046,6 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                   <div className="text-2xl font-black mb-1" style={{ color: isCurrentSpeaker ? '#1B3828' : isAdjourned ? '#8B2020' : '#1C1410' }}>
                     {isCurrentSpeaker ? 'YOU HAVE THE FLOOR' : phaseDisplay}
                   </div>
-                  {/* Queue position info — replaces the removed floor card */}
-                  {!isCurrentSpeaker && isOnSpeakersList && (
-                    <p className="text-sm font-semibold mt-1" style={{ color: myQueueIndex === 0 ? '#B8844A' : '#1B3828' }}>
-                      {myQueueIndex === 0 ? "You're up next!" : `${myQueueIndex} speaker${myQueueIndex !== 1 ? 's' : ''} ahead of you`}
-                    </p>
-                  )}
                   {!isCurrentSpeaker && !isOnSpeakersList && committee.phase === 'speakers-list' && (
                     <p className="text-sm font-semibold mt-1" style={{ color: '#9A8A78' }}>Not on the speakers list</p>
                   )}
@@ -1061,10 +1054,14 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                     <div className="mt-3">
                       <div className="text-xs text-[#9A8A78] mb-1">NOW SPEAKING</div>
                       <div className="flex items-center gap-2">
-                        {/* Section 1: FlagImg replaces text-2xl */}
                         <FlagImg code={getCountryByName(committee.currentSpeaker.country)?.code ?? ''} size={24} />
                         <span className="font-bold text-[#1C1410]">{committee.currentSpeaker.country}</span>
                       </div>
+                      {isOnSpeakersList && (
+                        <p className="text-sm font-black mt-2" style={{ color: '#1B3828' }}>
+                          {myQueueIndex === 0 ? "You're up next!" : `${myQueueIndex} speaker${myQueueIndex !== 1 ? 's' : ''} ahead of you`}
+                        </p>
+                      )}
                     </div>
                   )}
 
@@ -1167,9 +1164,9 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                         disabled={myDelegate?.status === 'present' || changesLeft <= 0}
                         className="flex-1 py-2 rounded-xl text-xs font-bold transition-colors focus:outline-none"
                         style={{
-                          backgroundColor: myDelegate?.status === 'present' ? '#3D7A52' : 'transparent',
-                          border: `1px solid ${myDelegate?.status === 'present' ? '#3D7A52' : '#DDD4C0'}`,
-                          color: myDelegate?.status === 'present' ? 'white' : changesLeft <= 0 ? '#9A8A78' : '#6A5A4A',
+                          backgroundColor: myDelegate?.status === 'present' ? '#1B3828' : 'transparent',
+                          border: `1px solid ${myDelegate?.status === 'present' ? '#1B3828' : '#DDD4C0'}`,
+                          color: myDelegate?.status === 'present' ? '#EDE7D8' : changesLeft <= 0 ? '#9A8A78' : '#6A5A4A',
                           cursor: changesLeft <= 0 && myDelegate?.status !== 'present' ? 'not-allowed' : 'pointer',
                         }}
                       >
@@ -1182,7 +1179,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                         style={{
                           backgroundColor: myDelegate?.status === 'present-voting' ? '#1B3828' : 'transparent',
                           border: `1px solid ${myDelegate?.status === 'present-voting' ? '#1B3828' : '#DDD4C0'}`,
-                          color: myDelegate?.status === 'present-voting' ? '#EED98A' : changesLeft <= 0 ? '#9A8A78' : '#6A5A4A',
+                          color: myDelegate?.status === 'present-voting' ? '#EDE7D8' : changesLeft <= 0 ? '#9A8A78' : '#6A5A4A',
                           cursor: changesLeft <= 0 && myDelegate?.status !== 'present-voting' ? 'not-allowed' : 'pointer',
                         }}
                       >
