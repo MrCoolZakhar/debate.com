@@ -845,7 +845,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
         <Link href="/">
           <img src="/GavellingLogo.png" alt="Gavelling" className="w-[14vw] h-auto max-h-8 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
         </Link>
-        <div className="flex flex-1 min-w-0 h-full items-center">
+        <div className="flex flex-1 min-w-0 h-full">
           {(['session', 'documents', 'chat', 'stats'] as DelegateTab[]).map((t, i) => {
             const labels: Record<DelegateTab, string> = { session: 'Session', documents: 'Documents', chat: 'Chat', stats: 'Stats' };
             const isActive = tab === t;
@@ -855,8 +855,8 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
               return Math.max(0, total - (chatReadCounts['everyone'] ?? 0));
             })();
             return (
-              <div key={t} className="flex items-center h-full">
-                {i > 0 && <div style={{ width: '1px', height: '28px', backgroundColor: 'rgba(28,20,16,0.2)', margin: '0 2px', flexShrink: 0 }} />}
+              <React.Fragment key={t}>
+                {i > 0 && <div style={{ width: '1px', height: '28px', alignSelf: 'center', backgroundColor: 'rgba(28,20,16,0.2)', flexShrink: 0 }} />}
                 <button
                   onClick={() => {
                     setTab(t);
@@ -877,7 +877,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                   )}
                   <span style={{ position: 'absolute', bottom: '4px', left: '12px', right: '12px', height: '2px', backgroundColor: '#B6871F', transform: isActive ? 'scaleX(1)' : 'scaleX(0)', transformOrigin: 'left', transition: 'transform 200ms ease', borderRadius: '2px' }} />
                 </button>
-              </div>
+              </React.Fragment>
             );
           })}
         </div>
@@ -930,7 +930,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
         {tab === 'session' && (
           <div>
             {/* Committee info strip */}
-            <div className="px-4 pt-4 pb-3 border-b border-[#DDD4C0]" style={{ backgroundColor: '#FAF8F3' }}>
+            <div className="px-4 pt-4 pb-2 text-center">
               <p className="text-xs font-mono font-bold uppercase tracking-widest mb-0.5" style={{ color: '#9A8A78' }}>Committee</p>
               <p className="font-black text-base" style={{ color: '#1B3828' }}>{committee.name}</p>
               {committee.topic && <p className="text-xs mt-0.5" style={{ color: '#9A8A78' }}>{committee.topic}</p>}
@@ -1012,26 +1012,10 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
             {/* Section 3: exclude both moderated and unmoderated caucus phases */}
             {committee.phase !== 'moderated-caucus' && committee.phase !== 'unmoderated-caucus' && (
             <div className={`p-4 space-y-4 max-w-2xl mx-auto ${isAbsent ? 'opacity-60 pointer-events-none select-none' : ''}`}>
-              {(() => {
-                const floorStyle = isCurrentSpeaker
-                  ? { bg: '#1B3828', border: '#3D7A52', text: '#EED98A', msg: 'YOU HAVE THE FLOOR' }
-                  : !isOnSpeakersList
-                  ? { bg: '#DDD4C0', border: '#C8BAA8', text: '#9A8A78', msg: 'Not on any speaker list' }
-                  : myQueueIndex === 0
-                  ? { bg: '#FAF8F3', border: '#B8844A', text: '#B8844A', msg: "YOU'RE UP NEXT!" }
-                  : myQueueIndex <= 5
-                  ? { bg: '#FAF8F3', border: '#DDD4C0', text: '#B8844A', msg: `${myQueueIndex} speaker${myQueueIndex !== 1 ? 's' : ''} ahead of you` }
-                  : { bg: '#FAF8F3', border: '#DDD4C0', text: '#1B3828', msg: `${myQueueIndex} speakers until your speech` };
-                return (
-                  <div className="rounded-xl p-4 text-center" style={{ backgroundColor: floorStyle.bg, border: `1.5px solid ${floorStyle.border}` }}>
-                    <div className="font-black text-base tracking-wide" style={{ color: floorStyle.text, fontFamily: "'Outfit', sans-serif" }}>{floorStyle.msg}</div>
-                  </div>
-                );
-              })()}
-
-              {/* Section 1: FlagImg replaces text-8xl emoji in main session */}
-              <div className="flex justify-center">
-                <FlagImg code={getCountryByName(country)?.code ?? ''} size={88} className="rounded-full shadow-lg" />
+              {/* Flag — larger, rectangular, with country name below */}
+              <div className="flex flex-col items-center gap-2 py-2">
+                {(() => { const c = getCountryByName(country); return c ? <img src={getFlagUrl(c.code)} alt={country} style={{ width: '120px', height: '86px', objectFit: 'cover', borderRadius: '10px', border: '1.5px solid rgba(28,20,16,0.12)', boxShadow: '0 4px 16px rgba(27,56,40,0.12)' }} /> : null; })()}
+                <p className="font-black text-lg" style={{ color: '#1C1410' }}>{country}</p>
               </div>
 
               {/* Section 5: Voting card */}
@@ -1056,16 +1040,22 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                 );
               })()}
 
-              {/* Status card — Section 2: removed flag-with-ring from inside */}
-              <div className={`rounded-xl p-5 border ${
-                isCurrentSpeaker ? 'bg-[#1B3828]/20 border-[#1B3828]/50' :
-                'bg-[#EDE7D8] border-[#DDD4C0]'
-              }`}>
+              {/* Status card */}
+              <div className="rounded-xl p-5 border bg-[#EDE7D8] border-[#DDD4C0]">
                 <div className="flex-1 min-w-0">
                   <div className="text-xs font-mono text-[#9A8A78] mb-2">SESSION STATUS</div>
-                  <div className="text-2xl font-black mb-1" style={{ color: isCurrentSpeaker ? '#B8844A' : isAdjourned ? '#8B2020' : '#1C1410' }}>
+                  <div className="text-2xl font-black mb-1" style={{ color: isCurrentSpeaker ? '#1B3828' : isAdjourned ? '#8B2020' : '#1C1410' }}>
                     {isCurrentSpeaker ? 'YOU HAVE THE FLOOR' : phaseDisplay}
                   </div>
+                  {/* Queue position info — replaces the removed floor card */}
+                  {!isCurrentSpeaker && isOnSpeakersList && (
+                    <p className="text-sm font-semibold mt-1" style={{ color: myQueueIndex === 0 ? '#B8844A' : '#1B3828' }}>
+                      {myQueueIndex === 0 ? "You're up next!" : `${myQueueIndex} speaker${myQueueIndex !== 1 ? 's' : ''} ahead of you`}
+                    </p>
+                  )}
+                  {!isCurrentSpeaker && !isOnSpeakersList && committee.phase === 'speakers-list' && (
+                    <p className="text-sm font-semibold mt-1" style={{ color: '#9A8A78' }}>Not on the speakers list</p>
+                  )}
 
                   {!isCurrentSpeaker && committee.currentSpeaker && committee.phase === 'speakers-list' && (
                     <div className="mt-3">
@@ -1130,7 +1120,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                       )
                     )}
                     {isOnSpeakersList && (
-                      <span className="text-xs text-green-400 font-medium">
+                      <span className="text-xs font-bold" style={{ color: '#1B3828' }}>
                         {myQueueIndex === 0 ? '✓ Up next' : `✓ After ${myQueueIndex} speaker${myQueueIndex !== 1 ? 's' : ''}`}
                       </span>
                     )}
@@ -1144,7 +1134,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                           <span className="text-[#9A8A78] text-xs w-4 font-mono shrink-0">{i + 1}</span>
                           {/* Section 1: FlagImg replaces text-lg */}
                           <FlagImg code={getCountryByName(s.country)?.code ?? ''} size={20} className="shrink-0" />
-                          <span className={s.country === country ? 'text-[#B6871F] font-bold' : 'text-[#6A5A4A]'}>
+                          <span className="font-semibold" style={{ color: s.country === country ? '#1B3828' : '#1C1410', fontWeight: s.country === country ? 700 : 600 }}>
                             {s.country}{s.country === country && ' (You)'}
                           </span>
                         </div>
@@ -1161,11 +1151,8 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                   {/* Section 1: FlagImg replaces text-3xl */}
                   <FlagImg code={getCountryByName(country)?.code ?? ''} size={36} />
                   <div>
-                    <div className="font-bold text-[#1C1410]">{country}</div>
-                    <div className={`text-xs font-medium mt-0.5 ${
-                      myDelegate?.status === 'present' ? 'text-green-400' :
-                      myDelegate?.status === 'present-voting' ? 'text-[#B6871F]' : 'text-red-400'
-                    }`}>
+                    <div className="font-black text-base" style={{ color: '#1C1410' }}>{country}</div>
+                    <div className="text-xs font-semibold mt-0.5" style={{ color: myDelegate?.status === 'absent' ? '#8B2020' : '#1B3828' }}>
                       {myDelegate?.status === 'present' ? 'Present' :
                        myDelegate?.status === 'present-voting' ? 'Present & Voting' : 'Absent'}
                     </div>
