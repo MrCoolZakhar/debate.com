@@ -58,7 +58,7 @@ function ExpandedDelegateCard({
     : <Emoji size="4.5rem">🌐</Emoji>;
 
   const handleNudge = (emoji: string) => {
-    sendMessageDB(committee.id, 'Faculty Advisor', `${emoji} to ${delegate.country}`, false);
+    sendMessageDB(committee.id, 'Faculty Advisor', emoji, true, delegate.country);
     setNudgeSent(emoji);
     setTimeout(() => setNudgeSent(null), 1500);
   };
@@ -231,6 +231,20 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
           <p className="text-[#1C1410] text-xl font-bold mb-4">Committee not found</p>
           <Link href="/join" className="bg-[#1B3828] text-white px-6 py-3 rounded-xl font-semibold">Join page</Link>
         </div>
+      </div>
+    );
+  }
+
+  const isAdjourned = committee.phase === 'adjourned' && !!committee.suspendedAt && !committee.endedAt;
+
+  if (isAdjourned) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center text-center px-8" style={{ backgroundColor: '#EDE7D8' }}>
+        <div className="pointer-events-none fixed inset-0 z-0" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
+        <p className="text-xs font-mono font-bold tracking-widest mb-2 relative z-10" style={{ color: '#1B3828' }}>{committee.name} · {committee.code}</p>
+        <h1 className="text-5xl font-black mb-4 tracking-wide relative z-10" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>SESSION ADJOURNED</h1>
+        <p className="text-lg relative z-10" style={{ color: '#6A5A4A' }}>Please wait until the chair reopens the session.</p>
+        <p className="text-xs mt-8 relative z-10" style={{ color: '#9A8A78' }}>Press ESC to return to main menu</p>
       </div>
     );
   }
