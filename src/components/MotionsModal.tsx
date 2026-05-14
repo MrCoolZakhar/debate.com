@@ -860,7 +860,9 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
           <button
             onClick={async () => {
               const motionId = specialVoteMotion!.id;
-              await removePendingMotionInDB(motionId);
+              if (!motionId.startsWith('temp-')) {
+                await removePendingMotionInDB(motionId);
+              }
               update((c) => ({ ...c, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== motionId) }));
               if (isSuspend) {
                 onCommitteeUpdate?.((c) => ({ ...c, suspendedAt: new Date().toISOString(), phase: 'adjourned' as const }));
