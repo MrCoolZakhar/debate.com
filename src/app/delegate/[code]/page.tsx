@@ -209,20 +209,77 @@ function calcPoints(logs: SpeakingLogEntry[], committee: Committee, country: str
 
   // Tier
   let tier = 'Observer';
-  if (total >= 300) tier = 'Distinguished Delegate ⭐';
-  else if (total >= 200) tier = 'Delegate 🏅';
-  else if (total >= 120) tier = 'Active Speaker 🎙️';
-  else if (total >= 70) tier = 'Debater 💬';
+  if (total >= 300) tier = 'Distinguished Delegate';
+  else if (total >= 200) tier = 'Delegate';
+  else if (total >= 120) tier = 'Active Speaker';
+  else if (total >= 70) tier = 'Debater';
   else if (total >= 30) tier = 'Participant';
 
-  // Tips — no point amounts mentioned
   const tips: string[] = [];
-  if (gslSpeeches.length === 0) tips.push('📢 Get on the General Speakers\' List — each GSL speech boosts your score.');
-  if (caucusSpeeches.length === 0) tips.push('💬 Speak during a moderated caucus to show engagement on specific topics.');
-  if (wps.length === 0 && drs.length === 0) tips.push('📄 Submit or co-sponsor a working paper or draft resolution.');
-  if (totalSeconds > 0 && totalSeconds < 60) tips.push('⏱ Use your full speaking time — longer speeches earn more time bonus points.');
-  if (drs.length === 0 && wps.length > 0) tips.push('📜 Escalate your working paper into a draft resolution for bigger points.');
-  if (myDocs.length === 0) tips.push('🤝 Co-sponsor a document to boost your score and signal cooperation.');
+
+  if (tier === 'Observer') {
+    tips.push('Request to be added to the General Speakers\' List — raise your placard when the chair asks.');
+    tips.push('Mark yourself Present or Present & Voting so you can participate actively.');
+    tips.push('Your opening speech is your first impression — prepare a 60–90 second position statement.');
+    tips.push('Address the chair as "Honourable Chair" and fellow delegates as "Distinguished Delegates."');
+    tips.push('Listen carefully to other speeches before your first — understand the room\'s dynamic first.');
+    tips.push('Pass a note to a like-minded delegation to start building a bloc before the first caucus.');
+  }
+
+  if (tier === 'Participant') {
+    tips.push('You\'ve made a start — now aim to speak in a moderated caucus on a specific sub-topic.');
+    tips.push('During unmoderated caucuses, actively approach delegations to co-sponsor a working paper.');
+    tips.push('Use your full allotted speaking time — cutting speeches short leaves points on the table.');
+    tips.push('Propose a moderated caucus on a sub-topic you know well to control the debate agenda.');
+    tips.push('Co-sponsoring a document shows cooperation and earns more points than just signing it.');
+    tips.push('A Right of Reply shows confidence — if a delegation mischaracterises your position, challenge it.');
+  }
+
+  if (tier === 'Debater') {
+    tips.push('You\'re engaging well — now focus on substance. Reference specific clauses and past resolutions in speeches.');
+    tips.push('Build a working paper with at least 3–4 co-sponsors to show bloc leadership.');
+    tips.push('Use the yield to questions option at the end of a speech — it signals confidence and invites engagement.');
+    tips.push('Raise a motion for a moderated caucus rather than waiting for others to drive the agenda.');
+    tips.push('Escalate your working paper to a draft resolution — that\'s where the real points are.');
+    tips.push('Challenge procedural missteps with a Point of Order — chairs notice delegates who know procedure.');
+    tips.push('Your GSL speech should preview the clauses you want in the final resolution — use it strategically.');
+  }
+
+  if (tier === 'Active Speaker') {
+    tips.push('You\'re a frequent voice — now make your speeches more impactful. Each one should advance a specific policy goal.');
+    tips.push('Lead a draft resolution with your delegation as primary sponsor.');
+    tips.push('Coordinate your bloc during unmoderated caucuses — share a draft and get signatories before the session ends.');
+    tips.push('Use your speeches to directly respond to and rebut other delegations\' positions.');
+    tips.push('A passed draft resolution is the highest individual scoring action — push your DR all the way to a vote.');
+    tips.push('Propose a Tour de Table to ensure every delegation is heard and to reset a stalled debate.');
+    tips.push('Master the art of the friendly amendment — incorporate allies\' language to broaden support for your DR.');
+  }
+
+  if (tier === 'Delegate') {
+    tips.push('You are close to Distinguished — one more passed resolution or RTR could push you there.');
+    tips.push('Help newer delegates get on the speakers list — demonstrated leadership is noticed by chairs.');
+    tips.push('Use your speeches to explicitly reference operative clauses in draft resolutions under discussion.');
+    tips.push('Introduce an unfriendly amendment to weaken a rival bloc\'s resolution if needed.');
+    tips.push('Volunteer to consolidate competing working papers — it shows diplomatic skill and earns respect.');
+    tips.push('A Point of Information during another delegate\'s speech can shift the room\'s focus to your agenda.');
+    tips.push('Your yield decisions matter at this level — yield to questions to demonstrate mastery of your country\'s position.');
+  }
+
+  if (tier === 'Distinguished Delegate') {
+    tips.push('You have reached the highest tier — your score reflects genuine engagement across every dimension of debate.');
+    tips.push('Focus on legacy: ensure your draft resolution is substantive enough to pass with broad support.');
+    tips.push('Mentor less experienced delegates during unmoderated caucuses — great MUNers elevate the whole room.');
+    tips.push('Use your final GSL speech to synthesise the debate and call for consensus behind your resolution.');
+    tips.push('A Distinguished Delegate drives the agenda, not just responds to it — every caucus should have your fingerprints on it.');
+    tips.push('Consider proposing closure of debate when you have enough votes secured — timing this correctly is the final skill.');
+  }
+
+  // Universal conditional tips regardless of tier
+  if (gslSpeeches.length === 0) tips.push('You have not spoken on the General Speakers\' List yet — this is the most visible way to establish your delegation\'s position.');
+  if (caucusSpeeches.length === 0 && committee.phase !== 'pre-session') tips.push('Moderated caucuses reward focused, topic-specific arguments — request one and use the shorter time to make a precise point.');
+  if (wps.length === 0 && drs.length === 0) tips.push('No documents yet — co-sponsoring even one working paper signals that your delegation is constructively engaged.');
+  if (totalSeconds > 0 && totalSeconds < 45) tips.push('You are not using your full speaking time. Longer speeches earn time-bonus points and project confidence.');
+  if (drs.length === 0 && wps.length > 0) tips.push('You have a working paper — escalate it to a draft resolution before the voting procedure begins.');
 
   return { total, breakdown, tier, tips };
 }
@@ -483,7 +540,7 @@ function StatisticsTab({ committee, country }: { committee: Committee; country: 
           <span className="text-lg font-medium mb-1" style={{ color: '#6A5A4A' }}>pts</span>
         </div>
         <div className="inline-flex items-center gap-1.5 text-sm font-black px-3 py-1 rounded-full" style={{ backgroundColor: '#1B3828', color: '#EED98A' }}>
-          {tier.replace(/\p{Emoji}/gu, '').trim()}
+          {tier}
         </div>
 
         {/* Score breakdown */}
