@@ -7,6 +7,7 @@ import { useSettingsStore, DEFAULT_MOTION_NAMES } from '@/lib/settingsStore';
 import { Committee } from '@/lib/types';
 import { getFlagUrl, getCountryByName } from '@/lib/countries';
 import { Emoji } from '@/components/Emoji';
+import { MajorityPie } from '@/components/RollCallPanel';
 
 function formatTime(seconds: number) {
   const m = Math.floor(seconds / 60);
@@ -151,13 +152,13 @@ function CollapsedDelegateCard({
 }) {
   const found = getCountryByName(delegate.country);
   const flagEl = found
-    ? <img src={getFlagUrl(found.code)} alt={found.code} style={{ width: '1.5rem', height: '1.5rem', objectFit: 'contain' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-    : <Emoji size="1.5rem">🌐</Emoji>;
+    ? <img src={getFlagUrl(found.code)} alt={found.code} style={{ width: '36px', height: '26px', objectFit: 'cover', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.1)' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+    : null;
 
   return (
     <button
       onClick={onSelect}
-      className="flex flex-col items-center gap-1 w-16 h-16 justify-center rounded-xl transition-all duration-200 shrink-0 focus:outline-none"
+      className="flex flex-col items-center gap-1 w-20 h-20 justify-center rounded-xl transition-all duration-200 shrink-0 focus:outline-none"
       style={{ backgroundColor: '#1B3828', border: '2px solid transparent' }}
       onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
@@ -188,7 +189,7 @@ function NormalDelegateCard({ delegate, committee, onSelect }: { delegate: Commi
       className="rounded-xl transition-all duration-200 cursor-pointer"
       style={{
         backgroundColor: '#1B3828',
-        border: isCurrentSpeaker ? '2px solid #EED98A' : '2px solid transparent',
+        border: '2px solid transparent',
       }}
       onClick={onSelect}
       onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
@@ -327,41 +328,13 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
                 <span className="font-semibold" style={{ color: 'rgba(238,217,138,0.7)' }}>Topic: </span>{committee.topic}
               </p>
             )}
-            {/* Pie charts — same as RollCallPanel */}
+            {/* Pie charts — using MajorityPie component */}
             <div className="flex items-center justify-between">
               <div className="flex gap-1.5">
-                {(() => {
-                  const pv = committee.delegates.filter((d) => d.status === 'present-voting').length;
-                  const p = committee.delegates.filter((d) => d.status === 'present').length;
-                  const total = pv + p;
-                  return (
-                    <>
-                      <svg width="28" height="28" viewBox="0 0 28 28">
-                        <circle cx="14" cy="14" r="11" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="4" />
-                        <circle cx="14" cy="14" r="11" fill="none" stroke="#2A5A3C" strokeWidth="4"
-                          strokeDasharray={`${(total / (committee.delegates.length || 1)) * 69.1} 69.1`}
-                          strokeLinecap="round" transform="rotate(-90 14 14)" />
-                        <text x="14" y="18" textAnchor="middle" fontSize="8" fontWeight="900" fill="#EDE7D8">{total}</text>
-                      </svg>
-                      <svg width="28" height="28" viewBox="0 0 28 28">
-                        <circle cx="14" cy="14" r="11" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="4" />
-                        <circle cx="14" cy="14" r="11" fill="none" stroke="#B6871F" strokeWidth="4"
-                          strokeDasharray={`${(Math.ceil(total * 2 / 3) / (committee.delegates.length || 1)) * 69.1} 69.1`}
-                          strokeLinecap="round" transform="rotate(-90 14 14)" />
-                        <text x="14" y="18" textAnchor="middle" fontSize="8" fontWeight="900" fill="#EDE7D8">{Math.ceil(total * 2/3)}</text>
-                      </svg>
-                      <svg width="28" height="28" viewBox="0 0 28 28">
-                        <circle cx="14" cy="14" r="11" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="4" />
-                        <circle cx="14" cy="14" r="11" fill="none" stroke="#8A7A6A" strokeWidth="4"
-                          strokeDasharray={`${((Math.floor(total / 2) + 1) / (committee.delegates.length || 1)) * 69.1} 69.1`}
-                          strokeLinecap="round" transform="rotate(-90 14 14)" />
-                        <text x="14" y="18" textAnchor="middle" fontSize="8" fontWeight="900" fill="#EDE7D8">{Math.floor(total/2)+1}</text>
-                      </svg>
-                    </>
-                  );
-                })()}
+                <MajorityPie arcFill={1} color="#2A5A3C" label={`${present}`} />
+                <MajorityPie arcFill={2/3} color="#B6871F" label={`${Math.ceil(present * 2 / 3)}`} />
+                <MajorityPie arcFill={0.5} color="#8A7A6A" label={`${Math.floor(present / 2) + 1}`} />
               </div>
-              {/* Phase display instead of A-Z/Queue toggle */}
               <span className="text-xs font-black capitalize px-2 py-1 rounded-lg" style={{ backgroundColor: 'rgba(238,217,138,0.12)', color: '#EED98A', fontFamily: "'DM Mono', monospace" }}>{advisorPhaseDisplay}</span>
             </div>
           </div>
@@ -494,7 +467,7 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
                 <p className="text-xs font-mono uppercase tracking-wider mb-3" style={{ color: '#1B3828', fontWeight: 700 }}>
                   Other Delegates ({otherDelegates.length})
                 </p>
-                <div className="flex flex-wrap gap-2">
+                <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(5, minmax(0, 1fr))' }}>
                   {otherDelegates.map((d) => (
                     <CollapsedDelegateCard
                       key={d.id}
