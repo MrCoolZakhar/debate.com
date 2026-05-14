@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { getCommitteeByCode, subscribeToCommittee, sendMessage as sendMessageDB } from '@/lib/committeeService';
 import { useSettingsStore, DEFAULT_MOTION_NAMES } from '@/lib/settingsStore';
 import { Committee } from '@/lib/types';
-import { FlagCircle } from '@/components/RollCallPanel';
 import { getFlagUrl, getCountryByName } from '@/lib/countries';
 import { Emoji } from '@/components/Emoji';
 
@@ -21,7 +20,7 @@ function ordinal(n: number): string {
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
 }
 
-const NUDGE_EMOJIS = ['👍', '💪', '🌟', '⭐', '🎯'];
+const NUDGE_MESSAGES = ['Good job!', 'Keep going!', 'Great speech!', 'You got this!', 'Stay confident!'];
 
 function ExpandedDelegateCard({
   delegate,
@@ -48,14 +47,14 @@ function ExpandedDelegateCard({
     delegate.status === 'present-voting' ? 'Present & Voting' : 'Absent';
 
   const statusColor =
-    delegate.status === 'present' ? 'text-green-400' :
-    delegate.status === 'present-voting' ? 'text-[#B6871F]' :
-    'text-[#9A8A78]';
+    delegate.status === 'present' ? '#3D7A52' :
+    delegate.status === 'present-voting' ? '#1B3828' :
+    '#9A8A78';
 
   const found = getCountryByName(delegate.country);
   const flagEl = found
-    ? <img src={getFlagUrl(found.code)} alt={found.code} style={{ width: '4.5rem', height: '4.5rem', objectFit: 'contain' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-    : <Emoji size="4.5rem">🌐</Emoji>;
+    ? <img src={getFlagUrl(found.code)} alt={found.code} style={{ width: '96px', height: '68px', objectFit: 'cover', borderRadius: '10px', border: '1.5px solid rgba(28,20,16,0.10)' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+    : null;
 
   const handleNudge = (emoji: string) => {
     sendMessageDB(committee.id, 'Faculty Advisor', emoji, true, delegate.country);
@@ -65,7 +64,7 @@ function ExpandedDelegateCard({
 
   let queueDisplay: string;
   if (isCurrentSpeaker) {
-    queueDisplay = '🎤 Currently Speaking';
+    queueDisplay = 'Currently Speaking';
   } else if (queueIndex >= 0) {
     queueDisplay = `Next up: #${queueIndex + 1} in queue`;
   } else {
@@ -104,7 +103,7 @@ function ExpandedDelegateCard({
       <div className="flex flex-col items-center gap-2 pt-2">
         {flagEl}
         <h2 className="text-3xl font-black text-[#1C1410] text-center">{delegate.country}</h2>
-        <span className={`text-sm font-bold ${statusColor}`}>{statusLabel}</span>
+        <span className="text-sm font-bold" style={{ color: statusColor }}>{statusLabel}</span>
       </div>
 
       <div className="space-y-3 w-full">
@@ -122,18 +121,21 @@ function ExpandedDelegateCard({
       <div>
         <p className="text-xs text-[#9A8A78] font-mono uppercase tracking-wider mb-2">Send Nudge</p>
         <div className="flex gap-2 flex-wrap">
-          {NUDGE_EMOJIS.map((emoji) => (
+          {NUDGE_MESSAGES.map((msg) => (
             <button
-              key={emoji}
-              onClick={() => handleNudge(emoji)}
-              className="text-2xl bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-3 py-2 hover:border-[#1B3828] hover:bg-[#DDD4C0] transition-colors"
+              key={msg}
+              onClick={() => handleNudge(msg)}
+              className="px-3 py-1.5 rounded-xl text-xs font-bold transition-colors focus:outline-none"
+              style={{ backgroundColor: 'transparent', border: '1px solid #DDD4C0', color: '#1B3828' }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; (e.currentTarget as HTMLElement).style.backgroundColor = '#EDE7D8'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
             >
-              {emoji}
+              {msg}
             </button>
           ))}
         </div>
         {nudgeSent && (
-          <p className="text-xs text-green-400 mt-2">Sent! {nudgeSent}</p>
+          <p className="text-xs font-semibold mt-2" style={{ color: '#1B3828' }}>Sent: "{nudgeSent}"</p>
         )}
       </div>
     </div>
@@ -167,36 +169,42 @@ function CollapsedDelegateCard({
 function NormalDelegateCard({ delegate, committee, onSelect }: { delegate: Committee['delegates'][0]; committee: Committee; onSelect: () => void }) {
   const queueIndex = committee.speakersList.findIndex((s) => s.delegateId === delegate.id);
   const isCurrentSpeaker = committee.currentSpeaker?.delegateId === delegate.id;
-
-  const statusColor =
-    delegate.status === 'present' ? 'bg-green-950/40 border-green-800/30' :
-    delegate.status === 'present-voting' ? 'bg-[#1B3828]/20 border-[#1B3828]/30' :
-    'border-transparent';
-
-  const statusLabelColor =
-    delegate.status === 'present' ? 'text-green-400' :
-    delegate.status === 'present-voting' ? 'text-[#B6871F]' :
-    'text-[#9A8A78]';
+  const found = getCountryByName(delegate.country);
 
   const statusLabel =
     delegate.status === 'present' ? 'P' :
-    delegate.status === 'present-voting' ? 'PV' : 'A';
+    delegate.status === 'present-voting' ? 'P+V' : 'A';
+
+  const statusLabelColor =
+    delegate.status === 'present' ? '#EED98A' :
+    delegate.status === 'present-voting' ? '#B8844A' :
+    'rgba(237,231,216,0.4)';
 
   return (
     <div
-      className={`border rounded-xl transition-all duration-200 cursor-pointer ${statusColor} ${isCurrentSpeaker ? 'ring-2 ring-[#B6871F]' : ''}`}
+      className="rounded-xl transition-all duration-200 cursor-pointer"
+      style={{
+        backgroundColor: '#1B3828',
+        border: isCurrentSpeaker ? '2px solid #EED98A' : '2px solid transparent',
+        boxShadow: isCurrentSpeaker ? '0 0 0 2px rgba(238,217,138,0.3)' : 'none',
+      }}
       onClick={onSelect}
+      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
     >
-      <div className="flex items-center gap-2 px-3 py-2.5">
-        <FlagCircle country={delegate.country} size="xs" />
-        <span className="flex-1 text-sm text-[#1C1410] truncate font-medium">{delegate.country}</span>
+      <div className="flex items-center gap-3 px-3 py-3">
+        {found
+          ? <img src={getFlagUrl(found.code)} alt={found.code} style={{ width: '32px', height: '22px', objectFit: 'cover', borderRadius: '4px', border: '1px solid rgba(28,20,16,0.15)', flexShrink: 0 }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+          : <div style={{ width: '32px', height: '22px', borderRadius: '4px', backgroundColor: 'rgba(255,255,255,0.1)', flexShrink: 0 }} />
+        }
+        <span className="flex-1 text-sm font-bold truncate" style={{ color: '#EDE7D8' }}>{delegate.country}</span>
         {isCurrentSpeaker && (
-          <span className="text-xs bg-[#B6871F]/30 text-[#B6871F] px-2 py-0.5 rounded-full font-bold shrink-0">SPEAKING</span>
+          <span className="text-[10px] font-black px-2 py-0.5 rounded-full shrink-0" style={{ backgroundColor: '#EED98A', color: '#1B3828' }}>SPEAKING</span>
         )}
         {!isCurrentSpeaker && queueIndex >= 0 && (
-          <span className="text-xs text-[#6A5A4A] shrink-0">{ordinal(queueIndex + 1)} up</span>
+          <span className="text-xs font-medium shrink-0" style={{ color: 'rgba(237,231,216,0.7)' }}>{ordinal(queueIndex + 1)} up</span>
         )}
-        <span className={`text-xs font-bold ${statusLabelColor} shrink-0 w-6 text-center`}>{statusLabel}</span>
+        <span className="text-xs font-black shrink-0" style={{ color: statusLabelColor }}>{statusLabel}</span>
       </div>
     </div>
   );
@@ -291,9 +299,10 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
     : sortedDelegates;
 
   return (
-    <div className="h-screen bg-[#F6F1E9] flex flex-col overflow-hidden">
+    <div className="h-screen flex flex-col overflow-hidden" style={{ backgroundColor: '#EDE7D8' }}>
+      <div className="pointer-events-none fixed inset-0 z-0" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
       {/* Header */}
-      <header className="border-b border-[#DDD4C0] bg-[#FAF8F3] px-4 h-11 flex items-center gap-3 shrink-0">
+      <header className="border-b border-[#DDD4C0] bg-[#FAF8F3] px-4 h-11 flex items-center gap-3 shrink-0 relative z-[2]">
         <Link href="/">
           <img src="/GavellingLogo.png" alt="Gavelling" className="w-[16vw] h-auto max-h-9 object-contain" onError={(e)=>{(e.target as HTMLImageElement).style.display="none"}} />
         </Link>
@@ -303,20 +312,33 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
         <span className="text-xs font-mono bg-[#DDD4C0] text-[#1C1410] px-2.5 py-1 rounded-lg shrink-0">{committee.code}</span>
       </header>
 
-      {/* Stats bar */}
-      <div className="border-b border-[#DDD4C0] bg-[#FAF8F3] px-4 py-1.5 flex items-center gap-6 shrink-0">
-        <span className="text-xs text-[#6A5A4A] font-mono">{present} / {committee.delegates.length} present</span>
-        <span className="text-xs text-[#6A5A4A]">Phase: <span className="text-[#1C1410] font-semibold capitalize">{advisorPhaseDisplay}</span></span>
-        {displayQueue.length > 0 && (
-          <span className="text-xs text-[#6A5A4A]">{displayQueue.length} in queue</span>
-        )}
-      </div>
+      {/* Stats bar removed — moved into left panel */}
 
-      <div className="flex-1 flex overflow-hidden">
-        {/* Left: Current speaker + queue */}
-        <div className="w-80 border-r border-[#DDD4C0] bg-[#F6F1E9] flex flex-col overflow-hidden shrink-0">
-          <div className="px-4 py-3 border-b border-[#DDD4C0] shrink-0">
-            <p className="text-xs text-[#9A8A78] font-mono uppercase tracking-wider">
+      <div className="flex-1 flex overflow-hidden relative z-[2]">
+        {/* Left: Current speaker + queue — forest green */}
+        <div className="w-80 flex flex-col overflow-hidden shrink-0" style={{ backgroundColor: '#1B3828', borderRight: '1px solid #3D7A52' }}>
+          {/* Stats section */}
+          <div className="px-4 pt-4 pb-3 shrink-0" style={{ borderBottom: '1px solid rgba(61,122,82,0.4)' }}>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-mono" style={{ color: 'rgba(238,217,138,0.6)' }}>PRESENT</span>
+                <span className="text-xs font-black" style={{ color: '#EED98A' }}>{present} / {committee.delegates.length}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-mono" style={{ color: 'rgba(238,217,138,0.6)' }}>PHASE</span>
+                <span className="text-xs font-black capitalize" style={{ color: '#EED98A' }}>{advisorPhaseDisplay}</span>
+              </div>
+              {displayQueue.length > 0 && (
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-mono" style={{ color: 'rgba(238,217,138,0.6)' }}>IN QUEUE</span>
+                  <span className="text-xs font-black" style={{ color: '#EED98A' }}>{displayQueue.length}</span>
+                </div>
+              )}
+            </div>
+          </div>
+          {/* Now Speaking label */}
+          <div className="px-4 py-2.5 shrink-0" style={{ borderBottom: '1px solid rgba(61,122,82,0.4)' }}>
+            <p className="text-xs font-mono uppercase tracking-wider" style={{ color: 'rgba(238,217,138,0.5)' }}>
               {isCaucus ? (caucus?.type === 'moderated' ? 'Caucus Speaker' : 'Caucus') : 'Now Speaking'}
             </p>
           </div>
@@ -324,28 +346,24 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
           {/* Moderated caucus — show caucus current speaker */}
           {isModeratedCaucus && (
             caucus?.currentSpeaker ? (
-              <div className="flex flex-col items-center px-4 py-6 border-b border-[#DDD4C0] shrink-0">
-                <FlagCircle country={caucus.currentSpeaker} size="xl" />
-                <h2 className="text-2xl font-black text-[#1C1410] mt-4 mb-1 text-center">{caucus.currentSpeaker}</h2>
-                <div className={`text-5xl font-black font-mono tabular-nums mt-2 ${
-                  caucus.speakerTimeRemaining <= 10 ? 'text-red-400' : caucus.speakerTimeRemaining <= 30 ? 'text-yellow-400' : 'text-[#1C1410]'
-                }`}>
+              <div className="flex flex-col items-center px-4 py-5 shrink-0" style={{ borderBottom: '1px solid rgba(61,122,82,0.4)' }}>
+                {(() => { const c = getCountryByName(caucus.currentSpeaker); return c ? <img src={getFlagUrl(c.code)} alt={caucus.currentSpeaker} style={{ width: '80px', height: '58px', objectFit: 'cover', borderRadius: '8px', border: '1.5px solid rgba(238,217,138,0.2)' }} /> : null; })()}
+                <h2 className="text-2xl font-black mt-3 mb-1 text-center" style={{ color: '#EDE7D8' }}>{caucus.currentSpeaker}</h2>
+                <div className="text-5xl font-black font-mono tabular-nums mt-1" style={{ color: caucus.speakerTimeRemaining <= 10 ? '#B8844A' : '#EDE7D8' }}>
                   {formatTime(caucus.speakerTimeRemaining)}
                 </div>
-                <div className="w-full max-w-xs h-1.5 bg-[#DDD4C0] rounded-full overflow-hidden mt-3">
-                  <div className={`h-full rounded-full transition-all ${caucusSpeakerProgress > 50 ? 'bg-[#B6871F]' : caucusSpeakerProgress > 20 ? 'bg-yellow-500' : 'bg-red-500'}`}
-                    style={{ width: `${caucusSpeakerProgress}%` }} />
+                <div className="w-full max-w-xs h-1.5 rounded-full overflow-hidden mt-3" style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}>
+                  <div className="h-full rounded-full transition-all" style={{ width: `${caucusSpeakerProgress}%`, backgroundColor: '#EED98A' }} />
                 </div>
                 {caucus.purpose && (
-                  <p className="text-xs text-[#9A8A78] mt-3 text-center">{caucus.purpose}</p>
+                  <p className="text-xs mt-3 text-center" style={{ color: 'rgba(238,217,138,0.5)' }}>{caucus.purpose}</p>
                 )}
               </div>
             ) : (
-              <div className="flex flex-col items-center px-4 py-6 border-b border-[#DDD4C0] shrink-0">
-                <div className="mb-2"><Emoji size="2.5rem">🎙️</Emoji></div>
-                <p className="text-[#6A5A4A] text-sm text-center">No speaker yet</p>
+              <div className="flex flex-col items-center px-4 py-5 shrink-0" style={{ borderBottom: '1px solid rgba(61,122,82,0.4)' }}>
+                <p className="text-sm text-center" style={{ color: 'rgba(237,231,216,0.5)' }}>No speaker yet</p>
                 {caucus?.purpose && (
-                  <p className="text-xs text-[#9A8A78] mt-2 text-center">{caucus.purpose}</p>
+                  <p className="text-xs mt-2 text-center" style={{ color: 'rgba(238,217,138,0.4)' }}>{caucus.purpose}</p>
                 )}
               </div>
             )
@@ -353,19 +371,17 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
 
           {/* Unmoderated caucus — show countdown + purpose */}
           {isUnmoderatedCaucus && (
-            <div className="flex flex-col items-center px-4 py-6 border-b border-[#DDD4C0] shrink-0">
-              <div className={`text-5xl font-black font-mono tabular-nums ${
-                (caucus?.remainingTime ?? 0) <= 30 ? 'text-red-400' : (caucus?.remainingTime ?? 0) <= 60 ? 'text-yellow-400' : 'text-[#1C1410]'
-              }`}>
+            <div className="flex flex-col items-center px-4 py-5 shrink-0" style={{ borderBottom: '1px solid rgba(61,122,82,0.4)' }}>
+              <div className="text-5xl font-black font-mono tabular-nums" style={{ color: (caucus?.remainingTime ?? 0) <= 30 ? '#B8844A' : '#EDE7D8' }}>
                 {formatTime(caucus?.remainingTime ?? 0)}
               </div>
-              <p className="text-xs text-[#9A8A78] mt-2 font-mono uppercase tracking-wider">
+              <p className="text-xs mt-2 font-mono uppercase tracking-wider" style={{ color: 'rgba(238,217,138,0.5)' }}>
                 {caucus?.type === 'consultation' ? advisorMotionNames.consultation :
                  caucus?.type === 'tour' ? advisorMotionNames.tour :
                  advisorMotionNames.unmoderated}
               </p>
               {caucus?.purpose && (
-                <p className="text-sm text-[#6A5A4A] mt-3 text-center">{caucus.purpose}</p>
+                <p className="text-sm mt-3 text-center" style={{ color: 'rgba(237,231,216,0.7)' }}>{caucus.purpose}</p>
               )}
             </div>
           )}
@@ -373,44 +389,43 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
           {/* GSL — show currentSpeaker */}
           {!isCaucus && (
             committee.currentSpeaker ? (
-              <div className="flex flex-col items-center px-4 py-6 border-b border-[#DDD4C0] shrink-0">
-                <FlagCircle country={committee.currentSpeaker.country} size="xl" />
-                <h2 className="text-2xl font-black text-[#1C1410] mt-4 mb-1 text-center">{committee.currentSpeaker.country}</h2>
-                <div className={`text-5xl font-black font-mono tabular-nums mt-2 ${
-                  committee.speakerTimeRemaining <= 10 ? 'text-red-400' : committee.speakerTimeRemaining <= 30 ? 'text-yellow-400' : 'text-[#1C1410]'
-                }`}>
+              <div className="flex flex-col items-center px-4 py-5 shrink-0" style={{ borderBottom: '1px solid rgba(61,122,82,0.4)' }}>
+                {(() => { const c = getCountryByName(committee.currentSpeaker.country); return c ? <img src={getFlagUrl(c.code)} alt={committee.currentSpeaker.country} style={{ width: '80px', height: '58px', objectFit: 'cover', borderRadius: '8px', border: '1.5px solid rgba(238,217,138,0.2)' }} /> : null; })()}
+                <h2 className="text-2xl font-black mt-3 mb-1 text-center" style={{ color: '#EDE7D8' }}>{committee.currentSpeaker.country}</h2>
+                <div className="text-5xl font-black font-mono tabular-nums mt-1" style={{ color: committee.speakerTimeRemaining <= 10 ? '#B8844A' : '#EDE7D8' }}>
                   {formatTime(committee.speakerTimeRemaining)}
                 </div>
-                <div className="w-full max-w-xs h-1.5 bg-[#DDD4C0] rounded-full overflow-hidden mt-3">
-                  <div className={`h-full rounded-full transition-all ${gslProgress > 50 ? 'bg-[#B6871F]' : gslProgress > 20 ? 'bg-yellow-500' : 'bg-red-500'}`}
-                    style={{ width: `${gslProgress}%` }} />
+                <div className="w-full max-w-xs h-1.5 rounded-full overflow-hidden mt-3" style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}>
+                  <div className="h-full rounded-full transition-all" style={{ width: `${gslProgress}%`, backgroundColor: '#EED98A' }} />
                 </div>
               </div>
             ) : (
-              <div className="flex flex-col items-center px-4 py-6 border-b border-[#DDD4C0] shrink-0">
-                <div className="mb-2"><Emoji size="2.5rem">🎙️</Emoji></div>
-                <p className="text-[#6A5A4A] text-sm text-center">No current speaker</p>
+              <div className="flex flex-col items-center px-4 py-5 shrink-0" style={{ borderBottom: '1px solid rgba(61,122,82,0.4)' }}>
+                <p className="text-sm text-center" style={{ color: 'rgba(237,231,216,0.5)' }}>No current speaker</p>
               </div>
             )
           )}
 
           {/* Queue */}
           <div className="flex-1 overflow-y-auto">
-            <div className="px-4 py-2 border-b border-[#DDD4C0]">
-              <p className="text-xs text-[#9A8A78] font-mono uppercase tracking-wider">
+            <div className="px-4 py-2 shrink-0" style={{ borderBottom: '1px solid rgba(61,122,82,0.4)' }}>
+              <p className="text-xs font-mono uppercase tracking-wider" style={{ color: 'rgba(238,217,138,0.5)' }}>
                 Up Next ({displayQueue.length})
               </p>
             </div>
             {displayQueue.length === 0 ? (
-              <div className="px-4 py-4 text-xs text-[#9A8A78]">No speakers queued</div>
+              <div className="px-4 py-4 text-xs" style={{ color: 'rgba(237,231,216,0.4)' }}>No speakers queued</div>
             ) : (
-              displayQueue.map((s, i) => (
-                <div key={s.delegateId} className="flex items-center gap-3 px-4 py-2.5 border-b border-[#DDD4C0]/40">
-                  <span className="text-xs text-[#9A8A78] font-mono w-5">{i + 1}</span>
-                  <FlagCircle country={s.country} size="xs" />
-                  <span className="text-sm text-[#1C1410] flex-1 truncate">{s.country}</span>
-                </div>
-              ))
+              displayQueue.map((s, i) => {
+                const c = getCountryByName(s.country);
+                return (
+                  <div key={s.delegateId} className="flex items-center gap-3 px-4 py-2.5" style={{ borderBottom: '1px solid rgba(61,122,82,0.2)' }}>
+                    <span className="text-xs font-mono w-5 shrink-0" style={{ color: 'rgba(238,217,138,0.5)' }}>{i + 1}</span>
+                    {c ? <img src={getFlagUrl(c.code)} alt={s.country} style={{ width: '24px', height: '17px', objectFit: 'cover', borderRadius: '3px', border: '1px solid rgba(255,255,255,0.1)', flexShrink: 0 }} /> : null}
+                    <span className="text-sm flex-1 truncate font-semibold" style={{ color: '#EDE7D8' }}>{s.country}</span>
+                  </div>
+                );
+              })
             )}
           </div>
         </div>
@@ -419,8 +434,9 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
         <main className="flex-1 overflow-y-auto p-4">
           {selectedCountry === null ? (
             <>
-              <div className="mb-3">
-                <h2 className="text-sm font-bold text-[#6A5A4A]">All Delegates — click to expand</h2>
+              <div className="mb-4 text-center">
+                <h2 className="text-2xl font-black tracking-wide" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>ALL DELEGATES</h2>
+                <p className="text-sm mt-1" style={{ color: '#9A8A78' }}>Click a card to expand delegate details</p>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
                 {sortedDelegates.map((d) => (
