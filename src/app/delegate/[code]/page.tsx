@@ -472,13 +472,17 @@ function StatisticsTab({ committee, country }: { committee: Committee; country: 
   return (
     <div className="p-4 max-w-2xl mx-auto space-y-5">
       {/* Score card */}
-      <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-2xl p-5">
-        <div className="text-xs font-mono text-[#9A8A78] mb-3">YOUR SCORE</div>
-        <div className="flex items-end gap-3 mb-3">
-          <span className="text-6xl font-black text-[#1C1410]">{total}</span>
-          <span className="text-lg text-[#6A5A4A] font-medium mb-1">pts</span>
+      <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid #DDD4C0' }}>
+        <div className="px-5 py-3 flex items-center gap-3" style={{ backgroundColor: '#1B3828', borderBottom: '1px solid #3D7A52' }}>
+          <div className="w-1 h-4 rounded-full" style={{ backgroundColor: '#EED98A' }} />
+          <span className="text-xs font-mono font-bold tracking-widest" style={{ color: '#EED98A' }}>YOUR SCORE</span>
         </div>
-        <div className="inline-flex items-center gap-1.5 text-sm font-black px-3 py-1 rounded-full" style={{ backgroundColor: 'rgba(27,56,40,0.1)', border: '1px solid rgba(27,56,40,0.3)', color: '#1B3828' }}>
+        <div className="p-5" style={{ backgroundColor: '#EDE7D8' }}>
+        <div className="flex items-end gap-3 mb-3">
+          <span className="text-6xl font-black" style={{ color: '#1B3828' }}>{total}</span>
+          <span className="text-lg font-medium mb-1" style={{ color: '#6A5A4A' }}>pts</span>
+        </div>
+        <div className="inline-flex items-center gap-1.5 text-sm font-black px-3 py-1 rounded-full" style={{ backgroundColor: '#1B3828', color: '#EED98A' }}>
           {tier.replace(/\p{Emoji}/gu, '').trim()}
         </div>
 
@@ -487,50 +491,60 @@ function StatisticsTab({ committee, country }: { committee: Committee; country: 
           <div className="mt-4 space-y-1.5">
             {breakdown.map((b) => (
               <div key={b.label} className="flex justify-between text-xs">
-                <span className="text-[#6A5A4A]">{b.label}</span>
-                <span className="text-[#1C1410] font-bold">+{b.pts}</span>
+                <span style={{ color: '#6A5A4A' }}>{b.label}</span>
+                <span className="font-bold" style={{ color: '#1B3828' }}>+{b.pts}</span>
               </div>
             ))}
           </div>
         )}
+        </div>
       </div>
 
       {/* Speaking stats */}
-      <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-2xl p-5">
-        <div className="text-xs font-mono text-[#9A8A78] mb-3">YOUR SPEAKING HISTORY</div>
+      <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid #DDD4C0' }}>
+        <div className="px-5 py-3 flex items-center gap-3" style={{ backgroundColor: '#1B3828', borderBottom: '1px solid #3D7A52' }}>
+          <div className="w-1 h-4 rounded-full" style={{ backgroundColor: '#EED98A' }} />
+          <span className="text-xs font-mono font-bold tracking-widest" style={{ color: '#EED98A' }}>YOUR SPEAKING HISTORY</span>
+        </div>
+        <div className="p-5" style={{ backgroundColor: '#EDE7D8' }}>
         <div className="grid grid-cols-3 gap-3 mb-4">
           <div className="text-center">
-            <div className="text-2xl font-black text-[#1C1410]">{myLogs.length}</div>
-            <div className="text-xs text-[#9A8A78]">Speeches</div>
+            <div className="text-2xl font-black" style={{ color: '#1B3828' }}>{myLogs.length}</div>
+            <div className="text-xs" style={{ color: '#9A8A78' }}>Speeches</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-black text-[#1C1410]">{formatTime(totalSeconds)}</div>
-            <div className="text-xs text-[#9A8A78]">Total time</div>
+            <div className="text-2xl font-black" style={{ color: '#1B3828' }}>{formatTime(totalSeconds)}</div>
+            <div className="text-xs" style={{ color: '#9A8A78' }}>Total time</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-black text-[#1C1410]">{myRank > 0 ? `#${myRank}` : '—'}</div>
-            <div className="text-xs text-[#9A8A78]">Rank by time</div>
+            <div className="text-2xl font-black" style={{ color: '#1B3828' }}>{myRank > 0 ? `#${myRank}` : '—'}</div>
+            <div className="text-xs" style={{ color: '#9A8A78' }}>Rank by time</div>
           </div>
         </div>
         {myLogs.length > 0 ? (
           <div className="space-y-1.5">
             {myLogs.map((l, i) => (
-              <div key={i} className="flex items-center justify-between text-xs bg-[#FAF8F3] rounded-lg px-3 py-2">
-                <span className="text-[#6A5A4A] truncate flex-1">{l.topic || 'General Speakers\' List'}</span>
-                <span className="text-[#9A8A78] shrink-0 ml-2 capitalize">{l.context.replace(/-/g, ' ')}</span>
-                <span className="text-[#1C1410] font-mono shrink-0 ml-2">{l.seconds}s</span>
+              <div key={i} className="flex items-center justify-between text-xs rounded-lg px-3 py-2" style={{ backgroundColor: '#FAF8F3' }}>
+                <span className="truncate flex-1" style={{ color: '#6A5A4A' }}>{l.topic || 'General Speakers\' List'}</span>
+                <span className="shrink-0 ml-2 capitalize" style={{ color: '#9A8A78' }}>{l.context.replace(/-/g, ' ')}</span>
+                <span className="font-mono shrink-0 ml-2" style={{ color: '#1C1410' }}>{l.seconds}s</span>
               </div>
             ))}
           </div>
         ) : (
-          <p className="text-[#9A8A78] text-sm text-center py-2">No speeches recorded yet</p>
+          <p className="text-sm text-center py-2" style={{ color: '#9A8A78' }}>No speeches recorded yet</p>
         )}
+        </div>
       </div>
 
       {/* Committee leaderboard */}
       {ranking.length > 0 && (
-        <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-2xl p-5">
-          <div className="text-xs font-mono text-[#9A8A78] mb-3">COMMITTEE SPEAKING TIME</div>
+        <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid #DDD4C0' }}>
+          <div className="px-5 py-3 flex items-center gap-3" style={{ backgroundColor: '#1B3828', borderBottom: '1px solid #3D7A52' }}>
+            <div className="w-1 h-4 rounded-full" style={{ backgroundColor: '#EED98A' }} />
+            <span className="text-xs font-mono font-bold tracking-widest" style={{ color: '#EED98A' }}>COMMITTEE SPEAKING TIME</span>
+          </div>
+          <div className="p-5" style={{ backgroundColor: '#EDE7D8' }}>
           {/* Column headers */}
           <div className="flex items-center gap-2 text-[10px] text-[#7A5A38] font-mono mb-1.5 px-2">
             <span className="w-4 shrink-0" />
@@ -557,12 +571,17 @@ function StatisticsTab({ committee, country }: { committee: Committee; country: 
             ))}
           </div>
         </div>
+        </div>
       )}
 
       {/* Tips */}
       {tips.length > 0 && (
-        <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-2xl p-5">
-          <div className="text-xs font-mono text-[#9A8A78] mb-3">HOW TO IMPROVE YOUR SCORE</div>
+        <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid #DDD4C0' }}>
+          <div className="px-5 py-3 flex items-center gap-3" style={{ backgroundColor: '#1B3828', borderBottom: '1px solid #3D7A52' }}>
+            <div className="w-1 h-4 rounded-full" style={{ backgroundColor: '#EED98A' }} />
+            <span className="text-xs font-mono font-bold tracking-widest" style={{ color: '#EED98A' }}>HOW TO IMPROVE YOUR SCORE</span>
+          </div>
+          <div className="p-5" style={{ backgroundColor: '#EDE7D8' }}>
           <div className="space-y-2">
             {tips.map((tip) => (
               <div key={tip} className="flex gap-2 text-sm" style={{ color: '#6A5A4A' }}>
@@ -570,6 +589,7 @@ function StatisticsTab({ committee, country }: { committee: Committee; country: 
                 <span>{tip.replace(/^\p{Emoji}\s*/u, '')}</span>
               </div>
             ))}
+          </div>
           </div>
         </div>
       )}
@@ -1208,18 +1228,18 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
               );
               return (
                 <>
-                  {/* Toggle buttons */}
-                  <div className="flex gap-3 px-4 pt-4 pb-3 border-b border-[#DDD4C0]" style={{ backgroundColor: '#FAF8F3' }}>
+                  {/* Tab-style subdirectory bar */}
+                  <div className="flex shrink-0" style={{ borderBottom: '1px solid #DDD4C0', backgroundColor: '#FAF8F3' }}>
                     <button
                       onClick={() => setDocsSection('submit')}
-                      className="flex-1 py-2.5 rounded-xl font-black text-sm transition-colors focus:outline-none"
-                      style={{ backgroundColor: docsSection === 'submit' ? '#1B3828' : 'transparent', color: docsSection === 'submit' ? '#EED98A' : '#6A5A4A', border: docsSection === 'submit' ? 'none' : '1px solid #DDD4C0', letterSpacing: '0.04em' }}>
+                      className="flex-1 py-2.5 text-xs font-black transition-colors focus:outline-none"
+                      style={{ color: docsSection === 'submit' ? '#1B3828' : '#9A8A78', borderBottom: docsSection === 'submit' ? '2px solid #1B3828' : '2px solid transparent', marginBottom: '-1px', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.04em' }}>
                       SUBMIT DOCUMENT
                     </button>
                     <button
                       onClick={() => setDocsSection('view')}
-                      className="flex-1 py-2.5 rounded-xl font-black text-sm transition-colors focus:outline-none"
-                      style={{ backgroundColor: docsSection === 'view' ? '#1B3828' : 'transparent', color: docsSection === 'view' ? '#EED98A' : '#6A5A4A', border: docsSection === 'view' ? 'none' : '1px solid #DDD4C0', letterSpacing: '0.04em' }}>
+                      className="flex-1 py-2.5 text-xs font-black transition-colors focus:outline-none"
+                      style={{ color: docsSection === 'view' ? '#1B3828' : '#9A8A78', borderBottom: docsSection === 'view' ? '2px solid #1B3828' : '2px solid transparent', marginBottom: '-1px', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.04em' }}>
                       VIEW DOCUMENTS
                     </button>
                   </div>

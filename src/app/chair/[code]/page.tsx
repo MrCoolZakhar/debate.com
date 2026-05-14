@@ -1889,14 +1889,22 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 : <Emoji size="1.125rem">🌐</Emoji>;
               return (
                 <div key={m.id} className="flex items-center gap-3 text-sm">
-                  <span className="text-[#EED98A] font-bold shrink-0">🎙️ GSL Request</span>
+                  <span className="font-black text-xs uppercase tracking-widest shrink-0" style={{ color: '#EED98A', fontFamily: "'DM Mono', monospace" }}>GSL REQUEST</span>
                   <span className="font-mono text-lg">{flagEl}</span>
-                  <span className="text-[#1C1410] font-semibold">{m.proposedBy}</span>
-                  <span className="text-[#6A5A4A] text-xs">wants to speak</span>
+                  <span className="font-black text-sm" style={{ color: '#EDE7D8' }}>{m.proposedBy}</span>
+                  <span className="text-xs" style={{ color: 'rgba(237,231,216,0.6)' }}>wants to speak</span>
                   <button onClick={() => handleApproveGslRequest(m.id, delegateId, m.proposedBy)}
-                    className="ml-2 px-3 py-1 bg-[#1B3828]/50 hover:bg-[#2A5A3C]/60 border border-[#3D7A52]/40 text-[#EED98A] text-xs rounded-lg font-semibold transition-colors">Add to GSL</button>
+                    className="ml-2 px-3 py-1.5 rounded-lg text-xs font-black transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828', color: '#EDE7D8', border: '1px solid #3D7A52' }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}>
+                    ADD TO GSL
+                  </button>
                   <button onClick={() => handleDenyGslRequest(m.id)}
-                    className="px-3 py-1 bg-[#8B2020]/20 hover:bg-[#7A1C1C]/40 border border-[#8B2020]/40 text-[#8B2020] text-xs rounded-lg font-semibold transition-colors">Deny</button>
+                    className="px-3 py-1.5 rounded-lg text-xs font-black transition-colors focus:outline-none" style={{ backgroundColor: '#8B2020', color: '#EDE7D8', border: '1px solid rgba(139,32,32,0.6)' }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#7A1C1C'; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#8B2020'; }}>
+                    DENY
+                  </button>
                 </div>
               );
             })}
