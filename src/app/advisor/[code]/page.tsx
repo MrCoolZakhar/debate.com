@@ -102,7 +102,7 @@ function ExpandedDelegateCard({
 
       <div className="flex flex-col items-center gap-2 pt-2">
         {flagEl}
-        <h2 className="text-3xl font-black text-[#1C1410] text-center">{delegate.country}</h2>
+        <h2 className="text-3xl font-black text-center" style={{ color: '#1C1410' }}>{delegate.country}</h2>
         <span className="text-sm font-bold" style={{ color: statusColor }}>{statusLabel}</span>
       </div>
 
@@ -118,9 +118,9 @@ function ExpandedDelegateCard({
         </div>
       </div>
 
-      <div>
-        <p className="text-xs text-[#9A8A78] font-mono uppercase tracking-wider mb-2">Send Nudge</p>
-        <div className="flex gap-2 flex-wrap">
+      <div className="flex flex-col items-center">
+        <p className="text-xs font-mono uppercase tracking-wider mb-2" style={{ color: '#9A8A78' }}>Send Nudge</p>
+        <div className="flex gap-2 flex-wrap justify-center">
           {NUDGE_MESSAGES.map((msg) => (
             <button
               key={msg}
@@ -157,11 +157,14 @@ function CollapsedDelegateCard({
   return (
     <button
       onClick={onSelect}
-      className="flex flex-col items-center gap-1 w-16 h-16 justify-center rounded-xl border border-[#DDD4C0] bg-[#FAF8F3] hover:border-[#1B3828] transition-all duration-200 shrink-0"
+      className="flex flex-col items-center gap-1 w-16 h-16 justify-center rounded-xl transition-all duration-200 shrink-0 focus:outline-none"
+      style={{ backgroundColor: '#1B3828', border: '2px solid transparent' }}
+      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
       title={delegate.country}
     >
       {flagEl}
-      <span className="text-[9px] text-[#6A5A4A] truncate max-w-full px-1 leading-tight">{delegate.country}</span>
+      <span className="text-[9px] truncate max-w-full px-1 leading-tight" style={{ color: '#EDE7D8' }}>{delegate.country}</span>
     </button>
   );
 }
@@ -186,7 +189,6 @@ function NormalDelegateCard({ delegate, committee, onSelect }: { delegate: Commi
       style={{
         backgroundColor: '#1B3828',
         border: isCurrentSpeaker ? '2px solid #EED98A' : '2px solid transparent',
-        boxShadow: isCurrentSpeaker ? '0 0 0 2px rgba(238,217,138,0.3)' : 'none',
       }}
       onClick={onSelect}
       onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
@@ -317,23 +319,50 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
       <div className="flex-1 flex overflow-hidden relative z-[2]">
         {/* Left: Current speaker + queue — forest green */}
         <div className="w-80 flex flex-col overflow-hidden shrink-0" style={{ backgroundColor: '#1B3828', borderRight: '1px solid #3D7A52' }}>
-          {/* Stats section */}
-          <div className="px-4 pt-4 pb-3 shrink-0" style={{ borderBottom: '1px solid rgba(61,122,82,0.4)' }}>
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-mono" style={{ color: 'rgba(238,217,138,0.6)' }}>PRESENT</span>
-                <span className="text-xs font-black" style={{ color: '#EED98A' }}>{present} / {committee.delegates.length}</span>
+          {/* Header — matches RollCallPanel style */}
+          <div className="px-4 pt-4 pb-3 shrink-0 relative z-10" style={{ borderBottom: '1px solid rgba(61,122,82,0.4)' }}>
+            <p className="text-lg font-black leading-tight truncate mb-0.5" style={{ color: '#EED98A' }}>{committee.name}</p>
+            {committee.topic && (
+              <p className="text-xs leading-snug line-clamp-2 mb-2" style={{ color: 'rgba(238,217,138,0.55)' }}>
+                <span className="font-semibold" style={{ color: 'rgba(238,217,138,0.7)' }}>Topic: </span>{committee.topic}
+              </p>
+            )}
+            {/* Pie charts — same as RollCallPanel */}
+            <div className="flex items-center justify-between">
+              <div className="flex gap-1.5">
+                {(() => {
+                  const pv = committee.delegates.filter((d) => d.status === 'present-voting').length;
+                  const p = committee.delegates.filter((d) => d.status === 'present').length;
+                  const total = pv + p;
+                  return (
+                    <>
+                      <svg width="28" height="28" viewBox="0 0 28 28">
+                        <circle cx="14" cy="14" r="11" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="4" />
+                        <circle cx="14" cy="14" r="11" fill="none" stroke="#2A5A3C" strokeWidth="4"
+                          strokeDasharray={`${(total / (committee.delegates.length || 1)) * 69.1} 69.1`}
+                          strokeLinecap="round" transform="rotate(-90 14 14)" />
+                        <text x="14" y="18" textAnchor="middle" fontSize="8" fontWeight="900" fill="#EDE7D8">{total}</text>
+                      </svg>
+                      <svg width="28" height="28" viewBox="0 0 28 28">
+                        <circle cx="14" cy="14" r="11" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="4" />
+                        <circle cx="14" cy="14" r="11" fill="none" stroke="#B6871F" strokeWidth="4"
+                          strokeDasharray={`${(Math.ceil(total * 2 / 3) / (committee.delegates.length || 1)) * 69.1} 69.1`}
+                          strokeLinecap="round" transform="rotate(-90 14 14)" />
+                        <text x="14" y="18" textAnchor="middle" fontSize="8" fontWeight="900" fill="#EDE7D8">{Math.ceil(total * 2/3)}</text>
+                      </svg>
+                      <svg width="28" height="28" viewBox="0 0 28 28">
+                        <circle cx="14" cy="14" r="11" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="4" />
+                        <circle cx="14" cy="14" r="11" fill="none" stroke="#8A7A6A" strokeWidth="4"
+                          strokeDasharray={`${((Math.floor(total / 2) + 1) / (committee.delegates.length || 1)) * 69.1} 69.1`}
+                          strokeLinecap="round" transform="rotate(-90 14 14)" />
+                        <text x="14" y="18" textAnchor="middle" fontSize="8" fontWeight="900" fill="#EDE7D8">{Math.floor(total/2)+1}</text>
+                      </svg>
+                    </>
+                  );
+                })()}
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-mono" style={{ color: 'rgba(238,217,138,0.6)' }}>PHASE</span>
-                <span className="text-xs font-black capitalize" style={{ color: '#EED98A' }}>{advisorPhaseDisplay}</span>
-              </div>
-              {displayQueue.length > 0 && (
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-mono" style={{ color: 'rgba(238,217,138,0.6)' }}>IN QUEUE</span>
-                  <span className="text-xs font-black" style={{ color: '#EED98A' }}>{displayQueue.length}</span>
-                </div>
-              )}
+              {/* Phase display instead of A-Z/Queue toggle */}
+              <span className="text-xs font-black capitalize px-2 py-1 rounded-lg" style={{ backgroundColor: 'rgba(238,217,138,0.12)', color: '#EED98A', fontFamily: "'DM Mono', monospace" }}>{advisorPhaseDisplay}</span>
             </div>
           </div>
           {/* Now Speaking label */}
@@ -462,7 +491,7 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
               </div>
 
               <div className="flex-1 overflow-y-auto">
-                <p className="text-xs text-[#9A8A78] font-mono uppercase tracking-wider mb-3">
+                <p className="text-xs font-mono uppercase tracking-wider mb-3" style={{ color: '#1B3828', fontWeight: 700 }}>
                   Other Delegates ({otherDelegates.length})
                 </p>
                 <div className="flex flex-wrap gap-2">
