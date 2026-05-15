@@ -1,5 +1,6 @@
 'use client';
 import { use, useEffect, useState, useRef, useCallback, useMemo, Suspense } from 'react';
+import MobileGate from '@/components/MobileGate';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Committee, DelegateStatus } from '@/lib/types';
@@ -1736,6 +1737,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   };
 
   return (
+    <MobileGate>
     <div className="h-screen flex flex-col overflow-hidden relative" style={{ backgroundColor: '#EDE7D8' }}>
       <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
       <header className="border-b border-[#DDD4C0] bg-[#FAF8F3] px-4 h-11 flex items-center gap-2" data-tutorial="topbar">
@@ -2488,6 +2490,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         </div>
       )}
     </div>
+    </MobileGate>
   );
 }
 
