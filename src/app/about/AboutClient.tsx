@@ -7,7 +7,6 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 const AMBASSADORS = [
   // Europe
@@ -107,14 +106,22 @@ export default function AboutClient() {
           <div className="grid grid-cols-5 gap-8">
             {AMBASSADORS.map((amb) => (
               <div key={amb.name} className="flex flex-col items-center gap-3">
-                <Avatar style={{ width: 80, height: 80, border: '2px solid rgba(28, 20, 16, 0.15)', backgroundColor: 'rgba(221, 212, 192, 0.5)' }}>
-                  <AvatarImage src={amb.photo} alt={amb.name} />
-                  <AvatarFallback style={{ backgroundColor: 'rgba(221, 212, 192, 0.8)', color: '#B6871F', fontWeight: 700, fontSize: 14 }}>
-                    {amb.initials}
-                  </AvatarFallback>
-                </Avatar>
+                <div style={{ width: 120, height: 120, borderRadius: '50%', overflow: 'hidden', border: '2px solid rgba(28,20,16,0.15)', backgroundColor: 'rgba(221,212,192,0.5)', flexShrink: 0 }}>
+                  {amb.photo ? (
+                    <img
+                      src={amb.photo}
+                      alt={amb.name}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top', display: 'block' }}
+                    />
+                  ) : (
+                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(221,212,192,0.8)', color: '#B6871F', fontWeight: 700, fontSize: 16 }}>
+                      {amb.initials}
+                    </div>
+                  )}
+                </div>
                 <div className="text-center">
                   <p className="text-[#1C1410] text-xs font-bold leading-tight">{amb.name}</p>
+                  <p className="text-[#9A8A78] text-[10px] mt-0.5">{amb.country}</p>
                 </div>
               </div>
             ))}
