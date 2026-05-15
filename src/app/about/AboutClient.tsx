@@ -21,10 +21,10 @@ const AMBASSADORS = [
   { name: 'Anna Cocconi',            country: 'Venezuela',      initials: 'AC', photo: '/anna_ambassador.png' },
   // Asia (west to east)
   { name: 'Farah Lahiani',           country: 'UAE',            initials: 'FH', photo: '/farah_ambassador.png' },
-  { name: 'Tyler Serano',            country: 'Philippines',    initials: 'TS', photo: '' },
+  { name: 'Tyler Serano',            country: 'Philippines',    initials: 'TS', photo: '/tyler_ambassador.png' },
   { name: 'Andrew Mailoa',           country: 'Indonesia',      initials: 'AM', photo: '/andrew_ambassador.png' },
   { name: 'Charlito Gunawan',        country: 'Indonesia',      initials: 'CG', photo: '/charlito_ambassador.png' },
-  { name: 'Victor',                  country: 'Hong Kong',      initials: 'VH', photo: '' },
+  { name: 'Victor Mikusek',          country: 'Hong Kong',      initials: 'VM', photo: '/victor_ambassador.png' },
 ];
 
 const inputStyle: React.CSSProperties = {
