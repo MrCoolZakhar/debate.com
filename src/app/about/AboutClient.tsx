@@ -10,19 +10,19 @@ import { Label } from '@/components/ui/label';
 
 const AMBASSADORS = [
   // Europe
-  { name: 'Kyle Wilkinson',          country: 'United Kingdom', initials: 'KW', photo: '/kyle_ambassador.jpg' },
-  { name: 'Celine Nasser',           country: 'United Kingdom', initials: 'CN', photo: '/celine_ambassador.jpg' },
-  { name: 'Noelia Alvarez Iglesias', country: 'Spain',          initials: 'NA', photo: '/noelia_ambassador.jpg' },
-  { name: 'Armande Loretz',          country: 'France',         initials: 'AL', photo: '/armande_ambassador.jpg' },
+  { name: 'Kyle Wilkinson',          country: 'United Kingdom', initials: 'KW', photo: '/kyle_ambassador.png' },
+  { name: 'Celine Nasser',           country: 'United Kingdom', initials: 'CN', photo: '/celine_ambassador.png' },
+  { name: 'Noelia Alvarez Iglesias', country: 'Spain',          initials: 'NA', photo: '/noelia_ambassador.png' },
+  { name: 'Armande Loretz',          country: 'France',         initials: 'AL', photo: '/armande_ambassador.png' },
   // South America
-  { name: 'Manuela Trujillo',        country: 'Peru',           initials: 'MT', photo: '/manuela_ambassador.jpg' },
+  { name: 'Manuela Trujillo',        country: 'Peru',           initials: 'MT', photo: '/manuela_ambassador.png' },
   { name: 'Valentina Cruz',          country: 'Peru',           initials: 'VC', photo: '/valentina_ambassador.png' },
-  { name: 'Paolo Marinuzzi',         country: 'Venezuela',      initials: 'PM', photo: '/paolo_ambassador.jpg' },
-  { name: 'Anna Cocconi',            country: 'Venezuela',      initials: 'AC', photo: '/anna_ambassador.jpg' },
+  { name: 'Paolo Marinuzzi',         country: 'Venezuela',      initials: 'PM', photo: '/paolo_ambassador.png' },
+  { name: 'Anna Cocconi',            country: 'Venezuela',      initials: 'AC', photo: '/anna_ambassador.png' },
   // Asia (west to east)
-  { name: 'Farah Lahiani',           country: 'UAE',            initials: 'FH', photo: '/farah_ambassador.jpg' },
+  { name: 'Farah Lahiani',           country: 'UAE',            initials: 'FH', photo: '/farah_ambassador.png' },
   { name: 'Tyler Serano',            country: 'Philippines',    initials: 'TS', photo: '' },
-  { name: 'Andrew Mailoa',           country: 'Indonesia',      initials: 'AM', photo: '/andrew_ambassador.jpg' },
+  { name: 'Andrew Mailoa',           country: 'Indonesia',      initials: 'AM', photo: '/andrew_ambassador.png' },
   { name: 'Charlito Gunawan',        country: 'Indonesia',      initials: 'CG', photo: '' },
   { name: 'Victor',                  country: 'Hong Kong',      initials: 'VH', photo: '' },
 ];
