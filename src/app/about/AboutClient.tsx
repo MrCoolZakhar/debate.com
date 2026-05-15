@@ -16,7 +16,7 @@ const AMBASSADORS = [
   { name: 'Armande Loretz',          country: 'France',         initials: 'AL', photo: '/armande_ambassador.jpg' },
   // South America
   { name: 'Manuela Trujillo',        country: 'Peru',           initials: 'MT', photo: '/manuela_ambassador.jpg' },
-  { name: 'Valentina Cruz',          country: 'Peru',           initials: 'VC', photo: '/valentina_ambassador.jpg' },
+  { name: 'Valentina Cruz',          country: 'Peru',           initials: 'VC', photo: '/valentina_ambassador.png' },
   { name: 'Paolo Marinuzzi',         country: 'Venezuela',      initials: 'PM', photo: '/paolo_ambassador.jpg' },
   { name: 'Anna Cocconi',            country: 'Venezuela',      initials: 'AC', photo: '/anna_ambassador.jpg' },
   // Asia (west to east)
