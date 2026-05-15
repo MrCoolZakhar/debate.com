@@ -23,7 +23,7 @@ const AMBASSADORS = [
   { name: 'Farah Lahiani',           country: 'UAE',            initials: 'FH', photo: '/farah_ambassador.png' },
   { name: 'Tyler Serano',            country: 'Philippines',    initials: 'TS', photo: '' },
   { name: 'Andrew Mailoa',           country: 'Indonesia',      initials: 'AM', photo: '/andrew_ambassador.png' },
-  { name: 'Charlito Gunawan',        country: 'Indonesia',      initials: 'CG', photo: '' },
+  { name: 'Charlito Gunawan',        country: 'Indonesia',      initials: 'CG', photo: '/charlito_ambassador.png' },
   { name: 'Victor',                  country: 'Hong Kong',      initials: 'VH', photo: '' },
 ];
 

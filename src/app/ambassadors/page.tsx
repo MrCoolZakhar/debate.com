@@ -5,6 +5,7 @@ const AMBASSADORS = [
   { name: 'anna', src: '/anna_ambassador.png' },
   { name: 'armande', src: '/armande_ambassador.png' },
   { name: 'celine', src: '/celine_ambassador.png' },
+  { name: 'charlito', src: '/charlito_ambassador.png' },
   { name: 'farah', src: '/farah_ambassador.png' },
   { name: 'kyle', src: '/kyle_ambassador.png' },
   { name: 'manuela', src: '/manuela_ambassador.png' },
