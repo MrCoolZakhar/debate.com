@@ -464,7 +464,7 @@ export default function HomeClient() {
 
             <div className="relative z-10 flex items-center px-8 md:px-14">
               <div className="flex flex-col justify-center items-center text-center w-full max-w-2xl mx-auto">
-                <h1 className="font-black tracking-tight text-white leading-[1.05] mb-5 text-center whitespace-nowrap" style={{ fontSize: 'clamp(90px, 13.5vw, 165px)' }}>
+                <h1 className="font-black tracking-tight text-white leading-[1.05] mb-5 text-center" style={{ fontSize: 'clamp(48px, 13.5vw, 165px)' }}>
                   MUN done{' '}
                   <span style={{ fontFamily: "'Playfair Display', serif", fontStyle: 'italic', fontWeight: 400, color: '#B8844A' }}>
                     right.
@@ -530,7 +530,7 @@ export default function HomeClient() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-[#B6871F]/30 w-full max-w-6xl mx-auto mt-16">
                   {steps.map((s) => (
-                    <div key={s.step} className="scroll-reveal text-center px-16 py-8 group relative overflow-hidden cursor-default flex flex-col items-center">
+                    <div key={s.step} className="scroll-reveal text-center px-6 md:px-16 py-8 group relative overflow-hidden cursor-default flex flex-col items-center">
                       <div className="relative w-full flex justify-center mb-2 h-8">
                         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-16 h-1.5 rounded-full bg-[#B6871F] opacity-0 group-hover:opacity-100 transition-all duration-300 shadow-[0_0_20px_6px_rgba(182,135,31,0.5)]" />
                         <div
@@ -560,7 +560,7 @@ export default function HomeClient() {
             <div className="w-full flex flex-col md:flex-row gap-12 items-center min-h-[calc(100vh-72px)]">
 
               {/* LEFT — text + pills centered */}
-              <div className="w-80 flex-shrink-0 flex flex-col justify-center items-start py-8">
+              <div className="w-full md:w-80 flex-shrink-0 flex flex-col justify-center items-start py-8">
 
                 <h2 className="font-black uppercase tracking-wide leading-tight mb-4" style={{ fontSize: 'clamp(28px, 3.2vw, 48px)' }}>
                   <span className="text-[#1B3828]">Everything chairs need</span><br />
