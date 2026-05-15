@@ -20,7 +20,8 @@ function getAmbassadors(): { name: string; src: string }[] {
   }
 }
 
-export const dynamic = 'force-dynamic'; // re-read public dir on every request
+// Static generation: fs.readdirSync runs once at build time on Vercel,
+// where process.cwd()/public is accessible. No runtime filesystem access needed.
 
 export default function AmbassadorsPage() {
   const ambassadors = getAmbassadors();
