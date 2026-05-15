@@ -218,7 +218,7 @@ function FullListPopup({
 // arcFill: fixed fraction 0–1 for the arc shape (never changes per chart).
 // label:   live-computed number shown next to the arc.
 // color:   always active — these are informational thresholds, not pass/fail.
-function MajorityPie({ arcFill, color, label }: {
+export function MajorityPie({ arcFill, color, label }: {
   arcFill: number; color: string; label: string;
 }) {
   const r = 13; const circ = 2 * Math.PI * r;

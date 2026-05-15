@@ -7,24 +7,24 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 const AMBASSADORS = [
-  { name: 'Ambassador One',      country: 'United Kingdom', initials: 'A1' },
-  { name: 'Ambassador Two',      country: 'Brazil',         initials: 'A2' },
-  { name: 'Ambassador Three',    country: 'Japan',          initials: 'A3' },
-  { name: 'Ambassador Four',     country: 'South Africa',   initials: 'A4' },
-  { name: 'Ambassador Five',     country: 'Germany',        initials: 'A5' },
-  { name: 'Ambassador Six',      country: 'India',          initials: 'A6' },
-  { name: 'Ambassador Seven',    country: 'Australia',      initials: 'A7' },
-  { name: 'Ambassador Eight',    country: 'Canada',         initials: 'A8' },
-  { name: 'Ambassador Nine',     country: 'France',         initials: 'A9' },
-  { name: 'Ambassador Ten',      country: 'Argentina',      initials: 'AT' },
-  { name: 'Ambassador Eleven',   country: 'Nigeria',        initials: 'AE' },
-  { name: 'Ambassador Twelve',   country: 'South Korea',    initials: 'AK' },
-  { name: 'Ambassador Thirteen', country: 'Mexico',         initials: 'AM' },
-  { name: 'Ambassador Fourteen', country: 'Egypt',          initials: 'AF' },
-  { name: 'Ambassador Fifteen',  country: 'Sweden',         initials: 'AS' },
+  // Europe
+  { name: 'Kyle Wilkinson',          country: 'United Kingdom', initials: 'KW', photo: '/kyle_ambassador.jpg' },
+  { name: 'Celine Nasser',           country: 'United Kingdom', initials: 'CN', photo: '/celine_ambassador.jpg' },
+  { name: 'Noelia Alvarez Iglesias', country: 'Spain',          initials: 'NA', photo: '/noelia_ambassador.jpg' },
+  { name: 'Armande Loretz',          country: 'France',         initials: 'AL', photo: '/armande_ambassador.jpg' },
+  // South America
+  { name: 'Manuela Trujillo',        country: 'Peru',           initials: 'MT', photo: '/manuela_ambassador.jpg' },
+  { name: 'Valentina Cruz',          country: 'Peru',           initials: 'VC', photo: '/valentina_ambassador.png' },
+  { name: 'Paolo Marinuzzi',         country: 'Venezuela',      initials: 'PM', photo: '/paolo_ambassador.jpg' },
+  { name: 'Anna Cocconi',            country: 'Venezuela',      initials: 'AC', photo: '/anna_ambassador.jpg' },
+  // Asia (west to east)
+  { name: 'Farah Lahiani',           country: 'UAE',            initials: 'FH', photo: '/farah_ambassador.jpg' },
+  { name: 'Tyler Serano',            country: 'Philippines',    initials: 'TS', photo: '' },
+  { name: 'Andrew Mailoa',           country: 'Indonesia',      initials: 'AM', photo: '/andrew_ambassador.jpg' },
+  { name: 'Charlito Gunawan',        country: 'Indonesia',      initials: 'CG', photo: '' },
+  { name: 'Victor',                  country: 'Hong Kong',      initials: 'VH', photo: '' },
 ];
 
 const inputStyle: React.CSSProperties = {
@@ -106,14 +106,22 @@ export default function AboutClient() {
           <div className="grid grid-cols-5 gap-8">
             {AMBASSADORS.map((amb) => (
               <div key={amb.name} className="flex flex-col items-center gap-3">
-                <Avatar style={{ width: 80, height: 80, border: '2px solid rgba(28, 20, 16, 0.15)', backgroundColor: 'rgba(221, 212, 192, 0.5)' }}>
-                  <AvatarImage src="" alt={amb.name} />
-                  <AvatarFallback style={{ backgroundColor: 'rgba(221, 212, 192, 0.8)', color: '#B6871F', fontWeight: 700, fontSize: 14 }}>
-                    {amb.initials}
-                  </AvatarFallback>
-                </Avatar>
+                <div style={{ width: 120, height: 120, borderRadius: '50%', overflow: 'hidden', border: '2px solid rgba(28,20,16,0.15)', backgroundColor: 'rgba(221,212,192,0.5)', flexShrink: 0 }}>
+                  {amb.photo ? (
+                    <img
+                      src={amb.photo}
+                      alt={amb.name}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top', display: 'block' }}
+                    />
+                  ) : (
+                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(221,212,192,0.8)', color: '#B6871F', fontWeight: 700, fontSize: 16 }}>
+                      {amb.initials}
+                    </div>
+                  )}
+                </div>
                 <div className="text-center">
                   <p className="text-[#1C1410] text-xs font-bold leading-tight">{amb.name}</p>
+                  <p className="text-[#9A8A78] text-[10px] mt-0.5">{amb.country}</p>
                 </div>
               </div>
             ))}

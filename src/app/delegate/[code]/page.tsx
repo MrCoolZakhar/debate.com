@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useEffect, useState, useRef, useCallback, Suspense } from 'react';
+import React, { use, useEffect, useState, useRef, useCallback, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Committee, CommitteeDocument, DocumentType, PendingMotionType, SpeakingLogEntry, DelegateStatus } from '@/lib/types';
@@ -43,7 +43,7 @@ function formatTime(seconds: number): string {
 
 function GavelLoader() {
   return (
-    <div className="min-h-screen bg-[#F6F1E9] flex flex-col items-center justify-center gap-4">
+    <div className="min-h-screen bg-[#EDE7D8] flex flex-col items-center justify-center gap-4">
       <style>{`
         @keyframes gavel-strike {
           0%   { transform: rotate(-30deg); }
@@ -209,20 +209,77 @@ function calcPoints(logs: SpeakingLogEntry[], committee: Committee, country: str
 
   // Tier
   let tier = 'Observer';
-  if (total >= 300) tier = 'Distinguished Delegate ⭐';
-  else if (total >= 200) tier = 'Delegate 🏅';
-  else if (total >= 120) tier = 'Active Speaker 🎙️';
-  else if (total >= 70) tier = 'Debater 💬';
+  if (total >= 300) tier = 'Distinguished Delegate';
+  else if (total >= 200) tier = 'Delegate';
+  else if (total >= 120) tier = 'Active Speaker';
+  else if (total >= 70) tier = 'Debater';
   else if (total >= 30) tier = 'Participant';
 
-  // Tips — no point amounts mentioned
   const tips: string[] = [];
-  if (gslSpeeches.length === 0) tips.push('📢 Get on the General Speakers\' List — each GSL speech boosts your score.');
-  if (caucusSpeeches.length === 0) tips.push('💬 Speak during a moderated caucus to show engagement on specific topics.');
-  if (wps.length === 0 && drs.length === 0) tips.push('📄 Submit or co-sponsor a working paper or draft resolution.');
-  if (totalSeconds > 0 && totalSeconds < 60) tips.push('⏱ Use your full speaking time — longer speeches earn more time bonus points.');
-  if (drs.length === 0 && wps.length > 0) tips.push('📜 Escalate your working paper into a draft resolution for bigger points.');
-  if (myDocs.length === 0) tips.push('🤝 Co-sponsor a document to boost your score and signal cooperation.');
+
+  if (tier === 'Observer') {
+    tips.push('Request to be added to the General Speakers\' List — raise your placard when the chair asks.');
+    tips.push('Mark yourself Present or Present & Voting so you can participate actively.');
+    tips.push('Your opening speech is your first impression — prepare a 60–90 second position statement.');
+    tips.push('Address the chair as "Honourable Chair" and fellow delegates as "Distinguished Delegates."');
+    tips.push('Listen carefully to other speeches before your first — understand the room\'s dynamic first.');
+    tips.push('Pass a note to a like-minded delegation to start building a bloc before the first caucus.');
+  }
+
+  if (tier === 'Participant') {
+    tips.push('You\'ve made a start — now aim to speak in a moderated caucus on a specific sub-topic.');
+    tips.push('During unmoderated caucuses, actively approach delegations to co-sponsor a working paper.');
+    tips.push('Use your full allotted speaking time — cutting speeches short leaves points on the table.');
+    tips.push('Propose a moderated caucus on a sub-topic you know well to control the debate agenda.');
+    tips.push('Co-sponsoring a document shows cooperation and earns more points than just signing it.');
+    tips.push('A Right of Reply shows confidence — if a delegation mischaracterises your position, challenge it.');
+  }
+
+  if (tier === 'Debater') {
+    tips.push('You\'re engaging well — now focus on substance. Reference specific clauses and past resolutions in speeches.');
+    tips.push('Build a working paper with at least 3–4 co-sponsors to show bloc leadership.');
+    tips.push('Use the yield to questions option at the end of a speech — it signals confidence and invites engagement.');
+    tips.push('Raise a motion for a moderated caucus rather than waiting for others to drive the agenda.');
+    tips.push('Escalate your working paper to a draft resolution — that\'s where the real points are.');
+    tips.push('Challenge procedural missteps with a Point of Order — chairs notice delegates who know procedure.');
+    tips.push('Your GSL speech should preview the clauses you want in the final resolution — use it strategically.');
+  }
+
+  if (tier === 'Active Speaker') {
+    tips.push('You\'re a frequent voice — now make your speeches more impactful. Each one should advance a specific policy goal.');
+    tips.push('Lead a draft resolution with your delegation as primary sponsor.');
+    tips.push('Coordinate your bloc during unmoderated caucuses — share a draft and get signatories before the session ends.');
+    tips.push('Use your speeches to directly respond to and rebut other delegations\' positions.');
+    tips.push('A passed draft resolution is the highest individual scoring action — push your DR all the way to a vote.');
+    tips.push('Propose a Tour de Table to ensure every delegation is heard and to reset a stalled debate.');
+    tips.push('Master the art of the friendly amendment — incorporate allies\' language to broaden support for your DR.');
+  }
+
+  if (tier === 'Delegate') {
+    tips.push('You are close to Distinguished — one more passed resolution or RTR could push you there.');
+    tips.push('Help newer delegates get on the speakers list — demonstrated leadership is noticed by chairs.');
+    tips.push('Use your speeches to explicitly reference operative clauses in draft resolutions under discussion.');
+    tips.push('Introduce an unfriendly amendment to weaken a rival bloc\'s resolution if needed.');
+    tips.push('Volunteer to consolidate competing working papers — it shows diplomatic skill and earns respect.');
+    tips.push('A Point of Information during another delegate\'s speech can shift the room\'s focus to your agenda.');
+    tips.push('Your yield decisions matter at this level — yield to questions to demonstrate mastery of your country\'s position.');
+  }
+
+  if (tier === 'Distinguished Delegate') {
+    tips.push('You have reached the highest tier — your score reflects genuine engagement across every dimension of debate.');
+    tips.push('Focus on legacy: ensure your draft resolution is substantive enough to pass with broad support.');
+    tips.push('Mentor less experienced delegates during unmoderated caucuses — great MUNers elevate the whole room.');
+    tips.push('Use your final GSL speech to synthesise the debate and call for consensus behind your resolution.');
+    tips.push('A Distinguished Delegate drives the agenda, not just responds to it — every caucus should have your fingerprints on it.');
+    tips.push('Consider proposing closure of debate when you have enough votes secured — timing this correctly is the final skill.');
+  }
+
+  // Universal conditional tips regardless of tier
+  if (gslSpeeches.length === 0) tips.push('You have not spoken on the General Speakers\' List yet — this is the most visible way to establish your delegation\'s position.');
+  if (caucusSpeeches.length === 0 && committee.phase !== 'pre-session') tips.push('Moderated caucuses reward focused, topic-specific arguments — request one and use the shorter time to make a precise point.');
+  if (wps.length === 0 && drs.length === 0) tips.push('No documents yet — co-sponsoring even one working paper signals that your delegation is constructively engaged.');
+  if (totalSeconds > 0 && totalSeconds < 45) tips.push('You are not using your full speaking time. Longer speeches earn time-bonus points and project confidence.');
+  if (drs.length === 0 && wps.length > 0) tips.push('You have a working paper — escalate it to a draft resolution before the voting procedure begins.');
 
   return { total, breakdown, tier, tips };
 }
@@ -301,8 +358,8 @@ function InlinePdfViewer({ fileUrl, fileName }: { fileUrl: string; fileName: str
   const [show, setShow] = useState(false);
   return (
     <div className="space-y-1.5">
-      <button onClick={() => setShow((v) => !v)} className="text-xs text-blue-400 hover:text-blue-300 transition-colors">
-        <Emoji size="1em">📎</Emoji> {fileName} {show ? '▲' : '▼'}
+      <button onClick={() => setShow((v) => !v)} className="text-xs transition-colors focus:outline-none" style={{ color: '#1B3828' }}>
+        📎 {fileName} {show ? '▲' : '▼'}
       </button>
       {show && (
         <iframe src={fileUrl} title={fileName} className="w-full rounded-lg border border-[#DDD4C0]" style={{ height: '400px' }} />
@@ -313,13 +370,14 @@ function InlinePdfViewer({ fileUrl, fileName }: { fileUrl: string; fileName: str
 
 // ── Delegate Doc Card (with inline PDF viewer) ────────────────────────────────
 function DelegateDocCard({ doc }: { doc: CommitteeDocument }) {
-  const statusColor = doc.status === 'passed' ? 'text-emerald-400' : doc.status === 'failed' ? 'text-red-400' : doc.status === 'introduced' ? 'text-purple-400' : doc.status === 'on-floor' ? 'text-[#B6871F]' : 'text-[#9A8A78]';
+  const statusColor = doc.status === 'passed' ? '#1B3828' : doc.status === 'failed' ? '#8B2020' : doc.status === 'introduced' ? '#B8844A' : doc.status === 'on-floor' ? '#B8844A' : '#9A8A78';
+  const statusBg = doc.status === 'passed' ? 'rgba(27,56,40,0.1)' : doc.status === 'failed' ? 'rgba(139,32,32,0.1)' : 'transparent';
   const statusLabel = doc.status === 'introduced' ? 'Being Presented' : doc.status === 'on-floor' ? 'On Floor' : doc.status === 'passed' ? 'Passed' : doc.status === 'failed' ? 'Failed' : 'Submitted';
   return (
     <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl p-3 space-y-2">
       <div className="flex items-center justify-between">
         <div className="font-semibold text-[#1C1410] text-sm">{doc.docCode} — {doc.title}</div>
-        <span className={`text-xs font-bold ml-2 shrink-0 ${statusColor}`}>{statusLabel}</span>
+        <span className="text-xs font-black ml-2 shrink-0 px-2 py-0.5 rounded-full" style={{ color: statusColor, backgroundColor: statusBg, border: `1px solid ${statusColor}30` }}>{statusLabel}</span>
       </div>
       <div className="text-xs text-[#9A8A78]">
         {doc.sponsors.map((s, i) => (
@@ -369,16 +427,16 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
 
   return (
     <div className="p-4 max-w-2xl mx-auto space-y-4">
-      <h2 className="text-lg font-bold text-[#1C1410]">Submit Document</h2>
+      <h2 className="text-lg font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>SUBMIT DOCUMENT</h2>
       {submitted && (
-        <div className="bg-green-900/30 border border-green-700/30 rounded-xl p-3 text-green-300 text-sm">
+        <div className="rounded-xl p-3 text-sm font-semibold" style={{ backgroundColor: 'rgba(27,56,40,0.1)', border: '1px solid rgba(27,56,40,0.3)', color: '#1B3828' }}>
           ✓ Document submitted to chair for review
         </div>
       )}
       <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl p-4 space-y-4">
         {/* Type selector */}
         <div>
-          <label className="text-xs text-[#6A5A4A] mb-1.5 block">Document type</label>
+          <label className="text-xs font-bold mb-1.5 block" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>DOCUMENT TYPE</label>
           <div className="flex gap-2">
             {(['working-paper', 'draft-resolution'] as DocumentType[]).map((dt) => (
               <button key={dt} onClick={() => setDocType(dt)}
@@ -391,7 +449,7 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
 
         {/* Title */}
         <div>
-          <label className="text-xs text-[#6A5A4A] mb-1.5 block">Title</label>
+          <label className="text-xs font-bold mb-1.5 block" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>TITLE</label>
           <input type="text" value={title} onChange={(e) => setTitle(e.target.value)}
             placeholder="e.g. Strengthening climate adaptation frameworks"
             className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-3 py-2 text-[#1C1410] text-sm focus:outline-none focus:border-[#1B3828]" />
@@ -399,19 +457,19 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
 
         {/* Co-sponsors */}
         <div>
-          <label className="text-xs text-[#6A5A4A] mb-1.5 block">
-            Sponsors <span className="text-[#9A8A78]">— you are automatically listed first</span>
+          <label className="text-xs font-bold mb-1.5 block" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>
+            SPONSORS <span className="font-normal" style={{ color: '#9A8A78' }}>— you are automatically listed first</span>
           </label>
           <SponsorsInput committee={committee} myCountry={country} value={coSponsors} onChange={setCoSponsors} />
         </div>
 
         {/* File */}
         <div>
-          <label className="text-xs text-[#6A5A4A] mb-1.5 block">Attach file <span className="text-[#9A8A78]">(optional)</span></label>
+          <label className="text-xs font-bold mb-1.5 block" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>ATTACHMENT <span className="font-normal" style={{ color: '#9A8A78' }}>(optional)</span></label>
           <div className="flex items-center gap-2">
             <button onClick={() => fileInputRef.current?.click()}
               className="text-xs bg-[#FAF8F3] border border-[#DDD4C0] hover:border-[#1B3828] text-[#6A5A4A] px-3 py-2 rounded-lg transition-colors">
-              {fileName ? <><Emoji size="1em">📎</Emoji>{` ${fileName}`}</> : '+ Attach file'}
+              {fileName ? `📎 ${fileName}` : '+ Attach file'}
             </button>
             {fileName && <button onClick={() => { setFileName(null); setFileUrl(null); }} className="text-xs text-[#9A8A78] hover:text-red-400">Remove</button>}
           </div>
@@ -426,8 +484,9 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
         </div>
 
         <button onClick={handleSubmit} disabled={!title.trim() || sending}
-          className="w-full bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white py-2.5 rounded-lg text-sm font-semibold transition-colors">
-          {sending ? 'Submitting…' : 'Submit to Chair →'}
+          className="w-full text-white py-3 rounded-xl text-sm font-black transition-colors focus:outline-none"
+          style={{ backgroundColor: !title.trim() || sending ? '#DDD4C0' : '#1B3828', color: !title.trim() || sending ? '#9A8A78' : 'white', letterSpacing: '0.05em' }}>
+          {sending ? 'SUBMITTING…' : 'SUBMIT TO CHAIR →'}
         </button>
       </div>
 
@@ -470,15 +529,18 @@ function StatisticsTab({ committee, country }: { committee: Committee; country: 
   return (
     <div className="p-4 max-w-2xl mx-auto space-y-5">
       {/* Score card */}
-      <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-2xl p-5">
-        <div className="text-xs font-mono text-[#9A8A78] mb-3">YOUR SCORE</div>
-        <div className="flex items-end gap-3 mb-3">
-          <span className="text-6xl font-black text-[#1C1410]">{total}</span>
-          <span className="text-lg text-[#6A5A4A] font-medium mb-1">pts</span>
+      <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid #DDD4C0' }}>
+        <div className="px-5 py-3 flex items-center gap-3" style={{ backgroundColor: '#1B3828', borderBottom: '1px solid #3D7A52' }}>
+          <div className="w-1 h-4 rounded-full" style={{ backgroundColor: '#EED98A' }} />
+          <span className="text-xs font-mono font-bold tracking-widest" style={{ color: '#EED98A' }}>YOUR SCORE</span>
         </div>
-        <div className="inline-flex items-center gap-1.5 bg-[#7B4A1E]/20 border border-[#7B4A1E]/30 text-[#B8844A] text-sm font-bold px-3 py-1 rounded-full">
-          <span>{tier.match(/\p{Emoji}/u)?.[0] ?? ''}</span>
-          <span>{tier.replace(/\p{Emoji}/gu, '').trim()}</span>
+        <div className="p-5" style={{ backgroundColor: '#EDE7D8' }}>
+        <div className="flex items-end gap-3 mb-3">
+          <span className="text-6xl font-black" style={{ color: '#1B3828' }}>{total}</span>
+          <span className="text-lg font-medium mb-1" style={{ color: '#6A5A4A' }}>pts</span>
+        </div>
+        <div className="inline-flex items-center gap-1.5 text-sm font-black px-3 py-1 rounded-full" style={{ backgroundColor: '#1B3828', color: '#EED98A' }}>
+          {tier}
         </div>
 
         {/* Score breakdown */}
@@ -486,50 +548,60 @@ function StatisticsTab({ committee, country }: { committee: Committee; country: 
           <div className="mt-4 space-y-1.5">
             {breakdown.map((b) => (
               <div key={b.label} className="flex justify-between text-xs">
-                <span className="text-[#6A5A4A]">{b.label}</span>
-                <span className="text-[#1C1410] font-bold">+{b.pts}</span>
+                <span style={{ color: '#6A5A4A' }}>{b.label}</span>
+                <span className="font-bold" style={{ color: '#1B3828' }}>+{b.pts}</span>
               </div>
             ))}
           </div>
         )}
+        </div>
       </div>
 
       {/* Speaking stats */}
-      <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-2xl p-5">
-        <div className="text-xs font-mono text-[#9A8A78] mb-3">YOUR SPEAKING HISTORY</div>
+      <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid #DDD4C0' }}>
+        <div className="px-5 py-3 flex items-center gap-3" style={{ backgroundColor: '#1B3828', borderBottom: '1px solid #3D7A52' }}>
+          <div className="w-1 h-4 rounded-full" style={{ backgroundColor: '#EED98A' }} />
+          <span className="text-xs font-mono font-bold tracking-widest" style={{ color: '#EED98A' }}>YOUR SPEAKING HISTORY</span>
+        </div>
+        <div className="p-5" style={{ backgroundColor: '#EDE7D8' }}>
         <div className="grid grid-cols-3 gap-3 mb-4">
           <div className="text-center">
-            <div className="text-2xl font-black text-[#1C1410]">{myLogs.length}</div>
-            <div className="text-xs text-[#9A8A78]">Speeches</div>
+            <div className="text-2xl font-black" style={{ color: '#1B3828' }}>{myLogs.length}</div>
+            <div className="text-xs" style={{ color: '#9A8A78' }}>Speeches</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-black text-[#1C1410]">{formatTime(totalSeconds)}</div>
-            <div className="text-xs text-[#9A8A78]">Total time</div>
+            <div className="text-2xl font-black" style={{ color: '#1B3828' }}>{formatTime(totalSeconds)}</div>
+            <div className="text-xs" style={{ color: '#9A8A78' }}>Total time</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-black text-[#1C1410]">{myRank > 0 ? `#${myRank}` : '—'}</div>
-            <div className="text-xs text-[#9A8A78]">Rank by time</div>
+            <div className="text-2xl font-black" style={{ color: '#1B3828' }}>{myRank > 0 ? `#${myRank}` : '—'}</div>
+            <div className="text-xs" style={{ color: '#9A8A78' }}>Rank by time</div>
           </div>
         </div>
         {myLogs.length > 0 ? (
           <div className="space-y-1.5">
             {myLogs.map((l, i) => (
-              <div key={i} className="flex items-center justify-between text-xs bg-[#FAF8F3] rounded-lg px-3 py-2">
-                <span className="text-[#6A5A4A] truncate flex-1">{l.topic || 'General Speakers\' List'}</span>
-                <span className="text-[#9A8A78] shrink-0 ml-2 capitalize">{l.context.replace(/-/g, ' ')}</span>
-                <span className="text-[#1C1410] font-mono shrink-0 ml-2">{l.seconds}s</span>
+              <div key={i} className="flex items-center justify-between text-xs rounded-lg px-3 py-2" style={{ backgroundColor: '#FAF8F3' }}>
+                <span className="truncate flex-1" style={{ color: '#6A5A4A' }}>{l.topic || 'General Speakers\' List'}</span>
+                <span className="shrink-0 ml-2 capitalize" style={{ color: '#9A8A78' }}>{l.context.replace(/-/g, ' ')}</span>
+                <span className="font-mono shrink-0 ml-2" style={{ color: '#1C1410' }}>{l.seconds}s</span>
               </div>
             ))}
           </div>
         ) : (
-          <p className="text-[#9A8A78] text-sm text-center py-2">No speeches recorded yet</p>
+          <p className="text-sm text-center py-2" style={{ color: '#9A8A78' }}>No speeches recorded yet</p>
         )}
+        </div>
       </div>
 
       {/* Committee leaderboard */}
       {ranking.length > 0 && (
-        <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-2xl p-5">
-          <div className="text-xs font-mono text-[#9A8A78] mb-3">COMMITTEE SPEAKING TIME</div>
+        <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid #DDD4C0' }}>
+          <div className="px-5 py-3 flex items-center gap-3" style={{ backgroundColor: '#1B3828', borderBottom: '1px solid #3D7A52' }}>
+            <div className="w-1 h-4 rounded-full" style={{ backgroundColor: '#EED98A' }} />
+            <span className="text-xs font-mono font-bold tracking-widest" style={{ color: '#EED98A' }}>COMMITTEE SPEAKING TIME</span>
+          </div>
+          <div className="p-5" style={{ backgroundColor: '#EDE7D8' }}>
           {/* Column headers */}
           <div className="flex items-center gap-2 text-[10px] text-[#7A5A38] font-mono mb-1.5 px-2">
             <span className="w-4 shrink-0" />
@@ -542,33 +614,39 @@ function StatisticsTab({ committee, country }: { committee: Committee; country: 
               <div key={r.country} className={`flex items-center gap-2 text-sm ${r.country === country ? 'bg-[#1B3828]/10 border border-[#1B3828]/20 rounded-lg px-2 py-1' : 'px-2 py-1'}`}>
                 <span className="text-[#9A8A78] text-xs w-4 font-mono shrink-0">{i + 1}</span>
                 <FlagImg code={getCountryByName(r.country)?.code ?? ''} size={20} className="shrink-0" />
-                <span className={`flex-1 truncate ${r.country === country ? 'text-[#B6871F] font-bold' : 'text-[#6A5A4A]'}`}>{r.country}</span>
+                <span className="flex-1 truncate font-semibold" style={{ color: r.country === country ? '#1B3828' : '#6A5A4A', fontWeight: r.country === country ? 700 : 400 }}>{r.country}</span>
                 <div className="flex items-center gap-2">
                   <div className="w-16 h-1.5 bg-[#DDD4C0] rounded-full overflow-hidden">
                     <div className="h-full bg-[#1B3828] rounded-full" style={{ width: `${(r.seconds / ranking[0].seconds) * 100}%` }} />
                   </div>
                   <span className="text-xs font-mono text-[#9A8A78] w-10 text-right">{formatTime(r.seconds)}</span>
                 </div>
-                <span className="text-xs font-bold text-[#B8844A] w-8 text-right shrink-0">
+                <span className="text-xs font-black w-8 text-right shrink-0" style={{ color: '#1B3828' }}>
                   {pointsByCountry[r.country] ?? 0}
                 </span>
               </div>
             ))}
           </div>
         </div>
+        </div>
       )}
 
       {/* Tips */}
       {tips.length > 0 && (
-        <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-2xl p-5">
-          <div className="text-xs font-mono text-[#9A8A78] mb-3">HOW TO IMPROVE YOUR SCORE</div>
+        <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid #DDD4C0' }}>
+          <div className="px-5 py-3 flex items-center gap-3" style={{ backgroundColor: '#1B3828', borderBottom: '1px solid #3D7A52' }}>
+            <div className="w-1 h-4 rounded-full" style={{ backgroundColor: '#EED98A' }} />
+            <span className="text-xs font-mono font-bold tracking-widest" style={{ color: '#EED98A' }}>HOW TO IMPROVE YOUR SCORE</span>
+          </div>
+          <div className="p-5" style={{ backgroundColor: '#EDE7D8' }}>
           <div className="space-y-2">
             {tips.map((tip) => (
-              <div key={tip} className="flex gap-2 text-sm text-[#6A5A4A]">
-                <span className="shrink-0">{tip.slice(0, 2)}</span>
-                <span>{tip.slice(3)}</span>
+              <div key={tip} className="flex gap-2 text-sm" style={{ color: '#6A5A4A' }}>
+                <span className="shrink-0">→</span>
+                <span>{tip.replace(/^\p{Emoji}\s*/u, '')}</span>
               </div>
             ))}
+          </div>
           </div>
         </div>
       )}
@@ -577,7 +655,7 @@ function StatisticsTab({ committee, country }: { committee: Committee; country: 
 }
 
 // ── Main Delegate Session ─────────────────────────────────────────────────────
-type DelegateTab = 'session' | 'motions' | 'resolutions' | 'documents' | 'stats';
+type DelegateTab = 'session' | 'documents' | 'chat' | 'stats';
 
 function DelegateSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const { code } = use(params);
@@ -588,11 +666,12 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   const [committee, setCommittee] = useState<Committee | null>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<DelegateTab>('session');
+  const [docsSection, setDocsSection] = useState<'submit' | 'view'>('submit');
   const [sessionSuspended, setSessionSuspended] = useState(false);
   const [sessionEnded, setSessionEnded] = useState(false);
   const [endedTab, setEndedTab] = useState<'ended' | 'session'>('ended');
   const [hoursRemaining, setHoursRemaining] = useState<number | null>(null);
-  const [showChat, setShowChat] = useState(false);
+  const [showChat, setShowChat] = useState(false); // kept for chatReadCounts compat only
   const [chatReadCounts, setChatReadCounts] = useState<Record<string, number>>({});
 
   const committeeIdRef = useRef('');
@@ -723,12 +802,11 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
 
   if (!committee) {
     return (
-      <div className="min-h-screen bg-[#F6F1E9] flex items-center justify-center">
+      <div className="min-h-screen bg-[#EDE7D8] flex items-center justify-center">
         <div className="text-center">
-          <div className="mb-4"><Emoji size="2.5rem">🔍</Emoji></div>
-          <h1 className="text-2xl font-bold text-[#1C1410] mb-2">Session not found</h1>
-          <p className="text-[#6A5A4A] mb-6">Code "{code}" is invalid or the session ended.</p>
-          <Link href="/join" className="bg-[#1B3828] hover:bg-[#2A5A3C] text-white px-6 py-3 rounded-lg font-semibold transition-colors">Try Again</Link>
+          <h1 className="text-2xl font-black mb-2" style={{ color: '#1B3828' }}>Session not found</h1>
+          <p className="mb-6" style={{ color: '#6A5A4A' }}>Code "{code}" is invalid or the session has ended.</p>
+          <Link href="/join" className="font-black text-white px-6 py-3 rounded-xl transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828' }}>TRY AGAIN</Link>
         </div>
       </div>
     );
@@ -791,165 +869,148 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
 
   // Section 7 — shortened tab labels
   const tabs: { key: DelegateTab; label: string }[] = [
-    { key: 'session',     label: 'Session' },
-    { key: 'motions',     label: 'Motions' },
-    { key: 'resolutions', label: 'DRs' },
-    { key: 'documents',   label: 'Docs' },
-    { key: 'stats',       label: 'Stats' },
+    { key: 'session',   label: 'Session' },
+    { key: 'documents', label: 'Documents' },
+    { key: 'chat',      label: 'Chat' },
+    { key: 'stats',     label: 'Stats' },
   ];
 
   // ── Absent banner (blocks active interaction)
   const AbsentBanner = () => (
-    <div className="mx-4 mt-4 bg-[#EDE7D8] border border-[#1B3828]/40 rounded-xl p-4">
-      <div className="text-sm font-bold text-[#1C1410] mb-1">You are currently absent</div>
-      <div className="text-xs text-[#6A5A4A] mb-3">Mark yourself Present or Present & Voting to participate actively.</div>
+    <div className="mx-4 mt-4 rounded-xl p-4" style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #DDD4C0' }}>
+      <div className="text-sm font-black mb-1" style={{ color: '#1B3828' }}>YOU ARE CURRENTLY ABSENT</div>
+      <div className="text-xs mb-3" style={{ color: '#6A5A4A' }}>Mark yourself Present or Present & Voting to participate actively.</div>
       {joinStatus && !joinDenied ? (
-        <div className="text-xs text-[#1B3828] font-medium flex items-center gap-1.5">
-          <div className="w-3 h-3 border border-[#1B3828] border-t-transparent rounded-full animate-spin" />
+        <div className="text-xs font-medium flex items-center gap-1.5" style={{ color: '#1B3828' }}>
+          <div className="w-3 h-3 border border-t-transparent rounded-full animate-spin" style={{ borderColor: '#1B3828' }} />
           Join request sent — waiting for chair approval…
         </div>
       ) : (
         <div className="flex gap-2">
           <button onClick={() => handleRequestJoin('present')} disabled={joinRequesting}
-            className="flex-1 bg-[#DDD4C0] hover:bg-[#C8BAA8] border border-[#1B3828]/30 text-[#6A5A4A] py-2 rounded-lg text-xs font-semibold transition-colors">
-            Mark Present (P)
+            className="flex-1 py-2 rounded-xl text-xs font-bold transition-colors focus:outline-none"
+            style={{ backgroundColor: 'transparent', border: '1px solid #DDD4C0', color: '#6A5A4A' }}>
+            PRESENT (P)
           </button>
           <button onClick={() => handleRequestJoin('present-voting')} disabled={joinRequesting}
-            className="flex-1 bg-[#1B3828] hover:bg-[#2A5A3C] text-white py-2 rounded-lg text-xs font-semibold transition-colors">
-            Present &amp; Voting (P&V)
+            className="flex-1 py-2 rounded-xl text-xs font-black text-white transition-colors focus:outline-none"
+            style={{ backgroundColor: '#1B3828' }}>
+            PRESENT &amp; VOTING (P+V)
           </button>
         </div>
       )}
-      {joinDenied && <p className="text-red-400 text-xs mt-2">Your join request was denied by the chair.</p>}
+      {joinDenied && <p className="text-xs mt-2 font-semibold" style={{ color: '#8B2020' }}>Your join request was denied by the chair.</p>}
     </div>
   );
 
   if (sessionSuspended && (committee.suspendedAt || wasEverSuspended.current)) {
     return (
-      <div className="min-h-screen bg-[#F6F1E9] flex flex-col items-center justify-center text-center px-8">
-        <div className="text-sm font-mono text-[#9A8A78] mb-2">{committee.name} · {committee.code}</div>
-        <div className="text-5xl mb-6">⏸️</div>
-        <h1 className="text-3xl font-black text-[#1C1410] mb-4">Session is currently adjourned.</h1>
-        <p className="text-lg text-[#6A5A4A]">Please wait until the chair reopens the session.</p>
-        <p className="text-xs text-[#9A8A78] mt-8">Press ESC to return to main menu</p>
+      <div className="min-h-screen flex flex-col items-center justify-center text-center px-8" style={{ backgroundColor: '#EDE7D8' }}>
+        <p className="text-xs font-mono font-bold tracking-widest mb-2" style={{ color: '#1B3828' }}>{committee.name} · {committee.code}</p>
+        <h1 className="text-4xl font-black mb-4 tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>SESSION ADJOURNED</h1>
+        <p className="text-lg" style={{ color: '#6A5A4A' }}>Please wait until the chair reopens the session.</p>
+        <p className="text-xs mt-8" style={{ color: '#9A8A78' }}>Press ESC to return to main menu</p>
       </div>
     );
   }
 
   return (
-    <div className="h-screen bg-[#F6F1E9] flex flex-col overflow-hidden">
+    <div className="h-screen flex flex-col overflow-hidden" style={{ backgroundColor: '#EDE7D8' }}>
+      <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
       {/* Header */}
-      <header className="border-b border-[#DDD4C0] bg-[#FAF8F3] px-4 h-14 flex items-center gap-3 shrink-0">
-        <Link href="/" className="flex items-center gap-2">
-          <img src="/GavellingLogo.png" alt="Gavelling" className="w-[16vw] h-auto max-h-9 object-contain" onError={(e)=>{(e.target as HTMLImageElement).style.display="none"}} />
+      <header className="border-b border-[#DDD4C0] bg-[#FAF8F3] px-4 h-11 flex items-center gap-2 relative z-[2] shrink-0">
+        <Link href="/">
+          <img src="/GavellingLogo.png" alt="Gavelling" className="w-[14vw] h-auto max-h-8 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
         </Link>
-        <div className="flex-1 min-w-0">
-          <div className="font-bold text-[#1C1410] text-sm truncate">{committee.name}</div>
-          <div className="text-xs text-[#9A8A78] truncate">{committee.topic}</div>
-        </div>
-        <div className="flex items-center gap-3 shrink-0">
-          <div className="text-right">
-            <div className="text-sm font-bold text-[#1C1410] flex items-center gap-1.5 justify-end">
-              <span className="text-lg">{flagFor(country)}</span>
-              {country}
-              <span className="ml-1 text-xs font-mono text-[#1B3828] bg-[#DDD4C0] px-1.5 py-0.5 rounded">{committee.code}</span>
-            </div>
-            <div className={`text-xs font-medium ${
-              isAdjourned ? 'text-red-400' :
-              committee.phase === 'voting' ? 'text-[#B6871F]' : 'text-[#9A8A78]'
-            }`}>{phaseDisplay}</div>
-          </div>
-          {!sessionEnded && (
-          <button
-            onClick={() => {
-              const newShow = !showChat;
-              setShowChat(newShow);
-              if (newShow) {
-                setChatReadCounts((prev) => ({
-                  ...prev,
-                  everyone: committee.messages.filter((m) => !m.content.startsWith('__log__:') && !m.isPrivate && m.sender !== country).length,
-                }));
-              }
-            }}
-            className={`relative text-xs px-3 py-1.5 rounded-lg transition-colors font-semibold shrink-0 ${showChat ? 'bg-[#1B3828] text-white' : 'bg-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}
-          >
-            <Emoji size="1em">💬</Emoji>
-            {!showChat && (() => {
+        <div className="flex flex-1 min-w-0 h-full">
+          {(['session', 'documents', 'chat', 'stats'] as DelegateTab[]).map((t, i) => {
+            const labels: Record<DelegateTab, string> = { session: 'Session', documents: 'Documents', chat: 'Chat', stats: 'Stats' };
+            const isActive = tab === t;
+            const chatUnread = (() => {
+              if (t !== 'chat') return 0;
               const total = committee.messages.filter((m) => m.sender !== country && !m.content.startsWith('__log__:') && !m.isPrivate).length;
-              const unread = total - (chatReadCounts['everyone'] ?? 0);
-              return unread > 0 ? (
-                <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#B6871F] rounded-full text-[#1C1410] text-[9px] flex items-center justify-center font-bold">
-                  {Math.min(unread, 99)}
-                </span>
-              ) : null;
-            })()}
+              return Math.max(0, total - (chatReadCounts['everyone'] ?? 0));
+            })();
+            return (
+              <React.Fragment key={t}>
+                {i > 0 && <div style={{ width: '1px', height: '28px', alignSelf: 'center', backgroundColor: 'rgba(28,20,16,0.2)', flexShrink: 0 }} />}
+                <button
+                  onClick={() => {
+                    setTab(t);
+                    if (t === 'chat') {
+                      setChatReadCounts((prev) => ({
+                        ...prev,
+                        everyone: committee.messages.filter((m) => !m.content.startsWith('__log__:') && !m.isPrivate && m.sender !== country).length,
+                      }));
+                    }
+                  }}
+                  className="flex-1 text-[18px] font-bold px-3 relative h-full transition-all duration-200"
+                  style={{ color: isActive ? '#1B3828' : '#1C1410', backgroundColor: isActive ? 'rgba(27,56,40,0.07)' : 'transparent', fontWeight: isActive ? 900 : 700 }}
+                  onMouseEnter={(e) => { if (!isActive) { const el = e.currentTarget as HTMLElement; el.style.color = '#1B3828'; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; el.style.transform = 'translateY(-1px)'; } }}
+                  onMouseLeave={(e) => { if (!isActive) { const el = e.currentTarget as HTMLElement; el.style.color = '#1C1410'; el.style.backgroundColor = 'transparent'; el.style.transform = 'translateY(0)'; } }}>
+                  {labels[t]}
+                  {chatUnread > 0 && tab !== 'chat' && (
+                    <span className="absolute top-1 right-1 w-4 h-4 bg-[#1B3828] rounded-full text-white text-[10px] flex items-center justify-center">{chatUnread}</span>
+                  )}
+                  <span style={{ position: 'absolute', bottom: '4px', left: '12px', right: '12px', height: '2px', backgroundColor: '#B6871F', transform: isActive ? 'scaleX(1)' : 'scaleX(0)', transformOrigin: 'left', transition: 'transform 200ms ease', borderRadius: '2px' }} />
+                </button>
+              </React.Fragment>
+            );
+          })}
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <button onClick={() => { navigator.clipboard.writeText(committee.code); }}
+            className="text-xs font-mono bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#1C1410] px-2.5 py-1 rounded-lg transition-colors shrink-0 focus:outline-none">
+            {committee.code}
           </button>
-          )}
         </div>
       </header>
 
       {/* Ended tab bar */}
       {sessionEnded && (
-        <div className="flex border-b border-[#DDD4C0] bg-[#FAF8F3] shrink-0">
+        <div className="flex shrink-0" style={{ borderBottom: '1px solid #DDD4C0', backgroundColor: '#FAF8F3' }}>
           <button onClick={() => setEndedTab('ended')}
-            className={`flex-1 py-2.5 text-sm font-bold transition-colors border-b-2 ${endedTab === 'ended' ? 'text-[#1C1410] border-[#1B3828]' : 'text-[#9A8A78] border-transparent hover:text-[#6A5A4A]'}`}>
-            🏁 End View
+            className="flex-1 py-2.5 text-xs font-black transition-colors focus:outline-none"
+            style={{ color: endedTab === 'ended' ? '#1B3828' : '#9A8A78', borderBottom: endedTab === 'ended' ? '2px solid #1B3828' : '2px solid transparent', marginBottom: '-1px', fontFamily: "'Outfit', sans-serif" }}>
+            END VIEW
           </button>
           <button onClick={() => setEndedTab('session')}
-            className={`flex-1 py-2.5 text-sm font-bold transition-colors border-b-2 ${endedTab === 'session' ? 'text-[#1C1410] border-[#1B3828]' : 'text-[#9A8A78] border-transparent hover:text-[#6A5A4A]'}`}>
-            👁 Session View
+            className="flex-1 py-2.5 text-xs font-black transition-colors focus:outline-none"
+            style={{ color: endedTab === 'session' ? '#1B3828' : '#9A8A78', borderBottom: endedTab === 'session' ? '2px solid #1B3828' : '2px solid transparent', marginBottom: '-1px', fontFamily: "'Outfit', sans-serif" }}>
+            SESSION VIEW
           </button>
         </div>
       )}
 
       {sessionEnded && endedTab === 'ended' ? (
         <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
-          <div className="mb-6"><Emoji size="3rem">🏁</Emoji></div>
-          <h1 className="text-4xl font-black text-[#1C1410] mb-4">This committee has ended.</h1>
-          <p className="text-xl text-[#6A5A4A] mb-2">{committee.name}</p>
-          <p className="text-base text-[#9A8A78] mb-8">{committee.topic}</p>
+          <h1 className="text-4xl font-black mb-4 tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>THIS COMMITTEE HAS ENDED.</h1>
+          <p className="text-xl mb-1" style={{ color: '#6A5A4A' }}>{committee.name}</p>
+          <p className="text-base mb-8" style={{ color: '#9A8A78' }}>{committee.topic}</p>
           {hoursRemaining !== null && (
-            <p className="text-sm text-[#9A8A78]">{hoursRemaining} hour{hoursRemaining !== 1 ? 's' : ''} until committee is deleted</p>
+            <p className="text-sm" style={{ color: '#9A8A78' }}>{hoursRemaining} hour{hoursRemaining !== 1 ? 's' : ''} until committee is deleted</p>
           )}
-          <p className="text-xs text-[#9A8A78] mt-8">Press ESC to return to main menu</p>
+          <p className="text-xs mt-8" style={{ color: '#9A8A78' }}>Press ESC to return to main menu</p>
         </div>
       ) : (
       <>
       {sessionEnded && endedTab === 'session' && (
-        <div className="shrink-0 bg-amber-900/20 border-b border-amber-700/40 px-4 py-2 text-center text-amber-300 text-sm font-semibold">
+        <div className="shrink-0 px-4 py-2 text-center text-sm font-bold" style={{ backgroundColor: '#1B3828', borderBottom: '1px solid #3D7A52', color: '#EED98A' }}>
           Session has ended — view only
         </div>
       )}
-      {/* Tab nav — Section 7: shorter labels, text-sm */}
-      <div className="flex border-b border-[#DDD4C0] bg-[#FAF8F3] shrink-0">
-        {tabs.map((t) => (
-          <button key={t.key} onClick={() => setTab(t.key)}
-            className={`flex-1 py-3 text-sm font-bold capitalize transition-colors ${
-              tab === t.key ? 'text-[#1C1410] border-b-2 border-[#1B3828]' : 'text-[#9A8A78] hover:text-[#6A5A4A]'
-            }`}>
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="flex-1 flex overflow-hidden">
-      {showChat && !sessionEnded && (
-        <ChatPanel
-          committee={committee}
-          senderName={country}
-          isChair={false}
-          onClose={() => setShowChat(false)}
-          initialReadCounts={chatReadCounts}
-          onReadCountsChange={setChatReadCounts}
-          readOnly={sessionEnded}
-          speakerCard={null}
-        />
-      )}
-      {!showChat && <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 flex overflow-hidden relative z-[2]">
+      {tab !== 'chat' && <div className="flex-1 overflow-y-auto">
 
         {/* ── Session tab ── */}
         {tab === 'session' && (
           <div>
+            {/* Committee info strip */}
+            <div className="px-4 pt-4 pb-2 text-center">
+              <p className="text-xs font-mono font-bold uppercase tracking-widest mb-0.5" style={{ color: '#9A8A78' }}>Committee</p>
+              <p className="font-black text-base" style={{ color: '#1B3828' }}>{committee.name}</p>
+              {committee.topic && <p className="text-xs mt-0.5" style={{ color: '#9A8A78' }}>{committee.topic}</p>}
+            </div>
             {isAbsent && !sessionEnded && <AbsentBanner />}
 
             {/* Moderated caucus special view */}
@@ -959,9 +1020,9 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                 <div className="flex justify-center">
                   <FlagImg code={getCountryByName(country)?.code ?? ''} size={88} className="rounded-full shadow-lg" />
                 </div>
-                <div className="bg-purple-900/20 border border-purple-700/30 rounded-xl p-5 text-center">
-                  <p className="text-5xl font-black text-[#B6871F] tracking-tight">MODERATED CAUCUS</p>
-                  <p className="text-3xl text-[#6A5A4A] mt-2">{committee.caucus.purpose}</p>
+                <div className="rounded-xl p-5 text-center" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
+                  <p className="text-3xl font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>MODERATED CAUCUS</p>
+                  <p className="text-xl mt-2" style={{ color: '#6A5A4A' }}>{committee.caucus.purpose}</p>
                   {committee.caucus.currentSpeaker && (
                     <div className="mt-4">
                       <div className="text-xs text-[#9A8A78] mb-2 font-mono">NOW SPEAKING</div>
@@ -974,12 +1035,11 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                       </div>
                     </div>
                   )}
-                  <div className="text-3xl font-black font-mono text-[#1C1410] mt-4">
+                  <div className="text-3xl font-black font-mono mt-4" style={{ color: '#1C1410' }}>
                     {formatTime(committee.caucus.remainingTime)}
                   </div>
-                  <div className="h-2 bg-[#DDD4C0] rounded-full overflow-hidden mt-2">
-                    <div className="h-full bg-purple-500 rounded-full transition-all"
-                      style={{ width: `${committee.caucus.totalTime > 0 ? (committee.caucus.remainingTime / committee.caucus.totalTime) * 100 : 0}%` }} />
+                  <div className="h-2 rounded-full overflow-hidden mt-2" style={{ backgroundColor: '#DDD4C0' }}>
+                    <div className="h-full rounded-full transition-all" style={{ width: `${committee.caucus.totalTime > 0 ? (committee.caucus.remainingTime / committee.caucus.totalTime) * 100 : 0}%`, backgroundColor: '#1B3828' }} />
                   </div>
                 </div>
                 {/* Upcoming speakers in caucus queue */}
@@ -1009,19 +1069,18 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                 <div className="flex justify-center">
                   <FlagImg code={getCountryByName(country)?.code ?? ''} size={88} className="rounded-full shadow-lg" />
                 </div>
-                <div className="bg-purple-900/20 border border-purple-700/30 rounded-xl p-6 text-center space-y-3">
-                  <p className="text-4xl font-black text-[#B8844A] tracking-tight">UNMODERATED CAUCUS</p>
+                <div className="rounded-xl p-6 text-center space-y-3" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
+                  <p className="text-3xl font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>UNMODERATED CAUCUS</p>
                   {committee.caucus.purpose && (
-                    <p className="text-xl text-[#C4A882]">{committee.caucus.purpose}</p>
+                    <p className="text-xl" style={{ color: '#6A5A4A' }}>{committee.caucus.purpose}</p>
                   )}
-                  <div className="text-5xl font-black font-mono text-white">
+                  <div className="text-5xl font-black font-mono" style={{ color: '#1C1410' }}>
                     {formatTime(committee.caucus.remainingTime)}
                   </div>
-                  <div className="h-2 bg-[#2E1E0F] rounded-full overflow-hidden">
-                    <div className="h-full bg-purple-500 rounded-full transition-all"
-                      style={{ width: `${committee.caucus.totalTime > 0 ? (committee.caucus.remainingTime / committee.caucus.totalTime) * 100 : 0}%` }} />
+                  <div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: '#DDD4C0' }}>
+                    <div className="h-full rounded-full transition-all" style={{ width: `${committee.caucus.totalTime > 0 ? (committee.caucus.remainingTime / committee.caucus.totalTime) * 100 : 0}%`, backgroundColor: '#1B3828' }} />
                   </div>
-                  <p className="text-[#7A5A38] text-sm">Get networking — use this time to lobby and draft.</p>
+                  <p className="text-sm" style={{ color: '#9A8A78' }}>Get networking — use this time to lobby and draft.</p>
                 </div>
               </div>
             )}
@@ -1029,27 +1088,10 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
             {/* Section 3: exclude both moderated and unmoderated caucus phases */}
             {committee.phase !== 'moderated-caucus' && committee.phase !== 'unmoderated-caucus' && (
             <div className={`p-4 space-y-4 max-w-2xl mx-auto ${isAbsent ? 'opacity-60 pointer-events-none select-none' : ''}`}>
-              {(() => {
-                type C = { bg: string; border: string; text: string; msg: string };
-                const v: C = isCurrentSpeaker
-                  ? { bg: 'bg-amber-900/30', border: 'border-amber-700/40', text: 'text-amber-300', msg: 'You have the floor!' }
-                  : !isOnSpeakersList
-                  ? { bg: 'bg-gray-800/30', border: 'border-gray-600/30', text: 'text-gray-400', msg: 'Not on any speaker list' }
-                  : myQueueIndex === 0
-                  ? { bg: 'bg-amber-900/30', border: 'border-amber-700/40', text: 'text-amber-300', msg: "You're up next!" }
-                  : myQueueIndex <= 5
-                  ? { bg: 'bg-yellow-500/20', border: 'border-yellow-500/40', text: 'text-yellow-300', msg: `${myQueueIndex} speaker${myQueueIndex !== 1 ? 's' : ''} until your speech` }
-                  : { bg: 'bg-green-900/30', border: 'border-green-700/30', text: 'text-green-300', msg: `${myQueueIndex} speakers until your speech` };
-                return (
-                  <div className={`${v.bg} border ${v.border} rounded-xl p-4 text-center`}>
-                    <div className={`${v.text} font-bold text-lg`}>{v.msg}</div>
-                  </div>
-                );
-              })()}
-
-              {/* Section 1: FlagImg replaces text-8xl emoji in main session */}
-              <div className="flex justify-center">
-                <FlagImg code={getCountryByName(country)?.code ?? ''} size={88} className="rounded-full shadow-lg" />
+              {/* Flag — larger, rectangular, with country name below */}
+              <div className="flex flex-col items-center gap-2 py-2">
+                {(() => { const c = getCountryByName(country); return c ? <img src={getFlagUrl(c.code)} alt={country} style={{ width: '120px', height: '86px', objectFit: 'cover', borderRadius: '10px', border: '1.5px solid rgba(28,20,16,0.12)', boxShadow: '0 4px 16px rgba(27,56,40,0.12)' }} /> : null; })()}
+                <p className="font-black text-3xl" style={{ color: '#1C1410' }}>{country}</p>
               </div>
 
               {/* Section 5: Voting card */}
@@ -1058,9 +1100,9 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                   (d) => d.status === 'on-floor' || d.status === 'introduced'
                 );
                 return (
-                  <div className="bg-[#7B4A1E]/20 border border-[#7B4A1E]/40 rounded-xl p-5 text-center space-y-2">
-                    <p className="text-xs font-mono text-[#7A5A38]">VOTING PROCEDURE</p>
-                    <p className="text-2xl font-black text-[#B8844A]">🗳️ Vote in Progress</p>
+                  <div className="rounded-xl p-5 text-center space-y-2" style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #1B3828' }}>
+                    <p className="text-xs font-mono font-bold" style={{ color: '#1B3828' }}>VOTING PROCEDURE</p>
+                    <p className="text-2xl font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>VOTE IN PROGRESS</p>
                     {activeDoc && (
                       <>
                         <p className="text-sm font-mono text-[#7B4A1E]">{activeDoc.docCode}</p>
@@ -1074,25 +1116,27 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                 );
               })()}
 
-              {/* Status card — Section 2: removed flag-with-ring from inside */}
-              <div className={`rounded-xl p-5 border ${
-                isCurrentSpeaker ? 'bg-[#1B3828]/20 border-[#1B3828]/50' :
-                'bg-[#EDE7D8] border-[#DDD4C0]'
-              }`}>
+              {/* Status card */}
+              <div className="rounded-xl p-5 border bg-[#EDE7D8] border-[#DDD4C0]">
                 <div className="flex-1 min-w-0">
                   <div className="text-xs font-mono text-[#9A8A78] mb-2">SESSION STATUS</div>
-                  <div className={`text-2xl font-black mb-1 ${isCurrentSpeaker ? 'text-[#B6871F]' : isAdjourned ? 'text-red-400' : 'text-[#1C1410]'}`}>
-                    {isCurrentSpeaker ? <><Emoji size="1em">🎙️</Emoji>{' You Have the Floor'}</> : phaseDisplay}
+                  <div className="text-2xl font-black mb-1" style={{ color: isCurrentSpeaker ? '#1B3828' : isAdjourned ? '#8B2020' : '#1C1410' }}>
+                    {isCurrentSpeaker ? 'YOU HAVE THE FLOOR' : phaseDisplay}
                   </div>
+                  {/* queue position text removed */}
 
                   {!isCurrentSpeaker && committee.currentSpeaker && committee.phase === 'speakers-list' && (
                     <div className="mt-3">
                       <div className="text-xs text-[#9A8A78] mb-1">NOW SPEAKING</div>
                       <div className="flex items-center gap-2">
-                        {/* Section 1: FlagImg replaces text-2xl */}
                         <FlagImg code={getCountryByName(committee.currentSpeaker.country)?.code ?? ''} size={24} />
                         <span className="font-bold text-[#1C1410]">{committee.currentSpeaker.country}</span>
                       </div>
+                      {isOnSpeakersList && myQueueIndex === 0 && (
+                        <p className="text-sm font-black mt-2" style={{ color: '#B8844A' }}>
+                          You're up next!
+                        </p>
+                      )}
                     </div>
                   )}
 
@@ -1105,9 +1149,8 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                       <div className="text-3xl font-black font-mono text-[#1C1410]">
                         {formatTime(committee.caucus.remainingTime)}
                       </div>
-                      <div className="h-2 bg-[#DDD4C0] rounded-full overflow-hidden mt-2">
-                        <div className="h-full bg-purple-500 rounded-full transition-all"
-                          style={{ width: `${(committee.caucus.remainingTime / committee.caucus.totalTime) * 100}%` }} />
+                      <div className="h-2 rounded-full overflow-hidden mt-2" style={{ backgroundColor: '#DDD4C0' }}>
+                        <div className="h-full rounded-full transition-all" style={{ width: `${(committee.caucus.remainingTime / committee.caucus.totalTime) * 100}%`, backgroundColor: '#1B3828' }} />
                       </div>
                       {committee.caucus.currentSpeaker && (
                         <div className="mt-3 text-sm flex items-center gap-2">
@@ -1131,7 +1174,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                     <div className="text-xs text-[#9A8A78] font-mono">SPEAKERS LIST</div>
                     {!isOnSpeakersList && !isCurrentSpeaker && myDelegate?.status !== 'absent' && !sessionEnded && (
                       isGslRequestPending ? (
-                        <span className="text-xs text-[#B6871F] font-medium flex items-center gap-1"><Emoji size="0.875rem">⏳</Emoji> Awaiting approval</span>
+                        <span className="text-xs font-semibold" style={{ color: '#B8844A' }}>Awaiting approval…</span>
                       ) : gslDenied ? (
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-red-400">Your request was denied</span>
@@ -1142,13 +1185,14 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                         </div>
                       ) : (
                         <button onClick={handleAddMeToSpeakers}
-                          className="text-xs bg-[#1B3828] hover:bg-[#2A5A3C] text-white px-3 py-1 rounded-lg font-medium transition-colors">
-                          + Request to Speak
+                          className="text-xs text-white px-3 py-1.5 rounded-lg font-black transition-colors focus:outline-none"
+                          style={{ backgroundColor: '#1B3828', letterSpacing: '0.04em' }}>
+                          + REQUEST TO SPEAK
                         </button>
                       )
                     )}
                     {isOnSpeakersList && (
-                      <span className="text-xs text-green-400 font-medium">
+                      <span className="text-xs font-bold" style={{ color: '#1B3828' }}>
                         {myQueueIndex === 0 ? '✓ Up next' : `✓ After ${myQueueIndex} speaker${myQueueIndex !== 1 ? 's' : ''}`}
                       </span>
                     )}
@@ -1162,7 +1206,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                           <span className="text-[#9A8A78] text-xs w-4 font-mono shrink-0">{i + 1}</span>
                           {/* Section 1: FlagImg replaces text-lg */}
                           <FlagImg code={getCountryByName(s.country)?.code ?? ''} size={20} className="shrink-0" />
-                          <span className={s.country === country ? 'text-[#B6871F] font-bold' : 'text-[#6A5A4A]'}>
+                          <span className="font-semibold" style={{ color: s.country === country ? '#1B3828' : '#1C1410', fontWeight: s.country === country ? 700 : 600 }}>
                             {s.country}{s.country === country && ' (You)'}
                           </span>
                         </div>
@@ -1179,11 +1223,8 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                   {/* Section 1: FlagImg replaces text-3xl */}
                   <FlagImg code={getCountryByName(country)?.code ?? ''} size={36} />
                   <div>
-                    <div className="font-bold text-[#1C1410]">{country}</div>
-                    <div className={`text-xs font-medium mt-0.5 ${
-                      myDelegate?.status === 'present' ? 'text-green-400' :
-                      myDelegate?.status === 'present-voting' ? 'text-[#B6871F]' : 'text-red-400'
-                    }`}>
+                    <div className="font-black text-base" style={{ color: '#1C1410' }}>{country}</div>
+                    <div className="text-xs font-semibold mt-0.5" style={{ color: myDelegate?.status === 'absent' ? '#8B2020' : '#1B3828' }}>
                       {myDelegate?.status === 'present' ? 'Present' :
                        myDelegate?.status === 'present-voting' ? 'Present & Voting' : 'Absent'}
                     </div>
@@ -1196,28 +1237,28 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                       <button
                         onClick={() => handleStatusChange('present')}
                         disabled={myDelegate?.status === 'present' || changesLeft <= 0}
-                        className={`flex-1 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
-                          myDelegate?.status === 'present'
-                            ? 'bg-green-900/30 border-green-700/40 text-green-300'
-                            : changesLeft <= 0
-                            ? 'bg-[#FAF8F3] border-[#DDD4C0] text-[#9A8A78] cursor-not-allowed'
-                            : 'bg-[#FAF8F3] border-[#DDD4C0] text-[#6A5A4A] hover:border-[#1B3828]'
-                        }`}
+                        className="flex-1 py-2 rounded-xl text-xs font-bold transition-colors focus:outline-none"
+                        style={{
+                          backgroundColor: myDelegate?.status === 'present' ? '#1B3828' : 'transparent',
+                          border: `1px solid ${myDelegate?.status === 'present' ? '#1B3828' : '#DDD4C0'}`,
+                          color: myDelegate?.status === 'present' ? '#EDE7D8' : changesLeft <= 0 ? '#9A8A78' : '#6A5A4A',
+                          cursor: changesLeft <= 0 && myDelegate?.status !== 'present' ? 'not-allowed' : 'pointer',
+                        }}
                       >
                         Present (P)
                       </button>
                       <button
                         onClick={() => handleStatusChange('present-voting')}
                         disabled={myDelegate?.status === 'present-voting' || changesLeft <= 0}
-                        className={`flex-1 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
-                          myDelegate?.status === 'present-voting'
-                            ? 'bg-[#1B3828]/30 border-[#1B3828]/40 text-[#B6871F]'
-                            : changesLeft <= 0
-                            ? 'bg-[#FAF8F3] border-[#DDD4C0] text-[#9A8A78] cursor-not-allowed'
-                            : 'bg-[#FAF8F3] border-[#DDD4C0] text-[#6A5A4A] hover:border-[#1B3828]'
-                        }`}
+                        className="flex-1 py-2 rounded-xl text-xs font-bold transition-colors focus:outline-none"
+                        style={{
+                          backgroundColor: myDelegate?.status === 'present-voting' ? '#1B3828' : 'transparent',
+                          border: `1px solid ${myDelegate?.status === 'present-voting' ? '#1B3828' : '#DDD4C0'}`,
+                          color: myDelegate?.status === 'present-voting' ? '#EDE7D8' : changesLeft <= 0 ? '#9A8A78' : '#6A5A4A',
+                          cursor: changesLeft <= 0 && myDelegate?.status !== 'present-voting' ? 'not-allowed' : 'pointer',
+                        }}
                       >
-                        Present &amp; Voting (P&V)
+                        Present &amp; Voting (P+V)
                       </button>
                     </div>
                     <p className="text-[10px] text-[#9A8A78] mt-1.5 text-center">
@@ -1231,93 +1272,97 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
           </div>
         )}
 
-        {/* ── Motions tab — COMING SOON ── */}
-        {tab === 'motions' && (
-          <div className="relative flex-1 min-h-[60vh]">
-            {/* Grayed-out ghost content */}
-            <div className="p-4 space-y-3 opacity-20 pointer-events-none select-none">
-              <div className="h-8 bg-[#DDD4C0] rounded-lg w-48" />
-              {[1,2,3].map(i => (
-                <div key={i} className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl p-4 space-y-2">
-                  <div className="h-4 bg-[#DDD4C0] rounded w-32" />
-                  <div className="h-3 bg-[#DDD4C0] rounded w-24" />
-                  <div className="h-3 bg-[#DDD4C0] rounded w-40" />
-                </div>
-              ))}
-            </div>
-            {/* Overlay */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#F6F1E9]/60 backdrop-blur-sm">
-              <div className="mb-6"><Emoji size="3rem">🚧</Emoji></div>
-              <div className="text-3xl md:text-4xl font-black text-[#1C1410] tracking-tight text-center px-6">
-                FEATURE IS COMING
-              </div>
-              <p className="text-[#9A8A78] text-sm mt-3 text-center px-6">
-                Delegate motion requests will be live in the next update.
-              </p>
-            </div>
-          </div>
-        )}
+        {/* Motions tab removed */}
 
-        {/* ── Resolutions tab — Section 4: filter to on-floor+ only ── */}
-        {tab === 'resolutions' && (
-          <div className="p-4 max-w-2xl mx-auto space-y-3">
-            <h2 className="text-lg font-bold text-[#1C1410]">Draft Resolutions</h2>
-            {(() => {
-              const drs = (committee.documents ?? []).filter(
-                (d) => d.type === 'draft-resolution' &&
-                  ['introduced', 'on-floor', 'passed', 'failed'].includes(d.status)
-              );
-              if (drs.length === 0) return <div className="text-center py-8 text-[#7A5A38]">No draft resolutions on the floor yet</div>;
-              return drs.map((doc) => {
-                const isPresenting = doc.status === 'introduced';
-                const isPassed = doc.status === 'passed';
-                const isFailed = doc.status === 'failed';
-                const isPendingVote = doc.status === 'on-floor';
-                return (
-                  <div key={doc.id} className={`bg-[#EDE7D8] border rounded-xl p-4 space-y-2 ${isPassed ? 'border-emerald-800/40' : isFailed ? 'border-red-800/40' : isPresenting ? 'border-purple-800/40' : 'border-[#DDD4C0]'}`}>
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <span className="text-xs font-mono font-bold text-[#1B3828] mr-2">{doc.docCode}</span>
-                        <span className="font-semibold text-[#1C1410] text-sm">{doc.title}</span>
-                      </div>
-                      {isPassed && <span className="shrink-0 text-xs font-bold text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 px-2 py-0.5 rounded-full">Passed</span>}
-                      {isFailed && <span className="shrink-0 text-xs font-bold text-red-400 bg-red-950/40 border border-red-800/40 px-2 py-0.5 rounded-full">Failed</span>}
-                      {isPresenting && <span className="shrink-0 text-xs font-bold text-purple-400 bg-purple-950/40 border border-purple-800/40 px-2 py-0.5 rounded-full animate-pulse">Now Presenting</span>}
-                      {isPendingVote && <span className="shrink-0 text-xs font-bold text-yellow-400 bg-yellow-950/40 border border-yellow-800/40 px-2 py-0.5 rounded-full">Pending Vote</span>}
-                    </div>
-                    <div className="text-xs text-[#9A8A78]">
-                      {doc.sponsors.map((s, i) => (
-                        <span key={s} className={i === 0 ? 'text-[#6A5A4A] font-medium' : ''}>
-                          {i > 0 ? ', ' : ''}{flagFor(s)} {s}
-                        </span>
-                      ))}
-                    </div>
-                    {isPresenting && doc.readingMinutes && doc.readingMinutes > 0 && (
-                      <div className="text-xs text-purple-300 mt-1">
-                        📖 {doc.readingMinutes}m reading · 🎤 {doc.presentationMinutes ?? 0}m presentation{doc.qaMinutes ? ` · ❓ ${doc.qaMinutes}m Q&A` : ''}
-                      </div>
-                    )}
-                    {doc.fileUrl && doc.fileName && (
-                      <InlinePdfViewer fileUrl={doc.fileUrl} fileName={doc.fileName} />
-                    )}
-                  </div>
-                );
-              });
-            })()}
-          </div>
-        )}
+        {/* Resolutions tab removed — merged into Documents tab */}
 
-        {/* ── Documents tab ── */}
+        {/* ── Documents tab (merged Submit + View DRs) ── */}
         {tab === 'documents' && (
           <div>
-            {isAbsent && !sessionEnded && <AbsentBanner />}
-            {!sessionEnded ? (
-              <div className={isAbsent ? 'opacity-60 pointer-events-none select-none' : ''}>
-                <DelegateDocumentsTab committee={committee} country={country} />
-              </div>
-            ) : (
-              <div className="p-8 text-center text-[#9A8A78]">Document submission is closed — session has ended.</div>
-            )}
+            {(() => {
+              const drs = (committee.documents ?? []).filter(
+                (d) => d.type === 'draft-resolution' && ['introduced', 'on-floor', 'passed', 'failed'].includes(d.status)
+              );
+              return (
+                <>
+                  {/* Tab-style subdirectory bar */}
+                  <div className="flex shrink-0" style={{ borderBottom: '1px solid #DDD4C0', backgroundColor: '#FAF8F3' }}>
+                    <button
+                      onClick={() => setDocsSection('submit')}
+                      className="flex-1 py-2.5 text-xs font-black transition-colors focus:outline-none"
+                      style={{ color: docsSection === 'submit' ? '#1B3828' : '#9A8A78', borderBottom: docsSection === 'submit' ? '2px solid #1B3828' : '2px solid transparent', marginBottom: '-1px', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.04em' }}>
+                      SUBMIT DOCUMENT
+                    </button>
+                    <button
+                      onClick={() => setDocsSection('view')}
+                      className="flex-1 py-2.5 text-xs font-black transition-colors focus:outline-none"
+                      style={{ color: docsSection === 'view' ? '#1B3828' : '#9A8A78', borderBottom: docsSection === 'view' ? '2px solid #1B3828' : '2px solid transparent', marginBottom: '-1px', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.04em' }}>
+                      VIEW DOCUMENTS
+                    </button>
+                  </div>
+
+                  {/* Submit section */}
+                  {docsSection === 'submit' && (
+                    <>
+                      {isAbsent && !sessionEnded && <AbsentBanner />}
+                      {!sessionEnded ? (
+                        <div className={isAbsent ? 'opacity-60 pointer-events-none select-none' : ''}>
+                          <DelegateDocumentsTab committee={committee} country={country} />
+                        </div>
+                      ) : (
+                        <div className="p-8 text-center font-semibold" style={{ color: '#9A8A78' }}>Document submission is closed — session has ended.</div>
+                      )}
+                    </>
+                  )}
+
+                  {/* View DRs section */}
+                  {docsSection === 'view' && (
+                    <div className="p-4 max-w-2xl mx-auto space-y-3">
+                      <h2 className="text-lg font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>DRAFT RESOLUTIONS</h2>
+                      {drs.length === 0 ? (
+                        <div className="text-center py-8 font-semibold" style={{ color: '#9A8A78' }}>No draft resolutions on the floor yet</div>
+                      ) : (
+                        drs.map((doc) => {
+                          const isPresenting = doc.status === 'introduced';
+                          const isPassed = doc.status === 'passed';
+                          const isFailed = doc.status === 'failed';
+                          const isPendingVote = doc.status === 'on-floor';
+                          return (
+                            <div key={doc.id} className="rounded-xl p-4 space-y-2" style={{ backgroundColor: '#FAF8F3', border: `1.5px solid ${isPassed ? '#1B3828' : isFailed ? 'rgba(139,32,32,0.4)' : '#DDD4C0'}` }}>
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <span className="text-xs font-mono font-bold mr-2" style={{ color: '#1B3828' }}>{doc.docCode}</span>
+                                  <span className="font-semibold text-sm" style={{ color: '#1C1410' }}>{doc.title}</span>
+                                </div>
+                                {isPassed && <span className="shrink-0 text-xs font-black px-2 py-0.5 rounded-full" style={{ backgroundColor: '#1B3828', color: '#EED98A' }}>Passed</span>}
+                                {isFailed && <span className="shrink-0 text-xs font-black px-2 py-0.5 rounded-full" style={{ color: '#8B2020', border: '1px solid rgba(139,32,32,0.3)' }}>Failed</span>}
+                                {isPresenting && <span className="shrink-0 text-xs font-black px-2 py-0.5 rounded-full animate-pulse" style={{ color: '#B8844A', border: '1px solid #B8844A' }}>Now Presenting</span>}
+                                {isPendingVote && <span className="shrink-0 text-xs font-black px-2 py-0.5 rounded-full" style={{ color: '#B8844A', border: '1px solid rgba(184,132,74,0.5)' }}>Pending Vote</span>}
+                              </div>
+                              <div className="text-xs" style={{ color: '#9A8A78' }}>
+                                {doc.sponsors.map((s, i) => (
+                                  <span key={s} style={{ color: i === 0 ? '#6A5A4A' : '#9A8A78', fontWeight: i === 0 ? 600 : 400 }}>
+                                    {i > 0 ? ', ' : ''}{flagFor(s)} {s}
+                                  </span>
+                                ))}
+                              </div>
+                              {isPresenting && doc.readingMinutes && doc.readingMinutes > 0 && (
+                                <div className="text-xs" style={{ color: '#9A8A78' }}>
+                                  {doc.readingMinutes}m reading · {doc.presentationMinutes ?? 0}m presentation{doc.qaMinutes ? ` · ${doc.qaMinutes}m Q&A` : ''}
+                                </div>
+                              )}
+                              {doc.fileUrl && doc.fileName && (
+                                <InlinePdfViewer fileUrl={doc.fileUrl} fileName={doc.fileName} />
+                              )}
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
         )}
 
@@ -1326,6 +1371,21 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
           <StatisticsTab committee={committee} country={country} />
         )}
       </div>}
+      {/* ── Chat tab ── */}
+      {tab === 'chat' && (
+        <div className="flex-1 flex overflow-hidden" style={{ height: '100%' }}>
+          <ChatPanel
+            committee={committee}
+            senderName={country}
+            isChair={false}
+            onClose={() => setTab('session')}
+            initialReadCounts={chatReadCounts}
+            onReadCountsChange={setChatReadCounts}
+            readOnly={sessionEnded}
+            speakerCard={null}
+          />
+        </div>
+      )}
       </div>
       </>
       )}
