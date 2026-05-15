@@ -1,31 +1,19 @@
-import fs from 'fs';
-import path from 'path';
 import SiteNav from '@/components/SiteNav';
 
-// Auto-detect ambassador images at request time.
-// Drop any NAME_ambassador.png into /public and it appears here automatically.
-function getAmbassadors(): { name: string; src: string }[] {
-  const publicDir = path.join(process.cwd(), 'public');
-  try {
-    return fs
-      .readdirSync(publicDir)
-      .filter((f) => f.endsWith('_ambassador.png'))
-      .map((f) => ({
-        name: f.replace('_ambassador.png', ''),
-        src: `/${f}`,
-      }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  } catch {
-    return [];
-  }
-}
-
-// Static generation: fs.readdirSync runs once at build time on Vercel,
-// where process.cwd()/public is accessible. No runtime filesystem access needed.
+const AMBASSADORS = [
+  { name: 'andrew', src: '/andrew_ambassador.png' },
+  { name: 'anna', src: '/anna_ambassador.png' },
+  { name: 'armande', src: '/armande_ambassador.png' },
+  { name: 'celine', src: '/celine_ambassador.png' },
+  { name: 'farah', src: '/farah_ambassador.png' },
+  { name: 'kyle', src: '/kyle_ambassador.png' },
+  { name: 'manuela', src: '/manuela_ambassador.png' },
+  { name: 'noelia', src: '/noelia_ambassador.png' },
+  { name: 'paolo', src: '/paolo_ambassador.png' },
+  { name: 'valentina', src: '/valentina_ambassador.png' },
+];
 
 export default function AmbassadorsPage() {
-  const ambassadors = getAmbassadors();
-
   return (
     <div style={{ minHeight: '100svh', backgroundColor: '#EDE7D8', fontFamily: 'system-ui, sans-serif' }}>
       <SiteNav />
@@ -55,52 +43,46 @@ export default function AmbassadorsPage() {
         </div>
 
         {/* Grid */}
-        {ambassadors.length === 0 ? (
-          <p style={{ textAlign: 'center', color: '#9A8A78', fontSize: 14 }}>
-            No ambassadors yet — check back soon.
-          </p>
-        ) : (
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-              gap: 32,
-            }}
-          >
-            {ambassadors.map(({ name, src }) => (
-              <div key={name} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
-                <div
-                  style={{
-                    width: 160,
-                    height: 160,
-                    borderRadius: '50%',
-                    overflow: 'hidden',
-                    border: '3px solid rgba(27,56,40,0.12)',
-                    backgroundColor: 'rgba(27,56,40,0.05)',
-                    flexShrink: 0,
-                  }}
-                >
-                  <img
-                    src={src}
-                    alt={name}
-                    style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top' }}
-                  />
-                </div>
-                <p
-                  style={{
-                    fontSize: 15,
-                    fontWeight: 700,
-                    color: '#1C1410',
-                    letterSpacing: '0.02em',
-                    textAlign: 'center',
-                  }}
-                >
-                  {name}
-                </p>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+            gap: 32,
+          }}
+        >
+          {AMBASSADORS.map(({ name, src }) => (
+            <div key={name} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
+              <div
+                style={{
+                  width: 160,
+                  height: 160,
+                  borderRadius: '50%',
+                  overflow: 'hidden',
+                  border: '3px solid rgba(27,56,40,0.12)',
+                  backgroundColor: 'rgba(27,56,40,0.05)',
+                  flexShrink: 0,
+                }}
+              >
+                <img
+                  src={src}
+                  alt={name}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top' }}
+                />
               </div>
-            ))}
-          </div>
-        )}
+              <p
+                style={{
+                  fontSize: 15,
+                  fontWeight: 700,
+                  color: '#1C1410',
+                  letterSpacing: '0.02em',
+                  textAlign: 'center',
+                }}
+              >
+                {name}
+              </p>
+            </div>
+          ))}
+        </div>
       </main>
     </div>
   );
