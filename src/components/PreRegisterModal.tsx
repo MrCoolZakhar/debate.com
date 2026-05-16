@@ -303,15 +303,11 @@ export default function PreRegisterModal({ open, onClose }: { open: boolean; onC
           >
             {/* Desktop image — fills full column height */}
             <div className="hidden md:flex flex-1 relative overflow-hidden items-end justify-center">
-              {/* Glass square behind otter */}
+              {/* Glass panel behind otter */}
               <div
                 style={{
                   position: 'absolute',
-                  bottom: '10%',
-                  left: '50%',
-                  transform: 'translateX(-50%) rotate(8deg)',
-                  width: '81%',
-                  aspectRatio: '1',
+                  inset: '5%',
                   borderRadius: 24,
                   background: 'rgba(255, 255, 255, 0.18)',
                   backdropFilter: 'blur(8px)',
