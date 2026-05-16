@@ -164,7 +164,7 @@ export default function PreRegisterModal({ open, onClose }: { open: boolean; onC
                 <Alert style={{ backgroundColor: 'rgba(27, 56, 40, 0.06)', border: '1px solid rgba(27, 56, 40, 0.18)' }}>
                   <GiftIcon size={16} style={{ color: '#1B3828' }} />
                   <AlertTitle style={{ color: '#1C1410' }}>
-                    First 1,000 users get 6 months free
+                    First 1,000 users get GAVELLING UNLIMITED for 2 conferences
                   </AlertTitle>
                   <AlertDescription style={{ color: '#6A5A4A' }}>
                     Pre-register now to unlock{' '}
@@ -296,17 +296,18 @@ export default function PreRegisterModal({ open, onClose }: { open: boolean; onC
           {/* ── Right column ── */}
           <div
             className="flex flex-col md:w-[45%]"
-            style={{ backgroundColor: '#DDD4C0' }}
+            style={{ backgroundColor: '#EDE7D8' }}
           >
             {/* Desktop image — fills full column height */}
-            <div className="hidden md:flex flex-1 relative overflow-hidden">
+            <div className="hidden md:flex flex-1 relative overflow-hidden items-end justify-center">
               <img
-                src="/GavelHero.png"
-                alt="Golden gavel on podium with floating flag icons"
+                src="/Otter-Preregister.png"
+                alt="Gavelling mascot"
                 style={{
                   width: '100%',
                   height: '100%',
                   objectFit: 'contain',
+                  objectPosition: 'bottom center',
                   display: 'block',
                 }}
               />
@@ -315,9 +316,9 @@ export default function PreRegisterModal({ open, onClose }: { open: boolean; onC
             {/* Mobile image */}
             <div className="flex md:hidden relative overflow-hidden" style={{ aspectRatio: '16/9' }}>
               <img
-                src="/GavelHero.png"
-                alt="Golden gavel on podium with floating flag icons"
-                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                src="/Otter-Preregister.png"
+                alt="Gavelling mascot"
+                style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
                 onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
               />
             </div>

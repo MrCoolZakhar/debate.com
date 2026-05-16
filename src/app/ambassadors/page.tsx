@@ -11,7 +11,9 @@ const AMBASSADORS = [
   { name: 'manuela', src: '/manuela_ambassador.png' },
   { name: 'noelia', src: '/noelia_ambassador.png' },
   { name: 'paolo', src: '/paolo_ambassador.png' },
+  { name: 'tyler', src: '/tyler_ambassador.png' },
   { name: 'valentina', src: '/valentina_ambassador.png' },
+  { name: 'victor', src: '/victor_ambassador.png' },
 ];
 
 export default function AmbassadorsPage() {
