@@ -310,7 +310,7 @@ export default function PreRegisterModal({ open, onClose }: { open: boolean; onC
                   bottom: '10%',
                   left: '50%',
                   transform: 'translateX(-50%) rotate(8deg)',
-                  width: '62%',
+                  width: '81%',
                   aspectRatio: '1',
                   borderRadius: 24,
                   background: 'rgba(255, 255, 255, 0.18)',
