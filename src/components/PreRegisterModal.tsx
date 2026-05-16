@@ -164,7 +164,10 @@ export default function PreRegisterModal({ open, onClose }: { open: boolean; onC
                 <Alert style={{ backgroundColor: 'rgba(27, 56, 40, 0.06)', border: '1px solid rgba(27, 56, 40, 0.18)' }}>
                   <GiftIcon size={16} style={{ color: '#1B3828' }} />
                   <AlertTitle style={{ color: '#1C1410' }}>
-                    First 1,000 users get GAVELLING UNLIMITED for 2 conferences
+                    First 1,000 users get{' '}
+                    <span style={{ color: '#1B3828', fontWeight: 800 }}>2 conferences</span>
+                    {' '}
+                    <span style={{ color: '#B6871F', fontWeight: 800 }}>fee-free</span>
                   </AlertTitle>
                   <AlertDescription style={{ color: '#6A5A4A' }}>
                     Pre-register now to unlock{' '}
@@ -300,10 +303,28 @@ export default function PreRegisterModal({ open, onClose }: { open: boolean; onC
           >
             {/* Desktop image — fills full column height */}
             <div className="hidden md:flex flex-1 relative overflow-hidden items-end justify-center">
+              {/* Glass square behind otter */}
+              <div
+                style={{
+                  position: 'absolute',
+                  bottom: '10%',
+                  left: '50%',
+                  transform: 'translateX(-50%) rotate(8deg)',
+                  width: '62%',
+                  aspectRatio: '1',
+                  borderRadius: 24,
+                  background: 'rgba(255, 255, 255, 0.18)',
+                  backdropFilter: 'blur(8px)',
+                  WebkitBackdropFilter: 'blur(8px)',
+                  border: '1px solid rgba(255, 255, 255, 0.35)',
+                  boxShadow: '0 8px 32px rgba(27, 56, 40, 0.08)',
+                }}
+              />
               <img
                 src="/Otter-Preregister.png"
                 alt="Gavelling mascot"
                 style={{
+                  position: 'relative',
                   width: '100%',
                   height: '100%',
                   objectFit: 'contain',
