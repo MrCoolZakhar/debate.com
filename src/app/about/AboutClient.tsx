@@ -10,22 +10,22 @@ import { Label } from '@/components/ui/label';
 
 const AMBASSADORS = [
   // Europe
-  { name: 'Kyle Wilkinson',          country: 'United Kingdom', initials: 'KW', photo: '/kyle_ambassador.png' },
-  { name: 'Celine Nasser',           country: 'United Kingdom', initials: 'CN', photo: '/celine_ambassador.png' },
-  { name: 'Noelia Alvarez Iglesias', country: 'Spain',          initials: 'NA', photo: '/noelia_ambassador.png' },
-  { name: 'Felix Losada',            country: 'Spain',          initials: 'FL', photo: '/felix_ambassador.jpg' },
-  { name: 'Armande Loretz',          country: 'France',         initials: 'AL', photo: '/armande_ambassador.png' },
+  { name: 'Kyle Wilkinson',          country: 'United Kingdom', initials: 'KW', photo: '/ambassadors/kyle_ambassador.png' },
+  { name: 'Celine Nasser',           country: 'United Kingdom', initials: 'CN', photo: '/ambassadors/celine_ambassador.png' },
+  { name: 'Noelia Alvarez Iglesias', country: 'Spain',          initials: 'NA', photo: '/ambassadors/noelia_ambassador.png' },
+  { name: 'Felix Losada',            country: 'Spain',          initials: 'FL', photo: '/ambassadors/felix_ambassador.png' },
+  { name: 'Armande Loretz',          country: 'France',         initials: 'AL', photo: '/ambassadors/armande_ambassador.png' },
   // South America
-  { name: 'Manuela Trujillo',        country: 'Peru',           initials: 'MT', photo: '/manuela_ambassador.png' },
-  { name: 'Valentina Cruz',          country: 'Peru',           initials: 'VC', photo: '/valentina_ambassador.png' },
-  { name: 'Paolo Marinuzzi',         country: 'Venezuela',      initials: 'PM', photo: '/paolo_ambassador.png' },
-  { name: 'Anna Cocconi',            country: 'Venezuela',      initials: 'AC', photo: '/anna_ambassador.png' },
+  { name: 'Manuela Trujillo',        country: 'Peru',           initials: 'MT', photo: '/ambassadors/manuela_ambassador.png' },
+  { name: 'Valentina Cruz',          country: 'Peru',           initials: 'VC', photo: '/ambassadors/valentina_ambassador.png' },
+  { name: 'Paolo Marinuzzi',         country: 'Venezuela',      initials: 'PM', photo: '/ambassadors/paolo_ambassador.png' },
+  { name: 'Anna Cocconi',            country: 'Venezuela',      initials: 'AC', photo: '/ambassadors/anna_ambassador.png' },
   // Asia (west to east)
-  { name: 'Farah Lahiani',           country: 'UAE',            initials: 'FH', photo: '/farah_ambassador.png' },
-  { name: 'Tyler Serano',            country: 'Philippines',    initials: 'TS', photo: '/tyler_ambassador.png' },
-  { name: 'Andrew Mailoa',           country: 'Indonesia',      initials: 'AM', photo: '/andrew_ambassador.png' },
-  { name: 'Charlito Gunawan',        country: 'Indonesia',      initials: 'CG', photo: '/charlito_ambassador.png' },
-  { name: 'Victor Mikusek',          country: 'Hong Kong',      initials: 'VM', photo: '/victor_ambassador.png' },
+  { name: 'Farah Lahiani',           country: 'UAE',            initials: 'FH', photo: '/ambassadors/farah_ambassador.png' },
+  { name: 'Tyler Serano',            country: 'Philippines',    initials: 'TS', photo: '/ambassadors/tyler_ambassador.png' },
+  { name: 'Andrew Mailoa',           country: 'Indonesia',      initials: 'AM', photo: '/ambassadors/andrew_ambassador.png' },
+  { name: 'Charlito Gunawan',        country: 'Indonesia',      initials: 'CG', photo: '/ambassadors/charlito_ambassador.png' },
+  { name: 'Victor Mikusek',          country: 'Hong Kong',      initials: 'VM', photo: '/ambassadors/victor_ambassador.png' },
 ];
 
 const inputStyle: React.CSSProperties = {
