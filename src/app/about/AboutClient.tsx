@@ -13,6 +13,7 @@ const AMBASSADORS = [
   { name: 'Kyle Wilkinson',          country: 'United Kingdom', initials: 'KW', photo: '/kyle_ambassador.png' },
   { name: 'Celine Nasser',           country: 'United Kingdom', initials: 'CN', photo: '/celine_ambassador.png' },
   { name: 'Noelia Alvarez Iglesias', country: 'Spain',          initials: 'NA', photo: '/noelia_ambassador.png' },
+  { name: 'Felix Losada',            country: 'Spain',          initials: 'FL', photo: '/felix_ambassador.jpg' },
   { name: 'Armande Loretz',          country: 'France',         initials: 'AL', photo: '/armande_ambassador.png' },
   // South America
   { name: 'Manuela Trujillo',        country: 'Peru',           initials: 'MT', photo: '/manuela_ambassador.png' },

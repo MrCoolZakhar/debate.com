@@ -994,14 +994,13 @@ function ModeratedCaucusMain({
 function SessionEndedContent({ committee, hoursRemaining }: { committee: Committee; hoursRemaining: number | null }) {
   return (
     <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
-      <div className="mb-6"><Emoji size="3rem">🏁</Emoji></div>
-      <h1 className="text-5xl font-black text-[#1C1410] mb-4">This committee has ended.</h1>
-      <p className="text-xl text-[#6A5A4A] mb-2">{committee.name}</p>
-      <p className="text-lg text-[#9A8A78] mb-8">{committee.topic}</p>
+      <h1 className="text-5xl font-black mb-4" style={{ color: '#1B3828' }}>This committee has ended.</h1>
+      <p className="text-xl mb-2" style={{ color: '#1C1410' }}>{committee.name}</p>
+      <p className="text-lg mb-8" style={{ color: '#9A8A78' }}>{committee.topic}</p>
       {hoursRemaining !== null && (
-        <p className="text-base text-[#9A8A78]">{hoursRemaining} hour{hoursRemaining !== 1 ? 's' : ''} until committee is deleted</p>
+        <p className="text-base" style={{ color: '#9A8A78' }}>{hoursRemaining} hour{hoursRemaining !== 1 ? 's' : ''} until committee is deleted</p>
       )}
-      <p className="text-xs text-[#9A8A78] mt-8">Press ESC to return to main menu</p>
+      <p className="text-xs mt-8" style={{ color: '#9A8A78' }}>Press ESC to return to main menu</p>
     </div>
   );
 }
@@ -1812,12 +1811,14 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       {sessionEnded && (
         <div className="flex border-b border-[#DDD4C0] bg-[#FAF8F3] shrink-0">
           <button onClick={() => setEndedTab('ended')}
-            className={`flex-1 py-2.5 text-sm font-bold transition-colors border-b-2 ${endedTab === 'ended' ? 'text-[#1C1410] border-[#1B3828]' : 'text-[#9A8A78] border-transparent hover:text-[#6A5A4A]'}`}>
-            🏁 End View
+            className="flex-1 py-2.5 text-sm font-black transition-colors border-b-2 focus:outline-none tracking-wide"
+            style={{ color: endedTab === 'ended' ? '#1B3828' : '#9A8A78', borderBottomColor: endedTab === 'ended' ? '#1B3828' : 'transparent', fontFamily: "'Outfit', sans-serif" }}>
+            END VIEW
           </button>
           <button onClick={() => setEndedTab('session')}
-            className={`flex-1 py-2.5 text-sm font-bold transition-colors border-b-2 ${endedTab === 'session' ? 'text-[#1C1410] border-[#1B3828]' : 'text-[#9A8A78] border-transparent hover:text-[#6A5A4A]'}`}>
-            👁 Session View
+            className="flex-1 py-2.5 text-sm font-black transition-colors border-b-2 focus:outline-none tracking-wide"
+            style={{ color: endedTab === 'session' ? '#1B3828' : '#9A8A78', borderBottomColor: endedTab === 'session' ? '#1B3828' : 'transparent', fontFamily: "'Outfit', sans-serif" }}>
+            SESSION VIEW
           </button>
         </div>
       )}
@@ -1837,7 +1838,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         </div>
       )}
       {sessionEnded && endedTab === 'session' && (
-        <div className="shrink-0 bg-amber-900/20 border-b border-amber-700/40 px-4 py-2 text-center text-amber-300 text-sm font-semibold">
+        <div className="shrink-0 px-4 py-2 text-center text-sm font-bold" style={{ backgroundColor: '#1B3828', borderBottom: '1px solid #3D7A52', color: '#EED98A', fontFamily: "'Outfit', sans-serif" }}>
           Session has ended — view only
         </div>
       )}
