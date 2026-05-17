@@ -1,9 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import { useState, useEffect, useRef } from 'react';
 import PreRegisterModal from '@/components/PreRegisterModal';
+import { useAuth } from '@/components/AuthProvider';
 
 const NAV_LINKS = [
   { label: 'SESSIONS', href: '/' },
@@ -18,9 +19,38 @@ interface SiteNavProps {
 
 export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
   const pathname = usePathname();
+  const router = useRouter();
   const [hovered, setHovered] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const accountMenuRef = useRef<HTMLDivElement>(null);
+
+  const { user, profile, signOut, loading } = useAuth();
+
+  // Close account dropdown on outside click
+  useEffect(() => {
+    function handleMouseDown(e: MouseEvent) {
+      if (accountMenuRef.current && !accountMenuRef.current.contains(e.target as Node)) {
+        setAccountMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleMouseDown);
+    return () => document.removeEventListener('mousedown', handleMouseDown);
+  }, []);
+
+  const avatarInitial = profile?.display_name
+    ? profile.display_name[0].toUpperCase()
+    : user?.email
+    ? user.email[0].toUpperCase()
+    : '?';
+
+  async function handleSignOut() {
+    await signOut();
+    setAccountMenuOpen(false);
+    setMenuOpen(false);
+    router.push('/');
+  }
 
   return (
     <>
@@ -87,38 +117,211 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
           })}
         </div>
 
-        {/* Desktop PRE-REGISTER button */}
-        <button
-          className="hidden md:inline-flex"
-          onClick={() => setShowModal(true)}
-          onMouseEnter={(e) => {
-            const el = e.currentTarget as HTMLElement;
-            el.style.backgroundColor = '#1B3828';
-            el.style.color = '#EED98A';
-            el.style.transform = 'translateY(-1px)';
-          }}
-          onMouseLeave={(e) => {
-            const el = e.currentTarget as HTMLElement;
-            el.style.backgroundColor = 'transparent';
-            el.style.color = '#1B3828';
-            el.style.transform = 'translateY(0)';
-          }}
-          style={{
-            alignItems: 'center',
-            padding: '10px 22px',
-            fontSize: '13px',
-            fontWeight: 800,
-            letterSpacing: '0.08em',
-            color: '#1B3828',
-            border: '1.5px solid rgba(27, 56, 40, 0.5)',
-            borderRadius: '9999px',
-            cursor: 'pointer',
-            transition: 'all 200ms ease',
-            backgroundColor: 'transparent',
-          }}
-        >
-          PRE-REGISTER
-        </button>
+        {/* Desktop right actions */}
+        <div className="hidden md:flex items-center gap-3">
+          {loading ? (
+            <div style={{ width: '120px' }} />
+          ) : user ? (
+            /* Account button + dropdown */
+            <div className="relative" ref={accountMenuRef}>
+              <button
+                onClick={() => setAccountMenuOpen((v) => !v)}
+                className="flex items-center gap-2 focus:outline-none"
+                style={{
+                  backgroundColor: '#1B3828',
+                  color: '#EED98A',
+                  borderRadius: '9999px',
+                  padding: '7px 14px 7px 8px',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  letterSpacing: '0.04em',
+                  fontFamily: "'Outfit', sans-serif",
+                  border: 'none',
+                  cursor: 'pointer',
+                  transition: 'background-color 150ms ease',
+                }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+              >
+                {profile?.avatar_url ? (
+                  <img
+                    src={profile.avatar_url}
+                    alt="Avatar"
+                    className="w-6 h-6 rounded-full object-cover"
+                  />
+                ) : (
+                  <div
+                    className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-black"
+                    style={{ backgroundColor: '#EED98A', color: '#1B3828' }}
+                  >
+                    {avatarInitial}
+                  </div>
+                )}
+                <span>{profile?.display_name ?? user.email?.split('@')[0] ?? 'Account'}</span>
+              </button>
+
+              {/* Dropdown */}
+              {accountMenuOpen && (
+                <div
+                  className="absolute right-0 mt-2 w-56"
+                  style={{
+                    backgroundColor: '#FAF8F3',
+                    border: '1px solid #DDD4C0',
+                    borderRadius: '12px',
+                    boxShadow: '0 8px 32px rgba(28, 20, 16, 0.12), 0 2px 8px rgba(28, 20, 16, 0.06)',
+                    zIndex: 50,
+                    overflow: 'hidden',
+                  }}
+                >
+                  {/* User info */}
+                  <div className="px-4 py-3">
+                    <p className="text-sm font-bold truncate" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                      {profile?.display_name ?? user.email?.split('@')[0]}
+                    </p>
+                    <p className="text-xs truncate mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                      {profile?.email ?? user.email}
+                    </p>
+                  </div>
+                  <div style={{ height: '1px', backgroundColor: '#DDD4C0' }} />
+
+                  {/* Nav items */}
+                  {[
+                    { label: 'MY PROFILE', href: '/account/profile' },
+                    { label: 'MUN CV', href: '/account/cv' },
+                    { label: 'CONFERENCE CALENDAR', href: '/account/calendar' },
+                    { label: 'GAVELLING POINTS', href: '/account/points' },
+                  ].map((item) => (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={() => setAccountMenuOpen(false)}
+                      className="block px-4 py-2 text-sm font-semibold transition-colors"
+                      style={{
+                        color: '#1C1410',
+                        fontFamily: "'Outfit', sans-serif",
+                        letterSpacing: '0.05em',
+                        fontSize: '12px',
+                        textDecoration: 'none',
+                      }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27, 56, 40, 0.06)'; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                    >
+                      {item.label}
+                    </Link>
+                  ))}
+
+                  <div style={{ height: '1px', backgroundColor: '#DDD4C0' }} />
+
+                  {/* Unlimited status */}
+                  {profile?.unlimited_status === 'none' ? (
+                    <Link
+                      href="/unlimited"
+                      onClick={() => setAccountMenuOpen(false)}
+                      className="block px-4 py-2 text-sm font-semibold transition-colors"
+                      style={{
+                        color: '#1B3828',
+                        fontFamily: "'Outfit', sans-serif",
+                        letterSpacing: '0.05em',
+                        fontSize: '12px',
+                        textDecoration: 'none',
+                      }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27, 56, 40, 0.06)'; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                    >
+                      UPGRADE TO UNLIMITED{' '}
+                      <span style={{ color: '#B6871F' }}>✦</span>
+                    </Link>
+                  ) : profile ? (
+                    <div className="px-4 py-2">
+                      <span
+                        className="text-xs font-black px-2 py-0.5 rounded-full"
+                        style={{
+                          backgroundColor: '#EED98A',
+                          color: '#1B3828',
+                          fontFamily: "'Outfit', sans-serif",
+                          letterSpacing: '0.06em',
+                        }}
+                      >
+                        GAVELLING UNLIMITED ✦
+                      </span>
+                    </div>
+                  ) : null}
+
+                  <div style={{ height: '1px', backgroundColor: '#DDD4C0' }} />
+
+                  {/* Sign out */}
+                  <button
+                    onClick={handleSignOut}
+                    className="block w-full text-left px-4 py-2 text-sm font-semibold transition-colors focus:outline-none"
+                    style={{
+                      color: '#8B2020',
+                      fontFamily: "'Outfit', sans-serif",
+                      letterSpacing: '0.05em',
+                      fontSize: '12px',
+                      backgroundColor: 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                    }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139, 32, 32, 0.06)'; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                  >
+                    SIGN OUT
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            /* Signed-out: SIGN IN + PRE-REGISTER */
+            <>
+              <Link
+                href="/auth/signin"
+                className="text-sm font-bold transition-colors focus:outline-none"
+                style={{
+                  color: '#1B3828',
+                  letterSpacing: '0.06em',
+                  fontFamily: "'Outfit', sans-serif",
+                  textDecoration: 'none',
+                }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.textDecoration = 'underline'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.textDecoration = 'none'; }}
+              >
+                SIGN IN
+              </Link>
+
+              <button
+                onClick={() => setShowModal(true)}
+                onMouseEnter={(e) => {
+                  const el = e.currentTarget as HTMLElement;
+                  el.style.backgroundColor = '#1B3828';
+                  el.style.color = '#EED98A';
+                  el.style.transform = 'translateY(-1px)';
+                }}
+                onMouseLeave={(e) => {
+                  const el = e.currentTarget as HTMLElement;
+                  el.style.backgroundColor = 'transparent';
+                  el.style.color = '#1B3828';
+                  el.style.transform = 'translateY(0)';
+                }}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  padding: '10px 22px',
+                  fontSize: '13px',
+                  fontWeight: 800,
+                  letterSpacing: '0.08em',
+                  color: '#1B3828',
+                  border: '1.5px solid rgba(27, 56, 40, 0.5)',
+                  borderRadius: '9999px',
+                  cursor: 'pointer',
+                  transition: 'all 200ms ease',
+                  backgroundColor: 'transparent',
+                }}
+              >
+                PRE-REGISTER
+              </button>
+            </>
+          )}
+        </div>
 
         {/* Mobile hamburger */}
         <button
@@ -154,7 +357,7 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
       <div
         className="md:hidden overflow-hidden transition-all duration-300 relative z-20"
         style={{
-          maxHeight: menuOpen ? '360px' : '0px',
+          maxHeight: menuOpen ? '420px' : '0px',
           backgroundColor: '#FAF8F3',
           borderBottom: menuOpen ? '1px solid #DDD4C0' : 'none',
         }}
@@ -188,25 +391,88 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
 
           <div style={{ height: '1px', backgroundColor: '#DDD4C0', margin: '8px 0' }} />
 
-          <button
-            onClick={() => { setMenuOpen(false); setShowModal(true); }}
-            style={{
-              display: 'block',
-              width: '100%',
-              padding: '13px 16px',
-              fontSize: '13px',
-              fontWeight: 800,
-              letterSpacing: '0.08em',
-              color: '#EDE7D8',
-              backgroundColor: '#1B3828',
-              border: 'none',
-              borderRadius: '10px',
-              cursor: 'pointer',
-              textAlign: 'center',
-            }}
-          >
-            PRE-REGISTER
-          </button>
+          {user ? (
+            /* Signed-in mobile */
+            <>
+              <div className="px-4 py-2">
+                <p
+                  className="text-sm font-bold"
+                  style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}
+                >
+                  {profile?.display_name ?? user.email?.split('@')[0]}
+                </p>
+                <p
+                  className="text-xs mt-0.5"
+                  style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}
+                >
+                  {profile?.email ?? user.email}
+                </p>
+              </div>
+              <button
+                onClick={handleSignOut}
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  padding: '13px 16px',
+                  fontSize: '13px',
+                  fontWeight: 800,
+                  letterSpacing: '0.08em',
+                  color: '#8B2020',
+                  backgroundColor: 'rgba(139, 32, 32, 0.08)',
+                  border: '1px solid rgba(139, 32, 32, 0.2)',
+                  borderRadius: '10px',
+                  cursor: 'pointer',
+                  textAlign: 'center',
+                  fontFamily: "'Outfit', sans-serif",
+                }}
+              >
+                SIGN OUT
+              </button>
+            </>
+          ) : (
+            /* Signed-out mobile */
+            <>
+              <Link
+                href="/auth/signin"
+                onClick={() => setMenuOpen(false)}
+                style={{
+                  display: 'block',
+                  padding: '13px 16px',
+                  fontSize: '13px',
+                  fontWeight: 800,
+                  letterSpacing: '0.08em',
+                  color: '#1B3828',
+                  backgroundColor: 'rgba(27, 56, 40, 0.07)',
+                  border: '1.5px solid rgba(27, 56, 40, 0.25)',
+                  borderRadius: '10px',
+                  textAlign: 'center',
+                  textDecoration: 'none',
+                  fontFamily: "'Outfit', sans-serif",
+                }}
+              >
+                SIGN IN
+              </Link>
+              <button
+                onClick={() => { setMenuOpen(false); setShowModal(true); }}
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  padding: '13px 16px',
+                  fontSize: '13px',
+                  fontWeight: 800,
+                  letterSpacing: '0.08em',
+                  color: '#EDE7D8',
+                  backgroundColor: '#1B3828',
+                  border: 'none',
+                  borderRadius: '10px',
+                  cursor: 'pointer',
+                  textAlign: 'center',
+                }}
+              >
+                PRE-REGISTER
+              </button>
+            </>
+          )}
         </div>
       </div>
 
