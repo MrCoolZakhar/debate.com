@@ -1,19 +1,20 @@
 import SiteNav from '@/components/SiteNav';
 
 const AMBASSADORS = [
-  { name: 'andrew', src: '/andrew_ambassador.png' },
-  { name: 'anna', src: '/anna_ambassador.png' },
-  { name: 'armande', src: '/armande_ambassador.png' },
-  { name: 'celine', src: '/celine_ambassador.png' },
-  { name: 'charlito', src: '/charlito_ambassador.png' },
-  { name: 'farah', src: '/farah_ambassador.png' },
-  { name: 'kyle', src: '/kyle_ambassador.png' },
-  { name: 'manuela', src: '/manuela_ambassador.png' },
-  { name: 'noelia', src: '/noelia_ambassador.png' },
-  { name: 'paolo', src: '/paolo_ambassador.png' },
-  { name: 'tyler', src: '/tyler_ambassador.png' },
-  { name: 'valentina', src: '/valentina_ambassador.png' },
-  { name: 'victor', src: '/victor_ambassador.png' },
+  { name: 'andrew', src: '/ambassador-photos/andrew_ambassador.png' },
+  { name: 'anna', src: '/ambassador-photos/anna_ambassador.png' },
+  { name: 'armande', src: '/ambassador-photos/armande_ambassador.png' },
+  { name: 'celine', src: '/ambassador-photos/celine_ambassador.png' },
+  { name: 'charlito', src: '/ambassador-photos/charlito_ambassador.png' },
+  { name: 'farah', src: '/ambassador-photos/farah_ambassador.png' },
+  { name: 'felix', src: '/ambassador-photos/felix_ambassador.png' },
+  { name: 'kyle', src: '/ambassador-photos/kyle_ambassador.png' },
+  { name: 'manuela', src: '/ambassador-photos/manuela_ambassador.png' },
+  { name: 'noelia', src: '/ambassador-photos/noelia_ambassador.png' },
+  { name: 'paolo', src: '/ambassador-photos/paolo_ambassador.png' },
+  { name: 'tyler', src: '/ambassador-photos/tyler_ambassador.png' },
+  { name: 'valentina', src: '/ambassador-photos/valentina_ambassador.png' },
+  { name: 'victor', src: '/ambassador-photos/victor_ambassador.png' },
 ];
 
 export default function AmbassadorsPage() {
