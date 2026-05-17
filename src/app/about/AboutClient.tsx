@@ -13,7 +13,7 @@ const AMBASSADORS = [
   { name: 'Kyle Wilkinson',          country: 'United Kingdom', initials: 'KW', photo: '/ambassador-photos/kyle_ambassador.png' },
   { name: 'Celine Nasser',           country: 'United Kingdom', initials: 'CN', photo: '/ambassador-photos/celine_ambassador.png' },
   { name: 'Noelia Alvarez Iglesias', country: 'Spain',          initials: 'NA', photo: '/ambassador-photos/noelia_ambassador.png' },
-  { name: 'Felix Losada',            country: 'Spain',          initials: 'FL', photo: '/ambassador-photos/felix_ambassador.png' },
+  { name: 'Felix Losada',            country: 'Spain',          initials: 'FL', photo: '/ambassador-photos/felix_ambassador.png', photoPosition: 'center 25%' },
   { name: 'Armande Loretz',          country: 'France',         initials: 'AL', photo: '/ambassador-photos/armande_ambassador.png' },
   // South America
   { name: 'Manuela Trujillo',        country: 'Peru',           initials: 'MT', photo: '/ambassador-photos/manuela_ambassador.png' },
@@ -112,7 +112,7 @@ export default function AboutClient() {
                     <img
                       src={amb.photo}
                       alt={amb.name}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top', display: 'block' }}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: amb.photoPosition ?? 'center top', display: 'block' }}
                     />
                   ) : (
                     <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(221,212,192,0.8)', color: '#B6871F', fontWeight: 700, fontSize: 16 }}>
