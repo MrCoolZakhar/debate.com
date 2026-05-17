@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Mic, Scale, List, FileText, MessageSquare, Save } from 'lucide-react';
+import Link from 'next/link';
+import { Mic, Scale, List, FileText, MessageSquare, Save, Users, CreditCard, Zap } from 'lucide-react';
 import { getFlagUrl, getCountryByName } from '@/lib/countries';
 import SiteNav from '@/components/SiteNav';
 
@@ -321,6 +322,101 @@ function ArchiveCard() {
   );
 }
 
+// ── MUN Globe ───────────────────────────────────────────────────────────────
+
+const GLOBE_CITIES = [
+  { name: 'The Hague',     lat: 52,  lng: 4,    delay: 0   },
+  { name: 'New York',      lat: 40,  lng: -74,  delay: 0.3 },
+  { name: 'London',        lat: 51,  lng: 0,    delay: 0.6 },
+  { name: 'Singapore',     lat: 1,   lng: 103,  delay: 0.9 },
+  { name: 'Tokyo',         lat: 35,  lng: 139,  delay: 1.2 },
+  { name: 'Geneva',        lat: 46,  lng: 6,    delay: 0.2 },
+  { name: 'Vienna',        lat: 48,  lng: 16,   delay: 0.5 },
+  { name: 'Nairobi',       lat: -1,  lng: 36,   delay: 0.8 },
+  { name: 'Buenos Aires',  lat: -34, lng: -58,  delay: 1.1 },
+  { name: 'Sydney',        lat: -33, lng: 151,  delay: 1.4 },
+];
+
+function MUNGlobe() {
+  const [rotation, setRotation] = useState(0);
+  useEffect(() => {
+    const iv = setInterval(() => setRotation(r => (r + 0.05) % 360), 100);
+    return () => clearInterval(iv);
+  }, []);
+
+  const SIZE = 280;
+  const cx = 140, cy = 140, r = 120;
+
+  function normalize(lng: number): number {
+    let v = ((lng + rotation) % 360 + 360) % 360;
+    if (v > 180) v -= 360;
+    return v;
+  }
+
+  function project(lat: number, lng: number) {
+    const eff = normalize(lng);
+    const x = cx + r * eff / 180 * (r / cx);
+    const y = cy - r * lat / 90 * (r / cy);
+    const dist = Math.sqrt((x - cx) ** 2 + (y - cy) ** 2);
+    return { x, y, visible: Math.abs(eff) <= 90 && dist <= r + 2 };
+  }
+
+  const latLines = [-60, -30, 0, 30, 60].map(lat => {
+    const y = cy - r * lat / 90 * (r / cy);
+    return { lat, y };
+  });
+
+  const lngLines = Array.from({ length: 12 }, (_, i) => i * 30 - 150).map(lng => {
+    const eff = normalize(lng);
+    const x = cx + r * eff / 180 * (r / cx);
+    return { lng, x, visible: Math.abs(eff) <= 90 };
+  });
+
+  return (
+    <div className="w-[220px] h-[220px] md:w-[280px] md:h-[280px]">
+      <svg viewBox={`0 0 ${SIZE} ${SIZE}`} width="100%" height="100%">
+        <defs>
+          <clipPath id="gc">
+            <circle cx={cx} cy={cy} r={r} />
+          </clipPath>
+          <radialGradient id="gg" cx="40%" cy="35%" r="65%">
+            <stop offset="0%" stopColor="rgba(61,122,82,0.4)" />
+            <stop offset="70%" stopColor="rgba(27,56,40,0.2)" />
+            <stop offset="100%" stopColor="rgba(0,0,0,0)" />
+          </radialGradient>
+        </defs>
+        <circle cx={cx} cy={cy} r={r} fill="url(#gg)" />
+        <g clipPath="url(#gc)" stroke="rgba(238,217,138,0.15)" strokeWidth="0.8" fill="none">
+          {latLines.map(({ lat, y }) => (
+            <line key={lat} x1={cx - r} y1={y} x2={cx + r} y2={y} />
+          ))}
+          {lngLines.filter(l => l.visible).map(({ lng, x }) => (
+            <line key={lng} x1={x} y1={cy - r} x2={x} y2={cy + r} />
+          ))}
+        </g>
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(238,217,138,0.2)" strokeWidth="1.5" />
+        {GLOBE_CITIES.map(city => {
+          const { x, y, visible } = project(city.lat, city.lng);
+          return (
+            <g key={city.name} opacity={visible ? 1 : 0}>
+              <circle
+                cx={x} cy={y} r={7}
+                fill="none" stroke="#EED98A" strokeWidth="1"
+                style={{
+                  animation: `globePulse 2s ease-in-out ${city.delay}s infinite`,
+                  transformBox: 'fill-box' as never,
+                  transformOrigin: 'center',
+                }}
+              />
+              <circle cx={x} cy={y} r={3} fill="#EED98A" />
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
 function FeatureCard({ id }: { id: string }) {
   if (id === 'roll-call') return <RollCallCard />;
   if (id === 'motions') return <MotionsCard />;
@@ -430,6 +526,10 @@ export default function HomeClient() {
         .scroll-reveal.visible { animation: fadeInUp 0.7s cubic-bezier(0.4, 0, 0.2, 1) both; }
         .scroll-reveal.visible:nth-child(2) { animation-delay: 0.1s; }
         .scroll-reveal.visible:nth-child(3) { animation-delay: 0.2s; }
+        @keyframes globePulse {
+          0%, 100% { opacity: 0.7; transform: scale(1); }
+          50% { opacity: 0.1; transform: scale(1.8); }
+        }
       `}</style>
 
       <div className="min-h-screen bg-[#EDE7D8] flex flex-col relative overflow-x-hidden">
@@ -601,6 +701,103 @@ export default function HomeClient() {
               <div className="flex-1 flex justify-center items-center py-8">
                 <div className="w-full" style={{ maxWidth: '680px' }}>
                   <FeatureCarousel activeFeature={activeFeature} setActiveFeature={setActiveFeature} />
+                </div>
+              </div>
+
+            </div>
+          </section>
+
+          {/* ── CONFERENCES SECTION ── */}
+          <section className="relative z-10 bg-[#1B3828] px-6 md:px-14 py-24 overflow-hidden">
+            {/* Grain */}
+            <div className="pointer-events-none absolute inset-0" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='cg'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23cg)' opacity='1'/%3E%3C/svg%3E")`, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'overlay', opacity: 0.07 }} />
+
+            <div className="relative max-w-6xl mx-auto">
+
+              {/* Part A — Eyebrow + heading */}
+              <div className="mb-14">
+                <p className="text-[11px] tracking-[0.2em] mb-3" style={{ color: '#EED98A', fontFamily: "'DM Mono', monospace" }}>MUN CONFERENCES</p>
+                <h2 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: 'clamp(32px, 4vw, 56px)', lineHeight: 1.05 }}>
+                  <span className="block text-white">Run your conference.</span>
+                  <span className="block" style={{ color: '#EED98A' }}>Fee-free for organisers.</span>
+                </h2>
+                <p className="mt-4 text-base leading-relaxed" style={{ color: 'rgba(237,231,216,0.7)', maxWidth: '520px', fontFamily: "'Outfit', sans-serif" }}>
+                  Gavelling handles registration, allocations, session management, and payments — so you can focus on running a great conference.
+                </p>
+              </div>
+
+              {/* Part B — 2×2 feature cards */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-20">
+                {[
+                  { icon: <Users size={22} color="#EED98A" />, title: 'Smart Delegate Assignment', desc: 'Preferences, experience scores, and one-click auto-assign. No more spreadsheets.' },
+                  { icon: <FileText size={22} color="#EED98A" />, title: 'Document Portal', desc: 'Study guides, position papers, and feedback — all in one place, not scattered across email.' },
+                  { icon: <CreditCard size={22} color="#EED98A" />, title: 'Fee-Free for Organisers', desc: 'Zero platform fees. A transparent 5% surcharge is added for delegates, waived with Gavelling Unlimited.' },
+                  { icon: <Zap size={22} color="#EED98A" />, title: 'Automated Everything', desc: 'Acceptance emails, allocation codes, reminders, and receipts — all sent automatically.' },
+                ].map(card => (
+                  <div key={card.title} style={{ backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(238,217,138,0.15)', borderRadius: '12px', padding: '20px 24px' }}>
+                    <div className="mb-3">{card.icon}</div>
+                    <h3 className="font-semibold text-base mb-1 text-white" style={{ fontFamily: "'Outfit', sans-serif" }}>{card.title}</h3>
+                    <p className="text-sm leading-relaxed" style={{ color: 'rgba(237,231,216,0.65)', fontFamily: "'Outfit', sans-serif" }}>{card.desc}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Part C — Globe + Global reach */}
+              <div className="flex flex-col md:flex-row gap-12 items-center mb-20">
+                <div className="flex-1">
+                  <p className="text-[10px] tracking-[0.2em] mb-2" style={{ color: 'rgba(238,217,138,0.6)', fontFamily: "'DM Mono', monospace" }}>GLOBAL REACH</p>
+                  <h3 className="font-black text-3xl md:text-4xl text-white mb-3" style={{ fontFamily: "'Outfit', sans-serif" }}>MUN Across the World</h3>
+                  <p className="text-sm leading-relaxed mb-6" style={{ color: 'rgba(237,231,216,0.7)', fontFamily: "'Outfit', sans-serif" }}>
+                    Conferences from The Hague to Singapore, Tokyo to New York. Find your next conference or list yours — the MUN community is global.
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <Link
+                      href="/conferences"
+                      className="rounded-xl py-3 px-6 font-bold text-sm text-center transition-all focus:outline-none"
+                      style={{ border: '1.5px solid rgba(238,217,138,0.4)', color: '#EED98A', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', textDecoration: 'none', display: 'inline-block' }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(238,217,138,0.08)'; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                    >
+                      EXPLORE CONFERENCES →
+                    </Link>
+                    <Link
+                      href="/conferences/new"
+                      className="rounded-xl py-3 px-6 font-bold text-sm text-center transition-all focus:outline-none"
+                      style={{ backgroundColor: '#EED98A', color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', textDecoration: 'none', display: 'inline-block' }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'white'; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#EED98A'; }}
+                    >
+                      ORGANISE A CONFERENCE →
+                    </Link>
+                  </div>
+                </div>
+                <div className="flex-shrink-0 flex items-center justify-center">
+                  <MUNGlobe />
+                </div>
+              </div>
+
+              {/* Part D — Job board teaser */}
+              <div
+                className="flex flex-col md:flex-row md:items-center gap-6"
+                style={{ backgroundColor: 'rgba(0,0,0,0.2)', border: '1px solid rgba(238,217,138,0.12)', borderRadius: '16px', padding: '32px 40px' }}
+              >
+                <div className="flex-1">
+                  <p className="text-[10px] tracking-[0.2em] mb-2" style={{ color: 'rgba(238,217,138,0.6)', fontFamily: "'DM Mono', monospace" }}>CHAIR & STAFF BOARD</p>
+                  <h3 className="font-black text-2xl text-white mb-2" style={{ fontFamily: "'Outfit', sans-serif" }}>Looking to chair? Find your next role.</h3>
+                  <p className="text-sm leading-relaxed" style={{ color: 'rgba(237,231,216,0.65)', fontFamily: "'Outfit', sans-serif" }}>
+                    Conferences post open positions for chairs, secretariat, and staff. Apply directly through your Gavelling profile.
+                  </p>
+                </div>
+                <div className="flex-shrink-0">
+                  <Link
+                    href="/conferences#jobs"
+                    className="rounded-xl py-3 px-8 font-bold text-sm transition-all focus:outline-none"
+                    style={{ border: '1.5px solid rgba(238,217,138,0.35)', color: '#EED98A', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', textDecoration: 'none', display: 'inline-block' }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(238,217,138,0.08)'; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                  >
+                    FIND A ROLE →
+                  </Link>
                 </div>
               </div>
 
