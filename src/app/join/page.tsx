@@ -8,14 +8,32 @@ import { getCommitteeByCode, addChairName } from '@/lib/committeeService';
 import { Committee } from '@/lib/types';
 import { useSettingsStore } from '@/lib/settingsStore';
 import { Emoji } from '@/components/Emoji';
+import { useAuth } from '@/components/AuthProvider';
+import { createAuthClient } from '@/lib/supabase-auth';
 
 type JoinMode = 'delegate' | 'chair' | 'advisor';
+
+interface ConferenceCommittee {
+  id: string;
+  name: string;
+  session_code: string;
+  conference_id: string;
+  conferences: {
+    full_name: string;
+    acronym: string;
+    slug: string;
+    start_date: string;
+    end_date: string;
+  } | null;
+}
 
 function JoinPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { committees } = useCommitteeStore();
   const { getSettings } = useSettingsStore();
+  const { user, loading: authLoading } = useAuth();
+  const supabaseAuth = createAuthClient();
 
   const initialMode = (searchParams.get('mode') as JoinMode) ?? 'delegate';
   const [mode, setMode] = useState<JoinMode>(initialMode);
@@ -30,6 +48,12 @@ function JoinPageInner() {
   const [chairNameMode, setChairNameMode] = useState<'select' | 'new'>('select');
   const [newChairName, setNewChairName] = useState('');
 
+  const [isConferenceSession, setIsConferenceSession] = useState(false);
+  const [conferenceCommittee, setConferenceCommittee] = useState<ConferenceCommittee | null>(null);
+  const [allocationLoading, setAllocationLoading] = useState(false);
+  const [allocationError, setAllocationError] = useState('');
+  const [allocatedCountry, setAllocatedCountry] = useState<{ code: string; name: string } | null>(null);
+
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // On mount, if code was pre-filled from URL, trigger lookup immediately
@@ -40,6 +64,39 @@ function JoinPageInner() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!isConferenceSession || !conferenceCommittee || !user) {
+      setAllocatedCountry(null);
+      setAllocationError('');
+      return;
+    }
+
+    async function checkAllocation() {
+      setAllocationLoading(true);
+      setAllocationError('');
+
+      const { data } = await supabaseAuth
+        .from('conference_allocations')
+        .select('country_code, country_name')
+        .eq('conference_committee_id', conferenceCommittee!.id)
+        .eq('user_id', user!.id)
+        .maybeSingle();
+
+      if (data) {
+        setAllocatedCountry({ code: data.country_code, name: data.country_name });
+      } else {
+        setAllocatedCountry(null);
+        setAllocationError(
+          'It appears your account is not linked to an assigned member of this committee. Please check your allocation or contact your conference organizers.'
+        );
+      }
+      setAllocationLoading(false);
+    }
+
+    checkAllocation();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isConferenceSession, conferenceCommittee?.id, user?.id]);
 
   function doLookup(upper: string, currentMode: JoinMode = mode) {
     setLookingUp(true);
@@ -69,10 +126,30 @@ function JoinPageInner() {
       return true;
     };
 
+    async function checkConferenceSession() {
+      const { data: confCommittee } = await supabaseAuth
+        .from('conference_committees')
+        .select(`
+          id, name, session_code, conference_id,
+          conferences (full_name, acronym, slug, start_date, end_date)
+        `)
+        .eq('session_code', upper)
+        .maybeSingle();
+
+      if (confCommittee) {
+        setConferenceCommittee(confCommittee as unknown as ConferenceCommittee);
+        setIsConferenceSession(true);
+      } else {
+        setConferenceCommittee(null);
+        setIsConferenceSession(false);
+      }
+    }
+
     // 1. Check local store first (instant)
     const local = Object.values(committees).find((c) => c.code === upper || (tryBase && c.code === tryBase));
     if (local) {
       trySetCommittee(local);
+      checkConferenceSession();
       setLookingUp(false);
       return;
     }
@@ -83,12 +160,15 @@ function JoinPageInner() {
       if (!remote && tryBase) {
         // Also try the full code in case it's literally the committee code
         const fallback = await getCommitteeByCode(upper);
-        if (fallback) { trySetCommittee(fallback); setLookingUp(false); return; }
+        if (fallback) { trySetCommittee(fallback); await checkConferenceSession(); setLookingUp(false); return; }
       }
       if (remote) {
         trySetCommittee(remote);
+        await checkConferenceSession();
       } else {
         setFoundCommittee(null);
+        setConferenceCommittee(null);
+        setIsConferenceSession(false);
         setError('Committee not found. Check the code and try again.');
       }
       setLookingUp(false);
@@ -103,6 +183,10 @@ function JoinPageInner() {
     setSuffixError('');
     setFoundCommittee(null);
     setLookingUp(false);
+    setIsConferenceSession(false);
+    setConferenceCommittee(null);
+    setAllocatedCountry(null);
+    setAllocationError('');
 
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
@@ -113,6 +197,23 @@ function JoinPageInner() {
   };
 
   const handleJoin = () => {
+    // ── Conference-linked session fork ──
+    if (isConferenceSession) {
+      if (!user) {
+        router.push(`/auth/signin?next=/join?code=${encodeURIComponent(code)}`);
+        return;
+      }
+      if (allocationLoading) return;
+      if (!allocatedCountry) {
+        setError(allocationError || 'Your account is not linked to this committee.');
+        return;
+      }
+      const encoded = encodeURIComponent(allocatedCountry.name);
+      router.push(`/delegate/${foundCommittee!.code}?country=${encoded}&locked=1`);
+      return;
+    }
+
+    // ── Existing anonymous flow continues unchanged below ──
     if (!foundCommittee) { setError('Committee not found.'); return; }
     if (mode === 'chair') {
       const name = chairNameMode === 'new' ? newChairName.trim() : chairName;
@@ -206,8 +307,109 @@ function JoinPageInner() {
             </div>
           )}
 
+          {/* Conference session block */}
+          {foundCommittee && isConferenceSession && (
+            <div className="mb-5">
+              {/* Conference badge */}
+              <div
+                className="rounded-xl px-4 py-3 mb-3"
+                style={{
+                  backgroundColor: '#1B3828',
+                  border: '1px solid rgba(238,217,138,0.2)',
+                }}
+              >
+                <p
+                  className="text-[10px] tracking-[0.2em] mb-0.5"
+                  style={{ color: 'rgba(238,217,138,0.6)', fontFamily: "'DM Mono', monospace" }}
+                >
+                  CONFERENCE SESSION
+                </p>
+                <p className="font-semibold text-sm text-white" style={{ fontFamily: "'Outfit', sans-serif" }}>
+                  {conferenceCommittee?.conferences?.full_name}
+                </p>
+                <p className="text-xs mt-0.5" style={{ color: 'rgba(238,217,138,0.6)', fontFamily: "'DM Mono', monospace" }}>
+                  {conferenceCommittee?.conferences?.acronym} · {conferenceCommittee?.name}
+                </p>
+              </div>
+
+              {/* Auth + allocation state */}
+              {authLoading ? (
+                <div className="flex items-center justify-center py-4">
+                  <div className="w-5 h-5 border-2 border-[#1B3828] border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : !user ? (
+                <div
+                  className="rounded-xl px-4 py-4 text-center"
+                  style={{
+                    backgroundColor: 'rgba(238,217,138,0.08)',
+                    border: '1px solid rgba(238,217,138,0.2)',
+                  }}
+                >
+                  <p className="font-semibold text-sm mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                    Sign in to join this session
+                  </p>
+                  <p className="text-xs mb-3" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                    This is a conference-linked session. You need a Gavelling account to verify your allocation.
+                  </p>
+                  <button
+                    onClick={() => router.push(`/auth/signin?next=/join?code=${encodeURIComponent(code)}`)}
+                    className="rounded-xl py-2.5 px-6 font-bold text-sm focus:outline-none transition-colors"
+                    style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.06em' }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+                  >
+                    SIGN IN TO JOIN →
+                  </button>
+                </div>
+              ) : allocationLoading ? (
+                <div className="flex items-center gap-2 px-4 py-3 rounded-xl" style={{ backgroundColor: 'rgba(27,56,40,0.06)', border: '1px solid rgba(27,56,40,0.1)' }}>
+                  <div className="w-4 h-4 border-2 border-[#1B3828] border-t-transparent rounded-full animate-spin flex-shrink-0" />
+                  <p className="text-xs font-medium" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>
+                    Verifying your allocation...
+                  </p>
+                </div>
+              ) : allocatedCountry ? (
+                <div
+                  className="rounded-xl px-4 py-3 flex items-center gap-3"
+                  style={{
+                    backgroundColor: 'rgba(61,122,82,0.1)',
+                    border: '1px solid rgba(61,122,82,0.3)',
+                  }}
+                >
+                  <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: '#3D7A52' }} />
+                  <div>
+                    <p className="text-xs font-semibold" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>
+                      VERIFIED ALLOCATION
+                    </p>
+                    <p className="font-bold text-sm mt-0.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                      {allocatedCountry.name}
+                    </p>
+                    <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                      You will join as {allocatedCountry.name}. This cannot be changed.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  className="rounded-xl px-4 py-3"
+                  style={{
+                    backgroundColor: 'rgba(139,32,32,0.06)',
+                    border: '1px solid rgba(139,32,32,0.2)',
+                  }}
+                >
+                  <p className="font-semibold text-sm mb-1" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>
+                    Not assigned to this committee
+                  </p>
+                  <p className="text-xs leading-relaxed" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                    {allocationError}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Role cards */}
-          {(() => {
+          {!isConferenceSession && (() => {
             const hasCode = code.trim().length >= 4;
             const isChairCode = code.includes('-');
             const roleCards: { key: JoinMode; label: string; desc: string }[] = [
@@ -250,7 +452,7 @@ function JoinPageInner() {
           })()}
 
           {/* Delegate country select */}
-          {foundCommittee && mode === 'delegate' && (() => {
+          {!isConferenceSession && foundCommittee && mode === 'delegate' && (() => {
             const requireName = getSettings(foundCommittee.code).requireDelegationName;
             if (!requireName) return null;
             return (
@@ -322,14 +524,18 @@ function JoinPageInner() {
           <button
             onClick={handleJoin}
             disabled={
-              mode === 'delegate'
-                ? (!foundCommittee || (getSettings(foundCommittee?.code ?? '').requireDelegationName && !country))
-                : mode === 'chair'
-                ? (!foundCommittee ||
-                    ((foundCommittee.dbSeparateChairCode ?? getSettings(foundCommittee.code).separateChairCode) && !code.includes('-')) ||
-                    !!suffixError ||
-                    (chairNameMode === 'select' ? !chairName : !newChairName.trim()))
-                : !foundCommittee
+              isConferenceSession
+                ? (!foundCommittee || !user || allocationLoading || !allocatedCountry)
+                : (
+                  mode === 'delegate'
+                    ? (!foundCommittee || (getSettings(foundCommittee?.code ?? '').requireDelegationName && !country))
+                    : mode === 'chair'
+                    ? (!foundCommittee ||
+                        ((foundCommittee.dbSeparateChairCode ?? getSettings(foundCommittee.code).separateChairCode) && !code.includes('-')) ||
+                        !!suffixError ||
+                        (chairNameMode === 'select' ? !chairName : !newChairName.trim()))
+                    : !foundCommittee
+                )
             }
             className="w-full py-4 rounded-2xl font-black text-base transition-all focus:outline-none"
             style={{ fontFamily: "'Outfit', sans-serif", letterSpacing: '0.06em' }}
@@ -343,7 +549,9 @@ function JoinPageInner() {
               }
             }}
           >
-            {mode === 'delegate'
+            {isConferenceSession
+              ? (allocatedCountry ? `JOIN AS ${allocatedCountry.name.toUpperCase()} →` : 'JOIN SESSION →')
+              : mode === 'delegate'
               ? (foundCommittee?.endedAt ? 'VIEW SESSION →' : 'JOIN SESSION →')
               : mode === 'chair' ? 'OPEN CHAIR PANEL →' : 'OPEN ADVISOR VIEW →'}
           </button>
