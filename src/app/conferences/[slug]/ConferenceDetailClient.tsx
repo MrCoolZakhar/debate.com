@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Globe, MessageCircle, Music } from 'lucide-react';
@@ -133,6 +133,14 @@ export default function ConferenceDetailClient() {
   const [myApplications, setMyApplications] = useState<MyApplication[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [myAllocation, setMyAllocation] = useState<any>(null);
+  const [myPositionPaper, setMyPositionPaper] = useState<any>(null);
+  const [ppFile, setPPFile] = useState<File | null>(null);
+  const [ppUploading, setPPUploading] = useState(false);
+  const [ppError, setPPError] = useState('');
+  const [ppNotify, setPPNotify] = useState(false);
+  const [isReplacing, setIsReplacing] = useState(false);
+  const ppFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (authLoading) return;
@@ -195,9 +203,79 @@ export default function ConferenceDetailClient() {
         .eq('conference_id', conf.id)
         .eq('user_id', user.id);
       setMyApplications((appsData as MyApplication[]) ?? []);
+
+      const committeeIds = (committeesRes.data as Committee[] ?? []).map(c => c.id);
+      if (committeeIds.length > 0) {
+        const { data: allocData } = await supabase
+          .from('conference_allocations')
+          .select('id, country_code, country_name, conference_committee_id, conference_committees (name, position_paper_deadline)')
+          .eq('user_id', user.id)
+          .in('conference_committee_id', committeeIds)
+          .maybeSingle();
+        setMyAllocation(allocData ?? null);
+        if (allocData) {
+          const { data: ppData } = await supabase
+            .from('position_papers')
+            .select('id, status, chair_feedback, submitted_at, file_name, notify_on_feedback')
+            .eq('conference_committee_id', (allocData as any).conference_committee_id)
+            .eq('user_id', user.id)
+            .maybeSingle();
+          setMyPositionPaper(ppData ?? null);
+        }
+      }
     }
 
     setLoading(false);
+  }
+
+  const loadMyPositionPaper = useCallback(async () => {
+    if (!user || !myAllocation) return;
+    const supabase = createAuthClient();
+    const { data } = await supabase
+      .from('position_papers')
+      .select('id, status, chair_feedback, submitted_at, file_name, notify_on_feedback')
+      .eq('conference_committee_id', myAllocation.conference_committee_id)
+      .eq('user_id', user.id)
+      .maybeSingle();
+    setMyPositionPaper(data ?? null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, myAllocation?.conference_committee_id]);
+
+  function handlePPFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.type !== 'application/pdf') { setPPError('Only PDF files are accepted.'); return; }
+    if (file.size > 5 * 1024 * 1024) { setPPError('File must be under 5MB.'); return; }
+    setPPError('');
+    setPPFile(file);
+  }
+
+  async function handlePPSubmit() {
+    if (!ppFile || !myAllocation || !user || !conference) return;
+    setPPUploading(true);
+    const supabase = createAuthClient();
+    if (myPositionPaper) {
+      await supabase.from('position_papers').delete().eq('id', myPositionPaper.id);
+    }
+    const path = `${conference.id}/${myAllocation.conference_committee_id}/${user.id}_${Date.now()}.pdf`;
+    const { error: storageError } = await supabase.storage.from('position-papers').upload(path, ppFile, { contentType: 'application/pdf' });
+    if (storageError) { setPPError('Upload failed.'); setPPUploading(false); return; }
+    const { data: { publicUrl } } = supabase.storage.from('position-papers').getPublicUrl(path);
+    await supabase.from('position_papers').insert({
+      conference_committee_id: myAllocation.conference_committee_id,
+      user_id: user.id,
+      country_code: myAllocation.country_code,
+      country_name: myAllocation.country_name,
+      file_url: publicUrl,
+      file_name: ppFile.name,
+      file_size_bytes: ppFile.size,
+      status: 'submitted',
+      notify_on_feedback: ppNotify,
+    });
+    setPPUploading(false);
+    setPPFile(null);
+    setIsReplacing(false);
+    await loadMyPositionPaper();
   }
 
   // Loading
@@ -456,6 +534,122 @@ export default function ConferenceDetailClient() {
                   </div>
                 )}
               </div>
+
+              {/* Position Paper */}
+              {myAllocation && (() => {
+                const deadline = myAllocation.conference_committees?.position_paper_deadline as string | null;
+                const deadlineSoon = deadline ? (new Date(deadline).getTime() - Date.now()) < 7 * 24 * 60 * 60 * 1000 && new Date(deadline) > new Date() : false;
+                const showUploadForm = !myPositionPaper || isReplacing;
+                const ppStatusMap: Record<string, { bg: string; color: string }> = {
+                  submitted: { bg: 'rgba(238,217,138,0.2)',  color: '#B8844A' },
+                  reviewed:  { bg: 'rgba(154,138,120,0.15)', color: '#9A8A78' },
+                  approved:  { bg: 'rgba(61,122,82,0.12)',   color: '#3D7A52' },
+                  rejected:  { bg: 'rgba(139,32,32,0.1)',    color: '#8B2020' },
+                };
+                const ppMonths = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                function fmtDate(iso: string) {
+                  const d = new Date(iso);
+                  return `${ppMonths[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+                }
+                return (
+                  <div style={{ background: '#FAF8F3', border: '1px solid #DDD4C0', borderRadius: 16, padding: 24, marginBottom: 24 }}>
+                    <h2 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 15, color: '#1C1410', marginBottom: 4 }}>
+                      Position Paper
+                    </h2>
+                    <p style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#9A8A78', marginBottom: 16 }}>
+                      {myAllocation.conference_committees?.name} · {myAllocation.country_name}
+                    </p>
+
+                    {showUploadForm ? (
+                      <>
+                        {deadline && (
+                          <p style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: deadlineSoon ? '#B8844A' : '#9A8A78', marginBottom: 14 }}>
+                            Due {fmtDate(deadline)}
+                          </p>
+                        )}
+                        <input type="file" accept="application/pdf" onChange={handlePPFileSelect} className="hidden" ref={ppFileInputRef} />
+                        {!ppFile ? (
+                          <div
+                            onClick={() => ppFileInputRef.current?.click()}
+                            style={{ border: '2px dashed #DDD4C0', borderRadius: 12, padding: '24px 12px', textAlign: 'center', cursor: 'pointer', marginBottom: 12, transition: 'border-color 0.15s' }}
+                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
+                          >
+                            <p style={{ fontSize: 13, color: '#9A8A78', fontFamily: "'Outfit', sans-serif", marginBottom: 2 }}>Click to select PDF</p>
+                            <p style={{ fontSize: 11, color: '#C8BFB0', fontFamily: "'Outfit', sans-serif" }}>Max 5MB</p>
+                          </div>
+                        ) : (
+                          <div style={{ border: '1px solid rgba(61,122,82,0.3)', borderRadius: 10, padding: '10px 14px', backgroundColor: 'rgba(61,122,82,0.04)', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <p style={{ fontSize: 13, color: '#1C1410', fontFamily: "'Outfit', sans-serif", fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ppFile.name}</p>
+                            </div>
+                            <button onClick={() => ppFileInputRef.current?.click()} className="focus:outline-none" style={{ fontSize: 11, color: '#9A8A78', fontFamily: "'Outfit', sans-serif", textDecoration: 'underline', cursor: 'pointer', background: 'none', border: 'none', flexShrink: 0 }}>
+                              Change
+                            </button>
+                          </div>
+                        )}
+                        {ppError && <p style={{ fontSize: 11, color: '#8B2020', fontFamily: "'Outfit', sans-serif", marginBottom: 8 }}>{ppError}</p>}
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: 14 }}>
+                          <input type="checkbox" checked={ppNotify} onChange={e => setPPNotify(e.target.checked)} style={{ accentColor: '#1B3828' }} />
+                          <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: 12, color: '#9A8A78' }}>
+                            Notify me via email when my position paper receives feedback
+                          </span>
+                        </label>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          {isReplacing && (
+                            <button onClick={() => { setIsReplacing(false); setPPFile(null); setPPError(''); }} className="focus:outline-none" style={{ border: '1px solid #DDD4C0', borderRadius: 12, padding: '10px 16px', fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 13, color: '#1C1410', backgroundColor: 'transparent', cursor: 'pointer' }}>
+                              CANCEL
+                            </button>
+                          )}
+                          <button
+                            onClick={handlePPSubmit}
+                            disabled={!ppFile || ppUploading}
+                            className="focus:outline-none"
+                            style={{ flex: 1, border: 'none', borderRadius: 12, padding: '10px 0', fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 13, backgroundColor: !ppFile || ppUploading ? '#DDD4C0' : '#1B3828', color: !ppFile || ppUploading ? '#9A8A78' : '#EED98A', cursor: !ppFile || ppUploading ? 'default' : 'pointer' }}
+                          >
+                            {ppUploading ? 'UPLOADING...' : 'SUBMIT POSITION PAPER'}
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                          <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#9A8A78', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {myPositionPaper.file_name}
+                          </span>
+                          {(() => {
+                            const s = ppStatusMap[myPositionPaper.status] ?? ppStatusMap.submitted;
+                            return (
+                              <span style={{ backgroundColor: s.bg, color: s.color, fontFamily: "'DM Mono', monospace", fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 9999, letterSpacing: '0.08em', flexShrink: 0 }}>
+                                {myPositionPaper.status.toUpperCase()}
+                              </span>
+                            );
+                          })()}
+                        </div>
+                        <p style={{ fontFamily: "'Outfit', sans-serif", fontSize: 11, color: '#9A8A78', marginBottom: 10 }}>
+                          Submitted {fmtDate(myPositionPaper.submitted_at)}
+                        </p>
+                        {myPositionPaper.chair_feedback && (
+                          <div style={{ backgroundColor: 'rgba(27,56,40,0.04)', borderLeft: '3px solid #DDD4C0', padding: '8px 12px', borderRadius: '0 6px 6px 0', marginBottom: 12 }}>
+                            <p style={{ fontFamily: "'Outfit', sans-serif", fontSize: 12, color: '#1C1410', fontStyle: 'italic' }}>
+                              {myPositionPaper.chair_feedback}
+                            </p>
+                          </div>
+                        )}
+                        <button
+                          onClick={() => { setIsReplacing(true); setPPFile(null); setPPError(''); }}
+                          className="focus:outline-none"
+                          style={{ fontFamily: "'Outfit', sans-serif", fontSize: 11, color: '#9A8A78', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#1C1410'; }}
+                          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
+                        >
+                          REPLACE
+                        </button>
+                      </>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Organiser */}
               <div className="rounded-2xl p-6 mb-6" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
