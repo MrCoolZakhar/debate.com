@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Users, CheckCircle, MapPin, CreditCard } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
@@ -142,6 +142,17 @@ export default function DashboardPage() {
   const { conference, refreshConference } = useManage();
   const [showPublishModal, setShowPublishModal] = useState(false);
   const [publishBlockMsg, setPublishBlockMsg] = useState('');
+  const [hasCommittees, setHasCommittees] = useState(false);
+
+  useEffect(() => {
+    if (!conference) return;
+    const supabase = createAuthClient();
+    supabase
+      .from('conference_committees')
+      .select('*', { count: 'exact', head: true })
+      .eq('conference_id', conference.id)
+      .then(({ count }) => { setHasCommittees((count ?? 0) > 0); });
+  }, [conference?.id]);
 
   if (!conference) {
     return (
@@ -155,7 +166,7 @@ export default function DashboardPage() {
 
   // Step completion
   const stepsComplete = {
-    committees: false,        // will be real in later prompt
+    committees: hasCommittees,
     applications: false,      // will be real in later prompt
     payments: conference.stripe_account_id !== null,
     published: conference.is_public,
