@@ -4,12 +4,14 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import PreRegisterModal from '@/components/PreRegisterModal';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { Globe } from 'lucide-react';
 
-const NAV_LINKS = [
-  { label: 'SESSIONS', href: '/' },
-  { label: 'CONFERENCES', href: '/conferences' },
-  { label: 'ABOUT US', href: '/about' },
-  { label: 'CONTACT', href: '/contact' },
+const NAV_LINKS_CONFIG = [
+  { en: 'SESSIONS',     es: 'SESIONES',     href: '/' },
+  { en: 'CONFERENCES',  es: 'CONFERENCIAS', href: '/conferences' },
+  { en: 'ABOUT US',     es: 'NOSOTROS',     href: '/about' },
+  { en: 'CONTACT',      es: 'CONTACTO',     href: '/contact' },
 ];
 
 interface SiteNavProps {
@@ -21,6 +23,9 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
   const [hovered, setHovered] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const { language, setLanguage } = useLanguage();
+  const [showLangMenu, setShowLangMenu] = useState(false);
+  const navLinks = NAV_LINKS_CONFIG.map(l => ({ label: l[language], href: l.href }));
 
   return (
     <>
@@ -40,7 +45,7 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
 
         {/* Desktop nav links */}
         <div className="hidden md:flex items-center">
-          {NAV_LINKS.map((link, i) => {
+          {navLinks.map((link, i) => {
             const active = pathname === link.href;
             const hl = hovered === link.label;
             return (
@@ -85,6 +90,50 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
               </div>
             );
           })}
+        </div>
+
+        {/* Language toggle */}
+        <div className="relative hidden md:block mr-3">
+          <button
+            onClick={() => setShowLangMenu((v) => !v)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl transition-all focus:outline-none"
+            style={{ color: '#1B3828', fontSize: '12px', fontWeight: 700, letterSpacing: '0.06em' }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.07)'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+          >
+            <Globe size={14} strokeWidth={2} />
+            <span style={{ fontFamily: "'DM Mono', monospace" }}>{language.toUpperCase()}</span>
+          </button>
+          {showLangMenu && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setShowLangMenu(false)} />
+              <div className="absolute right-0 top-full mt-2 z-50 rounded-xl overflow-hidden shadow-xl" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', minWidth: '140px' }}>
+                <button
+                  onClick={() => { setLanguage('en'); setShowLangMenu(false); }}
+                  className="w-full flex items-center gap-2.5 px-4 py-3 text-left transition-colors focus:outline-none"
+                  style={{ color: language === 'en' ? '#1B3828' : '#6A5A4A', fontWeight: language === 'en' ? 800 : 600, fontSize: '13px', backgroundColor: language === 'en' ? 'rgba(27,56,40,0.07)' : 'transparent' }}
+                  onMouseEnter={(e) => { if (language !== 'en') (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
+                  onMouseLeave={(e) => { if (language !== 'en') (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                >
+                  <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '11px', color: '#9A8A78' }}>EN</span>
+                  <span>English</span>
+                  {language === 'en' && <span className="ml-auto" style={{ color: '#B6871F' }}>✓</span>}
+                </button>
+                <div style={{ height: '1px', backgroundColor: '#DDD4C0' }} />
+                <button
+                  onClick={() => { setLanguage('es'); setShowLangMenu(false); }}
+                  className="w-full flex items-center gap-2.5 px-4 py-3 text-left transition-colors focus:outline-none"
+                  style={{ color: language === 'es' ? '#1B3828' : '#6A5A4A', fontWeight: language === 'es' ? 800 : 600, fontSize: '13px', backgroundColor: language === 'es' ? 'rgba(27,56,40,0.07)' : 'transparent' }}
+                  onMouseEnter={(e) => { if (language !== 'es') (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
+                  onMouseLeave={(e) => { if (language !== 'es') (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                >
+                  <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '11px', color: '#9A8A78' }}>ES</span>
+                  <span>Español</span>
+                  {language === 'es' && <span className="ml-auto" style={{ color: '#B6871F' }}>✓</span>}
+                </button>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Desktop PRE-REGISTER button */}
@@ -160,7 +209,7 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
         }}
       >
         <div className="flex flex-col px-6 py-4 gap-1">
-          {NAV_LINKS.map((link) => {
+          {navLinks.map((link) => {
             const active = pathname === link.href;
             return (
               <Link
@@ -188,6 +237,23 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
 
           <div style={{ height: '1px', backgroundColor: '#DDD4C0', margin: '8px 0' }} />
 
+          <div className="flex gap-2 mb-2">
+            <button
+              onClick={() => { setLanguage('en'); setMenuOpen(false); }}
+              className="flex-1 py-2.5 rounded-xl text-sm font-black transition-all focus:outline-none"
+              style={{ backgroundColor: language === 'en' ? '#1B3828' : '#EDE7D8', color: language === 'en' ? '#EED98A' : '#1B3828', border: '1px solid #DDD4C0' }}
+            >
+              EN — English
+            </button>
+            <button
+              onClick={() => { setLanguage('es'); setMenuOpen(false); }}
+              className="flex-1 py-2.5 rounded-xl text-sm font-black transition-all focus:outline-none"
+              style={{ backgroundColor: language === 'es' ? '#1B3828' : '#EDE7D8', color: language === 'es' ? '#EED98A' : '#1B3828', border: '1px solid #DDD4C0' }}
+            >
+              ES — Español
+            </button>
+          </div>
+
           <button
             onClick={() => { setMenuOpen(false); setShowModal(true); }}
             style={{
@@ -205,7 +271,7 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
               textAlign: 'center',
             }}
           >
-            PRE-REGISTER
+            {language === 'es' ? 'PRE-REGISTRARSE' : 'PRE-REGISTER'}
           </button>
         </div>
       </div>
