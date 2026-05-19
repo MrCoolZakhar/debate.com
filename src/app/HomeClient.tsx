@@ -5,12 +5,8 @@ import { useRouter } from 'next/navigation';
 import { Mic, Scale, List, FileText, MessageSquare, Save } from 'lucide-react';
 import { getFlagUrl, getCountryByName } from '@/lib/countries';
 import SiteNav from '@/components/SiteNav';
+import { useT, useLanguage } from '@/contexts/LanguageContext';
 
-const steps = [
-  { step: '01', title: 'Create a Committee', desc: 'Chair enters committee name, topic, and delegates. Pick a preset or builds custom.' },
-  { step: '02', title: 'Share the Code', desc: 'Delegates, co-chairs, and faculty advisors join instantly with a session code from any device.' },
-  { step: '03', title: 'Run the Session', desc: 'Manage roll call, speakers list, motions, and voting — all in one place.' },
-];
 
 // ── Individual feature card components ──────────────────────────────────────
 
@@ -364,6 +360,13 @@ export default function HomeClient() {
   const router = useRouter();
   const [joinCode, setJoinCode] = useState('');
   const [activeFeature, setActiveFeature] = useState('roll-call');
+  const t = useT();
+  const { language } = useLanguage();
+  const steps = [
+    { step: '01', title: t('step1_title'), desc: t('step1_desc') },
+    { step: '02', title: t('step2_title'), desc: t('step2_desc') },
+    { step: '03', title: t('step3_title'), desc: t('step3_desc') },
+  ];
   const handleJoin = () => {
     const code = joinCode.trim().toUpperCase();
     if (code.length >= 4) {
@@ -467,7 +470,7 @@ export default function HomeClient() {
                 <h1 className="font-black tracking-tight text-white leading-[1.05] mb-5 text-center md:whitespace-nowrap" style={{ fontSize: 'clamp(48px, 13.5vw, 165px)' }}>
                   MUN done{' '}
                   <span style={{ fontFamily: "'Playfair Display', serif", fontStyle: 'italic', fontWeight: 400, color: '#B8844A' }}>
-                    right.
+                    {t('hero_tagline')}
                   </span>
                 </h1>
                 <p className="text-reveal-3 text-lg max-w-lg mb-6 leading-relaxed font-medium text-center text-[#1B3828]" style={{
@@ -478,14 +481,14 @@ export default function HomeClient() {
                   borderRadius: '12px',
                   padding: '10px 20px',
                 }}>
-                  The most user-friendly way to run your MUN committee.
+                  {t('hero_subtitle')}
                 </p>
                 <button
                   onClick={() => router.push('/create')}
                   className="text-reveal-4 bg-[#1B3828] hover:bg-[#2A5A3C] active:scale-[0.98] text-[#EED98A] px-10 py-5 rounded-2xl font-black text-xl transition-all shadow-lg shadow-[#1B3828]/20 mb-5 w-fit mx-auto"
                   style={{ opacity: 0 }}
                 >
-                  START YOUR COMMITTEE →
+                  {t('hero_start_committee')}
                 </button>
                 <div className="text-reveal-5 flex flex-col gap-2 w-fit items-center" style={{
                   opacity: 0,
@@ -495,11 +498,11 @@ export default function HomeClient() {
                   borderRadius: '14px',
                   padding: '12px 20px',
                 }}>
-                  <p className="text-xs text-[#1B3828] tracking-[0.16em] uppercase font-semibold" style={{ fontFamily: "'DM Mono', monospace" }}>Join a Session</p>
+                  <p className="text-xs text-[#1B3828] tracking-[0.16em] uppercase font-semibold" style={{ fontFamily: "'DM Mono', monospace" }}>{t('hero_join_session')}</p>
                   <div className="flex gap-2">
                     <input
                       type="text"
-                      placeholder="SESSION CODE"
+                      placeholder={t('hero_session_code')}
                       value={joinCode}
                       onChange={(e) => setJoinCode(e.target.value.toUpperCase().slice(0, 20))}
                       onKeyDown={(e) => { if (e.key === 'Enter') handleJoin(); }}
@@ -512,7 +515,7 @@ export default function HomeClient() {
                       disabled={joinCode.trim().length < 4}
                       className="bg-[#1B3828] hover:bg-[#2A5A3C] disabled:opacity-40 text-[#EED98A] px-5 py-3 rounded-xl font-bold text-sm transition-colors"
                     >
-                      JOIN →
+                      {t('hero_join')}
                     </button>
                   </div>
                 </div>
@@ -525,8 +528,8 @@ export default function HomeClient() {
             <div>
               <div className="max-w-4xl mx-auto">
                 <div className="text-center mb-14">
-                  <h2 className="scroll-reveal text-5xl font-black text-white mb-4 uppercase tracking-wider">Up and Running in Minutes</h2>
-                  <p className="scroll-reveal text-[#EED98A]/70 text-lg mb-4">No downloads, no setup. Just open your browser and start chairing.</p>
+                  <h2 className="scroll-reveal text-5xl font-black text-white mb-4 uppercase tracking-wider">{t('how_title')}</h2>
+                  <p className="scroll-reveal text-[#EED98A]/70 text-lg mb-4">{t('how_subtitle')}</p>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-[#B6871F]/30 w-full max-w-6xl mx-auto mt-16">
                   {steps.map((s) => (
@@ -563,23 +566,23 @@ export default function HomeClient() {
               <div className="w-full md:w-80 flex-shrink-0 flex flex-col justify-center items-start py-8">
 
                 <h2 className="font-black uppercase tracking-wide leading-tight mb-4" style={{ fontSize: 'clamp(28px, 3.2vw, 48px)' }}>
-                  <span className="text-[#1B3828]">Everything chairs need</span><br />
-                  <span className="text-[#B8844A]">to run committees</span>
+                  <span className="text-[#1B3828]">{t('features_title_1')}</span><br />
+                  <span className="text-[#B8844A]">{t('features_title_2')}</span>
                 </h2>
 
                 <p className="text-[#6A5A4A] text-sm mb-5 leading-relaxed">
-                  One dashboard. Every tool. From opening session to final voting.
+                  {t('features_subtitle')}
                 </p>
 
                 {/* Pills */}
                 <div className="flex flex-col gap-1.5 w-full">
                   {[
-                    { id: 'roll-call', icon: <Mic size={15} className="text-[#EED98A]" />, label: 'Roll Call' },
-                    { id: 'motions', icon: <Scale size={15} className="text-[#EED98A]" />, label: 'Motions & Voting' },
-                    { id: 'speakers', icon: <List size={15} className="text-[#EED98A]" />, label: 'Speakers List' },
-                    { id: 'documents', icon: <FileText size={15} className="text-[#EED98A]" />, label: 'Document Upload' },
-                    { id: 'chat', icon: <MessageSquare size={15} className="text-[#EED98A]" />, label: 'Live Chat' },
-                    { id: 'archive', icon: <Save size={15} className="text-[#EED98A]" />, label: 'Archives' },
+                    { id: 'roll-call', icon: <Mic size={15} className="text-[#EED98A]" />, label: t('feature_rollcall') },
+                    { id: 'motions', icon: <Scale size={15} className="text-[#EED98A]" />, label: t('feature_motions') },
+                    { id: 'speakers', icon: <List size={15} className="text-[#EED98A]" />, label: t('feature_speakers') },
+                    { id: 'documents', icon: <FileText size={15} className="text-[#EED98A]" />, label: t('feature_documents') },
+                    { id: 'chat', icon: <MessageSquare size={15} className="text-[#EED98A]" />, label: t('feature_chat') },
+                    { id: 'archive', icon: <Save size={15} className="text-[#EED98A]" />, label: t('feature_archives') },
                   ].map((f) => (
                     <div
                       key={f.id}
