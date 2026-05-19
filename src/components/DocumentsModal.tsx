@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect, KeyboardEvent } from 'react';
+import { useT } from '@/contexts/LanguageContext';
 import { useRouter } from 'next/navigation';
 import { Committee, CommitteeDocument, DocumentType, DocumentStatus } from '@/lib/types';
 import { getCountryByName, getFlagUrl } from '@/lib/countries';
@@ -592,6 +593,7 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate }
   committee: Committee; onClose: () => void;
   onCommitteeUpdate?: (updater: (c: Committee) => Committee) => void;
 }) {
+  const t = useT();
   const router = useRouter();
   const [tab, setTab] = useState<DocTab>('working-paper');
   const hasWPs = (committee.documents ?? []).filter((d) => d.type === 'working-paper').length > 0;

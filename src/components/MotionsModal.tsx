@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { useT } from '@/contexts/LanguageContext';
 import { Committee, PendingMotion, PendingMotionType } from '@/lib/types';
 import { getCountryByName, getFlagUrl } from '@/lib/countries';
 import { Emoji } from '@/components/Emoji';
@@ -636,6 +637,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
   onCommitteeUpdate?: (updater: (c: Committee) => Committee) => void;
   belowQuorum?: boolean;
 }) {
+  const t = useT();
   const { getSettings } = useSettingsStore();
   const motionNames = { ...DEFAULT_MOTION_NAMES, ...(getSettings(committee.code).motionNames ?? {}) };
   const typeMeta = buildTypeMeta(motionNames);
@@ -879,7 +881,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
             className="px-16 py-8 rounded-3xl text-white text-2xl font-black transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}>
-            YES
+            {t('motions_yes')}
           </button>
           <button
             onClick={() => {
@@ -892,7 +894,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
             className="px-16 py-8 rounded-3xl text-white text-2xl font-black transition-colors focus:outline-none" style={{ backgroundColor: '#8B2020', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#7A1C1C'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#8B2020'; }}>
-            NO
+            {t('motions_no')}
           </button>
         </div>
       </div>

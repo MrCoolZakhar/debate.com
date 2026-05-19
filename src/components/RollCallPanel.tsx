@@ -8,6 +8,7 @@ import {
   setDelegateStatus as setDelegateStatusInDB,
   removeFromSpeakersList as removeFromSpeakersListInDB,
 } from '@/lib/committeeService';
+import { useT } from '@/contexts/LanguageContext';
 
 // ── FlagCircle ────────────────────────────────────────────────────────────────
 export function FlagCircle({ country, size = 'md' }: { country: string; size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' | 'hero' }) {
@@ -52,6 +53,7 @@ function StatusSlider({ status, onCycle }: { status: DelegateStatus; onCycle: ()
 
 // ── A-Z / QUEUE view toggle slider ────────────────────────────────────────────
 function ViewToggle({ view, onChange }: { view: 'az' | 'queue'; onChange: (v: 'az' | 'queue') => void }) {
+  const t = useT();
   const isQueue = view === 'queue';
   return (
     <button
@@ -65,8 +67,8 @@ function ViewToggle({ view, onChange }: { view: 'az' | 'queue'; onChange: (v: 'a
       <div className={`absolute top-[1px] w-[51px] h-[26px] rounded-full transition-all duration-200 ${isQueue ? 'left-[51px]' : 'left-[1px]'}`}
         style={{ backgroundColor: 'rgba(255,255,255,0.22)' }} />
       <div className="absolute inset-0 flex items-center pointer-events-none z-10">
-        <span className={`w-[52px] text-[10px] font-bold text-center leading-none ${!isQueue ? 'text-white' : 'text-white/40'}`}>A-Z</span>
-        <span className={`w-[52px] text-[10px] font-bold text-center leading-none ${isQueue ? 'text-white' : 'text-white/40'}`}>QUEUE</span>
+        <span className={`w-[52px] text-[10px] font-bold text-center leading-none ${!isQueue ? 'text-white' : 'text-white/40'}`}>{t('rollcall_az')}</span>
+        <span className={`w-[52px] text-[10px] font-bold text-center leading-none ${isQueue ? 'text-white' : 'text-white/40'}`}>{t('rollcall_queue')}</span>
       </div>
     </button>
   );
@@ -74,6 +76,7 @@ function ViewToggle({ view, onChange }: { view: 'az' | 'queue'; onChange: (v: 'a
 
 // ── Add country input ─────────────────────────────────────────────────────────
 function AddCountryInput({ committee, onAdd, onQueryChange }: { committee: Committee; onAdd: (country: string) => void; onQueryChange?: (q: string) => void }) {
+  const t = useT();
   const [query, setQuery] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const existingNames = new Set(committee.delegates.map((d) => d.country.toLowerCase()));
@@ -117,7 +120,7 @@ function AddCountryInput({ committee, onAdd, onQueryChange }: { committee: Commi
             }
             if (e.key === 'Escape') updateQuery('');
           }}
-          placeholder="Filter or add country / observer…"
+          placeholder={t('rollcall_filter_placeholder')}
           className="flex-1 bg-transparent px-3 py-2.5 text-sm focus:outline-none placeholder-white/30" style={{ color: '#EDE7D8' }}
         />
         {query && (topKnown || trimmed) && (
@@ -274,6 +277,7 @@ function RollCallPanelInner({
   isTdT?: boolean;
   isRoomOrderTdT?: boolean;
 }) {
+  const t = useT();
   const [search, setSearch] = useState('');
   const [listView, setListView] = useState<'az' | 'queue'>('az');
   const [showFullList, setShowFullList] = useState(false);
@@ -399,7 +403,7 @@ function RollCallPanelInner({
         <p className="text-lg font-black leading-tight truncate mb-0.5" style={{ color: '#EED98A' }}>{committee.name}</p>
         {committee.topic && (
           <p className="text-xs leading-snug line-clamp-2 mb-2" style={{ color: 'rgba(238,217,138,0.55)' }}>
-            <span className="font-semibold" style={{ color: 'rgba(238,217,138,0.7)' }}>Topic: </span>{committee.topic}
+            <span className="font-semibold" style={{ color: 'rgba(238,217,138,0.7)' }}>{t('rollcall_topic')} </span>{committee.topic}
           </p>
         )}
         <div className="flex items-center justify-between">
@@ -412,9 +416,9 @@ function RollCallPanelInner({
         </div>
         {showBulkActions && (
           <div className="flex gap-1.5 mt-2">
-            <button onClick={handleClear} className="text-[10px] font-bold uppercase tracking-wide px-2.5 py-1.5 rounded-lg transition-colors" style={{ backgroundColor: 'rgba(139,32,32,0.25)', color: '#F4A0A0', border: '1px solid rgba(139,32,32,0.4)' }}>Clear All</button>
-            <button onClick={handleAllPresent} className="text-[10px] font-bold uppercase tracking-wide px-2.5 py-1.5 rounded-lg transition-colors" style={{ backgroundColor: 'rgba(61,122,82,0.3)', color: '#EDE7D8', border: '1px solid rgba(61,122,82,0.4)' }}>All Present</button>
-            <button onClick={handleAllPresentVoting} className="text-[10px] font-bold uppercase tracking-wide px-2.5 py-1.5 rounded-lg transition-colors" style={{ backgroundColor: 'rgba(182,135,31,0.25)', color: '#EED98A', border: '1px solid rgba(182,135,31,0.35)' }}>All P+V</button>
+            <button onClick={handleClear} className="text-[10px] font-bold uppercase tracking-wide px-2.5 py-1.5 rounded-lg transition-colors" style={{ backgroundColor: 'rgba(139,32,32,0.25)', color: '#F4A0A0', border: '1px solid rgba(139,32,32,0.4)' }}>{t('rollcall_clear_all')}</button>
+            <button onClick={handleAllPresent} className="text-[10px] font-bold uppercase tracking-wide px-2.5 py-1.5 rounded-lg transition-colors" style={{ backgroundColor: 'rgba(61,122,82,0.3)', color: '#EDE7D8', border: '1px solid rgba(61,122,82,0.4)' }}>{t('rollcall_all_present')}</button>
+            <button onClick={handleAllPresentVoting} className="text-[10px] font-bold uppercase tracking-wide px-2.5 py-1.5 rounded-lg transition-colors" style={{ backgroundColor: 'rgba(182,135,31,0.25)', color: '#EED98A', border: '1px solid rgba(182,135,31,0.35)' }}>{t('rollcall_all_pv')}</button>
           </div>
         )}
       </div>
@@ -522,7 +526,7 @@ function RollCallPanelInner({
                   {d.country}
                 </span>
                 {isAbsent && !isRollCallPhase && (
-                  <span className="text-[10px] shrink-0 font-mono ml-auto uppercase tracking-wide" style={{ color: 'rgba(237,231,216,0.35)' }}>absent</span>
+                  <span className="text-[10px] shrink-0 font-mono ml-auto uppercase tracking-wide" style={{ color: 'rgba(237,231,216,0.35)' }}>{t('rollcall_absent')}</span>
                 )}
                 {isRollCallPhase && (
                   <div onClick={(e) => e.stopPropagation()} className={`ml-auto shrink-0 ${isReadOnly ? 'pointer-events-none opacity-50' : ''}`}>
@@ -543,7 +547,7 @@ function RollCallPanelInner({
             disabled={present < 1}
             className="w-full disabled:opacity-40 disabled:cursor-not-allowed py-3 rounded-xl text-sm font-black uppercase tracking-widest transition-all active:scale-[0.98]" style={{ backgroundColor: '#EDE7D8', color: '#1B3828' }} onMouseEnter={(e) => { if ((e.currentTarget as HTMLButtonElement).disabled) return; (e.currentTarget as HTMLElement).style.backgroundColor = '#DDD4C0'; (e.currentTarget as HTMLElement).style.boxShadow = '0 0 0 3px rgba(237,231,216,0.3)'; }} onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#EDE7D8'; (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}
           >
-            {present >= 1 ? 'Begin Session →' : 'Add at least 1 delegate'}
+            {present >= 1 ? t('rollcall_begin_session') : t('rollcall_add_delegate')}
           </button>
         )}
       </div>

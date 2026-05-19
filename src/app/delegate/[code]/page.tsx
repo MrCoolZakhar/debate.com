@@ -2,6 +2,7 @@
 
 import React, { use, useEffect, useState, useRef, useCallback, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
+import { useT } from '@/contexts/LanguageContext';
 import Link from 'next/link';
 import { Committee, CommitteeDocument, DocumentType, PendingMotionType, SpeakingLogEntry, DelegateStatus } from '@/lib/types';
 import ChatPanel from '@/components/ChatPanel';
@@ -658,6 +659,7 @@ function StatisticsTab({ committee, country }: { committee: Committee; country: 
 type DelegateTab = 'session' | 'documents' | 'chat' | 'stats';
 
 function DelegateSessionInner({ params }: { params: Promise<{ code: string }> }) {
+  const t = useT();
   const { code } = use(params);
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -923,21 +925,21 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
           <img src="/GavellingLogo.png" alt="Gavelling" className="w-[14vw] h-auto max-h-8 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
         </Link>
         <div className="flex flex-1 min-w-0 h-full">
-          {(['session', 'documents', 'chat', 'stats'] as DelegateTab[]).map((t, i) => {
-            const labels: Record<DelegateTab, string> = { session: 'Session', documents: 'Documents', chat: 'Chat', stats: 'Stats' };
-            const isActive = tab === t;
+          {(['session', 'documents', 'chat', 'stats'] as DelegateTab[]).map((tab2, i) => {
+            const labels: Record<DelegateTab, string> = { session: t('delegate_session_tab'), documents: t('delegate_documents_tab'), chat: t('tab_chat'), stats: t('delegate_stats_tab') };
+            const isActive = tab === tab2;
             const chatUnread = (() => {
-              if (t !== 'chat') return 0;
+              if (tab2 !== 'chat') return 0;
               const total = committee.messages.filter((m) => m.sender !== country && !m.content.startsWith('__log__:') && !m.isPrivate).length;
               return Math.max(0, total - (chatReadCounts['everyone'] ?? 0));
             })();
             return (
-              <React.Fragment key={t}>
+              <React.Fragment key={tab2}>
                 {i > 0 && <div style={{ width: '1px', height: '28px', alignSelf: 'center', backgroundColor: 'rgba(28,20,16,0.2)', flexShrink: 0 }} />}
                 <button
                   onClick={() => {
-                    setTab(t);
-                    if (t === 'chat') {
+                    setTab(tab2);
+                    if (tab2 === 'chat') {
                       setChatReadCounts((prev) => ({
                         ...prev,
                         everyone: committee.messages.filter((m) => !m.content.startsWith('__log__:') && !m.isPrivate && m.sender !== country).length,
@@ -948,7 +950,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                   style={{ color: isActive ? '#1B3828' : '#1C1410', backgroundColor: isActive ? 'rgba(27,56,40,0.07)' : 'transparent', fontWeight: isActive ? 900 : 700 }}
                   onMouseEnter={(e) => { if (!isActive) { const el = e.currentTarget as HTMLElement; el.style.color = '#1B3828'; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; el.style.transform = 'translateY(-1px)'; } }}
                   onMouseLeave={(e) => { if (!isActive) { const el = e.currentTarget as HTMLElement; el.style.color = '#1C1410'; el.style.backgroundColor = 'transparent'; el.style.transform = 'translateY(0)'; } }}>
-                  {labels[t]}
+                  {labels[tab2]}
                   {chatUnread > 0 && tab !== 'chat' && (
                     <span className="absolute top-1 right-1 w-4 h-4 bg-[#1B3828] rounded-full text-white text-[10px] flex items-center justify-center">{chatUnread}</span>
                   )}
@@ -972,12 +974,12 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
           <button onClick={() => setEndedTab('ended')}
             className="flex-1 py-2.5 text-xs font-black transition-colors focus:outline-none"
             style={{ color: endedTab === 'ended' ? '#1B3828' : '#9A8A78', borderBottom: endedTab === 'ended' ? '2px solid #1B3828' : '2px solid transparent', marginBottom: '-1px', fontFamily: "'Outfit', sans-serif" }}>
-            END VIEW
+            {t('session_end_view')}
           </button>
           <button onClick={() => setEndedTab('session')}
             className="flex-1 py-2.5 text-xs font-black transition-colors focus:outline-none"
             style={{ color: endedTab === 'session' ? '#1B3828' : '#9A8A78', borderBottom: endedTab === 'session' ? '2px solid #1B3828' : '2px solid transparent', marginBottom: '-1px', fontFamily: "'Outfit', sans-serif" }}>
-            SESSION VIEW
+            {t('session_view')}
           </button>
         </div>
       )}
@@ -996,7 +998,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
       <>
       {sessionEnded && endedTab === 'session' && (
         <div className="shrink-0 px-4 py-2 text-center text-sm font-bold" style={{ backgroundColor: '#1B3828', borderBottom: '1px solid #3D7A52', color: '#EED98A' }}>
-          Session has ended — view only
+          {t('session_ended_banner')}
         </div>
       )}
       <div className="flex-1 flex overflow-hidden relative z-[2]">
@@ -1177,17 +1179,17 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                         <span className="text-xs font-semibold" style={{ color: '#B8844A' }}>Awaiting approval…</span>
                       ) : gslDenied ? (
                         <div className="flex items-center gap-2">
-                          <span className="text-xs text-red-400">Your request was denied</span>
+                          <span className="text-xs text-red-400">{t('delegate_gsl_denied')}</span>
                           <button onClick={() => setGslDenied(false)}
                             className="text-xs bg-[#DDD4C0] hover:bg-[#C8BAA8] border border-[#1B3828]/30 text-[#6A5A4A] px-2 py-1 rounded-lg font-medium transition-colors">
-                            Request Again
+                            {t('delegate_request_again')}
                           </button>
                         </div>
                       ) : (
                         <button onClick={handleAddMeToSpeakers}
                           className="text-xs text-white px-3 py-1.5 rounded-lg font-black transition-colors focus:outline-none"
                           style={{ backgroundColor: '#1B3828', letterSpacing: '0.04em' }}>
-                          + REQUEST TO SPEAK
+                          + {t('delegate_request_gsl')}
                         </button>
                       )
                     )}

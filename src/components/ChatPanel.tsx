@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import { Committee, ChatMessage } from '@/lib/types';
 import { getFlagEmoji, getCountryByName } from '@/lib/countries';
 import { sendMessage as sendMessageToDB } from '@/lib/committeeService';
+import { useT } from '@/contexts/LanguageContext';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -59,6 +60,7 @@ export default function ChatPanel({
   onReadCountsChange?: React.Dispatch<React.SetStateAction<Record<string, number>>>;
   speakerCard?: React.ReactNode;
 }) {
+  const t = useT();
   const [activeConv, setActiveConv] = useState<ConvKey>('everyone');
   const [showThread, setShowThread] = useState(false); // mobile: false=list, true=thread
   const [msg, setMsg] = useState('');
@@ -362,7 +364,7 @@ export default function ChatPanel({
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 min-h-0">
           {activeConvObj.messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center">
-              <p className="text-sm font-semibold" style={{ color: '#9A8A78' }}>No messages yet</p>
+              <p className="text-sm font-semibold" style={{ color: '#9A8A78' }}>{t('chat_no_messages')}</p>
               <p className="text-xs mt-1" style={{ color: '#C8BAA8' }}>Send the first message below</p>
             </div>
           ) : (
@@ -408,11 +410,7 @@ export default function ChatPanel({
                 value={msg}
                 onChange={(e) => setMsg(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') handleSend(); }}
-                placeholder={
-                  activeConv === 'everyone' ? 'Message the committee…'
-                  : activeConv === 'chairs' ? 'Message to chairs…'
-                  : `Message to ${activeConv}…`
-                }
+                placeholder={t('chat_placeholder')}
                 className="flex-1 rounded-xl px-4 py-2.5 text-sm focus:outline-none transition-colors"
                 style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #DDD4C0', color: '#1C1410' }}
                 onFocus={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}

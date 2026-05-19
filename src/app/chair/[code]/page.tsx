@@ -1,5 +1,6 @@
 'use client';
 import { use, useEffect, useState, useRef, useCallback, useMemo, Suspense } from 'react';
+import { useT } from '@/contexts/LanguageContext';
 import MobileGate from '@/components/MobileGate';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -136,6 +137,7 @@ function resolveQuery(raw: string): string {
 
 // ── Add Speaker Input ─────────────────────────────────────────────────────────
 function AddSpeakerInput({ committee, onAdd }: { committee: Committee; onAdd: (id: string) => void }) {
+  const t = useT();
   const [query, setQuery] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const onList = new Set([
@@ -157,7 +159,7 @@ function AddSpeakerInput({ committee, onAdd }: { committee: Committee; onAdd: (i
       <div className="flex items-center bg-[#FAF8F3] border border-[#DDD4C0] focus-within:border-[#1B3828] rounded-xl transition-colors">
         <input ref={inputRef} type="text" value={query} onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(topNotOnList); } if (e.key === 'Escape') setQuery(''); }}
-          placeholder="Add to speakers list..." autoFocus
+          placeholder={t('gsl_add_to_list')} autoFocus
           className="flex-1 bg-transparent px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none text-sm" />
         {topNotOnList && query && <span className="text-xs text-[#9A8A78] px-3 truncate max-w-[120px]">↵ {topNotOnList.country}</span>}
       </div>
@@ -281,6 +283,7 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, lastSpeakerDelegate
   currentSpeakerDelegateId?: string | null;
   isRoomOrderTdT?: boolean;
 }) {
+  const t = useT();
   const dragIndexRef = useRef<number | null>(null);
   const qLen = list.length;
   const displayItems = list.slice(0, 7);
@@ -316,10 +319,10 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, lastSpeakerDelegate
               {!isRoomOrderTdT && (
                 <span className="line-clamp-2 break-words whitespace-normal leading-tight max-w-[80px] text-xs font-semibold text-center" style={{ color: '#1C1410' }}>{abbrevCountry(s.country)}</span>
               )}
-              {isCurrent && <span className="text-sm font-semibold" style={{ color: '#B8844A' }}>Speaking</span>}
-              {!isCurrent && i === 0 && <span className="text-xs font-semibold" style={{ color: '#B8844A' }}>Up next</span>}
+              {isCurrent && <span className="text-sm font-semibold" style={{ color: '#B8844A' }}>{t('gsl_speaking')}</span>}
+              {!isCurrent && i === 0 && <span className="text-xs font-semibold" style={{ color: '#B8844A' }}>{t('gsl_up_next')}</span>}
               {!isCurrent && lastSpeakerDelegateId && s.delegateId === lastSpeakerDelegateId && i !== 0 && (
-                <span className="text-xs font-bold text-[#9A8A78] bg-[#DDD4C0] px-1.5 py-0.5 rounded">Last</span>
+                <span className="text-xs font-bold text-[#9A8A78] bg-[#DDD4C0] px-1.5 py-0.5 rounded">{t('gsl_last')}</span>
               )}
               {!isCurrent && (
                 <button onClick={() => onRemove(s.delegateId)}
@@ -345,17 +348,18 @@ function CaucusQueueSidebar({ committee, onRemove, onReorder, lastSpeakerDelegat
   onReorder: (newList: { delegateId: string; country: string }[]) => void;
   lastSpeakerDelegateId?: string | null;
 }) {
+  const t = useT();
   const dragIndexRef = useRef<number | null>(null);
   const queue = committee.caucusQueue ?? [];
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="px-4 pt-4 pb-3 border-b border-[#DDD4C0] shrink-0">
-        <span className="text-sm font-bold text-[#1C1410]">Speaker Queue</span>
+        <span className="text-sm font-bold text-[#1C1410]">{t('gsl_speaker_queue')}</span>
         <span className="text-xs text-[#9A8A78] ml-2 font-mono">{queue.length} speakers</span>
       </div>
       <div className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
         {queue.length === 0 ? (
-          <div className="px-4 py-8 text-center text-[#9A8A78] text-sm">No speakers queued</div>
+          <div className="px-4 py-8 text-center text-[#9A8A78] text-sm">{t('gsl_no_speakers_queued')}</div>
         ) : (
           queue.map((s, i) => {
             const found = getCountryByName(s.country);
@@ -407,6 +411,7 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
   currentSpeakerCountry?: string | null;
   onEndCaucus?: () => void;
 }) {
+  const t = useT();
   const [query, setQuery] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const onList = new Set((committee.caucusQueue ?? committee.speakersList).map((s) => s.delegateId));
@@ -434,7 +439,7 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
       <div className="flex items-center bg-[#FAF8F3] border rounded-xl transition-colors border-[#DDD4C0] focus-within:border-[#1B3828]">
         <input ref={inputRef} type="text" value={query} onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(topNotOnList); } if (e.key === 'Escape') setQuery(''); }}
-          placeholder="Add to speakers list…"
+          placeholder={t('gsl_add_to_list')}
           className="flex-1 bg-transparent px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none text-sm" />
         {topNotOnList && query && <span className="text-xs text-[#9A8A78] px-3 truncate max-w-[120px]">↵ {topNotOnList.country}</span>}
       </div>
@@ -497,7 +502,7 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
       {onEndCaucus && (
         <button onClick={onEndCaucus}
           className="shrink-0 px-5 py-3 rounded-xl font-black text-sm bg-[#8B2020] hover:bg-[#7A1C1C] text-white transition-colors">
-          End Caucus
+          {t('caucus_end')}
         </button>
       )}
     </div>
@@ -506,6 +511,7 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
 
 // ── Unmoderated Caucus View ───────────────────────────────────────────────────
 function UnmoderatedCaucusView({ committee, setCommittee }: { committee: Committee; setCommittee: CommitteeSetter }) {
+  const t = useT();
   const { getSettings } = useSettingsStore();
   const unmoderatedName = getSettings(committee.code).motionNames?.unmoderated ?? 'Unmoderated Caucus';
   const [running, setRunning] = useState(false);
@@ -587,13 +593,13 @@ function UnmoderatedCaucusView({ committee, setCommittee }: { committee: Committ
               </span>
               <span>PAUSE</span>
             </span>
-          ) : '▶ START'}
+          ) : t('gsl_start')}
         </button>
         <button onClick={() => setShowExtendUnmod((v) => !v)} className="px-4 py-3 rounded-xl font-bold bg-[#1B3828] hover:bg-[#2A5A3C] text-[#EDE7D8] transition-colors focus:outline-none">
           Extend
         </button>
         <button onClick={handleEndCaucus} className="px-8 py-3 rounded-xl font-black bg-[#8B2020] hover:bg-[#7A1C1C] text-white transition-colors focus:outline-none">
-          END CAUCUS
+          {t('caucus_end')}
         </button>
       </div>
       {showExtendUnmod && (
@@ -671,6 +677,7 @@ function ModeratedCaucusMain({
   handleEndCaucus: () => void;
   sessionEnded: boolean;
 }) {
+  const t = useT();
   const { getSettings } = useSettingsStore();
   const caucus = committee.caucus!;
   const queue = committee.caucusQueue ?? [];
@@ -823,7 +830,7 @@ function ModeratedCaucusMain({
                 speakerTimeRemaining <= 10 ? 'text-[#B8844A]' : 'text-[#1C1410]'
               }`}>
                 {formatTime(speakerTimeRemaining)}
-                {extraTimeAdded && <span className="text-base ml-2 font-normal text-[#1C1410]">+time</span>}
+                {extraTimeAdded && <span className="text-base ml-2 font-normal text-[#1C1410]">{t('gsl_plus_time')}</span>}
               </div>
               <div className="w-full max-w-2xl h-2 bg-[#DDD4C0] rounded-full overflow-hidden mb-3">
                 <div className={`h-full rounded-full transition-all ${caucusProgress > 50 ? 'bg-[#B6871F]' : caucusProgress > 20 ? 'bg-[#B6871F]' : 'bg-red-500'}`} style={{ width: `${caucusProgress}%` }} />
@@ -845,20 +852,20 @@ function ModeratedCaucusMain({
     </span>
     <span>PAUSE</span>
   </span>
-) : '▶ START'}
+) : t('gsl_start')}
                 </button>
                 <button onClick={handleNextCaucusSpeaker} disabled={queue.length === 0}
                   className="flex-1 bg-[#DDD4C0] hover:bg-[#C8BAA8] disabled:opacity-40 text-[#1C1410] py-3 px-6 rounded-xl font-bold text-base transition-colors focus:outline-none">
-                  NEXT →
+                  {t('gsl_next')}
                 </button>
                 <button onClick={() => setActivePopover(activePopover === 'extraTime' ? null : 'extraTime')} title="Add time"
                   className="px-3 py-2 border rounded-xl font-black text-[9px] uppercase tracking-wide transition-colors bg-[#EDE7D8] hover:bg-[#DDD4C0] border-[#DDD4C0] text-[#1B3828] leading-tight text-center w-[52px]">
-                  ADD<br />TIME
+                  {t('gsl_add_time').split('\n')[0]}<br />{t('gsl_add_time').split('\n')[1]}
                 </button>
                 {!isTdT && (
                   <button onClick={() => setActivePopover(activePopover === 'rightToReply' ? null : 'rightToReply')}
                     className="px-3 py-3 border rounded-xl font-black text-xs uppercase tracking-wide transition-colors bg-[#B8844A]/15 hover:bg-[#B8844A]/25 border-[#B8844A]/30 text-[#B8844A]">
-                    Right to Reply
+                    {t('gsl_right_to_reply')}
                   </button>
                 )}
               </div>
@@ -886,12 +893,12 @@ function ModeratedCaucusMain({
                   isRoomOrderTdT={isRoomOrderTdT}
                 />
               )}
-              <h2 className="text-5xl font-black mb-3 text-center" style={{ color: '#1B3828' }}>No Current Speaker</h2>
-              <p className="mb-4 text-center text-sm" style={{ color: '#9A8A78' }}>Add delegates below, then call the first speaker.</p>
+              <h2 className="text-5xl font-black mb-3 text-center" style={{ color: '#1B3828' }}>{t('gsl_no_current_speaker')}</h2>
+              <p className="mb-4 text-center text-sm" style={{ color: '#9A8A78' }}>{t('gsl_add_call_first')}</p>
               {!sessionEnded && (
                 <button onClick={handleNextCaucusSpeaker} disabled={queue.length === 0}
                   className="bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white px-8 py-3 rounded-xl font-bold transition-colors focus:outline-none">
-                  CALL FIRST SPEAKER
+                  {t('gsl_call_first')}
                 </button>
               )}
             </div>
@@ -904,7 +911,7 @@ function ModeratedCaucusMain({
           {/* Total timer bar — hidden for Tour de Table */}
           {!isTdT && (
             <div className="flex items-center gap-3 mb-4">
-              <span className="text-xs text-[#9A8A78] font-mono shrink-0">TOTAL</span>
+              <span className="text-xs text-[#9A8A78] font-mono shrink-0">{t('gsl_total')}</span>
               <p className={`text-lg font-black font-mono shrink-0 ${liveRemaining <= 30 ? 'text-red-500' : 'text-[#1C1410]'}`}>{formatTime(liveRemaining)}</p>
               <div className="flex-1 h-2 bg-[#DDD4C0] rounded-full overflow-hidden">
                 <div className="h-full bg-[#B6871F]/60 rounded-full transition-all" style={{ width: `${totalProgress}%` }} />
@@ -969,7 +976,7 @@ function ModeratedCaucusMain({
               </div>
               <button onClick={handleEndCaucus}
                 className="px-8 py-3 rounded-lg font-black text-sm bg-[#8B2020] hover:bg-[#7A1C1C] text-white transition-colors">
-                End Caucus
+                {t('caucus_end')}
               </button>
             </div>
           )}
@@ -992,21 +999,23 @@ function ModeratedCaucusMain({
 
 // ── Session Ended Content ─────────────────────────────────────────────────────
 function SessionEndedContent({ committee, hoursRemaining }: { committee: Committee; hoursRemaining: number | null }) {
+  const t = useT();
   return (
     <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
-      <h1 className="text-5xl font-black mb-4" style={{ color: '#1B3828' }}>This committee has ended.</h1>
+      <h1 className="text-5xl font-black mb-4" style={{ color: '#1B3828' }}>{t('session_ended_title')}</h1>
       <p className="text-xl mb-2" style={{ color: '#1C1410' }}>{committee.name}</p>
       <p className="text-lg mb-8" style={{ color: '#9A8A78' }}>{committee.topic}</p>
       {hoursRemaining !== null && (
-        <p className="text-base" style={{ color: '#9A8A78' }}>{hoursRemaining} hour{hoursRemaining !== 1 ? 's' : ''} until committee is deleted</p>
+        <p className="text-base" style={{ color: '#9A8A78' }}>{t('session_hours_until_delete', { n: hoursRemaining ?? 0, s: hoursRemaining !== 1 ? 's' : '' })}</p>
       )}
-      <p className="text-xs mt-8" style={{ color: '#9A8A78' }}>Press ESC to return to main menu</p>
+      <p className="text-xs mt-8" style={{ color: '#9A8A78' }}>{t('session_adjourned_hint')}</p>
     </div>
   );
 }
 
 // ── Main Chair Session ────────────────────────────────────────────────────────
 function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
+  const t = useT();
   const { code } = use(params);
   const router = useRouter();
   const { updateSetting, getSettings } = useSettingsStore();
@@ -1451,8 +1460,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#EDE7D8' }}>
         <div className="text-center">
-          <p className="text-[#1C1410] text-xl font-bold mb-4">Committee not found</p>
-          <Link href="/create" className="bg-[#1B3828] text-white px-6 py-3 rounded-xl font-semibold hover:bg-[#2A5A3C] transition-colors">Create Committee</Link>
+          <p className="text-[#1C1410] text-xl font-bold mb-4">{t('session_not_found')}</p>
+          <Link href="/create" className="bg-[#1B3828] text-white px-6 py-3 rounded-xl font-semibold hover:bg-[#2A5A3C] transition-colors">{t('session_create_committee')}</Link>
         </div>
       </div>
     );
@@ -1751,7 +1760,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               style={{ color: showSliders ? '#1B3828' : '#1C1410', backgroundColor: showSliders ? 'rgba(27,56,40,0.07)' : 'transparent', fontWeight: showSliders ? 900 : 700 }}
               onMouseEnter={(e) => { if (!showSliders) { const el = e.currentTarget as HTMLElement; el.style.color = '#1B3828'; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; el.style.transform = 'translateY(-1px)'; } }}
               onMouseLeave={(e) => { if (!showSliders) { const el = e.currentTarget as HTMLElement; el.style.color = '#1C1410'; el.style.backgroundColor = 'transparent'; el.style.transform = 'translateY(0)'; } }}>
-              Roll Call
+              {t('tab_roll_call')}
               <span style={{ position: 'absolute', bottom: '4px', left: '12px', right: '12px', height: '2px', backgroundColor: '#B6871F', transform: showSliders ? 'scaleX(1)' : 'scaleX(0)', transformOrigin: 'left', transition: 'transform 200ms ease', borderRadius: '2px' }} />
             </button>
             <div style={{ width: '1px', height: '28px', backgroundColor: 'rgba(28,20,16,0.2)', margin: '0 2px', flexShrink: 0 }} />
@@ -1760,7 +1769,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               style={{ color: showMotions ? '#1B3828' : '#1C1410', backgroundColor: showMotions ? 'rgba(27,56,40,0.07)' : 'transparent', fontWeight: showMotions ? 900 : 700 }}
               onMouseEnter={(e) => { if (!showMotions) { const el = e.currentTarget as HTMLElement; el.style.color = '#1B3828'; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; el.style.transform = 'translateY(-1px)'; } }}
               onMouseLeave={(e) => { if (!showMotions) { const el = e.currentTarget as HTMLElement; el.style.color = '#1C1410'; el.style.backgroundColor = 'transparent'; el.style.transform = 'translateY(0)'; } }}>
-              Motions
+              {t('tab_motions')}
               {(committee.pendingMotions ?? []).filter((m) => m.type !== ('join-request' as string) && (m.type as string) !== 'gsl-request').length > 0 && (
                 <span className="absolute top-1 right-1 w-4 h-4 bg-[#1B3828] rounded-full text-white text-[10px] flex items-center justify-center">
                   {(committee.pendingMotions ?? []).filter((m) => m.type !== ('join-request' as string) && (m.type as string) !== 'gsl-request').length}
@@ -1774,7 +1783,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               style={{ color: showDocuments ? '#1B3828' : '#1C1410', backgroundColor: showDocuments ? 'rgba(27,56,40,0.07)' : 'transparent', fontWeight: showDocuments ? 900 : 700 }}
               onMouseEnter={(e) => { if (!showDocuments) { const el = e.currentTarget as HTMLElement; el.style.color = '#1B3828'; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; el.style.transform = 'translateY(-1px)'; } }}
               onMouseLeave={(e) => { if (!showDocuments) { const el = e.currentTarget as HTMLElement; el.style.color = '#1C1410'; el.style.backgroundColor = 'transparent'; el.style.transform = 'translateY(0)'; } }}>
-              Documents
+              {t('tab_documents')}
               {(() => { const n = (committee.documents ?? []).filter((d) => d.status === 'submitted').length; return n > 0 ? <span className="absolute top-1 right-1 w-4 h-4 bg-[#1B3828] rounded-full text-white text-[10px] flex items-center justify-center">{n}</span> : null; })()}
               <span style={{ position: 'absolute', bottom: '4px', left: '12px', right: '12px', height: '2px', backgroundColor: '#B6871F', transform: showDocuments ? 'scaleX(1)' : 'scaleX(0)', transformOrigin: 'left', transition: 'transform 200ms ease', borderRadius: '2px' }} />
             </button>
@@ -1784,7 +1793,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               style={{ color: showChat ? '#1B3828' : '#1C1410', backgroundColor: showChat ? 'rgba(27,56,40,0.07)' : 'transparent', fontWeight: showChat ? 900 : 700 }}
               onMouseEnter={(e) => { if (!showChat) { const el = e.currentTarget as HTMLElement; el.style.color = '#1B3828'; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; el.style.transform = 'translateY(-1px)'; } }}
               onMouseLeave={(e) => { if (!showChat) { const el = e.currentTarget as HTMLElement; el.style.color = '#1C1410'; el.style.backgroundColor = 'transparent'; el.style.transform = 'translateY(0)'; } }}>
-              Chat
+              {t('tab_chat')}
               {(() => {
                 const nonLogMsgs = committee.messages.filter((m) => !m.content.startsWith('__log__:'));
                 const totalUnread = Math.max(0, nonLogMsgs.length - (chatReadCounts['everyone'] ?? 0));
@@ -1813,12 +1822,12 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           <button onClick={() => setEndedTab('ended')}
             className="flex-1 py-2.5 text-sm font-black transition-colors border-b-2 focus:outline-none tracking-wide"
             style={{ color: endedTab === 'ended' ? '#1B3828' : '#9A8A78', borderBottomColor: endedTab === 'ended' ? '#1B3828' : 'transparent', fontFamily: "'Outfit', sans-serif" }}>
-            END VIEW
+            {t('session_end_view')}
           </button>
           <button onClick={() => setEndedTab('session')}
             className="flex-1 py-2.5 text-sm font-black transition-colors border-b-2 focus:outline-none tracking-wide"
             style={{ color: endedTab === 'session' ? '#1B3828' : '#9A8A78', borderBottomColor: endedTab === 'session' ? '#1B3828' : 'transparent', fontFamily: "'Outfit', sans-serif" }}>
-            SESSION VIEW
+            {t('session_view')}
           </button>
         </div>
       )}
@@ -1839,7 +1848,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       )}
       {sessionEnded && endedTab === 'session' && (
         <div className="shrink-0 px-4 py-2 text-center text-sm font-bold" style={{ backgroundColor: '#1B3828', borderBottom: '1px solid #3D7A52', color: '#EED98A', fontFamily: "'Outfit', sans-serif" }}>
-          Session has ended — view only
+          {t('session_ended_banner')}
         </div>
       )}
       {!sessionEnded && sessionSuspended && suspendTab === 'session' && (
@@ -1870,9 +1879,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                     {desiredStatus === 'present-voting' ? 'P+V' : 'P'}
                   </span>
                   <button onClick={() => handleApproveJoinRequest(m.id, delegateId, desiredStatus)}
-                    className="ml-2 px-3 py-1 bg-[#1B3828]/50 hover:bg-[#2A5A3C]/60 border border-[#3D7A52]/40 text-[#EED98A] text-xs rounded-lg font-semibold transition-colors">Approve</button>
+                    className="ml-2 px-3 py-1 bg-[#1B3828]/50 hover:bg-[#2A5A3C]/60 border border-[#3D7A52]/40 text-[#EED98A] text-xs rounded-lg font-semibold transition-colors">{t('session_approve')}</button>
                   <button onClick={() => handleDenyJoinRequest(m.id)}
-                    className="px-3 py-1 bg-[#8B2020]/20 hover:bg-[#7A1C1C]/40 border border-[#8B2020]/40 text-[#8B2020] text-xs rounded-lg font-semibold transition-colors">Deny</button>
+                    className="px-3 py-1 bg-[#8B2020]/20 hover:bg-[#7A1C1C]/40 border border-[#8B2020]/40 text-[#8B2020] text-xs rounded-lg font-semibold transition-colors">{t('session_deny')}</button>
                 </div>
               );
             })}
@@ -1892,7 +1901,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 : <Emoji size="1.125rem">🌐</Emoji>;
               return (
                 <div key={m.id} className="flex items-center gap-3 text-sm">
-                  <span className="font-black text-xs uppercase tracking-widest shrink-0" style={{ color: '#EED98A', fontFamily: "'DM Mono', monospace" }}>GSL REQUEST</span>
+                  <span className="font-black text-xs uppercase tracking-widest shrink-0" style={{ color: '#EED98A', fontFamily: "'DM Mono', monospace" }}>{t('session_gsl_request')}</span>
                   <span className="font-mono text-lg">{flagEl}</span>
                   <span className="font-black text-sm" style={{ color: '#EDE7D8' }}>{m.proposedBy}</span>
                   <span className="text-xs" style={{ color: 'rgba(237,231,216,0.6)' }}>wants to speak</span>
@@ -1921,7 +1930,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
             const anotherChairResuming = committee.resumingChair && committee.resumingChair !== (myChairName || committee.chairNames[0]);
             return (
               <>
-                <h1 className="text-6xl font-black mb-4 tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>SESSION ADJOURNED</h1>
+                <h1 className="text-6xl font-black mb-4 tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{t('session_adjourned')}</h1>
                 <p className="text-xl mb-12" style={{ color: '#6A5A4A' }}>This session has been temporarily suspended.</p>
                 {anotherChairResuming ? (
                   <>
@@ -1939,7 +1948,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                     RESUME SESSION
                   </button>
                 )}
-                <p className="text-xs mt-8" style={{ color: '#9A8A78' }}>Press ESC to return to main menu</p>
+                <p className="text-xs mt-8" style={{ color: '#9A8A78' }}>{t('session_adjourned_hint')}</p>
               </>
             );
           })()}
@@ -2047,7 +2056,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                     <div className="bg-[#EDE7D8] border border-[#1B3828]/40 rounded-3xl px-12 py-10 max-w-lg w-full shadow-2xl">
                       {isTdTParent ? (
                         <>
-                          <p className="text-xs font-mono tracking-widest mb-3 font-bold" style={{ color: '#1B3828' }}>TOUR DE TABLE STARTING</p>
+                          <p className="text-xs font-mono tracking-widest mb-3 font-bold" style={{ color: '#1B3828' }}>{t('caucus_starting_tdt')}</p>
                           <h1 className="text-5xl font-black mb-2" style={{ color: '#1B3828' }}>Tour de Table</h1>
                           <p className="text-[#6A5A4A] text-sm mb-6">
                             {committee.caucus.purpose?.includes('Room Order')
@@ -2059,17 +2068,17 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                               <div className="text-2xl font-black text-[#1C1410]">
                                 {committee.caucusQueue?.length ?? Math.floor(committee.caucus.totalTime / (committee.caucus.speakingTime || 1))}
                               </div>
-                              <div className="text-xs text-[#9A8A78] mt-1">Delegates</div>
+                              <div className="text-xs text-[#9A8A78] mt-1">{t('caucus_delegates')}</div>
                             </div>
                             <div className="w-px bg-[#DDD4C0]" />
                             <div className="text-center">
                               <div className="text-2xl font-black text-[#1C1410]">{committee.caucus.speakingTime}s</div>
-                              <div className="text-xs text-[#9A8A78] mt-1">Per Speaker</div>
+                              <div className="text-xs text-[#9A8A78] mt-1">{t('caucus_per_speaker')}</div>
                             </div>
                             <div className="w-px bg-[#DDD4C0]" />
                             <div className="text-center">
                               <div className="text-2xl font-black text-[#1C1410]">{formatTime(committee.caucus.totalTime)}</div>
-                              <div className="text-xs text-[#9A8A78] mt-1">Total Time</div>
+                              <div className="text-xs text-[#9A8A78] mt-1">{t('caucus_total_time')}</div>
                             </div>
                           </div>
                           <div className="flex items-center justify-center gap-2 text-[#9A8A78] text-sm">
@@ -2079,23 +2088,23 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                         </>
                       ) : (
                         <>
-                          <p className="text-xs font-mono tracking-widest mb-3 font-bold" style={{ color: '#1B3828' }}>MODERATED CAUCUS STARTING</p>
+                          <p className="text-xs font-mono tracking-widest mb-3 font-bold" style={{ color: '#1B3828' }}>{t('caucus_starting_moderated')}</p>
                           <h1 className="text-5xl font-black mb-2" style={{ color: '#1B3828' }}>{committee.caucus.purpose || 'Moderated Caucus'}</h1>
                           <p className="text-[#6A5A4A] text-sm mb-6">{committee.topic}</p>
                           <div className="flex justify-center gap-8 mb-8">
                             <div className="text-center">
                               <div className="text-2xl font-black text-[#1C1410]">{formatTime(committee.caucus.totalTime)}</div>
-                              <div className="text-xs text-[#9A8A78] mt-1">Total Time</div>
+                              <div className="text-xs text-[#9A8A78] mt-1">{t('caucus_total_time')}</div>
                             </div>
                             <div className="w-px bg-[#DDD4C0]" />
                             <div className="text-center">
                               <div className="text-2xl font-black text-[#1C1410]">{committee.caucus.speakingTime}s</div>
-                              <div className="text-xs text-[#9A8A78] mt-1">Per Speaker</div>
+                              <div className="text-xs text-[#9A8A78] mt-1">{t('caucus_per_speaker')}</div>
                             </div>
                             <div className="w-px bg-[#DDD4C0]" />
                             <div className="text-center">
                               <div className="text-2xl font-black text-[#1C1410]">{Math.floor(committee.caucus.totalTime / (committee.caucus.speakingTime || 1))}</div>
-                              <div className="text-xs text-[#9A8A78] mt-1">Max Speakers</div>
+                              <div className="text-xs text-[#9A8A78] mt-1">{t('caucus_max_speakers')}</div>
                             </div>
                           </div>
                           <div className="flex items-center justify-center gap-2 text-[#9A8A78] text-sm">
@@ -2140,17 +2149,17 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                       <div className="flex justify-center gap-8 mb-8">
                         <div className="text-center">
                           <div className="text-2xl font-black text-[#1C1410]">{formatTime(committee.caucus.totalTime)}</div>
-                          <div className="text-xs text-[#9A8A78] mt-1">Total Time</div>
+                          <div className="text-xs text-[#9A8A78] mt-1">{t('caucus_total_time')}</div>
                         </div>
                         <div className="w-px bg-[#DDD4C0]" />
                         <div className="text-center">
                           <div className="text-2xl font-black text-[#1C1410]">{committee.caucus.proposedBy}</div>
-                          <div className="text-xs text-[#9A8A78] mt-1">Proposed by</div>
+                          <div className="text-xs text-[#9A8A78] mt-1">{t('caucus_proposed_by')}</div>
                         </div>
                       </div>
                       <div className="flex items-center justify-center gap-2 text-[#9A8A78] text-sm">
                         <div className="w-4 h-4 border-2 border-[#1B3828] border-t-transparent rounded-full animate-spin" />
-                        <span>Starting caucus...</span>
+                        <span>{t('caucus_loading')}</span>
                       </div>
                     </div>
                   </div>
@@ -2197,7 +2206,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                             speakerTimeRemaining <= 10 ? 'text-[#B8844A]' : 'text-[#1C1410]'
                           }`}>
                             {formatTime(speakerTimeRemaining)}
-                            {extraTimeAdded && <span className="text-base ml-2 font-normal text-[#1C1410]">+time</span>}
+                            {extraTimeAdded && <span className="text-base ml-2 font-normal text-[#1C1410]">{t('gsl_plus_time')}</span>}
                           </div>
                           <div className="w-full max-w-2xl h-2 bg-[#DDD4C0] rounded-full overflow-hidden mb-2">
                             <div className={`h-full rounded-full transition-all ${progress > 20 ? 'bg-[#B6871F]' : 'bg-[#B8844A]'}`} style={{ width: `${progress}%` }} />
@@ -2233,11 +2242,11 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     </span>
     <span>PAUSE</span>
   </span>
-) : '▶ START'}
+) : t('gsl_start')}
                           </button>
                           <button onClick={handleNextSpeaker} disabled={committee.speakersList.length === 0}
                             className="flex-1 bg-[#DDD4C0] hover:bg-[#C8BAA8] disabled:opacity-40 text-[#1C1410] py-3 px-6 rounded-xl font-bold text-base transition-colors focus:outline-none">
-                            NEXT →
+                            {t('gsl_next')}
                           </button>
                           {/* Add Time button */}
                           <button
@@ -2245,14 +2254,14 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                             data-tutorial="add-time-button"
                             title="Add time"
                             className="px-3 py-2 border rounded-xl font-black text-[9px] uppercase tracking-wide transition-colors bg-[#EDE7D8] hover:bg-[#DDD4C0] border-[#DDD4C0] text-[#1B3828] leading-tight text-center w-[52px]">
-                            ADD<br />TIME
+                            {t('gsl_add_time').split('\n')[0]}<br />{t('gsl_add_time').split('\n')[1]}
                           </button>
                           {/* Right of Reply button */}
                           <button
                             onClick={() => setActivePopover(activePopover === 'rightToReply' ? null : 'rightToReply')}
                             data-tutorial="rtr-button"
                             className="px-3 py-3 border rounded-xl font-black text-xs uppercase tracking-wide transition-colors bg-[#B8844A]/15 hover:bg-[#B8844A]/25 border-[#B8844A]/30 text-[#B8844A]">
-                            Right to Reply
+                            {t('gsl_right_to_reply')}
                           </button>
                         </div>
                         )}
@@ -2267,8 +2276,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                               onRemove={handleRemoveFromSpeakersList}
                             />
                           )}
-                          <h2 className="text-5xl font-black mb-3 text-center" style={{ color: '#1B3828' }}>No Current Speaker</h2>
-                          <p className="mb-4 text-center text-sm" style={{ color: '#9A8A78' }}>Add delegates below, then call the first speaker.</p>
+                          <h2 className="text-5xl font-black mb-3 text-center" style={{ color: '#1B3828' }}>{t('gsl_no_current_speaker')}</h2>
+                          <p className="mb-4 text-center text-sm" style={{ color: '#9A8A78' }}>{t('gsl_add_call_first')}</p>
                           {committee.speakersList.length === 1 && (
                             <div className="mb-4 px-4 py-2 bg-[#B6871F]/10 border border-[#B6871F]/30 rounded-lg text-[#B6871F] text-xs text-center">
                               Only 1 delegate on the list — add more before starting.
@@ -2277,7 +2286,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                           {!sessionEnded && (
                             <button data-tutorial="call-first-speaker" onClick={handleNextSpeaker} disabled={committee.speakersList.length < 2}
                               className="bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white px-8 py-3 rounded-xl font-bold transition-colors focus:outline-none">
-                              CALL FIRST SPEAKER
+                              {t('gsl_call_first')}
                             </button>
                           )}
                         </div>
@@ -2288,7 +2297,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 {!sessionEnded && (
                 <div className="border-t border-[#DDD4C0] px-6 py-2" style={{ backgroundColor: '#F6F1E9' }}>
                   <div className="flex items-center gap-3 mb-4">
-                    <span className="text-xs text-[#9A8A78] font-mono shrink-0">TIME</span>
+                    <span className="text-xs text-[#9A8A78] font-mono shrink-0">{t('gsl_time')}</span>
                     <div className="flex gap-1.5">
                       {[30, 60, 90, 120, 180].map((t) => (
                         <button key={t} onClick={() => handleSetSpeakerTimeLimit(t)}
@@ -2347,7 +2356,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         >
           <div className="bg-[#EDE7D8] border border-[#3D7A52]/40 rounded-xl p-3 w-72 shadow-2xl">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-black uppercase tracking-wide" style={{ color: '#1B3828' }}>ADD TIME</span>
+              <span className="text-xs font-black uppercase tracking-wide" style={{ color: '#1B3828' }}>{t('gsl_add_time_title')}</span>
               <button onClick={() => setActivePopover(null)} className="text-[#1C1410] hover:text-[#8B2020] text-sm font-bold">✕</button>
             </div>
             <div className="flex gap-2 mb-2">
@@ -2394,7 +2403,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         >
           <div className="bg-[#EDE7D8] border border-[#B8844A]/30 rounded-xl p-4 w-72 shadow-2xl">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-black uppercase tracking-wide" style={{ color: '#B8844A' }}>RIGHT TO REPLY</span>
+              <span className="text-xs font-black uppercase tracking-wide" style={{ color: '#B8844A' }}>{t('gsl_right_to_reply_popover')}</span>
               <button onClick={() => {
                 setActivePopover(null);
                 setRtrOpen(false);
@@ -2436,7 +2445,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                   disabled={!rtrCountry}
                   className="w-full py-2 bg-[#B8844A] hover:bg-[#B8844A]/80 disabled:opacity-40 disabled:cursor-not-allowed text-[#1C1410] text-xs rounded-lg font-black uppercase tracking-wide transition-colors"
                 >
-                  GRANT
+                  {t('gsl_grant')}
                 </button>
               </>
             ) : (
@@ -2450,7 +2459,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                       : <Emoji size="1.25rem">🌐</Emoji>;
                   })()}
                   <span className="text-sm text-[#1C1410] font-bold flex-1">{rtrCountry}</span>
-                  <span className="text-xs font-black uppercase tracking-wide" style={{ color: '#B8844A' }}>RIGHT TO REPLY</span>
+                  <span className="text-xs font-black uppercase tracking-wide" style={{ color: '#B8844A' }}>{t('gsl_right_to_reply_popover')}</span>
                 </div>
                 <div className={`text-5xl font-black font-mono text-center mb-3 tabular-nums ${
                   rtrTimeRemaining <= 5 ? 'text-red-500' : rtrTimeRemaining <= 10 ? 'text-[#B6871F]' : 'text-[#B8844A]'
