@@ -468,7 +468,7 @@ export default function HomeClient() {
             <div className="relative z-10 flex items-center px-8 md:px-14">
               <div className="flex flex-col justify-center items-center text-center w-full max-w-2xl mx-auto">
                 <h1 className="font-black tracking-tight text-white leading-[1.05] mb-5 text-center md:whitespace-nowrap" style={{ fontSize: 'clamp(48px, 13.5vw, 165px)' }}>
-                  MUN done{' '}
+                  {language === 'en' ? 'MUN done' : 'MUN'}{' '}
                   <span style={{ fontFamily: "'Playfair Display', serif", fontStyle: 'italic', fontWeight: 400, color: '#B8844A' }}>
                     {t('hero_tagline')}
                   </span>
@@ -565,7 +565,7 @@ export default function HomeClient() {
               {/* LEFT — text + pills centered */}
               <div className="w-full md:w-80 flex-shrink-0 flex flex-col justify-center items-start py-8">
 
-                <h2 className="font-black uppercase tracking-wide leading-tight mb-4" style={{ fontSize: 'clamp(28px, 3.2vw, 48px)' }}>
+                <h2 className="font-black uppercase tracking-wide leading-tight mb-4" style={{ fontSize: language === 'es' ? 'clamp(22px, 2.6vw, 40px)' : 'clamp(28px, 3.2vw, 48px)' }}>
                   <span className="text-[#1B3828]">{t('features_title_1')}</span><br />
                   <span className="text-[#B8844A]">{t('features_title_2')}</span>
                 </h2>
