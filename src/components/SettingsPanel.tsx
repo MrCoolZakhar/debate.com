@@ -5,7 +5,7 @@ import { useSettingsStore, CommitteeSettings } from '@/lib/settingsStore';
 import { Committee } from '@/lib/types';
 import { updateCommitteeCode, updateCommitteeChairSuffixInDB } from '@/lib/committeeService';
 import { getFlagEmoji, getCountryByName } from '@/lib/countries';
-import { useT } from '@/contexts/LanguageContext';
+import { useT, useLanguage } from '@/contexts/LanguageContext';
 
 type SettingsTab = 'voting' | 'motions' | 'access' | 'points';
 
@@ -63,6 +63,7 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
   onCodeChange?: (newCode: string) => void;
 }) {
   const t = useT();
+  const { language, setLanguage } = useLanguage();
   const [tab, setTab] = useState<SettingsTab>('voting');
   const { getSettings, updateSetting, migrateSettings } = useSettingsStore();
   const s = getSettings(committee.code);
@@ -215,7 +216,7 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
           {/* ── Voting & Majorities ── */}
           {tab === 'voting' && (
             <div>
-              <SectionLabel>VOTING THRESHOLDS</SectionLabel>
+              <SectionLabel>{t('settings_section_voting')}</SectionLabel>
               <SelectRow
                 label="Procedural vote threshold"
                 value={s.proceduralThreshold}
@@ -245,7 +246,7 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
                 ]}
               />
 
-              <SectionLabel>ABSTENTIONS</SectionLabel>
+              <SectionLabel>{t('settings_section_abstentions')}</SectionLabel>
               <Toggle
                 label="Allow abstentions on substantive votes"
                 note="Abstentions are excluded from the denominator when calculating the threshold."
@@ -253,7 +254,7 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
                 onChange={(v) => upd('allowAbstentions', v)}
               />
 
-              <SectionLabel>VETO POWER</SectionLabel>
+              <SectionLabel>{t('settings_section_veto')}</SectionLabel>
               <div className="space-y-3 py-3" style={{ borderBottom: '1px solid #DDD4C0' }}>
                 {([
                   { id: 'none', label: 'No veto power', desc: 'Standard majority rules apply' },
@@ -281,7 +282,7 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
                 </div>
               )}
 
-              <SectionLabel>QUORUM</SectionLabel>
+              <SectionLabel>{t('settings_section_quorum')}</SectionLabel>
               <SelectRow
                 label="Quorum threshold"
                 note="Minimum delegates present for formal business (motions, voting) to proceed."
@@ -300,7 +301,7 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
           {/* ── Motions ── */}
           {tab === 'motions' && (
             <div>
-              <SectionLabel>ENABLED MOTION TYPES</SectionLabel>
+              <SectionLabel>{t('settings_section_motions')}</SectionLabel>
               <p className="text-xs mb-3 leading-snug" style={{ color: '#9A8A78' }}>Disabled motion types are hidden from the delegate motion-request interface immediately.</p>
               <Toggle
                 label="Moderated caucus"
@@ -328,12 +329,12 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
           {/* ── Access & Identity ── */}
           {tab === 'access' && (
             <div>
-              <SectionLabel>SESSION ID & JOIN CODES</SectionLabel>
+              <SectionLabel>{t('settings_section_codes')}</SectionLabel>
               <div className="py-3" style={{ borderBottom: '1px solid #DDD4C0' }}>
                 <div className="text-sm font-semibold mb-0.5" style={{ color: '#1C1410' }}>Custom session ID</div>
                 <div className="text-xs mb-2 leading-snug" style={{ color: '#9A8A78' }}>
                   Human-readable identifier (e.g. UNSC-2026). Delegates re-joining will need the new ID.
-                  Updates instantly — delegates can join with the new code right away.
+                  {t('settings_code_hint')}
                 </div>
                 <div className="flex gap-2">
                   <input
@@ -361,7 +362,7 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
                       color: codeSaved ? 'white' : (!codeSaving && customCodeInput.trim() && customCodeInput.trim().toUpperCase() !== committee.code) ? '#EDE7D8' : '#9A8A78',
                     }}
                   >
-                    {codeSaving ? '…' : codeSaved ? '✓ Saved' : 'APPLY'}
+                    {codeSaving ? '…' : codeSaved ? t('settings_saved_check') : t('settings_apply')}
                   </button>
                 </div>
                 {codeError && <p className="text-red-400 text-xs mt-1.5">{codeError}</p>}
@@ -398,7 +399,7 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
                 onChange={(v) => upd('requireChairApproval', v)}
               />
 
-              <SectionLabel>CHAIR RE-SIGN-IN</SectionLabel>
+              <SectionLabel>{t('settings_section_chair_resign')}</SectionLabel>
               <Toggle
                 label="Allow multiple co-chairs simultaneously"
                 note="Permits more than one chair account to be active in the same session at the same time."
@@ -418,20 +419,41 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
                 onChange={(v) => upd('chairTakeoverProtection', v)}
               />
 
-              <SectionLabel>DELEGATE IDENTITY</SectionLabel>
+              <SectionLabel>{t('settings_section_delegate_identity')}</SectionLabel>
               <Toggle
                 label="Require delegation name at join"
                 note="Delegates must specify their country or bloc name before entering the session."
                 value={s.requireDelegationName}
                 onChange={(v) => upd('requireDelegationName', v)}
               />
+
+              {/* Language */}
+              <div className="pt-4" style={{ borderTop: '1px solid #DDD4C0' }}>
+                <p className="text-xs font-black uppercase tracking-wide mb-3" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>{t('settings_language_toggle')}</p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setLanguage('en')}
+                    className="flex-1 py-2.5 rounded-xl text-sm font-black transition-all focus:outline-none"
+                    style={{ backgroundColor: language === 'en' ? '#1B3828' : '#EDE7D8', color: language === 'en' ? '#EED98A' : '#1B3828', border: '1px solid #DDD4C0' }}
+                  >
+                    EN — English
+                  </button>
+                  <button
+                    onClick={() => setLanguage('es')}
+                    className="flex-1 py-2.5 rounded-xl text-sm font-black transition-all focus:outline-none"
+                    style={{ backgroundColor: language === 'es' ? '#1B3828' : '#EDE7D8', color: language === 'es' ? '#EED98A' : '#1B3828', border: '1px solid #DDD4C0' }}
+                  >
+                    ES — Español
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
           {/* ── Points ── */}
           {tab === 'points' && (
             <div>
-              <SectionLabel>DELEGATE LEADERBOARD</SectionLabel>
+              <SectionLabel>{t('settings_section_leaderboard')}</SectionLabel>
               <p className="text-xs mb-3 leading-snug" style={{ color: '#9A8A78' }}>
                 Scores: +5 attendance · +10 per WP sponsored · +20 per DR sponsored · +1 per 10s speaking · +10 per GSL speech · +8 per caucus speech
               </p>

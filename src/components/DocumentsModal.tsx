@@ -474,6 +474,7 @@ function TimingSetup({ doc, onStart, onSkip }: {
   onStart: (readingMins: number, presentationMins: number, qaMins: number) => void;
   onSkip: () => void;
 }) {
+  const t = useT();
   const isWP = doc.type === 'working-paper';
   const [readingMins, setReadingMins] = useState(5);
   const [presentationMins, setPresentationMins] = useState(5);
@@ -484,14 +485,14 @@ function TimingSetup({ doc, onStart, onSkip }: {
       <p className="text-xs font-mono tracking-widest mb-2 text-[#9A8A78]">{doc.docCode} · SET UP TIMERS</p>
       <h2 className="text-2xl font-black text-[#1C1410] mb-1">{doc.title}</h2>
       <p className="text-sm text-[#6A5A4A] mb-8">
-        {isWP ? 'Working Paper: Reading → Presentation → Q&A → Auto Pass' : 'Draft Resolution: Reading → Presentation → Q&A → Vote'}
+        {isWP ? t('documents_working_paper_flow') : t('documents_dr_flow')}
       </p>
 
       <div className="w-full max-w-sm space-y-4">
         {[
           { key: 'reading', label: 'READING TIME', value: readingMins, set: setReadingMins, note: 'Delegates read the document' },
           { key: 'presentation', label: 'PRESENTATION', value: presentationMins, set: setPresentationMins, note: 'Sponsors present the document' },
-          { key: 'qa', label: 'Q&A', value: qaMins, set: setQaMins, note: isWP ? 'Optional for Working Papers' : 'Questions from delegates' },
+          { key: 'qa', label: 'Q&A', value: qaMins, set: setQaMins, note: isWP ? t('documents_qa_optional') : t('documents_qa_note') },
         ].map(({ key, label, value, set, note }) => (
           <div key={key} className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl p-4">
             <div className="flex items-center justify-between mb-1">
