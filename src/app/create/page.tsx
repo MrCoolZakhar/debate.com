@@ -508,7 +508,12 @@ function CreatePageInner() {
             {isUNSC && (
               <div className="mb-3 px-4 py-3 rounded-xl text-xs shrink-0 flex items-center gap-3" style={{ backgroundColor: '#1B3828', border: '1px solid #3D7A52', color: 'rgba(238,217,138,0.85)' }}>
                 <span className="font-black shrink-0 px-2 py-0.5 rounded-md text-[10px]" style={{ fontFamily: "'DM Mono', monospace", backgroundColor: 'rgba(238,217,138,0.15)', color: '#EED98A', border: '1px solid rgba(238,217,138,0.25)' }}>UNSC</span>
-                <span><strong style={{ color: '#EED98A' }}>Veto power active:</strong> P5 nations (China, France, Russia, UK, USA) will have veto voting. {language === 'es' ? 'Personaliza en' : 'Customize in'} <strong style={{ color: '#EED98A' }}>{language === 'es' ? 'Configuración' : 'Settings'}</strong> {language === 'es' ? 'al iniciar la sesión.' : 'after session starts.'}</span>
+                <span>
+                  {language === 'es'
+                    ? <><strong style={{ color: '#EED98A' }}>Poder de Veto activado:</strong> Grupo P5 (China, Francia, Rusia, RU, EE.UU.) tendrán veto. Personaliza en <strong style={{ color: '#EED98A' }}>Configuraciones</strong> al iniciar la sesión.</>
+                    : <><strong style={{ color: '#EED98A' }}>Veto power active:</strong> P5 nations (China, France, Russia, UK, USA) will have veto voting. Customize in <strong style={{ color: '#EED98A' }}>Settings</strong> after session starts.</>
+                  }
+                </span>
               </div>
             )}
 

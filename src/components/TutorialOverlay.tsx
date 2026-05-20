@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import type { Committee } from '@/lib/types';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface Props {
   committee: Committee;
@@ -28,119 +29,140 @@ interface TutorialStep {
 const G  = (t: string) => <span style={{ color: '#B6871F', fontWeight: 700 }}>{t}</span>; // gold
 const GR = (t: string) => <span style={{ color: '#2A5A3C', fontWeight: 700 }}>{t}</span>; // green
 
-const STEPS: TutorialStep[] = [
-  {
-    id: 'questionnaire', kind: 'questionnaire',
-    otterImage: '/Otter.Tutorial.Intro.webp', bubbleText: '',
-  },
-
-  {
-    id: 'welcome', kind: 'spotlight',
-    otterImage: '/Otter.Tutorial.webp',
-    spotlightTargets: [],
-    bubbleText: <>Welcome to your <strong>committee room</strong>. {GR('Speakers')}, {GR('timers')}, {GR('voting')}, {GR('motions')}, {GR('chat')}, {GR('documents')} — all bundled in one place, built to run your <strong>entire MUN session</strong> from the first gavel to the last.</>,
-  },
-
-  {
-    id: 'speakers-bottom-bar', kind: 'spotlight',
-    otterImage: '/Otter.Tutorial.webp',
-    spotlightTargets: ['speakers-bottom-bar'], spotlightRadius: 12,
-    bubbleText: <>This bar is how you <strong>add delegates</strong> to the speakers list. Type any {G('country name')} and press {G('Enter')}.</>,
-  },
-
-  {
-    id: 'sidebar-view-toggle', kind: 'action',
-    otterImage: '/Otter.Tutorial.webp',
-    spotlightTargets: ['sidebar-view-toggle'], spotlightRadius: 99,
-    bubbleText: <>The sidebar has two views — {G('A-Z')} and {G('QUEUE')}. Switch to <strong>QUEUE</strong> to see the speaking order.</>,
-    domActionDone: () => {
-      const el = document.querySelector('[data-tutorial="sidebar-view-toggle"]');
-      return el?.getAttribute('data-current-view') === 'queue';
+function getSteps(language: string): TutorialStep[] {
+  return [
+    {
+      id: 'questionnaire', kind: 'questionnaire',
+      otterImage: '/Otter.Tutorial.Intro.webp', bubbleText: '',
     },
-  },
-
-  {
-    id: 'speakers-action', kind: 'action',
-    otterImage: '/Otter.Tutorial.webp',
-    spotlightTargets: ['speakers-bottom-bar', 'speakers-sidebar', 'speakers-autocomplete'],
-    spotlightRadius: 12,
-    bubbleText: <>Add <strong>any 3 countries</strong> to the speakers list — use the {G('input bar')} below or click delegates in the {G('sidebar')}. Both work!</>,
-    actionDone: (c) => c.speakersList.length >= 3,
-  },
-
-  {
-    id: 'call-first-speaker', kind: 'action',
-    otterImage: '/Otter.Tutorial.webp',
-    spotlightTargets: ['call-first-speaker'], spotlightRadius: 14,
-    bubbleText: <>Now click <strong>CALL FIRST SPEAKER</strong> to bring the {G('first delegate')} to the floor!</>,
-    actionDone: (c) => !!c.currentSpeaker,
-  },
-
-  {
-    id: 'timer', kind: 'spotlight',
-    otterImage: '/Otter.Tutorial.webp',
-    spotlightTargets: ['timer'], spotlightRadius: 12,
-    bubbleText: <>The <strong>speaking timer</strong> counts down for the current delegate. Turns {G('amber')} when time runs low.</>,
-  },
-
-  {
-    id: 'add-time', kind: 'spotlight',
-    otterImage: '/Otter.Tutorial.webp',
-    spotlightTargets: ['add-time-button'], spotlightRadius: 12,
-    bubbleText: <>Need to grant more time? Hit {G('+time')}. You can also <strong>restart the clock</strong> entirely.</>,
-  },
-
-  {
-    id: 'rtr', kind: 'spotlight',
-    otterImage: '/Otter.Tutorial.webp',
-    spotlightTargets: ['rtr-button'], spotlightRadius: 12,
-    bubbleText: <>{GR('Right to Reply')} lets an accused delegate respond briefly <strong>without re-entering the queue</strong>. Use it sparingly.</>,
-  },
-
-  {
-    id: 'tab-rollcall', kind: 'spotlight',
-    otterImage: '/Otter.Tutorial.webp',
-    spotlightTargets: ['tab-rollcall'], spotlightRadius: 6,
-    bubbleText: <>{G('Roll Call')} — click here to mark each delegate as <strong>Absent</strong>, <strong>Present</strong>, or <strong>Present & Voting</strong>. You can update attendance at any point during the session.</>,
-  },
-  {
-    id: 'tab-motions', kind: 'spotlight',
-    otterImage: '/Otter.Tutorial.webp',
-    spotlightTargets: ['tab-motions'], spotlightRadius: 6,
-    bubbleText: <>{G('Motions')} — delegates raise <strong>Moderated Caucus</strong>, <strong>Unmoderated Caucus</strong>, <strong>Tour de Table</strong>, and <strong>Consultation of the Whole</strong> here. You can also <strong>close</strong> or <strong>suspend debate</strong> from this tab.</>,
-  },
-  {
-    id: 'tab-documents', kind: 'spotlight',
-    otterImage: '/Otter.Tutorial.webp',
-    spotlightTargets: ['tab-documents'], spotlightRadius: 6,
-    bubbleText: <>{G('Documents')} — <strong>Working Papers</strong> and <strong>Draft Resolutions</strong> submitted by delegates appear here. Once approved, delegates get a dedicated {GR('Reading')}, {GR('Presentation')}, and {GR('Q&A')} page.</>,
-  },
-  {
-    id: 'tab-chat', kind: 'spotlight',
-    otterImage: '/Otter.Tutorial.webp',
-    spotlightTargets: ['tab-chat'], spotlightRadius: 6,
-    bubbleText: <>{G('Chat')} — message <strong>all delegates</strong> at once or DM individuals. We recommend keeping this open on your <strong>personal device</strong> rather than the main committee screen.</>,
-  },
-  {
-    id: 'tab-settings', kind: 'spotlight',
-    otterImage: '/Otter.Tutorial.webp',
-    spotlightTargets: ['tab-settings'], spotlightRadius: 6,
-    bubbleText: <>{G('Settings')} — configure <strong>voting rules</strong>, motion types, speaking times, and access controls.</>,
-  },
-
-  {
-    id: 'join-code', kind: 'spotlight',
-    otterImage: '/Otter.Tutorial.webp',
-    spotlightTargets: ['join-code'], spotlightRadius: 8,
-    bubbleText: <>Your <strong>session code</strong>. Delegates enter this at {G('gavelling.com')} to join in real time. {GR('Click to copy')}.</>,
-  },
-
-  {
-    id: 'goodbye', kind: 'goodbye',
-    otterImage: '/Otter.Tutorial.Outro.webp',
-    bubbleText: <>Have fun exploring! And always {G('give us feedback')} — it&apos;s how Gavelling gets better. Text us on IG {GR('@wearegavelling')} any time 🎉</>,
-  },
-];
+    {
+      id: 'welcome', kind: 'spotlight',
+      otterImage: '/Otter.Tutorial.webp',
+      spotlightTargets: [],
+      bubbleText: language === 'es'
+        ? <>Bienvenido a tu <strong>sala de comité</strong>. {GR('Oradores')}, {GR('cronómetros')}, {GR('votaciones')}, {GR('mociones')}, {GR('chat')}, {GR('documentos')} — todo en un solo lugar, diseñado para dirigir tu <strong>sesión completa de MUN</strong> desde el primer mazo hasta el último.</>
+        : <>Welcome to your <strong>committee room</strong>. {GR('Speakers')}, {GR('timers')}, {GR('voting')}, {GR('motions')}, {GR('chat')}, {GR('documents')} — all bundled in one place, built to run your <strong>entire MUN session</strong> from the first gavel to the last.</>,
+    },
+    {
+      id: 'speakers-bottom-bar', kind: 'spotlight',
+      otterImage: '/Otter.Tutorial.webp',
+      spotlightTargets: ['speakers-bottom-bar'], spotlightRadius: 12,
+      bubbleText: language === 'es'
+        ? <>Esta barra es cómo <strong>agregas delegados</strong> a la lista de oradores. Escribe cualquier {G('nombre de país')} y presiona {G('Enter')}.</>
+        : <>This bar is how you <strong>add delegates</strong> to the speakers list. Type any {G('country name')} and press {G('Enter')}.</>,
+    },
+    {
+      id: 'sidebar-view-toggle', kind: 'action',
+      otterImage: '/Otter.Tutorial.webp',
+      spotlightTargets: ['sidebar-view-toggle'], spotlightRadius: 99,
+      bubbleText: language === 'es'
+        ? <>El panel lateral tiene dos vistas — {G('A-Z')} y {G('FILA')}. Cambia a <strong>FILA</strong> para ver el orden de oradores.</>
+        : <>The sidebar has two views — {G('A-Z')} and {G('QUEUE')}. Switch to <strong>QUEUE</strong> to see the speaking order.</>,
+      domActionDone: () => {
+        const el = document.querySelector('[data-tutorial="sidebar-view-toggle"]');
+        return el?.getAttribute('data-current-view') === 'queue';
+      },
+    },
+    {
+      id: 'speakers-action', kind: 'action',
+      otterImage: '/Otter.Tutorial.webp',
+      spotlightTargets: ['speakers-bottom-bar', 'speakers-sidebar', 'speakers-autocomplete'],
+      spotlightRadius: 12,
+      bubbleText: language === 'es'
+        ? <>Agrega <strong>cualquier 3 países</strong> a la lista de oradores — usa la {G('barra de búsqueda')} abajo o haz clic en delegados en el {G('panel lateral')}. ¡Ambos funcionan!</>
+        : <>Add <strong>any 3 countries</strong> to the speakers list — use the {G('input bar')} below or click delegates in the {G('sidebar')}. Both work!</>,
+      actionDone: (c) => c.speakersList.length >= 3,
+    },
+    {
+      id: 'call-first-speaker', kind: 'action',
+      otterImage: '/Otter.Tutorial.webp',
+      spotlightTargets: ['call-first-speaker'], spotlightRadius: 14,
+      bubbleText: language === 'es'
+        ? <>Ahora haz clic en <strong>LLAMAR PRIMER ORADOR</strong> para llamar al {G('primer delegado')} al piso.</>
+        : <>Now click <strong>CALL FIRST SPEAKER</strong> to bring the {G('first delegate')} to the floor!</>,
+      actionDone: (c) => !!c.currentSpeaker,
+    },
+    {
+      id: 'timer', kind: 'spotlight',
+      otterImage: '/Otter.Tutorial.webp',
+      spotlightTargets: ['timer'], spotlightRadius: 12,
+      bubbleText: language === 'es'
+        ? <>El <strong>cronómetro</strong> cuenta regresivamente para el delegado actual. Se vuelve {G('ámbar')} cuando el tiempo se acaba.</>
+        : <>The <strong>speaking timer</strong> counts down for the current delegate. Turns {G('amber')} when time runs low.</>,
+    },
+    {
+      id: 'add-time', kind: 'spotlight',
+      otterImage: '/Otter.Tutorial.webp',
+      spotlightTargets: ['add-time-button'], spotlightRadius: 12,
+      bubbleText: language === 'es'
+        ? <>¿Necesitas dar más tiempo? Presiona {G('+tiempo')}. También puedes <strong>reiniciar el cronómetro</strong> completamente.</>
+        : <>Need to grant more time? Hit {G('+time')}. You can also <strong>restart the clock</strong> entirely.</>,
+    },
+    {
+      id: 'rtr', kind: 'spotlight',
+      otterImage: '/Otter.Tutorial.webp',
+      spotlightTargets: ['rtr-button'], spotlightRadius: 12,
+      bubbleText: language === 'es'
+        ? <>{GR('Derecho a Réplica')} permite que un delegado acusado responda brevemente <strong>sin volver a entrar a la fila</strong>. Úsalo con moderación.</>
+        : <>{GR('Right to Reply')} lets an accused delegate respond briefly <strong>without re-entering the queue</strong>. Use it sparingly.</>,
+    },
+    {
+      id: 'tab-rollcall', kind: 'spotlight',
+      otterImage: '/Otter.Tutorial.webp',
+      spotlightTargets: ['tab-rollcall'], spotlightRadius: 6,
+      bubbleText: language === 'es'
+        ? <>{G('Lista de Asistencia')} — haz clic aquí para marcar a cada delegado como <strong>Ausente</strong>, <strong>Presente</strong>, o <strong>Presente y Votante</strong>. Puedes actualizar la asistencia en cualquier momento.</>
+        : <>{G('Roll Call')} — click here to mark each delegate as <strong>Absent</strong>, <strong>Present</strong>, or <strong>Present & Voting</strong>. You can update attendance at any point during the session.</>,
+    },
+    {
+      id: 'tab-motions', kind: 'spotlight',
+      otterImage: '/Otter.Tutorial.webp',
+      spotlightTargets: ['tab-motions'], spotlightRadius: 6,
+      bubbleText: language === 'es'
+        ? <>{G('Mociones')} — los delegados levantan <strong>Cáucus Moderado</strong>, <strong>Cáucus No Moderado</strong>, <strong>Tour de Table</strong> y <strong>Consulta de Plenaria</strong> aquí. También puedes <strong>cerrar</strong> o <strong>suspender el debate</strong> desde esta pestaña.</>
+        : <>{G('Motions')} — delegates raise <strong>Moderated Caucus</strong>, <strong>Unmoderated Caucus</strong>, <strong>Tour de Table</strong>, and <strong>Consultation of the Whole</strong> here. You can also <strong>close</strong> or <strong>suspend debate</strong> from this tab.</>,
+    },
+    {
+      id: 'tab-documents', kind: 'spotlight',
+      otterImage: '/Otter.Tutorial.webp',
+      spotlightTargets: ['tab-documents'], spotlightRadius: 6,
+      bubbleText: language === 'es'
+        ? <>{G('Documentos')} — <strong>Papeles de Trabajo</strong> y <strong>Proyectos de Resolución</strong> enviados por delegados aparecen aquí. Una vez aprobados, los delegados tienen una página dedicada de {GR('Lectura')}, {GR('Presentación')} y {GR('Preguntas')}.</>
+        : <>{G('Documents')} — <strong>Working Papers</strong> and <strong>Draft Resolutions</strong> submitted by delegates appear here. Once approved, delegates get a dedicated {GR('Reading')}, {GR('Presentation')}, and {GR('Q&A')} page.</>,
+    },
+    {
+      id: 'tab-chat', kind: 'spotlight',
+      otterImage: '/Otter.Tutorial.webp',
+      spotlightTargets: ['tab-chat'], spotlightRadius: 6,
+      bubbleText: language === 'es'
+        ? <>{G('Chat')} — envía mensajes a <strong>todos los delegados</strong> a la vez o DM a individuos. Recomendamos mantenerlo abierto en tu <strong>dispositivo personal</strong> en lugar de la pantalla principal.</>
+        : <>{G('Chat')} — message <strong>all delegates</strong> at once or DM individuals. We recommend keeping this open on your <strong>personal device</strong> rather than the main committee screen.</>,
+    },
+    {
+      id: 'tab-settings', kind: 'spotlight',
+      otterImage: '/Otter.Tutorial.webp',
+      spotlightTargets: ['tab-settings'], spotlightRadius: 6,
+      bubbleText: language === 'es'
+        ? <>{G('Configuración')} — configura <strong>reglas de votación</strong>, tipos de mociones, tiempos de habla y controles de acceso.</>
+        : <>{G('Settings')} — configure <strong>voting rules</strong>, motion types, speaking times, and access controls.</>,
+    },
+    {
+      id: 'join-code', kind: 'spotlight',
+      otterImage: '/Otter.Tutorial.webp',
+      spotlightTargets: ['join-code'], spotlightRadius: 8,
+      bubbleText: language === 'es'
+        ? <>Tu <strong>código de sesión</strong>. Los delegados lo ingresan en {G('gavelling.com')} para unirse en tiempo real. {GR('Haz clic para copiar')}.</>
+        : <>Your <strong>session code</strong>. Delegates enter this at {G('gavelling.com')} to join in real time. {GR('Click to copy')}.</>,
+    },
+    {
+      id: 'goodbye', kind: 'goodbye',
+      otterImage: '/Otter.Tutorial.Outro.webp',
+      bubbleText: language === 'es'
+        ? <>¡Diviértete explorando! Y siempre {G('danos tu opinión')} — así mejora Gavelling. Escríbenos en IG {GR('@wearegavelling')} cuando quieras 🎉</>
+        : <>Have fun exploring! And always {G('give us feedback')} — it&apos;s how Gavelling gets better. Text us on IG {GR('@wearegavelling')} any time 🎉</>,
+    },
+  ];
+}
 
 // ─── Hooks ───────────────────────────────────────────────────────────────────
 
@@ -178,6 +200,8 @@ function useSpotlightRects(targets: string[] = []) {
 // ─── Main ────────────────────────────────────────────────────────────────────
 
 export default function TutorialOverlay({ committee, onEnd }: Props) {
+  const { language } = useLanguage();
+  const STEPS = getSteps(language);
   const [stepIdx, setStepIdx] = useState(0);
   const { w: vw, h: vh } = useViewport();
 

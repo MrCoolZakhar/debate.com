@@ -468,10 +468,21 @@ export default function HomeClient() {
             <div className="relative z-10 flex items-center px-8 md:px-14">
               <div className="flex flex-col justify-center items-center text-center w-full max-w-2xl mx-auto">
                 <h1 className="font-black tracking-tight text-white leading-[1.05] mb-5 text-center md:whitespace-nowrap" style={{ fontSize: 'clamp(48px, 13.5vw, 165px)' }}>
-                  {language === 'en' ? 'MUN done' : 'MUN'}{' '}
-                  <span style={{ fontFamily: "'Playfair Display', serif", fontStyle: 'italic', fontWeight: 400, color: '#B8844A' }}>
-                    {t('hero_tagline')}
-                  </span>
+                  {language === 'en' ? (
+                    <>
+                      MUN done{' '}
+                      <span style={{ fontFamily: "'Playfair Display', serif", fontStyle: 'italic', fontWeight: 400, color: '#B8844A' }}>
+                        right.
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      MUN como se{' '}
+                      <span style={{ fontFamily: "'Playfair Display', serif", fontStyle: 'italic', fontWeight: 400, color: '#B8844A' }}>
+                        debe.
+                      </span>
+                    </>
+                  )}
                 </h1>
                 <p className="text-reveal-3 text-lg max-w-lg mb-6 leading-relaxed font-medium text-center text-[#1B3828]" style={{
                   opacity: 0,

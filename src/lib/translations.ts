@@ -297,7 +297,7 @@ export const translations = {
     rollcall_add_delegate: 'Agrega al menos 1 delegado',
     rollcall_absent: 'ausente',
     rollcall_az: 'A-Z',
-    rollcall_queue: 'COLA',
+    rollcall_queue: 'FILA',
     gsl_no_current_speaker: 'Sin Orador Actual',
     gsl_add_call_first: 'Agrega delegados abajo y llama al primer orador.',
     gsl_call_first: 'LLAMAR PRIMER ORADOR',

@@ -855,11 +855,11 @@ function ModeratedCaucusMain({
 ) : t('gsl_start')}
                 </button>
                 <button onClick={handleNextCaucusSpeaker} disabled={queue.length === 0}
-                  className="flex-1 bg-[#DDD4C0] hover:bg-[#C8BAA8] disabled:opacity-40 text-[#1C1410] py-3 px-6 rounded-xl font-bold text-base transition-colors focus:outline-none">
+                  className="flex-1 bg-[#DDD4C0] hover:bg-[#C8BAA8] disabled:opacity-40 text-[#1C1410] py-3 px-4 rounded-xl font-bold transition-colors focus:outline-none" style={{ fontSize: 'clamp(11px, 1.2vw, 14px)' }}>
                   {t('gsl_next')}
                 </button>
                 <button onClick={() => setActivePopover(activePopover === 'extraTime' ? null : 'extraTime')} title="Add time"
-                  className="px-3 py-2 border rounded-xl font-black text-[9px] uppercase tracking-wide transition-colors bg-[#EDE7D8] hover:bg-[#DDD4C0] border-[#DDD4C0] text-[#1B3828] leading-tight text-center w-[52px]">
+                  className="px-2 py-2 border rounded-xl font-black uppercase tracking-wide transition-colors bg-[#EDE7D8] hover:bg-[#DDD4C0] border-[#DDD4C0] text-[#1B3828] leading-tight text-center" style={{ fontSize: '8px', minWidth: '52px' }}>
                   {t('gsl_add_time').split('\n')[0]}<br />{t('gsl_add_time').split('\n')[1]}
                 </button>
                 {!isTdT && (
@@ -2245,7 +2245,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
 ) : t('gsl_start')}
                           </button>
                           <button onClick={handleNextSpeaker} disabled={committee.speakersList.length === 0}
-                            className="flex-1 bg-[#DDD4C0] hover:bg-[#C8BAA8] disabled:opacity-40 text-[#1C1410] py-3 px-6 rounded-xl font-bold text-base transition-colors focus:outline-none">
+                            className="flex-1 bg-[#DDD4C0] hover:bg-[#C8BAA8] disabled:opacity-40 text-[#1C1410] py-3 px-4 rounded-xl font-bold transition-colors focus:outline-none" style={{ fontSize: 'clamp(11px, 1.2vw, 14px)' }}>
                             {t('gsl_next')}
                           </button>
                           {/* Add Time button */}
@@ -2253,7 +2253,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                             onClick={() => setActivePopover(activePopover === 'extraTime' ? null : 'extraTime')}
                             data-tutorial="add-time-button"
                             title="Add time"
-                            className="px-3 py-2 border rounded-xl font-black text-[9px] uppercase tracking-wide transition-colors bg-[#EDE7D8] hover:bg-[#DDD4C0] border-[#DDD4C0] text-[#1B3828] leading-tight text-center w-[52px]">
+                            className="px-2 py-2 border rounded-xl font-black uppercase tracking-wide transition-colors bg-[#EDE7D8] hover:bg-[#DDD4C0] border-[#DDD4C0] text-[#1B3828] leading-tight text-center" style={{ fontSize: '8px', minWidth: '52px' }}>
                             {t('gsl_add_time').split('\n')[0]}<br />{t('gsl_add_time').split('\n')[1]}
                           </button>
                           {/* Right of Reply button */}
