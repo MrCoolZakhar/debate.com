@@ -531,6 +531,7 @@ function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation
   onRemove: (docId: string) => void;
   onStartPresentation: (doc: CommitteeDocument) => void;
 }) {
+  const t = useT();
   const [expanded, setExpanded] = useState(false);
   const [showPdf, setShowPdf] = useState(false);
   const nextStatus = STATUS_NEXT[doc.status];
@@ -579,7 +580,7 @@ function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation
       <div className="flex gap-2 pt-1">
         {nextStatus && doc.status !== 'passed' && doc.status !== 'failed' && doc.status !== 'introduced' && (
           <button onClick={handleAdvance} className="flex-1 bg-[#1B3828] hover:bg-[#2A5A3C] text-white py-2 rounded-lg font-bold text-xs transition-colors">
-            {needsPresentation ? 'Introduce →' : `Advance → ${STATUS_META[nextStatus].label}`}
+            {needsPresentation ? t('documents_introduce') + ' →' : `Advance → ${STATUS_META[nextStatus].label}`}
           </button>
         )}
       </div>
@@ -752,15 +753,14 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate }
 
         {!showForm && (
           <div className="flex gap-2 px-7 pt-4 shrink-0">
-            {(['working-paper', 'draft-resolution'] as const).map((t) => {
-              const label = t === 'working-paper' ? 'Working Papers' : 'Draft Resolutions';
-              const count = (committee.documents ?? []).filter((d) => d.type === t && (d.status === 'submitted' || d.status === 'on-floor')).length;
+            {(['working-paper', 'draft-resolution'] as const).map((tabItem) => {
+              const count = (committee.documents ?? []).filter((d) => d.type === tabItem && (d.status === 'submitted' || d.status === 'on-floor')).length;
               return (
-                <button key={t} onClick={() => setTab(t)}
-                  className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-colors relative ${tab === t ? 'bg-[#1B3828] text-white' : 'bg-[#EDE7D8] border border-[#DDD4C0] text-[#6A5A4A] hover:border-[#1B3828]'}`}>
-                  {label}
+                <button key={tabItem} onClick={() => setTab(tabItem)}
+                  className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-colors relative ${tab === tabItem ? 'bg-[#1B3828] text-white' : 'bg-[#EDE7D8] border border-[#DDD4C0] text-[#6A5A4A] hover:border-[#1B3828]'}`}>
+                  {tabItem === 'working-paper' ? t('documents_working_papers_tab') : t('documents_draft_resolutions_tab')}
                   {count > 0 && (
-                    <span className={`ml-1.5 inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-black ${tab === t ? 'bg-white/30 text-white' : 'bg-[#1B3828] text-white'}`}>{count}</span>
+                    <span className={`ml-1.5 inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-black ${tab === tabItem ? 'bg-white/30 text-white' : 'bg-[#1B3828] text-white'}`}>{count}</span>
                   )}
                 </button>
               );
@@ -797,7 +797,7 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate }
               )}
               <button onClick={() => setShowForm(true)}
                 className="w-full bg-[#EDE7D8] hover:bg-[#DDD4C0] border border-[#DDD4C0] hover:border-[#1B3828] text-[#1C1410] py-3.5 rounded-2xl font-bold transition-all mt-2 text-center focus:outline-none" style={{ fontFamily: "'Outfit', sans-serif" }}>
-                + Submit New {tab === 'working-paper' ? 'Working Paper' : 'Draft Resolution'}
+                + {tab === 'working-paper' ? t('documents_submit_new_wp').replace('+ ', '') : t('documents_submit_new_dr').replace('+ ', '')}
               </button>
             </div>
           )}

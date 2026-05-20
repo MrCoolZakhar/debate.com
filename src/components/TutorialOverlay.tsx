@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import type { Committee } from '@/lib/types';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useT, useLanguage } from '@/contexts/LanguageContext';
 
 interface Props {
   committee: Committee;
@@ -40,7 +40,7 @@ function getSteps(language: string): TutorialStep[] {
       otterImage: '/Otter.Tutorial.webp',
       spotlightTargets: [],
       bubbleText: language === 'es'
-        ? <>Bienvenido a tu <strong>sala de comité</strong>. {GR('Oradores')}, {GR('cronómetros')}, {GR('votaciones')}, {GR('mociones')}, {GR('chat')}, {GR('documentos')} — todo en un solo lugar, diseñado para dirigir tu <strong>sesión completa de MUN</strong> desde el primer mazo hasta el último.</>
+        ? <>Bienvenido a tu <strong>sala de comité</strong>. {GR('Oradores')}, {GR('cronómetros')}, {GR('votos')}, {GR('mociones')}, {GR('chat')}, {GR('documentos')} — todo en un solo lugar para dirigir tu <strong>sesión completa de MUN</strong>.</>
         : <>Welcome to your <strong>committee room</strong>. {GR('Speakers')}, {GR('timers')}, {GR('voting')}, {GR('motions')}, {GR('chat')}, {GR('documents')} — all bundled in one place, built to run your <strong>entire MUN session</strong> from the first gavel to the last.</>,
     },
     {
@@ -48,7 +48,7 @@ function getSteps(language: string): TutorialStep[] {
       otterImage: '/Otter.Tutorial.webp',
       spotlightTargets: ['speakers-bottom-bar'], spotlightRadius: 12,
       bubbleText: language === 'es'
-        ? <>Esta barra es cómo <strong>agregas delegados</strong> a la lista de oradores. Escribe cualquier {G('nombre de país')} y presiona {G('Enter')}.</>
+        ? <>Esta barra sirve para <strong>agregar delegados</strong> a la lista de oradores. Escribe cualquier {G('nombre de país')} y presiona {G('Enter')}.</>
         : <>This bar is how you <strong>add delegates</strong> to the speakers list. Type any {G('country name')} and press {G('Enter')}.</>,
     },
     {
@@ -69,7 +69,7 @@ function getSteps(language: string): TutorialStep[] {
       spotlightTargets: ['speakers-bottom-bar', 'speakers-sidebar', 'speakers-autocomplete'],
       spotlightRadius: 12,
       bubbleText: language === 'es'
-        ? <>Agrega <strong>cualquier 3 países</strong> a la lista de oradores — usa la {G('barra de búsqueda')} abajo o haz clic en delegados en el {G('panel lateral')}. ¡Ambos funcionan!</>
+        ? <>Agrega <strong>3 países</strong> a la lista — usa la {G('barra de búsqueda')} o haz clic en delegados del {G('panel lateral')}. ¡Ambos funcionan!</>
         : <>Add <strong>any 3 countries</strong> to the speakers list — use the {G('input bar')} below or click delegates in the {G('sidebar')}. Both work!</>,
       actionDone: (c) => c.speakersList.length >= 3,
     },
@@ -103,7 +103,7 @@ function getSteps(language: string): TutorialStep[] {
       otterImage: '/Otter.Tutorial.webp',
       spotlightTargets: ['rtr-button'], spotlightRadius: 12,
       bubbleText: language === 'es'
-        ? <>{GR('Derecho a Réplica')} permite que un delegado acusado responda brevemente <strong>sin volver a entrar a la fila</strong>. Úsalo con moderación.</>
+        ? <>{GR('Derecho a Réplica')} permite que un delegado responda brevemente <strong>sin volver a la fila</strong>. Úsalo con moderación.</>
         : <>{GR('Right to Reply')} lets an accused delegate respond briefly <strong>without re-entering the queue</strong>. Use it sparingly.</>,
     },
     {
@@ -111,7 +111,7 @@ function getSteps(language: string): TutorialStep[] {
       otterImage: '/Otter.Tutorial.webp',
       spotlightTargets: ['tab-rollcall'], spotlightRadius: 6,
       bubbleText: language === 'es'
-        ? <>{G('Lista de Asistencia')} — haz clic aquí para marcar a cada delegado como <strong>Ausente</strong>, <strong>Presente</strong>, o <strong>Presente y Votante</strong>. Puedes actualizar la asistencia en cualquier momento.</>
+        ? <>{G('Lista de Asistencia')} — marca a cada delegado como <strong>Ausente</strong>, <strong>Presente</strong> o <strong>Presente y Votante</strong>. Puedes actualizar la asistencia en cualquier momento.</>
         : <>{G('Roll Call')} — click here to mark each delegate as <strong>Absent</strong>, <strong>Present</strong>, or <strong>Present & Voting</strong>. You can update attendance at any point during the session.</>,
     },
     {
@@ -119,7 +119,7 @@ function getSteps(language: string): TutorialStep[] {
       otterImage: '/Otter.Tutorial.webp',
       spotlightTargets: ['tab-motions'], spotlightRadius: 6,
       bubbleText: language === 'es'
-        ? <>{G('Mociones')} — los delegados levantan <strong>Cáucus Moderado</strong>, <strong>Cáucus No Moderado</strong>, <strong>Tour de Table</strong> y <strong>Consulta de Plenaria</strong> aquí. También puedes <strong>cerrar</strong> o <strong>suspender el debate</strong> desde esta pestaña.</>
+        ? <>{G('Mociones')} — los delegados levantan <strong>Cáucus Moderado</strong>, <strong>Cáucus No Moderado</strong>, <strong>Tour de Table</strong> y <strong>Consulta de Plenaria</strong>. También puedes <strong>cerrar</strong> o <strong>suspender el debate</strong>.</>
         : <>{G('Motions')} — delegates raise <strong>Moderated Caucus</strong>, <strong>Unmoderated Caucus</strong>, <strong>Tour de Table</strong>, and <strong>Consultation of the Whole</strong> here. You can also <strong>close</strong> or <strong>suspend debate</strong> from this tab.</>,
     },
     {
@@ -127,7 +127,7 @@ function getSteps(language: string): TutorialStep[] {
       otterImage: '/Otter.Tutorial.webp',
       spotlightTargets: ['tab-documents'], spotlightRadius: 6,
       bubbleText: language === 'es'
-        ? <>{G('Documentos')} — <strong>Papeles de Trabajo</strong> y <strong>Proyectos de Resolución</strong> enviados por delegados aparecen aquí. Una vez aprobados, los delegados tienen una página dedicada de {GR('Lectura')}, {GR('Presentación')} y {GR('Preguntas')}.</>
+        ? <>{G('Documentos')} — los <strong>Papeles de Trabajo</strong> y <strong>Proyectos de Resolución</strong> aparecen aquí. Una vez aprobados, los delegados tienen páginas de {GR('Lectura')}, {GR('Presentación')} y {GR('Preguntas')}.</>
         : <>{G('Documents')} — <strong>Working Papers</strong> and <strong>Draft Resolutions</strong> submitted by delegates appear here. Once approved, delegates get a dedicated {GR('Reading')}, {GR('Presentation')}, and {GR('Q&A')} page.</>,
     },
     {
@@ -135,7 +135,7 @@ function getSteps(language: string): TutorialStep[] {
       otterImage: '/Otter.Tutorial.webp',
       spotlightTargets: ['tab-chat'], spotlightRadius: 6,
       bubbleText: language === 'es'
-        ? <>{G('Chat')} — envía mensajes a <strong>todos los delegados</strong> a la vez o DM a individuos. Recomendamos mantenerlo abierto en tu <strong>dispositivo personal</strong> en lugar de la pantalla principal.</>
+        ? <>{G('Chat')} — envía mensajes a <strong>todos los delegados</strong> o DM individuales. Recomendamos tenerlo abierto en tu <strong>dispositivo personal</strong>.</>
         : <>{G('Chat')} — message <strong>all delegates</strong> at once or DM individuals. We recommend keeping this open on your <strong>personal device</strong> rather than the main committee screen.</>,
     },
     {
@@ -200,6 +200,7 @@ function useSpotlightRects(targets: string[] = []) {
 // ─── Main ────────────────────────────────────────────────────────────────────
 
 export default function TutorialOverlay({ committee, onEnd }: Props) {
+  const t = useT();
   const { language } = useLanguage();
   const STEPS = getSteps(language);
   const [stepIdx, setStepIdx] = useState(0);
@@ -262,18 +263,18 @@ export default function TutorialOverlay({ committee, onEnd }: Props) {
           style={{ border: '2px solid rgba(27,56,40,0.2)' }}>
           <img src="/Otter.Tutorial.Intro.webp" alt="Gavin"
             style={{ width: 260, height: 260, objectFit: 'cover', objectPosition: 'center', borderRadius: 0 }} />
-          <h2 className="text-3xl font-black text-[#1C1410] tracking-tight">HAVE YOU USED GAVELLING BEFORE?</h2>
-          <p className="text-sm text-[#9A8A78]">Gavin has a short interactive run-through prepared for you.</p>
+          <h2 className="text-3xl font-black text-[#1C1410] tracking-tight">{t('tutorial_have_you_used')}</h2>
+          <p className="text-sm text-[#9A8A78]">{t('tutorial_gavin_prepared')}</p>
           <div className="flex gap-4 w-full">
             <button onClick={advance}
               className="flex-1 py-3 rounded-xl font-bold text-sm"
               style={{ backgroundColor: '#1B3828', color: '#EED98A' }}>
-              SHOW ME AROUND
+              {t('tutorial_show_me')}
             </button>
             <button onClick={onEnd}
               className="flex-1 py-3 rounded-xl font-bold text-sm"
               style={{ backgroundColor: 'rgba(27,56,40,0.08)', color: '#1B3828', border: '1.5px solid rgba(27,56,40,0.2)' }}>
-              SKIP TUTORIAL
+              {t('tutorial_skip')}
             </button>
           </div>
         </div>
@@ -348,7 +349,7 @@ export default function TutorialOverlay({ committee, onEnd }: Props) {
                 onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
               >
-                Start Exploring →
+                {t('tutorial_start_exploring')}
               </button>
             </div>
           </div>

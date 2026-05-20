@@ -5,6 +5,7 @@ import { useSettingsStore, CommitteeSettings } from '@/lib/settingsStore';
 import { Committee } from '@/lib/types';
 import { updateCommitteeCode, updateCommitteeChairSuffixInDB } from '@/lib/committeeService';
 import { getFlagEmoji, getCountryByName } from '@/lib/countries';
+import { useT } from '@/contexts/LanguageContext';
 
 type SettingsTab = 'voting' | 'motions' | 'access' | 'points';
 
@@ -61,6 +62,7 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
   onClose: () => void;
   onCodeChange?: (newCode: string) => void;
 }) {
+  const t = useT();
   const [tab, setTab] = useState<SettingsTab>('voting');
   const { getSettings, updateSetting, migrateSettings } = useSettingsStore();
   const s = getSettings(committee.code);
@@ -164,10 +166,10 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
   }
 
   const tabs: { id: SettingsTab; label: string }[] = [
-    { id: 'voting', label: 'Voting' },
-    { id: 'motions', label: 'Motions' },
-    { id: 'access', label: 'Access' },
-    { id: 'points', label: 'Points' },
+    { id: 'voting', label: t('settings_tab_voting') },
+    { id: 'motions', label: t('settings_tab_motions') },
+    { id: 'access', label: t('settings_tab_access') },
+    { id: 'points', label: t('settings_tab_points') },
   ];
 
   const chairCode = `${committee.code}-${s.chairJoinSuffix || '????'}`;
@@ -181,7 +183,7 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 shrink-0" style={{ borderBottom: '1px solid #DDD4C0', backgroundColor: '#1B3828' }}>
           <div className="flex flex-col">
-            <h2 className="text-base font-black" style={{ color: '#EED98A' }}>SESSION SETTINGS</h2>
+            <h2 className="text-base font-black" style={{ color: '#EED98A' }}>{t('settings_session_settings')}</h2>
             <p className="text-xs mt-0.5" style={{ color: 'rgba(238,217,138,0.6)', fontFamily: "'DM Mono', monospace" }}>{committee.name} · {committee.code}</p>
           </div>
           <button onClick={onClose} className="text-xl leading-none transition-colors focus:outline-none" style={{ color: 'rgba(238,217,138,0.6)' }}

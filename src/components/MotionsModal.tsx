@@ -83,6 +83,7 @@ const COUNTRY_ACRONYMS: Record<string, string> = {
 function ProposerInput({ candidates, value, onChange, blockedCountries }: {
   candidates: string[]; value: string; onChange: (v: string) => void; blockedCountries?: Set<string>;
 }) {
+  const t = useT();
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -109,7 +110,7 @@ function ProposerInput({ candidates, value, onChange, blockedCountries }: {
           <input ref={inputRef} autoFocus={open} type="text" value={query}
             onChange={(e) => { setQuery(e.target.value); setOpen(true); onChange(''); }}
             onKeyDown={(e) => { if (e.key === 'Enter' && top) { e.preventDefault(); commit(top); } if (e.key === 'Escape') { setQuery(''); setOpen(false); } }}
-            placeholder="Type country name…"
+            placeholder={t('motions_proposer_placeholder')}
             className="flex-1 bg-transparent px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none text-sm" />
           {top && query && <span className="text-xs text-[#9A8A78] px-3 truncate max-w-[120px]">↵ {top}</span>}
         </div>
@@ -150,6 +151,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
   editingMotion?: PendingMotion | null;
   belowQuorum?: boolean;
 }) {
+  const t = useT();
   const { getSettings } = useSettingsStore();
   const s = getSettings(committee.code);
   const enabledTypes = TYPE_ORDER.filter((t) => {
@@ -269,7 +271,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
                     All {presentCountries.length} present delegates will speak once each.
                   </p>
                   <div>
-                    <label className="block text-sm font-semibold text-[#6A5A4A] mb-1">Speaking time per delegate</label>
+                    <label className="block text-sm font-semibold text-[#6A5A4A] mb-1">{t('motions_speaking_time_label')}</label>
                     <div className="flex items-center gap-3">
                       <div className="flex items-center gap-2 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-3 py-1.5">
                         <input type="number" min={10} value={speakingTimeStr}
@@ -319,7 +321,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
             {/* Unmoderated / Consultation — total time */}
             {(type === 'unmoderated' || type === 'consultation') && (
               <div>
-                <label className="block text-lg font-semibold text-[#6A5A4A] mb-2">Total time</label>
+                <label className="block text-lg font-semibold text-[#6A5A4A] mb-2">{t('motions_total_time_label')}</label>
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-2 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-3 py-2.5">
                     <input type="number" min={0} value={totalMinsStr}
@@ -361,7 +363,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
                 {/* Total time + speaking time — side by side to avoid scroll */}
                 <div className="flex gap-4 items-start">
                   <div className="flex-1">
-                    <label className="block text-sm font-semibold text-[#6A5A4A] mb-2">Total time</label>
+                    <label className="block text-sm font-semibold text-[#6A5A4A] mb-2">{t('motions_total_time_label')}</label>
                     <div className="flex items-center gap-2">
                       <div className="flex items-center gap-1.5 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-3 py-2">
                         <input type="number" min={0} value={totalMinsStr}
@@ -422,13 +424,13 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
         <div className="px-7 pb-7 pt-3 border-t border-white/10 shrink-0">
           {belowQuorum && (
             <div className="mb-4 p-3 bg-[#8B2020]/20 border border-[#8B2020]/40 rounded-xl text-xs text-[#8B2020]">
-              ⚠️ Quorum not met. Motions cannot be raised until the required number of delegates are present.
+              ⚠️ {t('motions_quorum_warning')}
             </div>
           )}
           {error && <p className="text-[#8B2020] text-sm font-medium mb-3">{error}</p>}
           <button onClick={submit} disabled={!canSubmit() || belowQuorum}
             className="w-full bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white py-5 rounded-2xl text-base font-black transition-colors focus:outline-none" style={{ letterSpacing: '0.05em' }}>
-            {editingMotion ? 'EDIT MOTION →' : 'RAISE MOTION →'}
+            {editingMotion ? t('motions_edit_btn') : t('motions_raise_btn')}
           </button>
         </div>
       )}
@@ -447,6 +449,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
   onEdit: (motionId: string) => void;
   pendingIds: Set<string>;
 }) {
+  const t = useT();
   // Filter out join-request pseudo-motions — those are handled in the chair banner, not here
   const initialSorted = [...(committee.pendingMotions ?? [])]
     .filter((m) => m.type !== ('join-request' as string))
@@ -583,17 +586,17 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
           <div className="flex gap-2 mt-auto">
             <button onClick={() => onAccepted(m)}
               className="flex-1 bg-[#2A5A3C] hover:bg-[#3D7A52] text-white py-2.5 rounded-xl font-bold text-sm transition-colors focus:outline-none" style={{ fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}>
-              ✓ ACCEPT
+              {t('motions_accept_btn')}
             </button>
             <button onClick={() => onRemove(m.id)}
               disabled={pendingIds.has(m.id)}
               className={`flex-1 bg-[#DDD4C0] hover:bg-red-950/40 hover:text-[#8B2020] text-[#6A5A4A] border border-[#DDD4C0] hover:border-[#8B2020]/40 py-2.5 rounded-xl font-bold text-sm transition-colors focus:outline-none ${pendingIds.has(m.id) ? 'opacity-40 cursor-not-allowed' : ''}`} style={{ fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}>
-              ✗ REJECT
+              {t('motions_reject_btn')}
             </button>
             <button onClick={(e) => { e.stopPropagation(); onEdit(m.id); }}
               title="Edit motion"
               className="bg-[#B6871F]/20 hover:bg-[#B6871F]/40 border border-[#B6871F]/50 hover:border-[#B6871F] text-[#B6871F] py-2.5 px-4 rounded-xl font-bold text-sm transition-colors shrink-0 focus:outline-none" style={{ fontFamily: "'DM Mono', monospace" }}>
-              EDIT
+              {t('motions_edit_label')}
             </button>
           </div>
         )}
@@ -857,7 +860,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
         <p className="text-xs font-mono tracking-widest text-[#9A8A78] mb-6">
           {typeMeta[specialVoteMotion.type].label.toUpperCase()} · {specialVoteMotion.proposedBy}
         </p>
-        <h1 className="text-4xl font-black mb-14 tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>DOES THIS MOTION PASS?</h1>
+        <h1 className="text-4xl font-black mb-14 tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{t('motions_does_pass')}</h1>
         <div className="flex gap-8">
           <button
             onClick={async () => {
@@ -934,16 +937,16 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
           )}
           {view === 'list' && (
             <div className="px-7 pb-7 space-y-4">
-              <h2 className="text-3xl font-black text-[#1C1410]">Motions</h2>
+              <h2 className="text-3xl font-black text-[#1C1410]">{t('motions_title')}</h2>
               {pending.length === 0 ? (
                 <div className="text-center py-8">
                   <div className="mb-3"><Emoji size="2.5rem">📋</Emoji></div>
-                  <p className="text-[#6A5A4A]">No motions raised yet.</p>
-                  <p className="text-sm text-[#9A8A78] mt-1">The floor is open — invite delegates to raise motions.</p>
+                  <p className="text-[#6A5A4A]">{t('motions_no_raised')}</p>
+                  <p className="text-sm text-[#9A8A78] mt-1">{t('motions_floor_open')}</p>
                 </div>
               ) : (
                 <div className="space-y-2">
-                  <p className="text-xs text-[#9A8A78] font-mono">RANKED — MOST DISRUPTIVE FIRST</p>
+                  <p className="text-xs text-[#9A8A78] font-mono">{t('motions_ranked')}</p>
                   {pending.map((m, i) => {
                     const meta = typeMeta[m.type];
                     const mins = Math.floor(m.totalTime / 60);
