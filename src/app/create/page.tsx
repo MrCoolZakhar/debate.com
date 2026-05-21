@@ -50,6 +50,28 @@ function getPresetDisplayName(name: string, lang: string): string {
   return name;
 }
 
+const PRESET_ACRONYM_ES: Record<string, string> = {
+  'UN Security Council': 'CSNU',
+  'UN Environment Programme': 'PNUMA',
+  'World Health Organization': 'OMS',
+  'International Monetary Fund': 'FMI',
+  'World Bank': 'BM',
+  'UN General Assembly': 'AGNU',
+  'UN Human Rights Council': 'CDHNU',
+  'Economic and Social Council': 'ECOSOC',
+  'NATO': 'OTAN',
+  'G20': 'G20',
+  'European Union': 'UE',
+  'African Union': 'UA',
+  'Arab League': 'LA',
+  'ASEAN': 'ASEAN',
+};
+
+function getPresetAcronym(name: string, lang: string): string {
+  if (lang === 'es') return PRESET_ACRONYM_ES[name] ?? '';
+  return '';
+}
+
 const BUNDLES: Record<string, { label: string; acronym: string; logoPath?: string; members: string[] }> = {
   P5:         { label: 'P5',          acronym: 'UNSC', logoPath: '/logos/un.svg',            members: ['China', 'France', 'Russia', 'United Kingdom', 'United States'] },
   G7:         { label: 'G7',          acronym: 'G7',   logoPath: '/logos/g7.png',            members: ['Canada', 'France', 'Germany', 'Italy', 'Japan', 'United Kingdom', 'United States'] },
@@ -97,9 +119,17 @@ function CommitteeNameInput({ value, onChange, onPresetSelect }: {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const matches = value.trim()
-    ? COMMITTEE_PRESETS.filter((p) =>
-        p.name.toLowerCase().includes(value.toLowerCase()) ||
-        p.acronym.toLowerCase().includes(value.toLowerCase()))
+    ? COMMITTEE_PRESETS.filter((p) => {
+        const v = value.toLowerCase();
+        const esName = getPresetDisplayName(p.name, language).toLowerCase();
+        const esAcronym = getPresetAcronym(p.name, language).toLowerCase();
+        return (
+          p.name.toLowerCase().includes(v) ||
+          p.acronym.toLowerCase().includes(v) ||
+          esName.includes(v) ||
+          (esAcronym && esAcronym.includes(v))
+        );
+      })
     : [];
   const topMatch = matches[0] ?? null;
 
@@ -120,7 +150,7 @@ function CommitteeNameInput({ value, onChange, onPresetSelect }: {
           }
           if (e.key === 'Escape') setOpen(false);
         }}
-        placeholder={language === 'es' ? 'ej. Consejo de DDHH o CDDHH' : 'e.g. Human Rights Council or HRC'}
+        placeholder={language === 'es' ? 'ej. Consejo de Seguridad o CSNU' : 'e.g. Human Rights Council or HRC'}
         className="w-full bg-white/70 border border-[#C8BAA8] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] focus:ring-2 focus:ring-[#1B3828]/10 transition-all text-sm"
       />
       {open && matches.length > 0 && (
@@ -140,7 +170,7 @@ function CommitteeNameInput({ value, onChange, onPresetSelect }: {
                 <div className="w-[22px] h-[22px] rounded-md shrink-0" style={{ backgroundColor: 'rgba(27,56,40,0.08)' }} />
               )}
               <span className="text-sm flex-1">{getPresetDisplayName(p.name, language)}</span>
-              <span className="text-[10px] font-bold shrink-0" style={{ fontFamily: "'DM Mono', monospace", color: '#1B3828' }}>{p.acronym}</span>
+              <span className="text-[10px] font-bold shrink-0" style={{ fontFamily: "'DM Mono', monospace", color: '#1B3828' }}>{language === 'es' ? (getPresetAcronym(p.name, language) || p.acronym) : p.acronym}</span>
               {i === 0 && <span className="text-[10px] shrink-0" style={{ color: '#9A8A78' }}>↵</span>}
             </button>
           ))}

@@ -707,7 +707,7 @@ export const translations = {
     documents_submit_dr_heading: 'ENVIAR PROYECTO DE RESOLUCIÓN',
     documents_doc_code_label: 'CÓDIGO DE DOCUMENTO',
     documents_title_label: 'Título',
-    documents_title_placeholder_wp: 'ej. Abordar el cambio climático mediante la cooperación internacional…',
+    documents_title_placeholder_wp: 'ej. Abordar el cambio climático…',
     documents_title_placeholder_dr: 'ej. Fortalecer la cooperación internacional en…',
     documents_google_docs_label: 'Enlace de Google Docs',
     documents_google_docs_optional: 'Opcional',
