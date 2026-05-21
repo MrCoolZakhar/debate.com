@@ -461,12 +461,12 @@ function CreatePageInner() {
       else if (!found) unmatched.push(line);
     }
     setDelegates((p) => [...p, ...matched]);
-    setPasteError(unmatched.length > 0 ? `Could not match: ${unmatched.join(', ')}` : '');
+    setPasteError(unmatched.length > 0 ? (language === 'es' ? `No se pudo coincidir: ${unmatched.join(', ')}` : `Could not match: ${unmatched.join(', ')}`) : '');
     setPasteText('');
   };
 
   const handleCommitteePreset = (preset: typeof COMMITTEE_PRESETS[0]) => {
-    setCommitteeName(preset.name);
+    setCommitteeName(getPresetDisplayName(preset.name, language));
     if (preset.members !== null) setDelegates(preset.members);
     setIsUNSC(preset.acronym === 'UNSC');
   };

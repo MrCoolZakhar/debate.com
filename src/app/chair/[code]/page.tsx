@@ -2218,7 +2218,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                         </div>
                         {isLastGSLSpeaker && (
                           <div className="mb-2 px-4 py-2 bg-[#B6871F]/10 border border-[#B6871F]/30 rounded-lg text-[#B6871F] text-xs text-center">
-                            Add at least one more delegate before starting — the GSL can never be empty.
+                            {t('gsl_never_empty_warning')}
                           </div>
                         )}
                         {!sessionEnded && (
@@ -2384,8 +2384,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               <button
                 onClick={() => { const n = parseInt(extraTimeSecs); if (n > 0) { handleAddExtraTime(n); setActivePopover(null); } }}
                 disabled={!extraTimeSecs || parseInt(extraTimeSecs) <= 0}
-                className="px-3 py-1.5 bg-[#1B3828] hover:bg-[#2A5A3C] disabled:opacity-40 text-[#EED98A] text-xs rounded-lg font-black transition-colors">
-                ADD
+                className="px-2 py-1.5 bg-[#1B3828] hover:bg-[#2A5A3C] disabled:opacity-40 text-[#EED98A] text-xs rounded-lg font-black transition-colors">
+                {t('gsl_add_time_btn')}
               </button>
             </div>
           </div>

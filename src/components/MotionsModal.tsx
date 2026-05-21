@@ -153,13 +153,14 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
   belowQuorum?: boolean;
 }) {
   const t = useT();
+  const { language } = useLanguage();
   const { getSettings } = useSettingsStore();
   const s = getSettings(committee.code);
-  const enabledTypes = TYPE_ORDER.filter((t) => {
-    if (t === 'moderated')    return s.motionModeratedCaucus !== false;
-    if (t === 'unmoderated')  return s.motionUnmoderatedCaucus !== false;
-    if (t === 'consultation') return s.motionCoW !== false;
-    if (t === 'tour')         return s.motionTourDeTable !== false;
+  const enabledTypes = TYPE_ORDER.filter((motionType) => {
+    if (motionType === 'moderated')    return s.motionModeratedCaucus !== false;
+    if (motionType === 'unmoderated')  return s.motionUnmoderatedCaucus !== false;
+    if (motionType === 'consultation') return s.motionCoW !== false;
+    if (motionType === 'tour')         return s.motionTourDeTable !== false;
     return true;
   });
   const [type, setType] = useState<PendingMotionType | null>(editingMotion?.type ?? enabledTypes[0] ?? null);
@@ -232,12 +233,12 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
         {/* Type tabs — always shown */}
         <div className="flex gap-1.5 flex-wrap items-stretch">
           <div className="flex gap-1.5 flex-1 flex-wrap">
-            {enabledTypes.map((t) => (
-              <button key={t} type="button" onClick={() => setType(t)}
+            {enabledTypes.map((motionType) => (
+              <button key={motionType} type="button" onClick={() => setType(motionType)}
                 className={`px-3 py-2 rounded-xl border font-bold text-base transition-all flex-1 min-w-[120px] ${
-                  type === t ? 'bg-[#1B3828] border-[#2A5A3C] text-white' : 'bg-transparent border-[#DDD4C0] text-[#6A5A4A] hover:border-[#1B3828]'
+                  type === motionType ? 'bg-[#1B3828] border-[#2A5A3C] text-white' : 'bg-transparent border-[#DDD4C0] text-[#6A5A4A] hover:border-[#1B3828]'
                 }`}>
-                {typeMeta[t].label}
+                {typeMeta[motionType].label}
               </button>
             ))}
           </div>
@@ -354,7 +355,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
                 <div>
                   <label className="block text-lg font-semibold text-[#6A5A4A] mb-2">{t('motions_topic_label')} <span className="text-[#8B2020]">*</span></label>
                   <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)}
-                    placeholder="e.g. Humanitarian response in conflict zones"
+                    placeholder={language === 'es' ? 'ej. Respuesta humanitaria en zonas de conflicto' : 'e.g. Humanitarian response in conflict zones'}
                     className="w-full bg-[#FAF8F3] border-2 border-[#DDD4C0] rounded-xl px-4 py-4 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] transition-colors" />
                 </div>
                 <div>
@@ -407,9 +408,9 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
                     {speakerCount !== null && (
                       <div className="mt-3 rounded-lg bg-white border border-[#DDD4C0] px-3 py-2 inline-flex items-baseline gap-1.5">
                         <span className="font-black text-xl leading-tight" style={{ color: '#1B3828' }}>{speakerCount}</span>
-                        <span className="text-sm font-semibold" style={{ color: '#6A5A4A' }}>{speakerCount === 1 ? t('motions_delegate_singular') : t('motions_delegate_plural')} can speak</span>
+                        <span className="text-sm font-semibold" style={{ color: '#6A5A4A' }}>{speakerCount === 1 ? t('motions_delegate_speak').replace('{n}', '1').replace('{s}', t('motions_delegate_singular')) : t('motions_delegate_speak').replace('{n}', String(speakerCount ?? 0)).replace('{s}', t('motions_delegate_plural'))}</span>
                         {unusedSecs > 0 && (
-                          <span className="text-xs font-semibold ml-1" style={{ color: '#B8844A' }}>({unusedSecs}s unused)</span>
+                          <span className="text-xs font-semibold ml-1" style={{ color: '#B8844A' }}>{t('motions_unused_secs').replace('{n}', String(unusedSecs))}</span>
                         )}
                       </div>
                     )}

@@ -61,6 +61,7 @@ function CountryChip({ country, onRemove }: { country: string; onRemove: () => v
 function SponsorSelect({ candidates, selected, onChange }: {
   candidates: string[]; selected: string[]; onChange: (v: string[]) => void;
 }) {
+  const t = useT();
   const [query, setQuery] = useState('');
   const available = candidates.filter((c) => !selected.includes(c) && c.toLowerCase().includes(query.toLowerCase()));
   const add = (country: string) => { onChange([...selected, country]); setQuery(''); };
@@ -69,7 +70,7 @@ function SponsorSelect({ candidates, selected, onChange }: {
   };
   return (
     <div>
-      <label className="block text-sm font-semibold text-[#6A5A4A] mb-1.5">Sponsors <span className="text-red-500">*</span></label>
+      <label className="block text-sm font-semibold text-[#6A5A4A] mb-1.5">{t('documents_sponsors_label')} <span className="text-red-500">*</span></label>
       <div className="flex flex-wrap gap-1.5 mb-2 min-h-[28px]">
         {selected.map((c) => <CountryChip key={c} country={c} onRemove={() => onChange(selected.filter((s) => s !== c))} />)}
       </div>
@@ -434,28 +435,28 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
           onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#1C1410'; }}
           onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}>{t('documents_back')}</button>
         <h2 className="text-xl font-black text-center uppercase tracking-wide" style={{ color: '#1B3828' }}>
-          {type === 'working-paper' ? 'SUBMIT WORKING PAPER' : 'SUBMIT DRAFT RESOLUTION'}
+          {type === 'working-paper' ? t('documents_submit_wp_heading') : t('documents_submit_dr_heading')}
         </h2>
       </div>
       <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl px-4 py-2.5">
-        <span className="text-xs text-[#9A8A78] font-mono">DOCUMENT CODE</span>
+        <span className="text-xs text-[#9A8A78] font-mono">{t('documents_doc_code_label')}</span>
         <span className="ml-3 text-sm font-bold text-[#1C1410] font-mono">{docCode}</span>
       </div>
       <div>
-        <label className="block text-sm font-semibold text-[#6A5A4A] mb-1.5">Title <span className="text-red-500">*</span></label>
+        <label className="block text-sm font-semibold text-[#6A5A4A] mb-1.5">{t('documents_title_label')} <span className="text-red-500">*</span></label>
         <input type="text" value={title} onChange={(e) => setTitle(e.target.value)}
-          placeholder="e.g. Strengthening international cooperation on…"
+          placeholder={type === 'working-paper' ? t('documents_title_placeholder_wp') : t('documents_title_placeholder_dr')}
           className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] transition-colors" />
       </div>
       <SponsorSelect candidates={presentCountries} selected={sponsors} onChange={setSponsors} />
       <div>
-        <label className="block text-sm font-semibold text-[#6A5A4A] mb-1.5">Google Docs Link <span className="text-[#9A8A78] font-normal">(Optional)</span></label>
+        <label className="block text-sm font-semibold text-[#6A5A4A] mb-1.5">{t('documents_google_docs_label')} <span className="text-[#9A8A78] font-normal">({t('documents_google_docs_optional')})</span></label>
         <input type="text" value={content} onChange={(e) => setContent(e.target.value)}
           placeholder="https://docs.google.com/..."
           className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] transition-colors text-sm" />
       </div>
       <div>
-        <label className="block text-sm font-semibold text-[#6A5A4A] mb-1.5">Attachment <span className="text-red-500">*</span></label>
+        <label className="block text-sm font-semibold text-[#6A5A4A] mb-1.5">{t('documents_attachment_label')} <span className="text-red-500">*</span></label>
         {fileName ? (
           <div className="flex items-center gap-2 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3">
             <span className="text-sm text-[#1C1410] flex-1 truncate">📎 {fileName}</span>
@@ -465,14 +466,14 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
         ) : (
           <button type="button" onClick={() => fileInputRef.current?.click()}
             className="w-full bg-[#FAF8F3] border border-dashed border-[#DDD4C0] hover:border-[#1B3828] rounded-xl px-4 py-3 text-[#9A8A78] hover:text-[#6A5A4A] text-sm transition-colors text-left">
-            + Upload PDF
+            {t('documents_upload_pdf')}
           </button>
         )}
         <input ref={fileInputRef} type="file" accept=".pdf" onChange={handleFileChange} className="hidden" />
       </div>
       {limitReached && (
         <p className="text-xs text-red-400 text-center">
-          Limit reached ({existingCount}/{limit}) — no more {type === 'working-paper' ? 'working papers' : 'draft resolutions'} can be submitted.
+          {t('documents_limit_exceeded').replace('{current}', String(existingCount)).replace('{limit}', String(limit)).replace('{type}', type === 'working-paper' ? t('documents_type_wp') : t('documents_type_dr'))}
         </p>
       )}
       <button onClick={handleSubmit} disabled={!canSubmit}
@@ -763,7 +764,7 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate }
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
         <div className="flex items-center justify-between px-7 pt-6 pb-4 shrink-0 border-b border-[#DDD4C0]">
-          <h2 className="text-2xl font-black text-[#1C1410]">Documents</h2>
+          <h2 className="text-2xl font-black text-[#1C1410]">{t('documents_title')}</h2>
           <button onClick={onClose} className="text-[#9A8A78] hover:text-[#1C1410] transition-colors text-xl leading-none">✕</button>
         </div>
 
@@ -796,13 +797,13 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate }
                   onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = '0 8px 24px rgba(27,56,40,0.25)'; }}
                   onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}
                 >
-                  GO TO VOTING
+                  {t('documents_go_to_voting')}
                 </button>
               )}
               {docs.length === 0 ? (
                 <div className="text-center py-10">
-                  <p className="text-2xl font-black mb-1" style={{ color: '#1B3828' }}>No {tab === 'working-paper' ? 'working papers' : 'draft resolutions'} yet.</p>
-                  <p className="text-sm mt-1" style={{ color: '#9A8A78' }}>Submit the first one below.</p>
+                  <p className="text-2xl font-black mb-1" style={{ color: '#1B3828' }}>{tab === 'working-paper' ? t('documents_empty_wp') : t('documents_empty_dr')}</p>
+                  <p className="text-sm mt-1" style={{ color: '#9A8A78' }}>{t('documents_empty_sub')}</p>
                 </div>
               ) : (
                 docs.map((doc) => (
