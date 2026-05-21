@@ -259,7 +259,7 @@ export default function ChatPanel({
 
         {/* List header */}
         <div className="relative z-10 px-4 py-4 shrink-0" style={{ borderBottom: '1px solid rgba(61,122,82,0.4)' }}>
-          <h3 className="font-black text-base tracking-wide" style={{ color: '#EED98A', fontFamily: "'Outfit', sans-serif" }}>MESSAGES</h3>
+          <h3 className="font-black text-base tracking-wide" style={{ color: '#EED98A', fontFamily: "'Outfit', sans-serif" }}>{t('chat_messages_header')}</h3>
         </div>
 
         {/* Conversation rows */}
@@ -291,7 +291,7 @@ export default function ChatPanel({
                 </div>
                 {lastMsg && (
                   <p className="text-xs mt-0.5 truncate" style={{ color: 'rgba(168,197,176,0.7)' }}>
-                    {lastMsg.sender === senderName ? 'You: ' : `${lastMsg.sender}: `}
+                    {lastMsg.sender === senderName ? `${t('chat_you_prefix')}: ` : `${lastMsg.sender}: `}
                     {displayContent(lastMsg.content)}
                   </p>
                 )}
@@ -305,13 +305,13 @@ export default function ChatPanel({
           {showNewDM ? (
             <div className="space-y-1">
               <div className="flex items-center justify-between mb-1.5">
-                <span className="text-xs font-semibold" style={{ color: '#EED98A' }}>New message to…</span>
+                <span className="text-xs font-semibold" style={{ color: '#EED98A' }}>{t('chat_new_message')}</span>
                 <button onClick={() => setShowNewDM(false)} className="text-xs focus:outline-none" style={{ color: '#A8C5B0' }}>✕</button>
               </div>
               <div className="max-h-48 overflow-y-auto space-y-0.5">
                 {isChair && coChairCandidates.length > 0 && (
                   <>
-                    <p className="text-[10px] font-black uppercase tracking-widest px-2 py-1" style={{ color: 'rgba(238,217,138,0.5)' }}>Co-Chairs</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest px-2 py-1" style={{ color: 'rgba(238,217,138,0.5)' }}>{t('chat_co_chairs')}</p>
                     {coChairCandidates.map((c) => (
                       <button key={c.id} onClick={() => selectConv(c.country)}
                         className="w-full text-left px-2 py-1.5 rounded-lg text-sm transition-colors focus:outline-none flex items-center gap-2"
@@ -322,7 +322,7 @@ export default function ChatPanel({
                         <span className="truncate">{c.country}</span>
                       </button>
                     ))}
-                    {dmCandidates.length > 0 && <p className="text-[10px] font-black uppercase tracking-widest px-2 py-1 mt-1" style={{ color: 'rgba(238,217,138,0.5)' }}>Delegates</p>}
+                    {dmCandidates.length > 0 && <p className="text-[10px] font-black uppercase tracking-widest px-2 py-1 mt-1" style={{ color: 'rgba(238,217,138,0.5)' }}>{t('chat_delegates')}</p>}
                   </>
                 )}
                 {dmCandidates.map((d) => (
@@ -342,7 +342,7 @@ export default function ChatPanel({
               style={{ color: '#EED98A', border: '1px solid rgba(238,217,138,0.3)' }}
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#EED98A'; }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(238,217,138,0.3)'; }}>
-              + New message
+              {t('chat_new_message_btn')}
             </button>
           )}
         </div>
@@ -356,7 +356,7 @@ export default function ChatPanel({
           <button onClick={goBack} className="sm:hidden text-lg leading-none focus:outline-none" style={{ color: '#1B3828' }} aria-label="Back">←</button>
           <div className="min-w-0">
             <h3 className="font-black text-base truncate" style={{ color: '#1B3828' }}>{activeConvObj.label}</h3>
-            <p className="text-xs" style={{ color: '#9A8A78' }}>{activeConvObj.messages.length} message{activeConvObj.messages.length !== 1 ? 's' : ''}</p>
+            <p className="text-xs" style={{ color: '#9A8A78' }}>{activeConvObj.messages.length === 1 ? t('chat_message_count_one') : t('chat_message_count_other').replace('{n}', String(activeConvObj.messages.length))}</p>
           </div>
         </div>
 
@@ -365,7 +365,7 @@ export default function ChatPanel({
           {activeConvObj.messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center">
               <p className="text-sm font-semibold" style={{ color: '#9A8A78' }}>{t('chat_no_messages')}</p>
-              <p className="text-xs mt-1" style={{ color: '#C8BAA8' }}>Send the first message below</p>
+              <p className="text-xs mt-1" style={{ color: '#C8BAA8' }}>{t('chat_send_first')}</p>
             </div>
           ) : (
             activeConvObj.messages.map((m) => {
@@ -376,8 +376,8 @@ export default function ChatPanel({
                 <div key={m.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
                   <div className={`max-w-[78%] flex flex-col gap-0.5 ${isMe ? 'items-end' : 'items-start'}`}>
                     <div className={`flex items-center gap-1.5 text-[10px] flex-wrap ${isMe ? 'justify-end' : 'justify-start'}`}>
-                      {!isMe && <span className="font-bold" style={{ color: isChairMsg ? '#B8844A' : '#6A5A4A' }}>{m.sender}{isChairMsg && !isMe ? ' · Chair' : ''}</span>}
-                      {isMe && <span className="font-bold" style={{ color: '#6A5A4A' }}>You</span>}
+                      {!isMe && <span className="font-bold" style={{ color: isChairMsg ? '#B8844A' : '#6A5A4A' }}>{m.sender}{isChairMsg && !isMe ? ` ${t('chat_chair_badge')}` : ''}</span>}
+                      {isMe && <span className="font-bold" style={{ color: '#6A5A4A' }}>{t('chat_you_prefix')}</span>}
                       <span style={{ color: '#9A8A78' }}>{formatTime(m.timestamp)}</span>
                     </div>
                     <div className="rounded-2xl px-3.5 py-2 text-sm leading-snug break-words"
@@ -401,7 +401,7 @@ export default function ChatPanel({
         {/* Compose */}
         <div className="px-4 pb-4 pt-3 shrink-0" style={{ borderTop: '1px solid #DDD4C0', backgroundColor: 'rgba(250,248,243,0.6)' }}>
           {readOnly ? (
-            <p className="text-xs text-center py-2" style={{ color: '#9A8A78' }}>Session ended — chat is view only</p>
+            <p className="text-xs text-center py-2" style={{ color: '#9A8A78' }}>{t('chat_view_only')}</p>
           ) : (
             <div className="flex gap-2">
               <input
