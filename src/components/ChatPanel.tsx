@@ -148,7 +148,7 @@ export default function ChatPanel({
       });
 
     const result: Conversation[] = [
-      { key: 'everyone', label: 'Everyone', emoji: '📢', messages: everyoneMsgs },
+      { key: 'everyone', label: t('chat_everyone'), emoji: '📢', messages: everyoneMsgs },
     ];
 
     if (!isChair) {
@@ -167,7 +167,7 @@ export default function ChatPanel({
     }
 
     return result;
-  }, [committee.messages, senderName, isChair, chairNames, draftConv]);
+  }, [committee.messages, senderName, isChair, chairNames, draftConv, t]);
 
   const activeConvObj = conversations.find((c) => c.key === activeConv) ?? conversations[0];
 
@@ -318,7 +318,7 @@ export default function ChatPanel({
                         style={{ color: '#EDE7D8' }}
                         onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(238,217,138,0.1)'; }}
                         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}>
-                        <span className="text-[10px] font-black px-1.5 py-0.5 rounded" style={{ backgroundColor: 'rgba(238,217,138,0.2)', color: '#EED98A' }}>CHAIR</span>
+                        <span className="text-[10px] font-black px-1.5 py-0.5 rounded" style={{ backgroundColor: 'rgba(238,217,138,0.2)', color: '#EED98A' }}>{t('chat_chair_tag')}</span>
                         <span className="truncate">{c.country}</span>
                       </button>
                     ))}
