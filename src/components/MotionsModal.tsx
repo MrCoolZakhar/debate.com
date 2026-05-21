@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { useT } from '@/contexts/LanguageContext';
+import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { Committee, PendingMotion, PendingMotionType } from '@/lib/types';
 import { getCountryByName, getFlagUrl } from '@/lib/countries';
 import { Emoji } from '@/components/Emoji';
@@ -642,8 +642,17 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
   belowQuorum?: boolean;
 }) {
   const t = useT();
+  const { language } = useLanguage();
   const { getSettings } = useSettingsStore();
-  const motionNames = { ...DEFAULT_MOTION_NAMES, ...(getSettings(committee.code).motionNames ?? {}) };
+  const DEFAULT_MOTION_NAMES_LOCALIZED = language === 'es' ? {
+    moderated: 'Cáucus Moderado',
+    unmoderated: 'Cáucus No Moderado',
+    consultation: 'Consulta de Plenaria',
+    tour: 'Tour de Table',
+    suspendDebate: 'Suspender Debate',
+    endDebate: 'Cerrar Debate',
+  } : DEFAULT_MOTION_NAMES;
+  const motionNames = { ...DEFAULT_MOTION_NAMES_LOCALIZED, ...(getSettings(committee.code).motionNames ?? {}) };
   const typeMeta = buildTypeMeta(motionNames);
   const pending = [...(committee.pendingMotions ?? [])].filter((m) => m.type !== ('join-request' as string)).sort((a, b) => b.disruptiveness - a.disruptiveness);
   const [view, setView] = useState<ModalView>(pending.length === 0 ? 'raise' : 'vote');

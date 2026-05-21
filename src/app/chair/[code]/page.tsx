@@ -1,6 +1,6 @@
 'use client';
 import { use, useEffect, useState, useRef, useCallback, useMemo, Suspense } from 'react';
-import { useT } from '@/contexts/LanguageContext';
+import { useT, useLanguage } from '@/contexts/LanguageContext';
 import MobileGate from '@/components/MobileGate';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -211,6 +211,7 @@ function RtrCountryInput({
   value: string;
   onChange: (v: string) => void;
 }) {
+  const { language } = useLanguage();
   const [query, setQuery] = useState(value);
   const inputRef = useRef<HTMLInputElement>(null);
   const eligible = committee.delegates.filter((d) => d.status !== 'absent');
@@ -241,7 +242,7 @@ function RtrCountryInput({
             }
             if (e.key === 'Escape') { setQuery(''); onChange(''); }
           }}
-          placeholder="Type country…"
+          placeholder={language === 'es' ? 'Agregar país...' : 'Type country...'}
           className="flex-1 bg-transparent px-3 py-1.5 text-[#1C1410] text-xs placeholder-[#9A8A78] focus:outline-none"
         />
         {topMatch && query && !value && query.toLowerCase() !== topMatch.country.toLowerCase() && (
@@ -591,12 +592,12 @@ function UnmoderatedCaucusView({ committee, setCommittee }: { committee: Committ
                 <span className="w-[3px] h-[13px] rounded-sm bg-current inline-block" />
                 <span className="w-[3px] h-[13px] rounded-sm bg-current inline-block" />
               </span>
-              <span>PAUSE</span>
+              <span>{t('gsl_pause')}</span>
             </span>
           ) : t('gsl_start')}
         </button>
         <button onClick={() => setShowExtendUnmod((v) => !v)} className="px-4 py-3 rounded-xl font-bold bg-[#1B3828] hover:bg-[#2A5A3C] text-[#EDE7D8] transition-colors focus:outline-none">
-          Extend
+          {t('caucus_extend')}
         </button>
         <button onClick={handleEndCaucus} className="px-8 py-3 rounded-xl font-black bg-[#8B2020] hover:bg-[#7A1C1C] text-white transition-colors focus:outline-none">
           {t('caucus_end')}
@@ -850,12 +851,12 @@ function ModeratedCaucusMain({
       <span className="w-[3px] h-[13px] rounded-sm bg-current inline-block" />
       <span className="w-[3px] h-[13px] rounded-sm bg-current inline-block" />
     </span>
-    <span>PAUSE</span>
+    <span>{t('gsl_pause')}</span>
   </span>
 ) : t('gsl_start')}
                 </button>
                 <button onClick={handleNextCaucusSpeaker} disabled={queue.length === 0}
-                  className="flex-1 bg-[#DDD4C0] hover:bg-[#C8BAA8] disabled:opacity-40 text-[#1C1410] py-3 px-4 rounded-xl font-bold transition-colors focus:outline-none" style={{ fontSize: 'clamp(11px, 1.2vw, 14px)' }}>
+                  className="flex-1 bg-[#DDD4C0] hover:bg-[#C8BAA8] disabled:opacity-40 text-[#1C1410] py-3 px-4 rounded-xl font-bold transition-colors focus:outline-none whitespace-nowrap" style={{ fontSize: 'clamp(11px, 1.2vw, 14px)' }}>
                   {t('gsl_next')}
                 </button>
                 <button onClick={() => setActivePopover(activePopover === 'extraTime' ? null : 'extraTime')} title="Add time"
@@ -919,7 +920,7 @@ function ModeratedCaucusMain({
               <div className="relative" ref={extendRef}>
                 <button onClick={() => setShowExtendMod((v) => !v)}
                   className="px-3 py-2 rounded-lg font-bold text-xs bg-[#1B3828] hover:bg-[#2A5A3C] text-[#EDE7D8] transition-colors focus:outline-none">
-                  Extend
+                  {t('caucus_extend')}
                 </button>
                 {showExtendMod && (
                   <div className="absolute bottom-full right-0 mb-2 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3 shadow-xl z-20" style={{ minWidth: '180px' }}>
@@ -1016,6 +1017,7 @@ function SessionEndedContent({ committee, hoursRemaining }: { committee: Committ
 // ── Main Chair Session ────────────────────────────────────────────────────────
 function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const t = useT();
+  const { language } = useLanguage();
   const { code } = use(params);
   const router = useRouter();
   const { updateSetting, getSettings } = useSettingsStore();
@@ -1030,7 +1032,6 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const [hoursRemaining, setHoursRemaining] = useState<number | null>(null);
   const [timerRunning, setTimerRunning] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
-  const tutorialShownRef = useRef(false);
   const [showRollCall, setShowRollCall] = useState(true);
   const [showSliders, setShowSliders] = useState(false);
   const [showMotions, setShowMotions] = useState(false);
@@ -1247,11 +1248,14 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   // Tutorial — fires once when phase transitions from pre-session → speakers-list
   useEffect(() => {
     if (!committee) return;
-    if (committee.phase === 'speakers-list' && !tutorialShownRef.current) {
-      tutorialShownRef.current = true;
-      setShowTutorial(true);
+    if (committee.phase === 'speakers-list') {
+      const key = 'gavelling_tutorial_seen_' + committee.id;
+      if (!localStorage.getItem(key)) {
+        localStorage.setItem(key, '1');
+        setShowTutorial(true);
+      }
     }
-  }, [committee?.phase]);
+  }, [committee?.phase, committee?.id]);
 
   // Stable Set references — prevents RollCallPanel re-renders when only timer ticks
   const gslListIds = useMemo(
@@ -2083,7 +2087,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                           </div>
                           <div className="flex items-center justify-center gap-2 text-[#9A8A78] text-sm">
                             <div className="w-4 h-4 border-2 border-[#1B3828] border-t-transparent rounded-full animate-spin" />
-                            <span>Setting up speakers...</span>
+                            <span>{t('caucus_setting_up')}</span>
                           </div>
                         </>
                       ) : (
@@ -2109,7 +2113,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                           </div>
                           <div className="flex items-center justify-center gap-2 text-[#9A8A78] text-sm">
                             <div className="w-4 h-4 border-2 border-[#1B3828] border-t-transparent rounded-full animate-spin" />
-                            <span>Loading caucus...</span>
+                            <span>{t('caucus_loading_caucus')}</span>
                           </div>
                         </>
                       )}
@@ -2240,12 +2244,12 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       <span className="w-[3px] h-[13px] rounded-sm bg-current inline-block" />
       <span className="w-[3px] h-[13px] rounded-sm bg-current inline-block" />
     </span>
-    <span>PAUSE</span>
+    <span>{t('gsl_pause')}</span>
   </span>
 ) : t('gsl_start')}
                           </button>
                           <button onClick={handleNextSpeaker} disabled={committee.speakersList.length === 0}
-                            className="flex-1 bg-[#DDD4C0] hover:bg-[#C8BAA8] disabled:opacity-40 text-[#1C1410] py-3 px-4 rounded-xl font-bold transition-colors focus:outline-none" style={{ fontSize: 'clamp(11px, 1.2vw, 14px)' }}>
+                            className="flex-1 bg-[#DDD4C0] hover:bg-[#C8BAA8] disabled:opacity-40 text-[#1C1410] py-3 px-4 rounded-xl font-bold transition-colors focus:outline-none whitespace-nowrap" style={{ fontSize: 'clamp(11px, 1.2vw, 14px)' }}>
                             {t('gsl_next')}
                           </button>
                           {/* Add Time button */}
@@ -2280,7 +2284,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                           <p className="mb-4 text-center text-sm" style={{ color: '#9A8A78' }}>{t('gsl_add_call_first')}</p>
                           {committee.speakersList.length === 1 && (
                             <div className="mb-4 px-4 py-2 bg-[#B6871F]/10 border border-[#B6871F]/30 rounded-lg text-[#B6871F] text-xs text-center">
-                              Only 1 delegate on the list — add more before starting.
+                              {t('gsl_one_delegate_warning')}
                             </div>
                           )}
                           {!sessionEnded && (
@@ -2373,7 +2377,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 value={extraTimeSecs}
                 onChange={(e) => setExtraTimeSecs(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') { const n = parseInt(extraTimeSecs); if (n > 0) { handleAddExtraTime(n); setActivePopover(null); } } }}
-                placeholder="Custom sec…"
+                placeholder={language === 'es' ? 'Tiempo personalizado...' : 'Custom sec...'}
                 style={{ MozAppearance: 'textfield' } as React.CSSProperties}
                 className="flex-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-2 py-1.5 text-[#1C1410] text-xs focus:outline-none focus:border-[#1B3828] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
               />

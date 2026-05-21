@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import type { Committee } from '@/lib/types';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 
@@ -56,7 +56,7 @@ function getSteps(language: string): TutorialStep[] {
       otterImage: '/Otter.Tutorial.webp',
       spotlightTargets: ['sidebar-view-toggle'], spotlightRadius: 99,
       bubbleText: language === 'es'
-        ? <>El panel lateral tiene dos vistas — {G('A-Z')} y {G('FILA')}. Cambia a <strong>FILA</strong> para ver el orden de oradores.</>
+        ? <>El panel lateral tiene dos opciones — {G('A-Z')} y {G('FILA')}. Cambia a <strong>FILA</strong> para ver el orden de oradores.</>
         : <>The sidebar has two views — {G('A-Z')} and {G('QUEUE')}. Switch to <strong>QUEUE</strong> to see the speaking order.</>,
       domActionDone: () => {
         const el = document.querySelector('[data-tutorial="sidebar-view-toggle"]');
@@ -202,7 +202,7 @@ function useSpotlightRects(targets: string[] = []) {
 export default function TutorialOverlay({ committee, onEnd }: Props) {
   const t = useT();
   const { language } = useLanguage();
-  const STEPS = getSteps(language);
+  const STEPS = useMemo(() => getSteps(language), [language]);
   const [stepIdx, setStepIdx] = useState(0);
   const { w: vw, h: vh } = useViewport();
 
@@ -478,12 +478,13 @@ export default function TutorialOverlay({ committee, onEnd }: Props) {
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
 function EndTutorialBtn({ onEnd }: { onEnd: () => void }) {
+  const t = useT();
   return (
     <button
       onClick={onEnd}
       style={{
         position: 'fixed', top: 52, right: 16, zIndex: 9999,
-        padding: '7px 18px', borderRadius: 10, fontWeight: 700, fontSize: 13,
+        padding: '7px 14px', borderRadius: 10, fontWeight: 700, fontSize: 13,
         backgroundColor: '#1B3828', color: '#EED98A',
         border: 'none', cursor: 'pointer',
         boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
@@ -492,7 +493,7 @@ function EndTutorialBtn({ onEnd }: { onEnd: () => void }) {
       onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
     >
-      End Tutorial
+      {t('tutorial_end')}
     </button>
   );
 }

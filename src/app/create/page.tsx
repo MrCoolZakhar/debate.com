@@ -28,6 +28,28 @@ const COMMITTEE_PRESETS = [
   { name: 'ASEAN', acronym: 'ASEAN', logoPath: '/logos/asean.png', members: ['Brunei','Cambodia','Indonesia','Laos','Malaysia','Myanmar','Philippines','Singapore','Thailand','Timor-Leste','Vietnam'] },
 ];
 
+const PRESET_NAME_ES: Record<string, string> = {
+  'UN Security Council': 'Consejo de Seguridad de la ONU',
+  'UN Environment Programme': 'Programa de Medio Ambiente de la ONU',
+  'World Health Organization': 'Organización Mundial de la Salud',
+  'International Monetary Fund': 'Fondo Monetario Internacional',
+  'World Bank': 'Banco Mundial',
+  'UN General Assembly': 'Asamblea General de la ONU',
+  'UN Human Rights Council': 'Consejo de Derechos Humanos de la ONU',
+  'Economic and Social Council': 'Consejo Económico y Social',
+  'NATO': 'OTAN',
+  'G20': 'G20',
+  'European Union': 'Unión Europea',
+  'African Union': 'Unión Africana',
+  'Arab League': 'Liga Árabe',
+  'ASEAN': 'ASEAN',
+};
+
+function getPresetDisplayName(name: string, lang: string): string {
+  if (lang === 'es') return PRESET_NAME_ES[name] ?? name;
+  return name;
+}
+
 const BUNDLES: Record<string, { label: string; acronym: string; logoPath?: string; members: string[] }> = {
   P5:         { label: 'P5',          acronym: 'UNSC', logoPath: '/logos/un.svg',            members: ['China', 'France', 'Russia', 'United Kingdom', 'United States'] },
   G7:         { label: 'G7',          acronym: 'G7',   logoPath: '/logos/g7.png',            members: ['Canada', 'France', 'Germany', 'Italy', 'Japan', 'United Kingdom', 'United States'] },
@@ -70,6 +92,7 @@ function CommitteeNameInput({ value, onChange, onPresetSelect }: {
   onChange: (v: string) => void;
   onPresetSelect: (preset: typeof COMMITTEE_PRESETS[0]) => void;
 }) {
+  const { language } = useLanguage();
   const [open, setOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -97,7 +120,7 @@ function CommitteeNameInput({ value, onChange, onPresetSelect }: {
           }
           if (e.key === 'Escape') setOpen(false);
         }}
-        placeholder="e.g. Human Rights Council or HRC"
+        placeholder={language === 'es' ? 'ej. Consejo de DDHH o CDDHH' : 'e.g. Human Rights Council or HRC'}
         className="w-full bg-white/70 border border-[#C8BAA8] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] focus:ring-2 focus:ring-[#1B3828]/10 transition-all text-sm"
       />
       {open && matches.length > 0 && (
@@ -116,7 +139,7 @@ function CommitteeNameInput({ value, onChange, onPresetSelect }: {
               ) : (
                 <div className="w-[22px] h-[22px] rounded-md shrink-0" style={{ backgroundColor: 'rgba(27,56,40,0.08)' }} />
               )}
-              <span className="text-sm flex-1">{p.name}</span>
+              <span className="text-sm flex-1">{getPresetDisplayName(p.name, language)}</span>
               <span className="text-[10px] font-bold shrink-0" style={{ fontFamily: "'DM Mono', monospace", color: '#1B3828' }}>{p.acronym}</span>
               {i === 0 && <span className="text-[10px] shrink-0" style={{ color: '#9A8A78' }}>↵</span>}
             </button>
@@ -494,13 +517,13 @@ function CreatePageInner() {
                   {t('create_chair_name')} <span className="font-normal" style={{ color: '#9A8A78' }}>{t('create_optional')}</span>
                 </label>
                 <input type="text" value={chairNames[0]} onChange={(e) => setChairNames([e.target.value])}
-                  placeholder="e.g. John Smith"
+                  placeholder={language === 'es' ? 'ej. Juan Pérez' : 'e.g. John Smith'}
                   className="w-full bg-white/70 border border-[#C8BAA8] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] focus:ring-2 focus:ring-[#1B3828]/10 transition-all text-sm" />
               </div>
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wide mb-1.5" style={{ color: '#1B3828' }}>{t('create_topic')}</label>
                 <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)}
-                  placeholder="e.g. The right to education"
+                  placeholder={language === 'es' ? 'ej. El derecho a la educación' : 'e.g. The right to education'}
                   className="w-full bg-white/70 border border-[#C8BAA8] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] focus:ring-2 focus:ring-[#1B3828]/10 transition-all text-sm" />
               </div>
             </div>

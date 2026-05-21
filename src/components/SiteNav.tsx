@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import PreRegisterModal from '@/components/PreRegisterModal';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage, useT } from '@/contexts/LanguageContext';
 import { Globe } from 'lucide-react';
 
 const NAV_LINKS_CONFIG = [
@@ -24,13 +24,14 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
   const [showModal, setShowModal] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const { language, setLanguage } = useLanguage();
+  const t = useT();
   const [showLangMenu, setShowLangMenu] = useState(false);
   const navLinks = NAV_LINKS_CONFIG.map(l => ({ label: l[language], href: l.href }));
 
   return (
     <>
       <nav
-        className="relative z-20 flex items-center justify-between px-6 md:px-14 shrink-0"
+        className="relative z-20 flex items-center px-6 md:px-14 shrink-0"
         style={{ height: '72px' }}
       >
         {/* Logo */}
@@ -44,7 +45,7 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
         </Link>
 
         {/* Desktop nav links */}
-        <div className="hidden md:flex items-center">
+        <div className="hidden md:flex items-center absolute left-1/2 -translate-x-1/2">
           {navLinks.map((link, i) => {
             const active = pathname === link.href;
             const hl = hovered === link.label;
@@ -93,7 +94,7 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
         </div>
 
         {/* Language toggle */}
-        <div className="relative hidden md:block mr-3">
+        <div className="relative hidden md:block mr-3 ml-auto">
           <button
             onClick={() => setShowLangMenu((v) => !v)}
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl transition-all focus:outline-none"
@@ -116,7 +117,7 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
                   onMouseLeave={(e) => { if (language !== 'en') (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                 >
                   <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '11px', color: '#9A8A78' }}>EN</span>
-                  <span>English</span>
+                  <span>{t('settings_english')}</span>
                   {language === 'en' && <span className="ml-auto" style={{ color: '#B6871F' }}>✓</span>}
                 </button>
                 <div style={{ height: '1px', backgroundColor: '#DDD4C0' }} />
@@ -128,7 +129,7 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
                   onMouseLeave={(e) => { if (language !== 'es') (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                 >
                   <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '11px', color: '#9A8A78' }}>ES</span>
-                  <span>Español</span>
+                  <span>{t('settings_spanish')}</span>
                   {language === 'es' && <span className="ml-auto" style={{ color: '#B6871F' }}>✓</span>}
                 </button>
               </div>
