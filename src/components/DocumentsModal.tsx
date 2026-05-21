@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect, KeyboardEvent } from 'react';
 import { useT } from '@/contexts/LanguageContext';
 import { useRouter } from 'next/navigation';
 import { Committee, CommitteeDocument, DocumentType, DocumentStatus } from '@/lib/types';
+import { TranslationKey } from '@/lib/translations';
 import { getCountryByName, getFlagUrl } from '@/lib/countries';
 import { Emoji } from '@/components/Emoji';
 import { useSettingsStore } from '@/lib/settingsStore';
@@ -30,6 +31,17 @@ const STATUS_META: Record<DocumentStatus, { label: string; color: string }> = {
 const STATUS_NEXT: Partial<Record<DocumentStatus, DocumentStatus>> = {
   submitted: 'on-floor', 'on-floor': 'introduced', introduced: 'passed',
 };
+
+function getStatusLabel(status: DocumentStatus, t: (key: TranslationKey) => string): string {
+  const map: Record<DocumentStatus, string> = {
+    submitted:   t('documents_status_submitted'),
+    'on-floor':  t('documents_status_on_floor'),
+    introduced:  t('documents_status_introduced'),
+    passed:      t('documents_status_passed'),
+    failed:      t('documents_status_failed'),
+  };
+  return map[status] ?? status;
+}
 
 function StatusBadge({ status }: { status: DocumentStatus }) {
   const meta = STATUS_META[status];
@@ -104,6 +116,7 @@ function StageTimer({
   doc: CommitteeDocument; showDocument: boolean;
   onComplete: () => void; onToggleDocument: () => void; onBack: () => void;
 }) {
+  const t = useT();
   const [remaining, setRemaining] = useState(totalSeconds);
   const [running, setRunning] = useState(false);
   const [started, setStarted] = useState(false);
@@ -167,7 +180,7 @@ function StageTimer({
               style={{ backgroundColor: showDocument ? '#1B3828' : 'transparent', color: showDocument ? 'white' : '#6A5A4A', border: showDocument ? 'none' : '1px solid #DDD4C0', fontFamily: "'Outfit', sans-serif" }}
               onMouseEnter={(e) => { if (!showDocument) { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; (e.currentTarget as HTMLElement).style.color = '#1B3828'; } }}
               onMouseLeave={(e) => { if (!showDocument) { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; (e.currentTarget as HTMLElement).style.color = '#6A5A4A'; } }}>
-              {showDocument ? 'HIDE DOC' : 'SHOW DOC'}
+              {showDocument ? t('documents_hide_doc') : t('documents_show_doc')}
             </button>
             <button onClick={onComplete}
               className="w-10 h-10 rounded-xl font-bold transition-colors focus:outline-none flex items-center justify-center"
@@ -226,6 +239,7 @@ function DocumentVote({ doc, committee, onDone, onStatusChange }: {
   doc: CommitteeDocument; committee: Committee;
   onDone: () => void; onStatusChange: (docId: string, status: DocumentStatus) => void;
 }) {
+  const t = useT();
   const router = useRouter();
   const present = committee.delegates.filter((d) => d.status !== 'absent').length;
   const [forVotes, setFor] = useState(0);
@@ -292,20 +306,20 @@ function DocumentVote({ doc, committee, onDone, onStatusChange }: {
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center px-8 py-12 text-center">
-      <p className="text-xs font-mono tracking-widest mb-2 text-[#9A8A78]">{doc.docCode} · VOTE</p>
+      <p className="text-xs font-mono tracking-widest mb-2 text-[#9A8A78]">{doc.docCode} · {t('documents_vote_label')}</p>
       <h2 className="text-2xl font-black text-[#1C1410] mb-1">{doc.title}</h2>
-      <p className="text-sm text-[#6A5A4A] mb-8">Needs {needed} of {present} in favour to pass</p>
+      <p className="text-sm text-[#6A5A4A] mb-8">{t('documents_vote_needs').replace('{needed}', String(needed)).replace('{present}', String(present))}</p>
       {result ? (
         <>
           <div className={`w-full max-w-sm px-8 py-10 rounded-2xl ${result === 'passed' ? 'bg-green-950/40 border border-green-800/40' : 'bg-red-950/40 border border-red-800/40'}`}>
-            <p className={`text-4xl font-black mb-2 ${result === 'passed' ? 'text-green-400' : 'text-red-400'}`}>{result === 'passed' ? '✓ PASSED' : '✗ FAILED'}</p>
-            <p className="text-sm text-[#6A5A4A]">{forVotes} for · {against} against · {abstain} abstain</p>
-            <button onClick={onDone} className="mt-6 px-8 py-3 rounded-xl font-bold bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#1C1410] transition-colors">← Back to Documents</button>
+            <p className={`text-4xl font-black mb-2 ${result === 'passed' ? 'text-green-400' : 'text-red-400'}`}>{result === 'passed' ? t('documents_vote_passed') : t('documents_vote_failed')}</p>
+            <p className="text-sm text-[#6A5A4A]">{forVotes} {t('documents_vote_result_for')} · {against} {t('documents_vote_result_against')} · {abstain} {t('documents_vote_result_abstain')}</p>
+            <button onClick={onDone} className="mt-6 px-8 py-3 rounded-xl font-bold bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#1C1410] transition-colors">{t('documents_back_to_documents')}</button>
           </div>
           <button
             onClick={() => setShowProceedPanel(true)}
             className="mt-6 text-sm text-[#1C1410]/40 hover:text-[#1C1410]/70 transition-colors">
-            Click to proceed with Session.
+            {t('documents_proceed')}
           </button>
 
           {/* Proceed with Session panel */}
@@ -326,7 +340,7 @@ function DocumentVote({ doc, committee, onDone, onStatusChange }: {
                       type="text"
                       value={suspendProposer}
                       onChange={(e) => setSuspendProposer(e.target.value)}
-                      placeholder="Country name…"
+                      placeholder={t('documents_country_placeholder')}
                       className="w-full bg-[#F6F1E9] border border-[#DDD4C0] focus:border-[#1B3828] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none text-sm transition-colors"
                     />
                   </div>
@@ -350,9 +364,9 @@ function DocumentVote({ doc, committee, onDone, onStatusChange }: {
       ) : (
         <div className="w-full max-w-sm space-y-4">
           {[
-            { label: 'In Favour', value: forVotes, set: setFor, color: 'text-green-400' },
-            { label: 'Against', value: against, set: setAgainst, color: 'text-red-400' },
-            { label: 'Abstain', value: abstain, set: setAbstain, color: 'text-yellow-400' },
+            { label: t('documents_in_favour'), value: forVotes, set: setFor, color: 'text-green-400' },
+            { label: t('documents_against'), value: against, set: setAgainst, color: 'text-red-400' },
+            { label: t('documents_abstain'), value: abstain, set: setAbstain, color: 'text-yellow-400' },
           ].map(({ label, value, set, color }) => (
             <div key={label} className="flex items-center justify-between bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl px-4 py-3">
               <span className={`font-bold text-sm ${color}`}>{label}</span>
@@ -375,6 +389,7 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
   committee: Committee; type: DocumentType; onDone: () => void;
   onDocumentAdded: (doc: CommitteeDocument) => void;
 }) {
+  const t = useT();
   const { getSettings } = useSettingsStore();
   const settings = getSettings(committee.code);
   const existingCount = (committee.documents ?? []).filter((d) => d.type === type).length;
@@ -417,7 +432,7 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
       <div className="flex flex-col items-center gap-1 relative">
         <button onClick={onDone} className="absolute left-0 top-1/2 -translate-y-1/2 text-sm transition-colors focus:outline-none" style={{ color: '#9A8A78' }}
           onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#1C1410'; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}>← Back</button>
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}>{t('documents_back')}</button>
         <h2 className="text-xl font-black text-center uppercase tracking-wide" style={{ color: '#1B3828' }}>
           {type === 'working-paper' ? 'SUBMIT WORKING PAPER' : 'SUBMIT DRAFT RESOLUTION'}
         </h2>
@@ -462,7 +477,7 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
       )}
       <button onClick={handleSubmit} disabled={!canSubmit}
         className="w-full bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white py-3.5 rounded-xl font-bold transition-colors">
-        {limitReached ? `Limit reached (${existingCount}/${limit})` : 'Submit Document'}
+        {limitReached ? t('documents_limit_reached').replace('{current}', String(existingCount)).replace('{limit}', String(limit)) : t('documents_submit_document')}
       </button>
     </div>
   );
@@ -490,9 +505,9 @@ function TimingSetup({ doc, onStart, onSkip }: {
 
       <div className="w-full max-w-sm space-y-4">
         {[
-          { key: 'reading', label: 'READING TIME', value: readingMins, set: setReadingMins, note: 'Delegates read the document' },
-          { key: 'presentation', label: 'PRESENTATION', value: presentationMins, set: setPresentationMins, note: 'Sponsors present the document' },
-          { key: 'qa', label: 'Q&A', value: qaMins, set: setQaMins, note: isWP ? t('documents_qa_optional') : t('documents_qa_note') },
+          { key: 'reading', label: t('documents_stage_reading'), value: readingMins, set: setReadingMins, note: t('documents_stage_note_reading') },
+          { key: 'presentation', label: t('documents_stage_presentation'), value: presentationMins, set: setPresentationMins, note: t('documents_stage_note_presentation') },
+          { key: 'qa', label: t('documents_stage_qa'), value: qaMins, set: setQaMins, note: isWP ? t('documents_qa_optional') : t('documents_qa_note') },
         ].map(({ key, label, value, set, note }) => (
           <div key={key} className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl p-4">
             <div className="flex items-center justify-between mb-1">
@@ -557,7 +572,7 @@ function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation
         <button onClick={() => onRemove(doc.id)} className="text-[#9A8A78] hover:text-red-500 transition-colors text-sm shrink-0 focus:outline-none" title="Delete">✕</button>
       </div>
       <div className="text-xs text-[#6A5A4A]"><span className="font-semibold">Sponsors: </span>{doc.sponsors.join(', ') || '—'}</div>
-      {doc.readingMinutes && <div className="text-xs flex items-center gap-1 flex-wrap" style={{ color: '#1C1410' }}>{doc.readingMinutes}m reading{doc.presentationMinutes ? ` · ${doc.presentationMinutes}m presentation` : ''}{doc.qaMinutes ? ` · ${doc.qaMinutes}m Q&A` : ''}</div>}
+      {doc.readingMinutes && <div className="text-xs flex items-center gap-1 flex-wrap" style={{ color: '#1C1410' }}>{t('documents_reading_summary').replace('{r}', String(doc.readingMinutes))}{doc.presentationMinutes ? ` · ${t('documents_presentation_summary').replace('{p}', String(doc.presentationMinutes))}` : ''}{doc.qaMinutes ? ` · ${t('documents_qa_summary').replace('{q}', String(doc.qaMinutes))}` : ''}</div>}
       {doc.fileUrl && doc.fileName && (
         <div className="text-xs space-y-2">
           <button onClick={() => setShowPdf((v) => !v)} className="transition-colors focus:outline-none" style={{ color: '#1B3828' }}
@@ -581,7 +596,7 @@ function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation
       <div className="flex gap-2 pt-1">
         {nextStatus && doc.status !== 'passed' && doc.status !== 'failed' && doc.status !== 'introduced' && (
           <button onClick={handleAdvance} className="flex-1 bg-[#1B3828] hover:bg-[#2A5A3C] text-white py-2 rounded-lg font-bold text-xs transition-colors">
-            {needsPresentation ? t('documents_introduce') + ' →' : `Advance → ${STATUS_META[nextStatus].label}`}
+            {needsPresentation ? t('documents_introduce') + ' →' : `${t('documents_advance')}${getStatusLabel(nextStatus, t)}`}
           </button>
         )}
       </div>
@@ -689,7 +704,7 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate }
             <span className="text-sm font-bold text-[#1C1410]">{activeDoc.docCode}</span>
             {['reading', 'presentation', 'qa'].map((s) => (
               <span key={s} className={`text-xs px-2 py-0.5 rounded-full font-bold`} style={{ backgroundColor: stage === s ? '#1B3828' : '#DDD4C0', color: stage === s ? '#EED98A' : '#9A8A78', fontFamily: "'DM Mono', monospace" }}>
-                {s === 'reading' ? 'READING' : s === 'presentation' ? 'PRESENTATION' : 'Q&A'}
+                {s === 'reading' ? t('documents_stage_reading_short') : s === 'presentation' ? t('documents_stage_presentation') : t('documents_stage_qa')}
               </span>
             ))}
           </div>
@@ -697,7 +712,7 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate }
         </div>
 
         {stage === 'reading' && timings.reading > 0 && (
-          <StageTimer label="READING TIME" color="text-[#1B3828]"
+          <StageTimer label={t('documents_stage_reading')} color="text-[#1B3828]"
             totalSeconds={timings.reading * 60} doc={activeDoc}
             showDocument={showDocContent}
             onComplete={() => advanceFromStage('reading')}
@@ -705,7 +720,7 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate }
             onBack={() => setStage('setup')} />
         )}
         {stage === 'presentation' && timings.presentation > 0 && (
-          <StageTimer label="PRESENTATION" color="text-[#1B3828]"
+          <StageTimer label={t('documents_stage_presentation')} color="text-[#1B3828]"
             totalSeconds={timings.presentation * 60} doc={activeDoc}
             showDocument={showDocContent}
             onComplete={() => advanceFromStage('presentation')}
@@ -713,7 +728,7 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate }
             onBack={() => setStage('reading')} />
         )}
         {stage === 'qa' && timings.qa > 0 && (
-          <StageTimer label="Q&A" color="text-[#1B3828]"
+          <StageTimer label={t('documents_stage_qa')} color="text-[#1B3828]"
             totalSeconds={timings.qa * 60} doc={activeDoc}
             showDocument={showDocContent}
             onComplete={() => advanceFromStage('qa')}
