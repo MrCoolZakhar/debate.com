@@ -125,6 +125,7 @@ function getFlag(country: string) {
 function VoteScale({ forCount, againstCount, totalVoted }: {
   forCount: number; againstCount: number; totalVoted: number;
 }) {
+  const t = useT();
   const forPct = totalVoted > 0 ? (forCount / totalVoted) * 50 : 0;
   const againstPct = totalVoted > 0 ? (againstCount / totalVoted) * 50 : 0;
   return (
@@ -141,10 +142,37 @@ function VoteScale({ forCount, againstCount, totalVoted }: {
         <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-[#9A8A78] -translate-x-px" />
       </div>
       <div className="flex justify-between mt-1.5 text-xs font-bold">
-        <span className="text-red-400">← {againstCount} Against</span>
-        <span className="text-[#9A8A78] text-[10px] font-normal">{totalVoted} voted</span>
-        <span className="text-green-400">{forCount} For →</span>
+        <span className="text-red-400">{t('voting_against_bar').replace('{n}', String(againstCount))}</span>
+        <span className="text-[#9A8A78] text-[10px] font-normal">{t('voting_voted_count').replace('{n}', String(totalVoted))}</span>
+        <span className="text-green-400">{t('voting_for_bar').replace('{n}', String(forCount))}</span>
       </div>
+    </div>
+  );
+}
+
+function GavelLoader() {
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center gap-4" style={{ backgroundColor: '#EDE7D8' }}>
+      <style>{`
+        @keyframes gavel-strike {
+          0%   { transform: rotate(-30deg); }
+          35%  { transform: rotate(15deg); }
+          50%  { transform: rotate(10deg); }
+          65%  { transform: rotate(15deg); }
+          100% { transform: rotate(-30deg); }
+        }
+        .gavel-anim {
+          animation: gavel-strike 1s ease-in-out infinite;
+          transform-origin: 85% 85%;
+        }
+      `}</style>
+      <svg className="gavel-anim" width="72" height="72" viewBox="0 0 72 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="38" y="38" width="8" height="28" rx="3" transform="rotate(-45 38 38)" fill="#1B3828" />
+        <rect x="8" y="14" width="36" height="16" rx="5" transform="rotate(-45 8 14)" fill="#B6871F" />
+        <rect x="10" y="16" width="36" height="7" rx="3" transform="rotate(-45 10 16)" fill="#6A5A4A" opacity="0.4" />
+        <circle cx="56" cy="56" r="3" fill="#1B3828" opacity="0.5" />
+      </svg>
+      <p className="text-[#9A8A78] text-sm font-mono tracking-widest">LOADING…</p>
     </div>
   );
 }
@@ -218,11 +246,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   }, [rightsIndex, rightsTimerLimit]);
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-[#F6F1E9] flex items-center justify-center">
-        <img src="/loading.gif" alt="Loading..." className="w-24 h-24 object-contain" />
-      </div>
-    );
+    return <GavelLoader />;
   }
 
   if (!committee) {
@@ -481,7 +505,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
           onClick={() => setSelectedDocId(null)}
           className="text-xs text-[#9A8A78] hover:text-[#6A5A4A] transition-colors shrink-0"
         >
-          ← DRs
+          {t('voting_back_drs')}
         </button>
       </Header>
 
@@ -568,7 +592,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
 
           {/* Upcoming voters — fixed height, invisible when empty so layout never shifts */}
           <div className={`mt-4 w-full max-w-2xl h-[110px] shrink-0 ${upcomingDelegates.length === 0 ? 'invisible' : ''}`}>
-            <p className="text-[10px] text-[#9A8A78] font-mono text-center mb-2 tracking-widest">UP NEXT</p>
+            <p className="text-[10px] text-[#9A8A78] font-mono text-center mb-2 tracking-widest">{t('voting_up_next')}</p>
             <div className="flex items-center justify-center gap-4 h-[80px]">
               {upcomingDelegates.map((d, i) => {
                 const qf = getCountryByName(d.country);
@@ -599,9 +623,8 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       {/* ── All voted — proceed screen ── */}
       {phase === 'voting' && !currentDelegate && (
         <div className="flex-1 flex flex-col items-center justify-center px-8 gap-6">
-          <Emoji size="3.75rem">🗳️</Emoji>
-          <h2 className="text-3xl font-black text-[#1C1410]">
-            All {presentDelegates.length} delegates have voted
+          <h2 className="text-4xl font-black text-[#1C1410]">
+            {t('voting_all_voted').replace('{n}', String(presentDelegates.length))}
           </h2>
           <div className="flex gap-10 text-center">
             <div>
@@ -671,7 +694,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
               {orderedRights[rightsIndex].country}
             </h1>
             <p className="text-amber-400 font-semibold">
-              {orderedRights[rightsIndex].choice === 'for-rights' ? '★ In Favour with Rights' : '★ Against with Rights'}
+              {orderedRights[rightsIndex].choice === 'for-rights' ? t('voting_rights_for') : t('voting_rights_against')}
             </p>
             {/* Rights speaker countdown timer */}
             <div className={`text-6xl font-black font-mono mt-4 tabular-nums ${rightsSpeakerTime <= 10 ? 'text-red-500' : rightsSpeakerTime <= 20 ? 'text-yellow-500' : 'text-[#1C1410]'}`}>
@@ -682,7 +705,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                 onClick={() => setRightsRunning((r) => !r)}
                 className={`px-6 py-2.5 rounded-xl font-bold text-sm transition-colors ${rightsRunning ? 'bg-yellow-600 hover:bg-yellow-500 text-white' : 'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'}`}
               >
-                {rightsRunning ? '⏸ Pause' : '▶ Start'}
+                {rightsRunning ? t('voting_pause') : t('voting_start')}
               </button>
               {[30, 45, 60, 90, 120].map((s) => (
                 <button key={s} onClick={() => setRightsTimerLimit(s)}
@@ -727,7 +750,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                     isCurrent ? 'text-[#EED98A]' :
                     v.choice === 'for-rights' ? 'text-[#2A7A3C]' : 'text-[#8B2020]'
                   }`}>
-                    {isCurrent ? 'Speaking' : v.choice === 'for-rights' ? 'For w/ Rights' : 'Against w/ Rights'}
+                    {isCurrent ? t('voting_speaking') : v.choice === 'for-rights' ? t('voting_for_rights_list') : t('voting_against_rights_list')}
                   </span>
                 </div>
               );

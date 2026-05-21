@@ -218,38 +218,38 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
             <div>
               <SectionLabel>{t('settings_section_voting')}</SectionLabel>
               <SelectRow
-                label="Procedural vote threshold"
+                label={t('settings_procedural_threshold')}
                 value={s.proceduralThreshold}
                 onChange={(v) => upd('proceduralThreshold', v as CommitteeSettings['proceduralThreshold'])}
                 options={[
-                  { value: 'simple', label: 'Simple majority (1/2 + 1)' },
-                  { value: 'absolute', label: 'Absolute majority (1/2)' },
+                  { value: 'simple', label: t('settings_majority_simple') },
+                  { value: 'absolute', label: t('settings_majority_absolute') },
                 ]}
               />
               <SelectRow
-                label="Substantive vote threshold"
+                label={t('settings_substantive_threshold')}
                 value={s.substantiveThreshold}
                 onChange={(v) => upd('substantiveThreshold', v as CommitteeSettings['substantiveThreshold'])}
                 options={[
-                  { value: 'simple', label: 'Simple majority (1/2 + 1)' },
-                  { value: 'supermajority-2-3', label: '2/3 Supermajority' },
-                  { value: 'consensus', label: 'Consensus' },
+                  { value: 'simple', label: t('settings_majority_simple') },
+                  { value: 'supermajority-2-3', label: t('settings_majority_supermajority') },
+                  { value: 'consensus', label: t('settings_majority_consensus') },
                 ]}
               />
               <SelectRow
-                label="Amendment vote threshold"
+                label={t('settings_amendment_threshold')}
                 value={s.amendmentThreshold}
                 onChange={(v) => upd('amendmentThreshold', v as CommitteeSettings['amendmentThreshold'])}
                 options={[
-                  { value: 'simple', label: 'Simple majority (1/2 + 1)' },
-                  { value: 'supermajority-2-3', label: '2/3 Supermajority' },
+                  { value: 'simple', label: t('settings_majority_simple') },
+                  { value: 'supermajority-2-3', label: t('settings_majority_supermajority') },
                 ]}
               />
 
               <SectionLabel>{t('settings_section_abstentions')}</SectionLabel>
               <Toggle
-                label="Allow abstentions on substantive votes"
-                note="Abstentions are excluded from the denominator when calculating the threshold."
+                label={t('settings_allow_abstentions_label')}
+                note={t('settings_allow_abstentions_note')}
                 value={s.allowAbstentions}
                 onChange={(v) => upd('allowAbstentions', v)}
               />
@@ -257,9 +257,9 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
               <SectionLabel>{t('settings_section_veto')}</SectionLabel>
               <div className="space-y-3 py-3" style={{ borderBottom: '1px solid #DDD4C0' }}>
                 {([
-                  { id: 'none', label: 'No veto power', desc: 'Standard majority rules apply' },
-                  { id: 'p5', label: 'P5 veto power', desc: 'China, France, Russia, UK, USA each hold an individual veto. A single No defeats any resolution.' },
-                  { id: 'unanimous', label: 'Unanimous decision required', desc: 'All present-and-voting delegations must vote Yes for a resolution to pass.' },
+                  { id: 'none', label: t('settings_veto_none_label'), desc: t('settings_veto_none_desc') },
+                  { id: 'p5', label: t('settings_veto_p5_label'), desc: t('settings_veto_p5_desc') },
+                  { id: 'unanimous', label: t('settings_veto_unanimous_label'), desc: t('settings_veto_unanimous_desc') },
                 ] as const).map((option) => (
                   <label key={option.id} className="flex items-start gap-3 cursor-pointer" onClick={() => upd('vetoMode', option.id)}>
                     <div className="mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors"
@@ -276,23 +276,23 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
 
               {s.vetoMode === 'p5' && (
                 <div className="mt-2 p-3 rounded-xl" style={{ backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0' }}>
-                  <p className="text-xs font-semibold mb-1" style={{ color: '#1B3828' }}>P5 Delegations</p>
+                  <p className="text-xs font-semibold mb-1" style={{ color: '#1B3828' }}>{t('settings_p5_delegations')}</p>
                   <p className="text-xs font-mono" style={{ color: '#1C1410' }}>{s.p5Delegations.join(' · ')}</p>
-                  <p className="text-xs mt-1" style={{ color: '#9A8A78' }}>These are the permanent veto-holding delegations. A single veto vote Against defeats any substantive resolution.</p>
+                  <p className="text-xs mt-1" style={{ color: '#9A8A78' }}>{t('settings_p5_note')}</p>
                 </div>
               )}
 
               <SectionLabel>{t('settings_section_quorum')}</SectionLabel>
               <SelectRow
-                label="Quorum threshold"
-                note="Minimum delegates present for formal business (motions, voting) to proceed."
+                label={t('settings_quorum_label')}
+                note={t('settings_quorum_note')}
                 value={s.quorumThreshold}
                 onChange={(v) => upd('quorumThreshold', v as CommitteeSettings['quorumThreshold'])}
                 options={[
-                  { value: 'none', label: 'No quorum required' },
-                  { value: '1-4', label: '1/4 of total delegations' },
-                  { value: '1-3', label: '1/3 of total delegations' },
-                  { value: '1-2', label: '1/2 of total delegations' },
+                  { value: 'none', label: t('settings_quorum_none') },
+                  { value: '1-4', label: t('settings_quorum_1_4') },
+                  { value: '1-3', label: t('settings_quorum_1_3') },
+                  { value: '1-2', label: t('settings_quorum_1_2') },
                 ]}
               />
             </div>
@@ -302,24 +302,24 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
           {tab === 'motions' && (
             <div>
               <SectionLabel>{t('settings_section_motions')}</SectionLabel>
-              <p className="text-xs mb-3 leading-snug" style={{ color: '#9A8A78' }}>Disabled motion types are hidden from the delegate motion-request interface immediately.</p>
+              <p className="text-xs mb-3 leading-snug" style={{ color: '#9A8A78' }}>{t('settings_motions_disabled_note')}</p>
               <Toggle
-                label="Moderated caucus"
+                label={t('settings_motion_moderated')}
                 value={s.motionModeratedCaucus}
                 onChange={(v) => upd('motionModeratedCaucus', v)}
               />
               <Toggle
-                label="Unmoderated caucus"
+                label={t('settings_motion_unmoderated')}
                 value={s.motionUnmoderatedCaucus}
                 onChange={(v) => upd('motionUnmoderatedCaucus', v)}
               />
               <Toggle
-                label="Committee of the Whole (CoW)"
+                label={t('settings_motion_cow')}
                 value={s.motionCoW}
                 onChange={(v) => upd('motionCoW', v)}
               />
               <Toggle
-                label="Tour de Table"
+                label={t('settings_motion_tdt')}
                 value={s.motionTourDeTable}
                 onChange={(v) => upd('motionTourDeTable', v)}
               />
@@ -331,9 +331,9 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
             <div>
               <SectionLabel>{t('settings_section_codes')}</SectionLabel>
               <div className="py-3" style={{ borderBottom: '1px solid #DDD4C0' }}>
-                <div className="text-sm font-semibold mb-0.5" style={{ color: '#1C1410' }}>Custom session ID</div>
+                <div className="text-sm font-semibold mb-0.5" style={{ color: '#1C1410' }}>{t('settings_custom_id_label')}</div>
                 <div className="text-xs mb-2 leading-snug" style={{ color: '#9A8A78' }}>
-                  Human-readable identifier (e.g. UNSC-2026). Delegates re-joining will need the new ID.
+                  {t('settings_custom_id_note')}
                   {t('settings_code_hint')}
                 </div>
                 <div className="flex gap-2">
@@ -368,14 +368,14 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
                 {codeError && <p className="text-red-400 text-xs mt-1.5">{codeError}</p>}
               </div>
               <Toggle
-                label="Separate chair join code"
-                note="Chairs join with a unique code separate from delegates. The chair code is shown below."
+                label={t('settings_separate_chair_code_label')}
+                note={t('settings_separate_chair_code_note')}
                 value={s.separateChairCode}
                 onChange={(v) => upd('separateChairCode', v)}
               />
               {s.separateChairCode && (
                 <div className="py-3" style={{ borderBottom: '1px solid #DDD4C0' }}>
-                  <div className="text-xs mb-1.5" style={{ color: '#9A8A78' }}>Chair join code</div>
+                  <div className="text-xs mb-1.5" style={{ color: '#9A8A78' }}>{t('settings_chair_code_label')}</div>
                   <div className="flex items-center gap-2">
                     <span className="flex-1 rounded-lg px-3 py-2 text-sm font-mono tracking-wider" style={{ backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0', color: '#1B3828' }}>
                       {chairCode}
@@ -387,42 +387,42 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
                       onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
                       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
                     >
-                      COPY
+                      {t('settings_copy')}
                     </button>
                   </div>
                 </div>
               )}
               <Toggle
-                label="Chair must approve delegate entry"
-                note="Joining delegates are held in a waiting room and the chair must admit them individually."
+                label={t('settings_chair_approval_label')}
+                note={t('settings_chair_approval_note')}
                 value={s.requireChairApproval}
                 onChange={(v) => upd('requireChairApproval', v)}
               />
 
               <SectionLabel>{t('settings_section_chair_resign')}</SectionLabel>
               <Toggle
-                label="Allow multiple co-chairs simultaneously"
-                note="Permits more than one chair account to be active in the same session at the same time."
+                label={t('settings_multi_chairs_label')}
+                note={t('settings_multi_chairs_note')}
                 value={s.allowMultipleCoChairs}
                 onChange={(v) => upd('allowMultipleCoChairs', v)}
               />
               <Toggle
-                label="Chair session persistence"
-                note="Keeps chair signed in across browser refreshes and device switches without re-authenticating."
+                label={t('settings_chair_persistence_label')}
+                note={t('settings_chair_persistence_note')}
                 value={s.chairSessionPersistence}
                 onChange={(v) => upd('chairSessionPersistence', v)}
               />
               <Toggle
-                label="Chair takeover protection"
-                note="New device sign-in alerts the existing session with a 30-second window to confirm before logout."
+                label={t('settings_chair_takeover_label')}
+                note={t('settings_chair_takeover_note')}
                 value={s.chairTakeoverProtection}
                 onChange={(v) => upd('chairTakeoverProtection', v)}
               />
 
               <SectionLabel>{t('settings_section_delegate_identity')}</SectionLabel>
               <Toggle
-                label="Require delegation name at join"
-                note="Delegates must specify their country or bloc name before entering the session."
+                label={t('settings_require_delegation_label')}
+                note={t('settings_require_delegation_note')}
                 value={s.requireDelegationName}
                 onChange={(v) => upd('requireDelegationName', v)}
               />
@@ -455,10 +455,10 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
             <div>
               <SectionLabel>{t('settings_section_leaderboard')}</SectionLabel>
               <p className="text-xs mb-3 leading-snug" style={{ color: '#9A8A78' }}>
-                Scores: +5 attendance · +10 per WP sponsored · +20 per DR sponsored · +1 per 10s speaking · +10 per GSL speech · +8 per caucus speech
+                {t('settings_points_scoring_note')}
               </p>
               {committee.delegates.length === 0 && (
-                <p className="text-xs" style={{ color: '#9A8A78' }}>No delegates in this session yet.</p>
+                <p className="text-xs" style={{ color: '#9A8A78' }}>{t('settings_points_no_delegates')}</p>
               )}
               {[...committee.delegates]
                 .map((d) => ({ delegate: d, score: computeScore(d.country) }))
@@ -479,7 +479,7 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
                         <span className="text-lg leading-none shrink-0">{flag}</span>
                         <span className="flex-1 text-sm font-semibold truncate" style={{ color: '#1C1410' }}>{d.country}</span>
                         <span className="text-xs font-mono px-2 py-0.5 rounded-full shrink-0" style={{ backgroundColor: d.status === 'absent' ? '#DDD4C0' : '#1B3828', color: d.status === 'absent' ? '#9A8A78' : '#EED98A' }}>
-                          {score.total} pts
+                          {t('settings_points_pts').replace('{n}', String(score.total))}
                         </span>
                         <span className="text-xs shrink-0" style={{ color: '#9A8A78' }}>{isExpanded ? '▲' : '▼'}</span>
                       </button>
@@ -487,15 +487,15 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
                       {isExpanded && (
                         <div className="mx-1 mb-3 p-3 rounded-xl space-y-3" style={{ backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0' }}>
                           <div>
-                            <p className="text-[10px] font-mono font-bold tracking-widest mb-1.5" style={{ color: '#1B3828' }}>SCORE BREAKDOWN</p>
+                            <p className="text-[10px] font-mono font-bold tracking-widest mb-1.5" style={{ color: '#1B3828' }}>{t('settings_points_score_breakdown')}</p>
                             <div className="space-y-1">
                               {[
-                                { label: 'Attendance', value: score.attendancePoints },
-                                { label: 'Working papers sponsored', value: score.wpPoints },
-                                { label: 'Draft resolutions sponsored', value: score.drPoints },
-                                { label: 'Speaking time', value: score.speakingPoints },
-                                { label: `GSL speeches (${score.gslSpeeches}×)`, value: score.gslPoints },
-                                { label: `Caucus speeches (${score.caucusSpeeches}×)`, value: score.caucusPoints },
+                                { label: t('settings_points_attendance'), value: score.attendancePoints },
+                                { label: t('settings_points_wp_sponsored'), value: score.wpPoints },
+                                { label: t('settings_points_dr_sponsored'), value: score.drPoints },
+                                { label: t('settings_points_speaking_time'), value: score.speakingPoints },
+                                { label: t('settings_points_gsl_speeches').replace('{n}', String(score.gslSpeeches)), value: score.gslPoints },
+                                { label: t('settings_points_caucus_speeches').replace('{n}', String(score.caucusSpeeches)), value: score.caucusPoints },
                               ].map(({ label, value }) => (
                                 <div key={label} className="flex justify-between text-xs">
                                   <span style={{ color: '#6A5A4A' }}>{label}</span>
@@ -503,7 +503,7 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
                                 </div>
                               ))}
                               <div className="flex justify-between text-xs pt-1 mt-1" style={{ borderTop: '1px solid #DDD4C0' }}>
-                                <span className="font-semibold" style={{ color: '#1B3828' }}>Total</span>
+                                <span className="font-semibold" style={{ color: '#1B3828' }}>{t('settings_points_total')}</span>
                                 <span className="font-mono font-black" style={{ color: '#1B3828' }}>+{score.total}</span>
                               </div>
                             </div>
@@ -511,7 +511,7 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
 
                           {score.logs.length > 0 && (
                             <div>
-                              <p className="text-[10px] font-mono font-bold tracking-widest mb-1.5" style={{ color: '#1B3828' }}>SPEAKING HISTORY</p>
+                              <p className="text-[10px] font-mono font-bold tracking-widest mb-1.5" style={{ color: '#1B3828' }}>{t('settings_points_speaking_history')}</p>
                               <div className="space-y-1">
                                 {score.logs.map((entry, i) => (
                                   <div key={i} className="text-xs">
@@ -524,12 +524,12 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
                           )}
 
                           <div>
-                            <p className="text-[10px] font-mono font-bold tracking-widest mb-1.5" style={{ color: '#1B3828' }}>TIPS</p>
+                            <p className="text-[10px] font-mono font-bold tracking-widest mb-1.5" style={{ color: '#1B3828' }}>{t('settings_points_tips')}</p>
                             <div className="space-y-1">
-                              {score.gslSpeeches === 0 && <p className="text-xs" style={{ color: '#6A5A4A' }}>• Get on the General Speakers&apos; List</p>}
-                              {score.caucusSpeeches === 0 && <p className="text-xs" style={{ color: '#6A5A4A' }}>• Request a moderated caucus and speak</p>}
-                              {score.wpPoints === 0 && score.drPoints === 0 && <p className="text-xs" style={{ color: '#6A5A4A' }}>• Submit a working paper or draft resolution</p>}
-                              {score.gslSpeeches > 0 && score.caucusSpeeches > 0 && (score.wpPoints > 0 || score.drPoints > 0) && <p className="text-xs" style={{ color: '#3D7A52' }}>Great engagement — keep it up!</p>}
+                              {score.gslSpeeches === 0 && <p className="text-xs" style={{ color: '#6A5A4A' }}>{t('settings_points_tip_gsl')}</p>}
+                              {score.caucusSpeeches === 0 && <p className="text-xs" style={{ color: '#6A5A4A' }}>{t('settings_points_tip_caucus')}</p>}
+                              {score.wpPoints === 0 && score.drPoints === 0 && <p className="text-xs" style={{ color: '#6A5A4A' }}>{t('settings_points_tip_paper')}</p>}
+                              {score.gslSpeeches > 0 && score.caucusSpeeches > 0 && (score.wpPoints > 0 || score.drPoints > 0) && <p className="text-xs" style={{ color: '#3D7A52' }}>{t('settings_points_tip_great')}</p>}
                             </div>
                           </div>
                         </div>
@@ -542,7 +542,7 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
         </div>
 
         <div className="px-5 py-3 shrink-0" style={{ borderTop: '1px solid #DDD4C0' }}>
-          <p className="text-[10px] text-center font-mono" style={{ color: '#9A8A78' }}>Changes apply instantly · No save required</p>
+          <p className="text-[10px] text-center font-mono" style={{ color: '#9A8A78' }}>{t('settings_changes_apply')}</p>
         </div>
       </div>
     </div>
