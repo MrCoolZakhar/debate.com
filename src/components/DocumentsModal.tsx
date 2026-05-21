@@ -44,8 +44,9 @@ function getStatusLabel(status: DocumentStatus, t: (key: TranslationKey) => stri
 }
 
 function StatusBadge({ status }: { status: DocumentStatus }) {
+  const t = useT();
   const meta = STATUS_META[status];
-  return <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${meta.color}`}>{meta.label}</span>;
+  return <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${meta.color}`}>{getStatusLabel(status, t)}</span>;
 }
 
 function CountryChip({ country, onRemove }: { country: string; onRemove: () => void }) {
@@ -144,7 +145,7 @@ function StageTimer({
     <div className={`flex-1 flex ${showDocument ? 'flex-row items-stretch' : 'flex-col items-center justify-center px-8 py-8 text-center'}`}>
       <div className={`flex flex-col items-center justify-center text-center ${showDocument ? 'w-1/2 px-6 py-8 border-r border-[#DDD4C0]' : 'w-full px-8 py-8'}`}>
       <p className="text-xs font-mono tracking-widest mb-2" style={{ color: '#9A8A78' }}>
-        {doc.type === 'working-paper' ? 'WORKING PAPER' : 'DRAFT RESOLUTION'} · {doc.docCode}
+        {doc.type === 'working-paper' ? t('documents_working_paper_type') : t('documents_draft_resolution_type')} · {doc.docCode}
       </p>
       <h2 className="text-2xl font-black mb-1" style={{ color: '#1C1410' }}>{doc.title}</h2>
       <p className="text-xs font-black mb-6 mt-1 tracking-widest uppercase" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>{label}</p>
@@ -174,7 +175,7 @@ function StageTimer({
                   <span className="flex gap-[3px]"><span className="w-[3px] h-[13px] rounded-sm bg-white inline-block" /><span className="w-[3px] h-[13px] rounded-sm bg-white inline-block" /></span>
                   PAUSE
                 </span>
-              ) : started ? '▶ RESUME' : '▶ START'}
+              ) : started ? t('documents_resume_btn') : `▶ ${t('documents_start_btn').replace(' →', '')}`}
             </button>
             <button onClick={onToggleDocument}
               className="px-5 py-3 rounded-xl font-bold transition-colors focus:outline-none text-sm"
@@ -195,12 +196,12 @@ function StageTimer({
         </>
       ) : (
         <>
-          <p className="text-lg mb-8" style={{ color: '#6A5A4A' }}>{label} complete.</p>
+          <p className="text-lg mb-8" style={{ color: '#6A5A4A' }}>{t('documents_stage_complete').replace('{stage}', String(label))}</p>
           <button onClick={onComplete}
             className="px-10 py-4 rounded-2xl font-black text-lg transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828', color: 'white' }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}>
-            CONTINUE →
+            {t('documents_continue_btn')}
           </button>
         </>
       )}
@@ -498,7 +499,7 @@ function TimingSetup({ doc, onStart, onSkip }: {
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center px-8 py-12">
-      <p className="text-xs font-mono tracking-widest mb-2 text-[#9A8A78]">{doc.docCode} · SET UP TIMERS</p>
+      <p className="text-xs font-mono tracking-widest mb-2 text-[#9A8A78]">{doc.docCode} · {t('documents_setup_timers')}</p>
       <h2 className="text-2xl font-black text-[#1C1410] mb-1">{doc.title}</h2>
       <p className="text-sm text-[#6A5A4A] mb-8">
         {isWP ? t('documents_working_paper_flow') : t('documents_dr_flow')}
@@ -529,11 +530,11 @@ function TimingSetup({ doc, onStart, onSkip }: {
         <div className="flex gap-3 pt-2">
           <button onClick={() => onStart(readingMins, presentationMins, qaMins)}
             className="flex-1 bg-[#1B3828] hover:bg-[#2A5A3C] text-white py-3.5 rounded-2xl font-black transition-colors focus:outline-none" style={{ letterSpacing: '0.05em' }}>
-            START →
+            {t('documents_start_btn')}
           </button>
           <button onClick={onSkip}
             className="px-6 py-3.5 rounded-2xl font-bold bg-transparent border border-[#DDD4C0] hover:border-[#1B3828] transition-colors focus:outline-none" style={{ color: '#6A5A4A' }}>
-            SKIP
+            {t('documents_skip_btn')}
           </button>
         </div>
       </div>
@@ -572,7 +573,7 @@ function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation
         </div>
         <button onClick={() => onRemove(doc.id)} className="text-[#9A8A78] hover:text-red-500 transition-colors text-sm shrink-0 focus:outline-none" title="Delete">✕</button>
       </div>
-      <div className="text-xs text-[#6A5A4A]"><span className="font-semibold">Sponsors: </span>{doc.sponsors.join(', ') || '—'}</div>
+      <div className="text-xs text-[#6A5A4A]"><span className="font-semibold">{t('documents_sponsors_label_card')}: </span>{doc.sponsors.join(', ') || '—'}</div>
       {doc.readingMinutes && <div className="text-xs flex items-center gap-1 flex-wrap" style={{ color: '#1C1410' }}>{t('documents_reading_summary').replace('{r}', String(doc.readingMinutes))}{doc.presentationMinutes ? ` · ${t('documents_presentation_summary').replace('{p}', String(doc.presentationMinutes))}` : ''}{doc.qaMinutes ? ` · ${t('documents_qa_summary').replace('{q}', String(doc.qaMinutes))}` : ''}</div>}
       {doc.fileUrl && doc.fileName && (
         <div className="text-xs space-y-2">
@@ -601,7 +602,7 @@ function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation
           </button>
         )}
       </div>
-      <div className="text-xs text-[#9A8A78]">Submitted {new Date(doc.submittedAt).toLocaleDateString()}</div>
+      <div className="text-xs text-[#9A8A78]">{t('documents_submitted_date').replace('{date}', new Date(doc.submittedAt).toLocaleDateString())}</div>
     </div>
   );
 }
@@ -750,7 +751,7 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate }
     return (
       <div className="fixed inset-0 z-50 bg-[#F6F1E9] flex flex-col">
         <div className="flex items-center justify-between px-6 pt-4 pb-2 border-b border-[#DDD4C0] shrink-0">
-          <span className="text-sm font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>DOCUMENTS — INTRODUCE</span>
+          <span className="text-sm font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>{t('documents_introduce_header')}</span>
           <button onClick={() => { setStage(null); setActiveDoc(null); }} className="text-[#9A8A78] hover:text-[#1C1410] transition-colors text-xl">✕</button>
         </div>
         <TimingSetup doc={activeDoc} onStart={handleTimingConfirmed} onSkip={handleSkipToVote} />

@@ -3,6 +3,7 @@
 import { use, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { Committee, DelegateStatus } from '@/lib/types';
 import { getCountryByName, getFlagUrl } from '@/lib/countries';
 import { Emoji } from '@/components/Emoji';
@@ -46,6 +47,7 @@ function RollCallModal({
   onCycleStatus: (id: string) => void;
   onConfirm: () => void;
 }) {
+  const t = useT();
   const sorted = [...delegates].sort((a, b) => a.country.localeCompare(b.country));
   const thumbPos = (status: DelegateStatus) =>
     status === 'absent' ? 'left-[2px]' : status === 'present' ? 'left-[32px]' : 'left-[62px]';
@@ -56,9 +58,9 @@ function RollCallModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(5,4,3,0.92)', backdropFilter: 'blur(4px)' }}>
       <div className="rounded-2xl w-full max-w-md shadow-2xl flex flex-col" style={{ maxHeight: '85vh', backgroundColor: '#1B3828', border: '1px solid rgba(255,255,255,0.12)' }}>
         <div className="px-5 py-4 shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.12)' }}>
-          <h2 className="text-base font-black text-white">Roll Call</h2>
+          <h2 className="text-base font-black text-white">{t('voting_roll_call_heading')}</h2>
           <p className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.5)' }}>
-            {presentCount} of {delegates.length} delegates present — confirm before voting
+            {t('voting_roll_call_sub').replace('{present}', String(presentCount)).replace('{total}', String(delegates.length))}
           </p>
         </div>
         <div className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
@@ -105,7 +107,7 @@ function RollCallModal({
               color: presentCount > 0 ? '#1C1410' : 'rgba(255,255,255,0.4)',
             }}
           >
-            {presentCount > 0 ? `Start Voting with ${presentCount} delegates →` : 'Mark at least 1 delegate present'}
+            {presentCount > 0 ? t('voting_start_btn').replace('{n}', String(presentCount)) : t('voting_mark_present')}
           </button>
         </div>
       </div>
@@ -152,6 +154,8 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   const router = useRouter();
 
   // ── ALL hooks must be called before any early returns ──────────────────────
+  const t = useT();
+  const { language } = useLanguage();
   const getSettings = useSettingsStore((s) => s.getSettings);
   const [committee, setCommittee] = useState<Committee | null>(null);
   const [loading, setLoading] = useState(true);
@@ -374,7 +378,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
         onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
       >
-        ← Back to Session
+        {t('voting_back_to_session')}
       </button>
       <button
         onClick={() => setShowEndDebateConfirm(true)}
@@ -383,7 +387,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
         onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#A03030'; }}
         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#8B2020'; }}
       >
-        End Debate
+        {t('voting_end_debate')}
       </button>
       <button onClick={() => setShowSettings(true)} className="text-[#9A8A78] hover:text-[#1C1410] transition-colors shrink-0 text-2xl">⚙</button>
       {children}
@@ -417,7 +421,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
         <div className="flex-1 flex items-center justify-center">
           <div className="w-96 space-y-3">
             <p className="text-xs font-mono text-[#9A8A78] text-center mb-5 tracking-widest">
-              SELECT DRAFT RESOLUTION TO VOTE ON
+              {t('voting_select_dr')}
             </p>
             {allDRs.length === 0 ? (
               <p className="text-sm text-[#9A8A78] text-center py-8">No introduced draft resolutions.</p>
@@ -446,7 +450,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                     </div>
                     <span className="text-base font-bold text-[#1C1410] block">{doc.title}</span>
                     {doc.sponsors.length > 0 && (
-                      <span className="text-xs text-[#9A8A78] block mt-1">Sponsors: {doc.sponsors.join(', ')}</span>
+                      <span className="text-xs text-[#9A8A78] block mt-1">{t('voting_sponsors')}: {doc.sponsors.join(', ')}</span>
                     )}
                   </button>
                 );
@@ -523,37 +527,37 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
               onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'for')}
               className="flex-1 bg-[#2A7A3C] hover:bg-[#3D8A52] border border-[#2A7A3C] text-white font-black text-base py-6 rounded-2xl transition-colors"
             >
-              In Favour
+              {t('voting_in_favour')}
             </button>
             <button
               onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'for-rights')}
               className="flex-1 bg-[#1B5C2E] hover:bg-[#2A7A3C] border border-[#3D7A52] text-[#EED98A] font-black text-sm py-6 rounded-2xl transition-colors leading-snug"
             >
-              In Favour<br />with Rights
+              {t('voting_in_favour')}<br />{language === 'es' ? 'con Derechos' : 'with Rights'}
             </button>
             {(rollCallStatuses[currentDelegate.id] ?? currentDelegate.status) === 'present' ? (
               <button
                 onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'abstain')}
                 className="flex-1 bg-[#DDD4C0] hover:bg-[#C8BAA8] border border-[#C8BAA8] text-[#6A5A4A] font-black text-base py-6 rounded-2xl transition-colors"
               >
-                Abstain
+                {t('voting_abstain')}
               </button>
             ) : (
               <button disabled className="flex-1 bg-[#EDE7D8] border border-[#DDD4C0] text-[#9A8A78] font-black text-base py-6 rounded-2xl opacity-40 cursor-not-allowed">
-                Abstain (P+V)
+                {t('voting_abstain_pv')}
               </button>
             )}
             <button
               onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'against-rights')}
               className="flex-1 bg-[#7A2020] hover:bg-[#8B3030] border border-[#7A2020] text-[#EED98A] font-black text-sm py-6 rounded-2xl transition-colors leading-snug"
             >
-              Against<br />with Rights
+              {t('voting_against')}<br />{language === 'es' ? 'con Derechos' : 'with Rights'}
             </button>
             <button
               onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'against')}
               className="flex-1 bg-[#8B2020] hover:bg-[#A03030] border border-[#8B2020] text-white font-black text-base py-6 rounded-2xl transition-colors"
             >
-              Against
+              {t('voting_against')}
             </button>
           </div>
 
@@ -602,22 +606,22 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
           <div className="flex gap-10 text-center">
             <div>
               <div className="text-4xl font-black text-green-400">{forCount}</div>
-              <div className="text-[#6A5A4A] text-sm mt-1">For</div>
+              <div className="text-[#6A5A4A] text-sm mt-1">{t('voting_for_label')}</div>
             </div>
             <div>
               <div className="text-4xl font-black text-red-400">{againstCount}</div>
-              <div className="text-[#6A5A4A] text-sm mt-1">Against</div>
+              <div className="text-[#6A5A4A] text-sm mt-1">{t('voting_against_label')}</div>
             </div>
             {abstainCount > 0 && (
               <div>
                 <div className="text-4xl font-black text-[#6A5A4A]">{abstainCount}</div>
-                <div className="text-[#9A8A78] text-sm mt-1">Abstain</div>
+                <div className="text-[#9A8A78] text-sm mt-1">{t('voting_abstain_label')}</div>
               </div>
             )}
             {withRights.length > 0 && (
               <div>
                 <div className="text-4xl font-black text-amber-400">{withRights.length}</div>
-                <div className="text-[#6A5A4A] text-sm mt-1">w/ Rights</div>
+                <div className="text-[#6A5A4A] text-sm mt-1">{t('voting_with_rights_label')}</div>
               </div>
             )}
           </div>
@@ -627,8 +631,8 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             className="bg-[#1B3828] hover:bg-[#2A5A3C] text-white px-12 py-4 rounded-2xl font-black text-lg transition-colors mt-2"
           >
             {withRights.length > 0
-              ? `Proceed to Rights Speakers (${withRights.length}) →`
-              : 'See Final Result →'}
+              ? t('voting_proceed_rights').replace('{n}', String(withRights.length))
+              : t('voting_see_result')}
           </button>
         </div>
       )}
@@ -638,7 +642,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
         <div className="flex-1 flex flex-col items-center justify-between py-8 px-8 overflow-hidden">
           <div className="flex-1 flex flex-col items-center justify-center min-h-0">
             <p className="text-xs text-amber-400 font-mono tracking-widest mb-6">
-              RIGHTS SPEAKERS — {rightsIndex + 1} OF {orderedRights.length}
+              {t('voting_rights_header').replace('{current}', String(rightsIndex + 1)).replace('{total}', String(orderedRights.length))}
             </p>
             <div className="select-none mb-3 flex items-center justify-center">
               {(() => {
@@ -734,7 +738,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             onClick={() => { setRightsRunning(false); handleNextRightsSpeaker(); }}
             className="w-full max-w-md bg-[#1B3828] hover:bg-[#2A5A3C] text-white py-4 rounded-2xl font-black text-lg transition-colors"
           >
-            {rightsIndex + 1 < orderedRights.length ? 'Next Rights Speaker →' : 'See Final Result →'}
+            {rightsIndex + 1 < orderedRights.length ? t('voting_next_rights') : t('voting_see_result')}
           </button>
         </div>
       )}
@@ -743,7 +747,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       {phase === 'result' && (
         <div className="flex-1 flex flex-col items-center justify-center px-8 gap-6">
           <p className="text-xs font-mono text-[#9A8A78] tracking-widest uppercase">
-            Final Result — {selectedDoc.docCode}
+            {t('voting_final_result').replace('{code}', selectedDoc.docCode)}
           </p>
 
           {/* Main result bubble */}
@@ -757,7 +761,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             }}
           >
             <div className="text-6xl font-black mb-3" style={{ color: passed ? '#EED98A' : '#FFD0D0' }}>
-              {passed ? '✓ PASSED' : '✗ FAILED'}
+              {passed ? t('voting_passed') : t('voting_failed')}
             </div>
             <p className="text-xl font-bold mb-6" style={{ color: passed ? 'rgba(238,217,138,0.75)' : 'rgba(255,208,208,0.75)' }}>
               {selectedDoc.title}
@@ -765,43 +769,43 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             <div className="flex justify-center gap-10">
               <div className="text-center">
                 <div className="text-4xl font-black" style={{ color: '#6EE7A0' }}>{forCount}</div>
-                <div className="text-sm mt-1" style={{ color: passed ? 'rgba(238,217,138,0.6)' : 'rgba(255,208,208,0.6)' }}>For</div>
+                <div className="text-sm mt-1" style={{ color: passed ? 'rgba(238,217,138,0.6)' : 'rgba(255,208,208,0.6)' }}>{t('voting_for_label')}</div>
               </div>
               <div className="text-center">
                 <div className="text-4xl font-black" style={{ color: '#FCA5A5' }}>{againstCount}</div>
-                <div className="text-sm mt-1" style={{ color: passed ? 'rgba(238,217,138,0.6)' : 'rgba(255,208,208,0.6)' }}>Against</div>
+                <div className="text-sm mt-1" style={{ color: passed ? 'rgba(238,217,138,0.6)' : 'rgba(255,208,208,0.6)' }}>{t('voting_against_label')}</div>
               </div>
               {abstainCount > 0 && (
                 <div className="text-center">
                   <div className="text-4xl font-black" style={{ color: 'rgba(255,255,255,0.5)' }}>{abstainCount}</div>
-                  <div className="text-sm mt-1" style={{ color: passed ? 'rgba(238,217,138,0.6)' : 'rgba(255,208,208,0.6)' }}>Abstain</div>
+                  <div className="text-sm mt-1" style={{ color: passed ? 'rgba(238,217,138,0.6)' : 'rgba(255,208,208,0.6)' }}>{t('voting_abstain_label')}</div>
                 </div>
               )}
               {withRights.length > 0 && (
                 <div className="text-center">
                   <div className="text-4xl font-black" style={{ color: '#FCD34D' }}>{withRights.length}</div>
-                  <div className="text-sm mt-1" style={{ color: passed ? 'rgba(238,217,138,0.6)' : 'rgba(255,208,208,0.6)' }}>w/ Rights</div>
+                  <div className="text-sm mt-1" style={{ color: passed ? 'rgba(238,217,138,0.6)' : 'rgba(255,208,208,0.6)' }}>{t('voting_with_rights_label')}</div>
                 </div>
               )}
             </div>
             {p5Veto && (
               <p className="text-sm mt-4 font-semibold flex items-center gap-1 justify-center" style={{ color: '#FCA5A5' }}>
-                <Emoji size="1em">🛡️</Emoji> P5 veto exercised
+                <Emoji size="1em">🛡️</Emoji> {t('voting_p5_veto')}
               </p>
             )}
             {unanimousFail && (
               <p className="text-sm mt-4 font-semibold" style={{ color: '#FCA5A5' }}>
-                ⚠️ Unanimous vote required — one or more delegates voted against or abstained
+                {t('voting_unanimous_fail')}
               </p>
             )}
             {!p5Veto && !unanimousFail && settings.substantiveThreshold === 'supermajority-2-3' && (
               <p className="text-sm mt-3 font-semibold" style={{ color: thresholdMet ? '#6EE7A0' : '#FCA5A5' }}>
-                2/3 supermajority required · {forCount}/{totalDecisive} ({totalDecisive > 0 ? Math.round(forCount / totalDecisive * 100) : 0}%)
+                {t('voting_supermajority').replace('{for}', String(forCount)).replace('{total}', String(totalDecisive)).replace('{pct}', String(totalDecisive > 0 ? Math.round(forCount / totalDecisive * 100) : 0))}
               </p>
             )}
             {!p5Veto && !unanimousFail && settings.substantiveThreshold === 'consensus' && (
               <p className="text-sm mt-3 font-semibold" style={{ color: thresholdMet ? '#6EE7A0' : '#FCA5A5' }}>
-                Consensus required · {againstCount} voted against
+                {t('voting_consensus').replace('{against}', String(againstCount))}
               </p>
             )}
           </div>
@@ -817,7 +821,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#C8BAA8'; }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#DDD4C0'; }}
             >
-              Vote Again
+              {t('voting_vote_again')}
             </button>
             <button
               onClick={() => setSelectedDocId(null)}
@@ -826,7 +830,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
             >
-              Move to Next DR →
+              {t('voting_next_dr')}
             </button>
             <button
               onClick={() => setShowEndDebateConfirm(true)}
@@ -835,7 +839,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#A03030'; }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#8B2020'; }}
             >
-              End Debate
+              {t('voting_end_debate')}
             </button>
           </div>
         </div>
@@ -863,10 +867,10 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                 >
                   🔨
                 </div>
-                <h2 className="text-lg font-black text-[#1C1410]">End Debate?</h2>
+                <h2 className="text-lg font-black text-[#1C1410]">{t('voting_end_debate_title')}</h2>
               </div>
               <p className="text-sm text-[#6A5A4A] leading-relaxed mt-2">
-                This will permanently adjourn the committee. All delegates will be shown a session-closed screen and no further changes can be made.
+                {t('voting_end_debate_body')}
               </p>
             </div>
             {/* Buttons */}
@@ -878,7 +882,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                 onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#DDD4C0'; }}
                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#EDE7D8'; }}
               >
-                Cancel
+                {t('voting_cancel')}
               </button>
               <button
                 onClick={() => { setShowEndDebateConfirm(false); handleEndDebate(); }}
@@ -887,7 +891,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                 onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#A03030'; }}
                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#8B2020'; }}
               >
-                Yes, End Debate
+                {t('voting_confirm_end')}
               </button>
             </div>
           </div>
