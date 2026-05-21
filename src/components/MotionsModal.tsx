@@ -408,7 +408,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
                     {speakerCount !== null && (
                       <div className="mt-3 rounded-lg bg-white border border-[#DDD4C0] px-3 py-2 inline-flex items-baseline gap-1.5">
                         <span className="font-black text-xl leading-tight" style={{ color: '#1B3828' }}>{speakerCount}</span>
-                        <span className="text-sm font-semibold" style={{ color: '#6A5A4A' }}>{speakerCount === 1 ? t('motions_delegate_speak').replace('{n}', '1').replace('{s}', t('motions_delegate_singular')) : t('motions_delegate_speak').replace('{n}', String(speakerCount ?? 0)).replace('{s}', t('motions_delegate_plural'))}</span>
+                        <span className="text-sm font-semibold" style={{ color: '#6A5A4A' }}>{speakerCount === 1 ? t('motions_delegate_speak').replace('{s}', t('motions_delegate_singular')) : t('motions_delegate_speak').replace('{s}', t('motions_delegate_plural'))}</span>
                         {unusedSecs > 0 && (
                           <span className="text-xs font-semibold ml-1" style={{ color: '#B8844A' }}>{t('motions_unused_secs').replace('{n}', String(unusedSecs))}</span>
                         )}
@@ -644,7 +644,6 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
 }) {
   const t = useT();
   const { language } = useLanguage();
-  const { getSettings } = useSettingsStore();
   const DEFAULT_MOTION_NAMES_LOCALIZED = language === 'es' ? {
     moderated: 'Cáucus Moderado',
     unmoderated: 'Cáucus No Moderado',
@@ -653,7 +652,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
     suspendDebate: 'Suspender Debate',
     endDebate: 'Cerrar Debate',
   } : DEFAULT_MOTION_NAMES;
-  const motionNames = { ...DEFAULT_MOTION_NAMES_LOCALIZED, ...(getSettings(committee.code).motionNames ?? {}) };
+  const motionNames = { ...DEFAULT_MOTION_NAMES_LOCALIZED };
   const typeMeta = buildTypeMeta(motionNames);
   const pending = [...(committee.pendingMotions ?? [])].filter((m) => m.type !== ('join-request' as string)).sort((a, b) => b.disruptiveness - a.disruptiveness);
   const [view, setView] = useState<ModalView>(pending.length === 0 ? 'raise' : 'vote');

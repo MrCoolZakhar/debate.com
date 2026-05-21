@@ -513,8 +513,8 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
 // ── Unmoderated Caucus View ───────────────────────────────────────────────────
 function UnmoderatedCaucusView({ committee, setCommittee }: { committee: Committee; setCommittee: CommitteeSetter }) {
   const t = useT();
-  const { getSettings } = useSettingsStore();
-  const unmoderatedName = getSettings(committee.code).motionNames?.unmoderated ?? 'Unmoderated Caucus';
+  const { language } = useLanguage();
+  const unmoderatedName = language === 'es' ? 'Cáucus No Moderado' : 'Unmoderated Caucus';
   const [running, setRunning] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const caucus = committee.caucus!;
@@ -679,13 +679,13 @@ function ModeratedCaucusMain({
   sessionEnded: boolean;
 }) {
   const t = useT();
-  const { getSettings } = useSettingsStore();
+  const { language } = useLanguage();
   const caucus = committee.caucus!;
   const queue = committee.caucusQueue ?? [];
   const speakerTime = caucus.speakingTime;
   const isTdT = caucus.purpose?.startsWith('Tour de Table') ?? false;
   const isRoomOrderTdT = isTdT && (caucus.purpose?.includes('Room Order') ?? false);
-  const caucusTitle = isTdT ? 'TOUR DE TABLE' : (getSettings(committee.code).motionNames?.moderated ?? 'Moderated Caucus').toUpperCase();
+  const caucusTitle = isTdT ? 'TOUR DE TABLE' : (language === 'es' ? 'CÁUCUS MODERADO' : 'MODERATED CAUCUS');
   const spokenCountries = caucus.spokenCountries ?? [];
 
   // Extend-time UI state

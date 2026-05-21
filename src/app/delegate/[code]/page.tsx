@@ -2,11 +2,11 @@
 
 import React, { use, useEffect, useState, useRef, useCallback, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { useT } from '@/contexts/LanguageContext';
+import { useT, useLanguage } from '@/contexts/LanguageContext';
 import Link from 'next/link';
 import { Committee, CommitteeDocument, DocumentType, PendingMotionType, SpeakingLogEntry, DelegateStatus } from '@/lib/types';
 import ChatPanel from '@/components/ChatPanel';
-import { useSettingsStore } from '@/lib/settingsStore';
+import { useSettingsStore, DEFAULT_MOTION_NAMES } from '@/lib/settingsStore';
 import { getFlagUrl, getCountryByName } from '@/lib/countries';
 import { Emoji } from '@/components/Emoji';
 import { FlagImg } from '@/components/FlagImg';
@@ -660,6 +660,7 @@ type DelegateTab = 'session' | 'documents' | 'chat' | 'stats';
 
 function DelegateSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const t = useT();
+  const { language } = useLanguage();
   const { code } = use(params);
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -830,9 +831,16 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   };
 
   const phaseDisplay = (() => {
-    const mn = settings.motionNames;
-    if (committee.phase === 'moderated-caucus') return mn?.moderated ?? PHASE_LABELS['moderated-caucus'];
-    if (committee.phase === 'unmoderated-caucus') return mn?.unmoderated ?? PHASE_LABELS['unmoderated-caucus'];
+    const mn = language === 'es' ? {
+      moderated: 'Cáucus Moderado',
+      unmoderated: 'Cáucus No Moderado',
+      consultation: 'Consulta de Plenaria',
+      tour: 'Tour de Table',
+      suspendDebate: 'Suspender Debate',
+      endDebate: 'Cerrar Debate',
+    } : { ...DEFAULT_MOTION_NAMES };
+    if (committee.phase === 'moderated-caucus') return mn.moderated ?? PHASE_LABELS['moderated-caucus'];
+    if (committee.phase === 'unmoderated-caucus') return mn.unmoderated ?? PHASE_LABELS['unmoderated-caucus'];
     return PHASE_LABELS[committee.phase] || committee.phase;
   })();
 

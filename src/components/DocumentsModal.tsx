@@ -76,7 +76,7 @@ function SponsorSelect({ candidates, selected, onChange }: {
       </div>
       <div className="relative">
         <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={handleKeyDown}
-          placeholder="Type to filter delegates, Enter to add…"
+          placeholder={t('documents_sponsor_placeholder')}
           className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-3 py-2 text-[#1C1410] placeholder-[#9A8A78] text-sm focus:outline-none focus:border-[#1B3828] transition-colors" />
         {query && available.length > 0 && (
           <div className="absolute top-full left-0 right-0 mt-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl overflow-hidden z-20 shadow-lg max-h-36 overflow-y-auto">
@@ -469,7 +469,7 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
             {t('documents_upload_pdf')}
           </button>
         )}
-        <input ref={fileInputRef} type="file" accept=".pdf" onChange={handleFileChange} className="hidden" />
+        <input ref={fileInputRef} type="file" accept=".pdf" onChange={handleFileChange} style={{ position: 'fixed', top: '-9999px', left: '-9999px', opacity: 0, width: 0, height: 0, pointerEvents: 'none' }} />
       </div>
       {limitReached && (
         <p className="text-xs text-red-400 text-center">

@@ -3,7 +3,8 @@
 import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { getCommitteeByCode, subscribeToCommittee, sendMessage as sendMessageDB } from '@/lib/committeeService';
-import { useSettingsStore, DEFAULT_MOTION_NAMES } from '@/lib/settingsStore';
+import { DEFAULT_MOTION_NAMES } from '@/lib/settingsStore';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { Committee } from '@/lib/types';
 import { getFlagUrl, getCountryByName } from '@/lib/countries';
 import { Emoji } from '@/components/Emoji';
@@ -32,8 +33,15 @@ function ExpandedDelegateCard({
   committee: Committee;
   onClose: () => void;
 }) {
-  const { getSettings } = useSettingsStore();
-  const mn = { ...DEFAULT_MOTION_NAMES, ...(getSettings(committee.code).motionNames ?? {}) };
+  const { language } = useLanguage();
+  const mn = language === 'es' ? {
+    moderated: 'Cáucus Moderado',
+    unmoderated: 'Cáucus No Moderado',
+    consultation: 'Consulta de Plenaria',
+    tour: 'Tour de Table',
+    suspendDebate: 'Suspender Debate',
+    endDebate: 'Cerrar Debate',
+  } : { ...DEFAULT_MOTION_NAMES };
   const [nudgeSent, setNudgeSent] = useState<string | null>(null);
 
   const queueIndex = committee.speakersList.findIndex((s) => s.delegateId === delegate.id);
@@ -215,7 +223,7 @@ function NormalDelegateCard({ delegate, committee, onSelect }: { delegate: Commi
 
 export default function AdvisorPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = use(params);
-  const { getSettings } = useSettingsStore();
+  const { language } = useLanguage();
   const [committee, setCommittee] = useState<Committee | null>(null);
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
 
@@ -266,7 +274,14 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
   const isUnmoderatedCaucus = committee.phase === 'unmoderated-caucus';
   const isCaucus = isModeratedCaucus || isUnmoderatedCaucus;
 
-  const advisorMotionNames = { ...DEFAULT_MOTION_NAMES, ...(getSettings(committee.code).motionNames ?? {}) };
+  const advisorMotionNames = language === 'es' ? {
+    moderated: 'Cáucus Moderado',
+    unmoderated: 'Cáucus No Moderado',
+    consultation: 'Consulta de Plenaria',
+    tour: 'Tour de Table',
+    suspendDebate: 'Suspender Debate',
+    endDebate: 'Cerrar Debate',
+  } : { ...DEFAULT_MOTION_NAMES };
   const advisorPhaseDisplay = (() => {
     if (committee.phase === 'moderated-caucus') return advisorMotionNames.moderated;
     if (committee.phase === 'unmoderated-caucus') return advisorMotionNames.unmoderated;
