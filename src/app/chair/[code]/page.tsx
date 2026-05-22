@@ -335,7 +335,7 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, lastSpeakerDelegate
       </div>
       <div className="text-center h-10 flex items-start justify-center pt-1">
         {overflow > 0 && (
-          <span className="text-xs font-medium" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}>+{overflow} more in queue</span>
+          <span className="text-xs font-medium" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}>{t('gsl_more_in_queue').replace('{n}', String(overflow))}</span>
         )}
       </div>
     </div>
@@ -651,7 +651,7 @@ function UnmoderatedCaucusView({ committee, setCommittee }: { committee: Committ
             }, true);
             setShowExtendUnmod(false);
           }} className="w-full py-1.5 rounded-lg text-xs font-black bg-[#1B3828] hover:bg-[#2A5A3C] text-[#EDE7D8] transition-colors focus:outline-none">
-            + ADD
+            {t('gsl_add_time_extended')}
           </button>
         </div>
       )}
@@ -970,7 +970,7 @@ function ModeratedCaucusMain({
                       }, true);
                       setShowExtendMod(false);
                     }} className="w-full py-1.5 rounded-lg text-xs font-black bg-[#1B3828] hover:bg-[#2A5A3C] text-[#EDE7D8] transition-colors focus:outline-none">
-                      + ADD
+                      {t('gsl_add_time_extended')}
                     </button>
                   </div>
                 )}
@@ -1841,12 +1841,12 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           <button onClick={() => setSuspendTab('suspend')}
             className={`flex-1 py-2.5 text-sm font-black transition-colors border-b-2 focus:outline-none tracking-wide`}
             style={{ color: suspendTab === 'suspend' ? '#1B3828' : '#9A8A78', borderBottomColor: suspendTab === 'suspend' ? '#1B3828' : 'transparent', fontFamily: "'Outfit', sans-serif" }}>
-            SUSPEND VIEW
+            {t('session_suspend_view')}
           </button>
           <button onClick={() => setSuspendTab('session')}
             className={`flex-1 py-2.5 text-sm font-black transition-colors border-b-2 focus:outline-none tracking-wide`}
             style={{ color: suspendTab === 'session' ? '#1B3828' : '#9A8A78', borderBottomColor: suspendTab === 'session' ? '#1B3828' : 'transparent', fontFamily: "'Outfit', sans-serif" }}>
-            SESSION VIEW
+            {t('session_session_view')}
           </button>
         </div>
       )}
@@ -1919,7 +1919,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                     className="px-3 py-1.5 rounded-lg text-xs font-black transition-colors focus:outline-none" style={{ backgroundColor: '#8B2020', color: '#EDE7D8', border: '1px solid rgba(139,32,32,0.6)' }}
                     onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#7A1C1C'; }}
                     onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#8B2020'; }}>
-                    DENY
+                    {t('session_deny')}
                   </button>
                 </div>
               );
