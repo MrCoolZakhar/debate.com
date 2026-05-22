@@ -1878,7 +1878,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                   <span className="text-[#B6871F] font-bold shrink-0">🚪 Join Request</span>
                   <span className="font-mono text-lg">{flagEl}</span>
                   <span className="text-[#1C1410] font-semibold">{m.proposedBy}</span>
-                  <span className="text-[#6A5A4A] text-xs">wants to join as</span>
+                  <span className="text-[#6A5A4A] text-xs">{t('session_wants_to_join')}</span>
                   <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${desiredStatus === 'present-voting' ? 'bg-[#1B3828]/40 text-[#EED98A]' : 'bg-[#1B3828]/50 text-[#EED98A]'}`}>
                     {desiredStatus === 'present-voting' ? 'P+V' : 'P'}
                   </span>
@@ -1908,12 +1908,12 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                   <span className="font-black text-xs uppercase tracking-widest shrink-0" style={{ color: '#EED98A', fontFamily: "'DM Mono', monospace" }}>{t('session_gsl_request')}</span>
                   <span className="font-mono text-lg">{flagEl}</span>
                   <span className="font-black text-sm" style={{ color: '#EDE7D8' }}>{m.proposedBy}</span>
-                  <span className="text-xs" style={{ color: 'rgba(237,231,216,0.6)' }}>wants to speak</span>
+                  <span className="text-xs" style={{ color: 'rgba(237,231,216,0.6)' }}>{t('session_wants_to_speak')}</span>
                   <button onClick={() => handleApproveGslRequest(m.id, delegateId, m.proposedBy)}
                     className="ml-2 px-3 py-1.5 rounded-lg text-xs font-black transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828', color: '#EDE7D8', border: '1px solid #3D7A52' }}
                     onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
                     onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}>
-                    ADD TO GSL
+                    {t('session_add_to_gsl')}
                   </button>
                   <button onClick={() => handleDenyGslRequest(m.id)}
                     className="px-3 py-1.5 rounded-lg text-xs font-black transition-colors focus:outline-none" style={{ backgroundColor: '#8B2020', color: '#EDE7D8', border: '1px solid rgba(139,32,32,0.6)' }}
@@ -1935,13 +1935,13 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
             return (
               <>
                 <h1 className="text-6xl font-black mb-4 tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{t('session_adjourned')}</h1>
-                <p className="text-xl mb-12" style={{ color: '#6A5A4A' }}>This session has been temporarily suspended.</p>
+                <p className="text-xl mb-12" style={{ color: '#6A5A4A' }}>{t('session_suspended_desc')}</p>
                 {anotherChairResuming ? (
                   <>
                     <button disabled className="px-12 py-5 rounded-2xl cursor-not-allowed font-black text-xl" style={{ backgroundColor: '#DDD4C0', color: '#9A8A78' }}>
-                      RESUME SESSION
+                      {t('session_resume_btn')}
                     </button>
-                    <p className="text-sm mt-4" style={{ color: '#B8844A' }}>{committee.resumingChair} is resuming the session…</p>
+                    <p className="text-sm mt-4" style={{ color: '#B8844A' }}>{t('session_resuming_other').replace('{name}', committee.resumingChair ?? '')}</p>
                   </>
                 ) : (
                   <button
@@ -1949,7 +1949,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                     className="px-12 py-5 text-white text-xl font-black rounded-2xl transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}
                     onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
                     onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}>
-                    RESUME SESSION
+                    {t('session_resume_btn')}
                   </button>
                 )}
                 <p className="text-xs mt-8" style={{ color: '#9A8A78' }}>{t('session_adjourned_hint')}</p>
@@ -2064,8 +2064,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                           <h1 className="text-5xl font-black mb-2" style={{ color: '#1B3828' }}>Tour de Table</h1>
                           <p className="text-[#6A5A4A] text-sm mb-6">
                             {committee.caucus.purpose?.includes('Room Order')
-                              ? 'Room Order — chair calls each speaker'
-                              : committee.caucus.purpose?.includes('Z→A') ? 'Z → A order' : 'A → Z order, proposer speaks first'}
+                              ? t('caucus_tdt_room_order')
+                              : committee.caucus.purpose?.includes('Z→A') ? t('caucus_tdt_z_to_a') : t('caucus_tdt_a_to_z')}
                           </p>
                           <div className="flex justify-center gap-8 mb-8">
                             <div className="text-center">
@@ -2142,10 +2142,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                   <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
                     <div className="bg-[#EDE7D8] border border-[#DDD4C0]/40 rounded-3xl px-12 py-10 max-w-lg w-full shadow-2xl">
                       <p className="text-xs font-mono tracking-widest mb-3 font-bold" style={{ color: '#1B3828' }}>
-                        {(committee.caucus.motionLabel ?? 'UNMODERATED CAUCUS').toUpperCase()} STARTING
+                        {t('caucus_unmod_starting').replace('{name}', (committee.caucus.motionLabel ?? (language === 'es' ? 'CÁUCUS NO MODERADO' : 'UNMODERATED CAUCUS')).toUpperCase())}
                       </p>
                       <h1 className="text-5xl font-black mb-2" style={{ color: '#1B3828' }}>
-                        {committee.caucus.motionLabel ?? 'Unmoderated Caucus'}
+                        {committee.caucus.motionLabel ?? (language === 'es' ? 'Cáucus No Moderado' : 'Unmoderated Caucus')}
                       </h1>
                       {committee.caucus.purpose && (
                         <p className="text-[#6A5A4A] text-sm mb-6">{committee.caucus.purpose}</p>
