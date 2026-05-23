@@ -605,7 +605,6 @@ function UnmoderatedCaucusView({ committee, setCommittee }: { committee: Committ
       </div>
       {showExtendUnmod && (
         <div className="mt-4 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3 shadow-xl" style={{ minWidth: '180px' }}>
-          <p className="text-xs font-black text-[#1B3828] uppercase tracking-widest text-center mb-2">Add</p>
           <div className="flex gap-1.5 mb-2 justify-center">
             {(() => {
               const halfMins = caucus.totalTime / 120;
@@ -924,7 +923,6 @@ function ModeratedCaucusMain({
                 </button>
                 {showExtendMod && (
                   <div className="absolute bottom-full right-0 mb-2 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3 shadow-xl z-20" style={{ minWidth: '180px' }}>
-                    <p className="text-xs font-black text-[#1B3828] uppercase tracking-widest text-center mb-2">Add</p>
                     <div className="flex gap-1.5 mb-2 justify-center">
                       {(() => {
                         const halfMins = caucus.totalTime / 120;
