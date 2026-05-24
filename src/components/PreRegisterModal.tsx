@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { Dialog as RadixDialog } from 'radix-ui';
 import { Dialog, DialogPortal, DialogOverlay, DialogTitle } from '@/components/ui/dialog';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
@@ -16,6 +17,8 @@ const SPOTS_TOTAL = 1000;
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
 
 export default function PreRegisterModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { language } = useLanguage();
+  const t = useT();
   const [email, setEmail]         = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [duplicate, setDuplicate] = useState(false);
@@ -134,7 +137,7 @@ export default function PreRegisterModal({ open, onClose }: { open: boolean; onC
                   className="font-mono tracking-[0.18em] uppercase"
                   style={{ fontSize: 12, color: '#EED98A', fontWeight: 700 }}
                 >
-                  Coming August 2026
+                  {t('prereg_badge')}
                 </span>
               </div>
 
@@ -143,7 +146,7 @@ export default function PreRegisterModal({ open, onClose }: { open: boolean; onC
                 className="relative font-black text-white tracking-tight leading-[0.92]"
                 style={{ fontSize: 'clamp(24px, 3vw, 38px)', whiteSpace: 'nowrap' }}
               >
-                The committee room,{' '}
+                {t('prereg_heading_1')}{' '}
                 <span
                   style={{
                     fontFamily: "'Playfair Display', serif",
@@ -152,7 +155,7 @@ export default function PreRegisterModal({ open, onClose }: { open: boolean; onC
                     color: '#EED98A',
                   }}
                 >
-                  reimagined.
+                  {t('prereg_heading_2')}
                 </span>
               </h2>
             </div>
@@ -164,20 +167,20 @@ export default function PreRegisterModal({ open, onClose }: { open: boolean; onC
                 <Alert style={{ backgroundColor: 'rgba(27, 56, 40, 0.06)', border: '1px solid rgba(27, 56, 40, 0.18)' }}>
                   <GiftIcon size={16} style={{ color: '#1B3828' }} />
                   <AlertTitle style={{ color: '#1C1410' }}>
-                    First 1,000 users get{' '}
-                    <span style={{ color: '#1B3828', fontWeight: 800 }}>2 conferences</span>
+                    {t('prereg_alert_title_1')}{' '}
+                    <span style={{ color: '#1B3828', fontWeight: 800 }}>{t('prereg_alert_title_free')}</span>
                     {' '}
-                    <span style={{ color: '#B6871F', fontWeight: 800 }}>fee-free</span>
+                    <span style={{ color: '#B6871F', fontWeight: 800 }}>{t('prereg_alert_title_feefree')}</span>
                   </AlertTitle>
                   <AlertDescription style={{ color: '#6A5A4A' }}>
-                    Pre-register now to unlock{' '}
+                    {t('prereg_alert_desc_1')}{' '}
                     <span
                       className="font-black tracking-wide"
                       style={{ color: '#1B3828', letterSpacing: '0.04em' }}
                     >
-                      GAVELLING UNLIMITED
+                      {t('prereg_alert_desc_product')}
                     </span>
-                    {' '}before accounts open in August 2026.
+                    {' '}{t('prereg_alert_desc_2')}
                   </AlertDescription>
                 </Alert>
 
@@ -185,11 +188,7 @@ export default function PreRegisterModal({ open, onClose }: { open: boolean; onC
                 <div className="flex flex-col gap-2">
                   <Progress value={(spotsClaimed / SPOTS_TOTAL) * 100} />
                   <p className="text-xs" style={{ color: '#9A8A78' }}>
-                    <span className="font-semibold" style={{ color: '#1C1410' }}>{spotsClaimed}</span>
-                    {' '}of{' '}
-                    <span className="font-semibold" style={{ color: '#1C1410' }}>{SPOTS_TOTAL.toLocaleString()}</span>
-                    {' '}spots claimed ·{' '}
-                    <span className="font-semibold" style={{ color: '#1B3828' }}>{SPOTS_TOTAL - spotsClaimed} remaining</span>
+                    {t('prereg_spots_claimed').replace('{n}', String(spotsClaimed)).replace('{total}', SPOTS_TOTAL.toLocaleString()).replace('{remaining}', String(SPOTS_TOTAL - spotsClaimed))}
                   </p>
                 </div>
               </div>
@@ -210,7 +209,7 @@ export default function PreRegisterModal({ open, onClose }: { open: boolean; onC
                     <div className="flex items-center gap-2.5" style={{ color: duplicate ? '#B6871F' : '#1B3828' }}>
                       <CircleCheckIcon size={20} className="shrink-0" />
                       <span className="font-bold text-sm">
-                        {duplicate ? 'Already registered — you\'re on the list!' : 'You\'re on the list. See you in August.'}
+                        {duplicate ? t('prereg_success_duplicate') : t('prereg_success_new')}
                       </span>
                     </div>
                     <p className="text-xs pl-[28px]" style={{ color: '#9A8A78' }}>{email}</p>
@@ -281,14 +280,14 @@ export default function PreRegisterModal({ open, onClose }: { open: boolean; onC
                         boxShadow: '0 4px 14px rgba(27, 56, 40, 0.25)',
                       }}
                     >
-                      {loading ? <Spinner style={{ color: '#EED98A' }} /> : 'PRE-REGISTER →'}
+                      {loading ? <Spinner style={{ color: '#EED98A' }} /> : t('prereg_btn')}
                     </button>
 
                     {apiError && (
                       <p className="text-xs text-center text-red-500">{apiError}</p>
                     )}
                     <p className="text-xs text-center" style={{ color: '#9A8A78' }}>
-                      No spam. We'll only email you when accounts open.
+                      {t('prereg_no_spam')}
                     </p>
                   </form>
                 )}
@@ -350,7 +349,7 @@ export default function PreRegisterModal({ open, onClose }: { open: boolean; onC
                 className="font-mono tracking-[0.16em] uppercase"
                 style={{ fontSize: 11, color: '#1B3828', fontWeight: 700 }}
               >
-                Coming August 2026
+                {t('prereg_badge')}
               </span>
             </div>
           </div>

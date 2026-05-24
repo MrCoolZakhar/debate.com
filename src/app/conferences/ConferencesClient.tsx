@@ -1,8 +1,12 @@
 'use client';
 
 import SiteNav from '@/components/SiteNav';
+import { useLanguage, useT } from '@/contexts/LanguageContext';
 
 export default function ConferencesClient() {
+  const { language } = useLanguage();
+  const t = useT();
+
   return (
     <div className="min-h-screen bg-[#EDE7D8] flex flex-col relative overflow-x-hidden">
 
@@ -39,16 +43,15 @@ export default function ConferencesClient() {
               className="font-black text-[#1C1410] tracking-tight leading-none whitespace-nowrap"
               style={{ fontSize: 'clamp(40px, 6vw, 72px)' }}
             >
-              COMING SOON
+              {t('conferences_coming_soon')}
             </h1>
 
             <p className="text-[#6A5A4A] leading-relaxed" style={{ fontSize: '17px' }}>
-              Gavin is working really hard to bring you MUN Conferences on Gavelling. We expect to roll out the first conferences starting in{' '}
-              <span className="text-[#1C1410] font-semibold">August 2026</span>.
+              {t('conferences_desc1')}
             </p>
 
             <p className="text-[#9A8A78] leading-relaxed text-sm">
-              If you are a conference organiser and would like to organise your MUN conference <span className="font-bold text-[#6A5A4A]">fee-free</span> on Gavelling, book an intro call with us below.
+              {t('conferences_desc2')}
             </p>
 
             <a
@@ -84,7 +87,7 @@ export default function ConferencesClient() {
                 cursor: 'pointer',
               }}
             >
-              BOOK AN INTRO CALL →
+              {t('conferences_book_call')}
             </a>
           </div>
         </div>
@@ -116,7 +119,7 @@ export default function ConferencesClient() {
               </svg>
             </span>
           </div>
-          <p className="text-xs text-[#9A8A78] md:text-right">© {new Date().getFullYear()} Gavelling. Built for the MUN community.</p>
+          <p className="text-xs text-[#9A8A78] md:text-right">{t('conferences_footer_copy').replace('{year}', String(new Date().getFullYear()))}</p>
         </div>
       </footer>
     </div>

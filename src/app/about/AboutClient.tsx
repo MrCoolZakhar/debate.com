@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import SiteNav from '@/components/SiteNav';
+import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -48,6 +49,8 @@ const FounderPhoto = ({ src, name }: { src: string; name: string }) => (
 );
 
 export default function AboutClient() {
+  const { language } = useLanguage();
+  const t = useT();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ name: '', email: '', country: '', experience: '' });
   const [submitted, setSubmitted] = useState(false);
@@ -70,9 +73,9 @@ export default function AboutClient() {
         style={{ height: 340, background: 'linear-gradient(135deg, #1B3828 0%, #2A5A3C 50%, #1B3828 100%)', borderBottom: '1px solid rgba(27, 56, 40, 0.3)' }}>
 <div className="relative z-10 w-full text-center px-12 pb-10">
           <p className="font-black text-white tracking-tight leading-none" style={{ fontSize: 'clamp(36px, 5vw, 72px)' }}>
-            made by those who{' '}
-            <span style={{ fontFamily: "'Playfair Display', serif", fontStyle: 'italic', fontWeight: 400, color: '#EED98A' }}>love</span>
-            {' '}MUN
+            {t('about_banner_tagline')}{' '}
+            <span style={{ fontFamily: "'Playfair Display', serif", fontStyle: 'italic', fontWeight: 400, color: '#EED98A' }}>{t('about_banner_love')}</span>
+            {' '}{t('about_banner_mun')}
           </p>
         </div>
       </section>
@@ -82,7 +85,7 @@ export default function AboutClient() {
         <div className="flex flex-col md:flex-row items-center gap-16 mb-28">
           <div className="shrink-0"><FounderPhoto src="/PeterPic.jpg" name="Peter Zakhar" /></div>
           <div className="flex-1">
-            <p className="text-xs font-mono tracking-[0.18em] text-[#9A8A78] mb-2 uppercase">Co-Founder</p>
+            <p className="text-xs font-mono tracking-[0.18em] text-[#9A8A78] mb-2 uppercase">{t('about_cofounder')}</p>
             <h2 className="text-4xl font-black text-[#1C1410] mb-1">Peter Zakhar</h2>
             <p className="text-[#B6871F] text-sm font-semibold mb-6 tracking-wide">Business Development & Frontend</p>
             <p className="text-[#6A5A4A] leading-relaxed text-base">Peter is not scared of risky ideas. He listens, asks and acts immediately on any Gavelling related feedback. He is not just a figure with good ideas, but someone who has actively trained his own delegation to win over 100 awards in a single year. Ultimately, fun, adventure and creativity knows no bounds for Peter, having travelled to over 40 countries at 22.</p>
@@ -91,7 +94,7 @@ export default function AboutClient() {
         <div className="flex flex-col md:flex-row-reverse items-center gap-16">
           <div className="shrink-0"><FounderPhoto src="/Christian.jpg" name="Christian Galindo" /></div>
           <div className="flex-1">
-            <p className="text-xs font-mono tracking-[0.18em] text-[#9A8A78] mb-2 uppercase">Co-Founder</p>
+            <p className="text-xs font-mono tracking-[0.18em] text-[#9A8A78] mb-2 uppercase">{t('about_cofounder')}</p>
             <h2 className="text-4xl font-black text-[#1C1410] mb-1">Christian Galindo</h2>
             <p className="text-[#B6871F] text-sm font-semibold mb-6 tracking-wide">Business Development & Backend</p>
             <p className="text-[#6A5A4A] leading-relaxed text-base">Christian is constantly looking for change and progress; having lived in 9 countries at 21 years old. He applies this same mindset to Gavelling: voicing new ideas, taking feedback, and looking for positive change. His constant journey for new challenges led him to train delegates across continents to win awards at a 90% rate in global conferences.</p>
@@ -103,8 +106,8 @@ export default function AboutClient() {
       <section className="relative z-10 py-24 px-6" style={{ borderTop: '1px solid rgba(221, 212, 192, 0.8)' }}>
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-16">
-            <p className="text-xs font-mono tracking-[0.2em] text-[#9A8A78] mb-3 uppercase">Representing the world</p>
-            <h2 className="text-4xl font-black text-[#1C1410]">GLOBAL AMBASSADORS</h2>
+            <p className="text-xs font-mono tracking-[0.2em] text-[#9A8A78] mb-3 uppercase">{t('about_representing')}</p>
+            <h2 className="text-4xl font-black text-[#1C1410]">{t('about_ambassadors_title')}</h2>
           </div>
           <div className="grid grid-cols-5 gap-8">
             {AMBASSADORS.map((amb) => (
@@ -140,10 +143,10 @@ export default function AboutClient() {
         >
           <p className="font-black text-white mb-4"
             style={{ fontSize: 'clamp(28px, 4vw, 52px)', letterSpacing: '-0.02em' }}>
-            Start Gavelling with us
+            {t('about_cta_title')}
           </p>
           <p className="text-[#EED98A]/60 text-base max-w-xl mx-auto leading-relaxed">
-            Are you chairing conferences in your country and there are no ambassadors from where you are from? Apply and get your merch package.
+            {t('about_cta_desc')}
           </p>
           <button
             onClick={() => { setOpen(true); setSubmitted(false); }}
@@ -154,7 +157,7 @@ export default function AboutClient() {
             onMouseDown={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(238, 217, 138, 0.25)'; (e.currentTarget as HTMLButtonElement).style.color = '#FFFFFF'; }}
             onMouseUp={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(238, 217, 138, 0.12)'; (e.currentTarget as HTMLButtonElement).style.color = '#EED98A'; }}
           >
-            Apply Now →
+            {t('about_apply_btn')}
           </button>
         </div>
       </section>
@@ -165,10 +168,10 @@ export default function AboutClient() {
           style={{ backgroundColor: '#FAF8F3', border: '1px solid rgba(221, 212, 192, 0.8)', borderRadius: '20px', color: '#1C1410' }}>
           <DialogHeader>
             <DialogTitle className="text-[#1C1410] text-xl font-black">
-              {submitted ? 'Application received' : 'Apply to be an Ambassador'}
+              {submitted ? t('about_dialog_title_submitted') : t('about_dialog_title_new')}
             </DialogTitle>
             <DialogDescription style={{ color: '#9A8A78' }}>
-              {submitted ? "We'll be in touch shortly. Thank you for wanting to grow the MUN community with us." : 'Tell us a bit about yourself and your MUN journey.'}
+              {submitted ? t('about_dialog_desc_submitted') : t('about_dialog_desc_new')}
             </DialogDescription>
           </DialogHeader>
 
@@ -179,35 +182,35 @@ export default function AboutClient() {
                 <span style={{ fontSize: 28, color: '#1B3828' }}>✓</span>
               </div>
               <Button onClick={() => setOpen(false)} style={{ backgroundColor: '#1B3828', color: '#EED98A', borderRadius: '12px', fontWeight: 700 }}>
-                Close
+                {t('about_btn_close')}
               </Button>
             </div>
           ) : (
             <div className="flex flex-col gap-5 pt-2">
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="amb-name" style={{ color: '#6A5A4A', fontSize: 13, fontWeight: 600 }}>Full Name</Label>
-                <Input id="amb-name" placeholder="Your name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} style={inputStyle} />
+                <Label htmlFor="amb-name" style={{ color: '#6A5A4A', fontSize: 13, fontWeight: 600 }}>{t('about_label_name')}</Label>
+                <Input id="amb-name" placeholder={t('about_placeholder_name')} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} style={inputStyle} />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="amb-email" style={{ color: '#6A5A4A', fontSize: 13, fontWeight: 600 }}>Email</Label>
+                <Label htmlFor="amb-email" style={{ color: '#6A5A4A', fontSize: 13, fontWeight: 600 }}>{t('about_label_email')}</Label>
                 <Input id="amb-email" type="email" placeholder="you@example.com" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} style={inputStyle} />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="amb-country" style={{ color: '#6A5A4A', fontSize: 13, fontWeight: 600 }}>Country</Label>
-                <Input id="amb-country" placeholder="Where are you based?" value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} style={inputStyle} />
+                <Label htmlFor="amb-country" style={{ color: '#6A5A4A', fontSize: 13, fontWeight: 600 }}>{t('about_label_country')}</Label>
+                <Input id="amb-country" placeholder={t('about_placeholder_country')} value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} style={inputStyle} />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="amb-exp" style={{ color: '#6A5A4A', fontSize: 13, fontWeight: 600 }}>MUN Experience & Upcoming Conferences</Label>
-                <Textarea id="amb-exp" placeholder="Tell us about your MUN background..." value={form.experience} onChange={(e) => setForm({ ...form, experience: e.target.value })} rows={4} style={{ ...inputStyle, resize: 'none' }} />
+                <Label htmlFor="amb-exp" style={{ color: '#6A5A4A', fontSize: 13, fontWeight: 600 }}>{t('about_label_experience')}</Label>
+                <Textarea id="amb-exp" placeholder={t('about_placeholder_experience')} value={form.experience} onChange={(e) => setForm({ ...form, experience: e.target.value })} rows={4} style={{ ...inputStyle, resize: 'none' }} />
               </div>
               <div className="flex gap-3 pt-2">
                 <Button variant="outline" onClick={() => setOpen(false)} className="flex-1"
                   style={{ borderColor: 'rgba(28, 20, 16, 0.2)', color: '#9A8A78', backgroundColor: 'transparent', borderRadius: '12px' }}>
-                  Cancel
+                  {t('about_btn_cancel')}
                 </Button>
                 <Button onClick={handleSubmit} disabled={!form.name || !form.email || !form.country} className="flex-1"
                   style={{ backgroundColor: '#1B3828', color: '#EED98A', borderRadius: '12px', fontWeight: 800, opacity: (!form.name || !form.email || !form.country) ? 0.45 : 1 }}>
-                  Submit Application
+                  {t('about_btn_submit')}
                 </Button>
               </div>
             </div>
@@ -237,7 +240,7 @@ export default function AboutClient() {
               </svg>
             </span>
           </div>
-          <p className="text-xs text-[#9A8A78] md:text-right">© {new Date().getFullYear()} Gavelling. Built for the MUN community.</p>
+          <p className="text-xs text-[#9A8A78] md:text-right">{t('about_footer_copy').replace('{year}', String(new Date().getFullYear()))}</p>
         </div>
       </footer>
     </div>
