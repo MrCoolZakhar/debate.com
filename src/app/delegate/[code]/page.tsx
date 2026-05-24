@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import Link from 'next/link';
 import { Committee, CommitteeDocument, DocumentType, PendingMotionType, SpeakingLogEntry, DelegateStatus } from '@/lib/types';
+import { TranslationKey } from '@/lib/translations';
 import ChatPanel from '@/components/ChatPanel';
 import { useSettingsStore, DEFAULT_MOTION_NAMES } from '@/lib/settingsStore';
 import { getFlagUrl, getCountryByName } from '@/lib/countries';
@@ -130,7 +131,7 @@ function parseSpeakingLogs(committee: Committee): SpeakingLogEntry[] {
 }
 
 // Point calculation
-function calcPoints(logs: SpeakingLogEntry[], committee: Committee, country: string): {
+function calcPoints(logs: SpeakingLogEntry[], committee: Committee, country: string, t: (key: TranslationKey) => string): {
   total: number;
   breakdown: { label: string; pts: number }[];
   tier: string;
@@ -143,7 +144,7 @@ function calcPoints(logs: SpeakingLogEntry[], committee: Committee, country: str
   // Attendance (present/PV)
   const delegate = committee.delegates.find((d) => d.country === country);
   if (delegate && delegate.status !== 'absent') {
-    breakdown.push({ label: 'Attendance', pts: 5 });
+    breakdown.push({ label: t('delegate_attendance_pts'), pts: 5 });
     total += 5;
   }
 
@@ -209,77 +210,77 @@ function calcPoints(logs: SpeakingLogEntry[], committee: Committee, country: str
   }
 
   // Tier
-  let tier = 'Observer';
-  if (total >= 300) tier = 'Distinguished Delegate';
-  else if (total >= 200) tier = 'Delegate';
-  else if (total >= 120) tier = 'Active Speaker';
-  else if (total >= 70) tier = 'Debater';
-  else if (total >= 30) tier = 'Participant';
+  let tier = t('delegate_tier_observer');
+  if (total >= 300) tier = t('delegate_tier_distinguished');
+  else if (total >= 200) tier = t('delegate_tier_delegate');
+  else if (total >= 120) tier = t('delegate_tier_active');
+  else if (total >= 70) tier = t('delegate_tier_debater');
+  else if (total >= 30) tier = t('delegate_tier_participant');
 
   const tips: string[] = [];
 
-  if (tier === 'Observer') {
-    tips.push('Request to be added to the General Speakers\' List — raise your placard when the chair asks.');
-    tips.push('Mark yourself Present or Present & Voting so you can participate actively.');
-    tips.push('Your opening speech is your first impression — prepare a 60–90 second position statement.');
-    tips.push('Address the chair as "Honourable Chair" and fellow delegates as "Distinguished Delegates."');
-    tips.push('Listen carefully to other speeches before your first — understand the room\'s dynamic first.');
-    tips.push('Pass a note to a like-minded delegation to start building a bloc before the first caucus.');
+  if (tier === t('delegate_tier_observer')) {
+    tips.push(t('delegate_tip_gsl_request'));
+    tips.push(t('delegate_tip_mark_present'));
+    tips.push(t('delegate_tip_opening'));
+    tips.push(t('delegate_tip_address'));
+    tips.push(t('delegate_tip_listen'));
+    tips.push(t('delegate_tip_bloc'));
   }
 
-  if (tier === 'Participant') {
-    tips.push('You\'ve made a start — now aim to speak in a moderated caucus on a specific sub-topic.');
-    tips.push('During unmoderated caucuses, actively approach delegations to co-sponsor a working paper.');
-    tips.push('Use your full allotted speaking time — cutting speeches short leaves points on the table.');
-    tips.push('Propose a moderated caucus on a sub-topic you know well to control the debate agenda.');
-    tips.push('Co-sponsoring a document shows cooperation and earns more points than just signing it.');
+  if (tier === t('delegate_tier_participant')) {
+    tips.push(t('delegate_tip_caucus_sub'));
+    tips.push(t('delegate_tip_unmod_wp'));
+    tips.push(t('delegate_tip_full_time'));
+    tips.push(t('delegate_tip_propose_caucus'));
+    tips.push(t('delegate_tip_cosponsor'));
     tips.push('A Right of Reply shows confidence — if a delegation mischaracterises your position, challenge it.');
   }
 
-  if (tier === 'Debater') {
-    tips.push('You\'re engaging well — now focus on substance. Reference specific clauses and past resolutions in speeches.');
-    tips.push('Build a working paper with at least 3–4 co-sponsors to show bloc leadership.');
-    tips.push('Use the yield to questions option at the end of a speech — it signals confidence and invites engagement.');
-    tips.push('Raise a motion for a moderated caucus rather than waiting for others to drive the agenda.');
-    tips.push('Escalate your working paper to a draft resolution — that\'s where the real points are.');
-    tips.push('Challenge procedural missteps with a Point of Order — chairs notice delegates who know procedure.');
-    tips.push('Your GSL speech should preview the clauses you want in the final resolution — use it strategically.');
+  if (tier === t('delegate_tier_debater')) {
+    tips.push(t('delegate_tip_substance'));
+    tips.push(t('delegate_tip_wp_cosponsors'));
+    tips.push(t('delegate_tip_yield'));
+    tips.push(t('delegate_tip_raise_motion'));
+    tips.push(t('delegate_tip_escalate_dr'));
+    tips.push(t('delegate_tip_point_of_order'));
+    tips.push(t('delegate_tip_gsl_strategic'));
   }
 
-  if (tier === 'Active Speaker') {
-    tips.push('You\'re a frequent voice — now make your speeches more impactful. Each one should advance a specific policy goal.');
-    tips.push('Lead a draft resolution with your delegation as primary sponsor.');
-    tips.push('Coordinate your bloc during unmoderated caucuses — share a draft and get signatories before the session ends.');
-    tips.push('Use your speeches to directly respond to and rebut other delegations\' positions.');
+  if (tier === t('delegate_tier_active')) {
+    tips.push(t('delegate_tip_impact'));
+    tips.push(t('delegate_tip_lead_dr'));
+    tips.push(t('delegate_tip_coordinate_bloc'));
+    tips.push(t('delegate_tip_rebut'));
     tips.push('A passed draft resolution is the highest individual scoring action — push your DR all the way to a vote.');
-    tips.push('Propose a Tour de Table to ensure every delegation is heard and to reset a stalled debate.');
-    tips.push('Master the art of the friendly amendment — incorporate allies\' language to broaden support for your DR.');
+    tips.push(t('delegate_tip_tdt'));
+    tips.push(t('delegate_tip_friendly_amendment'));
   }
 
-  if (tier === 'Delegate') {
-    tips.push('You are close to Distinguished — one more passed resolution or RTR could push you there.');
-    tips.push('Help newer delegates get on the speakers list — demonstrated leadership is noticed by chairs.');
-    tips.push('Use your speeches to explicitly reference operative clauses in draft resolutions under discussion.');
-    tips.push('Introduce an unfriendly amendment to weaken a rival bloc\'s resolution if needed.');
-    tips.push('Volunteer to consolidate competing working papers — it shows diplomatic skill and earns respect.');
+  if (tier === t('delegate_tier_delegate')) {
+    tips.push(t('delegate_tip_close_to_distinguished'));
+    tips.push(t('delegate_tip_help_newer'));
+    tips.push(t('delegate_tip_operative_clauses'));
+    tips.push(t('delegate_tip_unfriendly_amendment'));
+    tips.push(t('delegate_tip_consolidate'));
     tips.push('A Point of Information during another delegate\'s speech can shift the room\'s focus to your agenda.');
-    tips.push('Your yield decisions matter at this level — yield to questions to demonstrate mastery of your country\'s position.');
+    tips.push(t('delegate_tip_yield_questions'));
   }
 
-  if (tier === 'Distinguished Delegate') {
-    tips.push('You have reached the highest tier — your score reflects genuine engagement across every dimension of debate.');
-    tips.push('Focus on legacy: ensure your draft resolution is substantive enough to pass with broad support.');
-    tips.push('Mentor less experienced delegates during unmoderated caucuses — great MUNers elevate the whole room.');
-    tips.push('Use your final GSL speech to synthesise the debate and call for consensus behind your resolution.');
+  if (tier === t('delegate_tier_distinguished')) {
+    tips.push(t('delegate_tip_highest_tier'));
+    tips.push(t('delegate_tip_legacy'));
+    tips.push(t('delegate_tip_mentor'));
+    tips.push(t('delegate_tip_synthesise'));
     tips.push('A Distinguished Delegate drives the agenda, not just responds to it — every caucus should have your fingerprints on it.');
-    tips.push('Consider proposing closure of debate when you have enough votes secured — timing this correctly is the final skill.');
+    tips.push(t('delegate_tip_closure'));
   }
 
   // Universal conditional tips regardless of tier
   if (gslSpeeches.length === 0) tips.push('You have not spoken on the General Speakers\' List yet — this is the most visible way to establish your delegation\'s position.');
   if (caucusSpeeches.length === 0 && committee.phase !== 'pre-session') tips.push('Moderated caucuses reward focused, topic-specific arguments — request one and use the shorter time to make a precise point.');
   if (wps.length === 0 && drs.length === 0) tips.push('No documents yet — co-sponsoring even one working paper signals that your delegation is constructively engaged.');
-  if (totalSeconds > 0 && totalSeconds < 45) tips.push('You are not using your full speaking time. Longer speeches earn time-bonus points and project confidence.');
+  if (totalSeconds > 0 && totalSeconds < 45) tips.push(t('delegate_tip_speaking_time'));
   if (drs.length === 0 && wps.length > 0) tips.push('You have a working paper — escalate it to a draft resolution before the voting procedure begins.');
 
   return { total, breakdown, tier, tips };
@@ -508,8 +509,9 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
 
 // ── Statistics Tab ────────────────────────────────────────────────────────────
 function StatisticsTab({ committee, country }: { committee: Committee; country: string }) {
+  const t = useT();
   const logs = parseSpeakingLogs(committee);
-  const { total, breakdown, tier, tips } = calcPoints(logs, committee, country);
+  const { total, breakdown, tier, tips } = calcPoints(logs, committee, country, t);
   const myLogs = logs.filter((l) => l.country === country);
   const totalSeconds = myLogs.reduce((s, l) => s + l.seconds, 0);
 
@@ -524,7 +526,7 @@ function StatisticsTab({ committee, country }: { committee: Committee; country: 
   // Points per country for leaderboard
   const pointsByCountry: Record<string, number> = {};
   ranking.slice(0, 10).forEach(({ country: c }) => {
-    pointsByCountry[c] = calcPoints(logs, committee, c).total;
+    pointsByCountry[c] = calcPoints(logs, committee, c, t).total;
   });
 
   return (
@@ -533,12 +535,12 @@ function StatisticsTab({ committee, country }: { committee: Committee; country: 
       <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid #DDD4C0' }}>
         <div className="px-5 py-3 flex items-center gap-3" style={{ backgroundColor: '#1B3828', borderBottom: '1px solid #3D7A52' }}>
           <div className="w-1 h-4 rounded-full" style={{ backgroundColor: '#EED98A' }} />
-          <span className="text-xs font-mono font-bold tracking-widest" style={{ color: '#EED98A' }}>YOUR SCORE</span>
+          <span className="text-xs font-mono font-bold tracking-widest" style={{ color: '#EED98A' }}>{t('delegate_score_header')}</span>
         </div>
         <div className="p-5" style={{ backgroundColor: '#EDE7D8' }}>
         <div className="flex items-end gap-3 mb-3">
           <span className="text-6xl font-black" style={{ color: '#1B3828' }}>{total}</span>
-          <span className="text-lg font-medium mb-1" style={{ color: '#6A5A4A' }}>pts</span>
+          <span className="text-lg font-medium mb-1" style={{ color: '#6A5A4A' }}>{t('delegate_pts_label')}</span>
         </div>
         <div className="inline-flex items-center gap-1.5 text-sm font-black px-3 py-1 rounded-full" style={{ backgroundColor: '#1B3828', color: '#EED98A' }}>
           {tier}
@@ -562,35 +564,35 @@ function StatisticsTab({ committee, country }: { committee: Committee; country: 
       <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid #DDD4C0' }}>
         <div className="px-5 py-3 flex items-center gap-3" style={{ backgroundColor: '#1B3828', borderBottom: '1px solid #3D7A52' }}>
           <div className="w-1 h-4 rounded-full" style={{ backgroundColor: '#EED98A' }} />
-          <span className="text-xs font-mono font-bold tracking-widest" style={{ color: '#EED98A' }}>YOUR SPEAKING HISTORY</span>
+          <span className="text-xs font-mono font-bold tracking-widest" style={{ color: '#EED98A' }}>{t('delegate_speaking_history')}</span>
         </div>
         <div className="p-5" style={{ backgroundColor: '#EDE7D8' }}>
         <div className="grid grid-cols-3 gap-3 mb-4">
           <div className="text-center">
             <div className="text-2xl font-black" style={{ color: '#1B3828' }}>{myLogs.length}</div>
-            <div className="text-xs" style={{ color: '#9A8A78' }}>Speeches</div>
+            <div className="text-xs" style={{ color: '#9A8A78' }}>{t('delegate_speeches_label')}</div>
           </div>
           <div className="text-center">
             <div className="text-2xl font-black" style={{ color: '#1B3828' }}>{formatTime(totalSeconds)}</div>
-            <div className="text-xs" style={{ color: '#9A8A78' }}>Total time</div>
+            <div className="text-xs" style={{ color: '#9A8A78' }}>{t('delegate_total_time_label')}</div>
           </div>
           <div className="text-center">
             <div className="text-2xl font-black" style={{ color: '#1B3828' }}>{myRank > 0 ? `#${myRank}` : '—'}</div>
-            <div className="text-xs" style={{ color: '#9A8A78' }}>Rank by time</div>
+            <div className="text-xs" style={{ color: '#9A8A78' }}>{t('delegate_rank_label')}</div>
           </div>
         </div>
         {myLogs.length > 0 ? (
           <div className="space-y-1.5">
             {myLogs.map((l, i) => (
               <div key={i} className="flex items-center justify-between text-xs rounded-lg px-3 py-2" style={{ backgroundColor: '#FAF8F3' }}>
-                <span className="truncate flex-1" style={{ color: '#6A5A4A' }}>{l.topic || 'General Speakers\' List'}</span>
+                <span className="truncate flex-1" style={{ color: '#6A5A4A' }}>{l.topic || t('delegate_gsl_fallback')}</span>
                 <span className="shrink-0 ml-2 capitalize" style={{ color: '#9A8A78' }}>{l.context.replace(/-/g, ' ')}</span>
                 <span className="font-mono shrink-0 ml-2" style={{ color: '#1C1410' }}>{l.seconds}s</span>
               </div>
             ))}
           </div>
         ) : (
-          <p className="text-sm text-center py-2" style={{ color: '#9A8A78' }}>No speeches recorded yet</p>
+          <p className="text-sm text-center py-2" style={{ color: '#9A8A78' }}>{t('delegate_no_speeches')}</p>
         )}
         </div>
       </div>
@@ -600,15 +602,15 @@ function StatisticsTab({ committee, country }: { committee: Committee; country: 
         <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid #DDD4C0' }}>
           <div className="px-5 py-3 flex items-center gap-3" style={{ backgroundColor: '#1B3828', borderBottom: '1px solid #3D7A52' }}>
             <div className="w-1 h-4 rounded-full" style={{ backgroundColor: '#EED98A' }} />
-            <span className="text-xs font-mono font-bold tracking-widest" style={{ color: '#EED98A' }}>COMMITTEE SPEAKING TIME</span>
+            <span className="text-xs font-mono font-bold tracking-widest" style={{ color: '#EED98A' }}>{t('delegate_committee_time')}</span>
           </div>
           <div className="p-5" style={{ backgroundColor: '#EDE7D8' }}>
           {/* Column headers */}
           <div className="flex items-center gap-2 text-[10px] text-[#7A5A38] font-mono mb-1.5 px-2">
             <span className="w-4 shrink-0" />
-            <span className="flex-1">Country</span>
-            <span className="w-16 text-right">Time</span>
-            <span className="w-8 text-right">Pts</span>
+            <span className="flex-1">{t('delegate_country_col')}</span>
+            <span className="w-16 text-right">{t('delegate_time_col')}</span>
+            <span className="w-8 text-right">{t('delegate_pts_col')}</span>
           </div>
           <div className="space-y-1.5">
             {ranking.slice(0, 10).map((r, i) => (
@@ -637,7 +639,7 @@ function StatisticsTab({ committee, country }: { committee: Committee; country: 
         <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid #DDD4C0' }}>
           <div className="px-5 py-3 flex items-center gap-3" style={{ backgroundColor: '#1B3828', borderBottom: '1px solid #3D7A52' }}>
             <div className="w-1 h-4 rounded-full" style={{ backgroundColor: '#EED98A' }} />
-            <span className="text-xs font-mono font-bold tracking-widest" style={{ color: '#EED98A' }}>HOW TO IMPROVE YOUR SCORE</span>
+            <span className="text-xs font-mono font-bold tracking-widest" style={{ color: '#EED98A' }}>{t('delegate_tips_header')}</span>
           </div>
           <div className="p-5" style={{ backgroundColor: '#EDE7D8' }}>
           <div className="space-y-2">
@@ -661,6 +663,11 @@ type DelegateTab = 'session' | 'documents' | 'chat' | 'stats';
 function DelegateSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const t = useT();
   const { language } = useLanguage();
+  const PHASE_LABEL: Record<string, string> = {
+    'pre-session': t('delegate_phase_pre_session'),
+    'roll-call': t('delegate_phase_roll_call'),
+    'speakers-list': t('delegate_phase_gsl'),
+  };
   const { code } = use(params);
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -807,7 +814,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     return (
       <div className="min-h-screen bg-[#EDE7D8] flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-black mb-2" style={{ color: '#1B3828' }}>Session not found</h1>
+          <h1 className="text-2xl font-black mb-2" style={{ color: '#1B3828' }}>{t('delegate_session_not_found')}</h1>
           <p className="mb-6" style={{ color: '#6A5A4A' }}>Code "{code}" is invalid or the session has ended.</p>
           <Link href="/join" className="font-black text-white px-6 py-3 rounded-xl transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828' }}>TRY AGAIN</Link>
         </div>
@@ -841,7 +848,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     } : { ...DEFAULT_MOTION_NAMES };
     if (committee.phase === 'moderated-caucus') return mn.moderated ?? PHASE_LABELS['moderated-caucus'];
     if (committee.phase === 'unmoderated-caucus') return mn.unmoderated ?? PHASE_LABELS['unmoderated-caucus'];
-    return PHASE_LABELS[committee.phase] || committee.phase;
+    return PHASE_LABEL[committee.phase] ?? PHASE_LABELS[committee.phase] ?? committee.phase;
   })();
 
   const isAdjourned = committee.phase === 'adjourned';
@@ -879,33 +886,33 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
 
   // Section 7 — shortened tab labels
   const tabs: { key: DelegateTab; label: string }[] = [
-    { key: 'session',   label: 'Session' },
-    { key: 'documents', label: 'Documents' },
-    { key: 'chat',      label: 'Chat' },
-    { key: 'stats',     label: 'Stats' },
+    { key: 'session',   label: t('delegate_tab_session') },
+    { key: 'documents', label: t('delegate_tab_documents') },
+    { key: 'chat',      label: t('delegate_tab_chat') },
+    { key: 'stats',     label: t('delegate_tab_stats') },
   ];
 
   // ── Absent banner (blocks active interaction)
   const AbsentBanner = () => (
     <div className="mx-4 mt-4 rounded-xl p-4" style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #DDD4C0' }}>
-      <div className="text-sm font-black mb-1" style={{ color: '#1B3828' }}>YOU ARE CURRENTLY ABSENT</div>
-      <div className="text-xs mb-3" style={{ color: '#6A5A4A' }}>Mark yourself Present or Present & Voting to participate actively.</div>
+      <div className="text-sm font-black mb-1" style={{ color: '#1B3828' }}>{t('delegate_absent_title')}</div>
+      <div className="text-xs mb-3" style={{ color: '#6A5A4A' }}>{t('delegate_absent_desc')}</div>
       {joinStatus && !joinDenied ? (
         <div className="text-xs font-medium flex items-center gap-1.5" style={{ color: '#1B3828' }}>
           <div className="w-3 h-3 border border-t-transparent rounded-full animate-spin" style={{ borderColor: '#1B3828' }} />
-          Join request sent — waiting for chair approval…
+          {t('delegate_join_waiting')}
         </div>
       ) : (
         <div className="flex gap-2">
           <button onClick={() => handleRequestJoin('present')} disabled={joinRequesting}
             className="flex-1 py-2 rounded-xl text-xs font-bold transition-colors focus:outline-none"
             style={{ backgroundColor: 'transparent', border: '1px solid #DDD4C0', color: '#6A5A4A' }}>
-            PRESENT (P)
+            {t('delegate_present_btn')}
           </button>
           <button onClick={() => handleRequestJoin('present-voting')} disabled={joinRequesting}
             className="flex-1 py-2 rounded-xl text-xs font-black text-white transition-colors focus:outline-none"
             style={{ backgroundColor: '#1B3828' }}>
-            PRESENT &amp; VOTING (P+V)
+            {t('delegate_pv_btn')}
           </button>
         </div>
       )}
@@ -1031,17 +1038,17 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                   <FlagImg code={getCountryByName(country)?.code ?? ''} size={88} className="rounded-full shadow-lg" />
                 </div>
                 <div className="rounded-xl p-5 text-center" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
-                  <p className="text-3xl font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>MODERATED CAUCUS</p>
+                  <p className="text-3xl font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>{t('delegate_moderated_caucus_label')}</p>
                   <p className="text-xl mt-2" style={{ color: '#6A5A4A' }}>{committee.caucus.purpose}</p>
                   {committee.caucus.currentSpeaker && (
                     <div className="mt-4">
-                      <div className="text-xs text-[#9A8A78] mb-2 font-mono">NOW SPEAKING</div>
+                      <div className="text-xs text-[#9A8A78] mb-2 font-mono">{t('delegate_now_speaking')}</div>
                       {/* Section 1: FlagImg replaces text-6xl emoji */}
                       <div className="flex justify-center">
                         <FlagImg code={getCountryByName(committee.caucus.currentSpeaker)?.code ?? ''} size={64} />
                       </div>
                       <div className={`text-xl font-bold mt-1 ${committee.caucus.currentSpeaker === country ? 'text-[#B6871F]' : 'text-[#1C1410]'}`}>
-                        {committee.caucus.currentSpeaker}{committee.caucus.currentSpeaker === country && ' (You)'}
+                        {committee.caucus.currentSpeaker}{committee.caucus.currentSpeaker === country && t('delegate_you_suffix')}
                       </div>
                     </div>
                   )}
@@ -1055,7 +1062,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                 {/* Upcoming speakers in caucus queue */}
                 {(committee.caucusQueue ?? []).length > 0 && (
                   <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl p-4">
-                    <div className="text-xs text-[#9A8A78] font-mono mb-2">UPCOMING SPEAKERS</div>
+                    <div className="text-xs text-[#9A8A78] font-mono mb-2">{t('delegate_upcoming_speakers')}</div>
                     <div className="space-y-1.5">
                       {committee.caucusQueue.slice(0, 8).map((s, i) => (
                         <div key={s.delegateId} className={`flex items-center gap-3 py-1.5 px-2 rounded-lg text-sm ${s.country === country ? 'bg-[#1B3828]/20 border border-[#1B3828]/30' : ''}`}>
@@ -1063,7 +1070,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                           {/* Section 1: FlagImg replaces text-lg emoji */}
                           <FlagImg code={getCountryByName(s.country)?.code ?? ''} size={20} className="shrink-0" />
                           <span className={s.country === country ? 'text-[#B6871F] font-bold' : 'text-[#6A5A4A]'}>
-                            {s.country}{s.country === country && ' (You)'}
+                            {s.country}{s.country === country && t('delegate_you_suffix')}
                           </span>
                         </div>
                       ))}
@@ -1080,7 +1087,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                   <FlagImg code={getCountryByName(country)?.code ?? ''} size={88} className="rounded-full shadow-lg" />
                 </div>
                 <div className="rounded-xl p-6 text-center space-y-3" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
-                  <p className="text-3xl font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>UNMODERATED CAUCUS</p>
+                  <p className="text-3xl font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>{t('delegate_unmoderated_caucus_label')}</p>
                   {committee.caucus.purpose && (
                     <p className="text-xl" style={{ color: '#6A5A4A' }}>{committee.caucus.purpose}</p>
                   )}
@@ -1090,7 +1097,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                   <div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: '#DDD4C0' }}>
                     <div className="h-full rounded-full transition-all" style={{ width: `${committee.caucus.totalTime > 0 ? (committee.caucus.remainingTime / committee.caucus.totalTime) * 100 : 0}%`, backgroundColor: '#1B3828' }} />
                   </div>
-                  <p className="text-sm" style={{ color: '#9A8A78' }}>Get networking — use this time to lobby and draft.</p>
+                  <p className="text-sm" style={{ color: '#9A8A78' }}>{t('delegate_unmod_desc')}</p>
                 </div>
               </div>
             )}
@@ -1111,8 +1118,8 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                 );
                 return (
                   <div className="rounded-xl p-5 text-center space-y-2" style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #1B3828' }}>
-                    <p className="text-xs font-mono font-bold" style={{ color: '#1B3828' }}>VOTING PROCEDURE</p>
-                    <p className="text-2xl font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>VOTE IN PROGRESS</p>
+                    <p className="text-xs font-mono font-bold" style={{ color: '#1B3828' }}>{t('delegate_voting_procedure')}</p>
+                    <p className="text-2xl font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{t('delegate_vote_in_progress')}</p>
                     {activeDoc && (
                       <>
                         <p className="text-sm font-mono text-[#7B4A1E]">{activeDoc.docCode}</p>
@@ -1120,7 +1127,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                       </>
                     )}
                     <p className="text-xs text-[#7A5A38] mt-2">
-                      Your chair is conducting the vote. Check the voting screen for results.
+                      {t('delegate_vote_desc')}
                     </p>
                   </div>
                 );
@@ -1129,22 +1136,22 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
               {/* Status card */}
               <div className="rounded-xl p-5 border bg-[#EDE7D8] border-[#DDD4C0]">
                 <div className="flex-1 min-w-0">
-                  <div className="text-xs font-mono text-[#9A8A78] mb-2">SESSION STATUS</div>
+                  <div className="text-xs font-mono text-[#9A8A78] mb-2">{t('delegate_session_status')}</div>
                   <div className="text-2xl font-black mb-1" style={{ color: isCurrentSpeaker ? '#1B3828' : isAdjourned ? '#8B2020' : '#1C1410' }}>
-                    {isCurrentSpeaker ? 'YOU HAVE THE FLOOR' : phaseDisplay}
+                    {isCurrentSpeaker ? t('delegate_you_have_floor') : phaseDisplay}
                   </div>
                   {/* queue position text removed */}
 
                   {!isCurrentSpeaker && committee.currentSpeaker && committee.phase === 'speakers-list' && (
                     <div className="mt-3">
-                      <div className="text-xs text-[#9A8A78] mb-1">NOW SPEAKING</div>
+                      <div className="text-xs text-[#9A8A78] mb-1">{t('delegate_now_speaking')}</div>
                       <div className="flex items-center gap-2">
                         <FlagImg code={getCountryByName(committee.currentSpeaker.country)?.code ?? ''} size={24} />
                         <span className="font-bold text-[#1C1410]">{committee.currentSpeaker.country}</span>
                       </div>
                       {isOnSpeakersList && myQueueIndex === 0 && (
                         <p className="text-sm font-black mt-2" style={{ color: '#B8844A' }}>
-                          You're up next!
+                          {t('delegate_up_next')}
                         </p>
                       )}
                     </div>
@@ -1153,7 +1160,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                   {committee.caucus && (
                     <div className="mt-3">
                       <div className="text-sm text-[#6A5A4A] mb-2">
-                        {committee.caucus.type === 'moderated' ? 'Moderated' : 'Unmoderated'} Caucus
+                        {committee.caucus.type === 'moderated' ? t('delegate_moderated') : t('delegate_unmoderated')} {language === 'es' ? 'Cáucus' : 'Caucus'}
                         {committee.caucus.purpose && ` — ${committee.caucus.purpose}`}
                       </div>
                       <div className="text-3xl font-black font-mono text-[#1C1410]">
@@ -1164,11 +1171,11 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                       </div>
                       {committee.caucus.currentSpeaker && (
                         <div className="mt-3 text-sm flex items-center gap-2">
-                          <span className="text-[#6A5A4A]">Speaking:</span>
+                          <span className="text-[#6A5A4A]">{t('delegate_speaking_label')}</span>
                           {/* Section 1: FlagImg replaces text-xl */}
                           <FlagImg code={getCountryByName(committee.caucus.currentSpeaker)?.code ?? ''} size={20} />
                           <span className={`font-bold ${committee.caucus.currentSpeaker === country ? 'text-[#B6871F]' : 'text-[#1C1410]'}`}>
-                            {committee.caucus.currentSpeaker}{committee.caucus.currentSpeaker === country && ' (You)'}
+                            {committee.caucus.currentSpeaker}{committee.caucus.currentSpeaker === country && t('delegate_you_suffix')}
                           </span>
                         </div>
                       )}
@@ -1181,10 +1188,10 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
               {committee.phase === 'speakers-list' && (
                 <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl p-4">
                   <div className="flex items-center justify-between mb-3">
-                    <div className="text-xs text-[#9A8A78] font-mono">SPEAKERS LIST</div>
+                    <div className="text-xs text-[#9A8A78] font-mono">{t('delegate_speakers_list_header')}</div>
                     {!isOnSpeakersList && !isCurrentSpeaker && myDelegate?.status !== 'absent' && !sessionEnded && (
                       isGslRequestPending ? (
-                        <span className="text-xs font-semibold" style={{ color: '#B8844A' }}>Awaiting approval…</span>
+                        <span className="text-xs font-semibold" style={{ color: '#B8844A' }}>{t('delegate_awaiting_approval')}</span>
                       ) : gslDenied ? (
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-red-400">{t('delegate_gsl_denied')}</span>
@@ -1203,12 +1210,12 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                     )}
                     {isOnSpeakersList && (
                       <span className="text-xs font-bold" style={{ color: '#1B3828' }}>
-                        {myQueueIndex === 0 ? '✓ Up next' : `✓ After ${myQueueIndex} speaker${myQueueIndex !== 1 ? 's' : ''}`}
+                        {myQueueIndex === 0 ? t('delegate_up_next_queue') : t('delegate_after_speakers').replace('{n}', String(myQueueIndex)).replace('{s}', myQueueIndex !== 1 ? 's' : '')}
                       </span>
                     )}
                   </div>
                   {committee.speakersList.length === 0 ? (
-                    <p className="text-sm text-[#9A8A78]">No speakers queued</p>
+                    <p className="text-sm text-[#9A8A78]">{t('delegate_no_speakers')}</p>
                   ) : (
                     <div className="space-y-1.5">
                       {committee.speakersList.map((s, i) => (
@@ -1217,7 +1224,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                           {/* Section 1: FlagImg replaces text-lg */}
                           <FlagImg code={getCountryByName(s.country)?.code ?? ''} size={20} className="shrink-0" />
                           <span className="font-semibold" style={{ color: s.country === country ? '#1B3828' : '#1C1410', fontWeight: s.country === country ? 700 : 600 }}>
-                            {s.country}{s.country === country && ' (You)'}
+                            {s.country}{s.country === country && t('delegate_you_suffix')}
                           </span>
                         </div>
                       ))}
@@ -1228,15 +1235,15 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
 
               {/* My delegation + status toggle */}
               <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl p-4">
-                <div className="text-xs text-[#9A8A78] font-mono mb-3">YOUR DELEGATION</div>
+                <div className="text-xs text-[#9A8A78] font-mono mb-3">{t('delegate_your_delegation')}</div>
                 <div className="flex items-center gap-3 mb-3">
                   {/* Section 1: FlagImg replaces text-3xl */}
                   <FlagImg code={getCountryByName(country)?.code ?? ''} size={36} />
                   <div>
                     <div className="font-black text-base" style={{ color: '#1C1410' }}>{country}</div>
                     <div className="text-xs font-semibold mt-0.5" style={{ color: myDelegate?.status === 'absent' ? '#8B2020' : '#1B3828' }}>
-                      {myDelegate?.status === 'present' ? 'Present' :
-                       myDelegate?.status === 'present-voting' ? 'Present & Voting' : 'Absent'}
+                      {myDelegate?.status === 'present' ? t('delegate_status_present') :
+                       myDelegate?.status === 'present-voting' ? t('delegate_status_pv') : t('delegate_status_absent')}
                     </div>
                   </div>
                 </div>
@@ -1255,7 +1262,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                           cursor: changesLeft <= 0 && myDelegate?.status !== 'present' ? 'not-allowed' : 'pointer',
                         }}
                       >
-                        Present (P)
+                        {t('delegate_present_btn')}
                       </button>
                       <button
                         onClick={() => handleStatusChange('present-voting')}
@@ -1268,11 +1275,11 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                           cursor: changesLeft <= 0 && myDelegate?.status !== 'present-voting' ? 'not-allowed' : 'pointer',
                         }}
                       >
-                        Present &amp; Voting (P+V)
+                        {t('delegate_pv_btn')}
                       </button>
                     </div>
                     <p className="text-[10px] text-[#9A8A78] mt-1.5 text-center">
-                      {changesLeft} status change{changesLeft !== 1 ? 's' : ''} remaining (resets after 3 hrs)
+                      {t('delegate_status_changes_left').replace('{n}', String(changesLeft)).replace('{s}', changesLeft !== 1 ? 's' : '')}
                     </p>
                   </div>
                 )}
@@ -1301,13 +1308,13 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                       onClick={() => setDocsSection('submit')}
                       className="flex-1 py-2.5 text-xs font-black transition-colors focus:outline-none"
                       style={{ color: docsSection === 'submit' ? '#1B3828' : '#9A8A78', borderBottom: docsSection === 'submit' ? '2px solid #1B3828' : '2px solid transparent', marginBottom: '-1px', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.04em' }}>
-                      SUBMIT DOCUMENT
+                      {t('delegate_submit_document')}
                     </button>
                     <button
                       onClick={() => setDocsSection('view')}
                       className="flex-1 py-2.5 text-xs font-black transition-colors focus:outline-none"
                       style={{ color: docsSection === 'view' ? '#1B3828' : '#9A8A78', borderBottom: docsSection === 'view' ? '2px solid #1B3828' : '2px solid transparent', marginBottom: '-1px', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.04em' }}>
-                      VIEW DOCUMENTS
+                      {t('delegate_view_documents')}
                     </button>
                   </div>
 
@@ -1320,7 +1327,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                           <DelegateDocumentsTab committee={committee} country={country} />
                         </div>
                       ) : (
-                        <div className="p-8 text-center font-semibold" style={{ color: '#9A8A78' }}>Document submission is closed — session has ended.</div>
+                        <div className="p-8 text-center font-semibold" style={{ color: '#9A8A78' }}>{t('delegate_session_closed_docs')}</div>
                       )}
                     </>
                   )}
@@ -1328,9 +1335,9 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                   {/* View DRs section */}
                   {docsSection === 'view' && (
                     <div className="p-4 max-w-2xl mx-auto space-y-3">
-                      <h2 className="text-lg font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>DRAFT RESOLUTIONS</h2>
+                      <h2 className="text-lg font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{t('delegate_draft_resolutions')}</h2>
                       {drs.length === 0 ? (
-                        <div className="text-center py-8 font-semibold" style={{ color: '#9A8A78' }}>No draft resolutions on the floor yet</div>
+                        <div className="text-center py-8 font-semibold" style={{ color: '#9A8A78' }}>{t('delegate_no_drs')}</div>
                       ) : (
                         drs.map((doc) => {
                           const isPresenting = doc.status === 'introduced';
@@ -1344,10 +1351,10 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                                   <span className="text-xs font-mono font-bold mr-2" style={{ color: '#1B3828' }}>{doc.docCode}</span>
                                   <span className="font-semibold text-sm" style={{ color: '#1C1410' }}>{doc.title}</span>
                                 </div>
-                                {isPassed && <span className="shrink-0 text-xs font-black px-2 py-0.5 rounded-full" style={{ backgroundColor: '#1B3828', color: '#EED98A' }}>Passed</span>}
-                                {isFailed && <span className="shrink-0 text-xs font-black px-2 py-0.5 rounded-full" style={{ color: '#8B2020', border: '1px solid rgba(139,32,32,0.3)' }}>Failed</span>}
-                                {isPresenting && <span className="shrink-0 text-xs font-black px-2 py-0.5 rounded-full animate-pulse" style={{ color: '#B8844A', border: '1px solid #B8844A' }}>Now Presenting</span>}
-                                {isPendingVote && <span className="shrink-0 text-xs font-black px-2 py-0.5 rounded-full" style={{ color: '#B8844A', border: '1px solid rgba(184,132,74,0.5)' }}>Pending Vote</span>}
+                                {isPassed && <span className="shrink-0 text-xs font-black px-2 py-0.5 rounded-full" style={{ backgroundColor: '#1B3828', color: '#EED98A' }}>{t('delegate_passed_badge')}</span>}
+                                {isFailed && <span className="shrink-0 text-xs font-black px-2 py-0.5 rounded-full" style={{ color: '#8B2020', border: '1px solid rgba(139,32,32,0.3)' }}>{t('delegate_failed_badge')}</span>}
+                                {isPresenting && <span className="shrink-0 text-xs font-black px-2 py-0.5 rounded-full animate-pulse" style={{ color: '#B8844A', border: '1px solid #B8844A' }}>{t('delegate_now_presenting')}</span>}
+                                {isPendingVote && <span className="shrink-0 text-xs font-black px-2 py-0.5 rounded-full" style={{ color: '#B8844A', border: '1px solid rgba(184,132,74,0.5)' }}>{t('delegate_pending_vote')}</span>}
                               </div>
                               <div className="text-xs" style={{ color: '#9A8A78' }}>
                                 {doc.sponsors.map((s, i) => (
