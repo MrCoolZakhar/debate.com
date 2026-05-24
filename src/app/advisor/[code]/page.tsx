@@ -4,7 +4,7 @@ import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { getCommitteeByCode, subscribeToCommittee, sendMessage as sendMessageDB } from '@/lib/committeeService';
 import { DEFAULT_MOTION_NAMES } from '@/lib/settingsStore';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage, useT } from '@/contexts/LanguageContext';
 import { Committee } from '@/lib/types';
 import { getFlagUrl, getCountryByName } from '@/lib/countries';
 import { Emoji } from '@/components/Emoji';
@@ -22,7 +22,7 @@ function ordinal(n: number): string {
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
 }
 
-const NUDGE_MESSAGES = ['Good job!', 'Keep going!', 'Great speech!', 'You got this!', 'Stay confident!'];
+const NUDGE_KEYS = ['advisor_nudge_1', 'advisor_nudge_2', 'advisor_nudge_3', 'advisor_nudge_4', 'advisor_nudge_5'] as const;
 
 function ExpandedDelegateCard({
   delegate,
@@ -34,6 +34,7 @@ function ExpandedDelegateCard({
   onClose: () => void;
 }) {
   const { language } = useLanguage();
+  const t = useT();
   const mn = language === 'es' ? {
     moderated: 'Cáucus Moderado',
     unmoderated: 'Cáucus No Moderado',
@@ -52,8 +53,8 @@ function ExpandedDelegateCard({
   );
 
   const statusLabel =
-    delegate.status === 'present' ? 'Present' :
-    delegate.status === 'present-voting' ? 'Present & Voting' : 'Absent';
+    delegate.status === 'present' ? t('delegate_status_present') :
+    delegate.status === 'present-voting' ? t('delegate_status_pv') : t('delegate_status_absent');
 
   const statusColor =
     delegate.status === 'present' ? '#3D7A52' :
@@ -65,19 +66,20 @@ function ExpandedDelegateCard({
     ? <img src={getFlagUrl(found.code)} alt={found.code} style={{ width: '96px', height: '68px', objectFit: 'cover', borderRadius: '10px', border: '1.5px solid rgba(28,20,16,0.10)' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
     : null;
 
-  const handleNudge = (emoji: string) => {
-    sendMessageDB(committee.id, 'Faculty Advisor', emoji, true, delegate.country);
-    setNudgeSent(emoji);
+  const handleNudge = (nudgeKey: string) => {
+    const msg = t(nudgeKey as any);
+    sendMessageDB(committee.id, 'Faculty Advisor', msg, true, delegate.country);
+    setNudgeSent(msg);
     setTimeout(() => setNudgeSent(null), 1500);
   };
 
   let queueDisplay: string;
   if (isCurrentSpeaker) {
-    queueDisplay = 'Currently Speaking';
+    queueDisplay = t('advisor_currently_speaking');
   } else if (queueIndex >= 0) {
-    queueDisplay = `Next up: #${queueIndex + 1} in queue`;
+    queueDisplay = t('advisor_next_up').replace('{n}', String(queueIndex + 1));
   } else {
-    queueDisplay = 'Not in queue';
+    queueDisplay = t('advisor_not_in_queue');
   }
 
   let motionDisplay: string;
@@ -93,7 +95,7 @@ function ExpandedDelegateCard({
     motionDisplay = typeLabel[lastMotion.type] || lastMotion.type;
     if (lastMotion.topic) motionDisplay += ` — ${lastMotion.topic}`;
   } else {
-    motionDisplay = 'No motion raised';
+    motionDisplay = t('advisor_no_motion');
   }
 
   return (
@@ -117,34 +119,34 @@ function ExpandedDelegateCard({
 
       <div className="space-y-3 w-full">
         <div className="bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3">
-          <p className="text-xs text-[#9A8A78] font-mono uppercase tracking-wider mb-1">Last Motion Raised</p>
+          <p className="text-xs text-[#9A8A78] font-mono uppercase tracking-wider mb-1">{t('advisor_last_motion')}</p>
           <p className="text-sm text-[#1C1410]">{motionDisplay}</p>
         </div>
 
         <div className="bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3">
-          <p className="text-xs text-[#9A8A78] font-mono uppercase tracking-wider mb-1">Position in Speakers Queue</p>
+          <p className="text-xs text-[#9A8A78] font-mono uppercase tracking-wider mb-1">{t('advisor_queue_position')}</p>
           <p className="text-sm text-[#1C1410]">{queueDisplay}</p>
         </div>
       </div>
 
       <div className="flex flex-col items-center">
-        <p className="text-xs font-mono uppercase tracking-wider mb-2" style={{ color: '#9A8A78' }}>Send Nudge</p>
+        <p className="text-xs font-mono uppercase tracking-wider mb-2" style={{ color: '#9A8A78' }}>{t('advisor_send_nudge')}</p>
         <div className="flex gap-2 flex-wrap justify-center">
-          {NUDGE_MESSAGES.map((msg) => (
+          {NUDGE_KEYS.map((nudgeKey) => (
             <button
-              key={msg}
-              onClick={() => handleNudge(msg)}
+              key={nudgeKey}
+              onClick={() => handleNudge(nudgeKey)}
               className="px-3 py-1.5 rounded-xl text-xs font-bold transition-colors focus:outline-none"
               style={{ backgroundColor: 'transparent', border: '1px solid #DDD4C0', color: '#1B3828' }}
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; (e.currentTarget as HTMLElement).style.backgroundColor = '#EDE7D8'; }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
             >
-              {msg}
+              {t(nudgeKey as any)}
             </button>
           ))}
         </div>
         {nudgeSent && (
-          <p className="text-xs font-semibold mt-2" style={{ color: '#1B3828' }}>Sent: "{nudgeSent}"</p>
+          <p className="text-xs font-semibold mt-2" style={{ color: '#1B3828' }}>{t('advisor_nudge_sent').replace('{msg}', nudgeSent ?? '')}</p>
         )}
       </div>
     </div>
@@ -224,6 +226,7 @@ function NormalDelegateCard({ delegate, committee, onSelect }: { delegate: Commi
 export default function AdvisorPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = use(params);
   const { language } = useLanguage();
+  const t = useT();
   const [committee, setCommittee] = useState<Committee | null>(null);
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
 
@@ -247,8 +250,8 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
     return (
       <div className="min-h-screen bg-[#F6F1E9] flex items-center justify-center">
         <div className="text-center">
-          <p className="text-[#1C1410] text-xl font-bold mb-4">Committee not found</p>
-          <Link href="/join" className="bg-[#1B3828] text-white px-6 py-3 rounded-xl font-semibold">Join page</Link>
+          <p className="text-[#1C1410] text-xl font-bold mb-4">{t('advisor_not_found')}</p>
+          <Link href="/join" className="bg-[#1B3828] text-white px-6 py-3 rounded-xl font-semibold">{t('advisor_join_page')}</Link>
         </div>
       </div>
     );
@@ -261,9 +264,9 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
       <div className="min-h-screen flex flex-col items-center justify-center text-center px-8" style={{ backgroundColor: '#EDE7D8' }}>
         <div className="pointer-events-none fixed inset-0 z-0" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
         <p className="text-xs font-mono font-bold tracking-widest mb-2 relative z-10" style={{ color: '#1B3828' }}>{committee.name} · {committee.code}</p>
-        <h1 className="text-5xl font-black mb-4 tracking-wide relative z-10" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>SESSION ADJOURNED</h1>
-        <p className="text-lg relative z-10" style={{ color: '#6A5A4A' }}>Please wait until the chair reopens the session.</p>
-        <p className="text-xs mt-8 relative z-10" style={{ color: '#9A8A78' }}>Press ESC to return to main menu</p>
+        <h1 className="text-5xl font-black mb-4 tracking-wide relative z-10" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{t('advisor_adjourned_title')}</h1>
+        <p className="text-lg relative z-10" style={{ color: '#6A5A4A' }}>{t('advisor_adjourned_desc')}</p>
+        <p className="text-xs mt-8 relative z-10" style={{ color: '#9A8A78' }}>{t('advisor_adjourned_esc')}</p>
       </div>
     );
   }
@@ -325,7 +328,7 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
           <img src="/GavellingLogo.png" alt="Gavelling" className="w-[16vw] h-auto max-h-9 object-contain" onError={(e)=>{(e.target as HTMLImageElement).style.display="none"}} />
         </Link>
         <span className="flex-1" />
-        <span className="text-xs px-2 py-1 bg-[#DDD4C0] text-[#6A5A4A] rounded-lg shrink-0">Faculty Advisor — Read Only</span>
+        <span className="text-xs px-2 py-1 bg-[#DDD4C0] text-[#6A5A4A] rounded-lg shrink-0">{t('advisor_readonly_badge')}</span>
         <span className="text-xs font-mono bg-[#DDD4C0] text-[#1C1410] px-2.5 py-1 rounded-lg shrink-0">{committee.code}</span>
       </header>
 
@@ -339,7 +342,7 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
             <p className="text-lg font-black leading-tight truncate mb-0.5" style={{ color: '#EED98A' }}>{committee.name}</p>
             {committee.topic && (
               <p className="text-xs leading-snug line-clamp-2 mb-2" style={{ color: 'rgba(238,217,138,0.55)' }}>
-                <span className="font-semibold" style={{ color: 'rgba(238,217,138,0.7)' }}>Topic: </span>{committee.topic}
+                <span className="font-semibold" style={{ color: 'rgba(238,217,138,0.7)' }}>{t('advisor_topic_label')}</span>{committee.topic}
               </p>
             )}
             {/* Pie charts — using MajorityPie component */}
@@ -355,7 +358,7 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
           {/* Now Speaking label */}
           <div className="px-4 py-2.5 shrink-0" style={{ borderBottom: '1px solid rgba(61,122,82,0.4)' }}>
             <p className="text-xs font-mono uppercase tracking-wider" style={{ color: 'rgba(238,217,138,0.5)' }}>
-              {isCaucus ? (caucus?.type === 'moderated' ? 'Caucus Speaker' : 'Caucus') : 'Now Speaking'}
+              {isCaucus ? (caucus?.type === 'moderated' ? t('advisor_caucus_speaker') : t('advisor_caucus_label')) : t('advisor_now_speaking_gsl')}
             </p>
           </div>
 
@@ -377,7 +380,7 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
               </div>
             ) : (
               <div className="flex flex-col items-center px-4 py-5 shrink-0" style={{ borderBottom: '1px solid rgba(61,122,82,0.4)' }}>
-                <p className="text-sm text-center" style={{ color: 'rgba(237,231,216,0.5)' }}>No speaker yet</p>
+                <p className="text-sm text-center" style={{ color: 'rgba(237,231,216,0.5)' }}>{t('advisor_no_speaker')}</p>
                 {caucus?.purpose && (
                   <p className="text-xs mt-2 text-center" style={{ color: 'rgba(238,217,138,0.4)' }}>{caucus.purpose}</p>
                 )}
@@ -417,7 +420,7 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
               </div>
             ) : (
               <div className="flex flex-col items-center px-4 py-5 shrink-0" style={{ borderBottom: '1px solid rgba(61,122,82,0.4)' }}>
-                <p className="text-sm text-center" style={{ color: 'rgba(237,231,216,0.5)' }}>No current speaker</p>
+                <p className="text-sm text-center" style={{ color: 'rgba(237,231,216,0.5)' }}>{t('advisor_no_current_speaker')}</p>
               </div>
             )
           )}
@@ -426,11 +429,11 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
           <div className="flex-1 overflow-y-auto">
             <div className="px-4 py-2 shrink-0" style={{ borderBottom: '1px solid rgba(61,122,82,0.4)' }}>
               <p className="text-xs font-mono uppercase tracking-wider" style={{ color: 'rgba(238,217,138,0.5)' }}>
-                Up Next ({displayQueue.length})
+                {t('advisor_up_next').replace('{n}', String(displayQueue.length))}
               </p>
             </div>
             {displayQueue.length === 0 ? (
-              <div className="px-4 py-4 text-xs" style={{ color: 'rgba(237,231,216,0.4)' }}>No speakers queued</div>
+              <div className="px-4 py-4 text-xs" style={{ color: 'rgba(237,231,216,0.4)' }}>{t('advisor_no_speakers_queued')}</div>
             ) : (
               displayQueue.map((s, i) => {
                 const c = getCountryByName(s.country);
@@ -451,8 +454,8 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
           {selectedCountry === null ? (
             <>
               <div className="mb-4 text-center">
-                <h2 className="text-2xl font-black tracking-wide" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>ALL DELEGATES</h2>
-                <p className="text-sm mt-1" style={{ color: '#9A8A78' }}>Click a card to expand delegate details</p>
+                <h2 className="text-2xl font-black tracking-wide" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>{t('advisor_all_delegates')}</h2>
+                <p className="text-sm mt-1" style={{ color: '#9A8A78' }}>{t('advisor_click_to_expand')}</p>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
                 {sortedDelegates.map((d) => (
@@ -479,7 +482,7 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
 
               <div className="flex-1 overflow-y-auto">
                 <p className="text-xs font-mono uppercase tracking-wider mb-3" style={{ color: '#1B3828', fontWeight: 700 }}>
-                  Other Delegates ({otherDelegates.length})
+                  {t('advisor_other_delegates').replace('{n}', String(otherDelegates.length))}
                 </p>
                 <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(5, minmax(0, 1fr))' }}>
                   {otherDelegates.map((d) => (
