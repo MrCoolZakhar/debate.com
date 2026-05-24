@@ -12,6 +12,7 @@ const AMBASSADORS = [
   { name: 'manuela', src: '/ambassador-photos/manuela_ambassador.png' },
   { name: 'noelia', src: '/ambassador-photos/noelia_ambassador.png' },
   { name: 'paolo', src: '/ambassador-photos/paolo_ambassador.png' },
+  { name: 'spencer', src: '/ambassador-photos/spencer_ambassador.jpeg' },
   { name: 'tyler', src: '/ambassador-photos/tyler_ambassador.png' },
   { name: 'valentina', src: '/ambassador-photos/valentina_ambassador.png' },
   { name: 'victor', src: '/ambassador-photos/victor_ambassador.png' },
