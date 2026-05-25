@@ -1255,7 +1255,7 @@ export const translations = {
     delegate_speakers_list_header: 'LISTA DE ORADORES',
     delegate_awaiting_approval: 'Esperando aprobación…',
     delegate_up_next_queue: '✓ Siguiente',
-    delegate_after_speakers: '✓ En {n} orador{s}',
+    delegate_after_speakers: '✓ En {n} oradores',
     delegate_no_speakers: 'Sin oradores en cola',
     delegate_your_delegation: 'TU DELEGACIÓN',
     delegate_status_present: 'Presente',
