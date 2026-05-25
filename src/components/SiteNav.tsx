@@ -95,7 +95,7 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
 
         {/* Language toggle */}
         <div className="relative hidden md:block mr-3 ml-auto">
-          <div className="relative">
+          <div className="relative" suppressHydrationWarning>
             {/* NEW badge — overlaps the top of the button */}
             <span
               className="absolute right-0 z-10 pointer-events-none"

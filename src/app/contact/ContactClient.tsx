@@ -122,8 +122,7 @@ export default function ContactClient() {
                 className="font-black text-white tracking-tight leading-[0.9]"
                 style={{ fontSize: 'clamp(62px, 7.5vw, 110px)' }}
               >
-                The Floor<br />
-                Is{' '}
+                {t('contact_hero_line1')}{t('contact_hero_line2_plain') ? <><br />{t('contact_hero_line2_plain')}{' '}</> : ' '}
                 <span
                   style={{
                     fontFamily: "'Playfair Display', serif",
@@ -132,7 +131,7 @@ export default function ContactClient() {
                     color: '#EED98A',
                   }}
                 >
-                  Yours.
+                  {t('contact_hero_line2_italic')}
                 </span>
               </h1>
 
@@ -159,10 +158,10 @@ export default function ContactClient() {
                     lineHeight: 1.7,
                   }}
                 >
-                  "Diplomacy is the art of letting someone else have your way."
+                  {t('contact_hero_quote')}
                 </p>
                 <p className="text-xs mt-2" style={{ color: 'rgba(238, 217, 138, 0.2)', letterSpacing: '0.12em' }}>
-                  — Daniele Vare
+                  {t('contact_hero_quote_author')}
                 </p>
               </div>
             </div>
