@@ -1462,6 +1462,19 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     return () => clearInterval(id);
   }, [committee?.expiresAt]);
 
+  useEffect(() => {
+    if (!showChat && committee) {
+      const chairNamesLocal = committee.chairNames ?? [];
+      const count = committee.messages.filter(m => {
+        if (m.content.startsWith('__log__:')) return false;
+        if (m.isPrivate && m.sender === 'Faculty Advisor') return false;
+        if (m.isPrivate && m.recipient && !chairNamesLocal.includes(m.recipient) && m.recipient !== 'Chairs') return false;
+        return true;
+      }).length;
+      setChatReadCounts(prev => ({ ...prev, everyone: count }));
+    }
+  }, [showChat, committee]);
+
   if (loading) return <GavelLoader />;
 
   if (!committee) {
@@ -1757,19 +1770,6 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       setChatReadCounts(prev => ({ ...prev, everyone: count }));
     }
   };
-
-  useEffect(() => {
-    if (!showChat && committee) {
-      const chairNamesLocal = committee.chairNames ?? [];
-      const count = committee.messages.filter(m => {
-        if (m.content.startsWith('__log__:')) return false;
-        if (m.isPrivate && m.sender === 'Faculty Advisor') return false;
-        if (m.isPrivate && m.recipient && !chairNamesLocal.includes(m.recipient) && m.recipient !== 'Chairs') return false;
-        return true;
-      }).length;
-      setChatReadCounts(prev => ({ ...prev, everyone: count }));
-    }
-  }, [showChat]);
 
   return (
     <MobileGate>
