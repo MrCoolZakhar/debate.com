@@ -282,6 +282,8 @@ export const COUNTRY_NAMES_ES: Record<string, string> = {
   AE: 'Emiratos Árabes Unidos', GB: 'Reino Unido', US: 'Estados Unidos',
   UY: 'Uruguay', UZ: 'Uzbekistán', VU: 'Vanuatu', VE: 'Venezuela', VN: 'Vietnam',
   YE: 'Yemen', ZM: 'Zambia', ZW: 'Zimbabue', EU: 'Unión Europea',
+  // Non-UN-member / observer states
+  PS: 'Palestina', VA: 'Santa Sede', XK: 'Kosovo', CK: 'Islas Cook', NU: 'Niue',
 };
 
 export function getCountryDisplayName(name: string, language: string): string {
