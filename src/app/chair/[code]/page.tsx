@@ -219,12 +219,8 @@ function RtrCountryInput({
   const eligible = committee.delegates.filter((d) => d.status !== 'absent');
   const q = resolveQuery(query).toLowerCase();
   const matches = q
-    ? eligible
-        .filter((d) => d.country.trim().toLowerCase().startsWith(q))
-        .concat(eligible.filter((d) =>
-          !d.country.trim().toLowerCase().startsWith(q) &&
-          d.country.trim().toLowerCase().includes(q)
-        ))
+    ? eligible.filter((d) => startsWithCountryQuery(d.country, q, language))
+        .concat(eligible.filter((d) => !startsWithCountryQuery(d.country, q, language) && matchesCountryQuery(d.country, q, language)))
     : [];
   const topMatch = matches[0] ?? null;
 
@@ -248,7 +244,7 @@ function RtrCountryInput({
           className="flex-1 bg-transparent px-3 py-1.5 text-[#1C1410] text-xs placeholder-[#9A8A78] focus:outline-none"
         />
         {topMatch && query && !value && query.toLowerCase() !== topMatch.country.toLowerCase() && (
-          <span className="text-[10px] text-[#9A8A78] px-2 truncate max-w-[90px]">↵ {topMatch.country}</span>
+          <span className="text-[10px] text-[#9A8A78] px-2 truncate max-w-[90px]">↵ {getCountryDisplayName(topMatch.country, language)}</span>
         )}
       </div>
       {query && matches.length > 0 && !value && (
@@ -266,7 +262,7 @@ function RtrCountryInput({
                   ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-4 h-4 object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                   : <Emoji size="0.875rem">🌐</Emoji>}
               </span>
-                <span className="flex-1">{d.country}</span>
+                <span className="flex-1">{getCountryDisplayName(d.country, language)}</span>
                 {i === 0 && <span className="text-[#9A8A78] shrink-0">Enter ↵</span>}
               </button>
             );

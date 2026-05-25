@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { Committee, PendingMotion, PendingMotionType } from '@/lib/types';
-import { getCountryByName, getFlagUrl, getCountryDisplayName } from '@/lib/countries';
+import { getCountryByName, getFlagUrl, getCountryDisplayName, matchesCountryQuery, startsWithCountryQuery } from '@/lib/countries';
 import { Emoji } from '@/components/Emoji';
 import { useSettingsStore, DEFAULT_MOTION_NAMES, MotionNames } from '@/lib/settingsStore';
 import {
@@ -91,8 +91,8 @@ function ProposerInput({ candidates, value, onChange, blockedCountries }: {
   const inputRef = useRef<HTMLInputElement>(null);
   const resolved = COUNTRY_ACRONYMS[query.trim().toLowerCase()] ?? query.trim();
   const matches = resolved
-    ? candidates.filter((c) => c.toLowerCase().startsWith(resolved.toLowerCase()))
-        .concat(candidates.filter((c) => !c.toLowerCase().startsWith(resolved.toLowerCase()) && c.toLowerCase().includes(resolved.toLowerCase())))
+    ? candidates.filter((c) => startsWithCountryQuery(c, resolved, language))
+        .concat(candidates.filter((c) => !startsWithCountryQuery(c, resolved, language) && matchesCountryQuery(c, resolved, language)))
     : [];
   const top = matches[0] ?? null;
   const commit = (country: string) => {

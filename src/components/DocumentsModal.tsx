@@ -5,7 +5,7 @@ import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { useRouter } from 'next/navigation';
 import { Committee, CommitteeDocument, DocumentType, DocumentStatus } from '@/lib/types';
 import { TranslationKey } from '@/lib/translations';
-import { getCountryByName, getFlagUrl, getCountryDisplayName } from '@/lib/countries';
+import { getCountryByName, getFlagUrl, getCountryDisplayName, matchesCountryQuery, startsWithCountryQuery } from '@/lib/countries';
 import { Emoji } from '@/components/Emoji';
 import { useSettingsStore } from '@/lib/settingsStore';
 import {
@@ -66,10 +66,14 @@ function SponsorSelect({ candidates, selected, onChange }: {
   const t = useT();
   const { language } = useLanguage();
   const [query, setQuery] = useState('');
-  const available = candidates.filter((c) => !selected.includes(c) && c.toLowerCase().includes(query.toLowerCase()));
+  const available = !query.trim()
+    ? candidates.filter((c) => !selected.includes(c))
+    : candidates
+        .filter((c) => !selected.includes(c) && startsWithCountryQuery(c, query.trim(), language))
+        .concat(candidates.filter((c) => !selected.includes(c) && !startsWithCountryQuery(c, query.trim(), language) && matchesCountryQuery(c, query.trim(), language)));
   const add = (country: string) => { onChange([...selected, country]); setQuery(''); };
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') { e.preventDefault(); if (available.length > 0) add(available[0]); }
+    if (e.key === 'Enter') { e.preventDefault(); if (query.trim() && available.length > 0) add(available[0]); }
   };
   return (
     <div>

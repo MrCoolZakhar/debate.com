@@ -127,7 +127,7 @@ function AddCountryInput({ committee, onAdd, onQueryChange }: { committee: Commi
         />
         {query && (topKnown || trimmed) && (
           <span className="text-[10px] text-[#9A8A78] px-2 truncate max-w-[80px]">
-            ↵ {topKnown ? topKnown.name : trimmed}
+            ↵ {topKnown ? getCountryDisplayName(topKnown.name, language) : trimmed}
           </span>
         )}
       </div>
@@ -146,7 +146,7 @@ function AddCountryInput({ committee, onAdd, onQueryChange }: { committee: Commi
                 }`}
               >
                 <img src={getFlagUrl(c.code)} alt={c.code} className="w-5 h-5 object-contain shrink-0" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                <span className="text-sm flex-1">{c.name}</span>
+                <span className="text-sm flex-1">{getCountryDisplayName(c.name, language)}</span>
                 {i === 0 && <span className="text-[10px] text-[#9A8A78] shrink-0">Enter ↵</span>}
               </button>
             ))}
