@@ -189,8 +189,24 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
           </div>
           <div className="flex items-center gap-2.5">
             {/* Compact language toggle in header */}
-            <div className="flex flex-col items-end gap-1">
-              <span className="text-[9px] font-black tracking-wide" style={{ color: 'rgba(238,217,138,0.55)' }}>✨ NEW</span>
+            <div className="relative">
+              {/* NEW badge — overlaps top of the toggle */}
+              <span
+                className="absolute left-1/2 -translate-x-1/2 z-10 pointer-events-none"
+                style={{
+                  top: '-9px',
+                  backgroundColor: '#0E1E13',
+                  color: '#EED98A',
+                  border: '1.5px solid rgba(238,217,138,0.55)',
+                  borderRadius: '6px',
+                  padding: '1px 6px',
+                  fontSize: '8px',
+                  fontWeight: 900,
+                  letterSpacing: '0.1em',
+                  whiteSpace: 'nowrap',
+                  lineHeight: '14px',
+                }}
+              >✨ NEW</span>
               <div className="flex rounded-lg overflow-hidden" style={{ border: '1px solid rgba(238,217,138,0.25)' }}>
                 <button
                   onClick={() => setLanguage('en')}

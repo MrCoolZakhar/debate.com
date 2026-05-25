@@ -291,7 +291,16 @@ export function getCountryDisplayName(name: string, language: string): string {
   if (name === 'African Union') return 'Unión Africana';
   const country = getCountryByName(name);
   if (!country) return name;
-  return COUNTRY_NAMES_ES[country.code] ?? name;
+  // Try curated dictionary first for accuracy
+  const fromDict = COUNTRY_NAMES_ES[country.code];
+  if (fromDict) return fromDict;
+  // Fallback: Intl.DisplayNames covers every ISO 3166-1 code including edge cases
+  try {
+    const dn = new Intl.DisplayNames(['es'], { type: 'region' });
+    return dn.of(country.code) ?? name;
+  } catch {
+    return name;
+  }
 }
 
 export function matchesSearch(c: Country, search: string, language: string): boolean {
