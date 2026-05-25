@@ -152,7 +152,7 @@ export default function ChatPanel({
     ];
 
     if (!isChair) {
-      result.push({ key: 'chairs', label: 'Chairs', emoji: '🪑', messages: chairsMsgs });
+      result.push({ key: 'chairs', label: t('chat_chairs_label'), emoji: '🪑', messages: chairsMsgs });
     }
 
     result.push(...countryConvs);

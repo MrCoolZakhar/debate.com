@@ -152,7 +152,7 @@ function calcPoints(logs: SpeakingLogEntry[], committee: Committee, country: str
   const gslSpeeches = myLogs.filter((l) => l.context === 'speakers-list');
   if (gslSpeeches.length > 0) {
     const pts = gslSpeeches.length * 10;
-    breakdown.push({ label: `GSL speeches (×${gslSpeeches.length})`, pts });
+    breakdown.push({ label: t('delegate_breakdown_gsl').replace('{n}', String(gslSpeeches.length)), pts });
     total += pts;
   }
 
@@ -160,7 +160,7 @@ function calcPoints(logs: SpeakingLogEntry[], committee: Committee, country: str
   const caucusSpeeches = myLogs.filter((l) => l.context === 'moderated-caucus' || l.context === 'unmoderated-caucus');
   if (caucusSpeeches.length > 0) {
     const pts = caucusSpeeches.length * 8;
-    breakdown.push({ label: `Caucus speeches (×${caucusSpeeches.length})`, pts });
+    breakdown.push({ label: t('delegate_breakdown_caucus').replace('{n}', String(caucusSpeeches.length)), pts });
     total += pts;
   }
 
@@ -168,7 +168,7 @@ function calcPoints(logs: SpeakingLogEntry[], committee: Committee, country: str
   const totalSeconds = myLogs.reduce((s, l) => s + l.seconds, 0);
   const timePts = Math.floor(totalSeconds / 10);
   if (timePts > 0) {
-    breakdown.push({ label: `Time bonus (${totalSeconds}s spoken)`, pts: timePts });
+    breakdown.push({ label: t('delegate_breakdown_time').replace('{n}', String(totalSeconds)), pts: timePts });
     total += timePts;
   }
 
@@ -178,17 +178,17 @@ function calcPoints(logs: SpeakingLogEntry[], committee: Committee, country: str
   const drs = myDocs.filter((d) => d.type === 'draft-resolution');
   if (wps.length > 0) {
     const pts = wps.length * 10;
-    breakdown.push({ label: `Working papers sponsored (×${wps.length})`, pts });
+    breakdown.push({ label: t('delegate_breakdown_wp').replace('{n}', String(wps.length)), pts });
     total += pts;
   }
   if (drs.length > 0) {
     const pts = drs.length * 20;
-    breakdown.push({ label: `Draft resolutions sponsored (×${drs.length})`, pts });
+    breakdown.push({ label: t('delegate_breakdown_dr').replace('{n}', String(drs.length)), pts });
     total += pts;
     const passedDrs = drs.filter((d) => d.status === 'passed').length;
     if (passedDrs > 0) {
       const passPts = passedDrs * 10;
-      breakdown.push({ label: `DR passed (×${passedDrs})`, pts: passPts });
+      breakdown.push({ label: t('delegate_breakdown_dr_passed').replace('{n}', String(passedDrs)), pts: passPts });
       total += passPts;
     }
   }
@@ -197,7 +197,7 @@ function calcPoints(logs: SpeakingLogEntry[], committee: Committee, country: str
   const motionsRaised = logs.filter((l) => (l as unknown as Record<string,unknown>).type === 'motion-raised' && l.country === country).length;
   if (motionsRaised > 0) {
     const pts = motionsRaised * 5;
-    breakdown.push({ label: `Motions raised (×${motionsRaised})`, pts });
+    breakdown.push({ label: t('delegate_breakdown_motions').replace('{n}', String(motionsRaised)), pts });
     total += pts;
   }
 
@@ -205,7 +205,7 @@ function calcPoints(logs: SpeakingLogEntry[], committee: Committee, country: str
   const rtrCount = logs.filter((l) => (l as unknown as Record<string,unknown>).type === 'right-of-reply' && l.country === country).length;
   if (rtrCount > 0) {
     const pts = rtrCount * 5;
-    breakdown.push({ label: `Right of reply (×${rtrCount})`, pts });
+    breakdown.push({ label: t('delegate_breakdown_rtr').replace('{n}', String(rtrCount)), pts });
     total += pts;
   }
 
@@ -234,7 +234,7 @@ function calcPoints(logs: SpeakingLogEntry[], committee: Committee, country: str
     tips.push(t('delegate_tip_full_time'));
     tips.push(t('delegate_tip_propose_caucus'));
     tips.push(t('delegate_tip_cosponsor'));
-    tips.push('A Right of Reply shows confidence — if a delegation mischaracterises your position, challenge it.');
+    tips.push(t('delegate_tip_right_of_reply'));
   }
 
   if (tier === t('delegate_tier_debater')) {
@@ -252,7 +252,7 @@ function calcPoints(logs: SpeakingLogEntry[], committee: Committee, country: str
     tips.push(t('delegate_tip_lead_dr'));
     tips.push(t('delegate_tip_coordinate_bloc'));
     tips.push(t('delegate_tip_rebut'));
-    tips.push('A passed draft resolution is the highest individual scoring action — push your DR all the way to a vote.');
+    tips.push(t('delegate_tip_passed_dr'));
     tips.push(t('delegate_tip_tdt'));
     tips.push(t('delegate_tip_friendly_amendment'));
   }
@@ -263,7 +263,7 @@ function calcPoints(logs: SpeakingLogEntry[], committee: Committee, country: str
     tips.push(t('delegate_tip_operative_clauses'));
     tips.push(t('delegate_tip_unfriendly_amendment'));
     tips.push(t('delegate_tip_consolidate'));
-    tips.push('A Point of Information during another delegate\'s speech can shift the room\'s focus to your agenda.');
+    tips.push(t('delegate_tip_point_of_info'));
     tips.push(t('delegate_tip_yield_questions'));
   }
 
@@ -272,16 +272,16 @@ function calcPoints(logs: SpeakingLogEntry[], committee: Committee, country: str
     tips.push(t('delegate_tip_legacy'));
     tips.push(t('delegate_tip_mentor'));
     tips.push(t('delegate_tip_synthesise'));
-    tips.push('A Distinguished Delegate drives the agenda, not just responds to it — every caucus should have your fingerprints on it.');
+    tips.push(t('delegate_tip_distinguished_driver'));
     tips.push(t('delegate_tip_closure'));
   }
 
   // Universal conditional tips regardless of tier
-  if (gslSpeeches.length === 0) tips.push('You have not spoken on the General Speakers\' List yet — this is the most visible way to establish your delegation\'s position.');
-  if (caucusSpeeches.length === 0 && committee.phase !== 'pre-session') tips.push('Moderated caucuses reward focused, topic-specific arguments — request one and use the shorter time to make a precise point.');
-  if (wps.length === 0 && drs.length === 0) tips.push('No documents yet — co-sponsoring even one working paper signals that your delegation is constructively engaged.');
+  if (gslSpeeches.length === 0) tips.push(t('delegate_tip_gsl_not_spoken'));
+  if (caucusSpeeches.length === 0 && committee.phase !== 'pre-session') tips.push(t('delegate_tip_no_caucus'));
+  if (wps.length === 0 && drs.length === 0) tips.push(t('delegate_tip_no_docs'));
   if (totalSeconds > 0 && totalSeconds < 45) tips.push(t('delegate_tip_speaking_time'));
-  if (drs.length === 0 && wps.length > 0) tips.push('You have a working paper — escalate it to a draft resolution before the voting procedure begins.');
+  if (drs.length === 0 && wps.length > 0) tips.push(t('delegate_tip_have_wp'));
 
   return { total, breakdown, tier, tips };
 }
@@ -298,6 +298,7 @@ function SponsorsInput({
   value: string[];
   onChange: (v: string[]) => void;
 }) {
+  const t = useT();
   const [query, setQuery] = useState('');
   const allCountries = committee.delegates.map((d) => d.country).filter((c) => c !== myCountry);
   const matches = query.trim()
@@ -333,7 +334,7 @@ function SponsorsInput({
             if (e.key === 'Enter' && matches.length > 0) { e.preventDefault(); add(matches[0]); }
             if (e.key === 'Backspace' && !query && value.length > 0) onChange(value.slice(0, -1));
           }}
-          placeholder="Search co-sponsors, press Enter to add…"
+          placeholder={t('delegate_doc_cosponsor_placeholder')}
           className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-3 py-2 text-[#1C1410] text-sm focus:outline-none focus:border-[#1B3828] placeholder-[#9A8A78]"
         />
         {matches.length > 0 && (
@@ -397,6 +398,7 @@ function DelegateDocCard({ doc }: { doc: CommitteeDocument }) {
 
 // ── Documents Tab ─────────────────────────────────────────────────────────────
 function DelegateDocumentsTab({ committee, country }: { committee: Committee; country: string }) {
+  const t = useT();
   const [title, setTitle] = useState('');
   const [docType, setDocType] = useState<DocumentType>('working-paper');
   const [coSponsors, setCoSponsors] = useState<string[]>([]);
@@ -429,21 +431,21 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
 
   return (
     <div className="p-4 max-w-2xl mx-auto space-y-4">
-      <h2 className="text-lg font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>SUBMIT DOCUMENT</h2>
+      <h2 className="text-lg font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{t('delegate_doc_submit_heading')}</h2>
       {submitted && (
         <div className="rounded-xl p-3 text-sm font-semibold" style={{ backgroundColor: 'rgba(27,56,40,0.1)', border: '1px solid rgba(27,56,40,0.3)', color: '#1B3828' }}>
-          ✓ Document submitted to chair for review
+          {t('delegate_doc_submitted_success')}
         </div>
       )}
       <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl p-4 space-y-4">
         {/* Type selector */}
         <div>
-          <label className="text-xs font-bold mb-1.5 block" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>DOCUMENT TYPE</label>
+          <label className="text-xs font-bold mb-1.5 block" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>{t('delegate_doc_type_label')}</label>
           <div className="flex gap-2">
             {(['working-paper', 'draft-resolution'] as DocumentType[]).map((dt) => (
               <button key={dt} onClick={() => setDocType(dt)}
                 className={`flex-1 py-2 rounded-lg text-xs font-semibold border transition-colors ${docType === dt ? 'bg-[#DDD4C0] border-[#1B3828] text-[#1C1410]' : 'bg-[#FAF8F3] border-[#DDD4C0] text-[#6A5A4A] hover:border-[#1B3828]'}`}>
-                {dt === 'working-paper' ? 'Working Paper' : 'Draft Resolution'}
+                {dt === 'working-paper' ? t('delegate_doc_type_wp') : t('delegate_doc_type_dr')}
               </button>
             ))}
           </div>
@@ -451,29 +453,29 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
 
         {/* Title */}
         <div>
-          <label className="text-xs font-bold mb-1.5 block" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>TITLE</label>
+          <label className="text-xs font-bold mb-1.5 block" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>{t('delegate_doc_title_label')}</label>
           <input type="text" value={title} onChange={(e) => setTitle(e.target.value)}
-            placeholder="e.g. Strengthening climate adaptation frameworks"
+            placeholder={t('delegate_doc_title_placeholder')}
             className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-3 py-2 text-[#1C1410] text-sm focus:outline-none focus:border-[#1B3828]" />
         </div>
 
         {/* Co-sponsors */}
         <div>
           <label className="text-xs font-bold mb-1.5 block" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>
-            SPONSORS <span className="font-normal" style={{ color: '#9A8A78' }}>— you are automatically listed first</span>
+            {t('delegate_doc_sponsors_label')} <span className="font-normal" style={{ color: '#9A8A78' }}>{t('delegate_doc_sponsors_auto')}</span>
           </label>
           <SponsorsInput committee={committee} myCountry={country} value={coSponsors} onChange={setCoSponsors} />
         </div>
 
         {/* File */}
         <div>
-          <label className="text-xs font-bold mb-1.5 block" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>ATTACHMENT <span className="font-normal" style={{ color: '#9A8A78' }}>(optional)</span></label>
+          <label className="text-xs font-bold mb-1.5 block" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>{t('delegate_doc_attachment_label')} <span className="font-normal" style={{ color: '#9A8A78' }}>{t('delegate_doc_attachment_optional')}</span></label>
           <div className="flex items-center gap-2">
             <button onClick={() => fileInputRef.current?.click()}
               className="text-xs bg-[#FAF8F3] border border-[#DDD4C0] hover:border-[#1B3828] text-[#6A5A4A] px-3 py-2 rounded-lg transition-colors">
-              {fileName ? `📎 ${fileName}` : '+ Attach file'}
+              {fileName ? `📎 ${fileName}` : t('delegate_doc_attach_btn')}
             </button>
-            {fileName && <button onClick={() => { setFileName(null); setFileUrl(null); }} className="text-xs text-[#9A8A78] hover:text-red-400">Remove</button>}
+            {fileName && <button onClick={() => { setFileName(null); setFileUrl(null); }} className="text-xs text-[#9A8A78] hover:text-red-400">{t('delegate_doc_remove')}</button>}
           </div>
           <input ref={fileInputRef} type="file" accept=".pdf" className="hidden"
             onChange={(e) => {
@@ -488,21 +490,10 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
         <button onClick={handleSubmit} disabled={!title.trim() || sending}
           className="w-full text-white py-3 rounded-xl text-sm font-black transition-colors focus:outline-none"
           style={{ backgroundColor: !title.trim() || sending ? '#DDD4C0' : '#1B3828', color: !title.trim() || sending ? '#9A8A78' : 'white', letterSpacing: '0.05em' }}>
-          {sending ? 'SUBMITTING…' : 'SUBMIT TO CHAIR →'}
+          {sending ? t('delegate_doc_submitting') : t('delegate_doc_submit_to_chair')}
         </button>
       </div>
 
-      {/* Existing docs */}
-      {(committee.documents ?? []).length > 0 && (
-        <div>
-          <div className="text-xs font-mono text-[#9A8A78] mb-2">SUBMITTED DOCUMENTS</div>
-          <div className="space-y-2">
-            {(committee.documents ?? []).map((doc) => (
-              <DelegateDocCard key={doc.id} doc={doc} />
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -916,7 +907,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
           </button>
         </div>
       )}
-      {joinDenied && <p className="text-xs mt-2 font-semibold" style={{ color: '#8B2020' }}>Your join request was denied by the chair.</p>}
+      {joinDenied && <p className="text-xs mt-2 font-semibold" style={{ color: '#8B2020' }}>{t('delegate_join_denied')}</p>}
     </div>
   );
 
@@ -924,9 +915,9 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     return (
       <div className="min-h-screen flex flex-col items-center justify-center text-center px-8" style={{ backgroundColor: '#EDE7D8' }}>
         <p className="text-xs font-mono font-bold tracking-widest mb-2" style={{ color: '#1B3828' }}>{committee.name} · {committee.code}</p>
-        <h1 className="text-4xl font-black mb-4 tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>SESSION ADJOURNED</h1>
-        <p className="text-lg" style={{ color: '#6A5A4A' }}>Please wait until the chair reopens the session.</p>
-        <p className="text-xs mt-8" style={{ color: '#9A8A78' }}>Press ESC to return to main menu</p>
+        <h1 className="text-4xl font-black mb-4 tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{t('delegate_adjourned_title')}</h1>
+        <p className="text-lg" style={{ color: '#6A5A4A' }}>{t('delegate_adjourned_desc')}</p>
+        <p className="text-xs mt-8" style={{ color: '#9A8A78' }}>{t('delegate_adjourned_esc')}</p>
       </div>
     );
   }
@@ -1024,7 +1015,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
           <div>
             {/* Committee info strip */}
             <div className="px-4 pt-4 pb-2 text-center">
-              <p className="text-xs font-mono font-bold uppercase tracking-widest mb-0.5" style={{ color: '#9A8A78' }}>Committee</p>
+              <p className="text-xs font-mono font-bold uppercase tracking-widest mb-0.5" style={{ color: '#9A8A78' }}>{t('delegate_committee_label')}</p>
               <p className="font-black text-base" style={{ color: '#1B3828' }}>{committee.name}</p>
               {committee.topic && <p className="text-xs mt-0.5" style={{ color: '#9A8A78' }}>{committee.topic}</p>}
             </div>
@@ -1298,7 +1289,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
           <div>
             {(() => {
               const drs = (committee.documents ?? []).filter(
-                (d) => d.type === 'draft-resolution' && ['introduced', 'on-floor', 'passed', 'failed'].includes(d.status)
+                (d) => d.type === 'draft-resolution'
               );
               return (
                 <>
@@ -1332,51 +1323,79 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                     </>
                   )}
 
-                  {/* View DRs section */}
-                  {docsSection === 'view' && (
-                    <div className="p-4 max-w-2xl mx-auto space-y-3">
-                      <h2 className="text-lg font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{t('delegate_draft_resolutions')}</h2>
-                      {drs.length === 0 ? (
-                        <div className="text-center py-8 font-semibold" style={{ color: '#9A8A78' }}>{t('delegate_no_drs')}</div>
-                      ) : (
-                        drs.map((doc) => {
-                          const isPresenting = doc.status === 'introduced';
-                          const isPassed = doc.status === 'passed';
-                          const isFailed = doc.status === 'failed';
-                          const isPendingVote = doc.status === 'on-floor';
-                          return (
-                            <div key={doc.id} className="rounded-xl p-4 space-y-2" style={{ backgroundColor: '#FAF8F3', border: `1.5px solid ${isPassed ? '#1B3828' : isFailed ? 'rgba(139,32,32,0.4)' : '#DDD4C0'}` }}>
-                              <div className="flex items-start justify-between gap-3">
-                                <div>
-                                  <span className="text-xs font-mono font-bold mr-2" style={{ color: '#1B3828' }}>{doc.docCode}</span>
-                                  <span className="font-semibold text-sm" style={{ color: '#1C1410' }}>{doc.title}</span>
+                  {/* View DRs + WPs section */}
+                  {docsSection === 'view' && (() => {
+                    const wps = (committee.documents ?? []).filter((d) => d.type === 'working-paper');
+                    return (
+                      <div className="p-4 max-w-2xl mx-auto space-y-6">
+                        <div className="space-y-3">
+                          <h2 className="text-lg font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{t('delegate_draft_resolutions')}</h2>
+                          {drs.length === 0 ? (
+                            <div className="text-center py-4 font-semibold" style={{ color: '#9A8A78' }}>{t('delegate_no_drs')}</div>
+                          ) : (
+                            drs.map((doc) => {
+                              const isPresenting = doc.status === 'introduced';
+                              const isPassed = doc.status === 'passed';
+                              const isFailed = doc.status === 'failed';
+                              const isPendingVote = doc.status === 'on-floor';
+                              return (
+                                <div key={doc.id} className="rounded-xl p-4 space-y-2" style={{ backgroundColor: '#FAF8F3', border: `1.5px solid ${isPassed ? '#1B3828' : isFailed ? 'rgba(139,32,32,0.4)' : '#DDD4C0'}` }}>
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div>
+                                      <span className="text-xs font-mono font-bold mr-2" style={{ color: '#1B3828' }}>{doc.docCode}</span>
+                                      <span className="font-semibold text-sm" style={{ color: '#1C1410' }}>{doc.title}</span>
+                                    </div>
+                                    {isPassed && <span className="shrink-0 text-xs font-black px-2 py-0.5 rounded-full" style={{ backgroundColor: '#1B3828', color: '#EED98A' }}>{t('delegate_passed_badge')}</span>}
+                                    {isFailed && <span className="shrink-0 text-xs font-black px-2 py-0.5 rounded-full" style={{ color: '#8B2020', border: '1px solid rgba(139,32,32,0.3)' }}>{t('delegate_failed_badge')}</span>}
+                                    {isPresenting && <span className="shrink-0 text-xs font-black px-2 py-0.5 rounded-full animate-pulse" style={{ color: '#B8844A', border: '1px solid #B8844A' }}>{t('delegate_now_presenting')}</span>}
+                                    {isPendingVote && <span className="shrink-0 text-xs font-black px-2 py-0.5 rounded-full" style={{ color: '#B8844A', border: '1px solid rgba(184,132,74,0.5)' }}>{t('delegate_pending_vote')}</span>}
+                                  </div>
+                                  <div className="text-xs" style={{ color: '#9A8A78' }}>
+                                    {doc.sponsors.map((s, i) => (
+                                      <span key={s} style={{ color: i === 0 ? '#6A5A4A' : '#9A8A78', fontWeight: i === 0 ? 600 : 400 }}>
+                                        {i > 0 ? ', ' : ''}{flagFor(s)} {s}
+                                      </span>
+                                    ))}
+                                  </div>
+                                  {doc.fileUrl && doc.fileName && (
+                                    <InlinePdfViewer fileUrl={doc.fileUrl} fileName={doc.fileName} />
+                                  )}
                                 </div>
-                                {isPassed && <span className="shrink-0 text-xs font-black px-2 py-0.5 rounded-full" style={{ backgroundColor: '#1B3828', color: '#EED98A' }}>{t('delegate_passed_badge')}</span>}
-                                {isFailed && <span className="shrink-0 text-xs font-black px-2 py-0.5 rounded-full" style={{ color: '#8B2020', border: '1px solid rgba(139,32,32,0.3)' }}>{t('delegate_failed_badge')}</span>}
-                                {isPresenting && <span className="shrink-0 text-xs font-black px-2 py-0.5 rounded-full animate-pulse" style={{ color: '#B8844A', border: '1px solid #B8844A' }}>{t('delegate_now_presenting')}</span>}
-                                {isPendingVote && <span className="shrink-0 text-xs font-black px-2 py-0.5 rounded-full" style={{ color: '#B8844A', border: '1px solid rgba(184,132,74,0.5)' }}>{t('delegate_pending_vote')}</span>}
-                              </div>
-                              <div className="text-xs" style={{ color: '#9A8A78' }}>
-                                {doc.sponsors.map((s, i) => (
-                                  <span key={s} style={{ color: i === 0 ? '#6A5A4A' : '#9A8A78', fontWeight: i === 0 ? 600 : 400 }}>
-                                    {i > 0 ? ', ' : ''}{flagFor(s)} {s}
-                                  </span>
-                                ))}
-                              </div>
-                              {isPresenting && doc.readingMinutes && doc.readingMinutes > 0 && (
+                              );
+                            })
+                          )}
+                        </div>
+                        <div className="space-y-3">
+                          <h2 className="text-lg font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{t('delegate_working_papers')}</h2>
+                          {wps.length === 0 ? (
+                            <div className="text-center py-4 font-semibold" style={{ color: '#9A8A78' }}>{t('delegate_no_wps')}</div>
+                          ) : (
+                            wps.map((doc) => (
+                              <div key={doc.id} className="rounded-xl p-4 space-y-2" style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #DDD4C0' }}>
+                                <div className="flex items-start justify-between gap-3">
+                                  <div>
+                                    <span className="text-xs font-mono font-bold mr-2" style={{ color: '#1B3828' }}>{doc.docCode}</span>
+                                    <span className="font-semibold text-sm" style={{ color: '#1C1410' }}>{doc.title}</span>
+                                  </div>
+                                  {doc.status === 'submitted' && <span className="shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(27,56,40,0.1)', color: '#1B3828' }}>{t('documents_status_submitted')}</span>}
+                                </div>
                                 <div className="text-xs" style={{ color: '#9A8A78' }}>
-                                  {doc.readingMinutes}m reading · {doc.presentationMinutes ?? 0}m presentation{doc.qaMinutes ? ` · ${doc.qaMinutes}m Q&A` : ''}
+                                  {doc.sponsors.map((s, i) => (
+                                    <span key={s} style={{ color: i === 0 ? '#6A5A4A' : '#9A8A78', fontWeight: i === 0 ? 600 : 400 }}>
+                                      {i > 0 ? ', ' : ''}{flagFor(s)} {s}
+                                    </span>
+                                  ))}
                                 </div>
-                              )}
-                              {doc.fileUrl && doc.fileName && (
-                                <InlinePdfViewer fileUrl={doc.fileUrl} fileName={doc.fileName} />
-                              )}
-                            </div>
-                          );
-                        })
-                      )}
-                    </div>
-                  )}
+                                {doc.fileUrl && doc.fileName && (
+                                  <InlinePdfViewer fileUrl={doc.fileUrl} fileName={doc.fileName} />
+                                )}
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </>
               );
             })()}
