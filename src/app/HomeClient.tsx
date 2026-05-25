@@ -99,7 +99,7 @@ function MotionsCard() {
           <div className="flex items-start justify-between gap-2">
             <div className="flex-1">
               <p className="font-black text-base" style={{ color: '#1C1410' }}>{es ? 'Cáucus Moderado' : 'Moderated Caucus'}</p>
-              <p className="text-xs font-semibold mt-0.5" style={{ color: '#1B3828' }}>{es ? 'Tema: ' : 'Topic: '}<span style={{ color: '#1C1410' }}>Nuclear Non-Proliferation</span></p>
+              <p className="text-xs font-semibold mt-0.5" style={{ color: '#1B3828' }}>{es ? 'Tema: ' : 'Topic: '}<span style={{ color: '#1C1410' }}>{es ? 'No Proliferación de Armas Nucleares' : 'Nuclear Non-Proliferation'}</span></p>
               <p className="text-xs mt-1" style={{ color: '#1C1410' }}><span className="font-semibold" style={{ color: '#1B3828' }}>{es ? 'Tiempo Total: ' : 'Total Time: '}</span><span className="font-black">10m</span></p>
               <p className="text-xs" style={{ color: '#1C1410' }}><span className="font-semibold" style={{ color: '#1B3828' }}>{es ? 'Tiempo por orador: ' : 'Speaker Time: '}</span><span className="font-black">90s</span></p>
               <p className="text-xs" style={{ color: '#1C1410' }}><span className="font-semibold" style={{ color: '#1B3828' }}>{es ? 'Total de oradores: ' : 'Total Speakers: '}</span><span className="font-black">{es ? '6 oradores' : '6 speakers'}</span></p>
@@ -208,7 +208,7 @@ function DocumentsCard() {
         </div>
         <div className="flex-1 flex flex-col items-center justify-center px-4 py-6 text-center">
           <p className="text-[10px] font-mono tracking-widest uppercase mb-1" style={{ color: '#9A8A78' }}>S/RES/2819 (2026)</p>
-          <p className="font-black text-xs uppercase mb-4" style={{ color: '#1C1410' }}>Libya Sanctions Resolution</p>
+          <p className="font-black text-xs uppercase mb-4" style={{ color: '#1C1410' }}>{es ? 'Resolución de Sanciones a Libia' : 'Libya Sanctions Resolution'}</p>
           <p className="font-mono text-3xl font-bold tabular-nums mb-1" style={{ color: '#1C1410' }}>{m}:{s.toString().padStart(2, '0')}</p>
           <p className="text-[10px] font-mono mb-4" style={{ color: '#9A8A78' }}>{es ? 'Tiempo de Lectura' : 'Reading Time'}</p>
           <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: '#DDD4C0' }}>
@@ -245,7 +245,7 @@ function ChatCard() {
     { sender: 'Pdte.', text: '¡Lo están haciendo muy bien! ¡Sigan así!', time: '09:06', isChair: true },
     { sender: 'Alemania', text: 'Alemania apoya la moción de un cáucus moderado.', time: '09:07', isChair: false },
   ] : [
-    { sender: 'Chair', text: 'Welcome to the Security Council session on Nuclear Non-Proliferation.', time: '09:02', isChair: true },
+    { sender: 'Chair', text: `Welcome to the Security Council session on ${es ? 'No Proliferación de Armas Nucleares' : 'Nuclear Non-Proliferation'}.`, time: '09:02', isChair: true },
     { sender: 'France', text: 'France is prepared to engage constructively on this matter.', time: '09:04', isChair: false },
     { sender: 'Chair', text: "You're doing great! Keep it up!", time: '09:06', isChair: true },
     { sender: 'Germany', text: 'Germany seconds the motion for a moderated caucus.', time: '09:07', isChair: false },

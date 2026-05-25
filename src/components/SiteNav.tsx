@@ -11,7 +11,7 @@ const NAV_LINKS_CONFIG = [
   { en: 'SESSIONS',     es: 'SESIONES',     href: '/' },
   { en: 'CONFERENCES',  es: 'CONFERENCIAS', href: '/conferences' },
   { en: 'ABOUT US',     es: 'NOSOTROS',     href: '/about' },
-  { en: 'CONTACT',      es: 'CONTACTO',     href: '/contact' },
+  { en: 'CONTACT',      es: 'CONTÁCTANOS',  href: '/contact' },
 ];
 
 interface SiteNavProps {
@@ -167,7 +167,7 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
             backgroundColor: 'transparent',
           }}
         >
-          PRE-REGISTER
+          {t('nav_preregister')}
         </button>
 
         {/* Mobile hamburger */}
@@ -272,7 +272,7 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
               textAlign: 'center',
             }}
           >
-            {language === 'es' ? 'PRE-REGISTRARSE' : 'PRE-REGISTER'}
+            {t('nav_preregister')}
           </button>
         </div>
       </div>

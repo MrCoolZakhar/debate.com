@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import SiteNav from '@/components/SiteNav';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
+import { getCountryDisplayName } from '@/lib/countries';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -87,8 +88,8 @@ export default function AboutClient() {
           <div className="flex-1">
             <p className="text-xs font-mono tracking-[0.18em] text-[#9A8A78] mb-2 uppercase">{t('about_cofounder')}</p>
             <h2 className="text-4xl font-black text-[#1C1410] mb-1">Peter Zakhar</h2>
-            <p className="text-[#B6871F] text-sm font-semibold mb-6 tracking-wide">Business Development & Frontend</p>
-            <p className="text-[#6A5A4A] leading-relaxed text-base">Peter is not scared of risky ideas. He listens, asks and acts immediately on any Gavelling related feedback. He is not just a figure with good ideas, but someone who has actively trained his own delegation to win over 100 awards in a single year. Ultimately, fun, adventure and creativity knows no bounds for Peter, having travelled to over 40 countries at 22.</p>
+            <p className="text-[#B6871F] text-sm font-semibold mb-6 tracking-wide">{t('about_peter_role')}</p>
+            <p className="text-[#6A5A4A] leading-relaxed text-base">{t('about_peter_bio')}</p>
           </div>
         </div>
         <div className="flex flex-col md:flex-row-reverse items-center gap-16">
@@ -96,8 +97,8 @@ export default function AboutClient() {
           <div className="flex-1">
             <p className="text-xs font-mono tracking-[0.18em] text-[#9A8A78] mb-2 uppercase">{t('about_cofounder')}</p>
             <h2 className="text-4xl font-black text-[#1C1410] mb-1">Christian Galindo</h2>
-            <p className="text-[#B6871F] text-sm font-semibold mb-6 tracking-wide">Business Development & Backend</p>
-            <p className="text-[#6A5A4A] leading-relaxed text-base">Christian is constantly looking for change and progress; having lived in 9 countries at 21 years old. He applies this same mindset to Gavelling: voicing new ideas, taking feedback, and looking for positive change. His constant journey for new challenges led him to train delegates across continents to win awards at a 90% rate in global conferences.</p>
+            <p className="text-[#B6871F] text-sm font-semibold mb-6 tracking-wide">{t('about_christian_role')}</p>
+            <p className="text-[#6A5A4A] leading-relaxed text-base">{t('about_christian_bio')}</p>
           </div>
         </div>
       </section>
@@ -127,7 +128,7 @@ export default function AboutClient() {
                 </div>
                 <div className="text-center">
                   <p className="text-[#1C1410] text-xs font-bold leading-tight">{amb.name}</p>
-                  <p className="text-[#9A8A78] text-[10px] mt-0.5">{amb.country}</p>
+                  <p className="text-[#9A8A78] text-[10px] mt-0.5">{getCountryDisplayName(amb.country, language)}</p>
                 </div>
               </div>
             ))}

@@ -184,6 +184,7 @@ function CollapsedDelegateCard({
 
 function NormalDelegateCard({ delegate, committee, onSelect }: { delegate: Committee['delegates'][0]; committee: Committee; onSelect: () => void }) {
   const { language } = useLanguage();
+  const t = useT();
   const queueIndex = committee.speakersList.findIndex((s) => s.delegateId === delegate.id);
   const isCurrentSpeaker = committee.currentSpeaker?.delegateId === delegate.id;
   const found = getCountryByName(delegate.country);
@@ -215,10 +216,10 @@ function NormalDelegateCard({ delegate, committee, onSelect }: { delegate: Commi
         }
         <span className="flex-1 text-sm font-bold truncate" style={{ color: '#EDE7D8' }}>{getCountryDisplayName(delegate.country, language)}</span>
         {isCurrentSpeaker && (
-          <span className="text-[10px] font-black px-2 py-0.5 rounded-full shrink-0" style={{ backgroundColor: '#EED98A', color: '#1B3828' }}>SPEAKING</span>
+          <span className="text-[10px] font-black px-2 py-0.5 rounded-full shrink-0" style={{ backgroundColor: '#EED98A', color: '#1B3828' }}>{t('advisor_speaking_badge')}</span>
         )}
         {!isCurrentSpeaker && queueIndex >= 0 && (
-          <span className="text-xs font-medium shrink-0" style={{ color: 'rgba(237,231,216,0.7)' }}>{ordinal(queueIndex + 1)} up</span>
+          <span className="text-xs font-medium shrink-0" style={{ color: 'rgba(237,231,216,0.7)' }}>{t('advisor_queue_position_display').replace('{n}', String(queueIndex + 1))}</span>
         )}
         <span className="text-xs font-black shrink-0" style={{ color: statusLabelColor }}>{statusLabel}</span>
       </div>
