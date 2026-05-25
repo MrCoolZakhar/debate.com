@@ -8,7 +8,7 @@ import { Committee, CommitteeDocument, DocumentType, PendingMotionType, Speaking
 import { TranslationKey } from '@/lib/translations';
 import ChatPanel from '@/components/ChatPanel';
 import { useSettingsStore, DEFAULT_MOTION_NAMES } from '@/lib/settingsStore';
-import { getFlagUrl, getCountryByName, getCountryDisplayName } from '@/lib/countries';
+import { getFlagUrl, getCountryByName, getCountryDisplayName, matchesCountryQuery } from '@/lib/countries';
 import { getCommitteeDisplayName } from '@/lib/presetNames';
 import { Emoji } from '@/components/Emoji';
 import { FlagImg } from '@/components/FlagImg';
@@ -300,10 +300,11 @@ function SponsorsInput({
   onChange: (v: string[]) => void;
 }) {
   const t = useT();
+  const { language } = useLanguage();
   const [query, setQuery] = useState('');
   const allCountries = committee.delegates.map((d) => d.country).filter((c) => c !== myCountry);
   const matches = query.trim()
-    ? allCountries.filter((c) => c.toLowerCase().includes(query.toLowerCase()) && !value.includes(c))
+    ? allCountries.filter((c) => matchesCountryQuery(c, query.trim(), language) && !value.includes(c))
     : [];
 
   const add = (c: string) => {
@@ -316,11 +317,11 @@ function SponsorsInput({
       {/* Selected sponsors tags */}
       <div className="flex flex-wrap gap-1.5 mb-2 min-h-[24px]">
         <span className="inline-flex items-center gap-1 text-xs bg-[#1B3828]/20 border border-[#1B3828]/30 text-[#6A5A4A] rounded-full px-2.5 py-0.5 font-medium">
-          {flagFor(myCountry)} {myCountry} <span className="text-[#9A8A78] ml-0.5">(you)</span>
+          {flagFor(myCountry)} {getCountryDisplayName(myCountry, language)} <span className="text-[#9A8A78] ml-0.5">{language === 'es' ? '(tú)' : '(you)'}</span>
         </span>
         {value.map((c) => (
           <span key={c} className="inline-flex items-center gap-1 text-xs bg-[#FAF8F3] border border-[#DDD4C0] text-[#6A5A4A] rounded-full px-2.5 py-0.5">
-            {flagFor(c)} {c}
+            {flagFor(c)} {getCountryDisplayName(c, language)}
             <button onClick={() => onChange(value.filter((x) => x !== c))} className="ml-1 text-[#9A8A78] hover:text-red-400 font-bold leading-none">×</button>
           </span>
         ))}
@@ -346,7 +347,7 @@ function SponsorsInput({
                 onMouseDown={(e) => { e.preventDefault(); add(c); }}
                 className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors ${i === 0 ? 'bg-[#DDD4C0] text-[#1C1410]' : 'text-[#6A5A4A] hover:bg-[#DDD4C0]'}`}
               >
-                {flagFor(c)} {c}
+                {flagFor(c)} {getCountryDisplayName(c, language)}
                 {i === 0 && <span className="ml-auto text-xs text-[#9A8A78]">↵ Enter</span>}
               </button>
             ))}
@@ -1355,7 +1356,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                                   <div className="text-xs" style={{ color: '#9A8A78' }}>
                                     {doc.sponsors.map((s, i) => (
                                       <span key={s} style={{ color: i === 0 ? '#6A5A4A' : '#9A8A78', fontWeight: i === 0 ? 600 : 400 }}>
-                                        {i > 0 ? ', ' : ''}{flagFor(s)} {s}
+                                        {i > 0 ? ', ' : ''}{flagFor(s)} {getCountryDisplayName(s, language)}
                                       </span>
                                     ))}
                                   </div>
@@ -1384,7 +1385,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                                 <div className="text-xs" style={{ color: '#9A8A78' }}>
                                   {doc.sponsors.map((s, i) => (
                                     <span key={s} style={{ color: i === 0 ? '#6A5A4A' : '#9A8A78', fontWeight: i === 0 ? 600 : 400 }}>
-                                      {i > 0 ? ', ' : ''}{flagFor(s)} {s}
+                                      {i > 0 ? ', ' : ''}{flagFor(s)} {getCountryDisplayName(s, language)}
                                     </span>
                                   ))}
                                 </div>
