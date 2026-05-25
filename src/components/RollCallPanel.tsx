@@ -2,7 +2,7 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { Committee, DelegateStatus } from '@/lib/types';
-import { getFlagUrl, getCountryByName, getCountryDisplayName, UN_COUNTRIES } from '@/lib/countries';
+import { getFlagUrl, getCountryByName, getCountryDisplayName, UN_COUNTRIES, matchesCountryQuery, startsWithCountryQuery } from '@/lib/countries';
 import { getCommitteeDisplayName } from '@/lib/presetNames';
 import {
   setPhase as setPhaseInDB,
@@ -78,6 +78,7 @@ function ViewToggle({ view, onChange }: { view: 'az' | 'queue'; onChange: (v: 'a
 // ── Add country input ─────────────────────────────────────────────────────────
 function AddCountryInput({ committee, onAdd, onQueryChange }: { committee: Committee; onAdd: (country: string) => void; onQueryChange?: (q: string) => void }) {
   const t = useT();
+  const { language } = useLanguage();
   const [query, setQuery] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const existingNames = new Set(committee.delegates.map((d) => d.country.toLowerCase()));
@@ -86,10 +87,10 @@ function AddCountryInput({ committee, onAdd, onQueryChange }: { committee: Commi
 
   const rq = query.trim().toLowerCase();
   const knownMatches = rq
-    ? UN_COUNTRIES.filter((c) => c.name.trim().toLowerCase().startsWith(rq))
+    ? UN_COUNTRIES.filter((c) => startsWithCountryQuery(c.name, rq, language))
         .concat(UN_COUNTRIES.filter((c) =>
-          !c.name.trim().toLowerCase().startsWith(rq) &&
-          c.name.trim().toLowerCase().includes(rq)))
+          !startsWithCountryQuery(c.name, rq, language) &&
+          matchesCountryQuery(c.name, rq, language)))
     : [];
 
   const topKnown = knownMatches.find((c) => !existingNames.has(c.name.toLowerCase())) ?? null;
@@ -432,7 +433,7 @@ function RollCallPanelInner({
           const isOnList = onListIds?.has(d.id) ?? false;
           const isAbsent = effectiveStatus === 'absent';
           const queuePos = queuePositionMap.get(d.id) ?? null;
-          const matchesSearch = !search || d.country.toLowerCase().includes(search.toLowerCase());
+          const matchesSearch = !search || matchesCountryQuery(d.country, search, language);
           const isDraggable = listView === 'queue' && !isRollCallPhase && queuePositionMap.has(d.id);
           const isCurrentSpeaker = committee.currentSpeaker?.delegateId === d.id;
           const isCurrentSpeakerInPanel = queuePos === 1 && (

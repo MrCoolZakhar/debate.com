@@ -312,3 +312,21 @@ export function matchesSearch(c: Country, search: string, language: string): boo
   }
   return false;
 }
+
+export function matchesCountryQuery(enName: string, query: string, language: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return false;
+  if (enName.trim().toLowerCase().includes(q)) return true;
+  const displayName = getCountryDisplayName(enName, language).toLowerCase();
+  if (displayName.includes(q)) return true;
+  return false;
+}
+
+export function startsWithCountryQuery(enName: string, query: string, language: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return false;
+  if (enName.trim().toLowerCase().startsWith(q)) return true;
+  const displayName = getCountryDisplayName(enName, language).toLowerCase();
+  if (displayName.startsWith(q)) return true;
+  return false;
+}

@@ -8,7 +8,7 @@ import { Committee, DelegateStatus } from '@/lib/types';
 import RollCallPanel, { FlagCircle } from '@/components/RollCallPanel';
 import MotionsModal from '@/components/MotionsModal';
 import DocumentsModal from '@/components/DocumentsModal';
-import { getFlagUrl, getCountryByName, getCountryDisplayName, UN_COUNTRIES } from '@/lib/countries';
+import { getFlagUrl, getCountryByName, getCountryDisplayName, UN_COUNTRIES, matchesCountryQuery, startsWithCountryQuery } from '@/lib/countries';
 import { getCommitteeDisplayName } from '@/lib/presetNames';
 import { Emoji } from '@/components/Emoji';
 import { SettingsPanel } from '@/components/SettingsPanel';
@@ -151,8 +151,8 @@ function AddSpeakerInput({ committee, onAdd }: { committee: Committee; onAdd: (i
   );
   const q = resolveQuery(query).toLowerCase();
   const matches = q
-    ? eligible.filter((d) => d.country.trim().toLowerCase().startsWith(q))
-        .concat(eligible.filter((d) => !d.country.trim().toLowerCase().startsWith(q) && d.country.trim().toLowerCase().includes(q)))
+    ? eligible.filter((d) => startsWithCountryQuery(d.country, q, language))
+        .concat(eligible.filter((d) => !startsWithCountryQuery(d.country, q, language) && matchesCountryQuery(d.country, q, language)))
     : [];
   const topNotOnList = matches.find((d) => !onList.has(d.id)) ?? null;
   const commit = (d: typeof topNotOnList) => { if (!d || onList.has(d.id)) return; onAdd(d.id); setQuery(''); };
@@ -425,8 +425,8 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
   const isFull = maxSpeakers !== undefined && currentQueueLength !== undefined && currentQueueLength >= maxSpeakers;
   const cq = resolveQuery(query).toLowerCase();
   const matches = cq
-    ? eligible.filter((d) => d.country.trim().toLowerCase().startsWith(cq))
-        .concat(eligible.filter((d) => !d.country.trim().toLowerCase().startsWith(cq) && d.country.trim().toLowerCase().includes(cq)))
+    ? eligible.filter((d) => startsWithCountryQuery(d.country, cq, language))
+        .concat(eligible.filter((d) => !startsWithCountryQuery(d.country, cq, language) && matchesCountryQuery(d.country, cq, language)))
     : [];
   const isCurrentSpeaker = (d: { country: string }) => !!currentSpeakerCountry && d.country === currentSpeakerCountry;
   const topNotOnList = matches.find((d) => !onList.has(d.id) && !isCurrentSpeaker(d)) ?? null;
@@ -1747,10 +1747,29 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     const newShow = !showChat;
     setShowChat(newShow);
     if (newShow) {
-      const count = committee?.messages.filter(m => !m.content.startsWith('__log__:')).length ?? 0;
+      const chairNamesLocal = committee?.chairNames ?? [];
+      const count = committee?.messages.filter(m => {
+        if (m.content.startsWith('__log__:')) return false;
+        if (m.isPrivate && m.sender === 'Faculty Advisor') return false;
+        if (m.isPrivate && m.recipient && !chairNamesLocal.includes(m.recipient) && m.recipient !== 'Chairs') return false;
+        return true;
+      }).length ?? 0;
       setChatReadCounts(prev => ({ ...prev, everyone: count }));
     }
   };
+
+  useEffect(() => {
+    if (!showChat && committee) {
+      const chairNamesLocal = committee.chairNames ?? [];
+      const count = committee.messages.filter(m => {
+        if (m.content.startsWith('__log__:')) return false;
+        if (m.isPrivate && m.sender === 'Faculty Advisor') return false;
+        if (m.isPrivate && m.recipient && !chairNamesLocal.includes(m.recipient) && m.recipient !== 'Chairs') return false;
+        return true;
+      }).length;
+      setChatReadCounts(prev => ({ ...prev, everyone: count }));
+    }
+  }, [showChat]);
 
   return (
     <MobileGate>
@@ -1803,8 +1822,14 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               onMouseLeave={(e) => { if (!showChat) { const el = e.currentTarget as HTMLElement; el.style.color = '#1C1410'; el.style.backgroundColor = 'transparent'; el.style.transform = 'translateY(0)'; } }}>
               {t('tab_chat')}
               {(() => {
-                const nonLogMsgs = committee.messages.filter((m) => !m.content.startsWith('__log__:'));
-                const totalUnread = Math.max(0, nonLogMsgs.length - (chatReadCounts['everyone'] ?? 0));
+                const chairNames = committee.chairNames ?? [];
+                const relevantMsgs = committee.messages.filter((m) => {
+                  if (m.content.startsWith('__log__:')) return false;
+                  if (m.isPrivate && m.sender === 'Faculty Advisor') return false;
+                  if (m.isPrivate && m.recipient && !chairNames.includes(m.recipient) && m.recipient !== 'Chairs') return false;
+                  return true;
+                });
+                const totalUnread = Math.max(0, relevantMsgs.length - (chatReadCounts['everyone'] ?? 0));
                 return totalUnread > 0 && !showChat
                   ? <span className="absolute top-1 right-1 w-4 h-4 bg-[#1B3828] rounded-full text-white text-[10px] flex items-center justify-center">{totalUnread}</span>
                   : null;

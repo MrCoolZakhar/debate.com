@@ -677,7 +677,7 @@ export default function HomeClient() {
                   </svg>
                 </span>
               </div>
-              <p className="text-xs font-semibold text-[#1B3828] md:text-right">© {new Date().getFullYear()} Gavelling. Built for the MUN community.</p>
+              <p className="text-xs font-semibold text-[#1B3828] md:text-right">{t('home_footer_copy').replace('{year}', String(new Date().getFullYear()))}</p>
             </div>
           </footer>
 

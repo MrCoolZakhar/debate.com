@@ -752,6 +752,7 @@ export const translations = {
     rtr_pause: '⏸ Pause',
     rtr_start: '▶ Start',
     rtr_done: 'Done',
+    home_footer_copy: '© {year} Gavelling. Built for the MUN community.',
   },
   es: {
     nav_sessions: 'SESIONES',
@@ -1504,6 +1505,7 @@ export const translations = {
     rtr_pause: '⏸ Pausar',
     rtr_start: '▶ Iniciar',
     rtr_done: 'Listo',
+    home_footer_copy: '© {year} Gavelling. Construido para la comunidad MUN.',
   },
 } as const;
 
