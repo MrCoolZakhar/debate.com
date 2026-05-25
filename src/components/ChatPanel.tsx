@@ -2,9 +2,9 @@
 
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { Committee, ChatMessage } from '@/lib/types';
-import { getFlagEmoji, getCountryByName } from '@/lib/countries';
+import { getFlagEmoji, getCountryByName, getCountryDisplayName } from '@/lib/countries';
 import { sendMessage as sendMessageToDB } from '@/lib/committeeService';
-import { useT } from '@/contexts/LanguageContext';
+import { useT, useLanguage } from '@/contexts/LanguageContext';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -61,6 +61,7 @@ export default function ChatPanel({
   speakerCard?: React.ReactNode;
 }) {
   const t = useT();
+  const { language } = useLanguage();
   const [activeConv, setActiveConv] = useState<ConvKey>('everyone');
   const [showThread, setShowThread] = useState(false); // mobile: false=list, true=thread
   const [msg, setMsg] = useState('');
@@ -319,7 +320,7 @@ export default function ChatPanel({
                         onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(238,217,138,0.1)'; }}
                         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}>
                         <span className="text-[10px] font-black px-1.5 py-0.5 rounded" style={{ backgroundColor: 'rgba(238,217,138,0.2)', color: '#EED98A' }}>{t('chat_chair_tag')}</span>
-                        <span className="truncate">{c.country}</span>
+                        <span className="truncate">{getCountryDisplayName(c.country, language)}</span>
                       </button>
                     ))}
                     {dmCandidates.length > 0 && <p className="text-[10px] font-black uppercase tracking-widest px-2 py-1 mt-1" style={{ color: 'rgba(238,217,138,0.5)' }}>{t('chat_delegates')}</p>}
@@ -331,7 +332,7 @@ export default function ChatPanel({
                     style={{ color: '#EDE7D8' }}
                     onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(238,217,138,0.1)'; }}
                     onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}>
-                    <span className="truncate">{d.country}</span>
+                    <span className="truncate">{getCountryDisplayName(d.country, language)}</span>
                   </button>
                 ))}
               </div>

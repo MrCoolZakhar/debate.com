@@ -233,12 +233,14 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
   const t = useT();
   const [committee, setCommittee] = useState<Committee | null>(null);
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const upperCode = code.toUpperCase();
     let unsub: (() => void) | null = null;
 
     getCommitteeByCode(upperCode).then((c) => {
+      setLoading(false);
       if (!c) return;
       setCommittee(c);
       unsub = subscribeToCommittee(c.id, async () => {
@@ -249,6 +251,30 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
 
     return () => { unsub?.(); };
   }, [code]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4" style={{ backgroundColor: '#EDE7D8' }}>
+        <style>{`
+          @keyframes gavel-strike {
+            0%   { transform: rotate(-30deg); }
+            35%  { transform: rotate(15deg); }
+            50%  { transform: rotate(10deg); }
+            65%  { transform: rotate(15deg); }
+            100% { transform: rotate(-30deg); }
+          }
+          .gavel-anim { animation: gavel-strike 1s ease-in-out infinite; transform-origin: 85% 85%; }
+        `}</style>
+        <svg className="gavel-anim" width="72" height="72" viewBox="0 0 72 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="38" y="38" width="8" height="28" rx="3" transform="rotate(-45 38 38)" fill="#1B3828" />
+          <rect x="8" y="14" width="36" height="16" rx="5" transform="rotate(-45 8 14)" fill="#B6871F" />
+          <rect x="10" y="16" width="36" height="7" rx="3" transform="rotate(-45 10 16)" fill="#6A5A4A" opacity="0.4" />
+          <circle cx="56" cy="56" r="3" fill="#1B3828" opacity="0.5" />
+        </svg>
+        <p className="text-[#9A8A78] text-sm font-mono tracking-widest">LOADING…</p>
+      </div>
+    );
+  }
 
   if (!committee) {
     return (

@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { Committee, PendingMotion, PendingMotionType } from '@/lib/types';
-import { getCountryByName, getFlagUrl } from '@/lib/countries';
+import { getCountryByName, getFlagUrl, getCountryDisplayName } from '@/lib/countries';
 import { Emoji } from '@/components/Emoji';
 import { useSettingsStore, DEFAULT_MOTION_NAMES, MotionNames } from '@/lib/settingsStore';
 import {
@@ -85,6 +85,7 @@ function ProposerInput({ candidates, value, onChange, blockedCountries }: {
   candidates: string[]; value: string; onChange: (v: string) => void; blockedCountries?: Set<string>;
 }) {
   const t = useT();
+  const { language } = useLanguage();
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -103,7 +104,7 @@ function ProposerInput({ candidates, value, onChange, blockedCountries }: {
       {value && !open ? (
         <div className="flex items-center gap-3 bg-[#1B3828]/10 border-2 border-[#3D7A52]/40 rounded-xl px-4 py-3">
           {(() => { const f = getCountryByName(value); return f ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ borderRadius: '6px', border: '1.5px solid rgba(28,20,16,0.10)', objectFit: 'cover' }} className="w-7 h-5 inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : null; })()}
-          <span className="text-sm text-[#1C1410] flex-1 font-semibold">{value}</span>
+          <span className="text-sm text-[#1C1410] flex-1 font-semibold">{getCountryDisplayName(value, language)}</span>
           <button onClick={() => { setOpen(true); setQuery(''); onChange(''); inputRef.current?.focus(); }} className="text-xs font-bold transition-colors focus:outline-none" style={{ color: '#2A5A3C' }}>{t('motions_change')}</button>
         </div>
       ) : (
@@ -113,7 +114,7 @@ function ProposerInput({ candidates, value, onChange, blockedCountries }: {
             onKeyDown={(e) => { if (e.key === 'Enter' && top) { e.preventDefault(); commit(top); } if (e.key === 'Escape') { setQuery(''); setOpen(false); } }}
             placeholder={t('motions_proposer_placeholder')}
             className="flex-1 bg-transparent px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none text-sm" />
-          {top && query && <span className="text-xs text-[#9A8A78] px-3 truncate max-w-[120px]">↵ {top}</span>}
+          {top && query && <span className="text-xs text-[#9A8A78] px-3 truncate max-w-[120px]">↵ {getCountryDisplayName(top, language)}</span>}
         </div>
       )}
       {open && query && matches.length > 0 && (
@@ -130,7 +131,7 @@ function ProposerInput({ candidates, value, onChange, blockedCountries }: {
                   i === 0 ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'
                 }`}>
                 {found ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <Emoji size="1.125rem">🌐</Emoji>}
-                <span className="text-sm flex-1">{country}</span>
+                <span className="text-sm flex-1">{getCountryDisplayName(country, language)}</span>
                 {isBlocked
                   ? <span className="text-xs text-[#B8844A] shrink-0 font-semibold">{t('motions_motion_on_floor')}</span>
                   : i === 0 && <span className="ml-auto text-xs text-[#9A8A78]">Enter ↵</span>}
@@ -868,7 +869,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
     return (
       <div className="fixed inset-0 z-[60] bg-[#F6F1E9] flex flex-col items-center justify-center text-center px-8">
         <p className="text-xs font-mono tracking-widest text-[#9A8A78] mb-6">
-          {typeMeta[specialVoteMotion.type].label.toUpperCase()} · {specialVoteMotion.proposedBy}
+          {typeMeta[specialVoteMotion.type].label.toUpperCase()} · {getCountryDisplayName(specialVoteMotion.proposedBy, language)}
         </p>
         <h1 className="text-4xl font-black mb-14 tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{t('motions_does_pass')}</h1>
         <div className="flex gap-8">

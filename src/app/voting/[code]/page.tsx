@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { Committee, DelegateStatus } from '@/lib/types';
-import { getCountryByName, getFlagUrl } from '@/lib/countries';
+import { getCountryByName, getFlagUrl, getCountryDisplayName } from '@/lib/countries';
 import { Emoji } from '@/components/Emoji';
 import { getCommitteeByCode, setPhase as setPhaseInDB, setDelegateStatus as setDelegateStatusInDB, updateDocumentStatus as updateDocumentStatusInDB } from '@/lib/committeeService';
 import { useSettingsStore } from '@/lib/settingsStore';
@@ -48,6 +48,7 @@ function RollCallModal({
   onConfirm: () => void;
 }) {
   const t = useT();
+  const { language } = useLanguage();
   const sorted = [...delegates].sort((a, b) => a.country.localeCompare(b.country));
   const thumbPos = (status: DelegateStatus) =>
     status === 'absent' ? 'left-[2px]' : status === 'present' ? 'left-[32px]' : 'left-[62px]';
@@ -79,7 +80,7 @@ function RollCallModal({
                 <div className="w-9 h-9 rounded-full bg-[#DDD4C0] border border-[#C8BAA8] flex items-center justify-center shrink-0 overflow-hidden">
                   {(() => { const f = getCountryByName(d.country); return f ? <img src={getFlagUrl(f.code)} alt={f.code} className="w-6 h-6 object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <Emoji size="1.25rem">🌐</Emoji>; })()}
                 </div>
-                <span className="flex-1 text-sm text-white truncate">{d.country}</span>
+                <span className="flex-1 text-sm text-white truncate">{getCountryDisplayName(d.country, language)}</span>
                 <button
                   onClick={() => onCycleStatus(d.id)}
                   className="relative w-[90px] h-[30px] rounded-full cursor-pointer shrink-0 select-none"
@@ -538,10 +539,10 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
               style={{ fontSize: 'min(5.5vw, 5vh)' }}
               className="font-black text-[#1C1410] text-center leading-tight mb-1"
             >
-              {currentDelegate.country}
+              {getCountryDisplayName(currentDelegate.country, language)}
             </h1>
             <p className="text-[#9A8A78] text-sm">
-              {currentVoterIndex + 1} of {presentDelegates.length}
+              {currentVoterIndex + 1}{language === 'es' ? ' de ' : ' of '}{presentDelegates.length}
             </p>
           </div>
 
@@ -611,7 +612,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                         <Emoji size={`${Math.round(qHeight * 0.65)}px`}>🌐</Emoji>
                       </div>
                     )}
-                    <span className="text-[9px] text-[#9A8A78] text-center max-w-[52px] truncate">{d.country}</span>
+                    <span className="text-[9px] text-[#9A8A78] text-center max-w-[52px] truncate">{getCountryDisplayName(d.country, language)}</span>
                   </div>
                 );
               })}
@@ -691,7 +692,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
               style={{ fontSize: 'min(5vw, 4vh)' }}
               className="font-black text-[#1C1410] text-center mb-2"
             >
-              {orderedRights[rightsIndex].country}
+              {getCountryDisplayName(orderedRights[rightsIndex].country, language)}
             </h1>
             <p className="text-amber-400 font-semibold">
               {orderedRights[rightsIndex].choice === 'for-rights' ? t('voting_rights_for') : t('voting_rights_against')}
@@ -745,7 +746,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                 >
                   {!isCurrent && <span className="text-[#9A8A78] text-xs">⠿</span>}
                   <span className="text-xs w-5 font-mono text-right opacity-60">{absIdx + 1}</span>
-                  <span>{getFlag(v.country)} {v.country}</span>
+                  <span>{getFlag(v.country)} {getCountryDisplayName(v.country, language)}</span>
                   <span className={`ml-auto text-xs font-semibold ${
                     isCurrent ? 'text-[#EED98A]' :
                     v.choice === 'for-rights' ? 'text-[#2A7A3C]' : 'text-[#8B2020]'

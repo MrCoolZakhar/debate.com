@@ -1,11 +1,11 @@
 'use client';
 
 import React, { useState, useRef, useEffect, KeyboardEvent } from 'react';
-import { useT } from '@/contexts/LanguageContext';
+import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { useRouter } from 'next/navigation';
 import { Committee, CommitteeDocument, DocumentType, DocumentStatus } from '@/lib/types';
 import { TranslationKey } from '@/lib/translations';
-import { getCountryByName, getFlagUrl } from '@/lib/countries';
+import { getCountryByName, getFlagUrl, getCountryDisplayName } from '@/lib/countries';
 import { Emoji } from '@/components/Emoji';
 import { useSettingsStore } from '@/lib/settingsStore';
 import {
@@ -50,10 +50,11 @@ function StatusBadge({ status }: { status: DocumentStatus }) {
 }
 
 function CountryChip({ country, onRemove }: { country: string; onRemove: () => void }) {
+  const { language } = useLanguage();
   const found = getCountryByName(country);
   return (
     <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-[#DDD4C0] border border-[#DDD4C0] rounded-full text-xs text-[#1C1410]">
-      {found ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-4 h-4 object-contain inline-block mr-1" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : '🌐'}{country}
+      {found ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-4 h-4 object-contain inline-block mr-1" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : '🌐'}{getCountryDisplayName(country, language)}
       <button onClick={onRemove} className="text-[#9A8A78] hover:text-red-500 ml-0.5 leading-none">✕</button>
     </span>
   );
@@ -63,6 +64,7 @@ function SponsorSelect({ candidates, selected, onChange }: {
   candidates: string[]; selected: string[]; onChange: (v: string[]) => void;
 }) {
   const t = useT();
+  const { language } = useLanguage();
   const [query, setQuery] = useState('');
   const available = candidates.filter((c) => !selected.includes(c) && c.toLowerCase().includes(query.toLowerCase()));
   const add = (country: string) => { onChange([...selected, country]); setQuery(''); };
@@ -87,7 +89,7 @@ function SponsorSelect({ candidates, selected, onChange }: {
                 <button key={c} onMouseDown={(e) => { e.preventDefault(); add(c); }}
                   className={`w-full flex items-center gap-2 px-3 py-2 text-left transition-colors ${i === 0 ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'}`}>
                   {found ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <span>🌐</span>}
-                  <span className="text-sm">{c}</span>
+                  <span className="text-sm">{getCountryDisplayName(c, language)}</span>
                 </button>
               );
             })}
@@ -550,6 +552,7 @@ function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation
   onStartPresentation: (doc: CommitteeDocument) => void;
 }) {
   const t = useT();
+  const { language } = useLanguage();
   const [expanded, setExpanded] = useState(false);
   const [showPdf, setShowPdf] = useState(false);
   const nextStatus = STATUS_NEXT[doc.status];
@@ -573,7 +576,7 @@ function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation
         </div>
         <button onClick={() => onRemove(doc.id)} className="text-[#9A8A78] hover:text-red-500 transition-colors text-sm shrink-0 focus:outline-none" title="Delete">✕</button>
       </div>
-      <div className="text-xs text-[#6A5A4A]"><span className="font-semibold">{t('documents_sponsors_label_card')}: </span>{doc.sponsors.join(', ') || '—'}</div>
+      <div className="text-xs text-[#6A5A4A]"><span className="font-semibold">{t('documents_sponsors_label_card')}: </span>{doc.sponsors.map(s => getCountryDisplayName(s, language)).join(', ') || '—'}</div>
       {doc.readingMinutes && <div className="text-xs flex items-center gap-1 flex-wrap" style={{ color: '#1C1410' }}>{t('documents_reading_summary').replace('{r}', String(doc.readingMinutes))}{doc.presentationMinutes ? ` · ${t('documents_presentation_summary').replace('{p}', String(doc.presentationMinutes))}` : ''}{doc.qaMinutes ? ` · ${t('documents_qa_summary').replace('{q}', String(doc.qaMinutes))}` : ''}</div>}
       {doc.fileUrl && doc.fileName && (
         <div className="text-xs space-y-2">
