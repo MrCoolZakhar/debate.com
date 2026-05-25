@@ -95,16 +95,19 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
 
         {/* Language toggle */}
         <div className="relative hidden md:block mr-3 ml-auto">
-          <button
-            onClick={() => setShowLangMenu((v) => !v)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl transition-all focus:outline-none"
-            style={{ color: '#1B3828', fontSize: '12px', fontWeight: 700, letterSpacing: '0.06em' }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.07)'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-          >
-            <Globe size={14} strokeWidth={2} />
-            <span style={{ fontFamily: "'DM Mono', monospace" }}>{language.toUpperCase()}</span>
-          </button>
+          <div className="flex flex-col items-center gap-0.5">
+            <span className="text-[8px] font-black tracking-wide leading-none" style={{ color: '#B6871F' }}>✨ NEW</span>
+            <button
+              onClick={() => setShowLangMenu((v) => !v)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl transition-all focus:outline-none"
+              style={{ color: '#1B3828', fontSize: '12px', fontWeight: 700, letterSpacing: '0.06em' }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.07)'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+            >
+              <Globe size={14} strokeWidth={2} />
+              <span style={{ fontFamily: "'DM Mono', monospace" }}>{language.toUpperCase()}</span>
+            </button>
+          </div>
           {showLangMenu && (
             <>
               <div className="fixed inset-0 z-40" onClick={() => setShowLangMenu(false)} />
