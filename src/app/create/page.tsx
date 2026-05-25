@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createCommittee as createCommitteeInDB } from '@/lib/committeeService';
 import { useSettingsStore } from '@/lib/settingsStore';
-import { UN_COUNTRIES, getFlagUrl, getCountryByName } from '@/lib/countries';
+import { UN_COUNTRIES, getFlagUrl, getCountryByName, getCountryDisplayName, matchesSearch } from '@/lib/countries';
 import { UNSC_MEMBERS, WHO_MEMBERS, IMF_MEMBERS, WORLD_BANK_MEMBERS, UNEP_MEMBERS } from '@/lib/presets';
 import { Globe, PenLine, ChevronLeft } from 'lucide-react';
 import { FlagImg } from '@/components/FlagImg';
@@ -451,7 +451,7 @@ function CreatePageInner() {
   const canProceed = committeeName.trim() && topic.trim();
 
   const available = UN_COUNTRIES.filter(
-    (c) => !delegates.includes(c.name) && c.name.toLowerCase().includes(search.toLowerCase())
+    (c) => !delegates.includes(c.name) && matchesSearch(c, search, language)
   );
 
   const addDelegate = (name: string) => {
@@ -583,7 +583,7 @@ function CreatePageInner() {
                           <button key={c.code} onMouseDown={(e) => { e.preventDefault(); addDelegate(c.name); setSearch(''); }}
                             className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${i === 0 ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'}`}>
                             <img src={getFlagUrl(c.code)} alt={c.code} className="w-6 h-6 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                            <span className="text-sm flex-1">{c.name}</span>
+                            <span className="text-sm flex-1">{getCountryDisplayName(c.name, language)}</span>
                             {i === 0 && <span className="ml-auto text-xs text-[#9A8A78]">Enter ↵</span>}
                           </button>
                         ))}
@@ -668,7 +668,7 @@ function CreatePageInner() {
                               ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                               : <Globe size={16} strokeWidth={1.5} className="text-[#9A8A78] shrink-0" />
                             }
-                            <span className="text-sm flex-1 truncate font-medium" style={{ color: '#1C1410' }}>{name}</span>
+                            <span className="text-sm flex-1 truncate font-medium" style={{ color: '#1C1410' }}>{getCountryDisplayName(name, language)}</span>
                             <button onClick={() => setDelegates((p) => p.filter((d) => d !== name))}
                               className="text-[#9A8A78] group-hover:text-red-500 transition-colors text-sm opacity-0 group-hover:opacity-100">✕</button>
                           </div>

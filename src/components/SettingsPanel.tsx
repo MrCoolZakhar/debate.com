@@ -187,9 +187,24 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
             <h2 className="text-base font-black" style={{ color: '#EED98A' }}>{t('settings_session_settings')}</h2>
             <p className="text-xs mt-0.5" style={{ color: 'rgba(238,217,138,0.6)', fontFamily: "'DM Mono', monospace" }}>{committee.name} · {committee.code}</p>
           </div>
-          <button onClick={onClose} className="text-xl leading-none transition-colors focus:outline-none" style={{ color: 'rgba(238,217,138,0.6)' }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#EED98A'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'rgba(238,217,138,0.6)'; }}>✕</button>
+          <div className="flex items-center gap-2.5">
+            {/* Compact language toggle in header */}
+            <div className="flex rounded-lg overflow-hidden" style={{ border: '1px solid rgba(238,217,138,0.25)' }}>
+              <button
+                onClick={() => setLanguage('en')}
+                className="px-2.5 py-1 text-[11px] font-black transition-all focus:outline-none"
+                style={{ backgroundColor: language === 'en' ? '#EED98A' : 'transparent', color: language === 'en' ? '#1B3828' : 'rgba(238,217,138,0.55)' }}
+              >EN</button>
+              <button
+                onClick={() => setLanguage('es')}
+                className="px-2.5 py-1 text-[11px] font-black transition-all focus:outline-none"
+                style={{ backgroundColor: language === 'es' ? '#EED98A' : 'transparent', color: language === 'es' ? '#1B3828' : 'rgba(238,217,138,0.55)' }}
+              >ES</button>
+            </div>
+            <button onClick={onClose} className="text-xl leading-none transition-colors focus:outline-none" style={{ color: 'rgba(238,217,138,0.6)' }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#EED98A'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'rgba(238,217,138,0.6)'; }}>✕</button>
+          </div>
         </div>
 
         {/* Tabs */}
@@ -429,7 +444,12 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
 
               {/* Language */}
               <div className="pt-4" style={{ borderTop: '1px solid #DDD4C0' }}>
-                <p className="text-xs font-black uppercase tracking-wide mb-3" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>{t('settings_language_toggle')}</p>
+                <div className="flex items-center gap-2 mb-3">
+                  <p className="text-xs font-black uppercase tracking-wide" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>{t('settings_language_toggle')}</p>
+                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-black tracking-wide" style={{ backgroundColor: '#1B3828', color: '#EED98A', border: '1px solid rgba(182,135,31,0.4)' }}>
+                    ✨ NEW 🌟
+                  </span>
+                </div>
                 <div className="flex gap-2">
                   <button
                     onClick={() => setLanguage('en')}

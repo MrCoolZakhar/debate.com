@@ -2487,7 +2487,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                       rtrTimerActive ? 'bg-[#B6871F] hover:bg-[#B6871F]/80 text-white' : 'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'
                     }`}
                   >
-                    {rtrTimerActive ? '⏸ Pause' : '▶ Start'}
+                    {rtrTimerActive ? t('rtr_pause') : t('rtr_start')}
                   </button>
                   <button
                     onClick={() => {
@@ -2499,7 +2499,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                     }}
                     className="px-3 py-2 rounded-lg font-bold text-xs bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#6A5A4A] transition-colors"
                   >
-                    Done
+                    {t('rtr_done')}
                   </button>
                 </div>
               </>

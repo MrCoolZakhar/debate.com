@@ -744,6 +744,9 @@ export const translations = {
     delegate_adjourned_desc: 'Please wait until the chair reopens the session.',
     delegate_adjourned_esc: 'Press ESC to return to main menu',
     delegate_join_denied: 'Your join request was denied by the chair.',
+    rtr_pause: '⏸ Pause',
+    rtr_start: '▶ Start',
+    rtr_done: 'Done',
   },
   es: {
     nav_sessions: 'SESIONES',
@@ -1488,6 +1491,9 @@ export const translations = {
     delegate_adjourned_desc: 'Por favor espera hasta que el director reabra la sesión.',
     delegate_adjourned_esc: 'Presiona ESC para volver al menú principal',
     delegate_join_denied: 'Tu solicitud de ingreso fue rechazada por el director.',
+    rtr_pause: '⏸ Pausar',
+    rtr_start: '▶ Iniciar',
+    rtr_done: 'Listo',
   },
 } as const;
 

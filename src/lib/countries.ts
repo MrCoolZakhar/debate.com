@@ -291,3 +291,13 @@ export function getCountryDisplayName(name: string, language: string): string {
   if (!country) return name;
   return COUNTRY_NAMES_ES[country.code] ?? name;
 }
+
+export function matchesSearch(c: Country, search: string, language: string): boolean {
+  const s = search.toLowerCase();
+  if (c.name.toLowerCase().includes(s)) return true;
+  if (language !== 'en') {
+    const localName = getCountryDisplayName(c.name, language).toLowerCase();
+    if (localName.includes(s)) return true;
+  }
+  return false;
+}
