@@ -413,7 +413,7 @@ function SelectScreen({ onSelect }: { onSelect: () => void }) {
 
 function CreatePageInner() {
   const t = useT();
-  const { language } = useLanguage();
+  const { language, setLanguage } = useLanguage();
   const router = useRouter();
   const { updateSetting } = useSettingsStore();
   const [chairNames, setChairNames] = useState<string[]>(['']);
@@ -501,6 +501,37 @@ function CreatePageInner() {
         <Link href="/">
           <img src="/GavellingLogo.png" alt="Gavelling" className="h-10 w-auto object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
         </Link>
+        {/* Language toggle — mirrors SiteNav style */}
+        <div className="relative ml-auto">
+          <span
+            className="absolute right-0 z-10 pointer-events-none"
+            style={{
+              top: '-8px',
+              backgroundColor: '#1B3828',
+              color: '#EED98A',
+              border: '1.5px solid rgba(238,217,138,0.55)',
+              borderRadius: '5px',
+              padding: '0px 4px',
+              fontSize: '7px',
+              fontWeight: 900,
+              letterSpacing: '0.08em',
+              whiteSpace: 'nowrap',
+              lineHeight: '13px',
+            }}
+          >✨ NEW</span>
+          <div className="flex rounded-lg overflow-hidden" style={{ border: '1.5px solid #C8BAA8' }}>
+            <button
+              onClick={() => setLanguage('en')}
+              className="px-3 py-1.5 text-xs font-black transition-all focus:outline-none"
+              style={{ backgroundColor: language === 'en' ? '#1B3828' : 'transparent', color: language === 'en' ? '#EED98A' : '#6A5A4A' }}
+            >EN</button>
+            <button
+              onClick={() => setLanguage('es')}
+              className="px-3 py-1.5 text-xs font-black transition-all focus:outline-none"
+              style={{ backgroundColor: language === 'es' ? '#1B3828' : 'transparent', color: language === 'es' ? '#EED98A' : '#6A5A4A' }}
+            >ES</button>
+          </div>
+        </div>
       </nav>
 
       <div className="flex-1 flex overflow-hidden">

@@ -98,19 +98,19 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
           <div className="relative">
             {/* NEW badge — overlaps the top of the button */}
             <span
-              className="absolute left-1/2 -translate-x-1/2 z-10 pointer-events-none"
+              className="absolute right-0 z-10 pointer-events-none"
               style={{
-                top: '-9px',
+                top: '-8px',
                 backgroundColor: '#1B3828',
                 color: '#EED98A',
                 border: '1.5px solid rgba(238,217,138,0.55)',
-                borderRadius: '6px',
-                padding: '1px 6px',
-                fontSize: '8px',
+                borderRadius: '5px',
+                padding: '0px 4px',
+                fontSize: '7px',
                 fontWeight: 900,
-                letterSpacing: '0.1em',
+                letterSpacing: '0.08em',
                 whiteSpace: 'nowrap',
-                lineHeight: '14px',
+                lineHeight: '13px',
               }}
             >✨ NEW</span>
             <button

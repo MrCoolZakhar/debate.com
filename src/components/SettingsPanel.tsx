@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useSettingsStore, CommitteeSettings } from '@/lib/settingsStore';
 import { Committee } from '@/lib/types';
 import { updateCommitteeCode, updateCommitteeChairSuffixInDB } from '@/lib/committeeService';
-import { getFlagEmoji, getCountryByName } from '@/lib/countries';
+import { getFlagEmoji, getCountryByName, getCountryDisplayName } from '@/lib/countries';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 
 type SettingsTab = 'voting' | 'motions' | 'access' | 'points';
@@ -192,19 +192,19 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
             <div className="relative">
               {/* NEW badge — overlaps top of the toggle */}
               <span
-                className="absolute left-1/2 -translate-x-1/2 z-10 pointer-events-none"
+                className="absolute right-0 z-10 pointer-events-none"
                 style={{
-                  top: '-9px',
+                  top: '-8px',
                   backgroundColor: '#0E1E13',
                   color: '#EED98A',
                   border: '1.5px solid rgba(238,217,138,0.55)',
-                  borderRadius: '6px',
-                  padding: '1px 6px',
-                  fontSize: '8px',
+                  borderRadius: '5px',
+                  padding: '0px 4px',
+                  fontSize: '7px',
                   fontWeight: 900,
-                  letterSpacing: '0.1em',
+                  letterSpacing: '0.08em',
                   whiteSpace: 'nowrap',
-                  lineHeight: '14px',
+                  lineHeight: '13px',
                 }}
               >✨ NEW</span>
               <div className="flex rounded-lg overflow-hidden" style={{ border: '1px solid rgba(238,217,138,0.25)' }}>
@@ -491,7 +491,7 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
                       >
                         <span className="text-xs w-5 text-right shrink-0 font-mono" style={{ color: '#9A8A78' }}>{idx + 1}</span>
                         <span className="text-lg leading-none shrink-0">{flag}</span>
-                        <span className="flex-1 text-sm font-semibold truncate" style={{ color: '#1C1410' }}>{d.country}</span>
+                        <span className="flex-1 text-sm font-semibold truncate" style={{ color: '#1C1410' }}>{getCountryDisplayName(d.country, language)}</span>
                         <span className="text-xs font-mono px-2 py-0.5 rounded-full shrink-0" style={{ backgroundColor: d.status === 'absent' ? '#DDD4C0' : '#1B3828', color: d.status === 'absent' ? '#9A8A78' : '#EED98A' }}>
                           {t('settings_points_pts').replace('{n}', String(score.total))}
                         </span>
