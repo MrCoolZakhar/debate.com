@@ -10,6 +10,7 @@ import { UNSC_MEMBERS, WHO_MEMBERS, IMF_MEMBERS, WORLD_BANK_MEMBERS, UNEP_MEMBER
 import { Globe, PenLine, ChevronLeft } from 'lucide-react';
 import { FlagImg } from '@/components/FlagImg';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
+import { getCommitteeDisplayName } from '@/lib/presetNames';
 
 const COMMITTEE_PRESETS = [
   { name: 'UN Security Council', acronym: 'UNSC', logoPath: '/logos/un.svg', members: UNSC_MEMBERS },
@@ -28,26 +29,8 @@ const COMMITTEE_PRESETS = [
   { name: 'ASEAN', acronym: 'ASEAN', logoPath: '/logos/asean.png', members: ['Brunei','Cambodia','Indonesia','Laos','Malaysia','Myanmar','Philippines','Singapore','Thailand','Timor-Leste','Vietnam'] },
 ];
 
-const PRESET_NAME_ES: Record<string, string> = {
-  'UN Security Council': 'Consejo de Seguridad de la ONU',
-  'UN Environment Programme': 'Programa de Medio Ambiente de la ONU',
-  'World Health Organization': 'Organización Mundial de la Salud',
-  'International Monetary Fund': 'Fondo Monetario Internacional',
-  'World Bank': 'Banco Mundial',
-  'UN General Assembly': 'Asamblea General de la ONU',
-  'UN Human Rights Council': 'Consejo de Derechos Humanos de la ONU',
-  'Economic and Social Council': 'Consejo Económico y Social',
-  'NATO': 'OTAN',
-  'G20': 'G20',
-  'European Union': 'Unión Europea',
-  'African Union': 'Unión Africana',
-  'Arab League': 'Liga Árabe',
-  'ASEAN': 'ASEAN',
-};
-
 function getPresetDisplayName(name: string, lang: string): string {
-  if (lang === 'es') return PRESET_NAME_ES[name] ?? name;
-  return name;
+  return getCommitteeDisplayName(name, lang);
 }
 
 const PRESET_ACRONYM_ES: Record<string, string> = {
@@ -496,7 +479,7 @@ function CreatePageInner() {
   };
 
   const handleCommitteePreset = (preset: typeof COMMITTEE_PRESETS[0]) => {
-    setCommitteeName(getPresetDisplayName(preset.name, language));
+    setCommitteeName(preset.name);
     if (preset.members !== null) setDelegates(preset.members);
     setIsUNSC(preset.acronym === 'UNSC');
   };

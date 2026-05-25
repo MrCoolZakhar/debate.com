@@ -6,7 +6,8 @@ import { getCommitteeByCode, subscribeToCommittee, sendMessage as sendMessageDB 
 import { DEFAULT_MOTION_NAMES } from '@/lib/settingsStore';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
 import { Committee } from '@/lib/types';
-import { getFlagUrl, getCountryByName } from '@/lib/countries';
+import { getFlagUrl, getCountryByName, getCountryDisplayName } from '@/lib/countries';
+import { getCommitteeDisplayName } from '@/lib/presetNames';
 import { Emoji } from '@/components/Emoji';
 import { MajorityPie } from '@/components/RollCallPanel';
 
@@ -38,8 +39,8 @@ function ExpandedDelegateCard({
   const mn = language === 'es' ? {
     moderated: 'Cáucus Moderado',
     unmoderated: 'Cáucus No Moderado',
-    consultation: 'Consulta de Plenaria',
-    tour: 'Tour de Table',
+    consultation: 'Consulta de Gabinete',
+    tour: 'Round Robin',
     suspendDebate: 'Suspender Debate',
     endDebate: 'Cerrar Debate',
   } : { ...DEFAULT_MOTION_NAMES };
@@ -113,7 +114,7 @@ function ExpandedDelegateCard({
 
       <div className="flex flex-col items-center gap-2 pt-2">
         {flagEl}
-        <h2 className="text-3xl font-black text-center" style={{ color: '#1C1410' }}>{delegate.country}</h2>
+        <h2 className="text-3xl font-black text-center" style={{ color: '#1C1410' }}>{getCountryDisplayName(delegate.country, language)}</h2>
         <span className="text-sm font-bold" style={{ color: statusColor }}>{statusLabel}</span>
       </div>
 
@@ -160,6 +161,7 @@ function CollapsedDelegateCard({
   delegate: Committee['delegates'][0];
   onSelect: () => void;
 }) {
+  const { language } = useLanguage();
   const found = getCountryByName(delegate.country);
   const flagEl = found
     ? <img src={getFlagUrl(found.code)} alt={found.code} style={{ width: '36px', height: '26px', objectFit: 'cover', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.1)' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
@@ -175,12 +177,13 @@ function CollapsedDelegateCard({
       title={delegate.country}
     >
       {flagEl}
-      <span className="text-[9px] truncate max-w-full px-1 leading-tight" style={{ color: '#EDE7D8' }}>{delegate.country}</span>
+      <span className="text-[9px] truncate max-w-full px-1 leading-tight" style={{ color: '#EDE7D8' }}>{getCountryDisplayName(delegate.country, language)}</span>
     </button>
   );
 }
 
 function NormalDelegateCard({ delegate, committee, onSelect }: { delegate: Committee['delegates'][0]; committee: Committee; onSelect: () => void }) {
+  const { language } = useLanguage();
   const queueIndex = committee.speakersList.findIndex((s) => s.delegateId === delegate.id);
   const isCurrentSpeaker = committee.currentSpeaker?.delegateId === delegate.id;
   const found = getCountryByName(delegate.country);
@@ -210,7 +213,7 @@ function NormalDelegateCard({ delegate, committee, onSelect }: { delegate: Commi
           ? <img src={getFlagUrl(found.code)} alt={found.code} style={{ width: '32px', height: '22px', objectFit: 'cover', borderRadius: '4px', border: '1px solid rgba(28,20,16,0.15)', flexShrink: 0 }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
           : <div style={{ width: '32px', height: '22px', borderRadius: '4px', backgroundColor: 'rgba(255,255,255,0.1)', flexShrink: 0 }} />
         }
-        <span className="flex-1 text-sm font-bold truncate" style={{ color: '#EDE7D8' }}>{delegate.country}</span>
+        <span className="flex-1 text-sm font-bold truncate" style={{ color: '#EDE7D8' }}>{getCountryDisplayName(delegate.country, language)}</span>
         {isCurrentSpeaker && (
           <span className="text-[10px] font-black px-2 py-0.5 rounded-full shrink-0" style={{ backgroundColor: '#EED98A', color: '#1B3828' }}>SPEAKING</span>
         )}
@@ -263,7 +266,7 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
     return (
       <div className="min-h-screen flex flex-col items-center justify-center text-center px-8" style={{ backgroundColor: '#EDE7D8' }}>
         <div className="pointer-events-none fixed inset-0 z-0" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
-        <p className="text-xs font-mono font-bold tracking-widest mb-2 relative z-10" style={{ color: '#1B3828' }}>{committee.name} · {committee.code}</p>
+        <p className="text-xs font-mono font-bold tracking-widest mb-2 relative z-10" style={{ color: '#1B3828' }}>{getCommitteeDisplayName(committee.name, language)} · {committee.code}</p>
         <h1 className="text-5xl font-black mb-4 tracking-wide relative z-10" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{t('advisor_adjourned_title')}</h1>
         <p className="text-lg relative z-10" style={{ color: '#6A5A4A' }}>{t('advisor_adjourned_desc')}</p>
         <p className="text-xs mt-8 relative z-10" style={{ color: '#9A8A78' }}>{t('advisor_adjourned_esc')}</p>
@@ -280,8 +283,8 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
   const advisorMotionNames = language === 'es' ? {
     moderated: 'Cáucus Moderado',
     unmoderated: 'Cáucus No Moderado',
-    consultation: 'Consulta de Plenaria',
-    tour: 'Tour de Table',
+    consultation: 'Consulta de Gabinete',
+    tour: 'Round Robin',
     suspendDebate: 'Suspender Debate',
     endDebate: 'Cerrar Debate',
   } : { ...DEFAULT_MOTION_NAMES };
@@ -339,7 +342,7 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
         <div className="w-80 flex flex-col overflow-hidden shrink-0" style={{ backgroundColor: '#1B3828', borderRight: '1px solid #3D7A52' }}>
           {/* Header — matches RollCallPanel style */}
           <div className="px-4 pt-4 pb-3 shrink-0 relative z-10" style={{ borderBottom: '1px solid rgba(61,122,82,0.4)' }}>
-            <p className="text-lg font-black leading-tight truncate mb-0.5" style={{ color: '#EED98A' }}>{committee.name}</p>
+            <p className="text-lg font-black leading-tight truncate mb-0.5" style={{ color: '#EED98A' }}>{getCommitteeDisplayName(committee.name, language)}</p>
             {committee.topic && (
               <p className="text-xs leading-snug line-clamp-2 mb-2" style={{ color: 'rgba(238,217,138,0.55)' }}>
                 <span className="font-semibold" style={{ color: 'rgba(238,217,138,0.7)' }}>{t('advisor_topic_label')}</span>{committee.topic}
@@ -410,7 +413,7 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
             committee.currentSpeaker ? (
               <div className="flex flex-col items-center px-4 py-5 shrink-0" style={{ borderBottom: '1px solid rgba(61,122,82,0.4)' }}>
                 {(() => { const c = getCountryByName(committee.currentSpeaker.country); return c ? <img src={getFlagUrl(c.code)} alt={committee.currentSpeaker.country} style={{ width: '80px', height: '58px', objectFit: 'cover', borderRadius: '8px', border: '1.5px solid rgba(238,217,138,0.2)' }} /> : null; })()}
-                <h2 className="text-2xl font-black mt-3 mb-1 text-center" style={{ color: '#EDE7D8' }}>{committee.currentSpeaker.country}</h2>
+                <h2 className="text-2xl font-black mt-3 mb-1 text-center" style={{ color: '#EDE7D8' }}>{getCountryDisplayName(committee.currentSpeaker.country, language)}</h2>
                 <div className="text-5xl font-black font-mono tabular-nums mt-1" style={{ color: committee.speakerTimeRemaining <= 10 ? '#B8844A' : '#EDE7D8' }}>
                   {formatTime(committee.speakerTimeRemaining)}
                 </div>
@@ -441,7 +444,7 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
                   <div key={s.delegateId} className="flex items-center gap-3 px-4 py-2.5" style={{ borderBottom: '1px solid rgba(61,122,82,0.2)' }}>
                     <span className="text-xs font-mono w-5 shrink-0" style={{ color: 'rgba(238,217,138,0.5)' }}>{i + 1}</span>
                     {c ? <img src={getFlagUrl(c.code)} alt={s.country} style={{ width: '24px', height: '17px', objectFit: 'cover', borderRadius: '3px', border: '1px solid rgba(255,255,255,0.1)', flexShrink: 0 }} /> : null}
-                    <span className="text-sm flex-1 truncate font-semibold" style={{ color: '#EDE7D8' }}>{s.country}</span>
+                    <span className="text-sm flex-1 truncate font-semibold" style={{ color: '#EDE7D8' }}>{getCountryDisplayName(s.country, language)}</span>
                   </div>
                 );
               })

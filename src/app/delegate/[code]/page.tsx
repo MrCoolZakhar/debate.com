@@ -8,7 +8,8 @@ import { Committee, CommitteeDocument, DocumentType, PendingMotionType, Speaking
 import { TranslationKey } from '@/lib/translations';
 import ChatPanel from '@/components/ChatPanel';
 import { useSettingsStore, DEFAULT_MOTION_NAMES } from '@/lib/settingsStore';
-import { getFlagUrl, getCountryByName } from '@/lib/countries';
+import { getFlagUrl, getCountryByName, getCountryDisplayName } from '@/lib/countries';
+import { getCommitteeDisplayName } from '@/lib/presetNames';
 import { Emoji } from '@/components/Emoji';
 import { FlagImg } from '@/components/FlagImg';
 import {
@@ -500,6 +501,7 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
 
 // ── Statistics Tab ────────────────────────────────────────────────────────────
 function StatisticsTab({ committee, country }: { committee: Committee; country: string }) {
+  const { language } = useLanguage();
   const t = useT();
   const logs = parseSpeakingLogs(committee);
   const { total, breakdown, tier, tips } = calcPoints(logs, committee, country, t);
@@ -608,7 +610,7 @@ function StatisticsTab({ committee, country }: { committee: Committee; country: 
               <div key={r.country} className={`flex items-center gap-2 text-sm ${r.country === country ? 'bg-[#1B3828]/10 border border-[#1B3828]/20 rounded-lg px-2 py-1' : 'px-2 py-1'}`}>
                 <span className="text-[#9A8A78] text-xs w-4 font-mono shrink-0">{i + 1}</span>
                 <FlagImg code={getCountryByName(r.country)?.code ?? ''} size={20} className="shrink-0" />
-                <span className="flex-1 truncate font-semibold" style={{ color: r.country === country ? '#1B3828' : '#6A5A4A', fontWeight: r.country === country ? 700 : 400 }}>{r.country}</span>
+                <span className="flex-1 truncate font-semibold" style={{ color: r.country === country ? '#1B3828' : '#6A5A4A', fontWeight: r.country === country ? 700 : 400 }}>{getCountryDisplayName(r.country, language)}</span>
                 <div className="flex items-center gap-2">
                   <div className="w-16 h-1.5 bg-[#DDD4C0] rounded-full overflow-hidden">
                     <div className="h-full bg-[#1B3828] rounded-full" style={{ width: `${(r.seconds / ranking[0].seconds) * 100}%` }} />
@@ -832,8 +834,8 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     const mn = language === 'es' ? {
       moderated: 'Cáucus Moderado',
       unmoderated: 'Cáucus No Moderado',
-      consultation: 'Consulta de Plenaria',
-      tour: 'Tour de Table',
+      consultation: 'Consulta de Gabinete',
+      tour: 'Round Robin',
       suspendDebate: 'Suspender Debate',
       endDebate: 'Cerrar Debate',
     } : { ...DEFAULT_MOTION_NAMES };
@@ -914,7 +916,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   if (sessionSuspended && (committee.suspendedAt || wasEverSuspended.current)) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center text-center px-8" style={{ backgroundColor: '#EDE7D8' }}>
-        <p className="text-xs font-mono font-bold tracking-widest mb-2" style={{ color: '#1B3828' }}>{committee.name} · {committee.code}</p>
+        <p className="text-xs font-mono font-bold tracking-widest mb-2" style={{ color: '#1B3828' }}>{getCommitteeDisplayName(committee.name, language)} · {committee.code}</p>
         <h1 className="text-4xl font-black mb-4 tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{t('delegate_adjourned_title')}</h1>
         <p className="text-lg" style={{ color: '#6A5A4A' }}>{t('delegate_adjourned_desc')}</p>
         <p className="text-xs mt-8" style={{ color: '#9A8A78' }}>{t('delegate_adjourned_esc')}</p>
@@ -993,7 +995,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
       {sessionEnded && endedTab === 'ended' ? (
         <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
           <h1 className="text-4xl font-black mb-4 tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>THIS COMMITTEE HAS ENDED.</h1>
-          <p className="text-xl mb-1" style={{ color: '#6A5A4A' }}>{committee.name}</p>
+          <p className="text-xl mb-1" style={{ color: '#6A5A4A' }}>{getCommitteeDisplayName(committee.name, language)}</p>
           <p className="text-base mb-8" style={{ color: '#9A8A78' }}>{committee.topic}</p>
           {hoursRemaining !== null && (
             <p className="text-sm" style={{ color: '#9A8A78' }}>{hoursRemaining} hour{hoursRemaining !== 1 ? 's' : ''} until committee is deleted</p>
@@ -1016,7 +1018,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
             {/* Committee info strip */}
             <div className="px-4 pt-4 pb-2 text-center">
               <p className="text-xs font-mono font-bold uppercase tracking-widest mb-0.5" style={{ color: '#9A8A78' }}>{t('delegate_committee_label')}</p>
-              <p className="font-black text-base" style={{ color: '#1B3828' }}>{committee.name}</p>
+              <p className="font-black text-base" style={{ color: '#1B3828' }}>{getCommitteeDisplayName(committee.name, language)}</p>
               {committee.topic && <p className="text-xs mt-0.5" style={{ color: '#9A8A78' }}>{committee.topic}</p>}
             </div>
             {isAbsent && !sessionEnded && <AbsentBanner />}
@@ -1061,7 +1063,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                           {/* Section 1: FlagImg replaces text-lg emoji */}
                           <FlagImg code={getCountryByName(s.country)?.code ?? ''} size={20} className="shrink-0" />
                           <span className={s.country === country ? 'text-[#B6871F] font-bold' : 'text-[#6A5A4A]'}>
-                            {s.country}{s.country === country && t('delegate_you_suffix')}
+                            {getCountryDisplayName(s.country, language)}{s.country === country && t('delegate_you_suffix')}
                           </span>
                         </div>
                       ))}
@@ -1099,7 +1101,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
               {/* Flag — larger, rectangular, with country name below */}
               <div className="flex flex-col items-center gap-2 py-2">
                 {(() => { const c = getCountryByName(country); return c ? <img src={getFlagUrl(c.code)} alt={country} style={{ width: '120px', height: '86px', objectFit: 'cover', borderRadius: '10px', border: '1.5px solid rgba(28,20,16,0.12)', boxShadow: '0 4px 16px rgba(27,56,40,0.12)' }} /> : null; })()}
-                <p className="font-black text-3xl" style={{ color: '#1C1410' }}>{country}</p>
+                <p className="font-black text-3xl" style={{ color: '#1C1410' }}>{getCountryDisplayName(country, language)}</p>
               </div>
 
               {/* Section 5: Voting card */}
@@ -1138,7 +1140,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                       <div className="text-xs text-[#9A8A78] mb-1">{t('delegate_now_speaking')}</div>
                       <div className="flex items-center gap-2">
                         <FlagImg code={getCountryByName(committee.currentSpeaker.country)?.code ?? ''} size={24} />
-                        <span className="font-bold text-[#1C1410]">{committee.currentSpeaker.country}</span>
+                        <span className="font-bold text-[#1C1410]">{getCountryDisplayName(committee.currentSpeaker.country, language)}</span>
                       </div>
                       {isOnSpeakersList && myQueueIndex === 0 && (
                         <p className="text-sm font-black mt-2" style={{ color: '#B8844A' }}>
@@ -1215,7 +1217,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                           {/* Section 1: FlagImg replaces text-lg */}
                           <FlagImg code={getCountryByName(s.country)?.code ?? ''} size={20} className="shrink-0" />
                           <span className="font-semibold" style={{ color: s.country === country ? '#1B3828' : '#1C1410', fontWeight: s.country === country ? 700 : 600 }}>
-                            {s.country}{s.country === country && t('delegate_you_suffix')}
+                            {getCountryDisplayName(s.country, language)}{s.country === country && t('delegate_you_suffix')}
                           </span>
                         </div>
                       ))}
@@ -1231,7 +1233,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                   {/* Section 1: FlagImg replaces text-3xl */}
                   <FlagImg code={getCountryByName(country)?.code ?? ''} size={36} />
                   <div>
-                    <div className="font-black text-base" style={{ color: '#1C1410' }}>{country}</div>
+                    <div className="font-black text-base" style={{ color: '#1C1410' }}>{getCountryDisplayName(country, language)}</div>
                     <div className="text-xs font-semibold mt-0.5" style={{ color: myDelegate?.status === 'absent' ? '#8B2020' : '#1B3828' }}>
                       {myDelegate?.status === 'present' ? t('delegate_status_present') :
                        myDelegate?.status === 'present-voting' ? t('delegate_status_pv') : t('delegate_status_absent')}

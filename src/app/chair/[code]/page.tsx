@@ -8,7 +8,8 @@ import { Committee, DelegateStatus } from '@/lib/types';
 import RollCallPanel, { FlagCircle } from '@/components/RollCallPanel';
 import MotionsModal from '@/components/MotionsModal';
 import DocumentsModal from '@/components/DocumentsModal';
-import { getFlagUrl, getCountryByName, UN_COUNTRIES } from '@/lib/countries';
+import { getFlagUrl, getCountryByName, getCountryDisplayName, UN_COUNTRIES } from '@/lib/countries';
+import { getCommitteeDisplayName } from '@/lib/presetNames';
 import { Emoji } from '@/components/Emoji';
 import { SettingsPanel } from '@/components/SettingsPanel';
 import { useSettingsStore } from '@/lib/settingsStore';
@@ -137,6 +138,7 @@ function resolveQuery(raw: string): string {
 
 // ── Add Speaker Input ─────────────────────────────────────────────────────────
 function AddSpeakerInput({ committee, onAdd }: { committee: Committee; onAdd: (id: string) => void }) {
+  const { language } = useLanguage();
   const t = useT();
   const [query, setQuery] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -161,7 +163,7 @@ function AddSpeakerInput({ committee, onAdd }: { committee: Committee; onAdd: (i
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(topNotOnList); } if (e.key === 'Escape') setQuery(''); }}
           placeholder={t('gsl_add_to_list')} autoFocus
           className="flex-1 bg-transparent px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none text-sm" />
-        {topNotOnList && query && <span className="text-xs text-[#9A8A78] px-3 truncate max-w-[120px]">↵ {topNotOnList.country}</span>}
+        {topNotOnList && query && <span className="text-xs text-[#9A8A78] px-3 truncate max-w-[120px]">↵ {getCountryDisplayName(topNotOnList.country, language)}</span>}
       </div>
       {query && matches.length > 0 && (
         <div data-tutorial="speakers-autocomplete" className="absolute bottom-full left-0 right-0 mb-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl overflow-hidden shadow-xl z-10 max-h-48 overflow-y-auto">
@@ -176,7 +178,7 @@ function AddSpeakerInput({ committee, onAdd }: { committee: Committee; onAdd: (i
                     ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                     : <Emoji size="1.125rem">🌐</Emoji>}
                 </span>
-                  <span className="text-sm flex-1 text-[#9A8A78]">{d.country}</span>
+                  <span className="text-sm flex-1 text-[#9A8A78]">{getCountryDisplayName(d.country, language)}</span>
                   <span className="text-xs text-[#9A8A78]">already on list</span>
                 </div>
               );
@@ -190,7 +192,7 @@ function AddSpeakerInput({ committee, onAdd }: { committee: Committee; onAdd: (i
                     ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                     : <Emoji size="1.125rem">🌐</Emoji>}
                 </span>
-                <span className="text-sm">{d.country}</span>
+                <span className="text-sm">{getCountryDisplayName(d.country, language)}</span>
                 {isFirst && <span className="ml-auto text-xs text-[#9A8A78]">Enter ↵</span>}
               </button>
             );
@@ -284,6 +286,7 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, lastSpeakerDelegate
   currentSpeakerDelegateId?: string | null;
   isRoomOrderTdT?: boolean;
 }) {
+  const { language } = useLanguage();
   const t = useT();
   const dragIndexRef = useRef<number | null>(null);
   const qLen = list.length;
@@ -318,7 +321,7 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, lastSpeakerDelegate
                 </div>
               )}
               {!isRoomOrderTdT && (
-                <span className="line-clamp-2 break-words whitespace-normal leading-tight max-w-[80px] text-xs font-semibold text-center" style={{ color: '#1C1410' }}>{abbrevCountry(s.country)}</span>
+                <span className="line-clamp-2 break-words whitespace-normal leading-tight max-w-[80px] text-xs font-semibold text-center" style={{ color: '#1C1410' }}>{abbrevCountry(getCountryDisplayName(s.country, language))}</span>
               )}
               {isCurrent && <span className="text-sm font-semibold" style={{ color: '#B8844A' }}>{t('gsl_speaking')}</span>}
               {!isCurrent && i === 0 && <span className="text-xs font-semibold" style={{ color: '#B8844A' }}>{t('gsl_up_next')}</span>}
@@ -349,6 +352,7 @@ function CaucusQueueSidebar({ committee, onRemove, onReorder, lastSpeakerDelegat
   onReorder: (newList: { delegateId: string; country: string }[]) => void;
   lastSpeakerDelegateId?: string | null;
 }) {
+  const { language } = useLanguage();
   const t = useT();
   const dragIndexRef = useRef<number | null>(null);
   const queue = committee.caucusQueue ?? [];
@@ -387,7 +391,7 @@ function CaucusQueueSidebar({ committee, onRemove, onReorder, lastSpeakerDelegat
                   ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                   : <Emoji size="1.125rem">🌐</Emoji>}
               </span>
-                <span className="flex-1 text-sm text-[#1C1410] line-clamp-2 break-words whitespace-normal leading-tight">{s.country}</span>
+                <span className="flex-1 text-sm text-[#1C1410] line-clamp-2 break-words whitespace-normal leading-tight">{getCountryDisplayName(s.country, language)}</span>
                 {lastSpeakerDelegateId && s.delegateId === lastSpeakerDelegateId && (
                   <span className="text-xs font-bold text-[#9A8A78] bg-[#DDD4C0] px-1.5 py-0.5 rounded shrink-0">Last</span>
                 )}
@@ -412,6 +416,7 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
   currentSpeakerCountry?: string | null;
   onEndCaucus?: () => void;
 }) {
+  const { language } = useLanguage();
   const t = useT();
   const [query, setQuery] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -442,7 +447,7 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(topNotOnList); } if (e.key === 'Escape') setQuery(''); }}
           placeholder={t('gsl_add_to_list')}
           className="flex-1 bg-transparent px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none text-sm" />
-        {topNotOnList && query && <span className="text-xs text-[#9A8A78] px-3 truncate max-w-[120px]">↵ {topNotOnList.country}</span>}
+        {topNotOnList && query && <span className="text-xs text-[#9A8A78] px-3 truncate max-w-[120px]">↵ {getCountryDisplayName(topNotOnList.country, language)}</span>}
       </div>
       {query && matches.length > 0 && (
         <div className="absolute bottom-full left-0 right-0 mb-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl overflow-hidden shadow-xl z-10 max-h-48 overflow-y-auto">
@@ -459,7 +464,7 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
                     ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                     : <Emoji size="1.125rem">🌐</Emoji>}
                 </span>
-                  <span className="text-sm flex-1 text-[#9A8A78]">{d.country}</span>
+                  <span className="text-sm flex-1 text-[#9A8A78]">{getCountryDisplayName(d.country, language)}</span>
                   <span className="text-xs text-[#9A8A78]">{isCurrent ? 'currently speaking' : 'already on list'}</span>
                 </div>
               );
@@ -473,7 +478,7 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
                     ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                     : <Emoji size="1.125rem">🌐</Emoji>}
                 </span>
-                <span className="text-sm flex-1">{d.country}</span>
+                <span className="text-sm flex-1">{getCountryDisplayName(d.country, language)}</span>
                 {spoke && <span className="text-[10px] text-[#B6871F] shrink-0">already spoke</span>}
                 {isFirst && !spoke && (
                   <div className="flex items-center gap-1 shrink-0">
@@ -825,7 +830,7 @@ function ModeratedCaucusMain({
                   })()}
                 </div>
               )}
-              <h1 className="text-5xl font-black text-[#1C1410] mt-2 mb-1 text-center">{committee.caucus!.currentSpeaker}</h1>
+              <h1 className="text-5xl font-black text-[#1C1410] mt-2 mb-1 text-center">{getCountryDisplayName(committee.caucus!.currentSpeaker!, language)}</h1>
               <div className={`text-8xl font-black font-mono mt-2 mb-3 tabular-nums ${
                 speakerTimeRemaining <= 10 ? 'text-[#B8844A]' : 'text-[#1C1410]'
               }`}>
@@ -998,11 +1003,12 @@ function ModeratedCaucusMain({
 
 // ── Session Ended Content ─────────────────────────────────────────────────────
 function SessionEndedContent({ committee, hoursRemaining }: { committee: Committee; hoursRemaining: number | null }) {
+  const { language } = useLanguage();
   const t = useT();
   return (
     <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
       <h1 className="text-5xl font-black mb-4" style={{ color: '#1B3828' }}>{t('session_ended_title')}</h1>
-      <p className="text-xl mb-2" style={{ color: '#1C1410' }}>{committee.name}</p>
+      <p className="text-xl mb-2" style={{ color: '#1C1410' }}>{getCommitteeDisplayName(committee.name, language)}</p>
       <p className="text-lg mb-8" style={{ color: '#9A8A78' }}>{committee.topic}</p>
       {hoursRemaining !== null && (
         <p className="text-base" style={{ color: '#9A8A78' }}>{t('session_hours_until_delete', { n: hoursRemaining ?? 0, s: hoursRemaining !== 1 ? 's' : '' })}</p>
@@ -1807,7 +1813,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
             </button>
           </div>
         ) : (
-          <span className="text-[#9A8A78] text-xs hidden sm:block truncate flex-1">{committee.name} — {committee.topic}</span>
+          <span className="text-[#9A8A78] text-xs hidden sm:block truncate flex-1">{getCommitteeDisplayName(committee.name, language)} — {committee.topic}</span>
         )}
 
 
@@ -2059,7 +2065,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                       {isTdTParent ? (
                         <>
                           <p className="text-xs font-mono tracking-widest mb-3 font-bold" style={{ color: '#1B3828' }}>{t('caucus_starting_tdt')}</p>
-                          <h1 className="text-5xl font-black mb-2" style={{ color: '#1B3828' }}>Tour de Table</h1>
+                          <h1 className="text-5xl font-black mb-2" style={{ color: '#1B3828' }}>{language === 'es' ? 'Round Robin' : 'Tour de Table'}</h1>
                           <p className="text-[#6A5A4A] text-sm mb-6">
                             {committee.caucus.purpose?.includes('Room Order')
                               ? t('caucus_tdt_room_order')
@@ -2203,7 +2209,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                                 : <Emoji size="5rem" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>🌐</Emoji>;
                             })()}
                           </div>
-                          <h1 className="text-5xl font-black text-[#1C1410] mt-2 mb-5 text-center">{committee.currentSpeaker.country}</h1>
+                          <h1 className="text-5xl font-black text-[#1C1410] mt-2 mb-5 text-center">{getCountryDisplayName(committee.currentSpeaker.country, language)}</h1>
                           <div data-tutorial="timer" className={`text-8xl font-black font-mono mt-0 mb-4 tabular-nums ${
                             speakerTimeRemaining <= 10 ? 'text-[#B8844A]' : 'text-[#1C1410]'
                           }`}>

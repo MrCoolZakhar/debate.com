@@ -2,13 +2,14 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { Committee, DelegateStatus } from '@/lib/types';
-import { getFlagUrl, getCountryByName, UN_COUNTRIES } from '@/lib/countries';
+import { getFlagUrl, getCountryByName, getCountryDisplayName, UN_COUNTRIES } from '@/lib/countries';
+import { getCommitteeDisplayName } from '@/lib/presetNames';
 import {
   setPhase as setPhaseInDB,
   setDelegateStatus as setDelegateStatusInDB,
   removeFromSpeakersList as removeFromSpeakersListInDB,
 } from '@/lib/committeeService';
-import { useT } from '@/contexts/LanguageContext';
+import { useLanguage, useT } from '@/contexts/LanguageContext';
 
 // ── FlagCircle ────────────────────────────────────────────────────────────────
 export function FlagCircle({ country, size = 'md' }: { country: string; size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' | 'hero' }) {
@@ -176,6 +177,7 @@ function FullListPopup({
   onClose: () => void;
   onRemove?: (delegateId: string) => void;
 }) {
+  const { language } = useLanguage();
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center"
@@ -201,7 +203,7 @@ function FullListPopup({
                   {i + 1}
                 </span>
                 <FlagCircle country={s.country} size="xs" />
-                <span className="text-sm text-[#1C1410] flex-1 truncate">{s.country}</span>
+                <span className="text-sm text-[#1C1410] flex-1 truncate">{getCountryDisplayName(s.country, language)}</span>
                 {onRemove && (
                   <button
                     onClick={() => onRemove(s.delegateId)}
@@ -277,6 +279,7 @@ function RollCallPanelInner({
   isTdT?: boolean;
   isRoomOrderTdT?: boolean;
 }) {
+  const { language } = useLanguage();
   const t = useT();
   const [search, setSearch] = useState('');
   const [listView, setListView] = useState<'az' | 'queue'>('az');
@@ -400,7 +403,7 @@ function RollCallPanelInner({
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="px-4 pt-4 pb-3 shrink-0 relative z-10" style={{ borderBottom: '1px solid rgba(61,122,82,0.4)' }}>
-        <p className="text-lg font-black leading-tight truncate mb-0.5" style={{ color: '#EED98A' }}>{committee.name}</p>
+        <p className="text-lg font-black leading-tight truncate mb-0.5" style={{ color: '#EED98A' }}>{getCommitteeDisplayName(committee.name, language)}</p>
         {committee.topic && (
           <p className="text-xs leading-snug line-clamp-2 mb-2" style={{ color: 'rgba(238,217,138,0.55)' }}>
             <span className="font-semibold" style={{ color: 'rgba(238,217,138,0.7)' }}>{t('rollcall_topic')} </span>{committee.topic}
@@ -523,7 +526,7 @@ function RollCallPanelInner({
                   )}
                 </div>
                 <span className={`flex-1 truncate ${isUpNext ? 'text-lg font-bold' : 'text-base'} ${!isAbsent ? 'font-medium' : 'opacity-50'}`} style={{ color: '#EDE7D8' }}>
-                  {d.country}
+                  {getCountryDisplayName(d.country, language)}
                 </span>
                 {isAbsent && !isRollCallPhase && (
                   <span className="text-[10px] shrink-0 font-mono ml-auto uppercase tracking-wide" style={{ color: 'rgba(237,231,216,0.35)' }}>{t('rollcall_absent')}</span>
