@@ -8,12 +8,14 @@ import { getCommitteeByCode, addChairName } from '@/lib/committeeService';
 import { Committee } from '@/lib/types';
 import { useSettingsStore } from '@/lib/settingsStore';
 import { Emoji } from '@/components/Emoji';
-import { useT } from '@/contexts/LanguageContext';
+import { useT, useLanguage } from '@/contexts/LanguageContext';
+import { getCountryDisplayName } from '@/lib/countries';
 
 type JoinMode = 'delegate' | 'chair' | 'advisor';
 
 function JoinPageInner() {
   const t = useT();
+  const { language } = useLanguage();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { committees } = useCommitteeStore();
@@ -266,7 +268,7 @@ function JoinPageInner() {
                 >
                   <option value="">{t('join_country_placeholder')}</option>
                   {foundCommittee.delegates.map((d) => (
-                    <option key={d.country} value={d.country}>{d.country}</option>
+                    <option key={d.country} value={d.country}>{getCountryDisplayName(d.country, language)}</option>
                   ))}
                 </select>
               </div>
