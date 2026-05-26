@@ -1,12 +1,34 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Search, SlidersHorizontal } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import { createAuthClient } from '@/lib/supabase-auth';
 import { getFlagUrl, getCountryByName } from '@/lib/countries';
+
+// ── Continent maps ─────────────────────────────────────────────────────────────
+
+const CONTINENT_COUNTRIES: Record<string, string[]> = {
+  'north-america': ['United States', 'Canada', 'Mexico', 'Guatemala', 'Belize', 'Honduras', 'El Salvador', 'Nicaragua', 'Costa Rica', 'Panama', 'Cuba', 'Jamaica', 'Haiti', 'Dominican Republic', 'Puerto Rico', 'Trinidad and Tobago', 'Barbados', 'Saint Lucia', 'Grenada', 'Antigua and Barbuda', 'Saint Kitts and Nevis', 'Saint Vincent and the Grenadines', 'Dominica', 'Bahamas'],
+  'south-america': ['Brazil', 'Argentina', 'Colombia', 'Chile', 'Peru', 'Venezuela', 'Ecuador', 'Bolivia', 'Paraguay', 'Uruguay', 'Guyana', 'Suriname'],
+  'europe': ['United Kingdom', 'Germany', 'France', 'Italy', 'Spain', 'Netherlands', 'Belgium', 'Switzerland', 'Austria', 'Sweden', 'Norway', 'Denmark', 'Finland', 'Poland', 'Czech Republic', 'Hungary', 'Romania', 'Bulgaria', 'Greece', 'Portugal', 'Ireland', 'Croatia', 'Slovakia', 'Slovenia', 'Estonia', 'Latvia', 'Lithuania', 'Luxembourg', 'Malta', 'Cyprus', 'Serbia', 'Bosnia and Herzegovina', 'North Macedonia', 'Albania', 'Montenegro', 'Kosovo', 'Moldova', 'Ukraine', 'Belarus', 'Russia', 'Iceland', 'Liechtenstein', 'Monaco', 'Andorra', 'San Marino'],
+  'africa': ['Nigeria', 'South Africa', 'Kenya', 'Ghana', 'Ethiopia', 'Tanzania', 'Uganda', 'Rwanda', 'Senegal', 'Ivory Coast', 'Cameroon', 'Zimbabwe', 'Zambia', 'Mozambique', 'Angola', 'Sudan', 'Egypt', 'Morocco', 'Tunisia', 'Algeria', 'Libya', 'Mali', 'Niger', 'Chad', 'Somalia', 'Madagascar', 'Malawi', 'Botswana', 'Namibia', 'Lesotho', 'Eswatini', 'Eritrea', 'Djibouti', 'Comoros', 'Cape Verde', 'Sao Tome and Principe', 'Equatorial Guinea', 'Gabon', 'Republic of the Congo', 'Democratic Republic of the Congo', 'Central African Republic', 'Burundi', 'Benin', 'Togo', 'Sierra Leone', 'Liberia', 'Guinea', 'Guinea-Bissau', 'Gambia', 'Mauritania', 'Mauritius', 'Seychelles'],
+  'asia': ['China', 'India', 'Japan', 'South Korea', 'Indonesia', 'Pakistan', 'Bangladesh', 'Vietnam', 'Thailand', 'Malaysia', 'Singapore', 'Philippines', 'Myanmar', 'Cambodia', 'Laos', 'Sri Lanka', 'Nepal', 'Bhutan', 'Mongolia', 'Kazakhstan', 'Uzbekistan', 'Turkmenistan', 'Kyrgyzstan', 'Tajikistan', 'Afghanistan', 'Iran', 'Iraq', 'Saudi Arabia', 'United Arab Emirates', 'Qatar', 'Kuwait', 'Bahrain', 'Oman', 'Yemen', 'Jordan', 'Lebanon', 'Syria', 'Israel', 'Palestine', 'Turkey', 'Azerbaijan', 'Armenia', 'Georgia', 'Taiwan', 'Hong Kong', 'Macao', 'Brunei', 'East Timor', 'Maldives'],
+  'oceania': ['Australia', 'New Zealand', 'Papua New Guinea', 'Fiji', 'Solomon Islands', 'Vanuatu', 'Samoa', 'Kiribati', 'Tonga', 'Micronesia', 'Palau', 'Marshall Islands', 'Nauru', 'Tuvalu', 'Cook Islands'],
+};
+
+const CONTINENT_LABELS: Record<string, string> = {
+  'north-america': 'North America',
+  'south-america': 'South America',
+  'europe': 'Europe',
+  'africa': 'Africa',
+  'asia': 'Asia',
+  'oceania': 'Oceania',
+};
+
+const CONTINENT_KEYS = ['north-america', 'south-america', 'europe', 'africa', 'asia', 'oceania'] as const;
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -205,6 +227,7 @@ function ConferenceCard({
 
 export default function ConferencesExploreClient() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [conferences, setConferences] = useState<Conference[]>([]);
   const [loading, setLoading] = useState(true);
@@ -213,6 +236,7 @@ export default function ConferencesExploreClient() {
   const [formatFilter, setFormatFilter] = useState<'in-person' | 'online' | 'hybrid' | ''>('');
   const [levelFilter, setLevelFilter] = useState<'school' | 'university' | 'both' | ''>('');
   const [applicationsOpen, setApplicationsOpen] = useState(false);
+  const [continentFilter, setContinentFilter] = useState<string>(() => searchParams.get('continent') ?? '');
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -242,6 +266,10 @@ export default function ConferencesExploreClient() {
     }
     if (formatFilter && c.format !== formatFilter) return false;
     if (levelFilter && c.student_level !== levelFilter) return false;
+    if (continentFilter) {
+      const countries = CONTINENT_COUNTRIES[continentFilter];
+      if (!countries || !countries.includes(c.country)) return false;
+    }
     return true;
   });
 
@@ -249,10 +277,11 @@ export default function ConferencesExploreClient() {
     setFormatFilter('');
     setLevelFilter('');
     setApplicationsOpen(false);
+    setContinentFilter('');
     setSearchQuery('');
   }
 
-  const hasActiveFilters = !!formatFilter || !!levelFilter || applicationsOpen || !!searchQuery;
+  const hasActiveFilters = !!formatFilter || !!levelFilter || applicationsOpen || !!searchQuery || !!continentFilter;
 
   return (
     <div className="min-h-screen flex flex-col relative" style={{ backgroundColor: '#EDE7D8' }}>
@@ -312,31 +341,71 @@ export default function ConferencesExploreClient() {
 
         {/* Filter bar — sticky */}
         <div
-          className="sticky z-10 px-6 md:px-14 py-3 flex items-center gap-3"
+          className="sticky z-10 px-6 md:px-14 py-3 flex flex-wrap items-center gap-3"
           style={{ top: '72px', backgroundColor: '#FAF8F3', borderBottom: '1px solid #DDD4C0' }}
         >
-          {/* Search */}
-          <div className="relative flex-1 md:flex-none" style={{ width: 'auto', minWidth: 0 }}>
-            <Search
-              size={16}
-              className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
-              style={{ color: '#9A8A78' }}
-            />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search conferences..."
-              className="w-full md:w-[280px] rounded-xl py-2.5 pl-10 pr-4 text-sm focus:outline-none transition-colors"
-              style={{
-                border: '1px solid #DDD4C0',
-                backgroundColor: '#FAF8F3',
-                color: '#1C1410',
-                fontFamily: "'Outfit', sans-serif",
-              }}
-              onFocus={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
-              onBlur={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
-            />
+          {/* Search + active continent tag */}
+          <div className="flex items-center gap-2 flex-1 md:flex-none" style={{ minWidth: 0 }}>
+            <div className="relative">
+              <Search
+                size={16}
+                className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+                style={{ color: '#9A8A78' }}
+              />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search conferences..."
+                className="w-full md:w-[280px] rounded-xl py-2.5 pl-10 pr-4 text-sm focus:outline-none transition-colors"
+                style={{
+                  border: '1px solid #DDD4C0',
+                  backgroundColor: '#FAF8F3',
+                  color: '#1C1410',
+                  fontFamily: "'Outfit', sans-serif",
+                }}
+                onFocus={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
+                onBlur={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
+              />
+            </div>
+            {continentFilter && (
+              <span
+                className="flex items-center gap-1.5 flex-shrink-0"
+                style={{
+                  backgroundColor: 'rgba(27,56,40,0.08)',
+                  border: '1px solid rgba(27,56,40,0.2)',
+                  borderRadius: 9999,
+                  padding: '3px 10px',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: '#1B3828',
+                  fontFamily: "'Outfit', sans-serif",
+                }}
+              >
+                {CONTINENT_LABELS[continentFilter]}
+                <button
+                  className="focus:outline-none"
+                  onClick={() => setContinentFilter('')}
+                  style={{ lineHeight: 1, color: '#1B3828', opacity: 0.6 }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = '0.6'; }}
+                >
+                  ×
+                </button>
+              </span>
+            )}
+          </div>
+
+          {/* Continent quick-filter pills */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {CONTINENT_KEYS.map(key => (
+              <FilterPill
+                key={key}
+                label={CONTINENT_LABELS[key].toUpperCase()}
+                active={continentFilter === key}
+                onClick={() => setContinentFilter(f => f === key ? '' : key)}
+              />
+            ))}
           </div>
 
           <div className="ml-auto flex-shrink-0">
@@ -383,6 +452,18 @@ export default function ConferencesExploreClient() {
             <div className="w-px h-5 mx-1" style={{ backgroundColor: '#DDD4C0' }} />
 
             <FilterPill label="APPLICATIONS OPEN" active={applicationsOpen} onClick={() => setApplicationsOpen(v => !v)} />
+
+            <div className="w-px h-5 mx-1" style={{ backgroundColor: '#DDD4C0' }} />
+
+            <span className="text-xs font-semibold mr-1" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Continent:</span>
+            {CONTINENT_KEYS.map(key => (
+              <FilterPill
+                key={key}
+                label={CONTINENT_LABELS[key].toUpperCase()}
+                active={continentFilter === key}
+                onClick={() => setContinentFilter(f => f === key ? '' : key)}
+              />
+            ))}
 
             {hasActiveFilters && (
               <button
