@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { Committee, PendingMotion, PendingMotionType } from '@/lib/types';
-import { getCountryByName, getFlagUrl, getCountryDisplayName, matchesCountryQuery, startsWithCountryQuery } from '@/lib/countries';
+import { getCountryByName, getFlagUrl, getCountryDisplayName } from '@/lib/countries';
 import { Emoji } from '@/components/Emoji';
 import { useSettingsStore, DEFAULT_MOTION_NAMES, MotionNames } from '@/lib/settingsStore';
 import {
@@ -68,19 +68,6 @@ function DisruptivenessBadge({ type }: { type: PendingMotionType }) {
   return <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${colors[type]}`}>{labels[type]}</span>;
 }
 
-const COUNTRY_ACRONYMS: Record<string, string> = {
-  'uk':   'United Kingdom',
-  'us':   'United States',
-  'usa':  'United States',
-  'uae':  'United Arab Emirates',
-  'drc':  'DR Congo',
-  'roc':  'Taiwan',
-  'rok':  'South Korea',
-  'dprk': 'North Korea',
-  'car':  'Central African Republic',
-  'png':  'Papua New Guinea',
-};
-
 function ProposerInput({ candidates, value, onChange, blockedCountries }: {
   candidates: string[]; value: string; onChange: (v: string) => void; blockedCountries?: Set<string>;
 }) {
@@ -89,15 +76,19 @@ function ProposerInput({ candidates, value, onChange, blockedCountries }: {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const resolved = COUNTRY_ACRONYMS[query.trim().toLowerCase()] ?? query.trim();
-  const matches = resolved
-    ? candidates.filter((c) => startsWithCountryQuery(c, resolved, language))
-        .concat(candidates.filter((c) => !startsWithCountryQuery(c, resolved, language) && matchesCountryQuery(c, resolved, language)))
+  const q = query.trim().toLowerCase();
+  const matches = q
+    ? candidates
+        .filter((c) => getCountryDisplayName(c, language).toLowerCase().startsWith(q))
+        .concat(candidates.filter((c) =>
+          !getCountryDisplayName(c, language).toLowerCase().startsWith(q) &&
+          getCountryDisplayName(c, language).toLowerCase().includes(q)
+        ))
     : [];
   const top = matches[0] ?? null;
   const commit = (country: string) => {
     if (blockedCountries?.has(country)) return;
-    onChange(country); setQuery(country); setOpen(false);
+    onChange(country); setQuery(getCountryDisplayName(country, language)); setOpen(false);
   };
   return (
     <div className="relative">
@@ -118,7 +109,7 @@ function ProposerInput({ candidates, value, onChange, blockedCountries }: {
         </div>
       )}
       {open && query && matches.length > 0 && (
-        <div className="absolute bottom-full left-0 right-0 mb-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl overflow-hidden z-30 shadow-xl max-h-48 overflow-y-auto">
+        <div className="absolute top-full left-0 right-0 mt-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl overflow-hidden z-50 shadow-xl max-h-48 overflow-y-auto">
           {matches.slice(0, 6).map((country, i) => {
             const found = getCountryByName(country);
             const isBlocked = blockedCountries?.has(country) ?? false;
