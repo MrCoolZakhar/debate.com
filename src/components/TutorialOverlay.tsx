@@ -119,7 +119,7 @@ function getSteps(language: string): TutorialStep[] {
       otterImage: '/Otter.Tutorial.webp',
       spotlightTargets: ['tab-motions'], spotlightRadius: 6,
       bubbleText: language === 'es'
-        ? <>{G('Mociones')} — los delegados levantan <strong>Cáucus Moderado</strong>, <strong>Cáucus No Moderado</strong>, <strong>Tour de Table</strong> y <strong>Consulta de Plenaria</strong>. También puedes <strong>cerrar</strong> o <strong>suspender el debate</strong>.</>
+        ? <>{G('Mociones')} — los delegados levantan <strong>Cáucus Moderado</strong>, <strong>Cáucus No Moderado</strong>, <strong>Round Robin</strong> y <strong>Consulta de Gabinete</strong>. También puedes <strong>cerrar</strong> o <strong>suspender el debate</strong>.</>
         : <>{G('Motions')} — delegates raise <strong>Moderated Caucus</strong>, <strong>Unmoderated Caucus</strong>, <strong>Tour de Table</strong>, and <strong>Consultation of the Whole</strong> here. You can also <strong>close</strong> or <strong>suspend debate</strong> from this tab.</>,
     },
     {
@@ -127,7 +127,7 @@ function getSteps(language: string): TutorialStep[] {
       otterImage: '/Otter.Tutorial.webp',
       spotlightTargets: ['tab-documents'], spotlightRadius: 6,
       bubbleText: language === 'es'
-        ? <>{G('Documentos')} — los <strong>Papeles de Trabajo</strong> y <strong>Proyectos de Resolución</strong> aparecen aquí. Una vez aprobados, los delegados tienen páginas de {GR('Lectura')}, {GR('Presentación')} y {GR('Preguntas')}.</>
+        ? <>{G('Documentos')} — las <strong>Hojas de Trabajo</strong> y <strong>Proyectos de Resolución</strong> aparecen aquí. Una vez aprobados, los delegados tienen páginas de {GR('Lectura')}, {GR('Presentación')} y {GR('Preguntas')}.</>
         : <>{G('Documents')} — <strong>Working Papers</strong> and <strong>Draft Resolutions</strong> submitted by delegates appear here. Once approved, delegates get a dedicated {GR('Reading')}, {GR('Presentation')}, and {GR('Q&A')} page.</>,
     },
     {
