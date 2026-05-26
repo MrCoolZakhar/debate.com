@@ -5,44 +5,43 @@ import { useRouter } from 'next/navigation';
 import { Mic, Scale, List, FileText, MessageSquare, Save } from 'lucide-react';
 import { getFlagUrl, getCountryByName } from '@/lib/countries';
 import SiteNav from '@/components/SiteNav';
+import { useT, useLanguage } from '@/contexts/LanguageContext';
 
-const steps = [
-  { step: '01', title: 'Create a Committee', desc: 'Chair enters committee name, topic, and delegates. Pick a preset or builds custom.' },
-  { step: '02', title: 'Share the Code', desc: 'Delegates, co-chairs, and faculty advisors join instantly with a session code from any device.' },
-  { step: '03', title: 'Run the Session', desc: 'Manage roll call, speakers list, motions, and voting — all in one place.' },
-];
 
 // ── Individual feature card components ──────────────────────────────────────
 
 function RollCallCard() {
+  const { language } = useLanguage();
+  const es = language === 'es';
   const shadow = { boxShadow: '0 24px 64px rgba(27,56,40,0.14)' };
   const getFlag = (country: string) => {
     const c = getCountryByName(country);
     return c ? <img src={getFlagUrl(c.code)} alt={country} style={{ width: '28px', height: '20px', objectFit: 'cover', borderRadius: '4px', border: '1px solid rgba(28,20,16,0.10)' }} /> : <span className="w-7 h-5 bg-[#DDD4C0] rounded inline-block" />;
   };
   const delegates = [
-    { country: 'China', status: 'present-voting' },
-    { country: 'France', status: 'present-voting' },
-    { country: 'Germany', status: 'present' },
-    { country: 'Brazil', status: 'absent' },
-    { country: 'India', status: 'present' },
-    { country: 'Japan', status: 'present-voting' },
-    { country: 'United Kingdom', status: 'absent' },
-    { country: 'South Africa', status: 'present' },
+    { country: 'China', label: es ? 'China' : 'China', status: 'present-voting' },
+    { country: 'France', label: es ? 'Francia' : 'France', status: 'present-voting' },
+    { country: 'Germany', label: es ? 'Alemania' : 'Germany', status: 'present' },
+    { country: 'Brazil', label: es ? 'Brasil' : 'Brazil', status: 'absent' },
+    { country: 'India', label: es ? 'India' : 'India', status: 'present' },
+    { country: 'Japan', label: es ? 'Japón' : 'Japan', status: 'present-voting' },
+    { country: 'United Kingdom', label: es ? 'Reino Unido' : 'United Kingdom', status: 'absent' },
+    { country: 'South Africa', label: es ? 'Sudáfrica' : 'South Africa', status: 'present' },
   ];
+  const bulkBtns = es ? ['Todos P', 'Todos P+V', 'Borrar'] : ['All Present', 'All P+V', 'Clear'];
   return (
     <div className="w-full rounded-2xl overflow-hidden flex flex-col" style={{ ...shadow, minHeight: '460px', backgroundColor: '#1B3828', border: '1px solid #3D7A52' }}>
       {/* Header */}
       <div className="px-5 py-3 flex items-center justify-between" style={{ borderBottom: '1px solid rgba(61,122,82,0.4)' }}>
         <div>
-          <p className="font-black text-sm uppercase tracking-widest" style={{ color: '#EED98A', fontFamily: "'DM Mono', monospace" }}>Roll Call</p>
-          <p className="text-xs mt-0.5" style={{ color: 'rgba(238,217,138,0.5)' }}>UN Security Council</p>
+          <p className="font-black text-sm uppercase tracking-widest" style={{ color: '#EED98A', fontFamily: "'DM Mono', monospace" }}>{es ? 'Lista de Asistencia' : 'Roll Call'}</p>
+          <p className="text-xs mt-0.5" style={{ color: 'rgba(238,217,138,0.5)' }}>{es ? 'Consejo de Seguridad de la ONU' : 'UN Security Council'}</p>
         </div>
-        <span className="text-[9px] font-mono px-2 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(238,217,138,0.15)', color: '#EED98A', border: '1px solid rgba(238,217,138,0.3)' }}>PRE-SESSION</span>
+        <span className="text-[9px] font-mono px-2 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(238,217,138,0.15)', color: '#EED98A', border: '1px solid rgba(238,217,138,0.3)' }}>{es ? 'PRE-SESIÓN' : 'PRE-SESSION'}</span>
       </div>
       {/* Quick set buttons */}
       <div className="flex gap-2 px-4 py-2.5">
-        {['All Present', 'All P+V', 'Clear'].map(btn => (
+        {bulkBtns.map(btn => (
           <button key={btn} className="flex-1 py-1.5 text-[9px] font-black uppercase rounded-lg" style={{ backgroundColor: 'rgba(238,217,138,0.1)', color: '#EED98A', border: '1px solid rgba(238,217,138,0.2)' }}>{btn}</button>
         ))}
       </div>
@@ -51,12 +50,12 @@ function RollCallCard() {
         {delegates.map(d => (
           <div key={d.country} className="flex items-center gap-3 rounded-xl px-3 py-2" style={{ backgroundColor: 'rgba(255,255,255,0.05)' }}>
             {getFlag(d.country)}
-            <span className="flex-1 text-xs font-semibold truncate" style={{ color: '#EDE7D8' }}>{d.country}</span>
+            <span className="flex-1 text-xs font-semibold truncate" style={{ color: '#EDE7D8' }}>{d.label}</span>
             <span className="text-[9px] font-bold px-2 py-0.5 rounded-full" style={{
               backgroundColor: d.status === 'present-voting' ? '#EED98A' : d.status === 'present' ? 'rgba(61,122,82,0.5)' : 'rgba(255,255,255,0.08)',
               color: d.status === 'present-voting' ? '#1B3828' : d.status === 'present' ? '#EDE7D8' : '#9A8A78',
             }}>
-              {d.status === 'present-voting' ? 'P+V' : d.status === 'present' ? 'P' : 'Absent'}
+              {d.status === 'present-voting' ? 'P+V' : d.status === 'present' ? 'P' : (es ? 'Ausente' : 'Absent')}
             </span>
           </div>
         ))}
@@ -64,7 +63,7 @@ function RollCallCard() {
       {/* Quorum bar */}
       <div className="px-4 py-3" style={{ borderTop: '1px solid rgba(61,122,82,0.3)' }}>
         <div className="flex items-center justify-between mb-1.5">
-          <span className="text-[9px] font-mono uppercase tracking-wide" style={{ color: 'rgba(238,217,138,0.5)' }}>Quorum</span>
+          <span className="text-[9px] font-mono uppercase tracking-wide" style={{ color: 'rgba(238,217,138,0.5)' }}>{es ? 'Quórum' : 'Quorum'}</span>
           <span className="text-[9px] font-mono font-bold" style={{ color: '#EED98A' }}>6 / 8</span>
         </div>
         <div className="h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}>
@@ -76,6 +75,8 @@ function RollCallCard() {
 }
 
 function MotionsCard() {
+  const { language } = useLanguage();
+  const es = language === 'es';
   const shadow = { boxShadow: '0 24px 64px rgba(27,56,40,0.14)' };
   const getFlag = (country: string) => {
     const c = getCountryByName(country);
@@ -85,11 +86,11 @@ function MotionsCard() {
     <div className="w-full rounded-2xl overflow-hidden" style={{ ...shadow, minHeight: '460px', backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
       {/* Header */}
       <div className="px-5 py-3 flex items-center justify-between" style={{ borderBottom: '1px solid #DDD4C0' }}>
-        <h2 className="text-lg font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>VOTE ON MOTIONS</h2>
+        <h2 className="text-lg font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{es ? 'VOTAR EN MOCIONES' : 'VOTE ON MOTIONS'}</h2>
       </div>
       {/* Drag hint */}
       <div className="mx-4 mt-3 px-3 py-2 rounded-xl text-xs font-semibold" style={{ backgroundColor: '#1B3828', color: '#EED98A' }}>
-        Drag motions to reorder. Most disruptive voted on first by default.
+        {es ? 'Arrastra las mociones para reordenar. La más disruptiva se vota primero por defecto.' : 'Drag motions to reorder. Most disruptive voted on first by default.'}
       </div>
       {/* Motion cards */}
       <div className="px-4 pt-3 pb-4 flex flex-col gap-3">
@@ -97,29 +98,29 @@ function MotionsCard() {
         <div className="rounded-2xl p-4 flex flex-col gap-2" style={{ border: '2px solid #1B3828', backgroundColor: 'transparent' }}>
           <div className="flex items-start justify-between gap-2">
             <div className="flex-1">
-              <p className="font-black text-base" style={{ color: '#1C1410' }}>Moderated Caucus</p>
-              <p className="text-xs font-semibold mt-0.5" style={{ color: '#1B3828' }}>Topic: <span style={{ color: '#1C1410' }}>Nuclear Non-Proliferation</span></p>
-              <p className="text-xs mt-1" style={{ color: '#1C1410' }}><span className="font-semibold" style={{ color: '#1B3828' }}>Total Time: </span><span className="font-black">10m</span></p>
-              <p className="text-xs" style={{ color: '#1C1410' }}><span className="font-semibold" style={{ color: '#1B3828' }}>Speaker Time: </span><span className="font-black">90s</span></p>
-              <p className="text-xs" style={{ color: '#1C1410' }}><span className="font-semibold" style={{ color: '#1B3828' }}>Total Speakers: </span><span className="font-black">6 speakers</span></p>
+              <p className="font-black text-base" style={{ color: '#1C1410' }}>{es ? 'Cáucus Moderado' : 'Moderated Caucus'}</p>
+              <p className="text-xs font-semibold mt-0.5" style={{ color: '#1B3828' }}>{es ? 'Tema: ' : 'Topic: '}<span style={{ color: '#1C1410' }}>{es ? 'No Proliferación de Armas Nucleares' : 'Nuclear Non-Proliferation'}</span></p>
+              <p className="text-xs mt-1" style={{ color: '#1C1410' }}><span className="font-semibold" style={{ color: '#1B3828' }}>{es ? 'Tiempo Total: ' : 'Total Time: '}</span><span className="font-black">10m</span></p>
+              <p className="text-xs" style={{ color: '#1C1410' }}><span className="font-semibold" style={{ color: '#1B3828' }}>{es ? 'Tiempo por orador: ' : 'Speaker Time: '}</span><span className="font-black">90s</span></p>
+              <p className="text-xs" style={{ color: '#1C1410' }}><span className="font-semibold" style={{ color: '#1B3828' }}>{es ? 'Total de oradores: ' : 'Total Speakers: '}</span><span className="font-black">{es ? '6 oradores' : '6 speakers'}</span></p>
             </div>
             {getFlag('France')}
           </div>
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
-            <span className="text-xs font-semibold flex-1" style={{ color: '#1B3828' }}>Simple majority</span>
-            <span className="text-xs font-bold" style={{ color: '#1C1410' }}>Needs 8 of 15</span>
+            <span className="text-xs font-semibold flex-1" style={{ color: '#1B3828' }}>{es ? 'Mayoría Simple' : 'Simple majority'}</span>
+            <span className="text-xs font-bold" style={{ color: '#1C1410' }}>{es ? 'Necesita 8 de 15' : 'Needs 8 of 15'}</span>
           </div>
           <div className="flex gap-2 mt-1">
-            <button className="flex-1 py-2 rounded-xl font-black text-xs text-white focus:outline-none" style={{ backgroundColor: '#1B3828', letterSpacing: '0.05em' }}>✓ ACCEPT</button>
-            <button className="flex-1 py-2 rounded-xl font-black text-xs focus:outline-none" style={{ backgroundColor: '#DDD4C0', color: '#6A5A4A', letterSpacing: '0.05em' }}>✗ REJECT</button>
-            <button className="px-3 py-2 rounded-xl font-black text-xs focus:outline-none" style={{ backgroundColor: 'rgba(182,135,31,0.2)', color: '#B6871F', border: '1px solid rgba(182,135,31,0.4)' }}>EDIT</button>
+            <button className="flex-1 py-2 rounded-xl font-black text-xs text-white focus:outline-none" style={{ backgroundColor: '#1B3828', letterSpacing: '0.05em' }}>{es ? '✓ ACEPTAR' : '✓ ACCEPT'}</button>
+            <button className="flex-1 py-2 rounded-xl font-black text-xs focus:outline-none" style={{ backgroundColor: '#DDD4C0', color: '#6A5A4A', letterSpacing: '0.05em' }}>{es ? '✗ RECHAZAR' : '✗ REJECT'}</button>
+            <button className="px-3 py-2 rounded-xl font-black text-xs focus:outline-none" style={{ backgroundColor: 'rgba(182,135,31,0.2)', color: '#B6871F', border: '1px solid rgba(182,135,31,0.4)' }}>{es ? 'EDITAR' : 'EDIT'}</button>
           </div>
         </div>
         {/* Secondary motion — small */}
         <div className="rounded-2xl p-3 flex items-center gap-3" style={{ border: '1px solid #DDD4C0', backgroundColor: 'transparent' }}>
           <div className="flex-1 min-w-0">
-            <p className="font-black text-sm" style={{ color: '#1C1410' }}>Unmoderated Caucus</p>
-            <p className="text-xs" style={{ color: '#1C1410' }}><span className="font-semibold" style={{ color: '#1B3828' }}>Total Time: </span><span className="font-black">15m</span></p>
+            <p className="font-black text-sm" style={{ color: '#1C1410' }}>{es ? 'Cáucus No Moderado' : 'Unmoderated Caucus'}</p>
+            <p className="text-xs" style={{ color: '#1C1410' }}><span className="font-semibold" style={{ color: '#1B3828' }}>{es ? 'Tiempo Total: ' : 'Total Time: '}</span><span className="font-black">15m</span></p>
           </div>
           {getFlag('Germany')}
         </div>
@@ -129,6 +130,8 @@ function MotionsCard() {
 }
 
 function SpeakersCard() {
+  const { language } = useLanguage();
+  const es = language === 'es';
   const [timerSecs, setTimerSecs] = useState(83);
   useEffect(() => {
     const t = setInterval(() => setTimerSecs(s => s > 0 ? s - 1 : 90), 1000);
@@ -138,11 +141,11 @@ function SpeakersCard() {
   const secs = timerSecs % 60;
   const shadow = { boxShadow: '0 24px 64px rgba(27,56,40,0.14)' };
   const queueDelegates = [
-    { country: 'Denmark', pos: 2 },
-    { country: 'Ecuador', pos: 3 },
-    { country: 'France', pos: 4 },
-    { country: 'Greece', pos: 5 },
-    { country: 'Japan', pos: 6 },
+    { country: 'Denmark', label: es ? 'Dinamarca' : 'Denmark', pos: 2 },
+    { country: 'Ecuador', label: 'Ecuador', pos: 3 },
+    { country: 'France', label: es ? 'Francia' : 'France', pos: 4 },
+    { country: 'Greece', label: es ? 'Grecia' : 'Greece', pos: 5 },
+    { country: 'Japan', label: es ? 'Japón' : 'Japan', pos: 6 },
   ];
   return (
     <div className="w-full rounded-2xl overflow-hidden" style={{ ...shadow, minHeight: '460px', backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
@@ -155,12 +158,12 @@ function SpeakersCard() {
               <div style={{ width: '52px', height: '38px', borderRadius: '10px', overflow: 'hidden', border: '1.5px solid rgba(28,20,16,0.10)' }}>
                 {c ? <img src={getFlagUrl(c.code)} alt={d.country} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div style={{ width: '100%', height: '100%', backgroundColor: '#DDD4C0' }} />}
               </div>
-              <span className="text-[9px] font-semibold text-center" style={{ color: '#6A5A4A' }}>{d.country}</span>
-              {d.pos === 2 && <span className="text-[8px] font-bold" style={{ color: '#B8844A' }}>Up next</span>}
+              <span className="text-[9px] font-semibold text-center" style={{ color: '#6A5A4A' }}>{d.label}</span>
+              {d.pos === 2 && <span className="text-[8px] font-bold" style={{ color: '#B8844A' }}>{es ? 'A continuación' : 'Up next'}</span>}
             </div>
           );
         })}
-        <span className="text-xs font-mono self-center flex-shrink-0" style={{ color: '#9A8A78' }}>+8 more</span>
+        <span className="text-xs font-mono self-center flex-shrink-0" style={{ color: '#9A8A78' }}>{es ? '+8 más' : '+8 more'}</span>
       </div>
       {/* Current speaker */}
       <div className="flex flex-col items-center px-6 py-4">
@@ -176,9 +179,9 @@ function SpeakersCard() {
         </div>
         {/* Buttons */}
         <div className="flex gap-2">
-          <button className="px-6 py-2.5 rounded-xl font-black text-sm text-white focus:outline-none" style={{ backgroundColor: '#2A5A3C' }}>▶ START</button>
-          <button className="px-6 py-2.5 rounded-xl font-black text-sm focus:outline-none" style={{ backgroundColor: 'transparent', border: '1px solid #DDD4C0', color: '#1C1410' }}>NEXT →</button>
-          <button className="px-3 py-2.5 rounded-xl font-black text-xs focus:outline-none" style={{ backgroundColor: 'transparent', border: '1px solid #DDD4C0', color: '#6A5A4A' }}>ADD TIME</button>
+          <button className="px-6 py-2.5 rounded-xl font-black text-sm text-white focus:outline-none" style={{ backgroundColor: '#2A5A3C' }}>{es ? '▶ INICIO' : '▶ START'}</button>
+          <button className="px-6 py-2.5 rounded-xl font-black text-sm focus:outline-none" style={{ backgroundColor: 'transparent', border: '1px solid #DDD4C0', color: '#1C1410' }}>{es ? 'SIGUIENTE →' : 'NEXT →'}</button>
+          <button className="px-3 py-2.5 rounded-xl font-black text-xs focus:outline-none" style={{ backgroundColor: 'transparent', border: '1px solid #DDD4C0', color: '#6A5A4A' }}>{es ? '+TIEMPO' : 'ADD TIME'}</button>
         </div>
       </div>
     </div>
@@ -186,6 +189,8 @@ function SpeakersCard() {
 }
 
 function DocumentsCard() {
+  const { language } = useLanguage();
+  const es = language === 'es';
   const [docTimer, setDocTimer] = useState(180);
   useEffect(() => {
     const t = setInterval(() => setDocTimer(s => s > 0 ? s - 1 : 180), 1000);
@@ -199,26 +204,26 @@ function DocumentsCard() {
     <div className="w-full rounded-2xl overflow-hidden flex flex-row" style={{ ...shadow, minHeight: '460px', border: '1px solid #DDD4C0' }}>
       <div className="flex flex-col" style={{ width: '42%', borderRight: '1px solid #DDD4C0', backgroundColor: '#FAF8F3' }}>
         <div className="px-4 py-3" style={{ backgroundColor: '#1B3828' }}>
-          <p className="font-black text-xs uppercase tracking-widest" style={{ color: '#EED98A', fontFamily: "'DM Mono', monospace" }}>READING TIME</p>
+          <p className="font-black text-xs uppercase tracking-widest" style={{ color: '#EED98A', fontFamily: "'DM Mono', monospace" }}>{es ? 'TIEMPO DE LECTURA' : 'READING TIME'}</p>
         </div>
         <div className="flex-1 flex flex-col items-center justify-center px-4 py-6 text-center">
           <p className="text-[10px] font-mono tracking-widest uppercase mb-1" style={{ color: '#9A8A78' }}>S/RES/2819 (2026)</p>
-          <p className="font-black text-xs uppercase mb-4" style={{ color: '#1C1410' }}>Libya Sanctions Resolution</p>
+          <p className="font-black text-xs uppercase mb-4" style={{ color: '#1C1410' }}>{es ? 'Resolución de Sanciones a Libia' : 'Libya Sanctions Resolution'}</p>
           <p className="font-mono text-3xl font-bold tabular-nums mb-1" style={{ color: '#1C1410' }}>{m}:{s.toString().padStart(2, '0')}</p>
-          <p className="text-[10px] font-mono mb-4" style={{ color: '#9A8A78' }}>Reading Time</p>
+          <p className="text-[10px] font-mono mb-4" style={{ color: '#9A8A78' }}>{es ? 'Tiempo de Lectura' : 'Reading Time'}</p>
           <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: '#DDD4C0' }}>
             <div className="h-full rounded-full transition-all duration-1000" style={{ width: `${(docTimer / 180) * 100}%`, backgroundColor: '#1B3828' }} />
           </div>
           <div className="flex gap-2 mt-6 w-full">
-            <button className="flex-1 py-2 rounded-xl font-black text-xs text-white" style={{ backgroundColor: '#2A5A3C' }}>▶ START</button>
-            <button className="flex-1 py-2 rounded-xl font-black text-xs" style={{ backgroundColor: 'transparent', border: '1px solid #DDD4C0', color: '#6A5A4A' }}>SKIP →</button>
+            <button className="flex-1 py-2 rounded-xl font-black text-xs text-white" style={{ backgroundColor: '#2A5A3C' }}>{es ? '▶ INICIO' : '▶ START'}</button>
+            <button className="flex-1 py-2 rounded-xl font-black text-xs" style={{ backgroundColor: 'transparent', border: '1px solid #DDD4C0', color: '#6A5A4A' }}>{es ? 'SALTAR →' : 'SKIP →'}</button>
           </div>
         </div>
       </div>
       <div className="flex flex-col" style={{ flex: 1, backgroundColor: '#EDE7D8' }}>
         <div className="px-3 py-2 flex items-center justify-between" style={{ backgroundColor: '#DDD4C0', borderBottom: '1px solid #C8BAA8' }}>
-          <span className="text-[10px] font-mono uppercase tracking-wide" style={{ color: '#6A5A4A' }}>Document</span>
-          <span className="text-[10px] font-bold uppercase" style={{ color: '#1B3828' }}>Hide Doc</span>
+          <span className="text-[10px] font-mono uppercase tracking-wide" style={{ color: '#6A5A4A' }}>{es ? 'Documento' : 'Document'}</span>
+          <span className="text-[10px] font-bold uppercase" style={{ color: '#1B3828' }}>{es ? 'Ocultar Doc' : 'Hide Doc'}</span>
         </div>
         <iframe
           src={pdfUrl}
@@ -232,38 +237,48 @@ function DocumentsCard() {
 }
 
 function ChatCard() {
-  const messages = [
-    { sender: 'Chair', text: 'Welcome to the Security Council session on Nuclear Non-Proliferation.', time: '09:02', isChair: true },
+  const { language } = useLanguage();
+  const es = language === 'es';
+  const messages = es ? [
+    { sender: 'Pdte.', text: 'Bienvenidos a la sesión del Consejo sobre No Proliferación Nuclear.', time: '09:02', isChair: true },
+    { sender: 'Francia', text: 'Francia está dispuesta a participar constructivamente en este asunto.', time: '09:04', isChair: false },
+    { sender: 'Pdte.', text: '¡Lo están haciendo muy bien! ¡Sigan así!', time: '09:06', isChair: true },
+    { sender: 'Alemania', text: 'Alemania apoya la moción de un cáucus moderado.', time: '09:07', isChair: false },
+  ] : [
+    { sender: 'Chair', text: `Welcome to the Security Council session on ${es ? 'No Proliferación de Armas Nucleares' : 'Nuclear Non-Proliferation'}.`, time: '09:02', isChair: true },
     { sender: 'France', text: 'France is prepared to engage constructively on this matter.', time: '09:04', isChair: false },
     { sender: 'Chair', text: "You're doing great! Keep it up!", time: '09:06', isChair: true },
     { sender: 'Germany', text: 'Germany seconds the motion for a moderated caucus.', time: '09:07', isChair: false },
   ];
   const shadow = { boxShadow: '0 24px 64px rgba(27,56,40,0.14)' };
-  const convs = ['Everyone', 'France', 'Germany'];
+  const convs = es ? ['Todos', 'Francia', 'Alemania'] : ['Everyone', 'France', 'Germany'];
+  const convPreviews = es
+    ? ['Pdte.: Bienvenidos...', 'Francia: Dispuesta...', 'Alemania: Apoya...']
+    : ['Chair: Welcome...', 'France: Prepared...', 'Germany: Seconds...'];
   return (
     <div className="w-full rounded-2xl overflow-hidden flex flex-row" style={{ ...shadow, minHeight: '460px', border: '1px solid #DDD4C0' }}>
       {/* Left panel — forest green */}
       <div className="flex flex-col flex-shrink-0" style={{ width: '140px', backgroundColor: '#1B3828', borderRight: '1px solid #3D7A52' }}>
         <div className="px-3 py-3" style={{ borderBottom: '1px solid rgba(61,122,82,0.4)' }}>
-          <p className="font-black text-xs uppercase tracking-widest" style={{ color: '#EED98A', fontFamily: "'Outfit', sans-serif" }}>MESSAGES</p>
+          <p className="font-black text-xs uppercase tracking-widest" style={{ color: '#EED98A', fontFamily: "'Outfit', sans-serif" }}>{es ? 'MENSAJES' : 'MESSAGES'}</p>
         </div>
         <div className="flex-1">
           {convs.map((c, i) => (
             <div key={c} className="px-3 py-2.5" style={{ backgroundColor: i === 0 ? 'rgba(238,217,138,0.12)' : 'transparent', borderLeft: i === 0 ? '3px solid #EED98A' : '3px solid transparent', borderBottom: '1px solid rgba(61,122,82,0.2)' }}>
               <p className="text-xs font-bold truncate" style={{ color: i === 0 ? '#EED98A' : '#A8C5B0' }}>{c}</p>
-              <p className="text-[9px] truncate mt-0.5" style={{ color: 'rgba(168,197,176,0.6)' }}>{i === 0 ? 'Chair: Welcome...' : i === 1 ? 'France: Prepared...' : 'Germany: Seconds...'}</p>
+              <p className="text-[9px] truncate mt-0.5" style={{ color: 'rgba(168,197,176,0.6)' }}>{convPreviews[i]}</p>
             </div>
           ))}
         </div>
         <div className="px-2 py-2.5" style={{ borderTop: '1px solid rgba(61,122,82,0.4)' }}>
-          <button className="w-full text-xs py-1.5 rounded-lg font-semibold" style={{ color: '#EED98A', border: '1px solid rgba(238,217,138,0.3)' }}>+ New message</button>
+          <button className="w-full text-xs py-1.5 rounded-lg font-semibold" style={{ color: '#EED98A', border: '1px solid rgba(238,217,138,0.3)' }}>{es ? '+ Nuevo mensaje' : '+ New message'}</button>
         </div>
       </div>
       {/* Right panel — ivory */}
       <div className="flex-1 flex flex-col" style={{ backgroundColor: '#FAF8F3' }}>
         <div className="px-4 py-3 flex-shrink-0" style={{ borderBottom: '1px solid #DDD4C0', backgroundColor: 'rgba(250,248,243,0.8)' }}>
-          <p className="font-black text-sm" style={{ color: '#1B3828' }}>Everyone</p>
-          <p className="text-[10px]" style={{ color: '#9A8A78' }}>4 messages</p>
+          <p className="font-black text-sm" style={{ color: '#1B3828' }}>{es ? 'Todos' : 'Everyone'}</p>
+          <p className="text-[10px]" style={{ color: '#9A8A78' }}>{es ? '4 mensajes' : '4 messages'}</p>
         </div>
         <div className="flex-1 px-3 py-3 flex flex-col gap-2.5 overflow-hidden">
           {messages.map((msg, i) => (
@@ -278,13 +293,13 @@ function ChatCard() {
                 }}>
                   {msg.text}
                 </div>
-                <span className="text-[9px] font-mono" style={{ color: '#9A8A78' }}>{msg.isChair ? 'You' : msg.sender} · {msg.time}</span>
+                <span className="text-[9px] font-mono" style={{ color: '#9A8A78' }}>{msg.isChair ? (es ? 'Tú' : 'You') : msg.sender} · {msg.time}</span>
               </div>
             </div>
           ))}
         </div>
         <div className="px-3 pb-3 pt-2 flex gap-2 flex-shrink-0" style={{ borderTop: '1px solid #DDD4C0' }}>
-          <div className="flex-1 rounded-xl px-3 py-2 text-xs" style={{ backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0', color: '#9A8A78' }}>Message the committee…</div>
+          <div className="flex-1 rounded-xl px-3 py-2 text-xs" style={{ backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0', color: '#9A8A78' }}>{es ? 'Mensaje al comité…' : 'Message the committee…'}</div>
           <button className="px-3 py-2 rounded-xl text-xs font-black" style={{ backgroundColor: '#1B3828', color: '#EDE7D8' }}>→</button>
         </div>
       </div>
@@ -293,22 +308,25 @@ function ChatCard() {
 }
 
 function ArchiveCard() {
+  const { language } = useLanguage();
+  const es = language === 'es';
   const base = 'w-full bg-[#FAF8F3] rounded-2xl border border-[#DDD4C0] overflow-hidden';
   const shadow = { boxShadow: '0 24px 64px rgba(27,56,40,0.14)' };
+  const menuItems = es ? ['Sesiones Guardadas', 'Estadísticas', 'Mi Progreso'] : ['Saved Sessions', 'Session Statistics', 'My Progress'];
   return (
     <div className={base} style={{ ...shadow, minHeight: '460px' }}>
       <div className="bg-[#1B3828] px-5 py-3 flex items-center justify-between">
-        <p className="text-[#EED98A] font-black text-sm uppercase tracking-wide">Session Archive</p>
-        <span className="bg-[#3D7A52] text-white text-[9px] font-mono px-2 py-0.5 rounded-full uppercase tracking-widest">Coming Soon</span>
+        <p className="text-[#EED98A] font-black text-sm uppercase tracking-wide">{es ? 'Archivo de Sesión' : 'Session Archive'}</p>
+        <span className="bg-[#3D7A52] text-white text-[9px] font-mono px-2 py-0.5 rounded-full uppercase tracking-widest">{es ? 'Próximamente' : 'Coming Soon'}</span>
       </div>
       <div className="px-5 py-6 flex flex-col items-center text-center">
         <div className="w-14 h-14 rounded-2xl bg-[#EDE7D8] border border-[#DDD4C0] flex items-center justify-center mb-4">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1B3828" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M9 21V9"/></svg>
         </div>
-        <h3 className="font-black text-[#1C1410] uppercase text-sm tracking-wide mb-2">Your Committee Dashboard</h3>
-        <p className="text-[#6A5A4A] text-xs leading-relaxed mb-6 max-w-xs">Track sessions, statistics, and delegate progress all in one place.</p>
+        <h3 className="font-black text-[#1C1410] uppercase text-sm tracking-wide mb-2">{es ? 'Tu Panel de Comité' : 'Your Committee Dashboard'}</h3>
+        <p className="text-[#6A5A4A] text-xs leading-relaxed mb-6 max-w-xs">{es ? 'Seguimiento de sesiones, estadísticas y progreso de delegados en un solo lugar.' : 'Track sessions, statistics, and delegate progress all in one place.'}</p>
         <div className="flex flex-col gap-2.5 w-full">
-          {['Saved Sessions', 'Session Statistics', 'My Progress'].map((label) => (
+          {menuItems.map((label) => (
             <div key={label} className="flex items-center gap-3 bg-[#1B3828] rounded-xl px-4 py-3.5">
               <div className="w-2 h-2 rounded-full bg-[#EED98A] flex-shrink-0" />
               <span className="text-sm font-bold text-[#EED98A] uppercase tracking-wide flex-1 text-left">{label}</span>
@@ -364,6 +382,13 @@ export default function HomeClient() {
   const router = useRouter();
   const [joinCode, setJoinCode] = useState('');
   const [activeFeature, setActiveFeature] = useState('roll-call');
+  const t = useT();
+  const { language } = useLanguage();
+  const steps = [
+    { step: '01', title: t('step1_title'), desc: t('step1_desc') },
+    { step: '02', title: t('step2_title'), desc: t('step2_desc') },
+    { step: '03', title: t('step3_title'), desc: t('step3_desc') },
+  ];
   const handleJoin = () => {
     const code = joinCode.trim().toUpperCase();
     if (code.length >= 4) {
@@ -465,10 +490,21 @@ export default function HomeClient() {
             <div className="relative z-10 flex items-center px-8 md:px-14">
               <div className="flex flex-col justify-center items-center text-center w-full max-w-2xl mx-auto">
                 <h1 className="font-black tracking-tight text-white leading-[1.05] mb-5 text-center md:whitespace-nowrap" style={{ fontSize: 'clamp(48px, 13.5vw, 165px)' }}>
-                  MUN done{' '}
-                  <span style={{ fontFamily: "'Playfair Display', serif", fontStyle: 'italic', fontWeight: 400, color: '#B8844A' }}>
-                    right.
-                  </span>
+                  {language === 'en' ? (
+                    <>
+                      MUN done{' '}
+                      <span style={{ fontFamily: "'Playfair Display', serif", fontStyle: 'italic', fontWeight: 400, color: '#B8844A' }}>
+                        right.
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      MUN como se{' '}
+                      <span style={{ fontFamily: "'Playfair Display', serif", fontStyle: 'italic', fontWeight: 400, color: '#B8844A' }}>
+                        debe.
+                      </span>
+                    </>
+                  )}
                 </h1>
                 <p className="text-reveal-3 text-lg max-w-lg mb-6 leading-relaxed font-medium text-center text-[#1B3828]" style={{
                   opacity: 0,
@@ -478,14 +514,14 @@ export default function HomeClient() {
                   borderRadius: '12px',
                   padding: '10px 20px',
                 }}>
-                  The most user-friendly way to run your MUN committee.
+                  {t('hero_subtitle')}
                 </p>
                 <button
                   onClick={() => router.push('/create')}
                   className="text-reveal-4 bg-[#1B3828] hover:bg-[#2A5A3C] active:scale-[0.98] text-[#EED98A] px-10 py-5 rounded-2xl font-black text-xl transition-all shadow-lg shadow-[#1B3828]/20 mb-5 w-fit mx-auto"
                   style={{ opacity: 0 }}
                 >
-                  START YOUR COMMITTEE →
+                  {t('hero_start_committee')}
                 </button>
                 <div className="text-reveal-5 flex flex-col gap-2 w-fit items-center" style={{
                   opacity: 0,
@@ -495,11 +531,11 @@ export default function HomeClient() {
                   borderRadius: '14px',
                   padding: '12px 20px',
                 }}>
-                  <p className="text-xs text-[#1B3828] tracking-[0.16em] uppercase font-semibold" style={{ fontFamily: "'DM Mono', monospace" }}>Join a Session</p>
+                  <p className="text-xs text-[#1B3828] tracking-[0.16em] uppercase font-semibold" style={{ fontFamily: "'DM Mono', monospace" }}>{t('hero_join_session')}</p>
                   <div className="flex gap-2">
                     <input
                       type="text"
-                      placeholder="SESSION CODE"
+                      placeholder={t('hero_session_code')}
                       value={joinCode}
                       onChange={(e) => setJoinCode(e.target.value.toUpperCase().slice(0, 20))}
                       onKeyDown={(e) => { if (e.key === 'Enter') handleJoin(); }}
@@ -512,7 +548,7 @@ export default function HomeClient() {
                       disabled={joinCode.trim().length < 4}
                       className="bg-[#1B3828] hover:bg-[#2A5A3C] disabled:opacity-40 text-[#EED98A] px-5 py-3 rounded-xl font-bold text-sm transition-colors"
                     >
-                      JOIN →
+                      {t('hero_join')}
                     </button>
                   </div>
                 </div>
@@ -525,8 +561,8 @@ export default function HomeClient() {
             <div>
               <div className="max-w-4xl mx-auto">
                 <div className="text-center mb-14">
-                  <h2 className="scroll-reveal text-5xl font-black text-white mb-4 uppercase tracking-wider">Up and Running in Minutes</h2>
-                  <p className="scroll-reveal text-[#EED98A]/70 text-lg mb-4">No downloads, no setup. Just open your browser and start chairing.</p>
+                  <h2 className="scroll-reveal text-5xl font-black text-white mb-4 uppercase tracking-wider">{t('how_title')}</h2>
+                  <p className="scroll-reveal text-[#EED98A]/70 text-lg mb-4">{t('how_subtitle')}</p>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-[#B6871F]/30 w-full max-w-6xl mx-auto mt-16">
                   {steps.map((s) => (
@@ -562,24 +598,24 @@ export default function HomeClient() {
               {/* LEFT — text + pills centered */}
               <div className="w-full md:w-80 flex-shrink-0 flex flex-col justify-center items-start py-8">
 
-                <h2 className="font-black uppercase tracking-wide leading-tight mb-4" style={{ fontSize: 'clamp(28px, 3.2vw, 48px)' }}>
-                  <span className="text-[#1B3828]">Everything chairs need</span><br />
-                  <span className="text-[#B8844A]">to run committees</span>
+                <h2 className="font-black uppercase tracking-wide leading-tight mb-4" style={{ fontSize: language === 'es' ? 'clamp(22px, 2.6vw, 40px)' : 'clamp(28px, 3.2vw, 48px)' }}>
+                  <span className="text-[#1B3828]">{t('features_title_1')}</span><br />
+                  <span className="text-[#B8844A]">{t('features_title_2')}</span>
                 </h2>
 
                 <p className="text-[#6A5A4A] text-sm mb-5 leading-relaxed">
-                  One dashboard. Every tool. From opening session to final voting.
+                  {t('features_subtitle')}
                 </p>
 
                 {/* Pills */}
                 <div className="flex flex-col gap-1.5 w-full">
                   {[
-                    { id: 'roll-call', icon: <Mic size={15} className="text-[#EED98A]" />, label: 'Roll Call' },
-                    { id: 'motions', icon: <Scale size={15} className="text-[#EED98A]" />, label: 'Motions & Voting' },
-                    { id: 'speakers', icon: <List size={15} className="text-[#EED98A]" />, label: 'Speakers List' },
-                    { id: 'documents', icon: <FileText size={15} className="text-[#EED98A]" />, label: 'Document Upload' },
-                    { id: 'chat', icon: <MessageSquare size={15} className="text-[#EED98A]" />, label: 'Live Chat' },
-                    { id: 'archive', icon: <Save size={15} className="text-[#EED98A]" />, label: 'Archives' },
+                    { id: 'roll-call', icon: <Mic size={15} className="text-[#EED98A]" />, label: t('feature_rollcall') },
+                    { id: 'motions', icon: <Scale size={15} className="text-[#EED98A]" />, label: t('feature_motions') },
+                    { id: 'speakers', icon: <List size={15} className="text-[#EED98A]" />, label: t('feature_speakers') },
+                    { id: 'documents', icon: <FileText size={15} className="text-[#EED98A]" />, label: t('feature_documents') },
+                    { id: 'chat', icon: <MessageSquare size={15} className="text-[#EED98A]" />, label: t('feature_chat') },
+                    { id: 'archive', icon: <Save size={15} className="text-[#EED98A]" />, label: t('feature_archives') },
                   ].map((f) => (
                     <div
                       key={f.id}
@@ -641,7 +677,7 @@ export default function HomeClient() {
                   </svg>
                 </span>
               </div>
-              <p className="text-xs font-semibold text-[#1B3828] md:text-right">© {new Date().getFullYear()} Gavelling. Built for the MUN community.</p>
+              <p className="text-xs font-semibold text-[#1B3828] md:text-right">{t('home_footer_copy').replace('{year}', String(new Date().getFullYear()))}</p>
             </div>
           </footer>
 

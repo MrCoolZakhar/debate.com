@@ -1,5 +1,6 @@
 'use client';
 import { use, useEffect, useState, useRef, useCallback, useMemo, Suspense } from 'react';
+import { useT, useLanguage } from '@/contexts/LanguageContext';
 import MobileGate from '@/components/MobileGate';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -7,7 +8,8 @@ import { Committee, DelegateStatus } from '@/lib/types';
 import RollCallPanel, { FlagCircle } from '@/components/RollCallPanel';
 import MotionsModal from '@/components/MotionsModal';
 import DocumentsModal from '@/components/DocumentsModal';
-import { getFlagUrl, getCountryByName, UN_COUNTRIES } from '@/lib/countries';
+import { getFlagUrl, getCountryByName, getCountryDisplayName, UN_COUNTRIES, matchesCountryQuery, startsWithCountryQuery } from '@/lib/countries';
+import { getCommitteeDisplayName } from '@/lib/presetNames';
 import { Emoji } from '@/components/Emoji';
 import { SettingsPanel } from '@/components/SettingsPanel';
 import { useSettingsStore } from '@/lib/settingsStore';
@@ -136,6 +138,8 @@ function resolveQuery(raw: string): string {
 
 // ── Add Speaker Input ─────────────────────────────────────────────────────────
 function AddSpeakerInput({ committee, onAdd }: { committee: Committee; onAdd: (id: string) => void }) {
+  const { language } = useLanguage();
+  const t = useT();
   const [query, setQuery] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const onList = new Set([
@@ -147,8 +151,8 @@ function AddSpeakerInput({ committee, onAdd }: { committee: Committee; onAdd: (i
   );
   const q = resolveQuery(query).toLowerCase();
   const matches = q
-    ? eligible.filter((d) => d.country.trim().toLowerCase().startsWith(q))
-        .concat(eligible.filter((d) => !d.country.trim().toLowerCase().startsWith(q) && d.country.trim().toLowerCase().includes(q)))
+    ? eligible.filter((d) => startsWithCountryQuery(d.country, q, language))
+        .concat(eligible.filter((d) => !startsWithCountryQuery(d.country, q, language) && matchesCountryQuery(d.country, q, language)))
     : [];
   const topNotOnList = matches.find((d) => !onList.has(d.id)) ?? null;
   const commit = (d: typeof topNotOnList) => { if (!d || onList.has(d.id)) return; onAdd(d.id); setQuery(''); };
@@ -157,9 +161,9 @@ function AddSpeakerInput({ committee, onAdd }: { committee: Committee; onAdd: (i
       <div className="flex items-center bg-[#FAF8F3] border border-[#DDD4C0] focus-within:border-[#1B3828] rounded-xl transition-colors">
         <input ref={inputRef} type="text" value={query} onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(topNotOnList); } if (e.key === 'Escape') setQuery(''); }}
-          placeholder="Add to speakers list..." autoFocus
+          placeholder={t('gsl_add_to_list')} autoFocus
           className="flex-1 bg-transparent px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none text-sm" />
-        {topNotOnList && query && <span className="text-xs text-[#9A8A78] px-3 truncate max-w-[120px]">↵ {topNotOnList.country}</span>}
+        {topNotOnList && query && <span className="text-xs text-[#9A8A78] px-3 truncate max-w-[120px]">↵ {getCountryDisplayName(topNotOnList.country, language)}</span>}
       </div>
       {query && matches.length > 0 && (
         <div data-tutorial="speakers-autocomplete" className="absolute bottom-full left-0 right-0 mb-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl overflow-hidden shadow-xl z-10 max-h-48 overflow-y-auto">
@@ -174,7 +178,7 @@ function AddSpeakerInput({ committee, onAdd }: { committee: Committee; onAdd: (i
                     ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                     : <Emoji size="1.125rem">🌐</Emoji>}
                 </span>
-                  <span className="text-sm flex-1 text-[#9A8A78]">{d.country}</span>
+                  <span className="text-sm flex-1 text-[#9A8A78]">{getCountryDisplayName(d.country, language)}</span>
                   <span className="text-xs text-[#9A8A78]">already on list</span>
                 </div>
               );
@@ -188,7 +192,7 @@ function AddSpeakerInput({ committee, onAdd }: { committee: Committee; onAdd: (i
                     ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                     : <Emoji size="1.125rem">🌐</Emoji>}
                 </span>
-                <span className="text-sm">{d.country}</span>
+                <span className="text-sm">{getCountryDisplayName(d.country, language)}</span>
                 {isFirst && <span className="ml-auto text-xs text-[#9A8A78]">Enter ↵</span>}
               </button>
             );
@@ -209,17 +213,14 @@ function RtrCountryInput({
   value: string;
   onChange: (v: string) => void;
 }) {
+  const { language } = useLanguage();
   const [query, setQuery] = useState(value);
   const inputRef = useRef<HTMLInputElement>(null);
   const eligible = committee.delegates.filter((d) => d.status !== 'absent');
   const q = resolveQuery(query).toLowerCase();
   const matches = q
-    ? eligible
-        .filter((d) => d.country.trim().toLowerCase().startsWith(q))
-        .concat(eligible.filter((d) =>
-          !d.country.trim().toLowerCase().startsWith(q) &&
-          d.country.trim().toLowerCase().includes(q)
-        ))
+    ? eligible.filter((d) => startsWithCountryQuery(d.country, q, language))
+        .concat(eligible.filter((d) => !startsWithCountryQuery(d.country, q, language) && matchesCountryQuery(d.country, q, language)))
     : [];
   const topMatch = matches[0] ?? null;
 
@@ -239,11 +240,11 @@ function RtrCountryInput({
             }
             if (e.key === 'Escape') { setQuery(''); onChange(''); }
           }}
-          placeholder="Type country…"
+          placeholder={language === 'es' ? 'Agregar país...' : 'Type country...'}
           className="flex-1 bg-transparent px-3 py-1.5 text-[#1C1410] text-xs placeholder-[#9A8A78] focus:outline-none"
         />
         {topMatch && query && !value && query.toLowerCase() !== topMatch.country.toLowerCase() && (
-          <span className="text-[10px] text-[#9A8A78] px-2 truncate max-w-[90px]">↵ {topMatch.country}</span>
+          <span className="text-[10px] text-[#9A8A78] px-2 truncate max-w-[90px]">↵ {getCountryDisplayName(topMatch.country, language)}</span>
         )}
       </div>
       {query && matches.length > 0 && !value && (
@@ -261,7 +262,7 @@ function RtrCountryInput({
                   ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-4 h-4 object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                   : <Emoji size="0.875rem">🌐</Emoji>}
               </span>
-                <span className="flex-1">{d.country}</span>
+                <span className="flex-1">{getCountryDisplayName(d.country, language)}</span>
                 {i === 0 && <span className="text-[#9A8A78] shrink-0">Enter ↵</span>}
               </button>
             );
@@ -281,6 +282,8 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, lastSpeakerDelegate
   currentSpeakerDelegateId?: string | null;
   isRoomOrderTdT?: boolean;
 }) {
+  const { language } = useLanguage();
+  const t = useT();
   const dragIndexRef = useRef<number | null>(null);
   const qLen = list.length;
   const displayItems = list.slice(0, 7);
@@ -314,12 +317,12 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, lastSpeakerDelegate
                 </div>
               )}
               {!isRoomOrderTdT && (
-                <span className="line-clamp-2 break-words whitespace-normal leading-tight max-w-[80px] text-xs font-semibold text-center" style={{ color: '#1C1410' }}>{abbrevCountry(s.country)}</span>
+                <span className="line-clamp-2 break-words whitespace-normal leading-tight max-w-[80px] text-xs font-semibold text-center" style={{ color: '#1C1410' }}>{abbrevCountry(getCountryDisplayName(s.country, language))}</span>
               )}
-              {isCurrent && <span className="text-sm font-semibold" style={{ color: '#B8844A' }}>Speaking</span>}
-              {!isCurrent && i === 0 && <span className="text-xs font-semibold" style={{ color: '#B8844A' }}>Up next</span>}
+              {isCurrent && <span className="text-sm font-semibold" style={{ color: '#B8844A' }}>{t('gsl_speaking')}</span>}
+              {!isCurrent && i === 0 && <span className="text-xs font-semibold" style={{ color: '#B8844A' }}>{t('gsl_up_next')}</span>}
               {!isCurrent && lastSpeakerDelegateId && s.delegateId === lastSpeakerDelegateId && i !== 0 && (
-                <span className="text-xs font-bold text-[#9A8A78] bg-[#DDD4C0] px-1.5 py-0.5 rounded">Last</span>
+                <span className="text-xs font-bold text-[#9A8A78] bg-[#DDD4C0] px-1.5 py-0.5 rounded">{t('gsl_last')}</span>
               )}
               {!isCurrent && (
                 <button onClick={() => onRemove(s.delegateId)}
@@ -331,7 +334,7 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, lastSpeakerDelegate
       </div>
       <div className="text-center h-10 flex items-start justify-center pt-1">
         {overflow > 0 && (
-          <span className="text-xs font-medium" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}>+{overflow} more in queue</span>
+          <span className="text-xs font-medium" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}>{t('gsl_more_in_queue').replace('{n}', String(overflow))}</span>
         )}
       </div>
     </div>
@@ -345,17 +348,19 @@ function CaucusQueueSidebar({ committee, onRemove, onReorder, lastSpeakerDelegat
   onReorder: (newList: { delegateId: string; country: string }[]) => void;
   lastSpeakerDelegateId?: string | null;
 }) {
+  const { language } = useLanguage();
+  const t = useT();
   const dragIndexRef = useRef<number | null>(null);
   const queue = committee.caucusQueue ?? [];
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="px-4 pt-4 pb-3 border-b border-[#DDD4C0] shrink-0">
-        <span className="text-sm font-bold text-[#1C1410]">Speaker Queue</span>
+        <span className="text-sm font-bold text-[#1C1410]">{t('gsl_speaker_queue')}</span>
         <span className="text-xs text-[#9A8A78] ml-2 font-mono">{queue.length} speakers</span>
       </div>
       <div className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
         {queue.length === 0 ? (
-          <div className="px-4 py-8 text-center text-[#9A8A78] text-sm">No speakers queued</div>
+          <div className="px-4 py-8 text-center text-[#9A8A78] text-sm">{t('gsl_no_speakers_queued')}</div>
         ) : (
           queue.map((s, i) => {
             const found = getCountryByName(s.country);
@@ -382,7 +387,7 @@ function CaucusQueueSidebar({ committee, onRemove, onReorder, lastSpeakerDelegat
                   ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                   : <Emoji size="1.125rem">🌐</Emoji>}
               </span>
-                <span className="flex-1 text-sm text-[#1C1410] line-clamp-2 break-words whitespace-normal leading-tight">{s.country}</span>
+                <span className="flex-1 text-sm text-[#1C1410] line-clamp-2 break-words whitespace-normal leading-tight">{getCountryDisplayName(s.country, language)}</span>
                 {lastSpeakerDelegateId && s.delegateId === lastSpeakerDelegateId && (
                   <span className="text-xs font-bold text-[#9A8A78] bg-[#DDD4C0] px-1.5 py-0.5 rounded shrink-0">Last</span>
                 )}
@@ -407,6 +412,8 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
   currentSpeakerCountry?: string | null;
   onEndCaucus?: () => void;
 }) {
+  const { language } = useLanguage();
+  const t = useT();
   const [query, setQuery] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const onList = new Set((committee.caucusQueue ?? committee.speakersList).map((s) => s.delegateId));
@@ -414,8 +421,8 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
   const isFull = maxSpeakers !== undefined && currentQueueLength !== undefined && currentQueueLength >= maxSpeakers;
   const cq = resolveQuery(query).toLowerCase();
   const matches = cq
-    ? eligible.filter((d) => d.country.trim().toLowerCase().startsWith(cq))
-        .concat(eligible.filter((d) => !d.country.trim().toLowerCase().startsWith(cq) && d.country.trim().toLowerCase().includes(cq)))
+    ? eligible.filter((d) => startsWithCountryQuery(d.country, cq, language))
+        .concat(eligible.filter((d) => !startsWithCountryQuery(d.country, cq, language) && matchesCountryQuery(d.country, cq, language)))
     : [];
   const isCurrentSpeaker = (d: { country: string }) => !!currentSpeakerCountry && d.country === currentSpeakerCountry;
   const topNotOnList = matches.find((d) => !onList.has(d.id) && !isCurrentSpeaker(d)) ?? null;
@@ -434,9 +441,9 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
       <div className="flex items-center bg-[#FAF8F3] border rounded-xl transition-colors border-[#DDD4C0] focus-within:border-[#1B3828]">
         <input ref={inputRef} type="text" value={query} onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(topNotOnList); } if (e.key === 'Escape') setQuery(''); }}
-          placeholder="Add to speakers list…"
+          placeholder={t('gsl_add_to_list')}
           className="flex-1 bg-transparent px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none text-sm" />
-        {topNotOnList && query && <span className="text-xs text-[#9A8A78] px-3 truncate max-w-[120px]">↵ {topNotOnList.country}</span>}
+        {topNotOnList && query && <span className="text-xs text-[#9A8A78] px-3 truncate max-w-[120px]">↵ {getCountryDisplayName(topNotOnList.country, language)}</span>}
       </div>
       {query && matches.length > 0 && (
         <div className="absolute bottom-full left-0 right-0 mb-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl overflow-hidden shadow-xl z-10 max-h-48 overflow-y-auto">
@@ -453,7 +460,7 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
                     ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                     : <Emoji size="1.125rem">🌐</Emoji>}
                 </span>
-                  <span className="text-sm flex-1 text-[#9A8A78]">{d.country}</span>
+                  <span className="text-sm flex-1 text-[#9A8A78]">{getCountryDisplayName(d.country, language)}</span>
                   <span className="text-xs text-[#9A8A78]">{isCurrent ? 'currently speaking' : 'already on list'}</span>
                 </div>
               );
@@ -467,7 +474,7 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
                     ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                     : <Emoji size="1.125rem">🌐</Emoji>}
                 </span>
-                <span className="text-sm flex-1">{d.country}</span>
+                <span className="text-sm flex-1">{getCountryDisplayName(d.country, language)}</span>
                 {spoke && <span className="text-[10px] text-[#B6871F] shrink-0">already spoke</span>}
                 {isFirst && !spoke && (
                   <div className="flex items-center gap-1 shrink-0">
@@ -497,7 +504,7 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
       {onEndCaucus && (
         <button onClick={onEndCaucus}
           className="shrink-0 px-5 py-3 rounded-xl font-black text-sm bg-[#8B2020] hover:bg-[#7A1C1C] text-white transition-colors">
-          End Caucus
+          {t('caucus_end')}
         </button>
       )}
     </div>
@@ -506,8 +513,9 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
 
 // ── Unmoderated Caucus View ───────────────────────────────────────────────────
 function UnmoderatedCaucusView({ committee, setCommittee }: { committee: Committee; setCommittee: CommitteeSetter }) {
-  const { getSettings } = useSettingsStore();
-  const unmoderatedName = getSettings(committee.code).motionNames?.unmoderated ?? 'Unmoderated Caucus';
+  const t = useT();
+  const { language } = useLanguage();
+  const unmoderatedName = language === 'es' ? 'Cáucus No Moderado' : 'Unmoderated Caucus';
   const [running, setRunning] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const caucus = committee.caucus!;
@@ -585,20 +593,19 @@ function UnmoderatedCaucusView({ committee, setCommittee }: { committee: Committ
                 <span className="w-[3px] h-[13px] rounded-sm bg-current inline-block" />
                 <span className="w-[3px] h-[13px] rounded-sm bg-current inline-block" />
               </span>
-              <span>PAUSE</span>
+              <span>{t('gsl_pause')}</span>
             </span>
-          ) : '▶ START'}
+          ) : t('gsl_start')}
         </button>
         <button onClick={() => setShowExtendUnmod((v) => !v)} className="px-4 py-3 rounded-xl font-bold bg-[#1B3828] hover:bg-[#2A5A3C] text-[#EDE7D8] transition-colors focus:outline-none">
-          Extend
+          {t('caucus_extend')}
         </button>
         <button onClick={handleEndCaucus} className="px-8 py-3 rounded-xl font-black bg-[#8B2020] hover:bg-[#7A1C1C] text-white transition-colors focus:outline-none">
-          END CAUCUS
+          {t('caucus_end')}
         </button>
       </div>
       {showExtendUnmod && (
         <div className="mt-4 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3 shadow-xl" style={{ minWidth: '180px' }}>
-          <p className="text-xs font-black text-[#1B3828] uppercase tracking-widest text-center mb-2">Add</p>
           <div className="flex gap-1.5 mb-2 justify-center">
             {(() => {
               const halfMins = caucus.totalTime / 120;
@@ -644,7 +651,7 @@ function UnmoderatedCaucusView({ committee, setCommittee }: { committee: Committ
             }, true);
             setShowExtendUnmod(false);
           }} className="w-full py-1.5 rounded-lg text-xs font-black bg-[#1B3828] hover:bg-[#2A5A3C] text-[#EDE7D8] transition-colors focus:outline-none">
-            + ADD
+            {t('gsl_add_time_extended')}
           </button>
         </div>
       )}
@@ -671,13 +678,14 @@ function ModeratedCaucusMain({
   handleEndCaucus: () => void;
   sessionEnded: boolean;
 }) {
-  const { getSettings } = useSettingsStore();
+  const t = useT();
+  const { language } = useLanguage();
   const caucus = committee.caucus!;
   const queue = committee.caucusQueue ?? [];
   const speakerTime = caucus.speakingTime;
   const isTdT = caucus.purpose?.startsWith('Tour de Table') ?? false;
   const isRoomOrderTdT = isTdT && (caucus.purpose?.includes('Room Order') ?? false);
-  const caucusTitle = isTdT ? 'TOUR DE TABLE' : (getSettings(committee.code).motionNames?.moderated ?? 'Moderated Caucus').toUpperCase();
+  const caucusTitle = isTdT ? 'TOUR DE TABLE' : (language === 'es' ? 'CÁUCUS MODERADO' : 'MODERATED CAUCUS');
   const spokenCountries = caucus.spokenCountries ?? [];
 
   // Extend-time UI state
@@ -818,12 +826,12 @@ function ModeratedCaucusMain({
                   })()}
                 </div>
               )}
-              <h1 className="text-5xl font-black text-[#1C1410] mt-2 mb-1 text-center">{committee.caucus!.currentSpeaker}</h1>
+              <h1 className="text-5xl font-black text-[#1C1410] mt-2 mb-1 text-center">{getCountryDisplayName(committee.caucus!.currentSpeaker!, language)}</h1>
               <div className={`text-8xl font-black font-mono mt-2 mb-3 tabular-nums ${
                 speakerTimeRemaining <= 10 ? 'text-[#B8844A]' : 'text-[#1C1410]'
               }`}>
                 {formatTime(speakerTimeRemaining)}
-                {extraTimeAdded && <span className="text-base ml-2 font-normal text-[#1C1410]">+time</span>}
+                {extraTimeAdded && <span className="text-base ml-2 font-normal text-[#1C1410]">{t('gsl_plus_time')}</span>}
               </div>
               <div className="w-full max-w-2xl h-2 bg-[#DDD4C0] rounded-full overflow-hidden mb-3">
                 <div className={`h-full rounded-full transition-all ${caucusProgress > 50 ? 'bg-[#B6871F]' : caucusProgress > 20 ? 'bg-[#B6871F]' : 'bg-red-500'}`} style={{ width: `${caucusProgress}%` }} />
@@ -843,22 +851,22 @@ function ModeratedCaucusMain({
       <span className="w-[3px] h-[13px] rounded-sm bg-current inline-block" />
       <span className="w-[3px] h-[13px] rounded-sm bg-current inline-block" />
     </span>
-    <span>PAUSE</span>
+    <span>{t('gsl_pause')}</span>
   </span>
-) : '▶ START'}
+) : t('gsl_start')}
                 </button>
                 <button onClick={handleNextCaucusSpeaker} disabled={queue.length === 0}
-                  className="flex-1 bg-[#DDD4C0] hover:bg-[#C8BAA8] disabled:opacity-40 text-[#1C1410] py-3 px-6 rounded-xl font-bold text-base transition-colors focus:outline-none">
-                  NEXT →
+                  className="flex-1 bg-[#DDD4C0] hover:bg-[#C8BAA8] disabled:opacity-40 text-[#1C1410] py-3 px-4 rounded-xl font-bold transition-colors focus:outline-none whitespace-nowrap" style={{ fontSize: 'clamp(11px, 1.2vw, 14px)' }}>
+                  {t('gsl_next')}
                 </button>
                 <button onClick={() => setActivePopover(activePopover === 'extraTime' ? null : 'extraTime')} title="Add time"
-                  className="px-3 py-2 border rounded-xl font-black text-[9px] uppercase tracking-wide transition-colors bg-[#EDE7D8] hover:bg-[#DDD4C0] border-[#DDD4C0] text-[#1B3828] leading-tight text-center w-[52px]">
-                  ADD<br />TIME
+                  className="px-2 py-2 border rounded-xl font-black uppercase tracking-wide transition-colors bg-[#EDE7D8] hover:bg-[#DDD4C0] border-[#DDD4C0] text-[#1B3828] leading-tight text-center" style={{ fontSize: '8px', minWidth: '52px' }}>
+                  {t('gsl_add_time').split('\n')[0]}<br />{t('gsl_add_time').split('\n')[1]}
                 </button>
                 {!isTdT && (
                   <button onClick={() => setActivePopover(activePopover === 'rightToReply' ? null : 'rightToReply')}
                     className="px-3 py-3 border rounded-xl font-black text-xs uppercase tracking-wide transition-colors bg-[#B8844A]/15 hover:bg-[#B8844A]/25 border-[#B8844A]/30 text-[#B8844A]">
-                    Right to Reply
+                    {t('gsl_right_to_reply')}
                   </button>
                 )}
               </div>
@@ -886,12 +894,12 @@ function ModeratedCaucusMain({
                   isRoomOrderTdT={isRoomOrderTdT}
                 />
               )}
-              <h2 className="text-5xl font-black mb-3 text-center" style={{ color: '#1B3828' }}>No Current Speaker</h2>
-              <p className="mb-4 text-center text-sm" style={{ color: '#9A8A78' }}>Add delegates below, then call the first speaker.</p>
+              <h2 className="text-5xl font-black mb-3 text-center" style={{ color: '#1B3828' }}>{t('gsl_no_current_speaker')}</h2>
+              <p className="mb-4 text-center text-sm" style={{ color: '#9A8A78' }}>{t('gsl_add_call_first')}</p>
               {!sessionEnded && (
                 <button onClick={handleNextCaucusSpeaker} disabled={queue.length === 0}
                   className="bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white px-8 py-3 rounded-xl font-bold transition-colors focus:outline-none">
-                  CALL FIRST SPEAKER
+                  {t('gsl_call_first')}
                 </button>
               )}
             </div>
@@ -904,7 +912,7 @@ function ModeratedCaucusMain({
           {/* Total timer bar — hidden for Tour de Table */}
           {!isTdT && (
             <div className="flex items-center gap-3 mb-4">
-              <span className="text-xs text-[#9A8A78] font-mono shrink-0">TOTAL</span>
+              <span className="text-xs text-[#9A8A78] font-mono shrink-0">{t('gsl_total')}</span>
               <p className={`text-lg font-black font-mono shrink-0 ${liveRemaining <= 30 ? 'text-red-500' : 'text-[#1C1410]'}`}>{formatTime(liveRemaining)}</p>
               <div className="flex-1 h-2 bg-[#DDD4C0] rounded-full overflow-hidden">
                 <div className="h-full bg-[#B6871F]/60 rounded-full transition-all" style={{ width: `${totalProgress}%` }} />
@@ -912,11 +920,10 @@ function ModeratedCaucusMain({
               <div className="relative" ref={extendRef}>
                 <button onClick={() => setShowExtendMod((v) => !v)}
                   className="px-3 py-2 rounded-lg font-bold text-xs bg-[#1B3828] hover:bg-[#2A5A3C] text-[#EDE7D8] transition-colors focus:outline-none">
-                  Extend
+                  {t('caucus_extend')}
                 </button>
                 {showExtendMod && (
                   <div className="absolute bottom-full right-0 mb-2 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3 shadow-xl z-20" style={{ minWidth: '180px' }}>
-                    <p className="text-xs font-black text-[#1B3828] uppercase tracking-widest text-center mb-2">Add</p>
                     <div className="flex gap-1.5 mb-2 justify-center">
                       {(() => {
                         const halfMins = caucus.totalTime / 120;
@@ -962,14 +969,14 @@ function ModeratedCaucusMain({
                       }, true);
                       setShowExtendMod(false);
                     }} className="w-full py-1.5 rounded-lg text-xs font-black bg-[#1B3828] hover:bg-[#2A5A3C] text-[#EDE7D8] transition-colors focus:outline-none">
-                      + ADD
+                      {t('gsl_add_time_extended')}
                     </button>
                   </div>
                 )}
               </div>
               <button onClick={handleEndCaucus}
                 className="px-8 py-3 rounded-lg font-black text-sm bg-[#8B2020] hover:bg-[#7A1C1C] text-white transition-colors">
-                End Caucus
+                {t('caucus_end')}
               </button>
             </div>
           )}
@@ -992,21 +999,25 @@ function ModeratedCaucusMain({
 
 // ── Session Ended Content ─────────────────────────────────────────────────────
 function SessionEndedContent({ committee, hoursRemaining }: { committee: Committee; hoursRemaining: number | null }) {
+  const { language } = useLanguage();
+  const t = useT();
   return (
     <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
-      <h1 className="text-5xl font-black mb-4" style={{ color: '#1B3828' }}>This committee has ended.</h1>
-      <p className="text-xl mb-2" style={{ color: '#1C1410' }}>{committee.name}</p>
+      <h1 className="text-5xl font-black mb-4" style={{ color: '#1B3828' }}>{t('session_ended_title')}</h1>
+      <p className="text-xl mb-2" style={{ color: '#1C1410' }}>{getCommitteeDisplayName(committee.name, language)}</p>
       <p className="text-lg mb-8" style={{ color: '#9A8A78' }}>{committee.topic}</p>
       {hoursRemaining !== null && (
-        <p className="text-base" style={{ color: '#9A8A78' }}>{hoursRemaining} hour{hoursRemaining !== 1 ? 's' : ''} until committee is deleted</p>
+        <p className="text-base" style={{ color: '#9A8A78' }}>{t('session_hours_until_delete', { n: hoursRemaining ?? 0, s: hoursRemaining !== 1 ? 's' : '' })}</p>
       )}
-      <p className="text-xs mt-8" style={{ color: '#9A8A78' }}>Press ESC to return to main menu</p>
+      <p className="text-xs mt-8" style={{ color: '#9A8A78' }}>{t('session_adjourned_hint')}</p>
     </div>
   );
 }
 
 // ── Main Chair Session ────────────────────────────────────────────────────────
 function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
+  const t = useT();
+  const { language } = useLanguage();
   const { code } = use(params);
   const router = useRouter();
   const { updateSetting, getSettings } = useSettingsStore();
@@ -1021,7 +1032,6 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const [hoursRemaining, setHoursRemaining] = useState<number | null>(null);
   const [timerRunning, setTimerRunning] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
-  const tutorialShownRef = useRef(false);
   const [showRollCall, setShowRollCall] = useState(true);
   const [showSliders, setShowSliders] = useState(false);
   const [showMotions, setShowMotions] = useState(false);
@@ -1238,11 +1248,14 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   // Tutorial — fires once when phase transitions from pre-session → speakers-list
   useEffect(() => {
     if (!committee) return;
-    if (committee.phase === 'speakers-list' && !tutorialShownRef.current) {
-      tutorialShownRef.current = true;
-      setShowTutorial(true);
+    if (committee.phase === 'speakers-list') {
+      const key = 'gavelling_tutorial_seen_' + committee.id;
+      if (!localStorage.getItem(key)) {
+        localStorage.setItem(key, '1');
+        setShowTutorial(true);
+      }
     }
-  }, [committee?.phase]);
+  }, [committee?.phase, committee?.id]);
 
   // Stable Set references — prevents RollCallPanel re-renders when only timer ticks
   const gslListIds = useMemo(
@@ -1445,14 +1458,27 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     return () => clearInterval(id);
   }, [committee?.expiresAt]);
 
+  useEffect(() => {
+    if (!showChat && committee) {
+      const chairNamesLocal = committee.chairNames ?? [];
+      const count = committee.messages.filter(m => {
+        if (m.content.startsWith('__log__:')) return false;
+        if (m.isPrivate && m.sender === 'Faculty Advisor') return false;
+        if (m.isPrivate && m.recipient && !chairNamesLocal.includes(m.recipient) && m.recipient !== 'Chairs') return false;
+        return true;
+      }).length;
+      setChatReadCounts(prev => ({ ...prev, everyone: count }));
+    }
+  }, [showChat, committee]);
+
   if (loading) return <GavelLoader />;
 
   if (!committee) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#EDE7D8' }}>
         <div className="text-center">
-          <p className="text-[#1C1410] text-xl font-bold mb-4">Committee not found</p>
-          <Link href="/create" className="bg-[#1B3828] text-white px-6 py-3 rounded-xl font-semibold hover:bg-[#2A5A3C] transition-colors">Create Committee</Link>
+          <p className="text-[#1C1410] text-xl font-bold mb-4">{t('session_not_found')}</p>
+          <Link href="/create" className="bg-[#1B3828] text-white px-6 py-3 rounded-xl font-semibold hover:bg-[#2A5A3C] transition-colors">{t('session_create_committee')}</Link>
         </div>
       </div>
     );
@@ -1730,7 +1756,13 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     const newShow = !showChat;
     setShowChat(newShow);
     if (newShow) {
-      const count = committee?.messages.filter(m => !m.content.startsWith('__log__:')).length ?? 0;
+      const chairNamesLocal = committee?.chairNames ?? [];
+      const count = committee?.messages.filter(m => {
+        if (m.content.startsWith('__log__:')) return false;
+        if (m.isPrivate && m.sender === 'Faculty Advisor') return false;
+        if (m.isPrivate && m.recipient && !chairNamesLocal.includes(m.recipient) && m.recipient !== 'Chairs') return false;
+        return true;
+      }).length ?? 0;
       setChatReadCounts(prev => ({ ...prev, everyone: count }));
     }
   };
@@ -1751,7 +1783,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               style={{ color: showSliders ? '#1B3828' : '#1C1410', backgroundColor: showSliders ? 'rgba(27,56,40,0.07)' : 'transparent', fontWeight: showSliders ? 900 : 700 }}
               onMouseEnter={(e) => { if (!showSliders) { const el = e.currentTarget as HTMLElement; el.style.color = '#1B3828'; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; el.style.transform = 'translateY(-1px)'; } }}
               onMouseLeave={(e) => { if (!showSliders) { const el = e.currentTarget as HTMLElement; el.style.color = '#1C1410'; el.style.backgroundColor = 'transparent'; el.style.transform = 'translateY(0)'; } }}>
-              Roll Call
+              {t('tab_roll_call')}
               <span style={{ position: 'absolute', bottom: '4px', left: '12px', right: '12px', height: '2px', backgroundColor: '#B6871F', transform: showSliders ? 'scaleX(1)' : 'scaleX(0)', transformOrigin: 'left', transition: 'transform 200ms ease', borderRadius: '2px' }} />
             </button>
             <div style={{ width: '1px', height: '28px', backgroundColor: 'rgba(28,20,16,0.2)', margin: '0 2px', flexShrink: 0 }} />
@@ -1760,7 +1792,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               style={{ color: showMotions ? '#1B3828' : '#1C1410', backgroundColor: showMotions ? 'rgba(27,56,40,0.07)' : 'transparent', fontWeight: showMotions ? 900 : 700 }}
               onMouseEnter={(e) => { if (!showMotions) { const el = e.currentTarget as HTMLElement; el.style.color = '#1B3828'; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; el.style.transform = 'translateY(-1px)'; } }}
               onMouseLeave={(e) => { if (!showMotions) { const el = e.currentTarget as HTMLElement; el.style.color = '#1C1410'; el.style.backgroundColor = 'transparent'; el.style.transform = 'translateY(0)'; } }}>
-              Motions
+              {t('tab_motions')}
               {(committee.pendingMotions ?? []).filter((m) => m.type !== ('join-request' as string) && (m.type as string) !== 'gsl-request').length > 0 && (
                 <span className="absolute top-1 right-1 w-4 h-4 bg-[#1B3828] rounded-full text-white text-[10px] flex items-center justify-center">
                   {(committee.pendingMotions ?? []).filter((m) => m.type !== ('join-request' as string) && (m.type as string) !== 'gsl-request').length}
@@ -1774,7 +1806,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               style={{ color: showDocuments ? '#1B3828' : '#1C1410', backgroundColor: showDocuments ? 'rgba(27,56,40,0.07)' : 'transparent', fontWeight: showDocuments ? 900 : 700 }}
               onMouseEnter={(e) => { if (!showDocuments) { const el = e.currentTarget as HTMLElement; el.style.color = '#1B3828'; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; el.style.transform = 'translateY(-1px)'; } }}
               onMouseLeave={(e) => { if (!showDocuments) { const el = e.currentTarget as HTMLElement; el.style.color = '#1C1410'; el.style.backgroundColor = 'transparent'; el.style.transform = 'translateY(0)'; } }}>
-              Documents
+              {t('tab_documents')}
               {(() => { const n = (committee.documents ?? []).filter((d) => d.status === 'submitted').length; return n > 0 ? <span className="absolute top-1 right-1 w-4 h-4 bg-[#1B3828] rounded-full text-white text-[10px] flex items-center justify-center">{n}</span> : null; })()}
               <span style={{ position: 'absolute', bottom: '4px', left: '12px', right: '12px', height: '2px', backgroundColor: '#B6871F', transform: showDocuments ? 'scaleX(1)' : 'scaleX(0)', transformOrigin: 'left', transition: 'transform 200ms ease', borderRadius: '2px' }} />
             </button>
@@ -1784,10 +1816,16 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               style={{ color: showChat ? '#1B3828' : '#1C1410', backgroundColor: showChat ? 'rgba(27,56,40,0.07)' : 'transparent', fontWeight: showChat ? 900 : 700 }}
               onMouseEnter={(e) => { if (!showChat) { const el = e.currentTarget as HTMLElement; el.style.color = '#1B3828'; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; el.style.transform = 'translateY(-1px)'; } }}
               onMouseLeave={(e) => { if (!showChat) { const el = e.currentTarget as HTMLElement; el.style.color = '#1C1410'; el.style.backgroundColor = 'transparent'; el.style.transform = 'translateY(0)'; } }}>
-              Chat
+              {t('tab_chat')}
               {(() => {
-                const nonLogMsgs = committee.messages.filter((m) => !m.content.startsWith('__log__:'));
-                const totalUnread = Math.max(0, nonLogMsgs.length - (chatReadCounts['everyone'] ?? 0));
+                const chairNames = committee.chairNames ?? [];
+                const relevantMsgs = committee.messages.filter((m) => {
+                  if (m.content.startsWith('__log__:')) return false;
+                  if (m.isPrivate && m.sender === 'Faculty Advisor') return false;
+                  if (m.isPrivate && m.recipient && !chairNames.includes(m.recipient) && m.recipient !== 'Chairs') return false;
+                  return true;
+                });
+                const totalUnread = Math.max(0, relevantMsgs.length - (chatReadCounts['everyone'] ?? 0));
                 return totalUnread > 0 && !showChat
                   ? <span className="absolute top-1 right-1 w-4 h-4 bg-[#1B3828] rounded-full text-white text-[10px] flex items-center justify-center">{totalUnread}</span>
                   : null;
@@ -1796,7 +1834,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
             </button>
           </div>
         ) : (
-          <span className="text-[#9A8A78] text-xs hidden sm:block truncate flex-1">{committee.name} — {committee.topic}</span>
+          <span className="text-[#9A8A78] text-xs hidden sm:block truncate flex-1">{getCommitteeDisplayName(committee.name, language)} — {committee.topic}</span>
         )}
 
 
@@ -1813,12 +1851,12 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           <button onClick={() => setEndedTab('ended')}
             className="flex-1 py-2.5 text-sm font-black transition-colors border-b-2 focus:outline-none tracking-wide"
             style={{ color: endedTab === 'ended' ? '#1B3828' : '#9A8A78', borderBottomColor: endedTab === 'ended' ? '#1B3828' : 'transparent', fontFamily: "'Outfit', sans-serif" }}>
-            END VIEW
+            {t('session_end_view')}
           </button>
           <button onClick={() => setEndedTab('session')}
             className="flex-1 py-2.5 text-sm font-black transition-colors border-b-2 focus:outline-none tracking-wide"
             style={{ color: endedTab === 'session' ? '#1B3828' : '#9A8A78', borderBottomColor: endedTab === 'session' ? '#1B3828' : 'transparent', fontFamily: "'Outfit', sans-serif" }}>
-            SESSION VIEW
+            {t('session_view')}
           </button>
         </div>
       )}
@@ -1828,18 +1866,18 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           <button onClick={() => setSuspendTab('suspend')}
             className={`flex-1 py-2.5 text-sm font-black transition-colors border-b-2 focus:outline-none tracking-wide`}
             style={{ color: suspendTab === 'suspend' ? '#1B3828' : '#9A8A78', borderBottomColor: suspendTab === 'suspend' ? '#1B3828' : 'transparent', fontFamily: "'Outfit', sans-serif" }}>
-            SUSPEND VIEW
+            {t('session_suspend_view')}
           </button>
           <button onClick={() => setSuspendTab('session')}
             className={`flex-1 py-2.5 text-sm font-black transition-colors border-b-2 focus:outline-none tracking-wide`}
             style={{ color: suspendTab === 'session' ? '#1B3828' : '#9A8A78', borderBottomColor: suspendTab === 'session' ? '#1B3828' : 'transparent', fontFamily: "'Outfit', sans-serif" }}>
-            SESSION VIEW
+            {t('session_session_view')}
           </button>
         </div>
       )}
       {sessionEnded && endedTab === 'session' && (
         <div className="shrink-0 px-4 py-2 text-center text-sm font-bold" style={{ backgroundColor: '#1B3828', borderBottom: '1px solid #3D7A52', color: '#EED98A', fontFamily: "'Outfit', sans-serif" }}>
-          Session has ended — view only
+          {t('session_ended_banner')}
         </div>
       )}
       {!sessionEnded && sessionSuspended && suspendTab === 'session' && (
@@ -1865,14 +1903,14 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                   <span className="text-[#B6871F] font-bold shrink-0">🚪 Join Request</span>
                   <span className="font-mono text-lg">{flagEl}</span>
                   <span className="text-[#1C1410] font-semibold">{m.proposedBy}</span>
-                  <span className="text-[#6A5A4A] text-xs">wants to join as</span>
+                  <span className="text-[#6A5A4A] text-xs">{t('session_wants_to_join')}</span>
                   <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${desiredStatus === 'present-voting' ? 'bg-[#1B3828]/40 text-[#EED98A]' : 'bg-[#1B3828]/50 text-[#EED98A]'}`}>
                     {desiredStatus === 'present-voting' ? 'P+V' : 'P'}
                   </span>
                   <button onClick={() => handleApproveJoinRequest(m.id, delegateId, desiredStatus)}
-                    className="ml-2 px-3 py-1 bg-[#1B3828]/50 hover:bg-[#2A5A3C]/60 border border-[#3D7A52]/40 text-[#EED98A] text-xs rounded-lg font-semibold transition-colors">Approve</button>
+                    className="ml-2 px-3 py-1 bg-[#1B3828]/50 hover:bg-[#2A5A3C]/60 border border-[#3D7A52]/40 text-[#EED98A] text-xs rounded-lg font-semibold transition-colors">{t('session_approve')}</button>
                   <button onClick={() => handleDenyJoinRequest(m.id)}
-                    className="px-3 py-1 bg-[#8B2020]/20 hover:bg-[#7A1C1C]/40 border border-[#8B2020]/40 text-[#8B2020] text-xs rounded-lg font-semibold transition-colors">Deny</button>
+                    className="px-3 py-1 bg-[#8B2020]/20 hover:bg-[#7A1C1C]/40 border border-[#8B2020]/40 text-[#8B2020] text-xs rounded-lg font-semibold transition-colors">{t('session_deny')}</button>
                 </div>
               );
             })}
@@ -1892,21 +1930,21 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 : <Emoji size="1.125rem">🌐</Emoji>;
               return (
                 <div key={m.id} className="flex items-center gap-3 text-sm">
-                  <span className="font-black text-xs uppercase tracking-widest shrink-0" style={{ color: '#EED98A', fontFamily: "'DM Mono', monospace" }}>GSL REQUEST</span>
+                  <span className="font-black text-xs uppercase tracking-widest shrink-0" style={{ color: '#EED98A', fontFamily: "'DM Mono', monospace" }}>{t('session_gsl_request')}</span>
                   <span className="font-mono text-lg">{flagEl}</span>
                   <span className="font-black text-sm" style={{ color: '#EDE7D8' }}>{m.proposedBy}</span>
-                  <span className="text-xs" style={{ color: 'rgba(237,231,216,0.6)' }}>wants to speak</span>
+                  <span className="text-xs" style={{ color: 'rgba(237,231,216,0.6)' }}>{t('session_wants_to_speak')}</span>
                   <button onClick={() => handleApproveGslRequest(m.id, delegateId, m.proposedBy)}
                     className="ml-2 px-3 py-1.5 rounded-lg text-xs font-black transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828', color: '#EDE7D8', border: '1px solid #3D7A52' }}
                     onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
                     onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}>
-                    ADD TO GSL
+                    {t('session_add_to_gsl')}
                   </button>
                   <button onClick={() => handleDenyGslRequest(m.id)}
                     className="px-3 py-1.5 rounded-lg text-xs font-black transition-colors focus:outline-none" style={{ backgroundColor: '#8B2020', color: '#EDE7D8', border: '1px solid rgba(139,32,32,0.6)' }}
                     onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#7A1C1C'; }}
                     onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#8B2020'; }}>
-                    DENY
+                    {t('session_deny')}
                   </button>
                 </div>
               );
@@ -1921,14 +1959,14 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
             const anotherChairResuming = committee.resumingChair && committee.resumingChair !== (myChairName || committee.chairNames[0]);
             return (
               <>
-                <h1 className="text-6xl font-black mb-4 tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>SESSION ADJOURNED</h1>
-                <p className="text-xl mb-12" style={{ color: '#6A5A4A' }}>This session has been temporarily suspended.</p>
+                <h1 className="text-6xl font-black mb-4 tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{t('session_adjourned')}</h1>
+                <p className="text-xl mb-12" style={{ color: '#6A5A4A' }}>{t('session_suspended_desc')}</p>
                 {anotherChairResuming ? (
                   <>
                     <button disabled className="px-12 py-5 rounded-2xl cursor-not-allowed font-black text-xl" style={{ backgroundColor: '#DDD4C0', color: '#9A8A78' }}>
-                      RESUME SESSION
+                      {t('session_resume_btn')}
                     </button>
-                    <p className="text-sm mt-4" style={{ color: '#B8844A' }}>{committee.resumingChair} is resuming the session…</p>
+                    <p className="text-sm mt-4" style={{ color: '#B8844A' }}>{t('session_resuming_other').replace('{name}', committee.resumingChair ?? '')}</p>
                   </>
                 ) : (
                   <button
@@ -1936,10 +1974,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                     className="px-12 py-5 text-white text-xl font-black rounded-2xl transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}
                     onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
                     onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}>
-                    RESUME SESSION
+                    {t('session_resume_btn')}
                   </button>
                 )}
-                <p className="text-xs mt-8" style={{ color: '#9A8A78' }}>Press ESC to return to main menu</p>
+                <p className="text-xs mt-8" style={{ color: '#9A8A78' }}>{t('session_adjourned_hint')}</p>
               </>
             );
           })()}
@@ -2047,60 +2085,60 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                     <div className="bg-[#EDE7D8] border border-[#1B3828]/40 rounded-3xl px-12 py-10 max-w-lg w-full shadow-2xl">
                       {isTdTParent ? (
                         <>
-                          <p className="text-xs font-mono tracking-widest mb-3 font-bold" style={{ color: '#1B3828' }}>TOUR DE TABLE STARTING</p>
-                          <h1 className="text-5xl font-black mb-2" style={{ color: '#1B3828' }}>Tour de Table</h1>
+                          <p className="text-xs font-mono tracking-widest mb-3 font-bold" style={{ color: '#1B3828' }}>{t('caucus_starting_tdt')}</p>
+                          <h1 className="text-5xl font-black mb-2" style={{ color: '#1B3828' }}>{language === 'es' ? 'Round Robin' : 'Tour de Table'}</h1>
                           <p className="text-[#6A5A4A] text-sm mb-6">
                             {committee.caucus.purpose?.includes('Room Order')
-                              ? 'Room Order — chair calls each speaker'
-                              : committee.caucus.purpose?.includes('Z→A') ? 'Z → A order' : 'A → Z order, proposer speaks first'}
+                              ? t('caucus_tdt_room_order')
+                              : committee.caucus.purpose?.includes('Z→A') ? t('caucus_tdt_z_to_a') : t('caucus_tdt_a_to_z')}
                           </p>
                           <div className="flex justify-center gap-8 mb-8">
                             <div className="text-center">
                               <div className="text-2xl font-black text-[#1C1410]">
                                 {committee.caucusQueue?.length ?? Math.floor(committee.caucus.totalTime / (committee.caucus.speakingTime || 1))}
                               </div>
-                              <div className="text-xs text-[#9A8A78] mt-1">Delegates</div>
+                              <div className="text-xs text-[#9A8A78] mt-1">{t('caucus_delegates')}</div>
                             </div>
                             <div className="w-px bg-[#DDD4C0]" />
                             <div className="text-center">
                               <div className="text-2xl font-black text-[#1C1410]">{committee.caucus.speakingTime}s</div>
-                              <div className="text-xs text-[#9A8A78] mt-1">Per Speaker</div>
+                              <div className="text-xs text-[#9A8A78] mt-1">{t('caucus_per_speaker')}</div>
                             </div>
                             <div className="w-px bg-[#DDD4C0]" />
                             <div className="text-center">
                               <div className="text-2xl font-black text-[#1C1410]">{formatTime(committee.caucus.totalTime)}</div>
-                              <div className="text-xs text-[#9A8A78] mt-1">Total Time</div>
+                              <div className="text-xs text-[#9A8A78] mt-1">{t('caucus_total_time')}</div>
                             </div>
                           </div>
                           <div className="flex items-center justify-center gap-2 text-[#9A8A78] text-sm">
                             <div className="w-4 h-4 border-2 border-[#1B3828] border-t-transparent rounded-full animate-spin" />
-                            <span>Setting up speakers...</span>
+                            <span>{t('caucus_setting_up')}</span>
                           </div>
                         </>
                       ) : (
                         <>
-                          <p className="text-xs font-mono tracking-widest mb-3 font-bold" style={{ color: '#1B3828' }}>MODERATED CAUCUS STARTING</p>
+                          <p className="text-xs font-mono tracking-widest mb-3 font-bold" style={{ color: '#1B3828' }}>{t('caucus_starting_moderated')}</p>
                           <h1 className="text-5xl font-black mb-2" style={{ color: '#1B3828' }}>{committee.caucus.purpose || 'Moderated Caucus'}</h1>
                           <p className="text-[#6A5A4A] text-sm mb-6">{committee.topic}</p>
                           <div className="flex justify-center gap-8 mb-8">
                             <div className="text-center">
                               <div className="text-2xl font-black text-[#1C1410]">{formatTime(committee.caucus.totalTime)}</div>
-                              <div className="text-xs text-[#9A8A78] mt-1">Total Time</div>
+                              <div className="text-xs text-[#9A8A78] mt-1">{t('caucus_total_time')}</div>
                             </div>
                             <div className="w-px bg-[#DDD4C0]" />
                             <div className="text-center">
                               <div className="text-2xl font-black text-[#1C1410]">{committee.caucus.speakingTime}s</div>
-                              <div className="text-xs text-[#9A8A78] mt-1">Per Speaker</div>
+                              <div className="text-xs text-[#9A8A78] mt-1">{t('caucus_per_speaker')}</div>
                             </div>
                             <div className="w-px bg-[#DDD4C0]" />
                             <div className="text-center">
                               <div className="text-2xl font-black text-[#1C1410]">{Math.floor(committee.caucus.totalTime / (committee.caucus.speakingTime || 1))}</div>
-                              <div className="text-xs text-[#9A8A78] mt-1">Max Speakers</div>
+                              <div className="text-xs text-[#9A8A78] mt-1">{t('caucus_max_speakers')}</div>
                             </div>
                           </div>
                           <div className="flex items-center justify-center gap-2 text-[#9A8A78] text-sm">
                             <div className="w-4 h-4 border-2 border-[#1B3828] border-t-transparent rounded-full animate-spin" />
-                            <span>Loading caucus...</span>
+                            <span>{t('caucus_loading_caucus')}</span>
                           </div>
                         </>
                       )}
@@ -2129,10 +2167,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                   <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
                     <div className="bg-[#EDE7D8] border border-[#DDD4C0]/40 rounded-3xl px-12 py-10 max-w-lg w-full shadow-2xl">
                       <p className="text-xs font-mono tracking-widest mb-3 font-bold" style={{ color: '#1B3828' }}>
-                        {(committee.caucus.motionLabel ?? 'UNMODERATED CAUCUS').toUpperCase()} STARTING
+                        {t('caucus_unmod_starting').replace('{name}', (committee.caucus.motionLabel ?? (language === 'es' ? 'CÁUCUS NO MODERADO' : 'UNMODERATED CAUCUS')).toUpperCase())}
                       </p>
                       <h1 className="text-5xl font-black mb-2" style={{ color: '#1B3828' }}>
-                        {committee.caucus.motionLabel ?? 'Unmoderated Caucus'}
+                        {committee.caucus.motionLabel ?? (language === 'es' ? 'Cáucus No Moderado' : 'Unmoderated Caucus')}
                       </h1>
                       {committee.caucus.purpose && (
                         <p className="text-[#6A5A4A] text-sm mb-6">{committee.caucus.purpose}</p>
@@ -2140,17 +2178,17 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                       <div className="flex justify-center gap-8 mb-8">
                         <div className="text-center">
                           <div className="text-2xl font-black text-[#1C1410]">{formatTime(committee.caucus.totalTime)}</div>
-                          <div className="text-xs text-[#9A8A78] mt-1">Total Time</div>
+                          <div className="text-xs text-[#9A8A78] mt-1">{t('caucus_total_time')}</div>
                         </div>
                         <div className="w-px bg-[#DDD4C0]" />
                         <div className="text-center">
                           <div className="text-2xl font-black text-[#1C1410]">{committee.caucus.proposedBy}</div>
-                          <div className="text-xs text-[#9A8A78] mt-1">Proposed by</div>
+                          <div className="text-xs text-[#9A8A78] mt-1">{t('caucus_proposed_by')}</div>
                         </div>
                       </div>
                       <div className="flex items-center justify-center gap-2 text-[#9A8A78] text-sm">
                         <div className="w-4 h-4 border-2 border-[#1B3828] border-t-transparent rounded-full animate-spin" />
-                        <span>Starting caucus...</span>
+                        <span>{t('caucus_loading')}</span>
                       </div>
                     </div>
                   </div>
@@ -2192,12 +2230,12 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                                 : <Emoji size="5rem" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>🌐</Emoji>;
                             })()}
                           </div>
-                          <h1 className="text-5xl font-black text-[#1C1410] mt-2 mb-5 text-center">{committee.currentSpeaker.country}</h1>
+                          <h1 className="text-5xl font-black text-[#1C1410] mt-2 mb-5 text-center">{getCountryDisplayName(committee.currentSpeaker.country, language)}</h1>
                           <div data-tutorial="timer" className={`text-8xl font-black font-mono mt-0 mb-4 tabular-nums ${
                             speakerTimeRemaining <= 10 ? 'text-[#B8844A]' : 'text-[#1C1410]'
                           }`}>
                             {formatTime(speakerTimeRemaining)}
-                            {extraTimeAdded && <span className="text-base ml-2 font-normal text-[#1C1410]">+time</span>}
+                            {extraTimeAdded && <span className="text-base ml-2 font-normal text-[#1C1410]">{t('gsl_plus_time')}</span>}
                           </div>
                           <div className="w-full max-w-2xl h-2 bg-[#DDD4C0] rounded-full overflow-hidden mb-2">
                             <div className={`h-full rounded-full transition-all ${progress > 20 ? 'bg-[#B6871F]' : 'bg-[#B8844A]'}`} style={{ width: `${progress}%` }} />
@@ -2205,7 +2243,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                         </div>
                         {isLastGSLSpeaker && (
                           <div className="mb-2 px-4 py-2 bg-[#B6871F]/10 border border-[#B6871F]/30 rounded-lg text-[#B6871F] text-xs text-center">
-                            Add at least one more delegate before starting — the GSL can never be empty.
+                            {t('gsl_never_empty_warning')}
                           </div>
                         )}
                         {!sessionEnded && (
@@ -2231,28 +2269,28 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       <span className="w-[3px] h-[13px] rounded-sm bg-current inline-block" />
       <span className="w-[3px] h-[13px] rounded-sm bg-current inline-block" />
     </span>
-    <span>PAUSE</span>
+    <span>{t('gsl_pause')}</span>
   </span>
-) : '▶ START'}
+) : t('gsl_start')}
                           </button>
                           <button onClick={handleNextSpeaker} disabled={committee.speakersList.length === 0}
-                            className="flex-1 bg-[#DDD4C0] hover:bg-[#C8BAA8] disabled:opacity-40 text-[#1C1410] py-3 px-6 rounded-xl font-bold text-base transition-colors focus:outline-none">
-                            NEXT →
+                            className="flex-1 bg-[#DDD4C0] hover:bg-[#C8BAA8] disabled:opacity-40 text-[#1C1410] py-3 px-4 rounded-xl font-bold transition-colors focus:outline-none whitespace-nowrap" style={{ fontSize: 'clamp(11px, 1.2vw, 14px)' }}>
+                            {t('gsl_next')}
                           </button>
                           {/* Add Time button */}
                           <button
                             onClick={() => setActivePopover(activePopover === 'extraTime' ? null : 'extraTime')}
                             data-tutorial="add-time-button"
                             title="Add time"
-                            className="px-3 py-2 border rounded-xl font-black text-[9px] uppercase tracking-wide transition-colors bg-[#EDE7D8] hover:bg-[#DDD4C0] border-[#DDD4C0] text-[#1B3828] leading-tight text-center w-[52px]">
-                            ADD<br />TIME
+                            className="px-2 py-2 border rounded-xl font-black uppercase tracking-wide transition-colors bg-[#EDE7D8] hover:bg-[#DDD4C0] border-[#DDD4C0] text-[#1B3828] leading-tight text-center" style={{ fontSize: '8px', minWidth: '52px' }}>
+                            {t('gsl_add_time').split('\n')[0]}<br />{t('gsl_add_time').split('\n')[1]}
                           </button>
                           {/* Right of Reply button */}
                           <button
                             onClick={() => setActivePopover(activePopover === 'rightToReply' ? null : 'rightToReply')}
                             data-tutorial="rtr-button"
                             className="px-3 py-3 border rounded-xl font-black text-xs uppercase tracking-wide transition-colors bg-[#B8844A]/15 hover:bg-[#B8844A]/25 border-[#B8844A]/30 text-[#B8844A]">
-                            Right to Reply
+                            {t('gsl_right_to_reply')}
                           </button>
                         </div>
                         )}
@@ -2267,17 +2305,17 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                               onRemove={handleRemoveFromSpeakersList}
                             />
                           )}
-                          <h2 className="text-5xl font-black mb-3 text-center" style={{ color: '#1B3828' }}>No Current Speaker</h2>
-                          <p className="mb-4 text-center text-sm" style={{ color: '#9A8A78' }}>Add delegates below, then call the first speaker.</p>
+                          <h2 className="text-5xl font-black mb-3 text-center" style={{ color: '#1B3828' }}>{t('gsl_no_current_speaker')}</h2>
+                          <p className="mb-4 text-center text-sm" style={{ color: '#9A8A78' }}>{t('gsl_add_call_first')}</p>
                           {committee.speakersList.length === 1 && (
                             <div className="mb-4 px-4 py-2 bg-[#B6871F]/10 border border-[#B6871F]/30 rounded-lg text-[#B6871F] text-xs text-center">
-                              Only 1 delegate on the list — add more before starting.
+                              {t('gsl_one_delegate_warning')}
                             </div>
                           )}
                           {!sessionEnded && (
                             <button data-tutorial="call-first-speaker" onClick={handleNextSpeaker} disabled={committee.speakersList.length < 2}
                               className="bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white px-8 py-3 rounded-xl font-bold transition-colors focus:outline-none">
-                              CALL FIRST SPEAKER
+                              {t('gsl_call_first')}
                             </button>
                           )}
                         </div>
@@ -2288,7 +2326,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 {!sessionEnded && (
                 <div className="border-t border-[#DDD4C0] px-6 py-2" style={{ backgroundColor: '#F6F1E9' }}>
                   <div className="flex items-center gap-3 mb-4">
-                    <span className="text-xs text-[#9A8A78] font-mono shrink-0">TIME</span>
+                    <span className="text-xs text-[#9A8A78] font-mono shrink-0">{t('gsl_time')}</span>
                     <div className="flex gap-1.5">
                       {[30, 60, 90, 120, 180].map((t) => (
                         <button key={t} onClick={() => handleSetSpeakerTimeLimit(t)}
@@ -2347,7 +2385,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         >
           <div className="bg-[#EDE7D8] border border-[#3D7A52]/40 rounded-xl p-3 w-72 shadow-2xl">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-black uppercase tracking-wide" style={{ color: '#1B3828' }}>ADD TIME</span>
+              <span className="text-xs font-black uppercase tracking-wide" style={{ color: '#1B3828' }}>{t('gsl_add_time_title')}</span>
               <button onClick={() => setActivePopover(null)} className="text-[#1C1410] hover:text-[#8B2020] text-sm font-bold">✕</button>
             </div>
             <div className="flex gap-2 mb-2">
@@ -2364,15 +2402,15 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 value={extraTimeSecs}
                 onChange={(e) => setExtraTimeSecs(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') { const n = parseInt(extraTimeSecs); if (n > 0) { handleAddExtraTime(n); setActivePopover(null); } } }}
-                placeholder="Custom sec…"
+                placeholder={language === 'es' ? 'Tiempo personalizado...' : 'Custom sec...'}
                 style={{ MozAppearance: 'textfield' } as React.CSSProperties}
                 className="flex-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-2 py-1.5 text-[#1C1410] text-xs focus:outline-none focus:border-[#1B3828] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
               />
               <button
                 onClick={() => { const n = parseInt(extraTimeSecs); if (n > 0) { handleAddExtraTime(n); setActivePopover(null); } }}
                 disabled={!extraTimeSecs || parseInt(extraTimeSecs) <= 0}
-                className="px-3 py-1.5 bg-[#1B3828] hover:bg-[#2A5A3C] disabled:opacity-40 text-[#EED98A] text-xs rounded-lg font-black transition-colors">
-                ADD
+                className="px-2 py-1.5 bg-[#1B3828] hover:bg-[#2A5A3C] disabled:opacity-40 text-[#EED98A] text-xs rounded-lg font-black transition-colors">
+                {t('gsl_add_time_btn')}
               </button>
             </div>
           </div>
@@ -2394,7 +2432,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         >
           <div className="bg-[#EDE7D8] border border-[#B8844A]/30 rounded-xl p-4 w-72 shadow-2xl">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-black uppercase tracking-wide" style={{ color: '#B8844A' }}>RIGHT TO REPLY</span>
+              <span className="text-xs font-black uppercase tracking-wide" style={{ color: '#B8844A' }}>{t('gsl_right_to_reply_popover')}</span>
               <button onClick={() => {
                 setActivePopover(null);
                 setRtrOpen(false);
@@ -2436,7 +2474,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                   disabled={!rtrCountry}
                   className="w-full py-2 bg-[#B8844A] hover:bg-[#B8844A]/80 disabled:opacity-40 disabled:cursor-not-allowed text-[#1C1410] text-xs rounded-lg font-black uppercase tracking-wide transition-colors"
                 >
-                  GRANT
+                  {t('gsl_grant')}
                 </button>
               </>
             ) : (
@@ -2450,7 +2488,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                       : <Emoji size="1.25rem">🌐</Emoji>;
                   })()}
                   <span className="text-sm text-[#1C1410] font-bold flex-1">{rtrCountry}</span>
-                  <span className="text-xs font-black uppercase tracking-wide" style={{ color: '#B8844A' }}>RIGHT TO REPLY</span>
+                  <span className="text-xs font-black uppercase tracking-wide" style={{ color: '#B8844A' }}>{t('gsl_right_to_reply_popover')}</span>
                 </div>
                 <div className={`text-5xl font-black font-mono text-center mb-3 tabular-nums ${
                   rtrTimeRemaining <= 5 ? 'text-red-500' : rtrTimeRemaining <= 10 ? 'text-[#B6871F]' : 'text-[#B8844A]'
@@ -2470,7 +2508,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                       rtrTimerActive ? 'bg-[#B6871F] hover:bg-[#B6871F]/80 text-white' : 'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'
                     }`}
                   >
-                    {rtrTimerActive ? '⏸ Pause' : '▶ Start'}
+                    {rtrTimerActive ? t('rtr_pause') : t('rtr_start')}
                   </button>
                   <button
                     onClick={() => {
@@ -2482,7 +2520,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                     }}
                     className="px-3 py-2 rounded-lg font-bold text-xs bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#6A5A4A] transition-colors"
                   >
-                    Done
+                    {t('rtr_done')}
                   </button>
                 </div>
               </>

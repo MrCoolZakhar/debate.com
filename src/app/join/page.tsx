@@ -10,6 +10,8 @@ import { useSettingsStore } from '@/lib/settingsStore';
 import { Emoji } from '@/components/Emoji';
 import { useAuth } from '@/components/AuthProvider';
 import { createAuthClient } from '@/lib/supabase-auth';
+import { useT, useLanguage } from '@/contexts/LanguageContext';
+import { getCountryDisplayName } from '@/lib/countries';
 
 type JoinMode = 'delegate' | 'chair' | 'advisor';
 
@@ -33,6 +35,8 @@ function JoinPageInner() {
   const { committees } = useCommitteeStore();
   const { getSettings } = useSettingsStore();
   const { user, loading: authLoading } = useAuth();
+  const t = useT();
+  const { language } = useLanguage();
   const supabaseAuth = createAuthClient();
 
   const initialMode = (searchParams.get('mode') as JoinMode) ?? 'delegate';
@@ -116,7 +120,7 @@ function JoinPageInner() {
         const suffix = upper.slice(upper.lastIndexOf('-') + 1);
         const expectedSuffix = found.dbChairJoinSuffix ?? getSettings(found.code).chairJoinSuffix;
         if (expectedSuffix && suffix !== expectedSuffix) {
-          setSuffixError('Incorrect chair code — double-check the code from your co-chair.');
+          setSuffixError(t('join_incorrect_code'));
         } else {
           setSuffixError('');
         }
@@ -169,7 +173,7 @@ function JoinPageInner() {
         setFoundCommittee(null);
         setConferenceCommittee(null);
         setIsConferenceSession(false);
-        setError('Committee not found. Check the code and try again.');
+        setError(t('join_not_found'));
       }
       setLookingUp(false);
     });
@@ -217,7 +221,7 @@ function JoinPageInner() {
     if (!foundCommittee) { setError('Committee not found.'); return; }
     if (mode === 'chair') {
       const name = chairNameMode === 'new' ? newChairName.trim() : chairName;
-      if (!name) { setError('Please select or enter your chair name.'); return; }
+      if (!name) { setError(t('join_select_name')); return; }
       addChairName(foundCommittee.id, name);
       router.push(`/chair/${foundCommittee.code}?chairName=${encodeURIComponent(name)}`);
       return;
@@ -255,7 +259,7 @@ function JoinPageInner() {
           <img src="/GavellingLogo.png" alt="Gavelling" className="w-[16vw] h-auto max-h-9 object-contain" />
         </Link>
         <Link href="/create" className="text-sm text-[#1B3828] hover:text-[#6A5A4A] transition-colors">
-          Chair? Create Committee →
+          {t('join_create_link')}
         </Link>
       </nav>
 
@@ -263,8 +267,8 @@ function JoinPageInner() {
         <div className="w-full max-w-lg">
 
           {/* Title */}
-          <h1 className="text-5xl font-black text-center mb-0.5 tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '-0.01em' }}>JOIN A SESSION</h1>
-          <p className="text-center text-sm mb-4" style={{ color: '#9A8A78' }}>Enter your session code below</p>
+          <h1 className="text-5xl font-black text-center mb-0.5 tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '-0.01em' }}>{t('join_title')}</h1>
+          <p className="text-center text-sm mb-4" style={{ color: '#9A8A78' }}>{t('join_subtitle')}</p>
 
           {/* Code input — always first */}
           <div className="mb-5">
@@ -274,7 +278,7 @@ function JoinPageInner() {
                 value={code}
                 onChange={(e) => handleCodeChange(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter' && foundCommittee) handleJoin(); }}
-                placeholder="ABC123 or ABC123-4821"
+                placeholder={t('join_code_placeholder')}
                 className="w-full rounded-2xl px-6 py-3.5 font-mono text-xl tracking-widest text-center uppercase focus:outline-none transition-colors"
                 style={{ backgroundColor: '#FAF8F3', border: '2px solid #DDD4C0', color: '#1C1410' }}
                 onFocus={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
@@ -300,9 +304,9 @@ function JoinPageInner() {
               <span className="text-xs font-mono font-black shrink-0" style={{ color: '#1B3828' }}>✓</span>
               <div className="min-w-0">
                 <p className="font-black text-sm truncate" style={{ color: '#1C1410' }}>{foundCommittee.name}{foundCommittee.topic ? <span className="font-normal text-xs ml-1.5" style={{ color: '#9A8A78' }}>· {foundCommittee.topic}</span> : ''}</p>
-                <p className="text-xs" style={{ color: '#9A8A78' }}>{foundCommittee.delegates.length} delegates registered</p>
-                {foundCommittee.endedAt && <p className="text-xs font-semibold mt-0.5" style={{ color: '#B8844A' }}>Session ended — view only.</p>}
-                {!foundCommittee.endedAt && foundCommittee.suspendedAt && mode === 'delegate' && <p className="text-xs font-semibold mt-0.5" style={{ color: '#B8844A' }}>Session adjourned — waiting screen.</p>}
+                <p className="text-xs" style={{ color: '#9A8A78' }}>{foundCommittee.delegates.length} {t('join_delegates_registered')}</p>
+                {foundCommittee.endedAt && <p className="text-xs font-semibold mt-0.5" style={{ color: '#B8844A' }}>{t('join_session_ended')}</p>}
+                {!foundCommittee.endedAt && foundCommittee.suspendedAt && mode === 'delegate' && <p className="text-xs font-semibold mt-0.5" style={{ color: '#B8844A' }}>{t('join_adjourned')}</p>}
               </div>
             </div>
           )}
@@ -413,9 +417,9 @@ function JoinPageInner() {
             const hasCode = code.trim().length >= 4;
             const isChairCode = code.includes('-');
             const roleCards: { key: JoinMode; label: string; desc: string }[] = [
-              { key: 'delegate', label: 'DELEGATE', desc: 'Join as a country delegation' },
-              { key: 'chair', label: 'CHAIR', desc: 'Re-join a chair panel committee session' },
-              { key: 'advisor', label: 'FACULTY ADVISOR', desc: 'Observer view for advisors' },
+              { key: 'delegate', label: t('join_role_delegate'), desc: t('join_role_delegate_desc') },
+              { key: 'chair', label: t('join_role_chair'), desc: t('join_role_chair_desc') },
+              { key: 'advisor', label: t('join_role_advisor'), desc: t('join_role_advisor_desc') },
             ];
             return (
               <div className="grid grid-cols-3 gap-4 mb-5">
@@ -457,16 +461,16 @@ function JoinPageInner() {
             if (!requireName) return null;
             return (
               <div className="mb-4">
-                <label className="block text-sm font-semibold mb-2" style={{ color: '#1C1410' }}>Your Country / Delegation</label>
+                <label className="block text-sm font-semibold mb-2" style={{ color: '#1C1410' }}>{t('join_country_label')}</label>
                 <select
                   value={country}
                   onChange={(e) => setCountry(e.target.value)}
                   className="w-full rounded-xl px-4 py-3 focus:outline-none transition-colors"
                   style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #DDD4C0', color: '#1C1410' }}
                 >
-                  <option value="">Select your country...</option>
+                  <option value="">{t('join_country_placeholder')}</option>
                   {foundCommittee.delegates.map((d) => (
-                    <option key={d.country} value={d.country}>{d.country}</option>
+                    <option key={d.country} value={d.country}>{getCountryDisplayName(d.country, language)}</option>
                   ))}
                 </select>
               </div>
@@ -476,7 +480,7 @@ function JoinPageInner() {
           {/* Chair name selection */}
           {foundCommittee && mode === 'chair' && (
             <div className="mb-4">
-              <label className="block text-sm font-semibold mb-2" style={{ color: '#1C1410' }}>Which chair are you?</label>
+              <label className="block text-sm font-semibold mb-2" style={{ color: '#1C1410' }}>{t('join_chair_label')}</label>
               {foundCommittee.chairNames.length > 0 && (
                 <div className="space-y-2 mb-3">
                   {foundCommittee.chairNames.map((n) => (
@@ -502,7 +506,7 @@ function JoinPageInner() {
                       color: chairNameMode === 'new' ? '#1C1410' : '#9A8A78',
                     }}
                   >
-                    + New name
+                    {t('join_new_name')}
                   </button>
                 </div>
               )}
@@ -511,7 +515,7 @@ function JoinPageInner() {
                   type="text"
                   value={newChairName}
                   onChange={(e) => setNewChairName(e.target.value)}
-                  placeholder="Enter your name…"
+                  placeholder={t('join_name_placeholder')}
                   autoFocus={chairNameMode === 'new'}
                   className="w-full rounded-xl px-4 py-3 focus:outline-none transition-colors"
                   style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #DDD4C0', color: '#1C1410' }}
@@ -552,14 +556,14 @@ function JoinPageInner() {
             {isConferenceSession
               ? (allocatedCountry ? `JOIN AS ${allocatedCountry.name.toUpperCase()} →` : 'JOIN SESSION →')
               : mode === 'delegate'
-              ? (foundCommittee?.endedAt ? 'VIEW SESSION →' : 'JOIN SESSION →')
-              : mode === 'chair' ? 'OPEN CHAIR PANEL →' : 'OPEN ADVISOR VIEW →'}
+              ? (foundCommittee?.endedAt ? t('join_btn_delegate_ended') : t('join_btn_delegate'))
+              : mode === 'chair' ? t('join_btn_chair') : t('join_btn_advisor')}
           </button>
 
           <p className="text-center text-sm mt-6" style={{ color: '#9A8A78' }}>
-            Are you a chair?{' '}
+            {t('join_chair_prompt')}{' '}
             <Link href="/create" className="font-semibold transition-colors" style={{ color: '#1B3828' }}>
-              Create a committee instead
+              {t('join_create_instead')}
             </Link>
           </p>
 

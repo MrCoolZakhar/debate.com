@@ -5,22 +5,9 @@ import SiteNav from '@/components/SiteNav';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-
-const SUBJECTS = [
-  { id: 'general',    label: 'General Enquiry' },
-  { id: 'conference', label: 'Conference Partnership' },
-  { id: 'press',      label: 'Press & Media' },
-  { id: 'feedback',   label: 'Feedback' },
-];
+import { useT, useLanguage } from '@/contexts/LanguageContext';
 
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
-
-const PLACEHOLDERS: Record<string, string> = {
-  general:    "What's on your mind? No formal placard required.",
-  conference: 'Tell us about your conference — expected delegates, date, school...',
-  press:      "Tell us about your publication and what you're working on...",
-  feedback:   'What would make Gavelling better for you?',
-};
 
 const inputStyle: React.CSSProperties = {
   backgroundColor: 'rgba(221, 212, 192, 0.4)',
@@ -38,6 +25,23 @@ const labelStyle: React.CSSProperties = {
 };
 
 export default function ContactClient() {
+  const { language } = useLanguage();
+  const t = useT();
+
+  const SUBJECTS = [
+    { id: 'general',    label: t('contact_subject_general') },
+    { id: 'conference', label: t('contact_subject_conference') },
+    { id: 'press',      label: t('contact_subject_press') },
+    { id: 'feedback',   label: t('contact_subject_feedback') },
+  ];
+
+  const PLACEHOLDERS: Record<string, string> = {
+    general:    t('contact_placeholder_general'),
+    conference: t('contact_placeholder_conference'),
+    press:      t('contact_placeholder_press'),
+    feedback:   t('contact_placeholder_feedback'),
+  };
+
   const [subject, setSubject]     = useState('general');
   const [form, setForm]           = useState({ name: '', email: '', message: '' });
   const [submitted, setSubmitted] = useState(false);
@@ -118,8 +122,7 @@ export default function ContactClient() {
                 className="font-black text-white tracking-tight leading-[0.9]"
                 style={{ fontSize: 'clamp(62px, 7.5vw, 110px)' }}
               >
-                The Floor<br />
-                Is{' '}
+                {t('contact_hero_line1')}{t('contact_hero_line2_plain') ? <><br />{t('contact_hero_line2_plain')}{' '}</> : ' '}
                 <span
                   style={{
                     fontFamily: "'Playfair Display', serif",
@@ -128,7 +131,7 @@ export default function ContactClient() {
                     color: '#EED98A',
                   }}
                 >
-                  Yours.
+                  {t('contact_hero_line2_italic')}
                 </span>
               </h1>
 
@@ -155,10 +158,10 @@ export default function ContactClient() {
                     lineHeight: 1.7,
                   }}
                 >
-                  "Diplomacy is the art of letting someone else have your way."
+                  {t('contact_hero_quote')}
                 </p>
                 <p className="text-xs mt-2" style={{ color: 'rgba(238, 217, 138, 0.2)', letterSpacing: '0.12em' }}>
-                  — Daniele Vare
+                  {t('contact_hero_quote_author')}
                 </p>
               </div>
             </div>
@@ -184,11 +187,10 @@ export default function ContactClient() {
                 </div>
 
                 <div>
-                  <p className="text-xs font-mono tracking-[0.2em] text-[#9A8A78] mb-2 uppercase">Motion received</p>
-                  <h2 className="text-3xl font-black text-[#1C1410] mb-3">The chair acknowledges.</h2>
+                  <p className="text-xs font-mono tracking-[0.2em] text-[#9A8A78] mb-2 uppercase">{t('contact_success_eyebrow')}</p>
+                  <h2 className="text-3xl font-black text-[#1C1410] mb-3">{t('contact_success_title')}</h2>
                   <p className="text-[#6A5A4A] leading-relaxed">
-                    Your message has been noted in the record. We'll be in touch within
-                    48 hours — usually much sooner.
+                    {t('contact_success_desc')}
                   </p>
                 </div>
 
@@ -212,20 +214,20 @@ export default function ContactClient() {
                     padding: 0,
                   }}
                 >
-                  Send another message
+                  {t('contact_send_another')}
                 </button>
               </div>
             ) : (
               <div className="flex flex-col gap-5 w-full">
 
                 <div>
-                  <p className="text-xs font-mono tracking-[0.2em] text-[#9A8A78] mb-2 uppercase">Raise your motion</p>
-                  <h2 className="text-3xl font-black text-[#1C1410]">GET IN TOUCH</h2>
+                  <p className="text-xs font-mono tracking-[0.2em] text-[#9A8A78] mb-2 uppercase">{t('contact_heading_eyebrow')}</p>
+                  <h2 className="text-3xl font-black text-[#1C1410]">{t('contact_heading')}</h2>
                 </div>
 
                 {/* Subject pills */}
                 <div className="flex flex-col gap-2.5">
-                  <Label style={labelStyle}>Subject</Label>
+                  <Label style={labelStyle}>{t('contact_label_subject')}</Label>
                   <div className="flex flex-row flex-nowrap gap-2 overflow-x-auto">
                     {SUBJECTS.map((s) => {
                       const active = subject === s.id;
@@ -257,17 +259,17 @@ export default function ContactClient() {
                 {/* Name + Email */}
                 <div className="flex flex-col sm:flex-row gap-4">
                   <div className="flex flex-col gap-1.5 flex-1">
-                    <Label htmlFor="contact-name" style={labelStyle}>Name</Label>
+                    <Label htmlFor="contact-name" style={labelStyle}>{t('contact_label_name')}</Label>
                     <Input
                       id="contact-name"
-                      placeholder="Your name"
+                      placeholder={t('contact_placeholder_name')}
                       value={form.name}
                       onChange={(e) => setForm({ ...form, name: e.target.value })}
                       style={inputStyle}
                     />
                   </div>
                   <div className="flex flex-col gap-1.5 flex-1">
-                    <Label htmlFor="contact-email" style={labelStyle}>Email</Label>
+                    <Label htmlFor="contact-email" style={labelStyle}>{t('contact_label_email')}</Label>
                     <Input
                       id="contact-email"
                       type="email"
@@ -281,7 +283,7 @@ export default function ContactClient() {
 
                 {/* Message */}
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="contact-message" style={labelStyle}>Message</Label>
+                  <Label htmlFor="contact-message" style={labelStyle}>{t('contact_label_message')}</Label>
                   <Textarea
                     id="contact-message"
                     placeholder={PLACEHOLDERS[subject]}
@@ -335,15 +337,15 @@ export default function ContactClient() {
                       boxShadow: '0 4px 14px rgba(27, 56, 40, 0.18)',
                     }}
                   >
-                    {sending ? 'Sending…' : 'YIELD TO CHAIR →'}
+                    {sending ? t('contact_sending') : t('contact_submit_btn')}
                   </button>
-                  <p className="text-xs" style={{ color: '#9A8A78' }}>We reply within 48 hrs</p>
+                  <p className="text-xs" style={{ color: '#9A8A78' }}>{t('contact_reply_time')}</p>
                 </div>
 
                 {/* Other ways to reach us — inline */}
                 <div style={{ marginTop: 20, borderTop: '1px solid rgba(28, 20, 16, 0.1)', paddingTop: 20 }}>
                   <p style={{ fontSize: 10, fontFamily: 'monospace', letterSpacing: '0.2em', textTransform: 'uppercase', color: '#9A8A78', marginBottom: 12 }}>
-                    Other ways to reach us
+                    {t('contact_other_ways')}
                   </p>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
 
@@ -357,7 +359,7 @@ export default function ContactClient() {
                       </div>
                       <div>
                         <p style={{ fontSize: 11, fontWeight: 700, color: '#1B3828', letterSpacing: '0.02em' }}>wearegavelling@gmail.com</p>
-                        <p style={{ fontSize: 11, color: '#9A8A78', marginTop: 1 }}>Drop us a line directly</p>
+                        <p style={{ fontSize: 11, color: '#9A8A78', marginTop: 1 }}>{t('contact_email_desc')}</p>
                       </div>
                     </a>
 
@@ -372,7 +374,7 @@ export default function ContactClient() {
                       </div>
                       <div>
                         <p style={{ fontSize: 11, fontWeight: 700, color: '#1B3828', letterSpacing: '0.02em' }}>@wearegavelling</p>
-                        <p style={{ fontSize: 11, color: '#9A8A78', marginTop: 1 }}>Follow the debate</p>
+                        <p style={{ fontSize: 11, color: '#9A8A78', marginTop: 1 }}>{t('contact_instagram_desc')}</p>
                       </div>
                     </a>
 
@@ -387,8 +389,8 @@ export default function ContactClient() {
                         </svg>
                       </div>
                       <div>
-                        <p style={{ fontSize: 11, fontWeight: 700, color: '#1B3828', letterSpacing: '0.02em' }}>Book a call</p>
-                        <p style={{ fontSize: 11, color: '#9A8A78', marginTop: 1 }}>30 mins, no agenda required</p>
+                        <p style={{ fontSize: 11, fontWeight: 700, color: '#1B3828', letterSpacing: '0.02em' }}>{t('contact_book_call')}</p>
+                        <p style={{ fontSize: 11, color: '#9A8A78', marginTop: 1 }}>{t('contact_book_call_desc')}</p>
                       </div>
                     </a>
 
@@ -426,7 +428,7 @@ export default function ContactClient() {
                 </svg>
               </span>
             </div>
-            <p className="text-xs text-[#9A8A78] md:text-right">© {new Date().getFullYear()} Gavelling. Built for the MUN community.</p>
+            <p className="text-xs text-[#9A8A78] md:text-right">{t('contact_footer_copy').replace('{year}', String(new Date().getFullYear()))}</p>
           </div>
         </footer>
       </div>

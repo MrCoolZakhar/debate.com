@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { Committee, PendingMotion, PendingMotionType } from '@/lib/types';
-import { getCountryByName, getFlagUrl } from '@/lib/countries';
+import { getCountryByName, getFlagUrl, getCountryDisplayName } from '@/lib/countries';
 import { Emoji } from '@/components/Emoji';
 import { useSettingsStore, DEFAULT_MOTION_NAMES, MotionNames } from '@/lib/settingsStore';
 import {
@@ -50,10 +51,11 @@ function requiredVotes(type: PendingMotionType, present: number): { needed: numb
 }
 
 function DisruptivenessBadge({ type }: { type: PendingMotionType }) {
+  const t = useT();
   const labels: Record<PendingMotionType, string> = {
-    'end-debate': 'Ends session', 'suspend-debate': 'Suspends session',
-    consultation: 'Most disruptive', tour: 'Very disruptive',
-    unmoderated: 'Disruptive', moderated: 'Least disruptive',
+    'end-debate': t('motions_badge_ends'), 'suspend-debate': t('motions_badge_suspends'),
+    consultation: t('motions_badge_most'), tour: t('motions_badge_very'),
+    unmoderated: t('motions_badge_disruptive'), moderated: t('motions_badge_least'),
   };
   const colors: Record<PendingMotionType, string> = {
     'end-debate': 'bg-[#8B2020]/20 text-[#8B2020] border-[#8B2020]/40',
@@ -66,55 +68,48 @@ function DisruptivenessBadge({ type }: { type: PendingMotionType }) {
   return <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${colors[type]}`}>{labels[type]}</span>;
 }
 
-const COUNTRY_ACRONYMS: Record<string, string> = {
-  'uk':   'United Kingdom',
-  'us':   'United States',
-  'usa':  'United States',
-  'uae':  'United Arab Emirates',
-  'drc':  'DR Congo',
-  'roc':  'Taiwan',
-  'rok':  'South Korea',
-  'dprk': 'North Korea',
-  'car':  'Central African Republic',
-  'png':  'Papua New Guinea',
-};
-
 function ProposerInput({ candidates, value, onChange, blockedCountries }: {
   candidates: string[]; value: string; onChange: (v: string) => void; blockedCountries?: Set<string>;
 }) {
+  const t = useT();
+  const { language } = useLanguage();
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const resolved = COUNTRY_ACRONYMS[query.trim().toLowerCase()] ?? query.trim();
-  const matches = resolved
-    ? candidates.filter((c) => c.toLowerCase().startsWith(resolved.toLowerCase()))
-        .concat(candidates.filter((c) => !c.toLowerCase().startsWith(resolved.toLowerCase()) && c.toLowerCase().includes(resolved.toLowerCase())))
+  const q = query.trim().toLowerCase();
+  const matches = q
+    ? candidates
+        .filter((c) => getCountryDisplayName(c, language).toLowerCase().startsWith(q))
+        .concat(candidates.filter((c) =>
+          !getCountryDisplayName(c, language).toLowerCase().startsWith(q) &&
+          getCountryDisplayName(c, language).toLowerCase().includes(q)
+        ))
     : [];
   const top = matches[0] ?? null;
   const commit = (country: string) => {
     if (blockedCountries?.has(country)) return;
-    onChange(country); setQuery(country); setOpen(false);
+    onChange(country); setQuery(getCountryDisplayName(country, language)); setOpen(false);
   };
   return (
     <div className="relative">
       {value && !open ? (
         <div className="flex items-center gap-3 bg-[#1B3828]/10 border-2 border-[#3D7A52]/40 rounded-xl px-4 py-3">
           {(() => { const f = getCountryByName(value); return f ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ borderRadius: '6px', border: '1.5px solid rgba(28,20,16,0.10)', objectFit: 'cover' }} className="w-7 h-5 inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : null; })()}
-          <span className="text-sm text-[#1C1410] flex-1 font-semibold">{value}</span>
-          <button onClick={() => { setOpen(true); setQuery(''); onChange(''); inputRef.current?.focus(); }} className="text-xs font-bold transition-colors focus:outline-none" style={{ color: '#2A5A3C' }}>CHANGE</button>
+          <span className="text-sm text-[#1C1410] flex-1 font-semibold">{getCountryDisplayName(value, language)}</span>
+          <button onClick={() => { setOpen(true); setQuery(''); onChange(''); inputRef.current?.focus(); }} className="text-xs font-bold transition-colors focus:outline-none" style={{ color: '#2A5A3C' }}>{t('motions_change')}</button>
         </div>
       ) : (
         <div className="flex items-center bg-[#FAF8F3] border border-[#DDD4C0] focus-within:border-[#1B3828] rounded-xl overflow-hidden transition-colors">
           <input ref={inputRef} autoFocus={open} type="text" value={query}
             onChange={(e) => { setQuery(e.target.value); setOpen(true); onChange(''); }}
             onKeyDown={(e) => { if (e.key === 'Enter' && top) { e.preventDefault(); commit(top); } if (e.key === 'Escape') { setQuery(''); setOpen(false); } }}
-            placeholder="Type country name…"
+            placeholder={t('motions_proposer_placeholder')}
             className="flex-1 bg-transparent px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none text-sm" />
-          {top && query && <span className="text-xs text-[#9A8A78] px-3 truncate max-w-[120px]">↵ {top}</span>}
+          {top && query && <span className="text-xs text-[#9A8A78] px-3 truncate max-w-[120px]">↵ {getCountryDisplayName(top, language)}</span>}
         </div>
       )}
       {open && query && matches.length > 0 && (
-        <div className="absolute bottom-full left-0 right-0 mb-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl overflow-hidden z-30 shadow-xl max-h-48 overflow-y-auto">
+        <div className="absolute top-full left-0 right-0 mt-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl overflow-hidden z-50 shadow-xl max-h-48 overflow-y-auto">
           {matches.slice(0, 6).map((country, i) => {
             const found = getCountryByName(country);
             const isBlocked = blockedCountries?.has(country) ?? false;
@@ -127,9 +122,9 @@ function ProposerInput({ candidates, value, onChange, blockedCountries }: {
                   i === 0 ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'
                 }`}>
                 {found ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <Emoji size="1.125rem">🌐</Emoji>}
-                <span className="text-sm flex-1">{country}</span>
+                <span className="text-sm flex-1">{getCountryDisplayName(country, language)}</span>
                 {isBlocked
-                  ? <span className="text-xs text-[#B8844A] shrink-0 font-semibold">Motion on floor</span>
+                  ? <span className="text-xs text-[#B8844A] shrink-0 font-semibold">{t('motions_motion_on_floor')}</span>
                   : i === 0 && <span className="ml-auto text-xs text-[#9A8A78]">Enter ↵</span>}
               </button>
             );
@@ -149,13 +144,15 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
   editingMotion?: PendingMotion | null;
   belowQuorum?: boolean;
 }) {
+  const t = useT();
+  const { language } = useLanguage();
   const { getSettings } = useSettingsStore();
   const s = getSettings(committee.code);
-  const enabledTypes = TYPE_ORDER.filter((t) => {
-    if (t === 'moderated')    return s.motionModeratedCaucus !== false;
-    if (t === 'unmoderated')  return s.motionUnmoderatedCaucus !== false;
-    if (t === 'consultation') return s.motionCoW !== false;
-    if (t === 'tour')         return s.motionTourDeTable !== false;
+  const enabledTypes = TYPE_ORDER.filter((motionType) => {
+    if (motionType === 'moderated')    return s.motionModeratedCaucus !== false;
+    if (motionType === 'unmoderated')  return s.motionUnmoderatedCaucus !== false;
+    if (motionType === 'consultation') return s.motionCoW !== false;
+    if (motionType === 'tour')         return s.motionTourDeTable !== false;
     return true;
   });
   const [type, setType] = useState<PendingMotionType | null>(editingMotion?.type ?? enabledTypes[0] ?? null);
@@ -223,17 +220,17 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
       {/* PERMANENT NOTE: No scroll in raise motion form. If content doesn't fit, reduce spacing
           or lay fields side-by-side — never re-add overflow-y-auto here. */}
       <div className="flex-1 px-7 pt-0 pb-4 space-y-4">
-        <h2 className="text-3xl font-black tracking-wide" style={{ color: '#1B3828' }}>{editingMotion ? 'EDIT MOTION' : 'RAISE A MOTION'}</h2>
+        <h2 className="text-3xl font-black tracking-wide" style={{ color: '#1B3828' }}>{editingMotion ? t('motions_edit_heading') : t('motions_raise_heading')}</h2>
 
         {/* Type tabs — always shown */}
         <div className="flex gap-1.5 flex-wrap items-stretch">
           <div className="flex gap-1.5 flex-1 flex-wrap">
-            {enabledTypes.map((t) => (
-              <button key={t} type="button" onClick={() => setType(t)}
+            {enabledTypes.map((motionType) => (
+              <button key={motionType} type="button" onClick={() => setType(motionType)}
                 className={`px-3 py-2 rounded-xl border font-bold text-base transition-all flex-1 min-w-[120px] ${
-                  type === t ? 'bg-[#1B3828] border-[#2A5A3C] text-white' : 'bg-transparent border-[#DDD4C0] text-[#6A5A4A] hover:border-[#1B3828]'
+                  type === motionType ? 'bg-[#1B3828] border-[#2A5A3C] text-white' : 'bg-transparent border-[#DDD4C0] text-[#6A5A4A] hover:border-[#1B3828]'
                 }`}>
-                {typeMeta[t].label}
+                {typeMeta[motionType].label}
               </button>
             ))}
           </div>
@@ -241,11 +238,11 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
           <div className="flex flex-col gap-1 self-stretch">
             <button type="button" onClick={() => setType('suspend-debate')}
               className={`px-2 flex-1 rounded-lg border text-xs font-bold transition-colors ${type === 'suspend-debate' ? 'bg-[#8B2020] border-red-700 text-white' : 'border-[#8B2020]/40 bg-[#8B2020]/20 text-[#8B2020] hover:bg-[#8B2020]/20'}`}>
-              Suspend
+              {t('motions_suspend')}
             </button>
             <button type="button" onClick={() => setType('end-debate')}
               className={`px-2 flex-1 rounded-lg border text-xs font-bold transition-colors ${type === 'end-debate' ? 'bg-[#8B2020] border-red-700 text-white' : 'border-[#8B2020]/40 bg-[#8B2020]/20 text-[#8B2020] hover:bg-[#8B2020]/20'}`}>
-              End Debate
+              {t('motions_end_debate')}
             </button>
           </div>
         </div>
@@ -255,7 +252,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
             {/* For moderated caucus: Topic first, then Proposed By */}
             {type !== 'moderated' && (
               <div>
-                <label className="block text-lg font-semibold mb-2" style={{ color: '#3D7A52' }}>Proposed by</label>
+                <label className="block text-lg font-semibold mb-2" style={{ color: '#3D7A52' }}>{t('motions_proposed_by')}</label>
                 <ProposerInput candidates={presentCountries} value={proposer} onChange={setProposer} blockedCountries={countriesWithMotions} />
               </div>
             )}
@@ -265,19 +262,19 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
               <>
                 <div className="bg-transparent border border-[#DDD4C0] rounded-2xl p-3 space-y-2">
                   <p className="text-[#1C1410] font-semibold text-xs">
-                    All {presentCountries.length} present delegates will speak once each.
+                    {t('motions_all_speak', { n: presentCountries.length })}
                   </p>
                   <div>
-                    <label className="block text-sm font-semibold text-[#6A5A4A] mb-1">Speaking time per delegate</label>
+                    <label className="block text-sm font-semibold text-[#6A5A4A] mb-1">{t('motions_speaking_time_label')}</label>
                     <div className="flex items-center gap-3">
                       <div className="flex items-center gap-2 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-3 py-1.5">
                         <input type="number" min={10} value={speakingTimeStr}
                           onChange={(e) => setSpeakingTimeStr(e.target.value)}
                           className={`w-14 ${numClass}`} />
-                        <span className="text-[#6A5A4A] text-sm">sec</span>
+                        <span className="text-[#6A5A4A] text-sm">{t('motions_sec')}</span>
                       </div>
                       <span className="text-xs text-[#9A8A78]">
-                        Total ≈ {speakingTime > 0 ? Math.ceil((presentCountries.length * speakingTime) / 60) : 0}m
+                        {t('motions_total_approx', { n: speakingTime > 0 ? Math.ceil((presentCountries.length * speakingTime) / 60) : 0 })}
                       </span>
                     </div>
                     <div className="flex gap-2 mt-1.5">
@@ -290,24 +287,24 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-semibold text-[#6A5A4A] mb-1">Speaking order</label>
+                    <label className="block text-sm font-semibold text-[#6A5A4A] mb-1">{t('motions_speaking_order')}</label>
                     <div className="flex gap-3">
                       <button onClick={() => setTourOrder('asc')}
                         className={`flex-1 py-2 rounded-xl font-bold text-sm transition-colors focus:outline-none ${tourOrder === 'asc' ? 'bg-[#1B3828] text-white' : 'bg-transparent border border-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
-                        A → Z
+                        {t('motions_az')}
                       </button>
                       <button onClick={() => setTourOrder('desc')}
                         className={`flex-1 py-2 rounded-xl font-bold text-sm transition-colors focus:outline-none ${tourOrder === 'desc' ? 'bg-[#1B3828] text-white' : 'bg-transparent border border-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
-                        Z → A
+                        {t('motions_za')}
                       </button>
                       <button onClick={() => setTourOrder('custom')}
                         className={`flex-1 py-2 rounded-xl font-bold text-sm transition-colors focus:outline-none ${tourOrder === 'custom' ? 'bg-[#1B3828] text-white' : 'bg-transparent border border-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
-                        Room Order
+                        {t('motions_room_order')}
                       </button>
                     </div>
                     <div style={{ height: '32px', display: 'flex', alignItems: 'center' }}>
                       {tourOrder === 'custom' && (
-                        <p className="text-xs text-[#9A8A78] leading-relaxed">Follows the physical room order. Call each speaker manually — the chair decides who goes next based on seating.</p>
+                        <p className="text-xs text-[#9A8A78] leading-relaxed">{t('motions_room_order_hint')}</p>
                       )}
                     </div>
                   </div>
@@ -318,19 +315,19 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
             {/* Unmoderated / Consultation — total time */}
             {(type === 'unmoderated' || type === 'consultation') && (
               <div>
-                <label className="block text-lg font-semibold text-[#6A5A4A] mb-2">Total time</label>
+                <label className="block text-lg font-semibold text-[#6A5A4A] mb-2">{t('motions_total_time_label')}</label>
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-2 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-3 py-2.5">
                     <input type="number" min={0} value={totalMinsStr}
                       onChange={(e) => setTotalMinsStr(e.target.value)}
                       className={`w-12 ${numClass}`} />
-                    <span className="text-[#6A5A4A] text-sm">min</span>
+                    <span className="text-[#6A5A4A] text-sm">{t('motions_min')}</span>
                   </div>
                   <div className="flex items-center gap-2 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-3 py-2.5">
                     <input type="number" min={0} max={59} value={totalSecsStr}
                       onChange={(e) => setTotalSecsStr(e.target.value)}
                       className={`w-12 ${numClass}`} />
-                    <span className="text-[#6A5A4A] text-sm">sec</span>
+                    <span className="text-[#6A5A4A] text-sm">{t('motions_sec')}</span>
                   </div>
                 </div>
                 <div className="flex gap-2 mt-2">
@@ -348,31 +345,31 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
             {type === 'moderated' && (
               <>
                 <div>
-                  <label className="block text-lg font-semibold text-[#6A5A4A] mb-2">Topic <span className="text-[#8B2020]">*</span></label>
+                  <label className="block text-lg font-semibold text-[#6A5A4A] mb-2">{t('motions_topic_label')} <span className="text-[#8B2020]">*</span></label>
                   <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)}
-                    placeholder="e.g. Humanitarian response in conflict zones"
+                    placeholder={language === 'es' ? 'ej. Respuesta humanitaria en zonas de conflicto' : 'e.g. Humanitarian response in conflict zones'}
                     className="w-full bg-[#FAF8F3] border-2 border-[#DDD4C0] rounded-xl px-4 py-4 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] transition-colors" />
                 </div>
                 <div>
-                  <label className="block text-lg font-semibold mb-2" style={{ color: '#3D7A52' }}>Proposed by</label>
+                  <label className="block text-lg font-semibold mb-2" style={{ color: '#3D7A52' }}>{t('motions_proposed_by')}</label>
                   <ProposerInput candidates={presentCountries} value={proposer} onChange={setProposer} blockedCountries={countriesWithMotions} />
                 </div>
                 {/* Total time + speaking time — side by side to avoid scroll */}
                 <div className="flex gap-4 items-start">
                   <div className="flex-1">
-                    <label className="block text-sm font-semibold text-[#6A5A4A] mb-2">Total time</label>
+                    <label className="block text-sm font-semibold text-[#6A5A4A] mb-2">{t('motions_total_time_label')}</label>
                     <div className="flex items-center gap-2">
                       <div className="flex items-center gap-1.5 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-3 py-2">
                         <input type="number" min={0} value={totalMinsStr}
                           onChange={(e) => setTotalMinsStr(e.target.value)}
                           className={`w-10 ${numClassSm}`} />
-                        <span className="text-[#6A5A4A] text-xs">min</span>
+                        <span className="text-[#6A5A4A] text-xs">{t('motions_min')}</span>
                       </div>
                       <div className="flex items-center gap-1.5 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-3 py-2">
                         <input type="number" min={0} max={59} value={totalSecsStr}
                           onChange={(e) => setTotalSecsStr(e.target.value)}
                           className={`w-10 ${numClassSm}`} />
-                        <span className="text-[#6A5A4A] text-xs">sec</span>
+                        <span className="text-[#6A5A4A] text-xs">{t('motions_sec')}</span>
                       </div>
                     </div>
                     <div className="flex gap-1.5 mt-2 flex-wrap">
@@ -385,12 +382,12 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
                     </div>
                   </div>
                   <div className="flex-1">
-                    <label className="block text-sm font-semibold text-[#6A5A4A] mb-2">Per delegate</label>
+                    <label className="block text-sm font-semibold text-[#6A5A4A] mb-2">{t('motions_per_delegate')}</label>
                     <div className="flex items-center gap-1.5 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-3 py-2 w-fit">
                       <input type="number" min={0} value={speakingTimeStr}
                         onChange={(e) => setSpeakingTimeStr(e.target.value)}
                         className={`w-12 ${numClassSm}`} />
-                      <span className="text-[#6A5A4A] text-xs">sec</span>
+                      <span className="text-[#6A5A4A] text-xs">{t('motions_sec')}</span>
                     </div>
                     <div className="flex gap-1.5 mt-2 flex-wrap">
                       {[30, 45, 60, 90, 120].map((t) => (
@@ -403,9 +400,9 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
                     {speakerCount !== null && (
                       <div className="mt-3 rounded-lg bg-white border border-[#DDD4C0] px-3 py-2 inline-flex items-baseline gap-1.5">
                         <span className="font-black text-xl leading-tight" style={{ color: '#1B3828' }}>{speakerCount}</span>
-                        <span className="text-sm font-semibold" style={{ color: '#6A5A4A' }}>{speakerCount === 1 ? 'delegate' : 'delegates'} can speak</span>
+                        <span className="text-sm font-semibold" style={{ color: '#6A5A4A' }}>{speakerCount === 1 ? t('motions_delegate_speak').replace('{s}', t('motions_delegate_singular')) : t('motions_delegate_speak').replace('{s}', t('motions_delegate_plural'))}</span>
                         {unusedSecs > 0 && (
-                          <span className="text-xs font-semibold ml-1" style={{ color: '#B8844A' }}>({unusedSecs}s unused)</span>
+                          <span className="text-xs font-semibold ml-1" style={{ color: '#B8844A' }}>{t('motions_unused_secs').replace('{n}', String(unusedSecs))}</span>
                         )}
                       </div>
                     )}
@@ -421,13 +418,13 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
         <div className="px-7 pb-7 pt-3 border-t border-white/10 shrink-0">
           {belowQuorum && (
             <div className="mb-4 p-3 bg-[#8B2020]/20 border border-[#8B2020]/40 rounded-xl text-xs text-[#8B2020]">
-              ⚠️ Quorum not met. Motions cannot be raised until the required number of delegates are present.
+              ⚠️ {t('motions_quorum_warning')}
             </div>
           )}
           {error && <p className="text-[#8B2020] text-sm font-medium mb-3">{error}</p>}
           <button onClick={submit} disabled={!canSubmit() || belowQuorum}
             className="w-full bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white py-5 rounded-2xl text-base font-black transition-colors focus:outline-none" style={{ letterSpacing: '0.05em' }}>
-            {editingMotion ? 'EDIT MOTION →' : 'RAISE MOTION →'}
+            {editingMotion ? t('motions_edit_btn') : t('motions_raise_btn')}
           </button>
         </div>
       )}
@@ -446,6 +443,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
   onEdit: (motionId: string) => void;
   pendingIds: Set<string>;
 }) {
+  const t = useT();
   // Filter out join-request pseudo-motions — those are handled in the chair banner, not here
   const initialSorted = [...(committee.pendingMotions ?? [])]
     .filter((m) => m.type !== ('join-request' as string))
@@ -483,8 +481,8 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
   if (order.length === 0) {
     return (
       <div className="px-7 pb-7 text-center py-8">
-        <p className="text-[#6A5A4A]">No motions to vote on.</p>
-        <button onClick={onAllDone} className="mt-4 text-sm text-[#B6871F] hover:text-[#EED98A]">← Back</button>
+        <p className="text-[#6A5A4A]">{t('motions_no_vote')}</p>
+        <button onClick={onAllDone} className="mt-4 text-sm text-[#B6871F] hover:text-[#EED98A]">{t('motions_back')}</button>
       </div>
     );
   }
@@ -535,7 +533,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
         {/* Topic inline */}
         {m.topic && (
           <p className={`${large ? 'text-2xl' : 'text-base'} font-semibold`} style={{ color: '#1C1410' }}>
-            <span className="font-bold" style={{ color: '#1B3828' }}>Topic: </span>{m.topic}
+            <span className="font-bold" style={{ color: '#1B3828' }}>{t('motions_topic_inline')} </span>{m.topic}
           </p>
         )}
 
@@ -543,19 +541,19 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
         {m.type !== 'tour' && m.totalTime > 0 && (
           <div className="flex flex-col gap-0.5">
             <p className={`${large ? 'text-sm' : 'text-xs'}`} style={{ color: '#1C1410' }}>
-              <span className="font-semibold" style={{ color: '#1B3828' }}>Total Time: </span>
+              <span className="font-semibold" style={{ color: '#1B3828' }}>{t('motions_total_time_display')} </span>
               <span className="font-black">{fmtTime(totalMins, totalSecs)}</span>
             </p>
             {m.type === 'moderated' && m.speakingTime > 0 && (
               <p className={`${large ? 'text-sm' : 'text-xs'}`} style={{ color: '#1C1410' }}>
-                <span className="font-semibold" style={{ color: '#1B3828' }}>Speaker Time: </span>
+                <span className="font-semibold" style={{ color: '#1B3828' }}>{t('motions_speaker_time_display')} </span>
                 <span className="font-black">{fmtTime(speakMins, speakSecs)}</span>
               </p>
             )}
             {m.type === 'moderated' && m.speakingTime > 0 && m.totalTime > 0 && (
               <p className={`${large ? 'text-sm' : 'text-xs'}`} style={{ color: '#1C1410' }}>
-                <span className="font-semibold" style={{ color: '#1B3828' }}>Total Speakers: </span>
-                <span className="font-black">{Math.floor(m.totalTime / m.speakingTime)} {Math.floor(m.totalTime / m.speakingTime) === 1 ? 'speaker' : 'speakers'}{m.totalTime % m.speakingTime !== 0 ? ' ⚠' : ''}</span>
+                <span className="font-semibold" style={{ color: '#1B3828' }}>{t('motions_total_speakers_display')} </span>
+                <span className="font-black">{Math.floor(m.totalTime / m.speakingTime)} {Math.floor(m.totalTime / m.speakingTime) === 1 ? t('motions_speaker_singular') : t('motions_speaker_plural')}{m.totalTime % m.speakingTime !== 0 ? ' ⚠' : ''}</span>
               </p>
             )}
           </div>
@@ -563,7 +561,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
         {m.type === 'tour' && (
           <div className="flex items-center gap-2">
             <span className={`font-black ${large ? 'text-base text-[#1C1410]' : 'text-xs text-[#6A5A4A]'}`}>
-              {fmtTime(0, m.speakingTime)} / delegate
+              {fmtTime(0, m.speakingTime)} {t('motions_per_delegate')}
             </span>
             <span className={`${large ? 'text-sm' : 'text-xs'} text-[#9A8A78]`}>
               {m.tourOrder === 'desc' ? 'Z→A' : m.tourOrder === 'custom' ? 'Custom' : 'A→Z'}
@@ -573,8 +571,8 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
 
         {/* Required votes */}
         <div className="flex items-center gap-2 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-3 py-1.5">
-          <span className="text-xs font-semibold" style={{ color: '#1B3828' }}>{fraction}</span>
-          <span className="text-xs font-bold ml-auto" style={{ color: '#1C1410' }}>Needs {needed} of {present}</span>
+          <span className="text-xs font-semibold" style={{ color: '#1B3828' }}>{fraction === 'Simple majority' ? t('motions_simple_majority') : t('motions_supermajority')}</span>
+          <span className="text-xs font-bold ml-auto" style={{ color: '#1C1410' }}>{t('motions_needs_votes', { needed, present })}</span>
         </div>
 
         {/* Accept/Reject/Edit — ONLY on the primary (idx===0) card being voted upon */}
@@ -582,17 +580,17 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
           <div className="flex gap-2 mt-auto">
             <button onClick={() => onAccepted(m)}
               className="flex-1 bg-[#2A5A3C] hover:bg-[#3D7A52] text-white py-2.5 rounded-xl font-bold text-sm transition-colors focus:outline-none" style={{ fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}>
-              ✓ ACCEPT
+              {t('motions_accept_btn')}
             </button>
             <button onClick={() => onRemove(m.id)}
               disabled={pendingIds.has(m.id)}
               className={`flex-1 bg-[#DDD4C0] hover:bg-red-950/40 hover:text-[#8B2020] text-[#6A5A4A] border border-[#DDD4C0] hover:border-[#8B2020]/40 py-2.5 rounded-xl font-bold text-sm transition-colors focus:outline-none ${pendingIds.has(m.id) ? 'opacity-40 cursor-not-allowed' : ''}`} style={{ fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}>
-              ✗ REJECT
+              {t('motions_reject_btn')}
             </button>
             <button onClick={(e) => { e.stopPropagation(); onEdit(m.id); }}
               title="Edit motion"
               className="bg-[#B6871F]/20 hover:bg-[#B6871F]/40 border border-[#B6871F]/50 hover:border-[#B6871F] text-[#B6871F] py-2.5 px-4 rounded-xl font-bold text-sm transition-colors shrink-0 focus:outline-none" style={{ fontFamily: "'DM Mono', monospace" }}>
-              EDIT
+              {t('motions_edit_label')}
             </button>
           </div>
         )}
@@ -603,10 +601,10 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
   return (
     <div className="px-7 pb-7 space-y-3 flex flex-col h-full overflow-hidden">
       <div className="flex items-center shrink-0">
-        <h2 className="text-3xl font-black" style={{ color: '#1B3828' }}>VOTE ON MOTIONS</h2>
+        <h2 className="text-3xl font-black" style={{ color: '#1B3828' }}>{t('motions_vote_heading')}</h2>
       </div>
       <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs shrink-0 font-semibold" style={{ backgroundColor: '#1B3828', color: '#EED98A' }}>
-        <span>Drag motions to reorder them. Most disruptive is voted on first by default.</span>
+        <span>{t('motions_drag_hint')}</span>
       </div>
       <div className="flex gap-4 flex-1 min-h-0">
         {/* Left column — primary motion being voted on */}
@@ -621,7 +619,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
             className="w-full bg-[#2A5A3C] hover:bg-[#3D7A52] text-white py-3 rounded-2xl font-black text-sm transition-colors shrink-0 focus:outline-none"
             style={{ letterSpacing: '0.05em' }}
           >
-            + RAISE A MOTION
+            {t('motions_raise_motion_btn')}
           </button>
         </div>
       </div>
@@ -636,8 +634,17 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
   onCommitteeUpdate?: (updater: (c: Committee) => Committee) => void;
   belowQuorum?: boolean;
 }) {
-  const { getSettings } = useSettingsStore();
-  const motionNames = { ...DEFAULT_MOTION_NAMES, ...(getSettings(committee.code).motionNames ?? {}) };
+  const t = useT();
+  const { language } = useLanguage();
+  const DEFAULT_MOTION_NAMES_LOCALIZED = language === 'es' ? {
+    moderated: 'Cáucus Moderado',
+    unmoderated: 'Cáucus No Moderado',
+    consultation: 'Consulta de Gabinete',
+    tour: 'Round Robin',
+    suspendDebate: 'Suspender Debate',
+    endDebate: 'Cerrar Debate',
+  } : DEFAULT_MOTION_NAMES;
+  const motionNames = { ...DEFAULT_MOTION_NAMES_LOCALIZED };
   const typeMeta = buildTypeMeta(motionNames);
   const pending = [...(committee.pendingMotions ?? [])].filter((m) => m.type !== ('join-request' as string)).sort((a, b) => b.disruptiveness - a.disruptiveness);
   const [view, setView] = useState<ModalView>(pending.length === 0 ? 'raise' : 'vote');
@@ -853,9 +860,9 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
     return (
       <div className="fixed inset-0 z-[60] bg-[#F6F1E9] flex flex-col items-center justify-center text-center px-8">
         <p className="text-xs font-mono tracking-widest text-[#9A8A78] mb-6">
-          {typeMeta[specialVoteMotion.type].label.toUpperCase()} · {specialVoteMotion.proposedBy}
+          {typeMeta[specialVoteMotion.type].label.toUpperCase()} · {getCountryDisplayName(specialVoteMotion.proposedBy, language)}
         </p>
-        <h1 className="text-4xl font-black mb-14 tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>DOES THIS MOTION PASS?</h1>
+        <h1 className="text-4xl font-black mb-14 tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{t('motions_does_pass')}</h1>
         <div className="flex gap-8">
           <button
             onClick={async () => {
@@ -879,7 +886,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
             className="px-16 py-8 rounded-3xl text-white text-2xl font-black transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}>
-            YES
+            {t('motions_yes')}
           </button>
           <button
             onClick={() => {
@@ -892,7 +899,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
             className="px-16 py-8 rounded-3xl text-white text-2xl font-black transition-colors focus:outline-none" style={{ backgroundColor: '#8B2020', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#7A1C1C'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#8B2020'; }}>
-            NO
+            {t('motions_no')}
           </button>
         </div>
       </div>
@@ -932,16 +939,16 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
           )}
           {view === 'list' && (
             <div className="px-7 pb-7 space-y-4">
-              <h2 className="text-3xl font-black text-[#1C1410]">Motions</h2>
+              <h2 className="text-3xl font-black text-[#1C1410]">{t('motions_title')}</h2>
               {pending.length === 0 ? (
                 <div className="text-center py-8">
                   <div className="mb-3"><Emoji size="2.5rem">📋</Emoji></div>
-                  <p className="text-[#6A5A4A]">No motions raised yet.</p>
-                  <p className="text-sm text-[#9A8A78] mt-1">The floor is open — invite delegates to raise motions.</p>
+                  <p className="text-[#6A5A4A]">{t('motions_no_raised')}</p>
+                  <p className="text-sm text-[#9A8A78] mt-1">{t('motions_floor_open')}</p>
                 </div>
               ) : (
                 <div className="space-y-2">
-                  <p className="text-xs text-[#9A8A78] font-mono">RANKED — MOST DISRUPTIVE FIRST</p>
+                  <p className="text-xs text-[#9A8A78] font-mono">{t('motions_ranked')}</p>
                   {pending.map((m, i) => {
                     const meta = typeMeta[m.type];
                     const mins = Math.floor(m.totalTime / 60);
@@ -959,24 +966,24 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
                             </div>
                             <div className="flex items-center gap-1.5 mt-1">
                               {proposerFlag ? <img src={getFlagUrl(proposerFlag.code)} alt={proposerFlag.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <Emoji size="1rem">🌐</Emoji>}
-                              <span className="text-sm font-semibold text-[#1C1410]">{m.proposedBy}</span>
+                              <span className="text-sm font-semibold text-[#1C1410]">{getCountryDisplayName(m.proposedBy, language)}</span>
                             </div>
                             {m.topic && <p className="text-sm text-[#6A5A4A] mt-1 font-medium">"{m.topic}"</p>}
                             <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                               {m.type !== 'tour' && m.totalTime > 0 && (
                                 <span className="text-xs font-bold text-[#1B3828] bg-[#FAF8F3] border border-[#DDD4C0] px-2 py-0.5 rounded-md">
-                                  {mins > 0 ? `${mins}m` : ''}{secs > 0 ? ` ${secs}s` : ''} total
+                                  {mins > 0 ? `${mins}m` : ''}{secs > 0 ? ` ${secs}s` : ''} {t('motions_total_label')}
                                 </span>
                               )}
                               {m.type === 'moderated' && m.speakingTime > 0 && (
                                 <span className="text-xs font-bold text-[#2A5A3C] bg-[#FAF8F3] border border-[#DDD4C0] px-2 py-0.5 rounded-md">
-                                  {m.speakingTime}s/speaker
+                                  {m.speakingTime}{t('motions_s_per_speaker')}
                                 </span>
                               )}
                               {m.type === 'tour' && (
                                 <>
                                   <span className="text-xs font-bold text-[#1B3828] bg-[#FAF8F3] border border-[#DDD4C0] px-2 py-0.5 rounded-md">
-                                    {m.speakingTime}s/delegate
+                                    {m.speakingTime}{t('motions_s_per_delegate')}
                                   </span>
                                   <span className="text-xs font-bold text-[#6A5A4A] bg-[#FAF8F3] border border-[#DDD4C0] px-2 py-0.5 rounded-md">
                                     {m.tourOrder === 'desc' ? 'Z→A' : 'A→Z'}
@@ -995,12 +1002,12 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
               <div className="flex gap-3 pt-2">
                 <button onClick={() => setView('raise')}
                   className="flex-1 bg-[#EDE7D8] hover:bg-[#DDD4C0] border border-[#DDD4C0] hover:border-[#1B3828] text-[#1C1410] py-3.5 rounded-2xl font-bold transition-all">
-                  + Raise Motion
+                  {t('motions_raise_list_btn')}
                 </button>
                 {pending.length > 0 && (
                   <button onClick={() => setView('vote')}
                     className="flex-1 bg-[#1B3828] hover:bg-[#2A5A3C] text-white py-3.5 rounded-2xl font-black transition-colors">
-                    Vote on Motions →
+                    {t('motions_vote_list_btn')}
                   </button>
                 )}
               </div>
