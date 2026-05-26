@@ -966,7 +966,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
                             </div>
                             <div className="flex items-center gap-1.5 mt-1">
                               {proposerFlag ? <img src={getFlagUrl(proposerFlag.code)} alt={proposerFlag.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <Emoji size="1rem">🌐</Emoji>}
-                              <span className="text-sm font-semibold text-[#1C1410]">{m.proposedBy}</span>
+                              <span className="text-sm font-semibold text-[#1C1410]">{getCountryDisplayName(m.proposedBy, language)}</span>
                             </div>
                             {m.topic && <p className="text-sm text-[#6A5A4A] mt-1 font-medium">"{m.topic}"</p>}
                             <div className="flex items-center gap-2 mt-1.5 flex-wrap">

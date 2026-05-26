@@ -542,7 +542,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
               {getCountryDisplayName(currentDelegate.country, language)}
             </h1>
             <p className="text-[#9A8A78] text-sm">
-              {currentVoterIndex + 1}{language === 'es' ? ' de ' : ' of '}{presentDelegates.length}
+              {currentVoterIndex + 1} / {presentDelegates.length}
             </p>
           </div>
 
@@ -558,7 +558,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
               onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'for-rights')}
               className="flex-1 bg-[#1B5C2E] hover:bg-[#2A7A3C] border border-[#3D7A52] text-[#EED98A] font-black text-sm py-6 rounded-2xl transition-colors leading-snug"
             >
-              {t('voting_in_favour')}<br />{language === 'es' ? 'con Derechos' : 'with Rights'}
+              {t('voting_in_favour')}<br />{t('voting_with_rights_label')}
             </button>
             {(rollCallStatuses[currentDelegate.id] ?? currentDelegate.status) === 'present' ? (
               <button
@@ -576,7 +576,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
               onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'against-rights')}
               className="flex-1 bg-[#7A2020] hover:bg-[#8B3030] border border-[#7A2020] text-[#EED98A] font-black text-sm py-6 rounded-2xl transition-colors leading-snug"
             >
-              {t('voting_against')}<br />{language === 'es' ? 'con Derechos' : 'with Rights'}
+              {t('voting_against')}<br />{t('voting_with_rights_label')}
             </button>
             <button
               onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'against')}
