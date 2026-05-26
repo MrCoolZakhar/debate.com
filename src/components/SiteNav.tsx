@@ -4,14 +4,14 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/components/AuthProvider';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage, useT } from '@/contexts/LanguageContext';
 import { Globe } from 'lucide-react';
 
-const NAV_LINKS = [
-  { label: 'SESSIONS', href: '/' },
-  { label: 'CONFERENCES', href: '/conferences' },
-  { label: 'ABOUT US', href: '/about' },
-  { label: 'CONTACT', href: '/contact' },
+const NAV_LINKS_CONFIG = [
+  { en: 'SESSIONS',    es: 'SESIONES',     href: '/' },
+  { en: 'CONFERENCES', es: 'CONFERENCIAS', href: '/conferences' },
+  { en: 'ABOUT US',    es: 'NOSOTROS',     href: '/about' },
+  { en: 'CONTACT',     es: 'CONTÁCTANOS',  href: '/contact' },
 ];
 
 interface SiteNavProps {
@@ -30,6 +30,8 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
 
   const { user, profile, signOut, loading } = useAuth();
   const { language, setLanguage } = useLanguage();
+  const t = useT();
+  const navLinks = NAV_LINKS_CONFIG.map(l => ({ label: l[language], href: l.href }));
 
   useEffect(() => {
     function handleMouseDown(e: MouseEvent) {
@@ -75,7 +77,7 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
 
         {/* Desktop nav links */}
         <div className="hidden md:flex items-center">
-          {NAV_LINKS.map((link, i) => {
+          {navLinks.map((link, i) => {
             const active = pathname === link.href;
             const hl = hovered === link.label;
             return (
@@ -182,7 +184,7 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
                     onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
                     onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                   >
-                    {lang === 'en' ? 'English' : 'Español'}
+                    {lang === 'en' ? t('settings_english') : t('settings_spanish')}
                     {language === lang && <span className="ml-1" style={{ color: '#B6871F' }}>✓</span>}
                   </button>
                 ))}
@@ -397,7 +399,7 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
         }}
       >
         <div className="flex flex-col px-6 py-4 gap-1">
-          {NAV_LINKS.map((link) => {
+          {navLinks.map((link) => {
             const active = pathname === link.href;
             return (
               <Link
@@ -441,7 +443,7 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
                   cursor: 'pointer',
                 }}
               >
-                {lang === 'en' ? 'EN — English' : 'ES — Español'}
+                {lang === 'en' ? `EN — ${t('settings_english')}` : `ES — ${t('settings_spanish')}`}
               </button>
             ))}
           </div>

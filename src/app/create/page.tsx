@@ -5,10 +5,12 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createCommittee as createCommitteeInDB } from '@/lib/committeeService';
 import { useSettingsStore } from '@/lib/settingsStore';
-import { UN_COUNTRIES, getFlagUrl, getCountryByName } from '@/lib/countries';
+import { UN_COUNTRIES, getFlagUrl, getCountryByName, getCountryDisplayName, matchesSearch } from '@/lib/countries';
 import { UNSC_MEMBERS, WHO_MEMBERS, IMF_MEMBERS, WORLD_BANK_MEMBERS, UNEP_MEMBERS } from '@/lib/presets';
 import { Globe, PenLine, ChevronLeft } from 'lucide-react';
 import { FlagImg } from '@/components/FlagImg';
+import { useT, useLanguage } from '@/contexts/LanguageContext';
+import { getCommitteeDisplayName } from '@/lib/presetNames';
 
 const COMMITTEE_PRESETS = [
   { name: 'UN Security Council', acronym: 'UNSC', logoPath: '/logos/un.svg', members: UNSC_MEMBERS },
@@ -26,6 +28,32 @@ const COMMITTEE_PRESETS = [
   { name: 'Arab League', acronym: 'LAS', logoPath: '/logos/arab-league.png', members: ['Algeria','Bahrain','Comoros','Djibouti','Egypt','Iraq','Jordan','Kuwait','Lebanon','Libya','Mauritania','Morocco','Oman','Palestine','Qatar','Saudi Arabia','Somalia','Sudan','Syria','Tunisia','United Arab Emirates','Yemen'] },
   { name: 'ASEAN', acronym: 'ASEAN', logoPath: '/logos/asean.png', members: ['Brunei','Cambodia','Indonesia','Laos','Malaysia','Myanmar','Philippines','Singapore','Thailand','Timor-Leste','Vietnam'] },
 ];
+
+function getPresetDisplayName(name: string, lang: string): string {
+  return getCommitteeDisplayName(name, lang);
+}
+
+const PRESET_ACRONYM_ES: Record<string, string> = {
+  'UN Security Council': 'CSNU',
+  'UN Environment Programme': 'PNUMA',
+  'World Health Organization': 'OMS',
+  'International Monetary Fund': 'FMI',
+  'World Bank': 'BM',
+  'UN General Assembly': 'AGNU',
+  'UN Human Rights Council': 'CDHNU',
+  'Economic and Social Council': 'ECOSOC',
+  'NATO': 'OTAN',
+  'G20': 'G20',
+  'European Union': 'UE',
+  'African Union': 'UA',
+  'Arab League': 'LA',
+  'ASEAN': 'ASEAN',
+};
+
+function getPresetAcronym(name: string, lang: string): string {
+  if (lang === 'es') return PRESET_ACRONYM_ES[name] ?? '';
+  return '';
+}
 
 const BUNDLES: Record<string, { label: string; acronym: string; logoPath?: string; members: string[] }> = {
   P5:         { label: 'P5',          acronym: 'UNSC', logoPath: '/logos/un.svg',            members: ['China', 'France', 'Russia', 'United Kingdom', 'United States'] },
@@ -69,13 +97,22 @@ function CommitteeNameInput({ value, onChange, onPresetSelect }: {
   onChange: (v: string) => void;
   onPresetSelect: (preset: typeof COMMITTEE_PRESETS[0]) => void;
 }) {
+  const { language } = useLanguage();
   const [open, setOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const matches = value.trim()
-    ? COMMITTEE_PRESETS.filter((p) =>
-        p.name.toLowerCase().includes(value.toLowerCase()) ||
-        p.acronym.toLowerCase().includes(value.toLowerCase()))
+    ? COMMITTEE_PRESETS.filter((p) => {
+        const v = value.toLowerCase();
+        const esName = getPresetDisplayName(p.name, language).toLowerCase();
+        const esAcronym = getPresetAcronym(p.name, language).toLowerCase();
+        return (
+          p.name.toLowerCase().includes(v) ||
+          p.acronym.toLowerCase().includes(v) ||
+          esName.includes(v) ||
+          (esAcronym && esAcronym.includes(v))
+        );
+      })
     : [];
   const topMatch = matches[0] ?? null;
 
@@ -96,7 +133,7 @@ function CommitteeNameInput({ value, onChange, onPresetSelect }: {
           }
           if (e.key === 'Escape') setOpen(false);
         }}
-        placeholder="e.g. Human Rights Council or HRC"
+        placeholder={language === 'es' ? 'ej. Consejo de Seguridad o CSNU' : 'e.g. Human Rights Council or HRC'}
         className="w-full bg-white/70 border border-[#C8BAA8] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] focus:ring-2 focus:ring-[#1B3828]/10 transition-all text-sm"
       />
       {open && matches.length > 0 && (
@@ -115,8 +152,8 @@ function CommitteeNameInput({ value, onChange, onPresetSelect }: {
               ) : (
                 <div className="w-[22px] h-[22px] rounded-md shrink-0" style={{ backgroundColor: 'rgba(27,56,40,0.08)' }} />
               )}
-              <span className="text-sm flex-1">{p.name}</span>
-              <span className="text-[10px] font-bold shrink-0" style={{ fontFamily: "'DM Mono', monospace", color: '#1B3828' }}>{p.acronym}</span>
+              <span className="text-sm flex-1">{getPresetDisplayName(p.name, language)}</span>
+              <span className="text-[10px] font-bold shrink-0" style={{ fontFamily: "'DM Mono', monospace", color: '#1B3828' }}>{language === 'es' ? (getPresetAcronym(p.name, language) || p.acronym) : p.acronym}</span>
               {i === 0 && <span className="text-[10px] shrink-0" style={{ color: '#9A8A78' }}>↵</span>}
             </button>
           ))}
@@ -150,6 +187,8 @@ function CardVideo({ src, active }: { src: string; active: boolean }) {
 }
 
 function SelectScreen({ onSelect }: { onSelect: () => void }) {
+  const t = useT();
+  const { language } = useLanguage();
   const [hovered, setHovered] = React.useState<string | null>(null);
 
   React.useEffect(() => {
@@ -160,9 +199,9 @@ function SelectScreen({ onSelect }: { onSelect: () => void }) {
     {
       id: 'debate',
       video: '/card_debate.mp4',
-      title: 'Regular\nDebate',
-      subtitle: 'Traditional parliamentary debate format',
-      badge: 'Coming Soon',
+      title: language === 'es' ? <>Debate<br />Regular</> : <>Regular<br />Debate</>,
+      subtitle: t('create_debate_subtitle'),
+      badge: t('create_coming_soon'),
       active: false,
       bg: '#1B3828',
       border: 'rgba(182,135,31,0.5)',
@@ -175,8 +214,8 @@ function SelectScreen({ onSelect }: { onSelect: () => void }) {
     {
       id: 'mun',
       video: '/card_mun.mp4',
-      title: 'Model United\nNations',
-      subtitle: 'A UN committee, from opening speech to passed resolution',
+      title: language === 'es' ? <>Modelo de<br />Naciones Unidas</> : <>Model United<br />Nations</>,
+      subtitle: t('create_mun_subtitle'),
       badge: null,
       active: true,
       bg: '#1B3828',
@@ -190,9 +229,9 @@ function SelectScreen({ onSelect }: { onSelect: () => void }) {
     {
       id: 'crisis',
       video: '/card_crisis.mp4',
-      title: 'Crisis\nCommittee',
-      subtitle: 'Fast-paced crisis scenarios and directives',
-      badge: 'Coming Late 2026',
+      title: language === 'es' ? <>Comité de<br />Crisis</> : <>Crisis<br />Committee</>,
+      subtitle: t('create_crisis_subtitle'),
+      badge: t('create_coming_h2'),
       active: false,
       bg: '#1B3828',
       border: 'rgba(182,135,31,0.5)',
@@ -231,7 +270,7 @@ function SelectScreen({ onSelect }: { onSelect: () => void }) {
         className="font-black uppercase tracking-wide text-center mb-4 relative"
         style={{ fontSize: 'clamp(30px, 3.8vw, 52px)', lineHeight: 1.05, color: '#1B3828' }}
       >
-        Select Committee Type
+        {t('create_select_type')}
       </h1>
 
       {/* Subtitle */}
@@ -239,7 +278,7 @@ function SelectScreen({ onSelect }: { onSelect: () => void }) {
         className="text-center mb-12 relative"
         style={{ fontSize: '16px', color: '#6A5A4A', maxWidth: '560px', lineHeight: 1.65, whiteSpace: 'nowrap' }}
       >
-        Choose a format to get started. More committee types arriving soon.
+        {t('create_choose_format')}
       </p>
 
       {/* Cards row */}
@@ -347,7 +386,7 @@ function SelectScreen({ onSelect }: { onSelect: () => void }) {
                         (e.currentTarget as HTMLElement).style.boxShadow = 'none';
                       }}
                     >
-                      START →
+                      {t('create_start')}
                     </button>
                   ) : (
                     <span
@@ -373,6 +412,8 @@ function SelectScreen({ onSelect }: { onSelect: () => void }) {
 }
 
 function CreatePageInner() {
+  const t = useT();
+  const { language, setLanguage } = useLanguage();
   const router = useRouter();
   const { updateSetting } = useSettingsStore();
   const [chairNames, setChairNames] = useState<string[]>(['']);
@@ -410,7 +451,7 @@ function CreatePageInner() {
   const canProceed = committeeName.trim() && topic.trim();
 
   const available = UN_COUNTRIES.filter(
-    (c) => !delegates.includes(c.name) && c.name.toLowerCase().includes(search.toLowerCase())
+    (c) => !delegates.includes(c.name) && matchesSearch(c, search, language)
   );
 
   const addDelegate = (name: string) => {
@@ -433,7 +474,7 @@ function CreatePageInner() {
       else if (!found) unmatched.push(line);
     }
     setDelegates((p) => [...p, ...matched]);
-    setPasteError(unmatched.length > 0 ? `Could not match: ${unmatched.join(', ')}` : '');
+    setPasteError(unmatched.length > 0 ? (language === 'es' ? `No se pudo coincidir: ${unmatched.join(', ')}` : `Could not match: ${unmatched.join(', ')}`) : '');
     setPasteText('');
   };
 
@@ -460,6 +501,37 @@ function CreatePageInner() {
         <Link href="/">
           <img src="/GavellingLogo.png" alt="Gavelling" className="h-10 w-auto object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
         </Link>
+        {/* Language toggle — mirrors SiteNav style */}
+        <div className="relative ml-auto">
+          <span
+            className="absolute right-0 z-10 pointer-events-none"
+            style={{
+              top: '-8px',
+              backgroundColor: '#1B3828',
+              color: '#EED98A',
+              border: '1.5px solid rgba(238,217,138,0.55)',
+              borderRadius: '5px',
+              padding: '0px 4px',
+              fontSize: '7px',
+              fontWeight: 900,
+              letterSpacing: '0.08em',
+              whiteSpace: 'nowrap',
+              lineHeight: '13px',
+            }}
+          >✨ NEW</span>
+          <div className="flex rounded-lg overflow-hidden" style={{ border: '1.5px solid #C8BAA8' }}>
+            <button
+              onClick={() => setLanguage('en')}
+              className="px-3 py-1.5 text-xs font-black transition-all focus:outline-none"
+              style={{ backgroundColor: language === 'en' ? '#1B3828' : 'transparent', color: language === 'en' ? '#EED98A' : '#6A5A4A' }}
+            >EN</button>
+            <button
+              onClick={() => setLanguage('es')}
+              className="px-3 py-1.5 text-xs font-black transition-all focus:outline-none"
+              style={{ backgroundColor: language === 'es' ? '#1B3828' : 'transparent', color: language === 'es' ? '#EED98A' : '#6A5A4A' }}
+            >ES</button>
+          </div>
+        </div>
       </nav>
 
       <div className="flex-1 flex overflow-hidden">
@@ -474,28 +546,28 @@ function CreatePageInner() {
                 onClick={() => setCommitteeMode('select')}
                 className="absolute left-0 flex items-center gap-2 px-3 py-2 rounded-xl bg-[#EDE7D8] border border-[#DDD4C0] hover:bg-[#DDD4C0] text-[#6A5A4A] hover:text-[#1C1410] text-xs font-bold uppercase tracking-wide transition-all"
               >
-                <ChevronLeft size={14} /> Back
+                <ChevronLeft size={14} /> {t('create_back')}
               </button>
-              <h1 className="text-4xl font-black uppercase tracking-wide mb-2" style={{ color: '#1B3828', letterSpacing: '0.06em' }}>New Committee</h1>
+              <h1 className="text-4xl font-black uppercase tracking-wide mb-2" style={{ color: '#1B3828', letterSpacing: '0.06em' }}>{t('create_new_committee').toUpperCase()}</h1>
             </div>
 
             <div className="grid grid-cols-3 gap-4 mb-3 shrink-0 mt-2">
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wide mb-1.5" style={{ color: '#1B3828' }}>Committee Name</label>
+                <label className="block text-xs font-bold uppercase tracking-wide mb-1.5" style={{ color: '#1B3828' }}>{t('create_committee_name')}</label>
                 <CommitteeNameInput value={committeeName} onChange={(v) => { setCommitteeName(v); setIsUNSC(false); }} onPresetSelect={handleCommitteePreset} />
               </div>
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wide mb-1.5" style={{ color: '#1B3828' }}>
-                  Chair Name <span className="font-normal" style={{ color: '#9A8A78' }}>(optional)</span>
+                  {t('create_chair_name')} <span className="font-normal" style={{ color: '#9A8A78' }}>{t('create_optional')}</span>
                 </label>
                 <input type="text" value={chairNames[0]} onChange={(e) => setChairNames([e.target.value])}
-                  placeholder="e.g. John Smith"
+                  placeholder={language === 'es' ? 'ej. Juan Pérez' : 'e.g. John Smith'}
                   className="w-full bg-white/70 border border-[#C8BAA8] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] focus:ring-2 focus:ring-[#1B3828]/10 transition-all text-sm" />
               </div>
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wide mb-1.5" style={{ color: '#1B3828' }}>Topic</label>
+                <label className="block text-xs font-bold uppercase tracking-wide mb-1.5" style={{ color: '#1B3828' }}>{t('create_topic')}</label>
                 <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)}
-                  placeholder="e.g. The right to education"
+                  placeholder={language === 'es' ? 'ej. El derecho a la educación' : 'e.g. The right to education'}
                   className="w-full bg-white/70 border border-[#C8BAA8] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] focus:ring-2 focus:ring-[#1B3828]/10 transition-all text-sm" />
               </div>
             </div>
@@ -503,7 +575,12 @@ function CreatePageInner() {
             {isUNSC && (
               <div className="mb-3 px-4 py-3 rounded-xl text-xs shrink-0 flex items-center gap-3" style={{ backgroundColor: '#1B3828', border: '1px solid #3D7A52', color: 'rgba(238,217,138,0.85)' }}>
                 <span className="font-black shrink-0 px-2 py-0.5 rounded-md text-[10px]" style={{ fontFamily: "'DM Mono', monospace", backgroundColor: 'rgba(238,217,138,0.15)', color: '#EED98A', border: '1px solid rgba(238,217,138,0.25)' }}>UNSC</span>
-                <span><strong style={{ color: '#EED98A' }}>Veto power active:</strong> P5 nations (China, France, Russia, UK, USA) will have veto voting. Customize in <strong style={{ color: '#EED98A' }}>Settings</strong> after session starts.</span>
+                <span>
+                  {language === 'es'
+                    ? <><strong style={{ color: '#EED98A' }}>Poder de Veto activado:</strong> Grupo P5 (China, Francia, Rusia, RU, EE.UU.) tendrán veto. Personaliza en <strong style={{ color: '#EED98A' }}>Configuraciones</strong> al iniciar la sesión.</>
+                    : <><strong style={{ color: '#EED98A' }}>Veto power active:</strong> P5 nations (China, France, Russia, UK, USA) will have veto voting. Customize in <strong style={{ color: '#EED98A' }}>Settings</strong> after session starts.</>
+                  }
+                </span>
               </div>
             )}
 
@@ -511,7 +588,7 @@ function CreatePageInner() {
               <div className="flex flex-col min-h-0">
                 {/* Search & Add — label row matches right column label row exactly */}
                 <div className="flex items-center justify-between mb-2 shrink-0">
-                  <label className="text-xs font-bold uppercase tracking-wide" style={{ color: '#1B3828' }}>Search &amp; Add</label>
+                  <label className="text-xs font-bold uppercase tracking-wide" style={{ color: '#1B3828' }}>{t('create_search_add')}</label>
                 </div>
                 <div className="shrink-0 mb-3">
                   <div className="relative">
@@ -525,7 +602,7 @@ function CreatePageInner() {
                           }
                           if (e.key === 'Escape') setSearch('');
                         }}
-                        placeholder="Search countries or add custom…"
+                        placeholder={t('create_search_placeholder')}
                         className="flex-1 bg-transparent px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none text-sm" />
                       {search && (available[0] || search.trim()) && (
                         <span className="text-xs text-[#9A8A78] px-3 shrink-0">↵ {available[0]?.name ?? search.trim()}</span>
@@ -537,7 +614,7 @@ function CreatePageInner() {
                           <button key={c.code} onMouseDown={(e) => { e.preventDefault(); addDelegate(c.name); setSearch(''); }}
                             className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${i === 0 ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'}`}>
                             <img src={getFlagUrl(c.code)} alt={c.code} className="w-6 h-6 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                            <span className="text-sm flex-1">{c.name}</span>
+                            <span className="text-sm flex-1">{getCountryDisplayName(c.name, language)}</span>
                             {i === 0 && <span className="ml-auto text-xs text-[#9A8A78]">Enter ↵</span>}
                           </button>
                         ))}
@@ -556,7 +633,7 @@ function CreatePageInner() {
 
                 {/* Quick Bundles */}
                 <div className="shrink-0 mb-3">
-                  <label className="block text-xs font-bold uppercase tracking-wide mb-2" style={{ color: '#1B3828' }}>Quick Bundles</label>
+                  <label className="block text-xs font-bold uppercase tracking-wide mb-2" style={{ color: '#1B3828' }}>{t('create_quick_bundles')}</label>
                   <div className="flex flex-wrap gap-2">
                     {Object.entries(BUNDLES).map(([key, bundle]) => (
                       <button key={key} onClick={() => addBundle(key)}
@@ -576,7 +653,7 @@ function CreatePageInner() {
 
                 {/* Paste Country List — flex-1 to fill remaining space, matching delegates box */}
                 <div className="flex-1 flex flex-col min-h-0">
-                  <label className="block text-xs font-bold uppercase tracking-wide mb-2" style={{ color: '#1B3828' }}>Paste Country List</label>
+                  <label className="block text-xs font-bold uppercase tracking-wide mb-2" style={{ color: '#1B3828' }}>{t('create_paste_list')}</label>
                   <textarea value={pasteText} onChange={(e) => { setPasteText(e.target.value); setPasteError(''); }}
                     placeholder={'France\nGermany\nBrazil, India...'}
                     className="flex-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] focus:ring-2 focus:ring-[#1B3828]/10 transition-all text-sm resize-none min-h-0" />
@@ -589,7 +666,7 @@ function CreatePageInner() {
                     style={{ backgroundColor: '#1B3828', color: '#EED98A' }}
                     onMouseEnter={(e) => { if (!pasteText.trim()) return; (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; (e.currentTarget as HTMLElement).style.boxShadow = '0 0 0 3px rgba(238,217,138,0.2)'; }}
                     onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}>
-                    Auto-match &amp; Add →
+                    {t('create_auto_match')}
                   </button>
                   {pasteError && <p className="text-xs" style={{ color: '#B6871F' }}>{pasteError}</p>}
                 </div>
@@ -598,19 +675,19 @@ function CreatePageInner() {
               <div className="flex flex-col min-h-0">
                 <div className="flex items-center justify-between mb-2 shrink-0">
                   <div className="flex items-center gap-2">
-                    <label className="text-xs font-bold uppercase tracking-wide" style={{ color: '#1B3828' }}>Selected Delegates</label>
+                    <label className="text-xs font-bold uppercase tracking-wide" style={{ color: '#1B3828' }}>{t('create_selected_delegates')}</label>
                     <span className="text-[10px] font-bold text-[#1B3828] bg-[#EED98A]/30 px-2 py-0.5 rounded-full" style={{ fontFamily: "'DM Mono', monospace" }}>{delegates.length}</span>
                   </div>
                   {delegates.length > 0 && (
-                    <button onClick={() => setDelegates([])} className="text-[10px] font-bold text-[#9A8A78] hover:text-[#8B2020] uppercase tracking-wide transition-colors">Clear all</button>
+                    <button onClick={() => setDelegates([])} className="text-[10px] font-bold text-[#9A8A78] hover:text-[#8B2020] uppercase tracking-wide transition-colors">{t('create_clear_all')}</button>
                   )}
                 </div>
 
                 <div className="flex-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl overflow-hidden mb-3 min-h-0">
                   {delegates.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full gap-2 px-8">
-                      <p className="text-base font-black uppercase tracking-wide text-center" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>No Delegates Yet</p>
-                      <p className="text-xs text-center leading-relaxed" style={{ color: '#9A8A78', maxWidth: '200px' }}>Search countries or use Quick Bundles above to get started</p>
+                      <p className="text-base font-black uppercase tracking-wide text-center" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>{t('create_no_delegates').toUpperCase()}</p>
+                      <p className="text-xs text-center leading-relaxed" style={{ color: '#9A8A78', maxWidth: '200px' }}>{t('create_no_delegates_hint')}</p>
                     </div>
                   ) : (
                     <div className="overflow-y-auto h-full">
@@ -622,7 +699,7 @@ function CreatePageInner() {
                               ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                               : <Globe size={16} strokeWidth={1.5} className="text-[#9A8A78] shrink-0" />
                             }
-                            <span className="text-sm flex-1 truncate font-medium" style={{ color: '#1C1410' }}>{name}</span>
+                            <span className="text-sm flex-1 truncate font-medium" style={{ color: '#1C1410' }}>{getCountryDisplayName(name, language)}</span>
                             <button onClick={() => setDelegates((p) => p.filter((d) => d !== name))}
                               className="text-[#9A8A78] group-hover:text-red-500 transition-colors text-sm opacity-0 group-hover:opacity-100">✕</button>
                           </div>
@@ -652,7 +729,7 @@ function CreatePageInner() {
                     (e.currentTarget as HTMLElement).style.boxShadow = '0 8px 24px rgba(27,56,40,0.25)';
                   }}
                 >
-                  {creating ? 'CREATING...' : canProceed ? 'START SESSION →' : 'ENTER COMMITTEE NAME & TOPIC ABOVE'}
+                  {creating ? t('create_creating') : canProceed ? t('create_start_session') : t('create_enter_details')}
                 </button>
               </div>
             </div>
