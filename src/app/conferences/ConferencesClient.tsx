@@ -330,23 +330,35 @@ function GlobeSection() {
           </Link>
         </div>
 
-        {/* Right — globe placeholder */}
-        <div className="flex-1 flex justify-center items-center">
+        {/* Right — spinning globe video */}
+        <div
+          className="flex-1 flex justify-end items-center"
+          style={{ overflow: 'visible', marginRight: '-80px' }}
+        >
           <div
-            className="flex items-center justify-center"
             style={{
-              width: '320px',
-              height: '320px',
+              width: 'clamp(380px, 38vw, 560px)',
+              height: 'clamp(380px, 38vw, 560px)',
               borderRadius: '50%',
-              border: '2px solid rgba(238,217,138,0.2)',
-              background: 'radial-gradient(circle, rgba(61,122,82,0.2) 0%, transparent 70%)',
+              overflow: 'hidden',
               flexShrink: 0,
+              boxShadow: '0 0 80px rgba(238,217,138,0.08), 0 0 160px rgba(27,56,40,0.4)',
+              border: '1.5px solid rgba(238,217,138,0.12)',
             }}
           >
-            <div className="text-center">
-              <p className="text-xs" style={{ color: 'rgba(238,217,138,0.5)', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em' }}>INTERACTIVE GLOBE</p>
-              <p className="text-xs mt-1" style={{ color: 'rgba(238,217,138,0.5)', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em' }}>COMING SOON</p>
-            </div>
+            <video
+              src="/map/interactive_globe.mp4"
+              autoPlay
+              loop
+              muted
+              playsInline
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                display: 'block',
+              }}
+            />
           </div>
         </div>
       </div>
