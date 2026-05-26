@@ -3,8 +3,9 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
-import PreRegisterModal from '@/components/PreRegisterModal';
 import { useAuth } from '@/components/AuthProvider';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { Globe } from 'lucide-react';
 
 const NAV_LINKS = [
   { label: 'SESSIONS', href: '/' },
@@ -21,18 +22,22 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
   const pathname = usePathname();
   const router = useRouter();
   const [hovered, setHovered] = useState<string | null>(null);
-  const [showModal, setShowModal] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [showLangMenu, setShowLangMenu] = useState(false);
   const accountMenuRef = useRef<HTMLDivElement>(null);
+  const langMenuRef = useRef<HTMLDivElement>(null);
 
   const { user, profile, signOut, loading } = useAuth();
+  const { language, setLanguage } = useLanguage();
 
-  // Close account dropdown on outside click
   useEffect(() => {
     function handleMouseDown(e: MouseEvent) {
       if (accountMenuRef.current && !accountMenuRef.current.contains(e.target as Node)) {
         setAccountMenuOpen(false);
+      }
+      if (langMenuRef.current && !langMenuRef.current.contains(e.target as Node)) {
+        setShowLangMenu(false);
       }
     }
     document.addEventListener('mousedown', handleMouseDown);
@@ -119,8 +124,75 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
 
         {/* Desktop right actions */}
         <div className="hidden md:flex items-center gap-3">
+
+          {/* Language toggle */}
+          <div className="relative" ref={langMenuRef}>
+            <div className="relative" suppressHydrationWarning>
+              <span
+                className="absolute right-0 z-10 pointer-events-none"
+                style={{
+                  top: '-8px',
+                  backgroundColor: '#1B3828',
+                  color: '#EED98A',
+                  border: '1.5px solid rgba(238,217,138,0.55)',
+                  borderRadius: '5px',
+                  padding: '0px 4px',
+                  fontSize: '7px',
+                  fontWeight: 900,
+                  letterSpacing: '0.08em',
+                  whiteSpace: 'nowrap',
+                  lineHeight: '13px',
+                }}
+              >✨ NEW</span>
+              <button
+                onClick={() => setShowLangMenu((v) => !v)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl transition-all focus:outline-none"
+                style={{ color: '#1B3828', fontSize: '12px', fontWeight: 700, letterSpacing: '0.06em' }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.07)'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+              >
+                <Globe size={14} strokeWidth={2} />
+                <span style={{ fontFamily: "'DM Mono', monospace" }}>{language.toUpperCase()}</span>
+              </button>
+            </div>
+            {showLangMenu && (
+              <div
+                className="absolute right-0 mt-1 w-36 rounded-xl overflow-hidden"
+                style={{
+                  backgroundColor: '#FAF8F3',
+                  border: '1px solid #DDD4C0',
+                  boxShadow: '0 8px 24px rgba(27,56,40,0.12)',
+                  zIndex: 50,
+                }}
+              >
+                {(['en', 'es'] as const).map((lang) => (
+                  <button
+                    key={lang}
+                    onClick={() => { setLanguage(lang); setShowLangMenu(false); }}
+                    className="w-full text-left px-4 py-2.5 text-sm font-semibold transition-colors focus:outline-none"
+                    style={{
+                      color: language === lang ? '#1B3828' : '#9A8A78',
+                      fontWeight: language === lang ? 800 : 600,
+                      fontFamily: "'Outfit', sans-serif",
+                      letterSpacing: '0.04em',
+                      backgroundColor: 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                    }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                  >
+                    {lang === 'en' ? 'English' : 'Español'}
+                    {language === lang && <span className="ml-1" style={{ color: '#B6871F' }}>✓</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Auth section */}
           {loading ? (
-            <div style={{ width: '120px' }} />
+            <div style={{ width: '80px' }} />
           ) : user ? (
             /* Account button + dropdown */
             <div className="relative" ref={accountMenuRef}>
@@ -173,7 +245,6 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
                     overflow: 'hidden',
                   }}
                 >
-                  {/* User info */}
                   <div className="px-4 py-3">
                     <p className="text-sm font-bold truncate" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
                       {profile?.display_name ?? user.email?.split('@')[0]}
@@ -184,7 +255,6 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
                   </div>
                   <div style={{ height: '1px', backgroundColor: '#DDD4C0' }} />
 
-                  {/* Nav items */}
                   {[
                     { label: 'MY PROFILE', href: '/account/profile' },
                     { label: 'MUN CV', href: '/account/cv' },
@@ -212,7 +282,6 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
 
                   <div style={{ height: '1px', backgroundColor: '#DDD4C0' }} />
 
-                  {/* Unlimited status */}
                   {profile?.unlimited_status === 'none' ? (
                     <Link
                       href="/unlimited"
@@ -249,7 +318,6 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
 
                   <div style={{ height: '1px', backgroundColor: '#DDD4C0' }} />
 
-                  {/* Sign out */}
                   <button
                     onClick={handleSignOut}
                     className="block w-full text-left px-4 py-2 text-sm font-semibold transition-colors focus:outline-none"
@@ -271,55 +339,21 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
               )}
             </div>
           ) : (
-            /* Signed-out: SIGN IN + PRE-REGISTER */
-            <>
-              <Link
-                href="/auth/signin"
-                className="text-sm font-bold transition-colors focus:outline-none"
-                style={{
-                  color: '#1B3828',
-                  letterSpacing: '0.06em',
-                  fontFamily: "'Outfit', sans-serif",
-                  textDecoration: 'none',
-                }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.textDecoration = 'underline'; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.textDecoration = 'none'; }}
-              >
-                SIGN IN
-              </Link>
-
-              <button
-                onClick={() => setShowModal(true)}
-                onMouseEnter={(e) => {
-                  const el = e.currentTarget as HTMLElement;
-                  el.style.backgroundColor = '#1B3828';
-                  el.style.color = '#EED98A';
-                  el.style.transform = 'translateY(-1px)';
-                }}
-                onMouseLeave={(e) => {
-                  const el = e.currentTarget as HTMLElement;
-                  el.style.backgroundColor = 'transparent';
-                  el.style.color = '#1B3828';
-                  el.style.transform = 'translateY(0)';
-                }}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  padding: '10px 22px',
-                  fontSize: '13px',
-                  fontWeight: 800,
-                  letterSpacing: '0.08em',
-                  color: '#1B3828',
-                  border: '1.5px solid rgba(27, 56, 40, 0.5)',
-                  borderRadius: '9999px',
-                  cursor: 'pointer',
-                  transition: 'all 200ms ease',
-                  backgroundColor: 'transparent',
-                }}
-              >
-                PRE-REGISTER
-              </button>
-            </>
+            /* Signed-out: SIGN IN only */
+            <Link
+              href="/auth/signin"
+              className="text-sm font-bold transition-colors focus:outline-none"
+              style={{
+                color: '#1B3828',
+                letterSpacing: '0.06em',
+                fontFamily: "'Outfit', sans-serif",
+                textDecoration: 'none',
+              }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.textDecoration = 'underline'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.textDecoration = 'none'; }}
+            >
+              SIGN IN
+            </Link>
           )}
         </div>
 
@@ -357,7 +391,7 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
       <div
         className="md:hidden overflow-hidden transition-all duration-300 relative z-20"
         style={{
-          maxHeight: menuOpen ? '420px' : '0px',
+          maxHeight: menuOpen ? '480px' : '0px',
           backgroundColor: '#FAF8F3',
           borderBottom: menuOpen ? '1px solid #DDD4C0' : 'none',
         }}
@@ -391,20 +425,36 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
 
           <div style={{ height: '1px', backgroundColor: '#DDD4C0', margin: '8px 0' }} />
 
+          {/* Mobile language toggle */}
+          <div className="flex gap-2 px-2 pb-1">
+            {(['en', 'es'] as const).map((lang) => (
+              <button
+                key={lang}
+                onClick={() => setLanguage(lang)}
+                className="flex-1 py-2.5 rounded-xl text-sm font-bold focus:outline-none transition-all"
+                style={{
+                  backgroundColor: language === lang ? '#1B3828' : 'rgba(27,56,40,0.07)',
+                  color: language === lang ? '#EED98A' : '#1B3828',
+                  border: language === lang ? 'none' : '1px solid rgba(27,56,40,0.18)',
+                  fontFamily: "'Outfit', sans-serif",
+                  letterSpacing: '0.06em',
+                  cursor: 'pointer',
+                }}
+              >
+                {lang === 'en' ? 'EN — English' : 'ES — Español'}
+              </button>
+            ))}
+          </div>
+
+          <div style={{ height: '1px', backgroundColor: '#DDD4C0', margin: '8px 0' }} />
+
           {user ? (
-            /* Signed-in mobile */
             <>
               <div className="px-4 py-2">
-                <p
-                  className="text-sm font-bold"
-                  style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}
-                >
+                <p className="text-sm font-bold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
                   {profile?.display_name ?? user.email?.split('@')[0]}
                 </p>
-                <p
-                  className="text-xs mt-0.5"
-                  style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}
-                >
+                <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
                   {profile?.email ?? user.email}
                 </p>
               </div>
@@ -430,53 +480,29 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
               </button>
             </>
           ) : (
-            /* Signed-out mobile */
-            <>
-              <Link
-                href="/auth/signin"
-                onClick={() => setMenuOpen(false)}
-                style={{
-                  display: 'block',
-                  padding: '13px 16px',
-                  fontSize: '13px',
-                  fontWeight: 800,
-                  letterSpacing: '0.08em',
-                  color: '#1B3828',
-                  backgroundColor: 'rgba(27, 56, 40, 0.07)',
-                  border: '1.5px solid rgba(27, 56, 40, 0.25)',
-                  borderRadius: '10px',
-                  textAlign: 'center',
-                  textDecoration: 'none',
-                  fontFamily: "'Outfit', sans-serif",
-                }}
-              >
-                SIGN IN
-              </Link>
-              <button
-                onClick={() => { setMenuOpen(false); setShowModal(true); }}
-                style={{
-                  display: 'block',
-                  width: '100%',
-                  padding: '13px 16px',
-                  fontSize: '13px',
-                  fontWeight: 800,
-                  letterSpacing: '0.08em',
-                  color: '#EDE7D8',
-                  backgroundColor: '#1B3828',
-                  border: 'none',
-                  borderRadius: '10px',
-                  cursor: 'pointer',
-                  textAlign: 'center',
-                }}
-              >
-                PRE-REGISTER
-              </button>
-            </>
+            <Link
+              href="/auth/signin"
+              onClick={() => setMenuOpen(false)}
+              style={{
+                display: 'block',
+                padding: '13px 16px',
+                fontSize: '13px',
+                fontWeight: 800,
+                letterSpacing: '0.08em',
+                color: '#1B3828',
+                backgroundColor: 'rgba(27, 56, 40, 0.07)',
+                border: '1.5px solid rgba(27, 56, 40, 0.25)',
+                borderRadius: '10px',
+                textAlign: 'center',
+                textDecoration: 'none',
+                fontFamily: "'Outfit', sans-serif",
+              }}
+            >
+              SIGN IN
+            </Link>
           )}
         </div>
       </div>
-
-      <PreRegisterModal open={showModal} onClose={() => setShowModal(false)} />
     </>
   );
 }

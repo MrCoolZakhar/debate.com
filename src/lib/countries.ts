@@ -236,3 +236,94 @@ export const UN_COUNTRIES: Country[] = [
 export function getCountryByName(name: string): Country | undefined {
   return UN_COUNTRIES.find((c) => c.name.toLowerCase() === name.toLowerCase());
 }
+
+export const COUNTRY_NAMES_ES: Record<string, string> = {
+  AF: 'Afganistán', AL: 'Albania', DZ: 'Argelia', AD: 'Andorra', AO: 'Angola',
+  AG: 'Antigua y Barbuda', AR: 'Argentina', AM: 'Armenia', AU: 'Australia',
+  AT: 'Austria', AZ: 'Azerbaiyán', BS: 'Bahamas', BH: 'Baréin', BD: 'Bangladesh',
+  BB: 'Barbados', BY: 'Bielorrusia', BE: 'Bélgica', BZ: 'Belice', BJ: 'Benín',
+  BT: 'Bután', BO: 'Bolivia', BA: 'Bosnia y Herzegovina', BW: 'Botsuana',
+  BR: 'Brasil', BN: 'Brunéi', BG: 'Bulgaria', BF: 'Burkina Faso', BI: 'Burundi',
+  CV: 'Cabo Verde', KH: 'Camboya', CM: 'Camerún', CA: 'Canadá', CF: 'República Centroafricana',
+  TD: 'Chad', CL: 'Chile', CN: 'China', CO: 'Colombia', KM: 'Comoras',
+  CG: 'Congo', CD: 'República Democrática del Congo', CR: 'Costa Rica',
+  CI: 'Costa de Marfil', HR: 'Croacia', CU: 'Cuba', CY: 'Chipre',
+  CZ: 'República Checa', DK: 'Dinamarca', DJ: 'Yibuti', DM: 'Dominica',
+  DO: 'República Dominicana', EC: 'Ecuador', EG: 'Egipto', SV: 'El Salvador',
+  GQ: 'Guinea Ecuatorial', ER: 'Eritrea', EE: 'Estonia', SZ: 'Suazilandia',
+  ET: 'Etiopía', FJ: 'Fiyi', FI: 'Finlandia', FR: 'Francia', GA: 'Gabón',
+  GM: 'Gambia', GE: 'Georgia', DE: 'Alemania', GH: 'Ghana', GR: 'Grecia',
+  GD: 'Granada', GT: 'Guatemala', GN: 'Guinea', GW: 'Guinea-Bisáu',
+  GY: 'Guyana', HT: 'Haití', HN: 'Honduras', HU: 'Hungría', IS: 'Islandia',
+  IN: 'India', ID: 'Indonesia', IR: 'Irán', IQ: 'Irak', IE: 'Irlanda',
+  IL: 'Israel', IT: 'Italia', JM: 'Jamaica', JP: 'Japón', JO: 'Jordania',
+  KZ: 'Kazajistán', KE: 'Kenia', KI: 'Kiribati', KP: 'Corea del Norte',
+  KR: 'Corea del Sur', KW: 'Kuwait', KG: 'Kirguistán', LA: 'Laos', LV: 'Letonia',
+  LB: 'Líbano', LS: 'Lesoto', LR: 'Liberia', LY: 'Libia', LI: 'Liechtenstein',
+  LT: 'Lituania', LU: 'Luxemburgo', MG: 'Madagascar', MW: 'Malaui',
+  MY: 'Malasia', MV: 'Maldivas', ML: 'Malí', MT: 'Malta', MH: 'Islas Marshall',
+  MR: 'Mauritania', MU: 'Mauricio', MX: 'México', FM: 'Micronesia',
+  MD: 'Moldavia', MC: 'Mónaco', MN: 'Mongolia', ME: 'Montenegro', MA: 'Marruecos',
+  MZ: 'Mozambique', MM: 'Myanmar', NA: 'Namibia', NR: 'Nauru', NP: 'Nepal',
+  NL: 'Países Bajos', NZ: 'Nueva Zelanda', NI: 'Nicaragua', NE: 'Níger',
+  NG: 'Nigeria', NO: 'Noruega', OM: 'Omán', PK: 'Pakistán', PW: 'Palaos',
+  PA: 'Panamá', PG: 'Papúa Nueva Guinea', PY: 'Paraguay', PE: 'Perú',
+  PH: 'Filipinas', PL: 'Polonia', PT: 'Portugal', QA: 'Catar', RO: 'Rumanía',
+  RU: 'Rusia', RW: 'Ruanda', KN: 'San Cristóbal y Nieves', LC: 'Santa Lucía',
+  VC: 'San Vicente y las Granadinas', WS: 'Samoa', SM: 'San Marino',
+  ST: 'Santo Tomé y Príncipe', SA: 'Arabia Saudita', SN: 'Senegal', RS: 'Serbia',
+  SC: 'Seychelles', SL: 'Sierra Leona', SG: 'Singapur', SK: 'Eslovaquia',
+  SI: 'Eslovenia', SB: 'Islas Salomón', SO: 'Somalia', ZA: 'Sudáfrica',
+  SS: 'Sudán del Sur', ES: 'España', LK: 'Sri Lanka', SD: 'Sudán',
+  SR: 'Surinam', SE: 'Suecia', CH: 'Suiza', SY: 'Siria', TW: 'Taiwán',
+  TJ: 'Tayikistán', TZ: 'Tanzania', TH: 'Tailandia', TL: 'Timor Oriental',
+  TG: 'Togo', TO: 'Tonga', TT: 'Trinidad y Tobago', TN: 'Túnez', TR: 'Turquía',
+  TM: 'Turkmenistán', TV: 'Tuvalu', UG: 'Uganda', UA: 'Ucrania',
+  AE: 'Emiratos Árabes Unidos', GB: 'Reino Unido', US: 'Estados Unidos',
+  UY: 'Uruguay', UZ: 'Uzbekistán', VU: 'Vanuatu', VE: 'Venezuela', VN: 'Vietnam',
+  YE: 'Yemen', ZM: 'Zambia', ZW: 'Zimbabue', EU: 'Unión Europea',
+  PS: 'Palestina', VA: 'Santa Sede', XK: 'Kosovo', CK: 'Islas Cook', NU: 'Niue',
+};
+
+export function getCountryDisplayName(name: string, language: string): string {
+  if (language !== 'es') return name;
+  if (name === 'African Union') return 'Unión Africana';
+  const country = getCountryByName(name);
+  if (!country) return name;
+  const fromDict = COUNTRY_NAMES_ES[country.code];
+  if (fromDict) return fromDict;
+  try {
+    const dn = new Intl.DisplayNames(['es'], { type: 'region' });
+    return dn.of(country.code) ?? name;
+  } catch {
+    return name;
+  }
+}
+
+export function matchesSearch(c: Country, search: string, language: string): boolean {
+  const s = search.toLowerCase();
+  if (c.name.toLowerCase().includes(s)) return true;
+  if (language !== 'en') {
+    const localName = getCountryDisplayName(c.name, language).toLowerCase();
+    if (localName.includes(s)) return true;
+  }
+  return false;
+}
+
+export function matchesCountryQuery(enName: string, query: string, language: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return false;
+  if (enName.trim().toLowerCase().includes(q)) return true;
+  const displayName = getCountryDisplayName(enName, language).toLowerCase();
+  if (displayName.includes(q)) return true;
+  return false;
+}
+
+export function startsWithCountryQuery(enName: string, query: string, language: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return false;
+  if (enName.trim().toLowerCase().startsWith(q)) return true;
+  const displayName = getCountryDisplayName(enName, language).toLowerCase();
+  if (displayName.startsWith(q)) return true;
+  return false;
+}
