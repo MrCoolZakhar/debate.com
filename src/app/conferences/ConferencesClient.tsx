@@ -322,7 +322,7 @@ function GlobeSection() {
           right: 0,
           top: 0,
           bottom: 0,
-          width: '65%',
+          width: '70%',
           height: '100%',
           overflow: 'hidden',
           pointerEvents: 'none',
@@ -334,14 +334,14 @@ function GlobeSection() {
           loop
           muted
           playsInline
-          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+          style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: '30% center', display: 'block' }}
         />
         {/* Left edge fade into forest background */}
         <div
           style={{
             position: 'absolute',
             inset: 0,
-            background: 'linear-gradient(to right, #1B3828 0%, #1B3828 5%, rgba(27,56,40,0.85) 30%, rgba(27,56,40,0.2) 55%, transparent 75%)',
+            background: 'linear-gradient(to right, #1B3828 0%, #1B3828 18%, rgba(27,56,40,0.9) 35%, rgba(27,56,40,0.3) 52%, transparent 65%)',
           }}
         />
         {/* Top/bottom fade */}
@@ -349,7 +349,15 @@ function GlobeSection() {
           style={{
             position: 'absolute',
             inset: 0,
-            background: 'linear-gradient(to bottom, rgba(27,56,40,0.3) 0%, transparent 20%, transparent 80%, rgba(27,56,40,0.5) 100%)',
+            background: 'linear-gradient(to bottom, rgba(27,56,40,0.4) 0%, transparent 15%, transparent 85%, rgba(27,56,40,0.6) 100%)',
+          }}
+        />
+        {/* Right edge fade */}
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'linear-gradient(to left, #1B3828 0%, rgba(27,56,40,0.7) 12%, transparent 30%)',
           }}
         />
       </div>
