@@ -436,7 +436,8 @@ function CreatePageInner() {
       if (result) {
         updateSetting(result.code, 'chairJoinSuffix', result.chairJoinSuffix);
         updateSetting(result.code, 'separateChairCode', true);
-        router.push(`/chair/${result.code}`);
+        const creatorName = names.length > 0 ? names[0] : 'Chair';
+        router.push(`/chair/${result.code}?chairName=${encodeURIComponent(creatorName)}`);
       } else {
         alert('Failed to create committee. Please try again.');
         setCreating(false);
