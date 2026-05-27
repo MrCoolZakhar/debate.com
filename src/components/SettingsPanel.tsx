@@ -64,7 +64,7 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
 }) {
   const t = useT();
   const { language, setLanguage } = useLanguage();
-  const [tab, setTab] = useState<SettingsTab>('voting');
+  const [tab, setTab] = useState<SettingsTab>('access');
   const { getSettings, updateSetting, migrateSettings } = useSettingsStore();
   const s = getSettings(committee.code);
   const upd = <K extends keyof CommitteeSettings>(key: K, value: CommitteeSettings[K]) =>
@@ -167,9 +167,9 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
   }
 
   const tabs: { id: SettingsTab; label: string }[] = [
-    { id: 'voting', label: t('settings_tab_voting') },
-    { id: 'motions', label: t('settings_tab_motions') },
     { id: 'access', label: t('settings_tab_access') },
+    { id: 'motions', label: t('settings_tab_motions') },
+    { id: 'voting', label: t('settings_tab_voting') },
     { id: 'points', label: t('settings_tab_points') },
   ];
 
