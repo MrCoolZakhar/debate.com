@@ -26,7 +26,7 @@ const CONTINENTS: ContinentDef[] = [
     key: 'north-america',
     label: 'North America',
     mapSrc: '/map/north_america_map.png',
-    points: '2%,8% 14%,3% 28%,3% 30%,12% 28%,28% 25%,38% 22%,48% 18%,55% 14%,58% 10%,52% 6%,40% 3%,28% 2%,15%',
+    points: '2%,8% 14%,3% 28%,3% 32%,8% 34%,14% 33%,22% 30%,30% 28%,38% 26%,44% 23%,50% 20%,55% 16%,58% 12%,56% 8%,50% 4%,38% 2%,22%',
     countries: [
       'United States', 'Canada', 'Mexico', 'Guatemala', 'Belize', 'Honduras',
       'El Salvador', 'Nicaragua', 'Costa Rica', 'Panama', 'Cuba', 'Jamaica',
@@ -39,7 +39,7 @@ const CONTINENTS: ContinentDef[] = [
     key: 'south-america',
     label: 'South America',
     mapSrc: '/map/south_america_map.png',
-    points: '20%,47% 32%,46% 36%,52% 38%,62% 36%,72% 30%,82% 26%,92% 22%,88% 18%,75% 17%,62% 19%,52%',
+    points: '23%,44% 28%,43% 33%,44% 36%,48% 40%,54% 41%,62% 38%,72% 33%,82% 28%,92% 24%,88% 20%,78% 18%,65% 19%,54% 21%,48%',
     countries: [
       'Brazil', 'Argentina', 'Colombia', 'Chile', 'Peru', 'Venezuela',
       'Ecuador', 'Bolivia', 'Paraguay', 'Uruguay', 'Guyana', 'Suriname',
@@ -65,7 +65,7 @@ const CONTINENTS: ContinentDef[] = [
     key: 'africa',
     label: 'Africa',
     mapSrc: '/map/africa_map.png',
-    points: '43%,33% 55%,31% 62%,38% 63%,50% 60%,62% 55%,78% 50%,84% 46%,82% 42%,68% 41%,52% 42%,40%',
+    points: '43%,33% 50%,31% 57%,31% 60%,33% 65%,38% 65%,44% 64%,52% 64%,64% 60%,72% 56%,80% 50%,85% 46%,83% 42%,72% 41%,58% 41%,44% 42%,38%',
     countries: [
       'Nigeria', 'South Africa', 'Kenya', 'Ghana', 'Ethiopia', 'Tanzania',
       'Uganda', 'Rwanda', 'Senegal', 'Ivory Coast', 'Cameroon', 'Zimbabwe',
@@ -83,7 +83,7 @@ const CONTINENTS: ContinentDef[] = [
     key: 'asia',
     label: 'Asia',
     mapSrc: '/map/asia_map.png',
-    points: '57%,14% 63%,3% 78%,2% 92%,4% 96%,12% 94%,25% 90%,38% 85%,52% 78%,62% 68%,60% 62%,50% 58%,38% 57%,28%',
+    points: '62%,5% 68%,3% 82%,2% 92%,4% 96%,12% 95%,22% 92%,32% 90%,42% 88%,50% 92%,58% 88%,62% 82%,64% 74%,62% 66%,58% 62%,50% 60%,40% 60%,28% 60%,18%',
     countries: [
       'China', 'India', 'Japan', 'South Korea', 'Indonesia', 'Pakistan',
       'Bangladesh', 'Vietnam', 'Thailand', 'Malaysia', 'Singapore', 'Philippines',
@@ -99,7 +99,7 @@ const CONTINENTS: ContinentDef[] = [
     key: 'oceania',
     label: 'Oceania',
     mapSrc: '/map/oceania_map.png',
-    points: '73%,52% 82%,50% 90%,52% 94%,58% 93%,68% 86%,75% 78%,76% 72%,70% 71%,60%',
+    points: '79%,58% 92%,57% 96%,62% 96%,72% 93%,78% 87%,80% 80%,78% 76%,72% 76%,64%',
     countries: [
       'Australia', 'New Zealand', 'Papua New Guinea', 'Fiji', 'Solomon Islands',
       'Vanuatu', 'Samoa', 'Kiribati', 'Tonga', 'Micronesia', 'Palau',
