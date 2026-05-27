@@ -13,6 +13,7 @@ import { getCommitteeDisplayName } from '@/lib/presetNames';
 import { Emoji } from '@/components/Emoji';
 import { SettingsPanel } from '@/components/SettingsPanel';
 import { useSettingsStore } from '@/lib/settingsStore';
+import { supabase } from '@/lib/supabase';
 import ChatPanel from '@/components/ChatPanel';
 import TutorialOverlay from '@/components/TutorialOverlay';
 import {
@@ -1177,28 +1178,26 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
 
   useEffect(() => {
     if (!committee?.id || !myChairName) return;
-    import('@/lib/supabase').then(({ supabase }) => {
-      const channel = supabase.channel(`chair-presence-${committee.id}`, {
-        config: { presence: { key: myChairName } },
-      });
-      const syncPresence = () => {
-        const state = channel.presenceState<{ joinedAt: number }>();
-        const seats = Object.entries(state)
-          .map(([name, payloads]) => ({ name, joinedAt: (payloads as { joinedAt: number }[])[0]?.joinedAt ?? Infinity }))
-          .sort((a, b) => a.joinedAt - b.joinedAt);
-        const head = seats[0]?.name ?? myChairName;
-        setHeadChairName(head);
-        setIsViewOnly(head !== myChairName);
-      };
-      channel
-        .on('presence', { event: 'sync' }, syncPresence)
-        .on('presence', { event: 'join' }, syncPresence)
-        .on('presence', { event: 'leave' }, syncPresence)
-        .subscribe(async (status) => {
-          if (status === 'SUBSCRIBED') await channel.track({ joinedAt: Date.now() });
-        });
-      return () => { supabase.removeChannel(channel); };
+    const channel = supabase.channel(`chair-presence-${committee.id}`, {
+      config: { presence: { key: myChairName } },
     });
+    const syncPresence = () => {
+      const state = channel.presenceState<{ joinedAt: number }>();
+      const seats = Object.entries(state)
+        .map(([name, payloads]) => ({ name, joinedAt: (payloads as { joinedAt: number }[])[0]?.joinedAt ?? Infinity }))
+        .sort((a, b) => a.joinedAt - b.joinedAt);
+      const head = seats[0]?.name ?? myChairName;
+      setHeadChairName(head);
+      setIsViewOnly(head !== myChairName);
+    };
+    channel
+      .on('presence', { event: 'sync' }, syncPresence)
+      .on('presence', { event: 'join' }, syncPresence)
+      .on('presence', { event: 'leave' }, syncPresence)
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') await channel.track({ joinedAt: Date.now() });
+      });
+    return () => { supabase.removeChannel(channel); };
   }, [committee?.id, myChairName]);
 
   // Timer — isolated: only updates the speakerTimeRemaining atom, never the committee object.
