@@ -433,7 +433,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
 }
 
 // ── Voting View ───────────────────────────────────────────────────────────────
-function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBack, onEdit, pendingIds }: {
+function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBack, onEdit, pendingIds, isViewOnly = false }: {
   committee: Committee;
   typeMeta: TypeMeta;
   onAccepted: (motion: PendingMotion) => void;
@@ -442,6 +442,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
   onBack: () => void;
   onEdit: (motionId: string) => void;
   pendingIds: Set<string>;
+  isViewOnly?: boolean;
 }) {
   const t = useT();
   // Filter out join-request pseudo-motions — those are handled in the chair banner, not here
@@ -576,7 +577,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
         </div>
 
         {/* Accept/Reject/Edit — ONLY on the primary (idx===0) card being voted upon */}
-        {isPrimary && (
+        {isPrimary && !isViewOnly && (
           <div className="flex gap-2 mt-auto">
             <button onClick={() => onAccepted(m)}
               className="flex-1 bg-[#2A5A3C] hover:bg-[#3D7A52] text-white py-2.5 rounded-xl font-bold text-sm transition-colors focus:outline-none" style={{ fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}>
@@ -628,11 +629,12 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
 }
 
 // ── Main Modal ────────────────────────────────────────────────────────────────
-export default function MotionsModal({ committee, onClose, onCommitteeUpdate, belowQuorum = false }: {
+export default function MotionsModal({ committee, onClose, onCommitteeUpdate, belowQuorum = false, isViewOnly = false }: {
   committee: Committee;
   onClose: () => void;
   onCommitteeUpdate?: (updater: (c: Committee) => Committee) => void;
   belowQuorum?: boolean;
+  isViewOnly?: boolean;
 }) {
   const t = useT();
   const { language } = useLanguage();
@@ -935,6 +937,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
               onBack={() => setView('raise')}
               onEdit={(motionId) => { setEditingMotionId(motionId); setView('raise'); }}
               pendingIds={pendingIds}
+              isViewOnly={isViewOnly}
             />
           )}
           {view === 'list' && (

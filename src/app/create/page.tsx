@@ -561,7 +561,7 @@ function CreatePageInner() {
                   {t('create_chair_name')} <span className="font-normal" style={{ color: '#9A8A78' }}>{t('create_optional')}</span>
                 </label>
                 <input type="text" value={chairNames[0]} onChange={(e) => setChairNames([e.target.value])}
-                  placeholder={language === 'es' ? 'ej. Juan Pérez' : 'e.g. John Smith'}
+                  placeholder={language === 'es' ? 'Tu nombre' : 'Your name'}
                   className="w-full bg-white/70 border border-[#C8BAA8] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] focus:ring-2 focus:ring-[#1B3828]/10 transition-all text-sm" />
               </div>
               <div>

@@ -33,7 +33,6 @@ export interface CommitteeSettings {
   separateChairCode: boolean;
   chairJoinSuffix: string;
   requireChairApproval: boolean;
-  allowMultipleCoChairs: boolean;
   chairSessionPersistence: boolean;
   chairTakeoverProtection: boolean;
   requireDelegationName: boolean;
@@ -68,7 +67,6 @@ export const DEFAULT_SETTINGS: CommitteeSettings = {
   separateChairCode: true,
   chairJoinSuffix: '',
   requireChairApproval: false,
-  allowMultipleCoChairs: true,
   chairSessionPersistence: true,
   chairTakeoverProtection: true,
   requireDelegationName: true,

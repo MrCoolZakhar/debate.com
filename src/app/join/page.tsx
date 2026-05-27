@@ -33,6 +33,8 @@ function JoinPageInner() {
   const [chairName, setChairName] = useState('');
   const [chairNameMode, setChairNameMode] = useState<'select' | 'new'>('select');
   const [newChairName, setNewChairName] = useState('');
+  const [chairPassword, setChairPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -52,45 +54,21 @@ function JoinPageInner() {
     setChairName('');
     setChairNameMode('select');
     setNewChairName('');
-
-    // For chair codes with suffix (e.g. "ABC123-1234"), try stripping the suffix first
-    const tryBase = upper.includes('-') ? upper.slice(0, upper.lastIndexOf('-')) : null;
-
-    // Always show the committee, but flag a suffix mismatch separately
-    const trySetCommittee = (found: Committee) => {
-      setFoundCommittee(found);
-      if (upper.includes('-')) {
-        const suffix = upper.slice(upper.lastIndexOf('-') + 1);
-        const expectedSuffix = found.dbChairJoinSuffix ?? getSettings(found.code).chairJoinSuffix;
-        if (expectedSuffix && suffix !== expectedSuffix) {
-          setSuffixError(t('join_incorrect_code'));
-        } else {
-          setSuffixError('');
-        }
-      } else {
-        setSuffixError('');
-      }
-      return true;
-    };
+    setChairPassword('');
+    setPasswordError('');
 
     // 1. Check local store first (instant)
-    const local = Object.values(committees).find((c) => c.code === upper || (tryBase && c.code === tryBase));
+    const local = Object.values(committees).find((c) => c.code === upper);
     if (local) {
-      trySetCommittee(local);
+      setFoundCommittee(local);
       setLookingUp(false);
       return;
     }
 
-    // 2. Fall back to DB — try base code first if there's a suffix
-    const lookupCode = tryBase ?? upper;
-    getCommitteeByCode(lookupCode).then(async (remote) => {
-      if (!remote && tryBase) {
-        // Also try the full code in case it's literally the committee code
-        const fallback = await getCommitteeByCode(upper);
-        if (fallback) { trySetCommittee(fallback); setLookingUp(false); return; }
-      }
+    // 2. Fall back to DB
+    getCommitteeByCode(upper).then((remote) => {
       if (remote) {
-        trySetCommittee(remote);
+        setFoundCommittee(remote);
       } else {
         setFoundCommittee(null);
         setError(t('join_not_found'));
@@ -121,6 +99,11 @@ function JoinPageInner() {
     if (mode === 'chair') {
       const name = chairNameMode === 'new' ? newChairName.trim() : chairName;
       if (!name) { setError(t('join_select_name')); return; }
+      const expectedPassword = foundCommittee.dbChairJoinSuffix ?? getSettings(foundCommittee.code).chairJoinSuffix;
+      if (expectedPassword && chairPassword !== expectedPassword) {
+        setPasswordError('Incorrect password — ask your head chair.');
+        return;
+      }
       addChairName(foundCommittee.id, name);
       router.push(`/chair/${foundCommittee.code}?chairName=${encodeURIComponent(name)}`);
       return;
@@ -141,6 +124,8 @@ function JoinPageInner() {
     setChairName('');
     setChairNameMode('select');
     setNewChairName('');
+    setChairPassword('');
+    setPasswordError('');
   };
 
   const tabs: { key: JoinMode; label: string; icon: string }[] = [
@@ -212,8 +197,6 @@ function JoinPageInner() {
 
           {/* Role cards */}
           {(() => {
-            const hasCode = code.trim().length >= 4;
-            const isChairCode = code.includes('-');
             const roleCards: { key: JoinMode; label: string; desc: string }[] = [
               { key: 'delegate', label: t('join_role_delegate'), desc: t('join_role_delegate_desc') },
               { key: 'chair', label: t('join_role_chair'), desc: t('join_role_chair_desc') },
@@ -222,7 +205,7 @@ function JoinPageInner() {
             return (
               <div className="grid grid-cols-3 gap-4 mb-5">
                 {roleCards.map(({ key, label, desc }) => {
-                  const enabled = !hasCode || (key === 'chair' ? isChairCode : !isChairCode);
+                  const enabled = true;
                   const isActive = mode === key && enabled;
                   return (
                     <button
@@ -322,6 +305,26 @@ function JoinPageInner() {
             </div>
           )}
 
+          {foundCommittee && mode === 'chair' && (() => {
+            const requiresPassword = !!(foundCommittee.dbChairJoinSuffix ?? getSettings(foundCommittee.code).chairJoinSuffix);
+            if (!requiresPassword) return null;
+            return (
+              <div className="mb-4">
+                <label className="block text-sm font-semibold mb-2" style={{ color: '#1C1410' }}>Chair Password</label>
+                <input
+                  type="password"
+                  value={chairPassword}
+                  onChange={(e) => { setChairPassword(e.target.value); setPasswordError(''); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleJoin(); }}
+                  placeholder="Enter password…"
+                  className="w-full rounded-xl px-4 py-3 focus:outline-none transition-colors"
+                  style={{ backgroundColor: '#FAF8F3', border: `1.5px solid ${passwordError ? '#8B2020' : '#DDD4C0'}`, color: '#1C1410' }}
+                />
+                {passwordError && <p className="text-xs mt-1.5 font-semibold" style={{ color: '#8B2020' }}>{passwordError}</p>}
+              </div>
+            );
+          })()}
+
           {/* Join button */}
           <button
             onClick={handleJoin}
@@ -330,9 +333,8 @@ function JoinPageInner() {
                 ? (!foundCommittee || (getSettings(foundCommittee?.code ?? '').requireDelegationName && !country))
                 : mode === 'chair'
                 ? (!foundCommittee ||
-                    ((foundCommittee.dbSeparateChairCode ?? getSettings(foundCommittee.code).separateChairCode) && !code.includes('-')) ||
-                    !!suffixError ||
-                    (chairNameMode === 'select' ? !chairName : !newChairName.trim()))
+                    (chairNameMode === 'select' ? !chairName : !newChairName.trim()) ||
+                    (!!(foundCommittee.dbChairJoinSuffix ?? getSettings(foundCommittee.code).chairJoinSuffix) && !chairPassword))
                 : !foundCommittee
             }
             className="w-full py-4 rounded-2xl font-black text-base transition-all focus:outline-none"

@@ -260,6 +260,7 @@ function RollCallPanelInner({
   showBulkActions = false,
   showViewToggle = true,
   isReadOnly = false,
+  isViewOnly = false,
   isTdT = false,
   isRoomOrderTdT = false,
 }: {
@@ -277,6 +278,7 @@ function RollCallPanelInner({
   showBulkActions?: boolean;
   showViewToggle?: boolean;
   isReadOnly?: boolean;
+  isViewOnly?: boolean;
   isTdT?: boolean;
   isRoomOrderTdT?: boolean;
 }) {
@@ -533,7 +535,7 @@ function RollCallPanelInner({
                   <span className="text-[10px] shrink-0 font-mono ml-auto uppercase tracking-wide" style={{ color: 'rgba(237,231,216,0.35)' }}>{t('rollcall_absent')}</span>
                 )}
                 {isRollCallPhase && (
-                  <div onClick={(e) => e.stopPropagation()} className={`ml-auto shrink-0 ${isReadOnly ? 'pointer-events-none opacity-50' : ''}`}>
+                  <div onClick={(e) => e.stopPropagation()} className={`ml-auto shrink-0 ${(isReadOnly || isViewOnly) ? 'pointer-events-none opacity-50' : ''}`}>
                     <StatusSlider status={effectiveStatus} onCycle={() => cycleStatus(d.id, effectiveStatus)} />
                   </div>
                 )}
@@ -579,6 +581,7 @@ const RollCallPanel = React.memo(RollCallPanelInner, (prev, next) => {
     prev.showBulkActions === next.showBulkActions &&
     prev.showViewToggle === next.showViewToggle &&
     prev.isReadOnly === next.isReadOnly &&
+    prev.isViewOnly === next.isViewOnly &&
     prev.isTdT === next.isTdT &&
     prev.isRoomOrderTdT === next.isRoomOrderTdT &&
     prev.onListIds === next.onListIds

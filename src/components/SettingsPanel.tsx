@@ -173,8 +173,6 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
     { id: 'points', label: t('settings_tab_points') },
   ];
 
-  const chairCode = `${committee.code}-${s.chairJoinSuffix || '????'}`;
-
   return (
     <div
       className="fixed inset-0 z-[60] bg-black/40 flex justify-end"
@@ -409,13 +407,13 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
               />
               {s.separateChairCode && (
                 <div className="py-3" style={{ borderBottom: '1px solid #DDD4C0' }}>
-                  <div className="text-xs mb-1.5" style={{ color: '#9A8A78' }}>{t('settings_chair_code_label')}</div>
+                  <div className="text-xs mb-1.5" style={{ color: '#9A8A78' }}>Chair password</div>
                   <div className="flex items-center gap-2">
                     <span className="flex-1 rounded-lg px-3 py-2 text-sm font-mono tracking-wider" style={{ backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0', color: '#1B3828' }}>
-                      {chairCode}
+                      {s.chairJoinSuffix || '????'}
                     </span>
                     <button
-                      onClick={() => navigator.clipboard.writeText(chairCode)}
+                      onClick={() => navigator.clipboard.writeText(s.chairJoinSuffix || '')}
                       className="px-3 py-2 rounded-lg text-xs font-bold transition-colors shrink-0 focus:outline-none"
                       style={{ backgroundColor: '#1B3828', color: '#EED98A' }}
                       onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
@@ -434,12 +432,6 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
               />
 
               <SectionLabel>{t('settings_section_chair_resign')}</SectionLabel>
-              <Toggle
-                label={t('settings_multi_chairs_label')}
-                note={t('settings_multi_chairs_note')}
-                value={s.allowMultipleCoChairs}
-                onChange={(v) => upd('allowMultipleCoChairs', v)}
-              />
               <Toggle
                 label={t('settings_chair_persistence_label')}
                 note={t('settings_chair_persistence_note')}
