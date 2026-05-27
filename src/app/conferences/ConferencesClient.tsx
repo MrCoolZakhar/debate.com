@@ -335,22 +335,22 @@ function GlobeSection() {
           loop
           muted
           playsInline
-          style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: '30% center', display: 'block' }}
+          style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: '30% center', display: 'block', opacity: 0.82 }}
         />
-        {/* Top/bottom fade */}
+        {/* Radial vignette — dissolves all edges into forest background */}
         <div
           style={{
             position: 'absolute',
             inset: 0,
-            background: 'linear-gradient(to bottom, #1B3828 0%, rgba(27,56,40,0.5) 8%, transparent 20%, transparent 78%, rgba(27,56,40,0.6) 92%, #1B3828 100%)',
+            background: 'radial-gradient(ellipse 80% 85% at 65% 50%, transparent 35%, rgba(27,56,40,0.45) 58%, rgba(27,56,40,0.82) 75%, #1B3828 95%)',
           }}
         />
-        {/* Right edge fade */}
+        {/* Left edge hard stop — prevents globe bleeding into text */}
         <div
           style={{
             position: 'absolute',
             inset: 0,
-            background: 'linear-gradient(to left, #1B3828 0%, #1B3828 2%, rgba(27,56,40,0.92) 10%, rgba(27,56,40,0.6) 20%, rgba(27,56,40,0.15) 38%, transparent 55%)',
+            background: 'linear-gradient(to right, #1B3828 0%, #1B3828 4%, rgba(27,56,40,0.6) 14%, transparent 28%)',
           }}
         />
       </div>
