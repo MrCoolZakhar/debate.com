@@ -300,67 +300,143 @@ function RolesSection() {
 
 function GlobeSection() {
   return (
-    <section className="relative px-6 md:px-14 py-20" style={{ backgroundColor: '#1B3828' }}>
-      {/* Grain */}
+    <section
+      className="relative"
+      style={{
+        backgroundColor: '#1B3828',
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
+      {/* Grain overlay */}
       <div
         className="pointer-events-none absolute inset-0"
-        style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'overlay', opacity: 0.07 }}
+        style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px', mixBlendMode: 'overlay', opacity: 0.07 }}
       />
-      <div className="relative flex flex-col md:flex-row gap-12 md:gap-16 items-center">
-        {/* Left */}
-        <div style={{ maxWidth: '400px' }}>
-          <p className="text-[10px] tracking-widest mb-3" style={{ color: 'rgba(238,217,138,0.6)', fontFamily: "'DM Mono', monospace", letterSpacing: '0.2em' }}>
-            GLOBAL MUN
-          </p>
-          <h2 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, lineHeight: 1.05 }}>
-            <span className="block text-white" style={{ fontSize: 'clamp(28px, 3.5vw, 48px)' }}>MUN Across</span>
-            <span className="block" style={{ fontSize: 'clamp(28px, 3.5vw, 48px)', color: '#EED98A' }}>the Globe.</span>
-          </h2>
-          <p className="mt-4 mb-8 text-sm leading-relaxed" style={{ color: 'rgba(237,231,216,0.7)', maxWidth: '400px', fontFamily: "'Outfit', sans-serif" }}>
-            From The Hague to Singapore, Tokyo to New York. Explore conferences on every continent and find your next destination.
-          </p>
-          <Link
-            href="/conferences/map"
-            className="inline-block rounded-2xl py-4 px-8 font-bold text-sm tracking-widest transition-colors focus:outline-none"
-            style={{ border: '1.5px solid rgba(238,217,138,0.4)', color: '#EED98A', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', textDecoration: 'none' }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(238,217,138,0.08)'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-          >
-            EXPLORE CONFERENCES WORLDWIDE →
-          </Link>
-        </div>
 
-        {/* Right — spinning globe video */}
+      {/* Globe video — right side, absolutely positioned */}
+      <div
+        style={{
+          position: 'absolute',
+          right: 0,
+          top: 0,
+          bottom: 0,
+          width: '65%',
+          height: '100%',
+          overflow: 'hidden',
+          pointerEvents: 'none',
+        }}
+      >
+        <video
+          src="/map/interactive_globe.mp4"
+          autoPlay
+          loop
+          muted
+          playsInline
+          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+        />
+        {/* Left edge fade into forest background */}
         <div
-          className="flex-1 flex justify-end items-center"
-          style={{ overflow: 'visible', marginRight: '-80px' }}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'linear-gradient(to right, #1B3828 0%, #1B3828 5%, rgba(27,56,40,0.85) 30%, rgba(27,56,40,0.2) 55%, transparent 75%)',
+          }}
+        />
+        {/* Top/bottom fade */}
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'linear-gradient(to bottom, rgba(27,56,40,0.3) 0%, transparent 20%, transparent 80%, rgba(27,56,40,0.5) 100%)',
+          }}
+        />
+      </div>
+
+      {/* Left content */}
+      <div
+        style={{
+          position: 'relative',
+          zIndex: 10,
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          paddingLeft: 56,
+          paddingRight: 56,
+          paddingTop: 120,
+          paddingBottom: 80,
+          maxWidth: 600,
+          flex: 1,
+        }}
+      >
+        <p
+          style={{
+            fontFamily: "'DM Mono', monospace",
+            fontSize: '11px',
+            fontWeight: 700,
+            color: 'rgba(238,217,138,0.6)',
+            letterSpacing: '0.2em',
+            margin: '0 0 16px 0',
+          }}
         >
-          <div
+          GLOBAL MUN
+        </p>
+        <h2 style={{ margin: 0 }}>
+          <span
             style={{
-              width: 'clamp(380px, 38vw, 560px)',
-              height: 'clamp(380px, 38vw, 560px)',
-              borderRadius: '50%',
-              overflow: 'hidden',
-              flexShrink: 0,
-              boxShadow: '0 0 80px rgba(238,217,138,0.08), 0 0 160px rgba(27,56,40,0.4)',
-              border: '1.5px solid rgba(238,217,138,0.12)',
+              display: 'block',
+              color: 'white',
+              fontSize: 'clamp(48px, 5.5vw, 80px)',
+              fontFamily: "'Outfit', sans-serif",
+              fontWeight: 900,
+              lineHeight: 1.0,
             }}
           >
-            <video
-              src="/map/interactive_globe.mp4"
-              autoPlay
-              loop
-              muted
-              playsInline
-              style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'cover',
-                display: 'block',
-              }}
-            />
-          </div>
-        </div>
+            MUN Across
+          </span>
+          <span
+            style={{
+              display: 'block',
+              color: '#EED98A',
+              fontSize: 'clamp(48px, 5.5vw, 80px)',
+              fontFamily: "'Outfit', sans-serif",
+              fontWeight: 900,
+              lineHeight: 1.0,
+            }}
+          >
+            the Globe.
+          </span>
+        </h2>
+        <p
+          style={{
+            marginTop: 24,
+            marginBottom: 40,
+            fontSize: '16px',
+            lineHeight: 1.7,
+            color: 'rgba(237,231,216,0.75)',
+            maxWidth: 440,
+            fontFamily: "'Outfit', sans-serif",
+          }}
+        >
+          From The Hague to Singapore, Tokyo to New York. Explore conferences on every continent and find your next destination.
+        </p>
+        <Link
+          href="/conferences/map"
+          className="inline-block rounded-2xl py-4 px-8 font-bold text-sm tracking-widest transition-colors focus:outline-none"
+          style={{
+            border: '1.5px solid rgba(238,217,138,0.4)',
+            color: '#EED98A',
+            backgroundColor: 'transparent',
+            fontFamily: "'Outfit', sans-serif",
+            letterSpacing: '0.08em',
+            textDecoration: 'none',
+          }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(238,217,138,0.08)'; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+        >
+          EXPLORE CONFERENCES WORLDWIDE →
+        </Link>
       </div>
     </section>
   );

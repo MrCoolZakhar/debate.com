@@ -17,7 +17,7 @@ interface ContinentDef {
   key: ContinentKey;
   label: string;
   mapSrc: string;
-  zone: { x: number; y: number; w: number; h: number };
+  points: string;
   countries: string[];
 }
 
@@ -26,7 +26,7 @@ const CONTINENTS: ContinentDef[] = [
     key: 'north-america',
     label: 'North America',
     mapSrc: '/map/north_america_map.png',
-    zone: { x: 2, y: 5, w: 28, h: 55 },
+    points: '2%,8% 14%,3% 28%,3% 30%,12% 28%,28% 25%,38% 22%,48% 18%,55% 14%,58% 10%,52% 6%,40% 3%,28% 2%,15%',
     countries: [
       'United States', 'Canada', 'Mexico', 'Guatemala', 'Belize', 'Honduras',
       'El Salvador', 'Nicaragua', 'Costa Rica', 'Panama', 'Cuba', 'Jamaica',
@@ -39,7 +39,7 @@ const CONTINENTS: ContinentDef[] = [
     key: 'south-america',
     label: 'South America',
     mapSrc: '/map/south_america_map.png',
-    zone: { x: 18, y: 45, w: 20, h: 48 },
+    points: '20%,47% 32%,46% 36%,52% 38%,62% 36%,72% 30%,82% 26%,92% 22%,88% 18%,75% 17%,62% 19%,52%',
     countries: [
       'Brazil', 'Argentina', 'Colombia', 'Chile', 'Peru', 'Venezuela',
       'Ecuador', 'Bolivia', 'Paraguay', 'Uruguay', 'Guyana', 'Suriname',
@@ -49,7 +49,7 @@ const CONTINENTS: ContinentDef[] = [
     key: 'europe',
     label: 'Europe',
     mapSrc: '/map/europe_map.png',
-    zone: { x: 43, y: 3, w: 18, h: 38 },
+    points: '43%,5% 52%,2% 62%,3% 68%,8% 65%,18% 62%,28% 57%,34% 52%,36% 47%,34% 43%,30% 43%,18%',
     countries: [
       'United Kingdom', 'Germany', 'France', 'Italy', 'Spain', 'Netherlands',
       'Belgium', 'Switzerland', 'Austria', 'Sweden', 'Norway', 'Denmark',
@@ -65,7 +65,7 @@ const CONTINENTS: ContinentDef[] = [
     key: 'africa',
     label: 'Africa',
     mapSrc: '/map/africa_map.png',
-    zone: { x: 43, y: 35, w: 20, h: 48 },
+    points: '43%,33% 55%,31% 62%,38% 63%,50% 60%,62% 55%,78% 50%,84% 46%,82% 42%,68% 41%,52% 42%,40%',
     countries: [
       'Nigeria', 'South Africa', 'Kenya', 'Ghana', 'Ethiopia', 'Tanzania',
       'Uganda', 'Rwanda', 'Senegal', 'Ivory Coast', 'Cameroon', 'Zimbabwe',
@@ -83,7 +83,7 @@ const CONTINENTS: ContinentDef[] = [
     key: 'asia',
     label: 'Asia',
     mapSrc: '/map/asia_map.png',
-    zone: { x: 57, y: 5, w: 38, h: 60 },
+    points: '57%,14% 63%,3% 78%,2% 92%,4% 96%,12% 94%,25% 90%,38% 85%,52% 78%,62% 68%,60% 62%,50% 58%,38% 57%,28%',
     countries: [
       'China', 'India', 'Japan', 'South Korea', 'Indonesia', 'Pakistan',
       'Bangladesh', 'Vietnam', 'Thailand', 'Malaysia', 'Singapore', 'Philippines',
@@ -99,7 +99,7 @@ const CONTINENTS: ContinentDef[] = [
     key: 'oceania',
     label: 'Oceania',
     mapSrc: '/map/oceania_map.png',
-    zone: { x: 72, y: 52, w: 25, h: 40 },
+    points: '73%,52% 82%,50% 90%,52% 94%,58% 93%,68% 86%,75% 78%,76% 72%,70% 71%,60%',
     countries: [
       'Australia', 'New Zealand', 'Papua New Guinea', 'Fiji', 'Solomon Islands',
       'Vanuatu', 'Samoa', 'Kiribati', 'Tonga', 'Micronesia', 'Palau',
@@ -107,6 +107,17 @@ const CONTINENTS: ContinentDef[] = [
     ],
   },
 ];
+
+function polygonCentroid(points: string): { x: number; y: number } {
+  const pairs = points.trim().split(/\s+/);
+  let sumX = 0, sumY = 0;
+  for (const pair of pairs) {
+    const [xStr, yStr] = pair.split(',');
+    sumX += parseFloat(xStr);
+    sumY += parseFloat(yStr);
+  }
+  return { x: sumX / pairs.length, y: sumY / pairs.length };
+}
 
 async function fetchActiveConferences(countries: string[]): Promise<number> {
   const today = new Date().toISOString().split('T')[0];
@@ -168,11 +179,13 @@ export default function ConferencesMapPage() {
   const [cardLoading, setCardLoading] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const hoveredRef = useRef<ContinentKey | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     hoveredRef.current = hovered;
   }, [hovered]);
 
+  // Forward scroll: world → clouds → continent
   useEffect(() => {
     if (phase !== 'world') return;
 
@@ -187,7 +200,7 @@ export default function ConferencesMapPage() {
       setPhase('clouds');
 
       if (videoRef.current) {
-        videoRef.current.currentTime = 2.3;
+        videoRef.current.currentTime = 2.5;
         videoRef.current.play();
       }
 
@@ -210,16 +223,122 @@ export default function ConferencesMapPage() {
     return () => document.removeEventListener('wheel', handleWheel);
   }, [phase]);
 
-  const handleBack = () => {
-    setPhase('world');
-    setSelected(null);
-    setHovered(null);
-    setActiveCount(0);
-    setHighlighted(null);
-  };
+  // Reverse scroll: continent → clouds → world
+  useEffect(() => {
+    if (phase !== 'continent') return;
+
+    const handleScrollUp = (e: WheelEvent) => {
+      if (e.deltaY >= 0) return;
+      setPhase('clouds');
+      if (videoRef.current) {
+        videoRef.current.currentTime = 0;
+        videoRef.current.play();
+      }
+      setTimeout(() => {
+        setPhase('world');
+        setSelected(null);
+        setHovered(null);
+        setActiveCount(0);
+        setHighlighted(null);
+      }, 1700);
+    };
+
+    document.addEventListener('wheel', handleScrollUp);
+    return () => document.removeEventListener('wheel', handleScrollUp);
+  }, [phase]);
+
+  // Cursor trail canvas effect
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    type TrailPoint = { x: number; y: number; age: number; terrain: 'ocean' | 'land' };
+    const trail: TrailPoint[] = [];
+
+    function isPointInPolygon(px: number, py: number, points: string): boolean {
+      const pairs = points.trim().split(/\s+/);
+      const vertices = pairs.map((p) => {
+        const [xStr, yStr] = p.split(',');
+        return {
+          x: parseFloat(xStr) / 100 * window.innerWidth,
+          y: parseFloat(yStr) / 100 * window.innerHeight,
+        };
+      });
+      let inside = false;
+      const n = vertices.length;
+      for (let i = 0, j = n - 1; i < n; j = i++) {
+        const xi = vertices[i].x, yi = vertices[i].y;
+        const xj = vertices[j].x, yj = vertices[j].y;
+        const intersect = ((yi > py) !== (yj > py)) && (px < ((xj - xi) * (py - yi)) / (yj - yi) + xi);
+        if (intersect) inside = !inside;
+      }
+      return inside;
+    }
+
+    function getTerrainAt(x: number, y: number): 'ocean' | 'land' {
+      for (const cont of CONTINENTS) {
+        if (isPointInPolygon(x, y, cont.points)) return 'land';
+      }
+      return 'ocean';
+    }
+
+    let rafId = 0;
+
+    function draw() {
+      if (!ctx || !canvas) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      for (let i = 0; i < trail.length; i++) {
+        trail[i].age += 0.06;
+      }
+      while (trail.length > 0 && trail[0].age >= 1) {
+        trail.shift();
+      }
+
+      for (let i = 1; i < trail.length; i++) {
+        const pt = trail[i];
+        const alpha = (1 - pt.age) * 0.55;
+        const lineWidth = (1 - pt.age) * 2.5;
+        if (alpha <= 0 || lineWidth <= 0) continue;
+
+        ctx.beginPath();
+        ctx.moveTo(trail[i - 1].x, trail[i - 1].y);
+        ctx.lineTo(pt.x, pt.y);
+        ctx.strokeStyle = pt.terrain === 'ocean'
+          ? `rgba(255,255,255,${alpha})`
+          : `rgba(180,140,80,${alpha})`;
+        ctx.lineWidth = lineWidth;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.stroke();
+      }
+
+      rafId = requestAnimationFrame(draw);
+    }
+
+    draw();
+
+    const handleMouseMove = (e: MouseEvent) => {
+      trail.push({ x: e.clientX, y: e.clientY, age: 0, terrain: getTerrainAt(e.clientX, e.clientY) });
+      if (trail.length > 28) trail.shift();
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      cancelAnimationFrame(rafId);
+    };
+  }, []);
 
   const selectedDef = selected ? CONTINENTS.find((c) => c.key === selected) ?? null : null;
   const hoveredDef = hovered ? CONTINENTS.find((c) => c.key === hovered) ?? null : null;
+  const tooltipPos = hoveredDef ? polygonCentroid(hoveredDef.points) : null;
 
   return (
     <div
@@ -246,8 +365,44 @@ export default function ConferencesMapPage() {
         }}
       />
 
-      {/* LAYER 2 — SiteNav */}
-      <div style={{ position: 'relative', zIndex: 50 }}>
+      {/* Keyframes — unconditional */}
+      <style>{`
+        @keyframes pulse-hint {
+          from { opacity: 0.4; }
+          to { opacity: 1; }
+        }
+        @keyframes pulse-skeleton {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.4; }
+        }
+      `}</style>
+
+      {/* LAYER 0.5 — Cursor trail canvas */}
+      <canvas
+        ref={canvasRef}
+        style={{
+          position: 'absolute',
+          inset: 0,
+          zIndex: 15,
+          pointerEvents: 'none',
+          width: '100%',
+          height: '100%',
+        }}
+      />
+
+      {/* LAYER 2 — SiteNav with semi-transparent forest background */}
+      <div
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 50,
+          backgroundColor: 'rgba(27,56,40,0.72)',
+          backdropFilter: 'blur(8px)',
+          borderBottom: '1px solid rgba(238,217,138,0.08)',
+        }}
+      >
         <SiteNav />
       </div>
 
@@ -267,9 +422,11 @@ export default function ConferencesMapPage() {
         }}
       />
 
-      {/* LAYER 4 — SVG hover zones */}
+      {/* LAYER 4 — SVG polygon hover zones */}
       {phase === 'world' && (
         <svg
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
           style={{
             position: 'absolute',
             inset: 0,
@@ -279,16 +436,13 @@ export default function ConferencesMapPage() {
           }}
         >
           {CONTINENTS.map((cont) => (
-            <rect
+            <polygon
               key={cont.key}
-              x={cont.zone.x + '%'}
-              y={cont.zone.y + '%'}
-              width={cont.zone.w + '%'}
-              height={cont.zone.h + '%'}
-              fill={hovered === cont.key ? 'rgba(238,217,138,0.15)' : 'transparent'}
-              stroke={hovered === cont.key ? 'rgba(238,217,138,0.4)' : 'transparent'}
+              points={cont.points.replace(/%/g, '')}
+              fill={hovered === cont.key ? 'rgba(238,217,138,0.12)' : 'transparent'}
+              stroke={hovered === cont.key ? 'rgba(238,217,138,0.35)' : 'transparent'}
               strokeWidth={1.5}
-              rx={4}
+              vectorEffect="non-scaling-stroke"
               style={{ pointerEvents: 'all', cursor: 'crosshair' }}
               onMouseEnter={() => setHovered(cont.key)}
               onMouseLeave={() => setHovered(null)}
@@ -298,13 +452,13 @@ export default function ConferencesMapPage() {
       )}
 
       {/* LAYER 5 — Continent tooltip */}
-      {phase === 'world' && hoveredDef && (
+      {phase === 'world' && hoveredDef && tooltipPos && (
         <div
           style={{
             position: 'absolute',
             zIndex: 30,
-            top: (hoveredDef.zone.y + hoveredDef.zone.h / 2) + '%',
-            left: (hoveredDef.zone.x + hoveredDef.zone.w / 2) + '%',
+            top: tooltipPos.y + '%',
+            left: tooltipPos.x + '%',
             transform: 'translate(-50%, -50%)',
             pointerEvents: 'none',
           }}
@@ -413,7 +567,6 @@ export default function ConferencesMapPage() {
                 fontWeight: 700,
                 color: '#B6871F',
                 letterSpacing: '0.2em',
-                marginBottom: 8,
                 margin: '0 0 8px 0',
                 textTransform: 'uppercase',
               }}
@@ -557,33 +710,7 @@ export default function ConferencesMapPage() {
         </div>
       )}
 
-      {/* LAYER 9 — Back button */}
-      {phase === 'continent' && (
-        <button
-          onClick={handleBack}
-          style={{
-            position: 'absolute',
-            top: 32,
-            left: 32,
-            zIndex: 30,
-            backgroundColor: 'rgba(250,248,243,0.92)',
-            border: '1px solid #DDD4C0',
-            borderRadius: 10,
-            padding: '8px 18px',
-            fontSize: 12,
-            fontWeight: 800,
-            color: '#1B3828',
-            fontFamily: "'Outfit', sans-serif",
-            letterSpacing: '0.06em',
-            outline: 'none',
-            cursor: 'pointer',
-          }}
-        >
-          ← BACK TO MAP
-        </button>
-      )}
-
-      {/* LAYER 10 — Hint text */}
+      {/* LAYER 10 — Hint text (world phase) */}
       {phase === 'world' && (
         <div
           style={{
@@ -600,7 +727,11 @@ export default function ConferencesMapPage() {
               fontFamily: "'DM Mono', monospace",
               fontSize: 9,
               letterSpacing: '0.2em',
-              color: 'rgba(238,217,138,0.5)',
+              color: 'rgba(238,217,138,0.9)',
+              backgroundColor: 'rgba(27,56,40,0.6)',
+              borderRadius: 20,
+              padding: '6px 16px',
+              border: '1px solid rgba(238,217,138,0.15)',
               whiteSpace: 'nowrap',
               margin: 0,
               animation: 'pulse-hint 2s ease-in-out infinite alternate',
@@ -608,16 +739,37 @@ export default function ConferencesMapPage() {
           >
             HOVER A CONTINENT AND SCROLL TO EXPLORE
           </p>
-          <style>{`
-            @keyframes pulse-hint {
-              from { opacity: 0.4; }
-              to { opacity: 1; }
-            }
-            @keyframes pulse-skeleton {
-              0%, 100% { opacity: 1; }
-              50% { opacity: 0.4; }
-            }
-          `}</style>
+        </div>
+      )}
+
+      {/* Scroll-up-to-return hint (continent phase) */}
+      {phase === 'continent' && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 32,
+            right: 48,
+            zIndex: 30,
+            pointerEvents: 'none',
+          }}
+        >
+          <p
+            style={{
+              fontFamily: "'DM Mono', monospace",
+              fontSize: 9,
+              letterSpacing: '0.2em',
+              color: 'rgba(238,217,138,0.9)',
+              backgroundColor: 'rgba(27,56,40,0.6)',
+              borderRadius: 20,
+              padding: '6px 16px',
+              border: '1px solid rgba(238,217,138,0.15)',
+              whiteSpace: 'nowrap',
+              margin: 0,
+              animation: 'pulse-hint 2s ease-in-out infinite alternate',
+            }}
+          >
+            SCROLL UP TO RETURN TO MAP
+          </p>
         </div>
       )}
     </div>
