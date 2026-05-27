@@ -304,9 +304,10 @@ function GlobeSection() {
       className="relative"
       style={{
         backgroundColor: '#1B3828',
-        minHeight: '100vh',
+        minHeight: '100dvh',
         display: 'flex',
         flexDirection: 'column',
+        justifyContent: 'space-between',
       }}
     >
       {/* Grain overlay */}
@@ -322,7 +323,7 @@ function GlobeSection() {
           right: 0,
           top: 0,
           bottom: 0,
-          width: '70%',
+          width: '52%',
           height: '100%',
           overflow: 'hidden',
           pointerEvents: 'none',
@@ -335,14 +336,6 @@ function GlobeSection() {
           muted
           playsInline
           style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: '30% center', display: 'block' }}
-        />
-        {/* Left edge fade into forest background */}
-        <div
-          style={{
-            position: 'absolute',
-            inset: 0,
-            background: 'linear-gradient(to right, #1B3828 0%, #1B3828 18%, rgba(27,56,40,0.9) 35%, rgba(27,56,40,0.3) 52%, transparent 65%)',
-          }}
         />
         {/* Top/bottom fade */}
         <div
@@ -357,7 +350,7 @@ function GlobeSection() {
           style={{
             position: 'absolute',
             inset: 0,
-            background: 'linear-gradient(to left, #1B3828 0%, rgba(27,56,40,0.7) 12%, transparent 30%)',
+            background: 'linear-gradient(to left, #1B3828 0%, rgba(27,56,40,0.5) 8%, transparent 22%)',
           }}
         />
       </div>
@@ -372,8 +365,8 @@ function GlobeSection() {
           justifyContent: 'center',
           paddingLeft: 56,
           paddingRight: 56,
-          paddingTop: 120,
-          paddingBottom: 80,
+          paddingTop: 100,
+          paddingBottom: 40,
           maxWidth: 600,
           flex: 1,
         }}
@@ -446,6 +439,49 @@ function GlobeSection() {
           EXPLORE CONFERENCES WORLDWIDE →
         </Link>
       </div>
+
+      {/* Footer */}
+      <footer
+        className="relative z-10 px-6 py-8"
+        style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='0.18'/%3E%3C/svg%3E")`,
+          backgroundRepeat: 'repeat',
+          backgroundSize: '300px 300px',
+          backgroundColor: '#1B3828',
+          borderTop: '1px solid rgba(238,217,138,0.1)',
+        }}
+      >
+        <div className="flex flex-col items-center gap-4 md:grid md:grid-cols-3 md:gap-0 md:items-center">
+          <img
+            src="/GavellingLogo.png"
+            alt="Gavelling"
+            className="h-7 w-auto"
+            style={{ filter: 'brightness(0) saturate(100%) invert(18%) sepia(25%) saturate(800%) hue-rotate(100deg) brightness(85%)' }}
+            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+          />
+          <div className="flex items-center justify-center gap-4">
+            <a
+              href="https://www.instagram.com/wearegavelling/"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Instagram"
+              style={{ color: 'rgba(237,231,216,0.35)', transition: 'color 0.15s' }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#EED98A'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = 'rgba(237,231,216,0.35)'; }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>
+              </svg>
+            </a>
+            <span aria-label="LinkedIn (coming soon)" style={{ color: 'rgba(237,231,216,0.2)', cursor: 'default' }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/>
+              </svg>
+            </span>
+          </div>
+          <p className="text-xs font-semibold md:text-right" style={{ color: 'rgba(237,231,216,0.45)' }}>© {new Date().getFullYear()} Gavelling. Built for the MUN community.</p>
+        </div>
+      </footer>
     </section>
   );
 }
@@ -474,48 +510,6 @@ export default function ConferencesClient() {
         <OrganiserSection />
         <RolesSection />
         <GlobeSection />
-
-        {/* Footer */}
-        <footer
-          className="relative z-10 border-t border-[#DDD4C0] px-6 py-8"
-          style={{
-            backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='0.18'/%3E%3C/svg%3E")`,
-            backgroundRepeat: 'repeat',
-            backgroundSize: '300px 300px',
-            backgroundColor: '#F6F1E9',
-          }}
-        >
-          <div className="flex flex-col items-center gap-4 md:grid md:grid-cols-3 md:gap-0 md:items-center">
-            <img
-              src="/GavellingLogo.png"
-              alt="Gavelling"
-              className="h-7 w-auto"
-              style={{ filter: 'brightness(0) saturate(100%) invert(18%) sepia(25%) saturate(800%) hue-rotate(100deg) brightness(85%)' }}
-              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-            />
-            <div className="flex items-center justify-center gap-4">
-              <a
-                href="https://www.instagram.com/wearegavelling/"
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="Instagram"
-                style={{ color: '#9A8A78', transition: 'color 0.15s' }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#1B3828'; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#9A8A78'; }}
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>
-                </svg>
-              </a>
-              <span aria-label="LinkedIn (coming soon)" style={{ color: '#C8BFB0', cursor: 'default' }}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/>
-                </svg>
-              </span>
-            </div>
-            <p className="text-xs font-semibold text-[#1B3828] md:text-right">© {new Date().getFullYear()} Gavelling. Built for the MUN community.</p>
-          </div>
-        </footer>
       </div>
     </div>
   );
