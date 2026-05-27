@@ -65,7 +65,7 @@ const CONTINENTS: ContinentDef[] = [
     key: 'africa',
     label: 'Africa',
     mapSrc: '/map/africa_map.png',
-    points: '43%,34% 50%,32% 57%,32% 60%,35% 60%,38% 64%,44% 65%,52% 64%,62% 60%,72% 56%,80% 50%,85% 46%,83% 42%,72% 41%,58% 41%,48% 42%,40%',
+    points: '43%,34% 50%,32% 57%,32% 59%,33% 59%,38% 60%,44% 64%,44% 65%,52% 64%,62% 60%,72% 56%,80% 50%,85% 46%,83% 42%,72% 41%,58% 41%,48% 42%,40%',
     countries: [
       'Nigeria', 'South Africa', 'Kenya', 'Ghana', 'Ethiopia', 'Tanzania',
       'Uganda', 'Rwanda', 'Senegal', 'Ivory Coast', 'Cameroon', 'Zimbabwe',
@@ -83,7 +83,7 @@ const CONTINENTS: ContinentDef[] = [
     key: 'asia',
     label: 'Asia',
     mapSrc: '/map/asia_map.png',
-    points: '68%,8% 82%,2% 92%,4% 96%,12% 95%,22% 92%,32% 90%,42% 88%,50% 92%,58% 88%,62% 82%,64% 74%,62% 66%,58% 62%,50% 62%,38% 62%,28% 65%,18%',
+    points: '57%,34% 62%,28% 65%,18% 68%,8% 82%,2% 92%,4% 96%,12% 95%,22% 92%,32% 90%,42% 88%,50% 92%,58% 88%,62% 82%,64% 74%,62% 66%,58% 62%,50% 62%,44% 61%,44% 59%,38% 59%,33%',
     countries: [
       'China', 'India', 'Japan', 'South Korea', 'Indonesia', 'Pakistan',
       'Bangladesh', 'Vietnam', 'Thailand', 'Malaysia', 'Singapore', 'Philippines',
