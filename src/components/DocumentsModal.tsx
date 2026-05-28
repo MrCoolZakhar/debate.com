@@ -628,19 +628,18 @@ function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation
           style={{ backgroundColor: 'rgba(27,56,40,0.10)', width: '88px' }}>
 
           {/* Thumbnail — PDF preview or fallback emoji */}
-          <div className="w-full rounded-lg overflow-hidden border border-[#1B3828]/15 flex-1" style={{ maxHeight: '120px' }}>
+          <div className="w-full rounded-lg overflow-hidden border border-[#1B3828]/15 flex-1 flex items-center justify-center"
+            style={{ maxHeight: '120px', minHeight: '80px', backgroundColor: '#FAF8F3' }}>
             {doc.fileUrl ? (
               <iframe
                 src={doc.fileUrl}
                 title={doc.docCode}
-                className="w-full h-full"
-                style={{ height: '120px', pointerEvents: 'none', transform: 'scale(1)', transformOrigin: 'top left' }}
+                className="w-full"
+                style={{ height: '120px', pointerEvents: 'none' }}
                 scrolling="no"
               />
             ) : (
-              <div className="w-full h-full flex items-center justify-center bg-[#FAF8F3]" style={{ minHeight: '80px' }}>
-                <span style={{ fontSize: '2rem' }}>📄</span>
-              </div>
+              <span style={{ fontSize: '3.5rem', lineHeight: 1, userSelect: 'none' }}>📋</span>
             )}
           </div>
 
