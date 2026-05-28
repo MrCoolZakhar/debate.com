@@ -361,6 +361,14 @@ export function SettingsPanel({ committee, onClose }: {
           {/* ── Access & Identity ── */}
           {tab === 'access' && (
             <div>
+              <SectionLabel>GSL</SectionLabel>
+              <Toggle
+                label={t('settings_gsl_require_next_label')}
+                note={t('settings_gsl_require_next_note')}
+                value={s.gslRequireNextSpeaker}
+                onChange={(v) => upd('gslRequireNextSpeaker', v)}
+              />
+
               <SectionLabel>{t('settings_section_codes')}</SectionLabel>
               <div className="py-3" style={{ borderBottom: '1px solid #DDD4C0' }}>
                 <div className="text-xs mb-1.5" style={{ color: '#9A8A78' }}>Session code</div>

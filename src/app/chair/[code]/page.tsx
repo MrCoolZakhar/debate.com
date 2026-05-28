@@ -274,6 +274,9 @@ function RtrCountryInput({
   );
 }
 
+// Flags that are square (non-rectangular) — no border/shadow
+const SQUARE_FLAGS = new Set(['CH', 'NP']);
+
 // ── Draggable GSL Speakers Queue ──────────────────────────────────────────────
 function DraggableSpeakersQueue({ list, onReorder, onRemove, lastSpeakerDelegateId, currentSpeakerDelegateId, isRoomOrderTdT }: {
   list: { delegateId: string; country: string }[];
@@ -295,6 +298,7 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, lastSpeakerDelegate
       <div className="flex flex-nowrap items-start gap-2 pt-2 pb-1 justify-center min-w-0 px-1">
         {displayItems.map((s, i) => {
           const isCurrent = currentSpeakerDelegateId && s.delegateId === currentSpeakerDelegateId;
+          const flagCountry = getCountryByName(s.country);
           return (
             <div key={`${s.delegateId}-${i}`} className="flex flex-col items-center gap-1 relative group cursor-grab shrink-0"
               draggable={!isCurrent}
@@ -314,8 +318,8 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, lastSpeakerDelegate
                   <span className="text-2xl font-black" style={{ color: '#1B3828' }}>{i + 2}</span>
                 </div>
               ) : (
-                <div style={{ width: '60px', height: '45px', borderRadius: '8px', overflow: 'hidden', boxShadow: '0 0 0 1.5px rgba(28,20,16,0.20)', backgroundColor: '#F0EBE1', flexShrink: 0 }}>
-                  {(() => { const f = getCountryByName(s.country); return f ? <img src={getFlagUrl(f.code)} alt={s.country} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : null; })()}
+                <div style={{ width: '60px', height: '45px', borderRadius: '8px', overflow: 'hidden', boxShadow: flagCountry && SQUARE_FLAGS.has(flagCountry.code) ? 'none' : '0 0 0 1.5px rgba(28,20,16,0.20)', backgroundColor: '#F0EBE1', flexShrink: 0 }}>
+                  {flagCountry ? <img src={getFlagUrl(flagCountry.code)} alt={s.country} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : null}
                 </div>
               )}
               {!isRoomOrderTdT && (
@@ -534,7 +538,7 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false }: 
         updateLocal(setCommittee, (c) => {
           if (!c.caucus) return c;
           const newTotal = Math.max(0, c.caucus.remainingTime - 1);
-          return { ...c, caucus: newTotal === 0 ? null : { ...c.caucus, remainingTime: newTotal } };
+          return { ...c, caucus: { ...c.caucus, remainingTime: newTotal } };
         });
       };
       tick();
@@ -1519,6 +1523,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const quorumMap: Record<string, number> = { 'none': 0, '1-4': 1 / 4, '1-3': 1 / 3, '1-2': 1 / 2 };
   const quorumFraction = quorumMap[settings.quorumThreshold ?? 'none'] ?? 0;
   const belowQuorum = quorumFraction > 0 && totalCount > 0 && (presentCount / totalCount) < quorumFraction;
+  const gslRequireNextSpeaker = settings.gslRequireNextSpeaker;
 
   // ── Optimistic action handlers ──────────────────────────────────────────────
 
@@ -2286,7 +2291,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                             <div className={`h-full rounded-full transition-all ${progress > 20 ? 'bg-[#B6871F]' : 'bg-[#B8844A]'}`} style={{ width: `${progress}%` }} />
                           </div>
                         </div>
-                        {isLastGSLSpeaker && (
+                        {gslRequireNextSpeaker && isLastGSLSpeaker && (
                           <div className="mb-2 px-4 py-2 bg-[#B6871F]/10 border border-[#B6871F]/30 rounded-lg text-[#B6871F] text-xs text-center">
                             {t('gsl_never_empty_warning')}
                           </div>
@@ -2302,10 +2307,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                           {/* Start/Pause */}
                           <button onClick={handleToggleTimer}
                             data-tutorial="timer-toggle"
-                            disabled={isLastGSLSpeaker}
+                            disabled={gslRequireNextSpeaker && isLastGSLSpeaker}
                             className={`flex-1 py-3 px-6 rounded-xl font-bold text-base transition-colors focus:outline-none ${
                               timerRunning ? 'bg-[#B6871F] hover:bg-[#B6871F]/80 text-white' :
-                              isLastGSLSpeaker ? 'bg-[#DDD4C0] text-[#9A8A78] cursor-not-allowed' :
+                              (gslRequireNextSpeaker && isLastGSLSpeaker) ? 'bg-[#DDD4C0] text-[#9A8A78] cursor-not-allowed' :
                               'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'
                             }`}>
                             {timerRunning ? (

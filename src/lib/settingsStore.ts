@@ -28,6 +28,8 @@ export interface CommitteeSettings {
   motionNames: MotionNames;
   wpSubmissionLimit: number | null;  // null = unlimited
   drSubmissionLimit: number | null;
+  // GSL behaviour
+  gslRequireNextSpeaker: boolean;
   // Tab 3 — Access & Identity
   chairJoinSuffix: string;
   requireChairApproval: boolean;
@@ -66,6 +68,7 @@ export const DEFAULT_SETTINGS: CommitteeSettings = {
   chairSessionPersistence: true,
   chairTakeoverProtection: true,
   requireDelegationName: true,
+  gslRequireNextSpeaker: false,
 };
 
 interface SettingsStore {
