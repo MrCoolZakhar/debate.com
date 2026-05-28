@@ -624,9 +624,13 @@ function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation
       <div className="flex items-stretch">
 
         {/* Left strip — emoji fills the full card height */}
-        <div className="relative shrink-0 flex items-center justify-center overflow-hidden"
-          style={{ width: '72px' }}>
-          <span className="select-none" style={{ fontSize: '7.2rem', lineHeight: 1, marginLeft: '12px' }}>📄</span>
+        <div className="relative shrink-0 flex flex-col items-center justify-center overflow-hidden gap-1"
+          style={{ width: '80px' }}>
+          <span className="select-none" style={{ fontSize: '8.64rem', lineHeight: 1, marginLeft: '20px' }}>📄</span>
+          <span className="font-black text-center leading-none select-none"
+            style={{ fontSize: '9px', color: '#EED98A', fontFamily: "'DM Mono', monospace", marginLeft: '20px', letterSpacing: '0.05em' }}>
+            {doc.docCode}
+          </span>
         </div>
 
         {/* Right content */}
