@@ -623,12 +623,30 @@ function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation
     <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl overflow-hidden">
       <div className="flex items-stretch">
 
-        {/* Left strip — emoji fills the full card height */}
-        <div className="relative shrink-0 flex flex-col items-center justify-center overflow-hidden gap-1"
-          style={{ width: '80px' }}>
-          <span className="select-none" style={{ fontSize: '8.64rem', lineHeight: 1, marginLeft: '20px' }}>📄</span>
-          <span className="font-black text-center leading-none select-none"
-            style={{ fontSize: '9px', color: '#EED98A', fontFamily: "'DM Mono', monospace", marginLeft: '20px', letterSpacing: '0.05em' }}>
+        {/* Left strip — doc thumbnail with padding from border */}
+        <div className="flex flex-col items-center justify-between shrink-0 p-2"
+          style={{ backgroundColor: 'rgba(27,56,40,0.10)', width: '88px' }}>
+
+          {/* Thumbnail — PDF preview or fallback emoji */}
+          <div className="w-full rounded-lg overflow-hidden border border-[#1B3828]/15 flex-1" style={{ maxHeight: '120px' }}>
+            {doc.fileUrl ? (
+              <iframe
+                src={doc.fileUrl}
+                title={doc.docCode}
+                className="w-full h-full"
+                style={{ height: '120px', pointerEvents: 'none', transform: 'scale(1)', transformOrigin: 'top left' }}
+                scrolling="no"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center bg-[#FAF8F3]" style={{ minHeight: '80px' }}>
+                <span style={{ fontSize: '2rem' }}>📄</span>
+              </div>
+            )}
+          </div>
+
+          {/* Doc code below the thumbnail */}
+          <span className="mt-1.5 text-center font-black"
+            style={{ fontSize: '9px', color: '#1B3828', fontFamily: "'DM Mono', monospace", letterSpacing: '0.03em' }}>
             {doc.docCode}
           </span>
         </div>
