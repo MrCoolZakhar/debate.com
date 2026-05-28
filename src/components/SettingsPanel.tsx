@@ -184,10 +184,7 @@ export function SettingsPanel({ committee, onClose }: {
       <div className="w-full max-w-md flex flex-col h-full shadow-2xl overflow-hidden" style={{ backgroundColor: '#FAF8F3', borderLeft: '1px solid #DDD4C0' }}>
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 shrink-0" style={{ borderBottom: '1px solid #DDD4C0', backgroundColor: '#1B3828' }}>
-          <div className="flex flex-col">
-            <h2 className="text-base font-black" style={{ color: '#EED98A' }}>{t('settings_session_settings')}</h2>
-            <p className="text-xs mt-0.5" style={{ color: 'rgba(238,217,138,0.6)', fontFamily: "'DM Mono', monospace" }}>{committee.name} · {committee.code}</p>
-          </div>
+          <h2 className="text-xl font-black" style={{ color: '#EED98A' }}>{t('settings_session_settings')}</h2>
           <div className="flex items-center gap-2.5">
             {/* Compact language toggle in header */}
             <div className="relative">
