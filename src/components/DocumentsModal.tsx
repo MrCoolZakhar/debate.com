@@ -625,8 +625,8 @@ function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation
 
         {/* Left strip — emoji fills the full card height */}
         <div className="relative shrink-0 flex items-center justify-center overflow-hidden"
-          style={{ backgroundColor: 'rgba(27,56,40,0.10)', width: '72px' }}>
-          <span className="select-none" style={{ fontSize: '6rem', lineHeight: 1 }}>📄</span>
+          style={{ width: '72px' }}>
+          <span className="select-none" style={{ fontSize: '7.2rem', lineHeight: 1, marginLeft: '12px' }}>📄</span>
         </div>
 
         {/* Right content */}
