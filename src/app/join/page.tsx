@@ -10,6 +10,7 @@ import { useSettingsStore } from '@/lib/settingsStore';
 import { Emoji } from '@/components/Emoji';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { getCountryDisplayName } from '@/lib/countries';
+import { supabase } from '@/lib/supabase';
 
 type JoinMode = 'delegate' | 'chair' | 'advisor';
 
@@ -35,6 +36,8 @@ function JoinPageInner() {
   const [newChairName, setNewChairName] = useState('');
   const [chairPassword, setChairPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
+  const [chairAlreadyActive, setChairAlreadyActive] = useState(false);
+  const presenceChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -47,6 +50,32 @@ function JoinPageInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Subscribe to chair presence channel to detect if a chair is already active
+  useEffect(() => {
+    if (presenceChannelRef.current) {
+      supabase.removeChannel(presenceChannelRef.current);
+      presenceChannelRef.current = null;
+      setChairAlreadyActive(false);
+    }
+    if (!foundCommittee || mode !== 'chair') return;
+
+    const channel = supabase.channel(`chair-presence-${foundCommittee.id}`);
+    presenceChannelRef.current = channel;
+
+    channel
+      .on('presence', { event: 'sync' }, () => {
+        const state = channel.presenceState<{ joinedAt: number }>();
+        setChairAlreadyActive(Object.keys(state).length > 0);
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+      presenceChannelRef.current = null;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [foundCommittee?.id, mode]);
+
   function doLookup(upper: string, currentMode: JoinMode = mode) {
     setLookingUp(true);
     setError('');
@@ -56,6 +85,7 @@ function JoinPageInner() {
     setNewChairName('');
     setChairPassword('');
     setPasswordError('');
+    setChairAlreadyActive(false);
 
     // 1. Check local store first (instant)
     const local = Object.values(committees).find((c) => c.code === upper);
@@ -126,6 +156,7 @@ function JoinPageInner() {
     setNewChairName('');
     setChairPassword('');
     setPasswordError('');
+    setChairAlreadyActive(false);
   };
 
   const tabs: { key: JoinMode; label: string; icon: string }[] = [
@@ -305,6 +336,16 @@ function JoinPageInner() {
             </div>
           )}
 
+          {foundCommittee && mode === 'chair' && chairAlreadyActive && (
+            <div className="mb-4 px-4 py-3 rounded-xl text-xs font-semibold flex items-center gap-2"
+              style={{ backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.2)', color: '#8B2020' }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+              Another chair is already managing this session — you can join once they disconnect.
+            </div>
+          )}
+
           {foundCommittee && mode === 'chair' && (() => {
             const requiresPassword = !!(foundCommittee.dbChairJoinSuffix ?? getSettings(foundCommittee.code).chairJoinSuffix);
             if (!requiresPassword) return null;
@@ -334,7 +375,8 @@ function JoinPageInner() {
                 : mode === 'chair'
                 ? (!foundCommittee ||
                     (chairNameMode === 'select' ? !chairName : !newChairName.trim()) ||
-                    (!!(foundCommittee.dbChairJoinSuffix ?? getSettings(foundCommittee.code).chairJoinSuffix) && !chairPassword))
+                    (!!(foundCommittee.dbChairJoinSuffix ?? getSettings(foundCommittee.code).chairJoinSuffix) && !chairPassword) ||
+                    chairAlreadyActive)
                 : !foundCommittee
             }
             className="w-full py-4 rounded-2xl font-black text-base transition-all focus:outline-none"

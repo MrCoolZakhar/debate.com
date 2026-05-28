@@ -29,8 +29,6 @@ export interface CommitteeSettings {
   wpSubmissionLimit: number | null;  // null = unlimited
   drSubmissionLimit: number | null;
   // Tab 3 — Access & Identity
-  customSessionId: string;
-  separateChairCode: boolean;
   chairJoinSuffix: string;
   requireChairApproval: boolean;
   chairSessionPersistence: boolean;
@@ -63,8 +61,6 @@ export const DEFAULT_SETTINGS: CommitteeSettings = {
   motionNames: { ...DEFAULT_MOTION_NAMES },
   wpSubmissionLimit: null,
   drSubmissionLimit: null,
-  customSessionId: '',
-  separateChairCode: true,
   chairJoinSuffix: '',
   requireChairApproval: false,
   chairSessionPersistence: true,
@@ -103,7 +99,7 @@ export const useSettingsStore = create<SettingsStore>()(
           const existing = s.settings[oldCode] ?? DEFAULT_SETTINGS;
           const updated = { ...s.settings };
           delete updated[oldCode];
-          updated[newCode] = { ...existing, customSessionId: newCode };
+          updated[newCode] = { ...existing };
           return { settings: updated };
         }),
     }),

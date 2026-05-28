@@ -435,7 +435,6 @@ function CreatePageInner() {
       const result = await createCommitteeInDB(committeeName.trim(), topic.trim(), names.length > 0 ? names : ['Chair'], delegates);
       if (result) {
         updateSetting(result.code, 'chairJoinSuffix', result.chairJoinSuffix);
-        updateSetting(result.code, 'separateChairCode', true);
         const creatorName = names.length > 0 ? names[0] : 'Chair';
         router.push(`/chair/${result.code}?chairName=${encodeURIComponent(creatorName)}`);
       } else {

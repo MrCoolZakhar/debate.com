@@ -984,7 +984,7 @@ function ModeratedCaucusMain({
               </button>}
             </div>
           )}
-          <CaucusAddSpeakerInput
+          {!isViewOnly && <CaucusAddSpeakerInput
             committee={committee}
             spokenCountries={spokenCountries}
             onAdd={handleCaucusAddToQueue}
@@ -994,7 +994,7 @@ function ModeratedCaucusMain({
             currentQueueLength={queue.length}
             currentSpeakerCountry={committee.currentSpeaker?.country ?? null}
             onEndCaucus={isTdT ? handleEndCaucus : undefined}
-          />
+          />}
         </div>
       )}
     </>
@@ -1115,9 +1115,6 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         committeeIdRef.current = found.id;
         if (found.dbChairJoinSuffix) {
           updateSetting(found.code, 'chairJoinSuffix', found.dbChairJoinSuffix);
-        }
-        if (found.dbSeparateChairCode !== undefined) {
-          updateSetting(found.code, 'separateChairCode', found.dbSeparateChairCode);
         }
       }
       setLoading(false);

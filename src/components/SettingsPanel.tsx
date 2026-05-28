@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useSettingsStore, CommitteeSettings } from '@/lib/settingsStore';
 import { Committee } from '@/lib/types';
-import { updateCommitteeCode, updateCommitteeChairSuffixInDB } from '@/lib/committeeService';
+import { updateCommitteeChairSuffixInDB } from '@/lib/committeeService';
 import { getFlagEmoji, getCountryByName, getCountryDisplayName } from '@/lib/countries';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 
@@ -11,6 +11,47 @@ type SettingsTab = 'voting' | 'motions' | 'access' | 'points';
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return <p className="text-[10px] font-mono font-bold tracking-widest mb-1 mt-5 first:mt-0" style={{ color: '#1B3828' }}>{children}</p>;
+}
+
+function CodeCopyButton({ code }: { code: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      onClick={() => { navigator.clipboard.writeText(code); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
+      className="w-full flex items-center justify-center gap-2 rounded-xl py-3 font-mono text-xl tracking-widest font-black transition-all focus:outline-none"
+      style={{ backgroundColor: '#1B3828', color: '#EED98A', letterSpacing: '0.12em' }}
+      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+    >
+      {copied
+        ? <><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg> Copied</>
+        : <>{code} <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" opacity="0.6"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></>
+      }
+    </button>
+  );
+}
+
+function ChairPasswordDisplay({ password }: { password: string }) {
+  const [revealed, setRevealed] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  return (
+    <button
+      onClick={() => { navigator.clipboard.writeText(password); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
+      onMouseEnter={() => setRevealed(true)}
+      onMouseLeave={() => { setRevealed(false); }}
+      className="w-full flex items-center justify-between rounded-xl px-4 py-2.5 font-mono text-sm font-bold tracking-widest transition-all focus:outline-none group"
+      style={{ backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0', color: '#1B3828' }}
+    >
+      <span style={{ letterSpacing: revealed ? '0.12em' : '0.05em', filter: revealed ? 'none' : 'blur(4px)', transition: 'filter 0.2s ease', userSelect: revealed ? 'text' : 'none' }}>
+        {password}
+      </span>
+      {copied
+        ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3D7A52" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+        : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" opacity={revealed ? 1 : 0.4}><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+      }
+    </button>
+  );
 }
 
 function Toggle({ value, onChange, label, note }: {
@@ -57,70 +98,32 @@ function SelectRow({ value, onChange, label, options, note }: {
   );
 }
 
-export function SettingsPanel({ committee, onClose, onCodeChange }: {
+export function SettingsPanel({ committee, onClose }: {
   committee: Committee;
   onClose: () => void;
-  onCodeChange?: (newCode: string) => void;
 }) {
   const t = useT();
   const { language, setLanguage } = useLanguage();
   const [tab, setTab] = useState<SettingsTab>('access');
-  const { getSettings, updateSetting, migrateSettings } = useSettingsStore();
+  const { getSettings, updateSetting } = useSettingsStore();
   const s = getSettings(committee.code);
   const upd = <K extends keyof CommitteeSettings>(key: K, value: CommitteeSettings[K]) =>
     updateSetting(committee.code, key, value);
 
-  // Custom session ID local state — allows full erase
-  const [customCodeInput, setCustomCodeInput] = useState(s.customSessionId || committee.code);
-  const [codeSaving, setCodeSaving] = useState(false);
-  const [codeError, setCodeError] = useState('');
-  const [codeSaved, setCodeSaved] = useState(false);
-
   // Points tab — expanded delegate
   const [expandedDelegate, setExpandedDelegate] = useState<string | null>(null);
 
-  // Keep input in sync if the prop changes (e.g. after a redirect)
+  // Auto-generate chairJoinSuffix on mount if none exists; always sync to DB
   useEffect(() => {
-    setCustomCodeInput(s.customSessionId || committee.code);
-  }, [committee.code, s.customSessionId]);
-
-  // Auto-generate chairJoinSuffix when separateChairCode is enabled and suffix is empty
-  useEffect(() => {
-    if (s.separateChairCode && s.chairJoinSuffix === '') {
+    if (s.chairJoinSuffix === '') {
       const newSuffix = Math.floor(1000 + Math.random() * 9000).toString();
       upd('chairJoinSuffix', newSuffix);
       updateCommitteeChairSuffixInDB(committee.id, newSuffix);
-    } else if (s.separateChairCode && s.chairJoinSuffix !== '') {
+    } else {
       updateCommitteeChairSuffixInDB(committee.id, s.chairJoinSuffix);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [s.separateChairCode, s.chairJoinSuffix]);
-
-  const handleCodeSave = async () => {
-    const newCode = customCodeInput.trim().toUpperCase();
-    if (!newCode) {
-      setCodeError('Code cannot be empty.');
-      return;
-    }
-    if (newCode.length < 4) {
-      setCodeError('Code must be at least 4 characters.');
-      return;
-    }
-    if (newCode === committee.code) return; // no change
-
-    setCodeSaving(true);
-    setCodeError('');
-    const success = await updateCommitteeCode(committee.id, newCode);
-    if (success) {
-      migrateSettings(committee.code, newCode);
-      setCodeSaved(true);
-      setTimeout(() => setCodeSaved(false), 2000);
-      onCodeChange?.(newCode);
-    } else {
-      setCodeError('Code already taken or invalid. Try another.');
-    }
-    setCodeSaving(false);
-  };
+  }, [s.chairJoinSuffix]);
 
   // ── Points scoring helpers ──
   function computeScore(country: string) {
@@ -363,67 +366,13 @@ export function SettingsPanel({ committee, onClose, onCodeChange }: {
             <div>
               <SectionLabel>{t('settings_section_codes')}</SectionLabel>
               <div className="py-3" style={{ borderBottom: '1px solid #DDD4C0' }}>
-                <div className="text-sm font-semibold mb-0.5" style={{ color: '#1C1410' }}>{t('settings_custom_id_label')}</div>
-                <div className="text-xs mb-2 leading-snug" style={{ color: '#9A8A78' }}>
-                  {t('settings_custom_id_note')}
-                  {t('settings_code_hint')}
-                </div>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={customCodeInput}
-                    onChange={(e) => {
-                      setCustomCodeInput(e.target.value.toUpperCase());
-                      setCodeError('');
-                      setCodeSaved(false);
-                    }}
-                    onKeyDown={(e) => { if (e.key === 'Enter') handleCodeSave(); }}
-                    placeholder={committee.code}
-                    maxLength={20}
-                    className="flex-1 rounded-lg px-3 py-2 text-sm focus:outline-none font-mono"
-                    style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #DDD4C0', color: '#1C1410' }}
-                    onFocus={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
-                    onBlur={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
-                  />
-                  <button
-                    onClick={handleCodeSave}
-                    disabled={codeSaving || !customCodeInput.trim() || customCodeInput.trim().toUpperCase() === committee.code}
-                    className="px-3 py-2 rounded-lg text-xs font-bold transition-colors shrink-0 focus:outline-none"
-                    style={{
-                      backgroundColor: codeSaved ? '#3D7A52' : (!codeSaving && customCodeInput.trim() && customCodeInput.trim().toUpperCase() !== committee.code) ? '#1B3828' : '#DDD4C0',
-                      color: codeSaved ? 'white' : (!codeSaving && customCodeInput.trim() && customCodeInput.trim().toUpperCase() !== committee.code) ? '#EDE7D8' : '#9A8A78',
-                    }}
-                  >
-                    {codeSaving ? '…' : codeSaved ? t('settings_saved_check') : t('settings_apply')}
-                  </button>
-                </div>
-                {codeError && <p className="text-red-400 text-xs mt-1.5">{codeError}</p>}
+                <div className="text-xs mb-1.5" style={{ color: '#9A8A78' }}>Session code</div>
+                <CodeCopyButton code={committee.code} />
               </div>
-              <Toggle
-                label={t('settings_separate_chair_code_label')}
-                note={t('settings_separate_chair_code_note')}
-                value={s.separateChairCode}
-                onChange={(v) => upd('separateChairCode', v)}
-              />
-              {s.separateChairCode && (
-                <div className="py-3" style={{ borderBottom: '1px solid #DDD4C0' }}>
-                  <div className="text-xs mb-1.5" style={{ color: '#9A8A78' }}>Chair password</div>
-                  <div className="flex items-center gap-2">
-                    <span className="flex-1 rounded-lg px-3 py-2 text-sm font-mono tracking-wider" style={{ backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0', color: '#1B3828' }}>
-                      {s.chairJoinSuffix || '????'}
-                    </span>
-                    <button
-                      onClick={() => navigator.clipboard.writeText(s.chairJoinSuffix || '')}
-                      className="px-3 py-2 rounded-lg text-xs font-bold transition-colors shrink-0 focus:outline-none"
-                      style={{ backgroundColor: '#1B3828', color: '#EED98A' }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-                    >
-                      {t('settings_copy')}
-                    </button>
-                  </div>
-                </div>
-              )}
+              <div className="py-3" style={{ borderBottom: '1px solid #DDD4C0' }}>
+                <div className="text-xs mb-1.5" style={{ color: '#9A8A78' }}>Chair password</div>
+                <ChairPasswordDisplay password={s.chairJoinSuffix || '????'} />
+              </div>
               <Toggle
                 label={t('settings_chair_approval_label')}
                 note={t('settings_chair_approval_note')}
