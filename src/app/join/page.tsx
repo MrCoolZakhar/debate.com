@@ -11,6 +11,7 @@ import { Emoji } from '@/components/Emoji';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { getCountryDisplayName } from '@/lib/countries';
 import { supabase } from '@/lib/supabase';
+import { PRESET_LOGOS } from '@/lib/presetNames';
 
 type JoinMode = 'delegate' | 'chair' | 'advisor';
 
@@ -216,7 +217,10 @@ function JoinPageInner() {
           {/* Committee found card */}
           {foundCommittee && (
             <div className="mb-5 rounded-xl px-4 py-2.5 flex items-center gap-3" style={{ backgroundColor: 'rgba(27,56,40,0.08)', border: '1.5px solid rgba(27,56,40,0.25)' }}>
-              <span className="text-xs font-mono font-black shrink-0" style={{ color: '#1B3828' }}>✓</span>
+              {PRESET_LOGOS[foundCommittee.name]
+                ? <img src={PRESET_LOGOS[foundCommittee.name]} alt="" className="w-8 h-8 object-contain shrink-0" />
+                : <span className="text-xs font-mono font-black shrink-0" style={{ color: '#1B3828' }}>✓</span>
+              }
               <div className="min-w-0">
                 <p className="font-black text-sm truncate" style={{ color: '#1C1410' }}>{foundCommittee.name}{foundCommittee.topic ? <span className="font-normal text-xs ml-1.5" style={{ color: '#9A8A78' }}>· {foundCommittee.topic}</span> : ''}</p>
                 <p className="text-xs" style={{ color: '#9A8A78' }}>{foundCommittee.delegates.length} {t('join_delegates_registered')}</p>
