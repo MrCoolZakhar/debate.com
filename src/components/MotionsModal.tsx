@@ -530,10 +530,27 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
             : 'p-4 space-y-2 border border-[#DDD4C0]'
         }`}
       >
-        <span className="absolute top-2 left-2 text-xs font-bold select-none" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}>#{idx + 1}</span>
+        {/* Position badge */}
+        <div
+          className="absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center text-xs font-black z-10 pointer-events-none"
+          style={{ backgroundColor: '#1B3828', color: '#EED98A' }}
+        >
+          {idx + 1}
+        </div>
         {/* Header: icon + type label + flag in top-right */}
         <div className="flex items-center gap-2">
-          <span className={`font-black text-[#1C1410] flex-1 ${large ? 'text-3xl' : 'text-lg'}`}>{meta.label}</span>
+          <span className={`font-black text-[#1C1410] flex-1 ${large ? 'text-3xl' : 'text-lg'}`}>
+            {meta.label}
+            {!isPrimary && !isViewOnly && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onEdit(m.id); }}
+                className="ml-1.5 text-sm opacity-50 hover:opacity-100 transition-opacity focus:outline-none"
+                title="Edit motion"
+              >
+                ✏️
+              </button>
+            )}
+          </span>
           {f ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ borderRadius: '8px', border: SQUARE_FLAGS.has(f.code) ? 'none' : '1.5px solid rgba(28,20,16,0.10)', objectFit: 'cover' }} className={large ? 'w-14 h-10 inline-block' : 'w-8 h-6 inline-block'} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : null}
         </div>
 
@@ -576,28 +593,26 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
           </div>
         )}
 
-        {/* Required votes */}
-        <div className="flex items-center gap-2 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-3 py-1.5">
-          <span className="text-xs font-semibold" style={{ color: '#1B3828' }}>{fraction === 'Simple majority' ? t('motions_simple_majority') : t('motions_supermajority')}</span>
-          <span className="text-xs font-bold ml-auto" style={{ color: '#1C1410' }}>{t('motions_needs_votes', { needed, present })}</span>
-        </div>
+        {/* Required votes — primary card only */}
+        {isPrimary && (
+          <div className="flex items-center gap-2 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-3 py-1.5">
+            <span className="text-xs font-semibold" style={{ color: '#1B3828' }}>{fraction === 'Simple majority' ? t('motions_simple_majority') : t('motions_supermajority')}</span>
+            <span className="text-xs font-bold ml-auto" style={{ color: '#1C1410' }}>{t('motions_needs_votes', { needed, present })}</span>
+          </div>
+        )}
 
-        {/* Accept/Reject/Edit — Accept+Reject only on primary; Edit on all */}
-        {!isViewOnly && (
+        {/* Accept/Reject/Edit — primary card only; non-primary has inline pencil */}
+        {isPrimary && !isViewOnly && (
           <div className="flex gap-2 mt-auto">
-            {isPrimary && (
-              <button onClick={() => onAccepted(m)}
-                className="flex-1 bg-[#2A5A3C] hover:bg-[#3D7A52] text-white py-2.5 rounded-xl font-bold text-sm transition-colors focus:outline-none" style={{ fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}>
-                {t('motions_accept_btn')}
-              </button>
-            )}
-            {isPrimary && (
-              <button onClick={() => onRemove(m.id)}
-                disabled={pendingIds.has(m.id)}
-                className={`flex-1 bg-[#DDD4C0] hover:bg-red-950/40 hover:text-[#8B2020] text-[#6A5A4A] border border-[#DDD4C0] hover:border-[#8B2020]/40 py-2.5 rounded-xl font-bold text-sm transition-colors focus:outline-none ${pendingIds.has(m.id) ? 'opacity-40 cursor-not-allowed' : ''}`} style={{ fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}>
-                {t('motions_reject_btn')}
-              </button>
-            )}
+            <button onClick={() => onAccepted(m)}
+              className="flex-1 bg-[#2A5A3C] hover:bg-[#3D7A52] text-white py-2.5 rounded-xl font-bold text-sm transition-colors focus:outline-none" style={{ fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}>
+              {t('motions_accept_btn')}
+            </button>
+            <button onClick={() => onRemove(m.id)}
+              disabled={pendingIds.has(m.id)}
+              className={`flex-1 bg-[#DDD4C0] hover:bg-red-950/40 hover:text-[#8B2020] text-[#6A5A4A] border border-[#DDD4C0] hover:border-[#8B2020]/40 py-2.5 rounded-xl font-bold text-sm transition-colors focus:outline-none ${pendingIds.has(m.id) ? 'opacity-40 cursor-not-allowed' : ''}`} style={{ fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}>
+              {t('motions_reject_btn')}
+            </button>
             <button onClick={(e) => { e.stopPropagation(); onEdit(m.id); }}
               title="Edit motion"
               className="bg-[#B6871F]/20 hover:bg-[#B6871F]/40 border border-[#B6871F]/50 hover:border-[#B6871F] text-[#B6871F] py-2.5 px-4 rounded-xl font-bold text-sm transition-colors shrink-0 focus:outline-none" style={{ fontFamily: "'DM Mono', monospace" }}>
