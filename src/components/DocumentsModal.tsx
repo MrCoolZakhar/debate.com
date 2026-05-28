@@ -550,9 +550,9 @@ function TimingSetup({ doc, onStart, onSkip }: {
 }) {
   const t = useT();
   const isWP = doc.type === 'working-paper';
-  const [readingMins, setReadingMins] = useState(5);
-  const [presentationMins, setPresentationMins] = useState(5);
-  const [qaMins, setQaMins] = useState(isWP ? 0 : 3);
+  const [readingMins, setReadingMins] = useState(0);
+  const [presentationMins, setPresentationMins] = useState(0);
+  const [qaMins, setQaMins] = useState(0);
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center px-8 py-12">
@@ -621,7 +621,12 @@ function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation
 
   return (
     <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl p-4 space-y-3">
-      <div className="flex items-start gap-3">
+      <div className="flex items-stretch gap-3">
+        {/* Doc icon — full height of the text block */}
+        <div className="shrink-0 w-10 rounded-lg flex items-center justify-center self-stretch" style={{ backgroundColor: '#1B3828' }}>
+          <span style={{ fontSize: '1.4rem', lineHeight: 1 }}>📄</span>
+        </div>
+
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1">
             {(() => {
@@ -639,21 +644,11 @@ function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation
           <p className="text-sm font-bold text-[#1C1410] leading-snug">{doc.title}</p>
         </div>
 
-        {/* Doc icon visual */}
-        <div className="relative shrink-0 w-10 h-12 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#1B3828' }}>
-          <span style={{ fontSize: '1.4rem', lineHeight: 1 }}>📄</span>
-          <span className="absolute bottom-0.5 left-0 right-0 text-center leading-none overflow-hidden"
-            style={{ fontSize: '6px', color: '#EED98A', fontFamily: "'DM Mono', monospace", fontWeight: 900 }}>
-            {doc.docCode}
-          </span>
-        </div>
-
         <button onClick={() => onRemove(doc.id)}
-          className="text-[#9A8A78] hover:text-red-500 transition-colors text-sm shrink-0 focus:outline-none mt-0.5"
+          className="text-[#9A8A78] hover:text-red-500 transition-colors text-sm shrink-0 focus:outline-none"
           title="Delete">✕</button>
       </div>
       <div className="text-xs text-[#6A5A4A]"><span className="font-semibold">{t('documents_sponsors_label_card')}: </span>{doc.sponsors.map(s => getCountryDisplayName(s, language)).join(', ') || '—'}</div>
-      {doc.readingMinutes && <div className="text-xs flex items-center gap-1 flex-wrap" style={{ color: '#1C1410' }}>{t('documents_reading_summary').replace('{r}', String(doc.readingMinutes))}{doc.presentationMinutes ? ` · ${t('documents_presentation_summary').replace('{p}', String(doc.presentationMinutes))}` : ''}{doc.qaMinutes ? ` · ${t('documents_qa_summary').replace('{q}', String(doc.qaMinutes))}` : ''}</div>}
       {doc.fileUrl && doc.fileName && (
         <div className="text-xs space-y-2">
           <button onClick={() => setShowPdf((v) => !v)} className="transition-colors focus:outline-none" style={{ color: '#1B3828' }}
@@ -681,7 +676,6 @@ function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation
           </button>
         )}
       </div>
-      <div className="text-xs text-[#9A8A78]">{t('documents_submitted_date').replace('{date}', new Date(doc.submittedAt).toLocaleDateString())}</div>
     </div>
   );
 }

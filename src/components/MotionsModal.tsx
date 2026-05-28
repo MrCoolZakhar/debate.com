@@ -530,16 +530,16 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
             : 'p-4 space-y-2 border border-[#DDD4C0]'
         }`}
       >
-        {/* Position badge */}
+        {/* Position badge — straddles the top-right border corner */}
         <div
-          className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full flex items-center justify-center text-xs font-black z-10 pointer-events-none select-none"
+          className="absolute top-0 right-0 translate-x-1/2 -translate-y-1/2 w-6 h-6 rounded-full flex items-center justify-center text-xs font-black z-10 pointer-events-none select-none"
           style={{ backgroundColor: '#1B3828', color: '#EED98A' }}
         >
           {idx + 1}
         </div>
         {/* Header: icon + type label + flag in top-right */}
         <div className="flex items-center gap-2">
-          <span className={`font-black text-[#1C1410] flex-1 ${large ? 'text-3xl' : 'text-lg'} flex items-center gap-3`}>
+          <span className={`font-black text-[#1C1410] flex-1 ${large ? 'text-3xl' : 'text-lg'} flex items-center gap-1.5`}>
             {meta.label}
             {!isPrimary && !isViewOnly && (
               <button
@@ -641,7 +641,8 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
           {renderCard(primary, true, 0)}
         </div>
         {/* Right column — queued motions + Raise a Motion button */}
-        <div className="w-72 flex flex-col gap-3 overflow-y-auto">
+        {/* pt-3 pr-4: give room for the badge that translates outside each card's top-right corner */}
+        <div className="w-72 flex flex-col gap-3 overflow-y-auto pt-3 pr-4">
           {rest.map((m, i) => renderCard(m, false, i + 1))}
           {!isViewOnly && (
             <button
