@@ -37,7 +37,7 @@ function JoinPageInner() {
   const [newChairName, setNewChairName] = useState('');
   const [chairPassword, setChairPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
-  const [chairAlreadyActive, setChairAlreadyActive] = useState(false);
+  const [activeChairNames, setActiveChairNames] = useState<Set<string>>(new Set());
   const presenceChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -56,7 +56,7 @@ function JoinPageInner() {
     if (presenceChannelRef.current) {
       supabase.removeChannel(presenceChannelRef.current);
       presenceChannelRef.current = null;
-      setChairAlreadyActive(false);
+      setActiveChairNames(new Set());
     }
     if (!foundCommittee || mode !== 'chair') return;
 
@@ -66,7 +66,7 @@ function JoinPageInner() {
     channel
       .on('presence', { event: 'sync' }, () => {
         const state = channel.presenceState<{ joinedAt: number }>();
-        setChairAlreadyActive(Object.keys(state).length > 0);
+        setActiveChairNames(new Set(Object.keys(state)));
       })
       .subscribe();
 
@@ -86,7 +86,7 @@ function JoinPageInner() {
     setNewChairName('');
     setChairPassword('');
     setPasswordError('');
-    setChairAlreadyActive(false);
+    setActiveChairNames(new Set());
 
     // 1. Check local store first (instant)
     const local = Object.values(committees).find((c) => c.code === upper);
@@ -157,7 +157,7 @@ function JoinPageInner() {
     setNewChairName('');
     setChairPassword('');
     setPasswordError('');
-    setChairAlreadyActive(false);
+    setActiveChairNames(new Set());
   };
 
   const tabs: { key: JoinMode; label: string; icon: string }[] = [
@@ -165,6 +165,9 @@ function JoinPageInner() {
     { key: 'chair', label: 'Re-join as Chair', icon: '🪑' },
     { key: 'advisor', label: 'Faculty Advisor', icon: '👁️' },
   ];
+
+  const selectedChairName = chairNameMode === 'new' ? newChairName.trim() : chairName;
+  const chairAlreadyActive = !!selectedChairName && activeChairNames.has(selectedChairName);
 
   return (
     <div className="min-h-screen flex flex-col relative" style={{ backgroundColor: '#EDE7D8' }}>
