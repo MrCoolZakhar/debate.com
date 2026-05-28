@@ -645,7 +645,7 @@ function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation
 
           {/* Doc code below the thumbnail */}
           <span className="mt-1.5 text-center font-black"
-            style={{ fontSize: '9px', color: '#1B3828', fontFamily: "'DM Mono', monospace", letterSpacing: '0.03em' }}>
+            style={{ fontSize: '11px', color: '#1B3828', fontFamily: "'DM Mono', monospace", letterSpacing: '0.03em' }}>
             {doc.docCode}
           </span>
         </div>
