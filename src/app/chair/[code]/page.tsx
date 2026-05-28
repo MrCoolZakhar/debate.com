@@ -2427,7 +2427,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         />
       )}
       {/* EXTRA TIME OVERLAY — fixed position, same anchor as RTR overlay */}
-      {!sessionEnded && activePopover === 'extraTime' && (
+      {!sessionEnded && !isViewOnly && activePopover === 'extraTime' && (
         <div
           className="fixed z-50"
           style={{ top: '50%', right: '2rem', transform: 'translateY(-50%)' }}
@@ -2474,7 +2474,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           onEnd={() => setShowTutorial(false)}
         />
       )}
-      {activePopover === 'rightToReply' && (
+      {!isViewOnly && activePopover === 'rightToReply' && (
         <div
           className="fixed z-50"
           style={{ top: '50%', right: '2rem', transform: 'translateY(-50%)' }}
