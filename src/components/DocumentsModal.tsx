@@ -620,61 +620,97 @@ function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation
   };
 
   return (
-    <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl p-4 space-y-3">
-      <div className="flex items-stretch gap-3">
-        {/* Doc icon — full height of the text block */}
-        <div className="shrink-0 w-10 rounded-lg flex items-center justify-center self-stretch" style={{ backgroundColor: '#1B3828' }}>
-          <span style={{ fontSize: '1.4rem', lineHeight: 1 }}>📄</span>
+    <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl overflow-hidden">
+      <div className="flex items-stretch">
+
+        {/* Left strip — full card height, light green tint */}
+        <div className="flex flex-col items-center justify-center gap-1.5 px-3 shrink-0"
+          style={{ backgroundColor: 'rgba(27,56,40,0.10)', minWidth: '64px' }}>
+          <span style={{ fontSize: '2rem', lineHeight: 1 }}>📄</span>
+          <span className="text-center leading-tight"
+            style={{ fontSize: '9px', color: '#1B3828', fontFamily: "'DM Mono', monospace", fontWeight: 900, maxWidth: '52px', wordBreak: 'break-word' }}>
+            {doc.docCode}
+          </span>
         </div>
 
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap mb-1">
-            {(() => {
-              const f = doc.sponsors[0] ? getCountryByName(doc.sponsors[0]) : null;
-              return f ? (
-                <img src={getFlagUrl(f.code)} alt={f.code}
-                  className="w-5 h-3.5 object-cover rounded-sm shrink-0"
-                  style={{ border: '1px solid rgba(28,20,16,0.12)' }}
-                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-              ) : null;
-            })()}
-            <span className="text-xs font-mono font-bold text-[#1B3828]">{doc.docCode}</span>
-            <StatusBadge status={doc.status} />
+        {/* Right content */}
+        <div className="flex-1 min-w-0 p-4 space-y-2.5">
+
+          {/* Title row + delete */}
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-base font-black text-[#1C1410] leading-snug">{doc.title}</p>
+              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                <StatusBadge status={doc.status} />
+              </div>
+            </div>
+            <button onClick={() => onRemove(doc.id)}
+              className="text-[#9A8A78] hover:text-red-500 transition-colors text-sm shrink-0 focus:outline-none mt-0.5"
+              title="Delete">✕</button>
           </div>
-          <p className="text-sm font-bold text-[#1C1410] leading-snug">{doc.title}</p>
-        </div>
 
-        <button onClick={() => onRemove(doc.id)}
-          className="text-[#9A8A78] hover:text-red-500 transition-colors text-sm shrink-0 focus:outline-none"
-          title="Delete">✕</button>
-      </div>
-      <div className="text-xs text-[#6A5A4A]"><span className="font-semibold">{t('documents_sponsors_label_card')}: </span>{doc.sponsors.map(s => getCountryDisplayName(s, language)).join(', ') || '—'}</div>
-      {doc.fileUrl && doc.fileName && (
-        <div className="text-xs space-y-2">
-          <button onClick={() => setShowPdf((v) => !v)} className="transition-colors focus:outline-none" style={{ color: '#1B3828' }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#2A5A3C'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}>
-            📎 {doc.fileName} {showPdf ? '▲' : '▼'}
-          </button>
-          {showPdf && (
-            <iframe src={doc.fileUrl} title={doc.fileName} className="w-full rounded-lg border border-[#DDD4C0]" style={{ height: '480px' }} />
+          {/* Sponsors with flags */}
+          {doc.sponsors.length > 0 && (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-xs font-semibold text-[#6A5A4A] shrink-0">{t('documents_sponsors_label_card')}:</span>
+              {doc.sponsors.map((s) => {
+                const f = getCountryByName(s);
+                return (
+                  <span key={s} className="inline-flex items-center gap-1">
+                    {f && (
+                      <img src={getFlagUrl(f.code)} alt={f.code}
+                        className="w-6 h-4 object-cover rounded-sm"
+                        style={{ border: '1px solid rgba(28,20,16,0.12)' }}
+                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                    )}
+                    <span className="text-xs text-[#6A5A4A]">{getCountryDisplayName(s, language)}</span>
+                  </span>
+                );
+              })}
+            </div>
           )}
+
+          {/* PDF toggle */}
+          {doc.fileUrl && doc.fileName && (
+            <div className="text-xs space-y-2">
+              <button onClick={() => setShowPdf((v) => !v)}
+                className="transition-colors focus:outline-none" style={{ color: '#1B3828' }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#2A5A3C'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}>
+                📎 {doc.fileName} {showPdf ? '▲' : '▼'}
+              </button>
+              {showPdf && (
+                <iframe src={doc.fileUrl} title={doc.fileName}
+                  className="w-full rounded-lg border border-[#DDD4C0]"
+                  style={{ height: '480px' }} />
+              )}
+            </div>
+          )}
+
+          {/* Content toggle */}
+          {doc.content && (
+            <div>
+              <button onClick={() => setExpanded((v) => !v)}
+                className="text-xs text-[#1B3828] hover:text-[#6A5A4A] transition-colors">
+                {expanded ? '▲ Hide content' : '▼ Show content'}
+              </button>
+              {expanded && (
+                <pre className="mt-2 text-xs text-[#1C1410] bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-3 py-2 whitespace-pre-wrap font-sans leading-relaxed max-h-48 overflow-y-auto">
+                  {doc.content}
+                </pre>
+              )}
+            </div>
+          )}
+
+          {/* Introduce / advance button */}
+          {nextStatus && doc.status !== 'passed' && doc.status !== 'failed' && doc.status !== 'introduced' && (
+            <button onClick={handleAdvance}
+              className="w-full bg-[#1B3828] hover:bg-[#2A5A3C] text-white py-2 rounded-lg font-bold text-sm transition-colors focus:outline-none">
+              {needsPresentation ? `${t('documents_introduce')} →` : `${t('documents_advance')}${getStatusLabel(nextStatus, t)}`}
+            </button>
+          )}
+
         </div>
-      )}
-      {doc.content && (
-        <div>
-          <button onClick={() => setExpanded((v) => !v)} className="text-xs text-[#1B3828] hover:text-[#6A5A4A] transition-colors">
-            {expanded ? '▲ Hide content' : '▼ Show content'}
-          </button>
-          {expanded && <pre className="mt-2 text-xs text-[#1C1410] bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-3 py-2 whitespace-pre-wrap font-sans leading-relaxed max-h-48 overflow-y-auto">{doc.content}</pre>}
-        </div>
-      )}
-      <div className="flex gap-2 pt-1">
-        {nextStatus && doc.status !== 'passed' && doc.status !== 'failed' && doc.status !== 'introduced' && (
-          <button onClick={handleAdvance} className="flex-1 bg-[#1B3828] hover:bg-[#2A5A3C] text-white py-2 rounded-lg font-bold text-xs transition-colors">
-            {needsPresentation ? t('documents_introduce') + ' →' : `${t('documents_advance')}${getStatusLabel(nextStatus, t)}`}
-          </button>
-        )}
       </div>
     </div>
   );
