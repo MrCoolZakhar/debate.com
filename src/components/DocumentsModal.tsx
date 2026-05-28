@@ -29,7 +29,7 @@ const STATUS_META: Record<DocumentStatus, { label: string; color: string }> = {
 };
 
 const STATUS_NEXT: Partial<Record<DocumentStatus, DocumentStatus>> = {
-  submitted: 'on-floor', 'on-floor': 'introduced', introduced: 'passed',
+  submitted: 'introduced', 'on-floor': 'introduced', introduced: 'passed',
 };
 
 function getStatusLabel(status: DocumentStatus, t: (key: TranslationKey) => string): string {
@@ -77,7 +77,7 @@ function SponsorSelect({ candidates, selected, onChange }: {
   };
   return (
     <div>
-      <label className="block text-sm font-semibold text-[#6A5A4A] mb-1.5">{t('documents_sponsors_label')} <span className="text-red-500">*</span></label>
+      <label className="block text-sm font-semibold text-[#6A5A4A] mb-1.5">{t('documents_sponsors_label')}</label>
       <div className="flex flex-wrap gap-1.5 mb-2 min-h-[28px]">
         {selected.map((c) => <CountryChip key={c} country={c} onRemove={() => onChange(selected.filter((s) => s !== c))} />)}
       </div>
@@ -172,6 +172,15 @@ function StageTimer({
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; (e.currentTarget as HTMLElement).style.color = '#6A5A4A'; }}
               title="Back">
               ←
+            </button>
+            <button
+              onClick={() => { setRemaining(totalSeconds); setRunning(false); setStarted(false); }}
+              title="Reset timer"
+              className="w-10 h-10 rounded-xl font-bold transition-colors focus:outline-none flex items-center justify-center"
+              style={{ backgroundColor: 'transparent', color: '#6A5A4A', border: '1px solid #DDD4C0' }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; (e.currentTarget as HTMLElement).style.color = '#6A5A4A'; }}>
+              ↺
             </button>
             <button onClick={() => { setRunning((r) => !r); setStarted(true); }}
               className="px-8 py-3 rounded-xl font-bold transition-colors focus:outline-none"
@@ -412,7 +421,14 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
   const [fileUrl, setFileUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const docCode = autoDocCode(type, committee.documents ?? []);
-  const canSubmit = !limitReached && title.trim() && sponsors.length > 0 && !!fileUrl;
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+
+  const isDuplicate = (committee.documents ?? []).some(
+    (d) => d.title.trim().toLowerCase() === title.trim().toLowerCase()
+  );
+
+  const canSubmit = !limitReached && !isSubmitting && !isDuplicate && !!title.trim();
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return;
@@ -421,18 +437,30 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
     reader.readAsDataURL(file);
   };
 
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (!file || file.type !== 'application/pdf') return;
+    const reader = new FileReader();
+    reader.onload = () => { setFileUrl(reader.result as string); setFileName(file.name); };
+    reader.readAsDataURL(file);
+  };
+
   const handleSubmit = async () => {
     if (!canSubmit) return;
-    const newDoc: Omit<CommitteeDocument, 'id' | 'submittedAt'> = {
-      type, docCode, title: title.trim(), sponsors, content: content.trim(), status: 'submitted',
-      ...(fileUrl && fileName ? { fileUrl, fileName } : {}),
-    };
-    // Insert first to get the real UUID back — never use temp IDs for DB operations
-    const saved = await addDocumentInDB(committee.id, newDoc);
-    if (saved) {
-      onDocumentAdded(saved);
+    setIsSubmitting(true);
+    try {
+      const newDoc: Omit<CommitteeDocument, 'id' | 'submittedAt'> = {
+        type, docCode, title: title.trim(), sponsors, content: content.trim(), status: 'submitted',
+        ...(fileUrl && fileName ? { fileUrl, fileName } : {}),
+      };
+      const saved = await addDocumentInDB(committee.id, newDoc);
+      if (saved) onDocumentAdded(saved);
+      onDone();
+    } finally {
+      setIsSubmitting(false);
     }
-    onDone();
   };
 
   return (
@@ -463,7 +491,9 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
           className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] transition-colors text-sm" />
       </div>
       <div>
-        <label className="block text-sm font-semibold text-[#6A5A4A] mb-1.5">{t('documents_attachment_label')} <span className="text-red-500">*</span></label>
+        <label className="block text-sm font-semibold text-[#6A5A4A] mb-1.5">
+          {t('documents_attachment_label')} <span className="text-[#9A8A78] font-normal">(optional)</span>
+        </label>
         {fileName ? (
           <div className="flex items-center gap-2 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3">
             <span className="text-sm text-[#1C1410] flex-1 truncate">📎 {fileName}</span>
@@ -471,10 +501,21 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
               className="text-[#9A8A78] hover:text-red-500 transition-colors text-sm">✕</button>
           </div>
         ) : (
-          <button type="button" onClick={() => fileInputRef.current?.click()}
-            className="w-full bg-[#FAF8F3] border border-dashed border-[#DDD4C0] hover:border-[#1B3828] rounded-xl px-4 py-3 text-[#9A8A78] hover:text-[#6A5A4A] text-sm transition-colors text-left">
-            {t('documents_upload_pdf')}
-          </button>
+          <div
+            onClick={() => fileInputRef.current?.click()}
+            onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+            onDragEnter={(e) => { e.preventDefault(); setIsDragging(true); }}
+            onDragLeave={() => setIsDragging(false)}
+            onDrop={handleDrop}
+            className={`w-full border border-dashed rounded-xl px-4 py-5 text-sm transition-colors text-center cursor-pointer select-none ${
+              isDragging
+                ? 'border-[#1B3828] bg-[#1B3828]/10 text-[#1B3828]'
+                : 'bg-[#FAF8F3] border-[#DDD4C0] hover:border-[#1B3828] text-[#9A8A78] hover:text-[#6A5A4A]'
+            }`}
+          >
+            <span className="block text-xl mb-1">📎</span>
+            {isDragging ? 'Drop PDF here' : 'Click to upload or drag & drop a PDF'}
+          </div>
         )}
         <input ref={fileInputRef} type="file" accept=".pdf" onChange={handleFileChange} style={{ position: 'fixed', top: '-9999px', left: '-9999px', opacity: 0, width: 0, height: 0, pointerEvents: 'none' }} />
       </div>
@@ -483,10 +524,20 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
           {t('documents_limit_exceeded').replace('{current}', String(existingCount)).replace('{limit}', String(limit)).replace('{type}', type === 'working-paper' ? t('documents_type_wp') : t('documents_type_dr'))}
         </p>
       )}
-      <button onClick={handleSubmit} disabled={!canSubmit}
-        className="w-full bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white py-3.5 rounded-xl font-bold transition-colors">
-        {limitReached ? t('documents_limit_reached').replace('{current}', String(existingCount)).replace('{limit}', String(limit)) : t('documents_submit_document')}
-      </button>
+      {isSubmitting ? (
+        <button disabled className="w-full bg-[#9A8A78] text-white py-3.5 rounded-xl font-bold cursor-not-allowed">
+          Uploading…
+        </button>
+      ) : (
+        <button onClick={handleSubmit} disabled={!canSubmit}
+          className="w-full bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white py-3.5 rounded-xl font-bold transition-colors">
+          {limitReached
+            ? t('documents_limit_reached').replace('{current}', String(existingCount)).replace('{limit}', String(limit))
+            : isDuplicate
+              ? 'A document with this title already exists'
+              : t('documents_submit_document')}
+        </button>
+      )}
     </div>
   );
 }
@@ -573,12 +624,33 @@ function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation
       <div className="flex items-start gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1">
+            {(() => {
+              const f = doc.sponsors[0] ? getCountryByName(doc.sponsors[0]) : null;
+              return f ? (
+                <img src={getFlagUrl(f.code)} alt={f.code}
+                  className="w-5 h-3.5 object-cover rounded-sm shrink-0"
+                  style={{ border: '1px solid rgba(28,20,16,0.12)' }}
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+              ) : null;
+            })()}
             <span className="text-xs font-mono font-bold text-[#1B3828]">{doc.docCode}</span>
             <StatusBadge status={doc.status} />
           </div>
           <p className="text-sm font-bold text-[#1C1410] leading-snug">{doc.title}</p>
         </div>
-        <button onClick={() => onRemove(doc.id)} className="text-[#9A8A78] hover:text-red-500 transition-colors text-sm shrink-0 focus:outline-none" title="Delete">✕</button>
+
+        {/* Doc icon visual */}
+        <div className="relative shrink-0 w-10 h-12 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#1B3828' }}>
+          <span style={{ fontSize: '1.4rem', lineHeight: 1 }}>📄</span>
+          <span className="absolute bottom-0.5 left-0 right-0 text-center leading-none overflow-hidden"
+            style={{ fontSize: '6px', color: '#EED98A', fontFamily: "'DM Mono', monospace", fontWeight: 900 }}>
+            {doc.docCode}
+          </span>
+        </div>
+
+        <button onClick={() => onRemove(doc.id)}
+          className="text-[#9A8A78] hover:text-red-500 transition-colors text-sm shrink-0 focus:outline-none mt-0.5"
+          title="Delete">✕</button>
       </div>
       <div className="text-xs text-[#6A5A4A]"><span className="font-semibold">{t('documents_sponsors_label_card')}: </span>{doc.sponsors.map(s => getCountryDisplayName(s, language)).join(', ') || '—'}</div>
       {doc.readingMinutes && <div className="text-xs flex items-center gap-1 flex-wrap" style={{ color: '#1C1410' }}>{t('documents_reading_summary').replace('{r}', String(doc.readingMinutes))}{doc.presentationMinutes ? ` · ${t('documents_presentation_summary').replace('{p}', String(doc.presentationMinutes))}` : ''}{doc.qaMinutes ? ` · ${t('documents_qa_summary').replace('{q}', String(doc.qaMinutes))}` : ''}</div>}
