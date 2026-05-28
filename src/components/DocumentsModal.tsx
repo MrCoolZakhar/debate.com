@@ -628,7 +628,7 @@ function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation
           style={{ backgroundColor: 'rgba(27,56,40,0.10)', width: '88px' }}>
 
           {/* Thumbnail — PDF preview or fallback emoji */}
-          <div className="w-full rounded-lg overflow-hidden border border-[#1B3828]/15 flex-1 flex items-center justify-center"
+          <div className="w-full rounded-lg overflow-hidden flex-1 flex items-center justify-center"
             style={{ maxHeight: '120px', minHeight: '80px' }}>
             {doc.fileUrl ? (
               <iframe
@@ -639,7 +639,7 @@ function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation
                 scrolling="no"
               />
             ) : (
-              <span style={{ fontSize: '5rem', lineHeight: 1, userSelect: 'none' }}>📋</span>
+              <span style={{ fontSize: '5.5rem', lineHeight: 1, userSelect: 'none' }}>📋</span>
             )}
           </div>
 
