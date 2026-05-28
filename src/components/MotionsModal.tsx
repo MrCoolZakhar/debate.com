@@ -136,13 +136,14 @@ function ProposerInput({ candidates, value, onChange, blockedCountries }: {
 }
 
 // ── Raise Motion Form ─────────────────────────────────────────────────────────
-function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion, belowQuorum = false }: {
+function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion, belowQuorum = false, isViewOnly = false }: {
   committee: Committee;
   typeMeta: TypeMeta;
   onBack: () => void;
   onRaised: (motion: Omit<PendingMotion, 'id' | 'disruptiveness'>) => void;
   editingMotion?: PendingMotion | null;
   belowQuorum?: boolean;
+  isViewOnly?: boolean;
 }) {
   const t = useT();
   const { language } = useLanguage();
@@ -422,10 +423,12 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
             </div>
           )}
           {error && <p className="text-[#8B2020] text-sm font-medium mb-3">{error}</p>}
-          <button onClick={submit} disabled={!canSubmit() || belowQuorum}
-            className="w-full bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white py-5 rounded-2xl text-base font-black transition-colors focus:outline-none" style={{ letterSpacing: '0.05em' }}>
-            {editingMotion ? t('motions_edit_btn') : t('motions_raise_btn')}
-          </button>
+          {!isViewOnly && (
+            <button onClick={submit} disabled={!canSubmit() || belowQuorum}
+              className="w-full bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white py-5 rounded-2xl text-base font-black transition-colors focus:outline-none" style={{ letterSpacing: '0.05em' }}>
+              {editingMotion ? t('motions_edit_btn') : t('motions_raise_btn')}
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -615,13 +618,15 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
         {/* Right column — queued motions + Raise a Motion button */}
         <div className="w-72 flex flex-col gap-3 overflow-y-auto">
           {rest.map((m, i) => renderCard(m, false, i + 1))}
-          <button
-            onClick={onBack}
-            className="w-full bg-[#2A5A3C] hover:bg-[#3D7A52] text-white py-3 rounded-2xl font-black text-sm transition-colors shrink-0 focus:outline-none"
-            style={{ letterSpacing: '0.05em' }}
-          >
-            {t('motions_raise_motion_btn')}
-          </button>
+          {!isViewOnly && (
+            <button
+              onClick={onBack}
+              className="w-full bg-[#2A5A3C] hover:bg-[#3D7A52] text-white py-3 rounded-2xl font-black text-sm transition-colors shrink-0 focus:outline-none"
+              style={{ letterSpacing: '0.05em' }}
+            >
+              {t('motions_raise_motion_btn')}
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -649,7 +654,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
   const motionNames = { ...DEFAULT_MOTION_NAMES_LOCALIZED };
   const typeMeta = buildTypeMeta(motionNames);
   const pending = [...(committee.pendingMotions ?? [])].filter((m) => m.type !== ('join-request' as string)).sort((a, b) => b.disruptiveness - a.disruptiveness);
-  const [view, setView] = useState<ModalView>(pending.length === 0 ? 'raise' : 'vote');
+  const [view, setView] = useState<ModalView>(pending.length === 0 && !isViewOnly ? 'raise' : 'vote');
   const [specialVoteMotion, setSpecialVoteMotion] = useState<PendingMotion | null>(null);
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const [editingMotionId, setEditingMotionId] = useState<string | null>(null);
@@ -925,6 +930,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
               onRaised={editingMotionId ? handleEdited : handleRaised}
               editingMotion={editingMotionId ? ((committee.pendingMotions ?? []).find((m) => m.id === editingMotionId) ?? null) : null}
               belowQuorum={belowQuorum}
+              isViewOnly={isViewOnly}
             />
           )}
           {view === 'vote' && (

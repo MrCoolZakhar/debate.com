@@ -615,9 +615,10 @@ function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation
 }
 
 // ── Main Modal ────────────────────────────────────────────────────────────────
-export default function DocumentsModal({ committee, onClose, onCommitteeUpdate }: {
+export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, isViewOnly = false }: {
   committee: Committee; onClose: () => void;
   onCommitteeUpdate?: (updater: (c: Committee) => Committee) => void;
+  isViewOnly?: boolean;
 }) {
   const t = useT();
   const router = useRouter();
@@ -820,10 +821,12 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate }
                     onStartPresentation={handleStartPresentation} />
                 ))
               )}
-              <button onClick={() => setShowForm(true)}
-                className="w-full bg-[#EDE7D8] hover:bg-[#DDD4C0] border border-[#DDD4C0] hover:border-[#1B3828] text-[#1C1410] py-3.5 rounded-2xl font-bold transition-all mt-2 text-center focus:outline-none" style={{ fontFamily: "'Outfit', sans-serif" }}>
-                + {tab === 'working-paper' ? t('documents_submit_new_wp').replace('+ ', '') : t('documents_submit_new_dr').replace('+ ', '')}
-              </button>
+              {!isViewOnly && (
+                <button onClick={() => setShowForm(true)}
+                  className="w-full bg-[#EDE7D8] hover:bg-[#DDD4C0] border border-[#DDD4C0] hover:border-[#1B3828] text-[#1C1410] py-3.5 rounded-2xl font-bold transition-all mt-2 text-center focus:outline-none" style={{ fontFamily: "'Outfit', sans-serif" }}>
+                  + {tab === 'working-paper' ? t('documents_submit_new_wp').replace('+ ', '') : t('documents_submit_new_dr').replace('+ ', '')}
+                </button>
+              )}
             </div>
           )}
         </div>

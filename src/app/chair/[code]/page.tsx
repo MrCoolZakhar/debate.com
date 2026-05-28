@@ -1343,11 +1343,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     const alreadyOn = committee.speakersList.some((s) => s.delegateId === delegateId);
     if (alreadyOn) return;
     if (committee.currentSpeaker?.delegateId === delegateId) return;
-    // Pass position from local state to skip the SELECT round-trip in the DB function,
-    // keeping the write under the debounce window (Bug 1 fix)
-    const nextPosition = committee.speakersList.length + 1;
     updateLocal(setCommittee, (c) => ({ ...c, speakersList: [...c.speakersList, { delegateId, country: delegate.country }] }), true);
-    addToSpeakersListInDB(committee.id, delegateId, delegate.country, nextPosition);
+    addToSpeakersListInDB(committee.id, delegateId, delegate.country);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [committee?.id, committee?.delegates, committee?.speakersList, committee?.currentSpeaker]);
 
@@ -2420,6 +2417,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           committee={committee}
           onClose={() => setShowDocuments(false)}
           onCommitteeUpdate={(updater) => updateLocal(setCommittee, updater, true)}
+          isViewOnly={isViewOnly}
         />
       )}
       {showSettings && (
