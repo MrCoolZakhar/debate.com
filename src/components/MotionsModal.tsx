@@ -524,15 +524,15 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
           dragIndexRef.current = null;
         }}
         onDragEnd={() => { dragIndexRef.current = null; }}
-        className={`relative bg-transparent rounded-2xl flex flex-col cursor-grab ${
+        className={`relative overflow-visible bg-transparent rounded-2xl flex flex-col cursor-grab ${
           large
             ? `p-6 space-y-3 flex-1 min-w-0 border-2 ${isPrimary ? 'border-[#1B3828]' : 'border-[#DDD4C0]'}`
             : 'p-4 space-y-2 border border-[#DDD4C0]'
         }`}
       >
-        {/* Position badge */}
+        {/* Position badge — straddles the border corner */}
         <div
-          className="absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center text-xs font-black z-10 pointer-events-none"
+          className="absolute top-0 right-0 translate-x-1/2 -translate-y-1/2 w-6 h-6 rounded-full flex items-center justify-center text-xs font-black z-10 pointer-events-none select-none"
           style={{ backgroundColor: '#1B3828', color: '#EED98A' }}
         >
           {idx + 1}
@@ -544,10 +544,13 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
             {!isPrimary && !isViewOnly && (
               <button
                 onClick={(e) => { e.stopPropagation(); onEdit(m.id); }}
-                className="ml-1.5 text-sm opacity-50 hover:opacity-100 transition-opacity focus:outline-none"
+                className="ml-1.5 opacity-40 hover:opacity-80 transition-opacity focus:outline-none"
                 title="Edit motion"
               >
-                ✏️
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" stroke="#4A4A4A" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M19.5 7.125L16.5 4.125" stroke="#4A4A4A" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
               </button>
             )}
           </span>
