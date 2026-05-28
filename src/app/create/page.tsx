@@ -655,7 +655,7 @@ function CreatePageInner() {
                 <div className="flex-1 flex flex-col min-h-0">
                   <label className="block text-xs font-bold uppercase tracking-wide mb-2" style={{ color: '#1B3828' }}>{t('create_paste_list')}</label>
                   <textarea value={pasteText} onChange={(e) => { setPasteText(e.target.value); setPasteError(''); }}
-                    placeholder={'France\nGermany\nBrazil, India...'}
+                    placeholder={language === 'es' ? 'Francia\nAlemania\nBrasil, India...' : 'France\nGermany\nBrazil, India...'}
                     className="flex-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] focus:ring-2 focus:ring-[#1B3828]/10 transition-all text-sm resize-none min-h-0" />
                 </div>
 
