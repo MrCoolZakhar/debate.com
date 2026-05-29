@@ -2074,7 +2074,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
             />
           </div>
         )}
-        {!showChat && committee.phase === 'pre-session' && (
+        {committee.phase === 'pre-session' && (
           <div className="flex-1 flex items-center justify-center px-6 py-8">
             <div className="w-full max-w-md rounded-2xl overflow-hidden relative" style={{ maxHeight: '88vh', display: 'flex', flexDirection: 'column', backgroundColor: '#1B3828', border: '1.5px solid #3D7A52', boxShadow: '0 32px 80px rgba(27,56,40,0.40)' }}>
               <div className="pointer-events-none absolute inset-0 z-[1]" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'overlay', opacity: 0.07 }} />
@@ -2092,7 +2092,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
             </div>
           </div>
         )}
-        {!showChat && committee.phase !== 'pre-session' && (
+        {committee.phase !== 'pre-session' && (
           <>
             {showRollCall && (
               <aside data-tutorial="speakers-sidebar" className="w-[22rem] flex flex-col overflow-hidden shrink-0" style={{ backgroundColor: '#1B3828', borderRight: '1px solid #3D7A52' }}>
