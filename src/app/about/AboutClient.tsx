@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label';
 
 const AMBASSADORS = [
   // Latin America
-  { name: 'Santiago Ramsés',         country: 'Venezuela',      initials: 'SR', photo: '/ambassador-photos/santiago_ambassador.png' },
+  { name: 'Santiago Rosas Peña',      country: 'Venezuela',      initials: 'SR', photo: '/ambassador-photos/santiago_ambassador.png', photoPosition: 'center 35%' },
   // Europe
   { name: 'Kyle Wilkinson',          country: 'United Kingdom', initials: 'KW', photo: '/ambassador-photos/kyle_ambassador.png' },
   { name: 'Celine Nasser',           country: 'United Kingdom', initials: 'CN', photo: '/ambassador-photos/celine_ambassador.png' },
