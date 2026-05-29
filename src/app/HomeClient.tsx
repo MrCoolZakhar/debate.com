@@ -6,7 +6,41 @@ import { Mic, Scale, List, FileText, MessageSquare, Save } from 'lucide-react';
 import { getFlagUrl, getCountryByName } from '@/lib/countries';
 import SiteNav from '@/components/SiteNav';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
+import { getCommitteeByCode, setPhase as setPhaseInDB } from '@/lib/committeeService';
 
+function getCommitteeAcronym(title: string): string {
+  const t = title.toUpperCase();
+  if (t.includes('SECURITY COUNCIL')) return 'UNSC';
+  if (t.includes('GENERAL ASSEMBLY')) return 'UNGA';
+  if (t.includes('HUMAN RIGHTS')) return 'UNHRC';
+  if (t.includes('ECOSOC')) return 'ECOSOC';
+  if (t.includes('ENVIRONMENT') || t.includes('UNEP')) return 'UNEP';
+  if (t.includes('WHO') || t.includes('WORLD HEALTH')) return 'WHO';
+  if (t.includes('NATO')) return 'NATO';
+  if (t.includes('AFRICAN UNION') || /\bAU\b/.test(t)) return 'AU';
+  if (t.includes('EUROPEAN UNION') || /\bEU\b/.test(t)) return 'EU';
+  if (t.includes('G20') || t.includes('G-20')) return 'G20';
+  if (t.includes('ARAB LEAGUE') || t.includes('LAS')) return 'LAS';
+  if (t.includes('ASEAN')) return 'ASEAN';
+  if (t.includes('IMF')) return 'IMF';
+  return 'UNGA';
+}
+
+const REJOIN_LOGOS: Record<string, string> = {
+  UNSC:   'https://flagcdn.com/w160/un.png',
+  UNGA:   'https://flagcdn.com/w160/un.png',
+  UNHRC:  'https://flagcdn.com/w160/un.png',
+  ECOSOC: 'https://flagcdn.com/w160/un.png',
+  UNEP:   'https://flagcdn.com/w160/un.png',
+  NATO:   'https://flagcdn.com/w160/xn.png',
+  EU:     'https://flagcdn.com/w160/eu.png',
+  AU:     'https://flagcdn.com/w160/au.png',
+  WHO:    'https://upload.wikimedia.org/wikipedia/commons/thumb/2/26/World_Health_Organization_Logo.svg/120px-World_Health_Organization_Logo.svg.png',
+  IMF:    'https://upload.wikimedia.org/wikipedia/commons/thumb/7/78/IMF_logo.svg/120px-IMF_logo.svg.png',
+  G20:    'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9d/G-20.svg/120px-G-20.svg.png',
+  LAS:    'https://flagcdn.com/w160/lo.png',
+  ASEAN:  'https://upload.wikimedia.org/wikipedia/commons/thumb/b/bc/Flag_of_ASEAN.svg/120px-Flag_of_ASEAN.svg.png',
+};
 
 // ── Individual feature card components ──────────────────────────────────────
 
@@ -708,40 +742,103 @@ export default function HomeClient() {
         </div>
       </div>
 
-      {rejoinData && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="rounded-2xl shadow-xl p-6 w-80 flex flex-col gap-4"
-            style={{ backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0' }}>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-widest mb-1"
-                style={{ color: '#B8844A' }}>Session in progress</p>
-              <p className="text-lg font-black leading-snug" style={{ color: '#1B3828' }}>
-                {rejoinData.committeeTitle}
-              </p>
-              <p className="text-sm mt-0.5" style={{ color: '#4A4A4A' }}>
-                Signed in as <span className="font-semibold">{rejoinData.chairName}</span>
-              </p>
-            </div>
-            <div className="flex gap-2">
+      {rejoinData && (() => {
+        const acronym = getCommitteeAcronym(rejoinData.committeeTitle);
+        const logoUrl = REJOIN_LOGOS[acronym];
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+            <div
+              className="rounded-2xl shadow-xl p-6 flex flex-col gap-4"
+              style={{ backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0', width: '320px' }}
+            >
+              {/* Logo + title row */}
+              <div className="flex items-center gap-3">
+                {logoUrl && (
+                  <div
+                    className="rounded-xl flex items-center justify-center shrink-0 overflow-hidden"
+                    style={{ width: '48px', height: '48px', backgroundColor: '#1B3828' }}
+                  >
+                    <img
+                      src={logoUrl}
+                      alt={acronym}
+                      width={32}
+                      height={32}
+                      style={{ objectFit: 'contain', width: '32px', height: '32px' }}
+                      onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                    />
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p
+                    className="text-xs font-semibold uppercase tracking-widest mb-0.5"
+                    style={{ color: '#B8844A' }}
+                  >
+                    Session in progress
+                  </p>
+                  <p
+                    className="text-base font-black leading-snug truncate"
+                    style={{ color: '#1B3828' }}
+                  >
+                    {rejoinData.committeeTitle}
+                  </p>
+                  <p className="text-xs mt-0.5" style={{ color: '#6A5A4A' }}>
+                    Signed in as <span className="font-semibold">{rejoinData.chairName}</span>
+                  </p>
+                </div>
+              </div>
+
+              {/* Primary buttons */}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { window.location.href = `/chair/${rejoinData.code}`; }}
+                  className="flex-1 py-2.5 rounded-xl font-black text-sm transition-colors"
+                  style={{ backgroundColor: '#1B3828', color: '#EED98A' }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+                >
+                  Rejoin →
+                </button>
+                <button
+                  onClick={() => { localStorage.removeItem('gavelling-rejoin'); setRejoinData(null); }}
+                  className="flex-1 py-2.5 rounded-xl font-black text-sm border transition-colors"
+                  style={{ borderColor: '#DDD4C0', color: '#1B3828', backgroundColor: 'transparent' }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#DDD4C0'; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                >
+                  Dismiss
+                </button>
+              </div>
+
+              {/* End Debate — small destructive */}
               <button
-                onClick={() => { window.location.href = `/chair/${rejoinData.code}`; }}
-                className="flex-1 py-2 rounded-xl font-bold text-sm"
-                style={{ backgroundColor: '#1B3828', color: '#EED98A' }}>
-                Rejoin →
-              </button>
-              <button
-                onClick={() => {
-                  localStorage.removeItem('gavelling-rejoin');
-                  setRejoinData(null);
+                onClick={async () => {
+                  try {
+                    const committee = await getCommitteeByCode(rejoinData.code);
+                    if (committee) await setPhaseInDB(committee.id, 'adjourned');
+                  } finally {
+                    localStorage.removeItem('gavelling-rejoin');
+                    setRejoinData(null);
+                  }
                 }}
-                className="flex-1 py-2 rounded-xl font-bold text-sm border"
-                style={{ borderColor: '#DDD4C0', color: '#1B3828', backgroundColor: 'transparent' }}>
-                Dismiss
+                className="w-full py-1.5 rounded-xl text-xs font-bold transition-colors"
+                style={{ backgroundColor: 'transparent', color: '#8B2020', border: '1px solid #C8BAA8' }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLElement).style.backgroundColor = '#8B2020';
+                  (e.currentTarget as HTMLElement).style.color = 'white';
+                  (e.currentTarget as HTMLElement).style.borderColor = '#8B2020';
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
+                  (e.currentTarget as HTMLElement).style.color = '#8B2020';
+                  (e.currentTarget as HTMLElement).style.borderColor = '#C8BAA8';
+                }}
+              >
+                End Debate
               </button>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </>
   );
 }
