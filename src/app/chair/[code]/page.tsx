@@ -1123,7 +1123,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           updateSetting(found.code, 'chairJoinSuffix', found.dbChairJoinSuffix);
         }
         if (!found.endedAt) {
-          localStorage.setItem('gavelling_active_session', JSON.stringify({
+          localStorage.setItem('gavelling-rejoin', JSON.stringify({
             code: found.code,
             chairName: myChairName || (found.chairNames[0] ?? 'Chair'),
             committeeTitle: found.topic ?? found.code,
@@ -1441,7 +1441,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     if (committee?.endedAt) {
       setSessionEnded(true);
       setSessionSuspended(false);
-      localStorage.removeItem('gavelling_active_session');
+      localStorage.removeItem('gavelling-rejoin');
     } else if (committee?.suspendedAt) {
       setSessionSuspended(true);
       setSessionEnded(false);

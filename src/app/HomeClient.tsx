@@ -389,6 +389,25 @@ export default function HomeClient() {
     { step: '02', title: t('step2_title'), desc: t('step2_desc') },
     { step: '03', title: t('step3_title'), desc: t('step3_desc') },
   ];
+  const [rejoinData, setRejoinData] = useState<{
+    code: string; chairName: string; committeeTitle: string; savedAt: number;
+  } | null>(null);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('gavelling-rejoin');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        const eightHours = 8 * 60 * 60 * 1000;
+        if (Date.now() - parsed.savedAt < eightHours) {
+          setRejoinData(parsed);
+        } else {
+          localStorage.removeItem('gavelling-rejoin');
+        }
+      }
+    } catch { /* ignore */ }
+  }, []);
+
   const handleJoin = () => {
     const code = joinCode.trim().toUpperCase();
     if (code.length >= 4) {
@@ -684,6 +703,40 @@ export default function HomeClient() {
         </div>
       </div>
 
+      {rejoinData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="rounded-2xl shadow-xl p-6 w-80 flex flex-col gap-4"
+            style={{ backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0' }}>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest mb-1"
+                style={{ color: '#B8844A' }}>Session in progress</p>
+              <p className="text-lg font-black leading-snug" style={{ color: '#1B3828' }}>
+                {rejoinData.committeeTitle}
+              </p>
+              <p className="text-sm mt-0.5" style={{ color: '#4A4A4A' }}>
+                Signed in as <span className="font-semibold">{rejoinData.chairName}</span>
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => { window.location.href = `/chair/${rejoinData.code}`; }}
+                className="flex-1 py-2 rounded-xl font-bold text-sm"
+                style={{ backgroundColor: '#1B3828', color: '#EED98A' }}>
+                Rejoin →
+              </button>
+              <button
+                onClick={() => {
+                  localStorage.removeItem('gavelling-rejoin');
+                  setRejoinData(null);
+                }}
+                className="flex-1 py-2 rounded-xl font-bold text-sm border"
+                style={{ borderColor: '#DDD4C0', color: '#1B3828', backgroundColor: 'transparent' }}>
+                Dismiss
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
