@@ -623,22 +623,23 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
           </div>
 
           {/* Scale */}
-          <div className="mb-4 w-full max-w-3xl flex items-center gap-3">
-            <div className={`flex-1 min-w-0 ${hideVotes ? 'blur-sm select-none pointer-events-none' : ''}`}>
+          <div className="mb-4 w-full max-w-3xl relative">
+            <div className={hideVotes ? 'blur-sm select-none pointer-events-none' : ''}>
               <VoteScale forCount={forCount} againstCount={againstCount} totalVoted={votes.length} />
             </div>
             <button
               onClick={() => setHideVotes((v) => !v)}
               title={hideVotes ? 'Show vote count' : 'Hide vote count'}
-              className="w-8 h-8 flex items-center justify-center rounded-lg text-[#9A8A78] hover:text-[#1C1410] transition-colors focus:outline-none border border-[#DDD4C0] hover:border-[#1B3828]">
+              className="absolute right-0 top-0 h-7 w-9 flex items-center justify-center rounded-r-full text-[#9A8A78] hover:text-[#1C1410] transition-colors focus:outline-none"
+              style={{ backgroundColor: 'rgba(221,212,192,0.85)', borderLeft: '1px solid #DDD4C0' }}>
               {hideVotes ? (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/>
                   <path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/>
                   <line x1="1" y1="1" x2="23" y2="23"/>
                 </svg>
               ) : (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
                   <circle cx="12" cy="12" r="3"/>
                 </svg>
