@@ -108,25 +108,34 @@ export default function AboutClient() {
 
       {/* Global Ambassadors */}
       <section className="relative z-10 py-24 px-6" style={{ borderTop: '1px solid rgba(221, 212, 192, 0.8)' }}>
-        <div className="max-w-4xl mx-auto">
-          <div className="text-center mb-16">
-            <p className="text-xs font-mono tracking-[0.2em] text-[#9A8A78] mb-3 uppercase">{t('about_representing')}</p>
-            <h2 className="text-4xl font-black text-[#1C1410]">{t('about_ambassadors_title')}</h2>
-          </div>
-          <div className="grid grid-cols-5 gap-8">
-            {AMBASSADORS.map((amb) => (
+        <div className="text-center mb-16">
+          <p className="text-xs font-mono tracking-[0.2em] text-[#9A8A78] mb-3 uppercase">{t('about_representing')}</p>
+          <h2 className="text-4xl font-black text-[#1C1410]">{t('about_ambassadors_title')}</h2>
+        </div>
+        {/* Flex row: left flanker | center grid | right flanker */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2rem', overflowX: 'auto' }}>
+          {/* Santiago — left outside */}
+          {(() => { const amb = AMBASSADORS[0]; return (
+            <div key={amb.name} className="flex flex-col items-center gap-3 shrink-0">
+              <div style={{ width: 120, height: 120, borderRadius: '50%', overflow: 'hidden', border: '2px solid rgba(28,20,16,0.15)', backgroundColor: 'rgba(221,212,192,0.5)', flexShrink: 0 }}>
+                {amb.photo ? <img src={amb.photo} alt={amb.name} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: amb.photoPosition ?? 'center top', display: 'block' }} /> : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(221,212,192,0.8)', color: '#B6871F', fontWeight: 700, fontSize: 16 }}>{amb.initials}</div>}
+              </div>
+              <div className="text-center">
+                <p className="text-[#1C1410] text-xs font-bold leading-tight">{amb.name}</p>
+                <p className="text-[#9A8A78] text-[10px] mt-0.5">{getCountryDisplayName(amb.country, language)}</p>
+              </div>
+            </div>
+          ); })()}
+
+          {/* Center grid — 15 ambassadors, max 3 rows, grows columns */}
+          <div style={{ display: 'grid', gridAutoFlow: 'column', gridTemplateRows: 'repeat(3, auto)', gap: '2rem' }}>
+            {AMBASSADORS.slice(1, -1).map((amb) => (
               <div key={amb.name} className="flex flex-col items-center gap-3">
                 <div style={{ width: 120, height: 120, borderRadius: '50%', overflow: 'hidden', border: '2px solid rgba(28,20,16,0.15)', backgroundColor: 'rgba(221,212,192,0.5)', flexShrink: 0 }}>
                   {amb.photo ? (
-                    <img
-                      src={amb.photo}
-                      alt={amb.name}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: amb.photoPosition ?? 'center top', display: 'block' }}
-                    />
+                    <img src={amb.photo} alt={amb.name} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: amb.photoPosition ?? 'center top', display: 'block' }} />
                   ) : (
-                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(221,212,192,0.8)', color: '#B6871F', fontWeight: 700, fontSize: 16 }}>
-                      {amb.initials}
-                    </div>
+                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(221,212,192,0.8)', color: '#B6871F', fontWeight: 700, fontSize: 16 }}>{amb.initials}</div>
                   )}
                 </div>
                 <div className="text-center">
@@ -136,6 +145,19 @@ export default function AboutClient() {
               </div>
             ))}
           </div>
+
+          {/* Isabella — right outside */}
+          {(() => { const amb = AMBASSADORS[AMBASSADORS.length - 1]; return (
+            <div key={amb.name} className="flex flex-col items-center gap-3 shrink-0">
+              <div style={{ width: 120, height: 120, borderRadius: '50%', overflow: 'hidden', border: '2px solid rgba(28,20,16,0.15)', backgroundColor: 'rgba(221,212,192,0.5)', flexShrink: 0 }}>
+                {amb.photo ? <img src={amb.photo} alt={amb.name} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: amb.photoPosition ?? 'center top', display: 'block' }} /> : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(221,212,192,0.8)', color: '#B6871F', fontWeight: 700, fontSize: 16 }}>{amb.initials}</div>}
+              </div>
+              <div className="text-center">
+                <p className="text-[#1C1410] text-xs font-bold leading-tight">{amb.name}</p>
+                <p className="text-[#9A8A78] text-[10px] mt-0.5">{getCountryDisplayName(amb.country, language)}</p>
+              </div>
+            </div>
+          ); })()}
         </div>
       </section>
 
