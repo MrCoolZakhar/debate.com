@@ -1123,11 +1123,13 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           updateSetting(found.code, 'chairJoinSuffix', found.dbChairJoinSuffix);
         }
         if (!found.endedAt) {
+          const foundSettings = getSettings(found.code);
           localStorage.setItem('gavelling-rejoin', JSON.stringify({
             code: found.code,
             chairName: myChairName || (found.chairNames[0] ?? 'Chair'),
             committeeTitle: found.name ?? found.topic ?? found.code,
             savedAt: Date.now(),
+            chairSuffix: foundSettings.chairJoinSuffix || null,
           }));
         }
       }

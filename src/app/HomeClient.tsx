@@ -6,7 +6,6 @@ import { Mic, Scale, List, FileText, MessageSquare, Save } from 'lucide-react';
 import { getFlagUrl, getCountryByName } from '@/lib/countries';
 import SiteNav from '@/components/SiteNav';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
-import { getCommitteeByCode, setPhase as setPhaseInDB } from '@/lib/committeeService';
 
 function getCommitteeAcronym(title: string): string {
   const t = title.toUpperCase();
@@ -427,7 +426,7 @@ export default function HomeClient() {
     { step: '03', title: t('step3_title'), desc: t('step3_desc') },
   ];
   const [rejoinData, setRejoinData] = useState<{
-    code: string; chairName: string; committeeTitle: string; savedAt: number;
+    code: string; chairName: string; committeeTitle: string; savedAt: number; chairSuffix?: string | null;
   } | null>(null);
 
   useEffect(() => {
@@ -436,7 +435,12 @@ export default function HomeClient() {
       const raw = localStorage.getItem('gavelling-rejoin') ?? localStorage.getItem('gavelling_active_session');
       if (raw) {
         const parsed = JSON.parse(raw);
-        const eightHours = 8 * 60 * 60 * 1000;
+        const dismissedCode = localStorage.getItem('gavelling-rejoin-dismissed');
+        if (parsed.code === dismissedCode) {
+          localStorage.removeItem('gavelling-rejoin');
+          return;
+        }
+        const eightHours = 18 * 60 * 60 * 1000;
         if (Date.now() - parsed.savedAt < eightHours) {
           // Migrate old key to new key if needed
           localStorage.setItem('gavelling-rejoin', raw);
@@ -754,8 +758,16 @@ export default function HomeClient() {
               className="rounded-2xl shadow-xl p-6 flex flex-col gap-4"
               style={{ backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0', width: '320px' }}
             >
-              {/* Logo + title row */}
-              <div className="flex items-center gap-3">
+              {/* SESSION IN PROGRESS — full-width label above everything */}
+              <p
+                className="text-xs font-black uppercase tracking-widest mb-3 text-center"
+                style={{ color: '#B8844A', fontSize: '11px', letterSpacing: '0.12em' }}
+              >
+                Session in progress
+              </p>
+
+              {/* Logo + title row with code top-right */}
+              <div className="flex items-start gap-3 mb-4 relative">
                 {logoUrl && (
                   <div
                     className="rounded-2xl flex items-center justify-center shrink-0 overflow-hidden"
@@ -772,25 +784,27 @@ export default function HomeClient() {
                   </div>
                 )}
                 <div className="flex-1 min-w-0">
-                  <p
-                    className="text-xs font-semibold uppercase tracking-widest mb-0.5"
-                    style={{ color: '#B8844A' }}
-                  >
-                    Session in progress
-                  </p>
-                  <p
-                    className="text-base font-black leading-snug truncate"
-                    style={{ color: '#1B3828' }}
-                  >
+                  <p className="text-lg font-black leading-snug" style={{ color: '#1B3828' }}>
                     {rejoinData.committeeTitle}
                   </p>
                   <p className="text-xs mt-0.5" style={{ color: '#6A5A4A' }}>
                     Signed in as <span className="font-semibold">{rejoinData.chairName}</span>
                   </p>
                 </div>
+                {/* Code + chair suffix top-right */}
+                <div className="shrink-0 text-right">
+                  <p className="font-black text-xs" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>
+                    {rejoinData.code.toUpperCase()}
+                  </p>
+                  {rejoinData.chairSuffix && (
+                    <p className="text-[10px] mt-0.5" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}>
+                      {rejoinData.chairSuffix}
+                    </p>
+                  )}
+                </div>
               </div>
 
-              {/* Primary buttons */}
+              {/* Buttons */}
               <div className="flex gap-2">
                 <button
                   onClick={() => { window.location.href = `/chair/${rejoinData.code}`; }}
@@ -802,7 +816,11 @@ export default function HomeClient() {
                   Rejoin →
                 </button>
                 <button
-                  onClick={() => { localStorage.removeItem('gavelling-rejoin'); setRejoinData(null); }}
+                  onClick={() => {
+                    localStorage.setItem('gavelling-rejoin-dismissed', rejoinData.code);
+                    localStorage.removeItem('gavelling-rejoin');
+                    setRejoinData(null);
+                  }}
                   className="flex-1 py-2.5 rounded-xl font-black text-sm border transition-colors"
                   style={{ borderColor: '#DDD4C0', color: '#1B3828', backgroundColor: 'transparent' }}
                   onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#DDD4C0'; }}
@@ -811,33 +829,6 @@ export default function HomeClient() {
                   Dismiss
                 </button>
               </div>
-
-              {/* End Debate — small destructive */}
-              <button
-                onClick={async () => {
-                  try {
-                    const committee = await getCommitteeByCode(rejoinData.code);
-                    if (committee) await setPhaseInDB(committee.id, 'adjourned');
-                  } finally {
-                    localStorage.removeItem('gavelling-rejoin');
-                    setRejoinData(null);
-                  }
-                }}
-                className="w-full py-1.5 rounded-xl text-xs font-bold transition-colors"
-                style={{ backgroundColor: 'transparent', color: '#8B2020', border: '1px solid #C8BAA8' }}
-                onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLElement).style.backgroundColor = '#8B2020';
-                  (e.currentTarget as HTMLElement).style.color = 'white';
-                  (e.currentTarget as HTMLElement).style.borderColor = '#8B2020';
-                }}
-                onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
-                  (e.currentTarget as HTMLElement).style.color = '#8B2020';
-                  (e.currentTarget as HTMLElement).style.borderColor = '#C8BAA8';
-                }}
-              >
-                End Debate
-              </button>
             </div>
           </div>
         );
