@@ -11,6 +11,8 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 
 const AMBASSADORS = [
+  // Latin America
+  { name: 'Santiago Ramsés',         country: 'Venezuela',      initials: 'SR', photo: '/ambassador-photos/santiago_ambassador.JPG' },
   // Europe
   { name: 'Kyle Wilkinson',          country: 'United Kingdom', initials: 'KW', photo: '/ambassador-photos/kyle_ambassador.png' },
   { name: 'Celine Nasser',           country: 'United Kingdom', initials: 'CN', photo: '/ambassador-photos/celine_ambassador.png' },
@@ -30,6 +32,7 @@ const AMBASSADORS = [
   { name: 'Andrew Mailoa',           country: 'Indonesia',      initials: 'AM', photo: '/ambassador-photos/andrew_ambassador.png' },
   { name: 'Charlito Gunawan',        country: 'Indonesia',      initials: 'CG', photo: '/ambassador-photos/charlito_ambassador.png' },
   { name: 'Victor Mikusek',          country: 'Hong Kong',      initials: 'VM', photo: '/ambassador-photos/victor_ambassador.png' },
+  { name: 'Isabella Romero',         country: 'Honduras',       initials: 'IR', photo: '/ambassador-photos/isabella_ambassador.JPG' },
 ];
 
 const inputStyle: React.CSSProperties = {
