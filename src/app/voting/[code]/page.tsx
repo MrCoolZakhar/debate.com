@@ -137,7 +137,7 @@ function VoteScale({ forCount, againstCount, totalVoted }: {
   const forPct = totalVoted > 0 ? (forCount / totalVoted) * 50 : 0;
   const againstPct = totalVoted > 0 ? (againstCount / totalVoted) * 50 : 0;
   return (
-    <div className="w-full max-w-2xl px-4">
+    <div className="w-full px-0">
       <div className="relative h-7 bg-[#EDE7D8] rounded-full overflow-hidden border border-[#DDD4C0]">
         <div
           className="absolute right-1/2 top-0 bottom-0 bg-red-500/70 transition-all duration-300"
@@ -621,8 +621,8 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
           </div>
 
           {/* Scale */}
-          <div className="mb-4 w-full flex justify-center items-center gap-3">
-            <div className={hideVotes ? 'blur-sm select-none pointer-events-none' : ''}>
+          <div className="mb-4 w-full max-w-3xl flex items-center gap-3">
+            <div className={`flex-1 min-w-0 ${hideVotes ? 'blur-sm select-none pointer-events-none' : ''}`}>
               <VoteScale forCount={forCount} againstCount={againstCount} totalVoted={votes.length} />
             </div>
             <button
