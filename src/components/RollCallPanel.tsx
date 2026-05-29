@@ -263,6 +263,8 @@ function RollCallPanelInner({
   isViewOnly = false,
   isTdT = false,
   isRoomOrderTdT = false,
+  listView: listViewProp,
+  onListViewChange,
 }: {
   committee: Committee;
   onAddToList?: (delegateId: string) => void;
@@ -281,11 +283,15 @@ function RollCallPanelInner({
   isViewOnly?: boolean;
   isTdT?: boolean;
   isRoomOrderTdT?: boolean;
+  listView?: 'az' | 'queue';
+  onListViewChange?: (v: 'az' | 'queue') => void;
 }) {
   const { language } = useLanguage();
   const t = useT();
   const [search, setSearch] = useState('');
-  const [listView, setListView] = useState<'az' | 'queue'>('az');
+  const [listViewInternal, setListViewInternal] = useState<'az' | 'queue'>('az');
+  const listView = listViewProp !== undefined ? listViewProp : listViewInternal;
+  const setListView = (v: 'az' | 'queue') => { setListViewInternal(v); onListViewChange?.(v); };
   const [showFullList, setShowFullList] = useState(false);
   const [localStatuses, setLocalStatuses] = useState<Record<string, DelegateStatus>>({});
   const listRef = useRef<HTMLDivElement>(null);

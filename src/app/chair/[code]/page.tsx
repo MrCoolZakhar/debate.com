@@ -1043,6 +1043,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const [showTutorial, setShowTutorial] = useState(false);
   const [showRollCall, setShowRollCall] = useState(true);
   const [showSliders, setShowSliders] = useState(false);
+  const [gslListView, setGslListView] = useState<'az' | 'queue'>('az');
   const [showMotions, setShowMotions] = useState(false);
   const [showDocuments, setShowDocuments] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -1802,16 +1803,19 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const handleMotionsClick = () => {
     if (isPreSession) return;
     setShowMotions((v) => !v);
+    setShowChat(false);
   };
   const handleDocumentsClick = () => {
     if (isPreSession) return;
     setShowDocuments((v) => !v);
+    setShowChat(false);
   };
   const handleToggleChat = () => {
     const newShow = !showChat;
     setShowChat(newShow);
     if (newShow) {
       setShowRollCall(false);
+      setShowSliders(false);
       const chairNamesLocal = committee?.chairNames ?? [];
       const count = committee?.messages.filter(m => {
         if (m.content.startsWith('__log__:')) return false;
@@ -1834,7 +1838,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
 
         {committee.phase !== 'pre-session' && !sessionEnded ? (
           <div className="flex flex-1 min-w-0 h-full items-center">
-            <button data-tutorial="tab-rollcall" onClick={() => { setShowSliders((v) => !v); setShowChat(false); setShowRollCall(true); }}
+            <button data-tutorial="tab-rollcall" onClick={() => { const opening = !showSliders; setShowSliders(opening); if (opening) { setShowChat(false); setGslListView('az'); } else { setGslListView('queue'); } setShowRollCall(true); }}
               className="flex-1 text-[13px] md:text-[18px] font-bold px-3 relative h-full transition-all duration-200"
               style={{ color: showSliders ? '#1B3828' : '#1C1410', backgroundColor: showSliders ? 'rgba(27,56,40,0.07)' : 'transparent', fontWeight: showSliders ? 900 : 700 }}
               onMouseEnter={(e) => { if (!showSliders) { const el = e.currentTarget as HTMLElement; el.style.color = '#1B3828'; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; el.style.transform = 'translateY(-1px)'; } }}
@@ -2147,6 +2151,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                     onDelegateAdd={handleDelegateAdd}
                     onReorderList={handleReorderSpeakersList}
                     isRollCallPhase={showSliders}
+                    listView={gslListView}
+                    onListViewChange={setGslListView}
                     isReadOnly={sessionEnded}
                     isViewOnly={isViewOnly} />
                 )}
