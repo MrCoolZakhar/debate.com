@@ -15,6 +15,41 @@ import { PRESET_LOGOS } from '@/lib/presetNames';
 
 type JoinMode = 'delegate' | 'chair' | 'advisor';
 
+function RejoinBanner() {
+  const router = useRouter();
+  const [session, setSession] = useState<{ code: string; chairName: string; committeeTitle: string; savedAt: number } | null>(null);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('gavelling_active_session');
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (Date.now() - parsed.savedAt < 18 * 60 * 60 * 1000) setSession(parsed);
+      else localStorage.removeItem('gavelling_active_session');
+    } catch { /* ignore */ }
+  }, []);
+
+  if (!session) return null;
+
+  return (
+    <div className="mb-4 px-4 py-3 rounded-2xl flex items-center gap-3"
+      style={{ backgroundColor: 'rgba(27,56,40,0.08)', border: '1px solid rgba(27,56,40,0.2)' }}>
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-black text-[#1B3828] truncate">{session.committeeTitle}</p>
+        <p className="text-xs text-[#6A5A4A]">Active session · {session.code}</p>
+      </div>
+      <button
+        onClick={() => router.push(`/chair/${session.code}?chairName=${encodeURIComponent(session.chairName)}`)}
+        className="shrink-0 px-3 py-1.5 rounded-xl text-xs font-black text-white transition-colors"
+        style={{ backgroundColor: '#1B3828' }}>
+        Rejoin →
+      </button>
+      <button onClick={() => { localStorage.removeItem('gavelling_active_session'); setSession(null); }}
+        className="shrink-0 text-[#9A8A78] hover:text-[#1C1410] text-sm transition-colors">✕</button>
+    </div>
+  );
+}
+
 function JoinPageInner() {
   const t = useT();
   const { language } = useLanguage();
@@ -188,6 +223,8 @@ function JoinPageInner() {
           {/* Title */}
           <h1 className="text-5xl font-black text-center mb-0.5 tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '-0.01em' }}>{t('join_title')}</h1>
           <p className="text-center text-sm mb-4" style={{ color: '#9A8A78' }}>{t('join_subtitle')}</p>
+
+          <RejoinBanner />
 
           {/* Code input — always first */}
           <div className="mb-5">

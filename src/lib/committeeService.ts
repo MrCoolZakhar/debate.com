@@ -736,6 +736,10 @@ export async function addChairName(committeeId: string, name: string): Promise<v
   if (error) console.error('Error adding chair name:', error);
 }
 
+export async function updateSpeakerTimeLimit(committeeId: string, limitSeconds: number): Promise<void> {
+  await supabase.from('committees').update({ speaker_time_limit: limitSeconds }).eq('id', committeeId);
+}
+
 // ============================================================
 // REAL-TIME SUBSCRIPTIONS
 // ============================================================

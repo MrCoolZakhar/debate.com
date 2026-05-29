@@ -40,6 +40,7 @@ import {
   claimResumeSession as claimResumeSessionInDB,
   startResumeRollCall as startResumeRollCallInDB,
   removePendingMotion as removePendingMotionInDB,
+  updateSpeakerTimeLimit,
 } from '@/lib/committeeService';
 
 function formatTime(seconds: number) {
@@ -539,7 +540,7 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false }: 
           if (!c.caucus) return c;
           const newTotal = Math.max(0, c.caucus.remainingTime - 1);
           return { ...c, caucus: { ...c.caucus, remainingTime: newTotal } };
-        });
+        }, true);
       };
       tick();
       intervalRef.current = setInterval(tick, 1000);
@@ -1120,6 +1121,14 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         if (found.dbChairJoinSuffix) {
           updateSetting(found.code, 'chairJoinSuffix', found.dbChairJoinSuffix);
         }
+        if (!found.endedAt) {
+          localStorage.setItem('gavelling_active_session', JSON.stringify({
+            code: found.code,
+            chairName: myChairName || (found.chairNames[0] ?? 'Chair'),
+            committeeTitle: found.topic ?? found.code,
+            savedAt: Date.now(),
+          }));
+        }
       }
       setLoading(false);
       if (found) {
@@ -1133,7 +1142,13 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           // the chair just wrote them. Skip the fetch entirely — optimistic state is truth.
           // Only fetch for motion/session/document events where another actor may have written.
           if (withinDebounce) {
-            if (table === 'speakers_list' || table === 'delegates') return;
+            if (table === 'speakers_list') return;
+            if (table === 'delegates') {
+              const updated = await getCommitteeByCode(code);
+              if (!updated) return;
+              setCommittee((prev) => prev ? { ...prev, delegates: updated.delegates } : prev);
+              return;
+            }
             const updated = await getCommitteeByCode(code);
             if (!updated) return;
             setCommittee((prev) => {
@@ -1234,7 +1249,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   useEffect(() => {
     if (!timerRunning) return;
     if (committee?.phase !== 'moderated-caucus' || !committee.caucus) return;
-    setCommittee((prev) => {
+    updateLocal(setCommittee, (prev) => {
       if (!prev?.caucus || prev.phase !== 'moderated-caucus') return prev;
       const next = Math.max(0, prev.caucus.remainingTime - 1);
       if (next === 0) {
@@ -1247,7 +1262,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         return { ...prev, caucus: null, phase: 'speakers-list' as const, caucusQueue: [], currentSpeaker: null, speakersList: newSpeakersList };
       }
       return { ...prev, caucus: { ...prev.caucus, remainingTime: next } };
-    });
+    }, true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [speakerTimeRemaining]);
 
@@ -1276,10 +1291,14 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     delegateStatusRef.current = incoming;
   }, [committee?.delegates]);
 
-  // Tutorial — fires once when phase transitions from pre-session → speakers-list
+  const prevPhaseRef = useRef<string | null>(null);
+
+  // Tutorial — fires once on first pre-session → speakers-list transition
   useEffect(() => {
     if (!committee) return;
-    if (committee.phase === 'speakers-list') {
+    const prev = prevPhaseRef.current;
+    prevPhaseRef.current = committee.phase;
+    if (committee.phase === 'speakers-list' && prev === 'pre-session') {
       const key = 'gavelling_tutorial_seen_' + committee.id;
       if (!localStorage.getItem(key)) {
         localStorage.setItem(key, '1');
@@ -1421,6 +1440,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     if (committee?.endedAt) {
       setSessionEnded(true);
       setSessionSuspended(false);
+      localStorage.removeItem('gavelling_active_session');
     } else if (committee?.suspendedAt) {
       setSessionSuspended(true);
       setSessionEnded(false);
@@ -1709,6 +1729,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     setSpeakerTimeLimitLocal(seconds);
     setSpeakerTimeRemaining(seconds);
     updateLocal(setCommittee, (c) => ({ ...c, speakerTimeLimit: seconds, speakerTimeRemaining: seconds }));
+    updateSpeakerTimeLimit(committee.id, seconds);
   };
 
   const handleResumeSession = () => {
@@ -1790,6 +1811,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     const newShow = !showChat;
     setShowChat(newShow);
     if (newShow) {
+      setShowRollCall(false);
       const chairNamesLocal = committee?.chairNames ?? [];
       const count = committee?.messages.filter(m => {
         if (m.content.startsWith('__log__:')) return false;
@@ -1812,7 +1834,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
 
         {committee.phase !== 'pre-session' && !sessionEnded ? (
           <div className="flex flex-1 min-w-0 h-full items-center">
-            <button data-tutorial="tab-rollcall" onClick={() => setShowSliders((v) => !v)}
+            <button data-tutorial="tab-rollcall" onClick={() => { setShowSliders((v) => !v); setShowChat(false); setShowRollCall(true); }}
               className="flex-1 text-[13px] md:text-[18px] font-bold px-3 relative h-full transition-all duration-200"
               style={{ color: showSliders ? '#1B3828' : '#1C1410', backgroundColor: showSliders ? 'rgba(27,56,40,0.07)' : 'transparent', fontWeight: showSliders ? 900 : 700 }}
               onMouseEnter={(e) => { if (!showSliders) { const el = e.currentTarget as HTMLElement; el.style.color = '#1B3828'; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; el.style.transform = 'translateY(-1px)'; } }}

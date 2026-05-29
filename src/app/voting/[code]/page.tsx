@@ -151,6 +151,32 @@ function VoteScale({ forCount, againstCount, totalVoted }: {
   );
 }
 
+function PieChart({ forVotes, against, abstain }: { forVotes: number; against: number; abstain: number }) {
+  const total = forVotes + against + abstain;
+  if (total === 0) return null;
+  const cx = 60, cy = 60, r = 50;
+  const slice = (startAngle: number, value: number, color: string) => {
+    if (value === 0) return null;
+    const pct = value / total;
+    const angle = pct * 2 * Math.PI;
+    const x1 = cx + r * Math.sin(startAngle);
+    const y1 = cy - r * Math.cos(startAngle);
+    const x2 = cx + r * Math.sin(startAngle + angle);
+    const y2 = cy - r * Math.cos(startAngle + angle);
+    const large = angle > Math.PI ? 1 : 0;
+    return <path key={color} d={`M${cx},${cy} L${x1},${y1} A${r},${r} 0 ${large},1 ${x2},${y2} Z`} fill={color} />;
+  };
+  const forAngle = (forVotes / total) * 2 * Math.PI;
+  const againstAngle = (against / total) * 2 * Math.PI;
+  return (
+    <svg width="120" height="120" viewBox="0 0 120 120" className="shrink-0">
+      {slice(0, forVotes, '#4ade80')}
+      {slice(forAngle, against, '#f87171')}
+      {slice(forAngle + againstAngle, abstain, '#9A8A78')}
+    </svg>
+  );
+}
+
 function GavelLoader() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-4" style={{ backgroundColor: '#EDE7D8' }}>
@@ -202,6 +228,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   const [rollCallStatuses, setRollCallStatuses] = useState<Record<string, DelegateStatus>>({});
   const [rightsTimerLimit, setRightsTimerLimit] = useState(60);
   const [showEndDebateConfirm, setShowEndDebateConfirm] = useState(false);
+  const [hideVotes, setHideVotes] = useState(false);
   const [orderedRights, setOrderedRights] = useState<DelegateVote[]>([]);
   const dragIndexRef = useRef<number | null>(null);
   const resultPersistedRef = useRef(false);
@@ -587,8 +614,27 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
           </div>
 
           {/* Scale */}
-          <div className="mb-4 w-full flex justify-center">
-            <VoteScale forCount={forCount} againstCount={againstCount} totalVoted={votes.length} />
+          <div className="mb-4 w-full flex justify-center items-center gap-3">
+            <div className={hideVotes ? 'blur-sm select-none pointer-events-none' : ''}>
+              <VoteScale forCount={forCount} againstCount={againstCount} totalVoted={votes.length} />
+            </div>
+            <button
+              onClick={() => setHideVotes((v) => !v)}
+              title={hideVotes ? 'Show vote count' : 'Hide vote count'}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-[#9A8A78] hover:text-[#1C1410] transition-colors focus:outline-none border border-[#DDD4C0] hover:border-[#1B3828]">
+              {hideVotes ? (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/>
+                  <path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/>
+                  <line x1="1" y1="1" x2="23" y2="23"/>
+                </svg>
+              ) : (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+              )}
+            </button>
           </div>
 
           {/* Upcoming voters — fixed height, invisible when empty so layout never shifts */}
@@ -834,7 +880,10 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             )}
           </div>
 
-          <VoteScale forCount={forCount} againstCount={againstCount} totalVoted={votes.length} />
+          <div className="flex items-center justify-center gap-6">
+            <PieChart forVotes={forCount} against={againstCount} abstain={abstainCount} />
+            <VoteScale forCount={forCount} againstCount={againstCount} totalVoted={votes.length} />
+          </div>
 
           {/* Action buttons */}
           <div className="flex gap-3">
