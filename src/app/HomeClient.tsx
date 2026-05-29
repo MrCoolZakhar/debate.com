@@ -758,16 +758,21 @@ export default function HomeClient() {
               className="rounded-2xl shadow-xl p-6 flex flex-col gap-4"
               style={{ backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0', width: '320px' }}
             >
-              {/* SESSION IN PROGRESS — full-width label above everything */}
-              <p
-                className="text-xs font-black uppercase tracking-widest mb-3 text-center"
-                style={{ color: '#B8844A', fontSize: '11px', letterSpacing: '0.12em' }}
+              {/* SESSION IN PROGRESS — full-width pill */}
+              <div
+                className="w-full flex items-center justify-center rounded-xl py-2"
+                style={{ backgroundColor: 'rgba(182,135,31,0.12)', border: '1px solid rgba(182,135,31,0.25)' }}
               >
-                Session in progress
-              </p>
+                <p
+                  className="font-black uppercase tracking-widest text-center"
+                  style={{ color: '#B8844A', fontSize: '11px', letterSpacing: '0.12em' }}
+                >
+                  Session in progress
+                </p>
+              </div>
 
-              {/* Logo + title row with code top-right */}
-              <div className="flex items-start gap-3 mb-4 relative">
+              {/* Logo + title row */}
+              <div className="flex items-start gap-3">
                 {logoUrl && (
                   <div
                     className="rounded-2xl flex items-center justify-center shrink-0 overflow-hidden"
@@ -791,17 +796,26 @@ export default function HomeClient() {
                     Signed in as <span className="font-semibold">{rejoinData.chairName}</span>
                   </p>
                 </div>
-                {/* Code + chair suffix top-right */}
-                <div className="shrink-0 text-right">
-                  <p className="font-black text-xs" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>
+              </div>
+
+              {/* Code badge + password row */}
+              <div className="flex flex-col gap-1.5">
+                <div
+                  className="w-full flex items-center justify-center rounded-xl py-2"
+                  style={{ backgroundColor: '#F5F0E8', border: '1.5px solid #C8BFB0' }}
+                >
+                  <p
+                    className="font-black tracking-widest"
+                    style={{ color: '#1C1410', fontFamily: "'DM Mono', monospace", fontSize: '15px', letterSpacing: '0.18em' }}
+                  >
                     {rejoinData.code.toUpperCase()}
                   </p>
-                  {rejoinData.chairSuffix && (
-                    <p className="text-[10px] mt-0.5" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}>
-                      {rejoinData.chairSuffix}
-                    </p>
-                  )}
                 </div>
+                {rejoinData.chairSuffix && (
+                  <p className="text-xs text-center" style={{ color: '#6A5A4A' }}>
+                    Password: <span className="font-black" style={{ fontFamily: "'DM Mono', monospace", color: '#1B3828' }}>{rejoinData.chairSuffix}</span>
+                  </p>
+                )}
               </div>
 
               {/* Buttons */}

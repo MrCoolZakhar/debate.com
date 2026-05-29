@@ -1,6 +1,7 @@
 import SiteNav from '@/components/SiteNav';
 
 const AMBASSADORS = [
+  { name: 'Santiago Ramsés', country: 'Venezuela', src: '/ambassador-photos/santiago_ambassador.png' },
   { name: 'andrew', src: '/ambassador-photos/andrew_ambassador.png' },
   { name: 'anna', src: '/ambassador-photos/anna_ambassador.png' },
   { name: 'armande', src: '/ambassador-photos/armande_ambassador.png' },
@@ -16,6 +17,7 @@ const AMBASSADORS = [
   { name: 'tyler', src: '/ambassador-photos/tyler_ambassador.png' },
   { name: 'valentina', src: '/ambassador-photos/valentina_ambassador.png' },
   { name: 'victor', src: '/ambassador-photos/victor_ambassador.png' },
+  { name: 'Isabella Romero', country: 'Honduras', src: '/ambassador-photos/isabella_ambassador.png' },
 ];
 
 export default function AmbassadorsPage() {
@@ -55,7 +57,7 @@ export default function AmbassadorsPage() {
             gap: 32,
           }}
         >
-          {AMBASSADORS.map(({ name, src }) => (
+          {AMBASSADORS.map(({ name, src, country }) => (
             <div key={name} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
               <div
                 style={{
@@ -74,17 +76,21 @@ export default function AmbassadorsPage() {
                   style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top' }}
                 />
               </div>
-              <p
-                style={{
-                  fontSize: 15,
-                  fontWeight: 700,
-                  color: '#1C1410',
-                  letterSpacing: '0.02em',
-                  textAlign: 'center',
-                }}
-              >
-                {name}
-              </p>
+              <div style={{ textAlign: 'center' }}>
+                <p
+                  style={{
+                    fontSize: 15,
+                    fontWeight: 700,
+                    color: '#1C1410',
+                    letterSpacing: '0.02em',
+                  }}
+                >
+                  {name}
+                </p>
+                {country && (
+                  <p style={{ fontSize: 12, color: '#9A8A78', marginTop: 2 }}>{country}</p>
+                )}
+              </div>
             </div>
           ))}
         </div>
