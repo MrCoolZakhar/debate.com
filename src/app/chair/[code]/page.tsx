@@ -1675,6 +1675,11 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
 
     // DB calls outside setState
     updateCaucusInDB(committee.id, updatedCaucus);
+    // Remove the newly-active speaker from the DB caucus queue —
+    // nextSpeakerInDB only removes from the GSL, so we must do this separately.
+    if (next?.delegateId) {
+      removeFromCaucusListInDB(committee.id, next.delegateId);
+    }
     await nextSpeakerInDB(
       committee.id,
       speakTime,
