@@ -758,18 +758,13 @@ export default function HomeClient() {
               className="rounded-2xl shadow-xl p-6 flex flex-col gap-4"
               style={{ backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0', width: '320px' }}
             >
-              {/* SESSION IN PROGRESS — full-width pill */}
-              <div
-                className="w-full flex items-center justify-center rounded-xl py-2"
-                style={{ backgroundColor: 'rgba(182,135,31,0.12)', border: '1px solid rgba(182,135,31,0.25)' }}
+              {/* SESSION IN PROGRESS */}
+              <p
+                className="font-black uppercase tracking-widest text-center"
+                style={{ color: '#B8844A', fontSize: '17px', letterSpacing: '0.12em' }}
               >
-                <p
-                  className="font-black uppercase tracking-widest text-center"
-                  style={{ color: '#B8844A', fontSize: '11px', letterSpacing: '0.12em' }}
-                >
-                  Session in progress
-                </p>
-              </div>
+                Session in progress
+              </p>
 
               {/* Logo + title row */}
               <div className="flex items-start gap-3">
