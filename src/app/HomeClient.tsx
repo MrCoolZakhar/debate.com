@@ -395,14 +395,19 @@ export default function HomeClient() {
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem('gavelling-rejoin');
+      // Also check old key name for backward compat
+      const raw = localStorage.getItem('gavelling-rejoin') ?? localStorage.getItem('gavelling_active_session');
       if (raw) {
         const parsed = JSON.parse(raw);
         const eightHours = 8 * 60 * 60 * 1000;
         if (Date.now() - parsed.savedAt < eightHours) {
+          // Migrate old key to new key if needed
+          localStorage.setItem('gavelling-rejoin', raw);
+          localStorage.removeItem('gavelling_active_session');
           setRejoinData(parsed);
         } else {
           localStorage.removeItem('gavelling-rejoin');
+          localStorage.removeItem('gavelling_active_session');
         }
       }
     } catch { /* ignore */ }

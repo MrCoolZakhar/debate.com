@@ -1126,7 +1126,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           localStorage.setItem('gavelling-rejoin', JSON.stringify({
             code: found.code,
             chairName: myChairName || (found.chairNames[0] ?? 'Chair'),
-            committeeTitle: found.topic ?? found.code,
+            committeeTitle: found.name ?? found.topic ?? found.code,
             savedAt: Date.now(),
           }));
         }
