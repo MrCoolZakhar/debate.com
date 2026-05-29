@@ -78,9 +78,6 @@ function SponsorSelect({ candidates, selected, onChange }: {
   return (
     <div>
       <label className="block text-sm font-semibold text-[#6A5A4A] mb-1.5">{t('documents_sponsors_label')}</label>
-      <div className="flex flex-wrap gap-1.5 mb-2 min-h-[28px]">
-        {selected.map((c) => <CountryChip key={c} country={c} onRemove={() => onChange(selected.filter((s) => s !== c))} />)}
-      </div>
       <div className="relative">
         <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={handleKeyDown}
           placeholder={t('documents_sponsor_placeholder')}
@@ -100,6 +97,30 @@ function SponsorSelect({ candidates, selected, onChange }: {
           </div>
         )}
       </div>
+      {/* Selected sponsors — flags only, below input */}
+      {selected.length > 0 && (
+        <div className="flex flex-wrap gap-2 mt-2">
+          {selected.map((c) => {
+            const f = getCountryByName(c);
+            return (
+              <button key={c} onClick={() => onChange(selected.filter((s) => s !== c))}
+                title={`Remove ${c}`}
+                className="relative group focus:outline-none">
+                {f ? (
+                  <img src={getFlagUrl(f.code)} alt={f.code}
+                    className="w-10 h-7 object-cover rounded"
+                    style={{ border: '1.5px solid rgba(28,20,16,0.15)' }}
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                ) : (
+                  <span className="text-2xl">🌐</span>
+                )}
+                <span className="absolute inset-0 flex items-center justify-center rounded opacity-0 group-hover:opacity-100 transition-opacity text-xs font-bold text-white"
+                  style={{ backgroundColor: 'rgba(139,32,32,0.7)' }}>✕</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
