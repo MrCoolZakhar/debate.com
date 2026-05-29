@@ -27,19 +27,22 @@ function getCommitteeAcronym(title: string): string {
 }
 
 const REJOIN_LOGOS: Record<string, string> = {
-  UNSC:   'https://flagcdn.com/w160/un.png',
-  UNGA:   'https://flagcdn.com/w160/un.png',
-  UNHRC:  'https://flagcdn.com/w160/un.png',
-  ECOSOC: 'https://flagcdn.com/w160/un.png',
-  UNEP:   'https://flagcdn.com/w160/un.png',
-  NATO:   'https://flagcdn.com/w160/xn.png',
-  EU:     'https://flagcdn.com/w160/eu.png',
-  AU:     'https://flagcdn.com/w160/au.png',
-  WHO:    'https://upload.wikimedia.org/wikipedia/commons/thumb/2/26/World_Health_Organization_Logo.svg/120px-World_Health_Organization_Logo.svg.png',
-  IMF:    'https://upload.wikimedia.org/wikipedia/commons/thumb/7/78/IMF_logo.svg/120px-IMF_logo.svg.png',
-  G20:    'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9d/G-20.svg/120px-G-20.svg.png',
-  LAS:    'https://flagcdn.com/w160/lo.png',
-  ASEAN:  'https://upload.wikimedia.org/wikipedia/commons/thumb/b/bc/Flag_of_ASEAN.svg/120px-Flag_of_ASEAN.svg.png',
+  UNSC:   '/logos/un.svg',
+  UNGA:   '/logos/un.svg',
+  UNHRC:  '/logos/UNHRC.png',
+  ECOSOC: '/logos/un.svg',
+  UNEP:   '/logos/UNEP.png',
+  NATO:   '/logos/nato.png',
+  EU:     '/logos/eu.png',
+  AU:     '/logos/AU.png',
+  WHO:    '/logos/who.png',
+  IMF:    '/logos/IMF.png',
+  G20:    '/logos/g20.svg',
+  G7:     '/logos/g7.png',
+  LAS:    '/logos/arab-league.png',
+  ASEAN:  '/logos/asean.png',
+  WB:     '/logos/worldbank.svg',
+  BRICS:  '/logos/brics.png',
 };
 
 // ── Individual feature card components ──────────────────────────────────────
@@ -755,15 +758,15 @@ export default function HomeClient() {
               <div className="flex items-center gap-3">
                 {logoUrl && (
                   <div
-                    className="rounded-xl flex items-center justify-center shrink-0 overflow-hidden"
-                    style={{ width: '48px', height: '48px', backgroundColor: '#1B3828' }}
+                    className="rounded-2xl flex items-center justify-center shrink-0 overflow-hidden"
+                    style={{ width: '56px', height: '56px', backgroundColor: 'rgba(27,56,40,0.08)', border: '1px solid rgba(27,56,40,0.12)' }}
                   >
                     <img
                       src={logoUrl}
                       alt={acronym}
-                      width={32}
-                      height={32}
-                      style={{ objectFit: 'contain', width: '32px', height: '32px' }}
+                      width={36}
+                      height={36}
+                      style={{ objectFit: 'contain', width: '36px', height: '36px' }}
                       onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
                     />
                   </div>
