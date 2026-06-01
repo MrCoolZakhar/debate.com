@@ -52,7 +52,7 @@ function RollCallCard() {
   const shadow = { boxShadow: '0 24px 64px rgba(27,56,40,0.14)' };
   const getFlag = (country: string) => {
     const c = getCountryByName(country);
-    return c ? <img src={getFlagUrl(c.code)} alt={country} style={{ width: '28px', height: '20px', objectFit: 'cover', borderRadius: '4px', border: '1px solid rgba(28,20,16,0.10)' }} /> : <span className="w-7 h-5 bg-[#DDD4C0] rounded inline-block" />;
+    return c ? <img src={getFlagUrl(c.code)} alt={country} loading="lazy" style={{ width: '28px', height: '20px', objectFit: 'cover', borderRadius: '4px', border: '1px solid rgba(28,20,16,0.10)' }} /> : <span className="w-7 h-5 bg-[#DDD4C0] rounded inline-block" />;
   };
   const delegates = [
     { country: 'China', label: es ? 'China' : 'China', status: 'present-voting' },
@@ -116,7 +116,7 @@ function MotionsCard() {
   const shadow = { boxShadow: '0 24px 64px rgba(27,56,40,0.14)' };
   const getFlag = (country: string) => {
     const c = getCountryByName(country);
-    return c ? <img src={getFlagUrl(c.code)} alt={country} style={{ width: '32px', height: '22px', objectFit: 'cover', borderRadius: '6px', border: '1px solid rgba(28,20,16,0.10)' }} /> : null;
+    return c ? <img src={getFlagUrl(c.code)} alt={country} loading="lazy" style={{ width: '32px', height: '22px', objectFit: 'cover', borderRadius: '6px', border: '1px solid rgba(28,20,16,0.10)' }} /> : null;
   };
   return (
     <div className="w-full rounded-2xl overflow-hidden" style={{ ...shadow, minHeight: '460px', backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
@@ -192,7 +192,7 @@ function SpeakersCard() {
           return (
             <div key={d.country} className="flex flex-col items-center gap-1 flex-shrink-0">
               <div style={{ width: '52px', height: '38px', borderRadius: '10px', overflow: 'hidden', border: '1.5px solid rgba(28,20,16,0.10)' }}>
-                {c ? <img src={getFlagUrl(c.code)} alt={d.country} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div style={{ width: '100%', height: '100%', backgroundColor: '#DDD4C0' }} />}
+                {c ? <img src={getFlagUrl(c.code)} alt={d.country} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div style={{ width: '100%', height: '100%', backgroundColor: '#DDD4C0' }} />}
               </div>
               <span className="text-[9px] font-semibold text-center" style={{ color: '#6A5A4A' }}>{d.label}</span>
               {d.pos === 2 && <span className="text-[8px] font-bold" style={{ color: '#B8844A' }}>{es ? 'A continuación' : 'Up next'}</span>}
@@ -204,7 +204,7 @@ function SpeakersCard() {
       {/* Current speaker */}
       <div className="flex flex-col items-center px-6 py-4">
         <div style={{ width: '100px', height: '72px', borderRadius: '14px', overflow: 'hidden', border: '1.5px solid rgba(28,20,16,0.10)', marginBottom: '12px' }}>
-          {(() => { const c = getCountryByName('China'); return c ? <img src={getFlagUrl(c.code)} alt="China" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : null; })()}
+          {(() => { const c = getCountryByName('China'); return c ? <img src={getFlagUrl(c.code)} alt="China" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : null; })()}
         </div>
         <p className="font-black text-2xl mb-1" style={{ color: '#1C1410' }}>China</p>
         <p className="font-black text-5xl font-mono tabular-nums mb-2" style={{ color: timerSecs <= 10 ? '#B8844A' : '#1C1410' }}>
