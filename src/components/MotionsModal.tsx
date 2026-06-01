@@ -4,6 +4,8 @@ import { useState, useRef, useEffect } from 'react';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { Committee, PendingMotion, PendingMotionType } from '@/lib/types';
 import { getCountryByName, getFlagUrl, getCountryDisplayName } from '@/lib/countries';
+
+const SQUARE_FLAGS = new Set(['CH', 'NP']);
 import { Emoji } from '@/components/Emoji';
 import { useSettingsStore, DEFAULT_MOTION_NAMES, MotionNames } from '@/lib/settingsStore';
 import {
@@ -136,13 +138,14 @@ function ProposerInput({ candidates, value, onChange, blockedCountries }: {
 }
 
 // ── Raise Motion Form ─────────────────────────────────────────────────────────
-function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion, belowQuorum = false }: {
+function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion, belowQuorum = false, isViewOnly = false }: {
   committee: Committee;
   typeMeta: TypeMeta;
   onBack: () => void;
   onRaised: (motion: Omit<PendingMotion, 'id' | 'disruptiveness'>) => void;
   editingMotion?: PendingMotion | null;
   belowQuorum?: boolean;
+  isViewOnly?: boolean;
 }) {
   const t = useT();
   const { language } = useLanguage();
@@ -422,10 +425,12 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
             </div>
           )}
           {error && <p className="text-[#8B2020] text-sm font-medium mb-3">{error}</p>}
-          <button onClick={submit} disabled={!canSubmit() || belowQuorum}
-            className="w-full bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white py-5 rounded-2xl text-base font-black transition-colors focus:outline-none" style={{ letterSpacing: '0.05em' }}>
-            {editingMotion ? t('motions_edit_btn') : t('motions_raise_btn')}
-          </button>
+          {!isViewOnly && (
+            <button onClick={submit} disabled={!canSubmit() || belowQuorum}
+              className="w-full bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white py-5 rounded-2xl text-base font-black transition-colors focus:outline-none" style={{ letterSpacing: '0.05em' }}>
+              {editingMotion ? t('motions_edit_btn') : t('motions_raise_btn')}
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -433,7 +438,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
 }
 
 // ── Voting View ───────────────────────────────────────────────────────────────
-function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBack, onEdit, pendingIds }: {
+function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBack, onEdit, pendingIds, isViewOnly = false }: {
   committee: Committee;
   typeMeta: TypeMeta;
   onAccepted: (motion: PendingMotion) => void;
@@ -442,6 +447,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
   onBack: () => void;
   onEdit: (motionId: string) => void;
   pendingIds: Set<string>;
+  isViewOnly?: boolean;
 }) {
   const t = useT();
   // Filter out join-request pseudo-motions — those are handled in the chair banner, not here
@@ -518,16 +524,37 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
           dragIndexRef.current = null;
         }}
         onDragEnd={() => { dragIndexRef.current = null; }}
-        className={`bg-transparent rounded-2xl flex flex-col cursor-grab ${
+        className={`relative bg-transparent rounded-2xl flex flex-col cursor-grab ${
           large
             ? `p-6 space-y-3 flex-1 min-w-0 border-2 ${isPrimary ? 'border-[#1B3828]' : 'border-[#DDD4C0]'}`
             : 'p-4 space-y-2 border border-[#DDD4C0]'
         }`}
       >
+        {/* Position badge — straddles the top-right border corner */}
+        <div
+          className="absolute top-0 right-0 translate-x-1/2 -translate-y-1/2 w-6 h-6 rounded-full flex items-center justify-center text-xs font-black z-10 pointer-events-none select-none"
+          style={{ backgroundColor: '#1B3828', color: '#EED98A' }}
+        >
+          {idx + 1}
+        </div>
         {/* Header: icon + type label + flag in top-right */}
         <div className="flex items-center gap-2">
-          <span className={`font-black text-[#1C1410] flex-1 ${large ? 'text-3xl' : 'text-lg'}`}>{meta.label}</span>
-          {f ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ borderRadius: '8px', border: '1.5px solid rgba(28,20,16,0.10)', objectFit: 'cover' }} className={large ? 'w-14 h-10 inline-block' : 'w-8 h-6 inline-block'} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : null}
+          <span className={`font-black text-[#1C1410] flex-1 ${large ? 'text-3xl' : 'text-lg'} flex items-center gap-1.5`}>
+            {meta.label}
+            {!isPrimary && !isViewOnly && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onEdit(m.id); }}
+                title="Edit motion"
+                className="opacity-40 hover:opacity-80 transition-opacity focus:outline-none shrink-0"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" stroke="#4A4A4A" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M19.5 7.125L16.5 4.125" stroke="#4A4A4A" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </button>
+            )}
+          </span>
+          {f ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ borderRadius: '8px', border: SQUARE_FLAGS.has(f.code) ? 'none' : '1.5px solid rgba(28,20,16,0.10)', objectFit: 'cover' }} className={large ? 'w-14 h-10 inline-block' : 'w-8 h-6 inline-block'} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : null}
         </div>
 
         {/* Topic inline */}
@@ -569,14 +596,16 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
           </div>
         )}
 
-        {/* Required votes */}
-        <div className="flex items-center gap-2 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-3 py-1.5">
-          <span className="text-xs font-semibold" style={{ color: '#1B3828' }}>{fraction === 'Simple majority' ? t('motions_simple_majority') : t('motions_supermajority')}</span>
-          <span className="text-xs font-bold ml-auto" style={{ color: '#1C1410' }}>{t('motions_needs_votes', { needed, present })}</span>
-        </div>
-
-        {/* Accept/Reject/Edit — ONLY on the primary (idx===0) card being voted upon */}
+        {/* Required votes — primary card only */}
         {isPrimary && (
+          <div className="flex items-center gap-2 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-3 py-1.5">
+            <span className="text-xs font-semibold" style={{ color: '#1B3828' }}>{fraction === 'Simple majority' ? t('motions_simple_majority') : t('motions_supermajority')}</span>
+            <span className="text-xs font-bold ml-auto" style={{ color: '#1C1410' }}>{t('motions_needs_votes', { needed, present })}</span>
+          </div>
+        )}
+
+        {/* Accept/Reject/Edit — primary card only; non-primary has inline pencil */}
+        {isPrimary && !isViewOnly && (
           <div className="flex gap-2 mt-auto">
             <button onClick={() => onAccepted(m)}
               className="flex-1 bg-[#2A5A3C] hover:bg-[#3D7A52] text-white py-2.5 rounded-xl font-bold text-sm transition-colors focus:outline-none" style={{ fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}>
@@ -612,15 +641,18 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
           {renderCard(primary, true, 0)}
         </div>
         {/* Right column — queued motions + Raise a Motion button */}
-        <div className="w-72 flex flex-col gap-3 overflow-y-auto">
+        {/* pt-3 pr-4: give room for the badge that translates outside each card's top-right corner */}
+        <div className="w-72 flex flex-col gap-3 overflow-y-auto pt-3 pr-4">
           {rest.map((m, i) => renderCard(m, false, i + 1))}
-          <button
-            onClick={onBack}
-            className="w-full bg-[#2A5A3C] hover:bg-[#3D7A52] text-white py-3 rounded-2xl font-black text-sm transition-colors shrink-0 focus:outline-none"
-            style={{ letterSpacing: '0.05em' }}
-          >
-            {t('motions_raise_motion_btn')}
-          </button>
+          {!isViewOnly && (
+            <button
+              onClick={onBack}
+              className="w-full bg-[#2A5A3C] hover:bg-[#3D7A52] text-white py-3 rounded-2xl font-black text-sm transition-colors shrink-0 focus:outline-none"
+              style={{ letterSpacing: '0.05em' }}
+            >
+              {t('motions_raise_motion_btn')}
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -628,11 +660,12 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
 }
 
 // ── Main Modal ────────────────────────────────────────────────────────────────
-export default function MotionsModal({ committee, onClose, onCommitteeUpdate, belowQuorum = false }: {
+export default function MotionsModal({ committee, onClose, onCommitteeUpdate, belowQuorum = false, isViewOnly = false }: {
   committee: Committee;
   onClose: () => void;
   onCommitteeUpdate?: (updater: (c: Committee) => Committee) => void;
   belowQuorum?: boolean;
+  isViewOnly?: boolean;
 }) {
   const t = useT();
   const { language } = useLanguage();
@@ -647,7 +680,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
   const motionNames = { ...DEFAULT_MOTION_NAMES_LOCALIZED };
   const typeMeta = buildTypeMeta(motionNames);
   const pending = [...(committee.pendingMotions ?? [])].filter((m) => m.type !== ('join-request' as string)).sort((a, b) => b.disruptiveness - a.disruptiveness);
-  const [view, setView] = useState<ModalView>(pending.length === 0 ? 'raise' : 'vote');
+  const [view, setView] = useState<ModalView>(pending.length === 0 && !isViewOnly ? 'raise' : 'vote');
   const [specialVoteMotion, setSpecialVoteMotion] = useState<PendingMotion | null>(null);
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const [editingMotionId, setEditingMotionId] = useState<string | null>(null);
@@ -923,6 +956,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
               onRaised={editingMotionId ? handleEdited : handleRaised}
               editingMotion={editingMotionId ? ((committee.pendingMotions ?? []).find((m) => m.id === editingMotionId) ?? null) : null}
               belowQuorum={belowQuorum}
+              isViewOnly={isViewOnly}
             />
           )}
           {view === 'vote' && (
@@ -935,6 +969,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
               onBack={() => setView('raise')}
               onEdit={(motionId) => { setEditingMotionId(motionId); setView('raise'); }}
               pendingIds={pendingIds}
+              isViewOnly={isViewOnly}
             />
           )}
           {view === 'list' && (

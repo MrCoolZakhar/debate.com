@@ -260,8 +260,11 @@ function RollCallPanelInner({
   showBulkActions = false,
   showViewToggle = true,
   isReadOnly = false,
+  isViewOnly = false,
   isTdT = false,
   isRoomOrderTdT = false,
+  listView: listViewProp,
+  onListViewChange,
 }: {
   committee: Committee;
   onAddToList?: (delegateId: string) => void;
@@ -277,13 +280,18 @@ function RollCallPanelInner({
   showBulkActions?: boolean;
   showViewToggle?: boolean;
   isReadOnly?: boolean;
+  isViewOnly?: boolean;
   isTdT?: boolean;
   isRoomOrderTdT?: boolean;
+  listView?: 'az' | 'queue';
+  onListViewChange?: (v: 'az' | 'queue') => void;
 }) {
   const { language } = useLanguage();
   const t = useT();
   const [search, setSearch] = useState('');
-  const [listView, setListView] = useState<'az' | 'queue'>('az');
+  const [listViewInternal, setListViewInternal] = useState<'az' | 'queue'>('az');
+  const listView = listViewProp !== undefined ? listViewProp : listViewInternal;
+  const setListView = (v: 'az' | 'queue') => { setListViewInternal(v); onListViewChange?.(v); };
   const [showFullList, setShowFullList] = useState(false);
   const [localStatuses, setLocalStatuses] = useState<Record<string, DelegateStatus>>({});
   const listRef = useRef<HTMLDivElement>(null);
@@ -443,6 +451,7 @@ function RollCallPanelInner({
           const isUpNext = listView === 'queue' && isCurrentSpeakerInPanel;
 
           const handleRowClick = () => {
+            if (isViewOnly) return;
             if (onAddToList && !isAbsent) {
               if (!isOnList) onAddToList(d.id);
               else if (onRemoveFromList) onRemoveFromList(d.id);
@@ -533,7 +542,7 @@ function RollCallPanelInner({
                   <span className="text-[10px] shrink-0 font-mono ml-auto uppercase tracking-wide" style={{ color: 'rgba(237,231,216,0.35)' }}>{t('rollcall_absent')}</span>
                 )}
                 {isRollCallPhase && (
-                  <div onClick={(e) => e.stopPropagation()} className={`ml-auto shrink-0 ${isReadOnly ? 'pointer-events-none opacity-50' : ''}`}>
+                  <div onClick={(e) => e.stopPropagation()} className={`ml-auto shrink-0 ${(isReadOnly || isViewOnly) ? 'pointer-events-none opacity-50' : ''}`}>
                     <StatusSlider status={effectiveStatus} onCycle={() => cycleStatus(d.id, effectiveStatus)} />
                   </div>
                 )}
@@ -579,6 +588,7 @@ const RollCallPanel = React.memo(RollCallPanelInner, (prev, next) => {
     prev.showBulkActions === next.showBulkActions &&
     prev.showViewToggle === next.showViewToggle &&
     prev.isReadOnly === next.isReadOnly &&
+    prev.isViewOnly === next.isViewOnly &&
     prev.isTdT === next.isTdT &&
     prev.isRoomOrderTdT === next.isRoomOrderTdT &&
     prev.onListIds === next.onListIds

@@ -1,3 +1,20 @@
+export const PRESET_LOGOS: Record<string, string> = {
+  'UN Security Council': '/logos/un.svg',
+  'UN Environment Programme': '/logos/UNEP.png',
+  'World Health Organization': '/logos/who.png',
+  'International Monetary Fund': '/logos/IMF.png',
+  'World Bank': '/logos/worldbank.svg',
+  'UN General Assembly': '/logos/un.svg',
+  'UN Human Rights Council': '/logos/UNHRC.png',
+  'Economic and Social Council': '/logos/un.svg',
+  'NATO': '/logos/nato.png',
+  'G20': '/logos/g20.svg',
+  'European Union': '/logos/eu.png',
+  'African Union': '/logos/AU.png',
+  'Arab League': '/logos/arab-league.png',
+  'ASEAN': '/logos/asean.png',
+};
+
 export const PRESET_NAME_ES: Record<string, string> = {
   'UN Security Council': 'Consejo de Seguridad de la ONU',
   'UN Environment Programme': 'Programa de Medio Ambiente de la ONU',

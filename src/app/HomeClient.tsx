@@ -7,6 +7,42 @@ import { getFlagUrl, getCountryByName } from '@/lib/countries';
 import SiteNav from '@/components/SiteNav';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 
+function getCommitteeAcronym(title: string): string {
+  const t = title.toUpperCase();
+  if (t.includes('SECURITY COUNCIL')) return 'UNSC';
+  if (t.includes('GENERAL ASSEMBLY')) return 'UNGA';
+  if (t.includes('HUMAN RIGHTS')) return 'UNHRC';
+  if (t.includes('ECOSOC')) return 'ECOSOC';
+  if (t.includes('ENVIRONMENT') || t.includes('UNEP')) return 'UNEP';
+  if (t.includes('WHO') || t.includes('WORLD HEALTH')) return 'WHO';
+  if (t.includes('NATO')) return 'NATO';
+  if (t.includes('AFRICAN UNION') || /\bAU\b/.test(t)) return 'AU';
+  if (t.includes('EUROPEAN UNION') || /\bEU\b/.test(t)) return 'EU';
+  if (t.includes('G20') || t.includes('G-20')) return 'G20';
+  if (t.includes('ARAB LEAGUE') || t.includes('LAS')) return 'LAS';
+  if (t.includes('ASEAN')) return 'ASEAN';
+  if (t.includes('IMF')) return 'IMF';
+  return 'UNGA';
+}
+
+const REJOIN_LOGOS: Record<string, string> = {
+  UNSC:   '/logos/un.svg',
+  UNGA:   '/logos/un.svg',
+  UNHRC:  '/logos/UNHRC.png',
+  ECOSOC: '/logos/un.svg',
+  UNEP:   '/logos/UNEP.png',
+  NATO:   '/logos/nato.png',
+  EU:     '/logos/eu.png',
+  AU:     '/logos/AU.png',
+  WHO:    '/logos/who.png',
+  IMF:    '/logos/IMF.png',
+  G20:    '/logos/g20.svg',
+  G7:     '/logos/g7.png',
+  LAS:    '/logos/arab-league.png',
+  ASEAN:  '/logos/asean.png',
+  WB:     '/logos/worldbank.svg',
+  BRICS:  '/logos/brics.png',
+};
 
 // ── Individual feature card components ──────────────────────────────────────
 
@@ -16,7 +52,7 @@ function RollCallCard() {
   const shadow = { boxShadow: '0 24px 64px rgba(27,56,40,0.14)' };
   const getFlag = (country: string) => {
     const c = getCountryByName(country);
-    return c ? <img src={getFlagUrl(c.code)} alt={country} style={{ width: '28px', height: '20px', objectFit: 'cover', borderRadius: '4px', border: '1px solid rgba(28,20,16,0.10)' }} /> : <span className="w-7 h-5 bg-[#DDD4C0] rounded inline-block" />;
+    return c ? <img src={getFlagUrl(c.code)} alt={country} loading="lazy" style={{ width: '28px', height: '20px', objectFit: 'cover', borderRadius: '4px', border: '1px solid rgba(28,20,16,0.10)' }} /> : <span className="w-7 h-5 bg-[#DDD4C0] rounded inline-block" />;
   };
   const delegates = [
     { country: 'China', label: es ? 'China' : 'China', status: 'present-voting' },
@@ -80,7 +116,7 @@ function MotionsCard() {
   const shadow = { boxShadow: '0 24px 64px rgba(27,56,40,0.14)' };
   const getFlag = (country: string) => {
     const c = getCountryByName(country);
-    return c ? <img src={getFlagUrl(c.code)} alt={country} style={{ width: '32px', height: '22px', objectFit: 'cover', borderRadius: '6px', border: '1px solid rgba(28,20,16,0.10)' }} /> : null;
+    return c ? <img src={getFlagUrl(c.code)} alt={country} loading="lazy" style={{ width: '32px', height: '22px', objectFit: 'cover', borderRadius: '6px', border: '1px solid rgba(28,20,16,0.10)' }} /> : null;
   };
   return (
     <div className="w-full rounded-2xl overflow-hidden" style={{ ...shadow, minHeight: '460px', backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
@@ -156,7 +192,7 @@ function SpeakersCard() {
           return (
             <div key={d.country} className="flex flex-col items-center gap-1 flex-shrink-0">
               <div style={{ width: '52px', height: '38px', borderRadius: '10px', overflow: 'hidden', border: '1.5px solid rgba(28,20,16,0.10)' }}>
-                {c ? <img src={getFlagUrl(c.code)} alt={d.country} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div style={{ width: '100%', height: '100%', backgroundColor: '#DDD4C0' }} />}
+                {c ? <img src={getFlagUrl(c.code)} alt={d.country} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div style={{ width: '100%', height: '100%', backgroundColor: '#DDD4C0' }} />}
               </div>
               <span className="text-[9px] font-semibold text-center" style={{ color: '#6A5A4A' }}>{d.label}</span>
               {d.pos === 2 && <span className="text-[8px] font-bold" style={{ color: '#B8844A' }}>{es ? 'A continuación' : 'Up next'}</span>}
@@ -168,7 +204,7 @@ function SpeakersCard() {
       {/* Current speaker */}
       <div className="flex flex-col items-center px-6 py-4">
         <div style={{ width: '100px', height: '72px', borderRadius: '14px', overflow: 'hidden', border: '1.5px solid rgba(28,20,16,0.10)', marginBottom: '12px' }}>
-          {(() => { const c = getCountryByName('China'); return c ? <img src={getFlagUrl(c.code)} alt="China" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : null; })()}
+          {(() => { const c = getCountryByName('China'); return c ? <img src={getFlagUrl(c.code)} alt="China" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : null; })()}
         </div>
         <p className="font-black text-2xl mb-1" style={{ color: '#1C1410' }}>China</p>
         <p className="font-black text-5xl font-mono tabular-nums mb-2" style={{ color: timerSecs <= 10 ? '#B8844A' : '#1C1410' }}>
@@ -389,6 +425,35 @@ export default function HomeClient() {
     { step: '02', title: t('step2_title'), desc: t('step2_desc') },
     { step: '03', title: t('step3_title'), desc: t('step3_desc') },
   ];
+  const [rejoinData, setRejoinData] = useState<{
+    code: string; chairName: string; committeeTitle: string; savedAt: number; chairSuffix?: string | null;
+  } | null>(null);
+
+  useEffect(() => {
+    try {
+      // Also check old key name for backward compat
+      const raw = localStorage.getItem('gavelling-rejoin') ?? localStorage.getItem('gavelling_active_session');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        const dismissedCode = localStorage.getItem('gavelling-rejoin-dismissed');
+        if (parsed.code === dismissedCode) {
+          localStorage.removeItem('gavelling-rejoin');
+          return;
+        }
+        const eightHours = 18 * 60 * 60 * 1000;
+        if (Date.now() - parsed.savedAt < eightHours) {
+          // Migrate old key to new key if needed
+          localStorage.setItem('gavelling-rejoin', raw);
+          localStorage.removeItem('gavelling_active_session');
+          setRejoinData(parsed);
+        } else {
+          localStorage.removeItem('gavelling-rejoin');
+          localStorage.removeItem('gavelling_active_session');
+        }
+      }
+    } catch { /* ignore */ }
+  }, []);
+
   const handleJoin = () => {
     const code = joinCode.trim().toUpperCase();
     if (code.length >= 4) {
@@ -684,6 +749,99 @@ export default function HomeClient() {
         </div>
       </div>
 
+      {rejoinData && (() => {
+        const acronym = getCommitteeAcronym(rejoinData.committeeTitle);
+        const logoUrl = REJOIN_LOGOS[acronym];
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+            <div
+              className="rounded-2xl shadow-xl p-6 flex flex-col gap-4"
+              style={{ backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0', width: '320px' }}
+            >
+              {/* SESSION IN PROGRESS */}
+              <p
+                className="font-black uppercase tracking-widest text-center"
+                style={{ color: '#B8844A', fontSize: '17px', letterSpacing: '0.12em' }}
+              >
+                Session in progress
+              </p>
+
+              {/* Logo + title row */}
+              <div className="flex items-start gap-3">
+                {logoUrl && (
+                  <div
+                    className="rounded-2xl flex items-center justify-center shrink-0 overflow-hidden"
+                    style={{ width: '56px', height: '56px', backgroundColor: 'rgba(27,56,40,0.08)', border: '1px solid rgba(27,56,40,0.12)' }}
+                  >
+                    <img
+                      src={logoUrl}
+                      alt={acronym}
+                      width={36}
+                      height={36}
+                      style={{ objectFit: 'contain', width: '36px', height: '36px' }}
+                      onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                    />
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-lg font-black leading-snug" style={{ color: '#1B3828' }}>
+                    {rejoinData.committeeTitle}
+                  </p>
+                  <p className="text-xs mt-0.5" style={{ color: '#6A5A4A' }}>
+                    Signed in as <span className="font-semibold">{rejoinData.chairName}</span>
+                  </p>
+                </div>
+              </div>
+
+              {/* Code badge + password row */}
+              <div className="flex flex-col gap-1.5">
+                <div
+                  className="w-full flex items-center justify-center rounded-xl py-2"
+                  style={{ backgroundColor: '#F5F0E8', border: '1.5px solid #C8BFB0' }}
+                >
+                  <p
+                    className="font-black tracking-widest"
+                    style={{ color: '#1C1410', fontFamily: "'DM Mono', monospace", fontSize: '15px', letterSpacing: '0.18em' }}
+                  >
+                    {rejoinData.code.toUpperCase()}
+                  </p>
+                </div>
+                {rejoinData.chairSuffix && (
+                  <p className="text-xs text-center" style={{ color: '#6A5A4A' }}>
+                    Password: <span className="font-black" style={{ fontFamily: "'DM Mono', monospace", color: '#1B3828' }}>{rejoinData.chairSuffix}</span>
+                  </p>
+                )}
+              </div>
+
+              {/* Buttons */}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { window.location.href = `/chair/${rejoinData.code}`; }}
+                  className="flex-1 py-2.5 rounded-xl font-black text-sm transition-colors"
+                  style={{ backgroundColor: '#1B3828', color: '#EED98A' }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+                >
+                  Rejoin →
+                </button>
+                <button
+                  onClick={() => {
+                    localStorage.setItem('gavelling-rejoin-dismissed', rejoinData.code);
+                    localStorage.removeItem('gavelling-rejoin');
+                    setRejoinData(null);
+                  }}
+                  className="flex-1 py-2.5 rounded-xl font-black text-sm border transition-colors"
+                  style={{ borderColor: '#DDD4C0', color: '#1B3828', backgroundColor: 'transparent' }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#DDD4C0'; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </>
   );
 }

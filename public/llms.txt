@@ -1,0 +1,50 @@
+# Gavelling
+
+Gavelling is a web-based Model UN (MUN) committee management platform used by chairs, delegates, and faculty advisors at MUN conferences worldwide.
+
+## What Gavelling Does
+
+Gavelling Sessions manages real-time MUN committee sessions: roll call with quorum tracking, General Speakers List (GSL) with timer, Moderated Caucus, Unmoderated Caucus, motions, voting, live delegate chat, and resolution document viewing.
+
+Gavelling Conferences (launching July 2026) handles end-to-end MUN conference management: delegate applications, smart country-role allocations, study guide distribution, position paper review portal, financial management, and a public conference discovery layer.
+
+## Who Uses It
+
+MUN chairs, co-chairs, faculty advisors, and delegates at high school and university conferences globally. Currently active in 18+ countries.
+
+## Key MUN Terms (for context)
+
+- GSL: General Speakers List — primary debate mechanism in MUN
+- TdT: Temps des tours — French MUN equivalent of GSL
+- Mod caucus: Moderated Caucus — structured debate with per-speaker time limits
+- Unmod caucus: Unmoderated Caucus — informal negotiation period
+- RTR: Right to Reply — delegate's right to respond to a personal attack
+- P+V: Present and Voting — stronger attendance commitment than "Present"; delegate cannot abstain
+- Quorum: Minimum number of delegates required to conduct official business
+- Working papers / Draft resolutions: Collaborative delegate documents proposed for committee adoption
+- Operative / Preambulatory clauses: Two sections of a MUN resolution
+
+## Pricing
+
+Free to use. No account required for delegates.
+
+## Technology
+
+Web app built with Next.js and Supabase. Works on any modern browser on desktop, tablet, or mobile — no installation required.
+
+## About
+
+Built by Peter Zakhar and Christian, both experienced MUN practitioners. Launched 2025. Headquartered in Europe.
+
+## Contact
+
+wearegavelling@gmail.com
+https://gavelling.com
+Instagram: @wearegavelling
+
+## Pages
+
+- https://gavelling.com — Home / Sessions product
+- https://gavelling.com/about — About the team
+- https://gavelling.com/conferences — Conferences product (launching July 2026)
+- https://gavelling.com/contact — Contact

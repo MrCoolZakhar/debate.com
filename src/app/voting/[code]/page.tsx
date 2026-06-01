@@ -7,6 +7,7 @@ import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { Committee, DelegateStatus } from '@/lib/types';
 import { getCountryByName, getFlagUrl, getCountryDisplayName } from '@/lib/countries';
 import { Emoji } from '@/components/Emoji';
+import { MajorityPie } from '@/components/RollCallPanel';
 import { getCommitteeByCode, setPhase as setPhaseInDB, setDelegateStatus as setDelegateStatusInDB, updateDocumentStatus as updateDocumentStatusInDB } from '@/lib/committeeService';
 import { useSettingsStore } from '@/lib/settingsStore';
 import { SettingsPanel } from '@/components/SettingsPanel';
@@ -55,12 +56,20 @@ function RollCallModal({
   const thumbColor = (status: DelegateStatus) =>
     status === 'absent' ? 'bg-[#8B2020]' : status === 'present' ? 'bg-[#3D7A52]' : 'bg-[#B6871F]';
   const presentCount = Object.values(rollCallStatuses).filter((s) => s !== 'absent').length;
+  const pvCount = Object.values(rollCallStatuses).filter((s) => s === 'present-voting').length;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(5,4,3,0.92)', backdropFilter: 'blur(4px)' }}>
       <div className="rounded-2xl w-full max-w-md shadow-2xl flex flex-col" style={{ maxHeight: '85vh', backgroundColor: '#1B3828', border: '1px solid rgba(255,255,255,0.12)' }}>
         <div className="px-5 py-4 shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.12)' }}>
-          <h2 className="text-base font-black text-white">{t('voting_roll_call_heading')}</h2>
-          <p className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.5)' }}>
+          <div className="flex items-center justify-between mb-1">
+            <h2 className="text-base font-black text-white">{t('voting_roll_call_heading')}</h2>
+            <div className="flex gap-1.5">
+              <MajorityPie arcFill={1}     color="#2A5A3C" label={`${presentCount}`} />
+              <MajorityPie arcFill={2 / 3} color="#B6871F" label={`${Math.ceil(presentCount * 2 / 3)}`} />
+              <MajorityPie arcFill={0.5}   color="#8A7A6A" label={`${Math.floor(presentCount / 2) + 1}`} />
+            </div>
+          </div>
+          <p className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>
             {t('voting_roll_call_sub').replace('{present}', String(presentCount)).replace('{total}', String(delegates.length))}
           </p>
         </div>
@@ -130,7 +139,7 @@ function VoteScale({ forCount, againstCount, totalVoted }: {
   const forPct = totalVoted > 0 ? (forCount / totalVoted) * 50 : 0;
   const againstPct = totalVoted > 0 ? (againstCount / totalVoted) * 50 : 0;
   return (
-    <div className="w-full max-w-2xl px-4">
+    <div className="w-full px-0">
       <div className="relative h-7 bg-[#EDE7D8] rounded-full overflow-hidden border border-[#DDD4C0]">
         <div
           className="absolute right-1/2 top-0 bottom-0 bg-red-500/70 transition-all duration-300"
@@ -148,6 +157,32 @@ function VoteScale({ forCount, againstCount, totalVoted }: {
         <span className="text-green-400">{t('voting_for_bar').replace('{n}', String(forCount))}</span>
       </div>
     </div>
+  );
+}
+
+function PieChart({ forVotes, against, abstain }: { forVotes: number; against: number; abstain: number }) {
+  const total = forVotes + against + abstain;
+  if (total === 0) return null;
+  const cx = 60, cy = 60, r = 50;
+  const slice = (startAngle: number, value: number, color: string) => {
+    if (value === 0) return null;
+    const pct = value / total;
+    const angle = pct * 2 * Math.PI;
+    const x1 = cx + r * Math.sin(startAngle);
+    const y1 = cy - r * Math.cos(startAngle);
+    const x2 = cx + r * Math.sin(startAngle + angle);
+    const y2 = cy - r * Math.cos(startAngle + angle);
+    const large = angle > Math.PI ? 1 : 0;
+    return <path key={color} d={`M${cx},${cy} L${x1},${y1} A${r},${r} 0 ${large},1 ${x2},${y2} Z`} fill={color} />;
+  };
+  const forAngle = (forVotes / total) * 2 * Math.PI;
+  const againstAngle = (against / total) * 2 * Math.PI;
+  return (
+    <svg width="120" height="120" viewBox="0 0 120 120" className="shrink-0">
+      {slice(0, forVotes, '#4ade80')}
+      {slice(forAngle, against, '#f87171')}
+      {slice(forAngle + againstAngle, abstain, '#9A8A78')}
+    </svg>
   );
 }
 
@@ -202,6 +237,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   const [rollCallStatuses, setRollCallStatuses] = useState<Record<string, DelegateStatus>>({});
   const [rightsTimerLimit, setRightsTimerLimit] = useState(60);
   const [showEndDebateConfirm, setShowEndDebateConfirm] = useState(false);
+  const [hideVotes, setHideVotes] = useState(false);
   const [orderedRights, setOrderedRights] = useState<DelegateVote[]>([]);
   const dragIndexRef = useRef<number | null>(null);
   const resultPersistedRef = useRef(false);
@@ -587,8 +623,28 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
           </div>
 
           {/* Scale */}
-          <div className="mb-4 w-full flex justify-center">
-            <VoteScale forCount={forCount} againstCount={againstCount} totalVoted={votes.length} />
+          <div className="mb-4 w-full max-w-3xl relative">
+            <div className={hideVotes ? 'blur-sm select-none pointer-events-none' : ''}>
+              <VoteScale forCount={forCount} againstCount={againstCount} totalVoted={votes.length} />
+            </div>
+            <button
+              onClick={() => setHideVotes((v) => !v)}
+              title={hideVotes ? 'Show vote count' : 'Hide vote count'}
+              className="absolute right-0 top-0 h-7 w-9 flex items-center justify-center rounded-r-full text-[#9A8A78] hover:text-[#1C1410] transition-colors focus:outline-none"
+              style={{ backgroundColor: 'rgba(221,212,192,0.85)', borderLeft: '1px solid #DDD4C0' }}>
+              {hideVotes ? (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/>
+                  <path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/>
+                  <line x1="1" y1="1" x2="23" y2="23"/>
+                </svg>
+              ) : (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+              )}
+            </button>
           </div>
 
           {/* Upcoming voters — fixed height, invisible when empty so layout never shifts */}
@@ -834,7 +890,10 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             )}
           </div>
 
-          <VoteScale forCount={forCount} againstCount={againstCount} totalVoted={votes.length} />
+          <div className="flex items-center justify-center gap-6">
+            <PieChart forVotes={forCount} against={againstCount} abstain={abstainCount} />
+            <VoteScale forCount={forCount} againstCount={againstCount} totalVoted={votes.length} />
+          </div>
 
           {/* Action buttons */}
           <div className="flex gap-3">
