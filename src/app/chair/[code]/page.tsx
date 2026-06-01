@@ -281,8 +281,8 @@ const SQUARE_FLAGS = new Set(['CH', 'NP']);
 // ── Draggable GSL Speakers Queue ──────────────────────────────────────────────
 function DraggableSpeakersQueue({ list, onReorder, onRemove, lastSpeakerDelegateId, currentSpeakerDelegateId, isRoomOrderTdT }: {
   list: { delegateId: string; country: string }[];
-  onReorder: (newList: { delegateId: string; country: string }[]) => void;
-  onRemove: (delegateId: string) => void;
+  onReorder?: (newList: { delegateId: string; country: string }[]) => void;
+  onRemove?: (delegateId: string) => void;
   lastSpeakerDelegateId?: string | null;
   currentSpeakerDelegateId?: string | null;
   isRoomOrderTdT?: boolean;
@@ -302,12 +302,12 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, lastSpeakerDelegate
           const flagCountry = getCountryByName(s.country);
           return (
             <div key={`${s.delegateId}-${i}`} className="flex flex-col items-center gap-1 relative group cursor-grab shrink-0"
-              draggable={!isCurrent}
-              onDragStart={() => { if (!isCurrent) dragIndexRef.current = i; }}
+              draggable={!isCurrent && !!onReorder}
+              onDragStart={() => { if (!isCurrent && onReorder) dragIndexRef.current = i; }}
               onDragOver={(e) => e.preventDefault()}
               onDrop={() => {
                 const from = dragIndexRef.current;
-                if (from === null || from === i) return;
+                if (from === null || from === i || !onReorder) return;
                 const newList = [...list];
                 const [moved] = newList.splice(from, 1);
                 newList.splice(i, 0, moved);
@@ -331,7 +331,7 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, lastSpeakerDelegate
               {!isCurrent && lastSpeakerDelegateId && s.delegateId === lastSpeakerDelegateId && i !== 0 && (
                 <span className="text-xs font-bold text-[#9A8A78] bg-[#DDD4C0] px-1.5 py-0.5 rounded">{t('gsl_last')}</span>
               )}
-              {!isCurrent && (
+              {!isCurrent && onRemove && (
                 <button onClick={() => onRemove(s.delegateId)}
                   className="absolute -top-1 -right-1 w-5 h-5 bg-[#EDE7D8] border border-[#DDD4C0] rounded-full text-[#1C1410] text-[10px] font-black hidden group-hover:flex items-center justify-center shadow-sm">✕</button>
               )}
@@ -2300,8 +2300,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                             <DraggableSpeakersQueue
                               list={gslDisplayList}
                               currentSpeakerDelegateId={committee.currentSpeaker.delegateId}
-                              onReorder={(newList) => handleReorderSpeakersList(newList.filter((s) => s.delegateId !== committee.currentSpeaker!.delegateId))}
-                              onRemove={handleRemoveFromSpeakersList}
+                              onReorder={isViewOnly ? undefined : (newList) => handleReorderSpeakersList(newList.filter((s) => s.delegateId !== committee.currentSpeaker!.delegateId))}
+                              onRemove={isViewOnly ? undefined : handleRemoveFromSpeakersList}
                             />
                           );
                         })()}
@@ -2386,8 +2386,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                           {committee.speakersList.length > 0 && (
                             <DraggableSpeakersQueue
                               list={committee.speakersList}
-                              onReorder={handleReorderSpeakersList}
-                              onRemove={handleRemoveFromSpeakersList}
+                              onReorder={isViewOnly ? undefined : handleReorderSpeakersList}
+                              onRemove={isViewOnly ? undefined : handleRemoveFromSpeakersList}
                             />
                           )}
                           <h2 className="text-5xl font-black mb-3 text-center" style={{ color: '#1B3828' }}>{t('gsl_no_current_speaker')}</h2>
@@ -2410,7 +2410,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 </div>{/* end flex-row */}
                 {!sessionEnded && (
                 <div className="border-t border-[#DDD4C0] px-6 py-2" style={{ backgroundColor: '#F6F1E9' }}>
-                  <div className="flex items-center gap-3 mb-4">
+                  {!isViewOnly && <div className="flex items-center gap-3 mb-4">
                     <span className="text-xs text-[#9A8A78] font-mono shrink-0">{t('gsl_time')}</span>
                     <div className="flex gap-1.5">
                       {[30, 60, 90, 120, 180].map((t) => (
@@ -2423,7 +2423,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                         onChange={(e) => handleSetSpeakerTimeLimit(parseInt(e.target.value) || 90)}
                         className="w-14 bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-2 py-1 text-[#1C1410] text-xs focus:outline-none" />
                     </div>
-                  </div>
+                  </div>}
                   {belowQuorum && (
                     <p className="text-xs text-[#8B2020] text-center py-2">
                       ⚠️ Below quorum — speakers cannot be added until {Math.ceil(quorumFraction * totalCount)} delegates are present.
