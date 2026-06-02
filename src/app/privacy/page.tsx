@@ -136,7 +136,7 @@ export default function PrivacyPage() {
 
           <section>
             <h2 className="text-lg font-black mb-3" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>11. Contact Us</h2>
-            <p>If you have questions about this Privacy Policy or wish to exercise your rights, please contact us through our <Link href="/contact" className="underline font-semibold" style={{ color: '#1B3828' }}>contact page</Link> or by email at <a href="mailto:privacy@gavelling.com" className="underline font-semibold" style={{ color: '#1B3828' }}>privacy@gavelling.com</a>.</p>
+            <p>If you have questions about this Privacy Policy or wish to exercise your rights, please contact us through our <Link href="/contact" className="underline font-semibold" style={{ color: '#1B3828' }}>contact page</Link> or by email at <a href="mailto:wearegavelling@gmail.com" className="underline font-semibold" style={{ color: '#1B3828' }}>wearegavelling@gmail.com</a>.</p>
           </section>
 
         </div>
