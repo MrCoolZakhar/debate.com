@@ -708,20 +708,6 @@ export default function HomeClient() {
             </div>
           </section>
 
-          {/* MUN Resources — SEO footer links */}
-          <div style={{ background: '#F6F1E9', borderTop: '1px solid #DDD4C0', padding: '32px 24px', textAlign: 'center' }}>
-            <p style={{ fontSize: '11px', color: '#9A8A78', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '12px', fontWeight: 700 }}>
-              MUN Resources
-            </p>
-            <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '8px 20px' }}>
-              <a href="/blog/how-to-run-mun-committee" style={{ fontSize: '12px', color: '#6A5A4A', textDecoration: 'none' }}>How to Run a MUN Committee</a>
-              <a href="/blog/best-mun-software-2026" style={{ fontSize: '12px', color: '#6A5A4A', textDecoration: 'none' }}>Best MUN Software 2026</a>
-              <a href="/blog/general-speakers-list-guide" style={{ fontSize: '12px', color: '#6A5A4A', textDecoration: 'none' }}>GSL Guide</a>
-              <a href="/blog/mun-motions-explained" style={{ fontSize: '12px', color: '#6A5A4A', textDecoration: 'none' }}>MUN Motions Explained</a>
-              <a href="/blog/how-to-chair-first-mun" style={{ fontSize: '12px', color: '#6A5A4A', textDecoration: 'none' }}>How to Chair Your First MUN</a>
-            </div>
-          </div>
-
           {/* Footer */}
           <footer
             className="relative z-10 border-t border-[#DDD4C0] px-6 py-8"
