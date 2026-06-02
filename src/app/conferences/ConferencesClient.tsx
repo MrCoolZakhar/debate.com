@@ -119,7 +119,10 @@ export default function ConferencesClient() {
               </svg>
             </span>
           </div>
-          <p className="text-xs text-[#9A8A78] md:text-right">{t('conferences_footer_copy').replace('{year}', String(new Date().getFullYear()))}</p>
+          <div className="flex flex-col items-center gap-1 md:items-end">
+            <p className="text-xs text-[#9A8A78]">{t('conferences_footer_copy').replace('{year}', String(new Date().getFullYear()))}</p>
+            <a href="/privacy" className="text-xs transition-colors" style={{ color: '#9A8A78' }} onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#1B3828'; }} onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#9A8A78'; }}>Privacy Policy</a>
+          </div>
         </div>
       </footer>
     </div>
