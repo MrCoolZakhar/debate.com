@@ -27,6 +27,20 @@ const COMMITTEE_PRESETS = [
   { name: 'African Union', acronym: 'AU', logoPath: '/logos/AU.png', members: ['Algeria','Angola','Benin','Botswana','Burkina Faso','Burundi','Cabo Verde','Cameroon','Central African Republic','Chad','Comoros','Congo','Côte d\'Ivoire','DR Congo','Djibouti','Egypt','Equatorial Guinea','Eritrea','Eswatini','Ethiopia','Gabon','Gambia','Ghana','Guinea','Guinea-Bissau','Kenya','Lesotho','Liberia','Libya','Madagascar','Malawi','Mali','Mauritania','Mauritius','Morocco','Mozambique','Namibia','Niger','Nigeria','Rwanda','São Tomé and Príncipe','Senegal','Seychelles','Sierra Leone','Somalia','South Africa','South Sudan','Sudan','Tanzania','Togo','Tunisia','Uganda','Zambia','Zimbabwe'] },
   { name: 'Arab League', acronym: 'LAS', logoPath: '/logos/arab-league.png', members: ['Algeria','Bahrain','Comoros','Djibouti','Egypt','Iraq','Jordan','Kuwait','Lebanon','Libya','Mauritania','Morocco','Oman','Palestine','Qatar','Saudi Arabia','Somalia','Sudan','Syria','Tunisia','United Arab Emirates','Yemen'] },
   { name: 'ASEAN', acronym: 'ASEAN', logoPath: '/logos/asean.png', members: ['Brunei','Cambodia','Indonesia','Laos','Malaysia','Myanmar','Philippines','Singapore','Thailand','Timor-Leste','Vietnam'] },
+  { name: 'GA First Committee (Disarmament)',            acronym: 'DISEC',   logoPath: '/logos/un.svg',       members: [] },
+  { name: 'GA Fourth Committee (Special Political)',     acronym: 'SPECPOL', logoPath: '/logos/un.svg',       members: [] },
+  { name: 'GA Third Committee (Social, Humanitarian)',   acronym: 'SOCHUM',  logoPath: '/logos/un.svg',       members: [] },
+  { name: 'GA Sixth Committee (Legal)',                  acronym: 'LEGAL',   logoPath: '/logos/un.svg',       members: [] },
+  { name: 'UN Children\'s Fund',                         acronym: 'UNICEF',  logoPath: '/logos/unicef.png',   members: [] },
+  { name: 'UN Educational, Scientific & Cultural Org.', acronym: 'UNESCO',  logoPath: '/logos/unesco.png',   members: [] },
+  { name: 'UN Refugee Agency',                           acronym: 'UNHCR',   logoPath: '/logos/un.svg',       members: [] },
+  { name: 'World Food Programme',                        acronym: 'WFP',     logoPath: '/logos/un.svg',       members: [] },
+  { name: 'Food and Agriculture Organization',           acronym: 'FAO',     logoPath: '/logos/fao.png',      members: [] },
+  { name: 'International Labour Organization',           acronym: 'ILO',     logoPath: '/logos/un.svg',       members: [] },
+  { name: 'International Atomic Energy Agency',          acronym: 'IAEA',    logoPath: '/logos/iaea.png',     members: [] },
+  { name: 'UN Development Programme',                   acronym: 'UNDP',    logoPath: '/logos/un.svg',       members: [] },
+  { name: 'UN Entity for Gender Equality (UN Women)',   acronym: 'UNW',     logoPath: '/logos/un.svg',       members: [] },
+  { name: 'UN Office on Drugs and Crime',               acronym: 'UNODC',   logoPath: '/logos/un.svg',       members: [] },
 ];
 
 function getPresetDisplayName(name: string, lang: string): string {
