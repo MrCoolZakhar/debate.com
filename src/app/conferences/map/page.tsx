@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import type { CSSProperties } from 'react';
 import Link from 'next/link';
 import SiteNav from '@/components/SiteNav';
 import { supabase } from '@/lib/supabase';
@@ -170,6 +171,22 @@ async function fetchHighlightedConference(countries: string[]): Promise<string |
 
 const GRAIN_SVG = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
 
+function getContinentLayout(key: ContinentKey): { cardPosition: CSSProperties; hintPosition: CSSProperties } {
+  switch (key) {
+    case 'europe':
+    case 'africa':
+      return {
+        cardPosition: { bottom: 48, left: 48, right: 'auto' },
+        hintPosition: { top: 100, left: 48, bottom: 'auto', right: 'auto' },
+      };
+    default:
+      return {
+        cardPosition: { bottom: 48, right: 48, left: 'auto' },
+        hintPosition: { top: 100, right: 48, bottom: 'auto', left: 'auto' },
+      };
+  }
+}
+
 export default function ConferencesMapPage() {
   const [hovered, setHovered] = useState<ContinentKey | null>(null);
   const [selected, setSelected] = useState<ContinentKey | null>(null);
@@ -180,10 +197,49 @@ export default function ConferencesMapPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hoveredRef = useRef<ContinentKey | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const mousePosRef = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     hoveredRef.current = hovered;
   }, [hovered]);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => { mousePosRef.current = { x: e.clientX, y: e.clientY }; };
+    document.addEventListener('mousemove', handler);
+    return () => document.removeEventListener('mousemove', handler);
+  }, []);
+
+  function isPointInPolygonXY(px: number, py: number, points: string): boolean {
+    const pairs = points.trim().split(/\s+/);
+    const vertices = pairs.map((p) => {
+      const [xStr, yStr] = p.split(',');
+      return {
+        x: parseFloat(xStr) / 100 * window.innerWidth,
+        y: parseFloat(yStr) / 100 * window.innerHeight,
+      };
+    });
+    let inside = false;
+    const n = vertices.length;
+    for (let i = 0, j = n - 1; i < n; j = i++) {
+      const xi = vertices[i].x, yi = vertices[i].y;
+      const xj = vertices[j].x, yj = vertices[j].y;
+      const intersect = ((yi > py) !== (yj > py)) && (px < ((xj - xi) * (py - yi)) / (yj - yi) + xi);
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }
+
+  function recheckHover() {
+    const pos = mousePosRef.current;
+    if (!pos) return;
+    for (const cont of CONTINENTS) {
+      if (isPointInPolygonXY(pos.x, pos.y, cont.points)) {
+        setHovered(cont.key);
+        return;
+      }
+    }
+    setHovered(null);
+  }
 
   // Forward scroll: world → clouds → continent
   useEffect(() => {
@@ -200,7 +256,7 @@ export default function ConferencesMapPage() {
       setPhase('clouds');
 
       if (videoRef.current) {
-        videoRef.current.currentTime = 2.5;
+        videoRef.current.currentTime = 0;
         videoRef.current.play();
       }
 
@@ -240,6 +296,7 @@ export default function ConferencesMapPage() {
         setHovered(null);
         setActiveCount(0);
         setHighlighted(null);
+        recheckHover();
       }, 1700);
     };
 
@@ -375,6 +432,8 @@ export default function ConferencesMapPage() {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.4; }
         }
+        .map-nav-wrapper a, .map-nav-wrapper button { color: #EDE7D8 !important; }
+        .map-nav-wrapper a:hover { color: #EED98A !important; }
       `}</style>
 
       {/* LAYER 0.5 — Cursor trail canvas */}
@@ -392,6 +451,7 @@ export default function ConferencesMapPage() {
 
       {/* LAYER 2 — SiteNav with semi-transparent forest background */}
       <div
+        className="map-nav-wrapper"
         style={{
           position: 'absolute',
           top: 0,
@@ -440,7 +500,7 @@ export default function ConferencesMapPage() {
               key={cont.key}
               points={cont.points.replace(/%/g, '')}
               fill={hovered === cont.key ? 'rgba(238,217,138,0.12)' : 'transparent'}
-              stroke={hovered === cont.key ? 'rgba(238,217,138,0.35)' : 'transparent'}
+              stroke="transparent"
               strokeWidth={1.5}
               vectorEffect="non-scaling-stroke"
               style={{ pointerEvents: 'all', cursor: 'crosshair' }}
@@ -526,188 +586,218 @@ export default function ConferencesMapPage() {
         />
       )}
 
-      {/* LAYER 8 — Info card */}
+      {/* LAYER 8 — Info card + scroll-up hint (continent phase) */}
       {phase === 'continent' && selectedDef && (
-        <div
-          style={{
-            position: 'absolute',
-            bottom: 48,
-            left: 48,
-            zIndex: 30,
-            backgroundColor: '#FAF8F3',
-            borderRadius: 16,
-            padding: '28px 32px',
-            minWidth: 280,
-            maxWidth: 340,
-            boxShadow: '0 8px 40px rgba(27,56,40,0.25)',
-            border: '1px solid #DDD4C0',
-            overflow: 'hidden',
-          }}
-        >
-          {/* Card grain overlay */}
+        <>
           <div
             style={{
               position: 'absolute',
-              inset: 0,
-              pointerEvents: 'none',
-              backgroundImage: GRAIN_SVG,
-              backgroundRepeat: 'repeat',
-              backgroundSize: '300px',
-              opacity: 0.06,
-              mixBlendMode: 'multiply',
-              zIndex: 0,
+              zIndex: 30,
+              backgroundColor: '#FAF8F3',
+              borderRadius: 16,
+              padding: '28px 32px',
+              minWidth: 280,
+              maxWidth: 340,
+              boxShadow: '0 8px 40px rgba(27,56,40,0.25)',
+              border: '1px solid #DDD4C0',
+              overflow: 'hidden',
+              ...getContinentLayout(selectedDef.key).cardPosition,
             }}
-          />
-
-          <div style={{ position: 'relative', zIndex: 1 }}>
-            <p
-              style={{
-                fontFamily: "'DM Mono', monospace",
-                fontSize: 9,
-                fontWeight: 700,
-                color: '#B6871F',
-                letterSpacing: '0.2em',
-                margin: '0 0 8px 0',
-                textTransform: 'uppercase',
-              }}
-            >
-              {'CONFERENCES — ' + selectedDef.label.toUpperCase()}
-            </p>
-
-            <h2
-              style={{
-                fontFamily: "'Outfit', sans-serif",
-                fontWeight: 900,
-                fontSize: 28,
-                color: '#1B3828',
-                margin: 0,
-              }}
-            >
-              {selectedDef.label}
-            </h2>
-
+          >
+            {/* Card grain overlay */}
             <div
               style={{
-                height: 1,
-                backgroundColor: '#DDD4C0',
-                margin: '12px 0',
+                position: 'absolute',
+                inset: 0,
+                pointerEvents: 'none',
+                backgroundImage: GRAIN_SVG,
+                backgroundRepeat: 'repeat',
+                backgroundSize: '300px',
+                opacity: 0.06,
+                mixBlendMode: 'multiply',
+                zIndex: 0,
               }}
             />
 
-            {cardLoading ? (
-              <>
-                <div
-                  style={{
-                    height: 20,
-                    borderRadius: 6,
-                    backgroundColor: '#DDD4C0',
-                    marginBottom: 8,
-                    animation: 'pulse-skeleton 1.5s ease-in-out infinite',
-                  }}
-                />
-                <div
-                  style={{
-                    height: 20,
-                    borderRadius: 6,
-                    backgroundColor: '#DDD4C0',
-                    marginBottom: 8,
-                    animation: 'pulse-skeleton 1.5s ease-in-out infinite',
-                  }}
-                />
-              </>
-            ) : (
-              <>
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    marginBottom: 8,
-                  }}
-                >
-                  <p
-                    style={{
-                      fontFamily: "'Outfit', sans-serif",
-                      fontSize: 12,
-                      fontWeight: 600,
-                      color: '#9A8A78',
-                      margin: 0,
-                    }}
-                  >
-                    Active Conferences
-                  </p>
-                  <p
-                    style={{
-                      fontFamily: "'DM Mono', monospace",
-                      fontSize: 18,
-                      fontWeight: 700,
-                      color: '#1B3828',
-                      margin: 0,
-                    }}
-                  >
-                    {activeCount.toString()}
-                  </p>
-                </div>
+            <div style={{ position: 'relative', zIndex: 1 }}>
+              <p
+                style={{
+                  fontFamily: "'DM Mono', monospace",
+                  fontSize: 9,
+                  fontWeight: 700,
+                  color: '#B6871F',
+                  letterSpacing: '0.2em',
+                  margin: '0 0 8px 0',
+                  textTransform: 'uppercase',
+                }}
+              >
+                {'CONFERENCES — ' + selectedDef.label.toUpperCase()}
+              </p>
 
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    marginBottom: 8,
-                  }}
-                >
-                  <p
-                    style={{
-                      fontFamily: "'Outfit', sans-serif",
-                      fontSize: 12,
-                      fontWeight: 600,
-                      color: '#9A8A78',
-                      margin: 0,
-                    }}
-                  >
-                    Highlighted Conference
-                  </p>
-                  <p
-                    style={{
-                      fontFamily: "'Outfit', sans-serif",
-                      fontSize: 12,
-                      fontWeight: 700,
-                      color: '#1B3828',
-                      margin: 0,
-                      maxWidth: 140,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {highlighted ?? '—'}
-                  </p>
-                </div>
-              </>
-            )}
+              <h2
+                style={{
+                  fontFamily: "'Outfit', sans-serif",
+                  fontWeight: 900,
+                  fontSize: 28,
+                  color: '#1B3828',
+                  margin: 0,
+                }}
+              >
+                {selectedDef.label}
+              </h2>
 
-            <Link
-              href={'/conferences/explore?continent=' + selectedDef.key}
+              <div
+                style={{
+                  height: 1,
+                  backgroundColor: '#DDD4C0',
+                  margin: '12px 0',
+                }}
+              />
+
+              {cardLoading ? (
+                <>
+                  <div
+                    style={{
+                      height: 20,
+                      borderRadius: 6,
+                      backgroundColor: '#DDD4C0',
+                      marginBottom: 8,
+                      animation: 'pulse-skeleton 1.5s ease-in-out infinite',
+                    }}
+                  />
+                  <div
+                    style={{
+                      height: 20,
+                      borderRadius: 6,
+                      backgroundColor: '#DDD4C0',
+                      marginBottom: 8,
+                      animation: 'pulse-skeleton 1.5s ease-in-out infinite',
+                    }}
+                  />
+                </>
+              ) : (
+                <>
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      marginBottom: 8,
+                    }}
+                  >
+                    <p
+                      style={{
+                        fontFamily: "'Outfit', sans-serif",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: '#9A8A78',
+                        margin: 0,
+                      }}
+                    >
+                      Active Conferences
+                    </p>
+                    <p
+                      style={{
+                        fontFamily: "'DM Mono', monospace",
+                        fontSize: 18,
+                        fontWeight: 700,
+                        color: '#1B3828',
+                        margin: 0,
+                      }}
+                    >
+                      {activeCount.toString()}
+                    </p>
+                  </div>
+
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      marginBottom: 8,
+                    }}
+                  >
+                    <p
+                      style={{
+                        fontFamily: "'Outfit', sans-serif",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: '#9A8A78',
+                        margin: 0,
+                      }}
+                    >
+                      Highlighted Conference
+                    </p>
+                    <p
+                      style={{
+                        fontFamily: "'Outfit', sans-serif",
+                        fontSize: 12,
+                        fontWeight: 700,
+                        color: '#1B3828',
+                        margin: 0,
+                        maxWidth: 140,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {highlighted ?? '—'}
+                    </p>
+                  </div>
+                </>
+              )}
+
+              <Link
+                href={'/conferences/explore?continent=' + selectedDef.key}
+                style={{
+                  display: 'block',
+                  marginTop: 16,
+                  textAlign: 'center',
+                  backgroundColor: '#1B3828',
+                  color: '#EED98A',
+                  borderRadius: 10,
+                  padding: '10px 20px',
+                  fontSize: 12,
+                  fontWeight: 800,
+                  letterSpacing: '0.08em',
+                  fontFamily: "'Outfit', sans-serif",
+                  textDecoration: 'none',
+                }}
+              >
+                {'EXPLORE ' + selectedDef.label.toUpperCase() + ' →'}
+              </Link>
+            </div>
+          </div>
+
+          {/* Scroll-up-to-return hint */}
+          <div
+            style={{
+              position: 'absolute',
+              zIndex: 30,
+              pointerEvents: 'none',
+              ...getContinentLayout(selectedDef.key).hintPosition,
+            }}
+          >
+            <p
               style={{
-                display: 'block',
-                marginTop: 16,
-                textAlign: 'center',
-                backgroundColor: '#1B3828',
-                color: '#EED98A',
-                borderRadius: 10,
-                padding: '10px 20px',
-                fontSize: 12,
-                fontWeight: 800,
-                letterSpacing: '0.08em',
-                fontFamily: "'Outfit', sans-serif",
-                textDecoration: 'none',
+                fontFamily: "'DM Mono', monospace",
+                fontSize: 11,
+                letterSpacing: '0.18em',
+                color: '#1B3828',
+                backgroundColor: 'rgba(237,231,216,0.88)',
+                borderRadius: 24,
+                padding: '9px 22px',
+                border: '1px solid rgba(27,56,40,0.18)',
+                whiteSpace: 'nowrap',
+                margin: 0,
+                animation: 'pulse-hint 2s ease-in-out infinite alternate',
+                boxShadow: '0 2px 12px rgba(27,56,40,0.15)',
               }}
             >
-              {'EXPLORE ' + selectedDef.label.toUpperCase() + ' →'}
-            </Link>
+              SCROLL UP TO RETURN TO MAP
+            </p>
           </div>
-        </div>
+        </>
       )}
 
       {/* LAYER 10 — Hint text (world phase) */}
@@ -725,16 +815,17 @@ export default function ConferencesMapPage() {
           <p
             style={{
               fontFamily: "'DM Mono', monospace",
-              fontSize: 9,
-              letterSpacing: '0.2em',
-              color: 'rgba(238,217,138,0.9)',
-              backgroundColor: 'rgba(27,56,40,0.6)',
-              borderRadius: 20,
-              padding: '6px 16px',
-              border: '1px solid rgba(238,217,138,0.15)',
+              fontSize: 11,
+              letterSpacing: '0.18em',
+              color: '#1B3828',
+              backgroundColor: 'rgba(237,231,216,0.88)',
+              borderRadius: 24,
+              padding: '9px 22px',
+              border: '1px solid rgba(27,56,40,0.18)',
               whiteSpace: 'nowrap',
               margin: 0,
               animation: 'pulse-hint 2s ease-in-out infinite alternate',
+              boxShadow: '0 2px 12px rgba(27,56,40,0.15)',
             }}
           >
             HOVER A CONTINENT AND SCROLL TO EXPLORE
@@ -742,34 +833,29 @@ export default function ConferencesMapPage() {
         </div>
       )}
 
-      {/* Scroll-up-to-return hint (continent phase) */}
-      {phase === 'continent' && (
-        <div
-          style={{
-            position: 'absolute',
-            bottom: 32,
-            right: 48,
-            zIndex: 30,
-            pointerEvents: 'none',
-          }}
-        >
-          <p
+      {/* Back to conferences button (world phase) */}
+      {phase === 'world' && (
+        <div style={{ position: 'absolute', bottom: 32, left: 48, zIndex: 30 }}>
+          <Link
+            href="/conferences"
             style={{
+              backgroundColor: 'rgba(237,231,216,0.88)',
+              border: '1px solid rgba(27,56,40,0.18)',
+              borderRadius: 24,
+              padding: '9px 22px',
+              fontSize: 11,
+              fontWeight: 700,
+              color: '#1B3828',
               fontFamily: "'DM Mono', monospace",
-              fontSize: 9,
-              letterSpacing: '0.2em',
-              color: 'rgba(238,217,138,0.9)',
-              backgroundColor: 'rgba(27,56,40,0.6)',
-              borderRadius: 20,
-              padding: '6px 16px',
-              border: '1px solid rgba(238,217,138,0.15)',
+              letterSpacing: '0.18em',
+              textDecoration: 'none',
               whiteSpace: 'nowrap',
-              margin: 0,
-              animation: 'pulse-hint 2s ease-in-out infinite alternate',
+              boxShadow: '0 2px 12px rgba(27,56,40,0.15)',
+              display: 'inline-block',
             }}
           >
-            SCROLL UP TO RETURN TO MAP
-          </p>
+            ← BACK TO CONFERENCES
+          </Link>
         </div>
       )}
     </div>
