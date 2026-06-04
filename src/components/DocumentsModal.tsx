@@ -8,6 +8,7 @@ import { TranslationKey } from '@/lib/translations';
 import { getCountryByName, getFlagUrl, getCountryDisplayName, matchesCountryQuery, startsWithCountryQuery } from '@/lib/countries';
 import { Emoji } from '@/components/Emoji';
 import { useSettingsStore } from '@/lib/settingsStore';
+import { supabase } from '@/lib/supabase';
 import {
   addDocument as addDocumentInDB,
   updateDocumentStatus as updateDocumentStatusInDB,
@@ -451,21 +452,27 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
 
   const canSubmit = !limitReached && !isSubmitting && !isDuplicate && !!title.trim();
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]; if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => { setFileUrl(reader.result as string); setFileName(file.name); };
-    reader.readAsDataURL(file);
+  const uploadFile = async (file: File) => {
+    setFileName(file.name);
+    const path = committee.id + '/' + Date.now() + '-' + file.name;
+    const { error } = await supabase.storage.from('session-documents').upload(path, file, { upsert: true });
+    if (error) { console.error('Storage upload error:', error); return; }
+    const { data } = supabase.storage.from('session-documents').getPublicUrl(path);
+    setFileUrl(data.publicUrl);
   };
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    await uploadFile(f);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
     const file = e.dataTransfer.files?.[0];
     if (!file || file.type !== 'application/pdf') return;
-    const reader = new FileReader();
-    reader.onload = () => { setFileUrl(reader.result as string); setFileName(file.name); };
-    reader.readAsDataURL(file);
+    await uploadFile(file);
   };
 
   const handleSubmit = async () => {
