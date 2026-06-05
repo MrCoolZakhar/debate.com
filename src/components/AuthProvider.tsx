@@ -73,7 +73,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   async function signOut() {
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut({ scope: 'local' });
+    } catch {}
     setUser(null);
     setSession(null);
     setProfile(null);
