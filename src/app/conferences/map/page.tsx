@@ -366,9 +366,7 @@ export default function ConferencesMapPage() {
         ctx.beginPath();
         ctx.moveTo(trail[i - 1].x, trail[i - 1].y);
         ctx.lineTo(pt.x, pt.y);
-        ctx.strokeStyle = pt.terrain === 'ocean'
-          ? `rgba(255,255,255,${alpha})`
-          : `rgba(180,140,80,${alpha})`;
+        ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
         ctx.lineWidth = lineWidth;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
