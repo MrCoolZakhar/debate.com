@@ -64,7 +64,25 @@ const PRESET_ACRONYM_ES: Record<string, string> = {
   'ASEAN': 'ASEAN',
 };
 
+const PRESET_ACRONYM_FR: Record<string, string> = {
+  'UN Security Council': 'CSNU',
+  'UN Environment Programme': 'PNUE',
+  'World Health Organization': 'OMS',
+  'International Monetary Fund': 'FMI',
+  'World Bank': 'BM',
+  'UN General Assembly': 'AGNU',
+  'UN Human Rights Council': 'CDH',
+  'Economic and Social Council': 'ECOSOC',
+  'NATO': 'OTAN',
+  'G20': 'G20',
+  'European Union': 'UE',
+  'African Union': 'UA',
+  'Arab League': 'LA',
+  'ASEAN': 'ASEAN',
+};
+
 function getPresetAcronym(name: string, lang: string): string {
+  if (lang === 'fr') return PRESET_ACRONYM_FR[name] ?? '';
   if (lang === 'es') return PRESET_ACRONYM_ES[name] ?? '';
   return '';
 }
@@ -167,7 +185,7 @@ function CommitteeNameInput({ value, onChange, onPresetSelect }: {
                 <div className="w-[22px] h-[22px] rounded-md shrink-0" style={{ backgroundColor: 'rgba(27,56,40,0.08)' }} />
               )}
               <span className="text-sm flex-1">{getPresetDisplayName(p.name, language)}</span>
-              <span className="text-[10px] font-bold shrink-0" style={{ fontFamily: "'DM Mono', monospace", color: '#1B3828' }}>{language === 'es' ? (getPresetAcronym(p.name, language) || p.acronym) : p.acronym}</span>
+              <span className="text-[10px] font-bold shrink-0" style={{ fontFamily: "'DM Mono', monospace", color: '#1B3828' }}>{(language === 'es' || language === 'fr') ? (getPresetAcronym(p.name, language) || p.acronym) : p.acronym}</span>
               {i === 0 && <span className="text-[10px] shrink-0" style={{ color: '#9A8A78' }}>↵</span>}
             </button>
           ))}

@@ -375,9 +375,10 @@ function InlinePdfViewer({ fileUrl, fileName }: { fileUrl: string; fileName: str
 
 // ── Delegate Doc Card (with inline PDF viewer) ────────────────────────────────
 function DelegateDocCard({ doc }: { doc: CommitteeDocument }) {
+  const t = useT();
   const statusColor = doc.status === 'passed' ? '#1B3828' : doc.status === 'failed' ? '#8B2020' : doc.status === 'introduced' ? '#B8844A' : doc.status === 'on-floor' ? '#B8844A' : '#9A8A78';
   const statusBg = doc.status === 'passed' ? 'rgba(27,56,40,0.1)' : doc.status === 'failed' ? 'rgba(139,32,32,0.1)' : 'transparent';
-  const statusLabel = doc.status === 'introduced' ? 'Being Presented' : doc.status === 'on-floor' ? 'On Floor' : doc.status === 'passed' ? 'Passed' : doc.status === 'failed' ? 'Failed' : 'Submitted';
+  const statusLabel = doc.status === 'introduced' ? t('documents_status_introduced') : doc.status === 'on-floor' ? t('documents_status_on_floor') : doc.status === 'passed' ? t('documents_status_passed') : doc.status === 'failed' ? t('documents_status_failed') : t('documents_status_submitted');
   return (
     <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl p-3 space-y-2">
       <div className="flex items-center justify-between">
@@ -1002,13 +1003,13 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
 
       {sessionEnded && endedTab === 'ended' ? (
         <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
-          <h1 className="text-4xl font-black mb-4 tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>THIS COMMITTEE HAS ENDED.</h1>
+          <h1 className="text-4xl font-black mb-4 tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{t('session_ended_title').toUpperCase()}</h1>
           <p className="text-xl mb-1" style={{ color: '#6A5A4A' }}>{getCommitteeDisplayName(committee.name, language)}</p>
           <p className="text-base mb-8" style={{ color: '#9A8A78' }}>{committee.topic}</p>
           {hoursRemaining !== null && (
-            <p className="text-sm" style={{ color: '#9A8A78' }}>{hoursRemaining} hour{hoursRemaining !== 1 ? 's' : ''} until committee is deleted</p>
+            <p className="text-sm" style={{ color: '#9A8A78' }}>{t('session_hours_until_delete', { n: hoursRemaining, s: hoursRemaining !== 1 ? 's' : '' })}</p>
           )}
-          <p className="text-xs mt-8" style={{ color: '#9A8A78' }}>Press ESC to return to main menu</p>
+          <p className="text-xs mt-8" style={{ color: '#9A8A78' }}>{t('session_ended_hint')}</p>
         </div>
       ) : (
       <>
