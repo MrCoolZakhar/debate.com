@@ -28,7 +28,7 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
   const accountMenuRef = useRef<HTMLDivElement>(null);
   const langMenuRef = useRef<HTMLDivElement>(null);
 
-  const { user, profile, signOut, loading } = useAuth();
+  const { user, profile, signOut } = useAuth();
   const { language, setLanguage } = useLanguage();
   const t = useT();
   const navLinks = NAV_LINKS_CONFIG.map(l => ({ label: l[language], href: l.href }));
@@ -193,9 +193,7 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
           </div>
 
           {/* Auth section */}
-          {loading ? (
-            <div style={{ width: '80px' }} />
-          ) : user ? (
+          {user ? (
             /* Account button + dropdown */
             <div className="relative" ref={accountMenuRef}>
               <button

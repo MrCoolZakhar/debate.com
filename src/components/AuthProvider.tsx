@@ -29,12 +29,14 @@ const AuthContext = createContext<AuthContextType>({
   signOut: async () => {},
 });
 
+const supabaseAuthClient = createAuthClient();
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
-  const supabase = createAuthClient();
+  const supabase = supabaseAuthClient;
 
   async function fetchProfile(userId: string) {
     const { data } = await supabase
