@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
-import { createAuthClient } from '@/lib/supabase-auth';
+import { supabaseAuthClient } from '@/lib/supabase-auth';
 import { UN_COUNTRIES } from '@/lib/countries';
 
 const EXPERIENCE_LEVELS = [
@@ -46,7 +46,7 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (!user) return;
-    const supabase = createAuthClient();
+    const supabase = supabaseAuthClient;
 
     supabase
       .from('profiles')
@@ -72,7 +72,7 @@ export default function ProfilePage() {
   async function handleSave() {
     if (!user) return;
     setSaving(true);
-    const supabase = createAuthClient();
+    const supabase = supabaseAuthClient;
     await supabase
       .from('profiles')
       .update({
@@ -88,7 +88,7 @@ export default function ProfilePage() {
 
   function handleToggle(field: keyof NotifFields, value: boolean) {
     setNotifications((prev) => ({ ...prev, [field]: value }));
-    const supabase = createAuthClient();
+    const supabase = supabaseAuthClient;
     supabase.from('profiles').update({ [field]: value }).eq('id', user!.id);
   }
 

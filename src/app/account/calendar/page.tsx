@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { AlertTriangle } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
-import { createAuthClient } from '@/lib/supabase-auth';
+import { supabaseAuthClient } from '@/lib/supabase-auth';
 import { getCountryByName, getFlagUrl } from '@/lib/countries';
 
 interface CalendarConference {
@@ -193,7 +193,7 @@ export default function CalendarPage() {
 
   useEffect(() => {
     if (!user) return;
-    const supabase = createAuthClient();
+    const supabase = supabaseAuthClient;
 
     supabase
       .from('applications')

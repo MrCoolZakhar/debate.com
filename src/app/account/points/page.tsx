@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { TrendingUp, ShoppingBag, Minus, Settings, Trophy, Award } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
-import { createAuthClient } from '@/lib/supabase-auth';
+import { supabaseAuthClient } from '@/lib/supabase-auth';
 
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
 
@@ -30,7 +30,7 @@ export default function PointsPage() {
 
   useEffect(() => {
     if (!user) return;
-    const supabase = createAuthClient();
+    const supabase = supabaseAuthClient;
 
     supabase
       .from('points_ledger')

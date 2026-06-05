@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/components/AuthProvider';
-import { createAuthClient } from '@/lib/supabase-auth';
+import { supabaseAuthClient } from '@/lib/supabase-auth';
 
 interface CVEntry {
   id: string;
@@ -51,7 +51,7 @@ function AddCVEntryModal({
       return;
     }
     setSubmitting(true);
-    const supabase = createAuthClient();
+    const supabase = supabaseAuthClient;
     const { error: dbErr } = await supabase.from('mun_cv_entries').insert({
       user_id:        userId,
       conference_name: conferenceName,
@@ -229,7 +229,7 @@ export default function CVPage() {
 
   async function fetchEntries() {
     if (!user) return;
-    const supabase = createAuthClient();
+    const supabase = supabaseAuthClient;
     const { data } = await supabase
       .from('mun_cv_entries')
       .select('id, conference_name, committee, allocation, expertise_level, award, source, created_at')
@@ -246,7 +246,7 @@ export default function CVPage() {
 
   async function handleDelete(id: string) {
     setDeletingId(id);
-    const supabase = createAuthClient();
+    const supabase = supabaseAuthClient;
     await supabase.from('mun_cv_entries').delete().eq('id', id);
     setEntries((prev) => prev.filter((e) => e.id !== id));
     setDeletingId(null);

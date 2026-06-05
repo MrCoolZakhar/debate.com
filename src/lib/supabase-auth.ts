@@ -6,3 +6,5 @@ export function createAuthClient() {
     'sb_publishable_k7NdduzaXK358z8ew18ZKA_vBSieDlV'
   );
 }
+
+export const supabaseAuthClient = createAuthClient();

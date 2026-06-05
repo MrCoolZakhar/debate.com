@@ -230,7 +230,6 @@ export const UN_COUNTRIES: Country[] = [
   { name: 'Zambia', code: 'ZM' },
   { name: 'Zimbabwe', code: 'ZW' },
   { name: 'European Union', code: 'EU' },
-  { name: 'African Union', code: 'AU' },
 ];
 
 export function getCountryByName(name: string): Country | undefined {
