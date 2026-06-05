@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { Globe } from 'lucide-react';
 import { useSettingsStore, CommitteeSettings } from '@/lib/settingsStore';
 import { Committee } from '@/lib/types';
 import { updateCommitteeChairSuffixInDB } from '@/lib/committeeService';
@@ -104,6 +105,7 @@ export function SettingsPanel({ committee, onClose }: {
 }) {
   const t = useT();
   const { language, setLanguage } = useLanguage();
+  const [showLangMenu, setShowLangMenu] = useState(false);
   const [tab, setTab] = useState<SettingsTab>('access');
   const { getSettings, updateSetting } = useSettingsStore();
   const s = getSettings(committee.code);
@@ -188,40 +190,39 @@ export function SettingsPanel({ committee, onClose }: {
           <div className="flex items-center gap-2.5">
             {/* Compact language toggle in header */}
             <div className="relative">
-              {/* NEW badge — overlaps top of the toggle */}
-              <span
-                className="absolute right-0 z-10 pointer-events-none"
-                style={{
-                  top: '-8px',
-                  backgroundColor: '#0E1E13',
-                  color: '#EED98A',
-                  border: '1.5px solid rgba(238,217,138,0.55)',
-                  borderRadius: '5px',
-                  padding: '0px 4px',
-                  fontSize: '7px',
-                  fontWeight: 900,
-                  letterSpacing: '0.08em',
-                  whiteSpace: 'nowrap',
-                  lineHeight: '13px',
-                }}
-              >✨ NEW</span>
-              <div className="flex rounded-lg overflow-hidden" style={{ border: '1px solid rgba(238,217,138,0.25)' }}>
-                <button
-                  onClick={() => setLanguage('en')}
-                  className="px-2.5 py-1 text-[11px] font-black transition-all focus:outline-none"
-                  style={{ backgroundColor: language === 'en' ? '#EED98A' : 'transparent', color: language === 'en' ? '#1B3828' : 'rgba(238,217,138,0.55)' }}
-                >EN</button>
-                <button
-                  onClick={() => setLanguage('es')}
-                  className="px-2.5 py-1 text-[11px] font-black transition-all focus:outline-none"
-                  style={{ backgroundColor: language === 'es' ? '#EED98A' : 'transparent', color: language === 'es' ? '#1B3828' : 'rgba(238,217,138,0.55)' }}
-                >ES</button>
-                <button
-                  onClick={() => setLanguage('fr')}
-                  className="px-2.5 py-1 text-[11px] font-black transition-all focus:outline-none"
-                  style={{ backgroundColor: language === 'fr' ? '#EED98A' : 'transparent', color: language === 'fr' ? '#1B3828' : 'rgba(238,217,138,0.55)' }}
-                >FR</button>
-              </div>
+              <button
+                onClick={() => setShowLangMenu((v) => !v)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl transition-colors focus:outline-none"
+                style={{ color: '#EED98A', backgroundColor: showLangMenu ? 'rgba(238,217,138,0.12)' : 'transparent' }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(238,217,138,0.12)'; }}
+                onMouseLeave={(e) => { if (!showLangMenu) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+              >
+                <Globe size={14} strokeWidth={2} />
+                <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '11px', fontWeight: 700 }}>{language.toUpperCase()}</span>
+              </button>
+              {showLangMenu && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowLangMenu(false)} />
+                  <div className="absolute right-0 top-full mt-2 z-50 rounded-xl overflow-hidden shadow-xl" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', minWidth: '140px' }}>
+                    {([['en', t('settings_english')], ['es', t('settings_spanish')], ['fr', t('settings_french')]] as [string, string][]).map(([code, label], i) => (
+                      <div key={code}>
+                        {i > 0 && <div style={{ height: '1px', backgroundColor: '#DDD4C0' }} />}
+                        <button
+                          onClick={() => { setLanguage(code as 'en' | 'es' | 'fr'); setShowLangMenu(false); }}
+                          className="w-full flex items-center gap-2.5 px-4 py-3 text-left transition-colors focus:outline-none"
+                          style={{ color: language === code ? '#1B3828' : '#6A5A4A', fontWeight: language === code ? 800 : 600, fontSize: '13px', backgroundColor: language === code ? 'rgba(27,56,40,0.07)' : 'transparent' }}
+                          onMouseEnter={(e) => { if (language !== code) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
+                          onMouseLeave={(e) => { if (language !== code) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                        >
+                          <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '11px', color: '#9A8A78' }}>{code.toUpperCase()}</span>
+                          <span>{label}</span>
+                          {language === code && <span className="ml-auto" style={{ color: '#B6871F' }}>✓</span>}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
             <button onClick={onClose} className="text-xl leading-none transition-colors focus:outline-none" style={{ color: 'rgba(238,217,138,0.6)' }}
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#EED98A'; }}
