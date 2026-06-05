@@ -216,6 +216,11 @@ export function SettingsPanel({ committee, onClose }: {
                   className="px-2.5 py-1 text-[11px] font-black transition-all focus:outline-none"
                   style={{ backgroundColor: language === 'es' ? '#EED98A' : 'transparent', color: language === 'es' ? '#1B3828' : 'rgba(238,217,138,0.55)' }}
                 >ES</button>
+                <button
+                  onClick={() => setLanguage('fr')}
+                  className="px-2.5 py-1 text-[11px] font-black transition-all focus:outline-none"
+                  style={{ backgroundColor: language === 'fr' ? '#EED98A' : 'transparent', color: language === 'fr' ? '#1B3828' : 'rgba(238,217,138,0.55)' }}
+                >FR</button>
               </div>
             </div>
             <button onClick={onClose} className="text-xl leading-none transition-colors focus:outline-none" style={{ color: 'rgba(238,217,138,0.6)' }}

@@ -151,6 +151,18 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
                   <span>{t('settings_spanish')}</span>
                   {language === 'es' && <span className="ml-auto" style={{ color: '#B6871F' }}>✓</span>}
                 </button>
+                <div style={{ height: '1px', backgroundColor: '#DDD4C0' }} />
+                <button
+                  onClick={() => { setLanguage('fr'); setShowLangMenu(false); }}
+                  className="w-full flex items-center gap-2.5 px-4 py-3 text-left transition-colors focus:outline-none"
+                  style={{ color: language === 'fr' ? '#1B3828' : '#6A5A4A', fontWeight: language === 'fr' ? 800 : 600, fontSize: '13px', backgroundColor: language === 'fr' ? 'rgba(27,56,40,0.07)' : 'transparent' }}
+                  onMouseEnter={(e) => { if (language !== 'fr') (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
+                  onMouseLeave={(e) => { if (language !== 'fr') (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                >
+                  <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '11px', color: '#9A8A78' }}>FR</span>
+                  <span>{t('settings_french')}</span>
+                  {language === 'fr' && <span className="ml-auto" style={{ color: '#B6871F' }}>✓</span>}
+                </button>
               </div>
             </>
           )}
@@ -271,6 +283,13 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
               style={{ backgroundColor: language === 'es' ? '#1B3828' : '#EDE7D8', color: language === 'es' ? '#EED98A' : '#1B3828', border: '1px solid #DDD4C0' }}
             >
               ES — Español
+            </button>
+            <button
+              onClick={() => { setLanguage('fr'); setMenuOpen(false); }}
+              className="flex-1 py-2.5 rounded-xl text-sm font-black transition-all focus:outline-none"
+              style={{ backgroundColor: language === 'fr' ? '#1B3828' : '#EDE7D8', color: language === 'fr' ? '#EED98A' : '#1B3828', border: '1px solid #DDD4C0' }}
+            >
+              FR — Français
             </button>
           </div>
 
