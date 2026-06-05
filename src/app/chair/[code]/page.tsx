@@ -2413,7 +2413,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                   {!isViewOnly && <div className="flex items-center gap-3 mb-4">
                     <span className="text-xs text-[#9A8A78] font-mono shrink-0">{t('gsl_time')}</span>
                     <div className="flex gap-1.5">
-                      {[30, 60, 90, 120, 180].map((t) => (
+                      {[45, 60, 90].map((t) => (
                         <button key={t} onClick={() => handleSetSpeakerTimeLimit(t)}
                           className={`text-xs px-2.5 py-1 rounded-lg transition-colors font-semibold ${speakerTimeLimit === t ? 'bg-[#1B3828] text-white' : 'bg-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
                           {t}s
