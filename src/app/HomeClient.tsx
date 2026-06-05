@@ -567,7 +567,7 @@ export default function HomeClient() {
 
             <div className="relative z-10 flex items-center px-8 md:px-14">
               <div className="flex flex-col justify-center items-center text-center w-full max-w-2xl mx-auto">
-                <h1 className="font-black tracking-tight text-white leading-[1.05] mb-5 text-center md:whitespace-nowrap" style={{ fontSize: 'clamp(48px, 13.5vw, 165px)' }}>
+                <h1 className={`font-black tracking-tight text-white leading-[1.05] mb-5 text-center ${language !== 'fr' ? 'md:whitespace-nowrap' : ''}`} style={{ fontSize: language === 'fr' ? 'clamp(36px, 9.5vw, 118px)' : language === 'es' ? 'clamp(44px, 11.5vw, 145px)' : 'clamp(48px, 13.5vw, 165px)' }}>
                   {language === 'fr' ? (
                     <>
                       MUN comme il{' '}

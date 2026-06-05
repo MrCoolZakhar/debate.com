@@ -556,7 +556,7 @@ function CreatePageInner() {
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.08)'; }}
             onMouseLeave={(e) => { if (!showLangMenu) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
           >
-            <span style={{ fontSize: '16px' }}>🌐</span>
+            <Globe size={14} strokeWidth={2} style={{ color: '#1B3828' }} />
             <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '11px', fontWeight: 700, color: '#6A5A4A' }}>{language.toUpperCase()}</span>
           </button>
           {showLangMenu && (
