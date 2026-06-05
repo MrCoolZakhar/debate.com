@@ -133,16 +133,20 @@ function CommitteeNameInput({ value, onChange, onPresetSelect }: {
   const [open, setOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // If the stored value is an exact preset EN name, display the translated version
+  const isPreset = COMMITTEE_PRESETS.some((p) => p.name === value);
+  const displayValue = isPreset ? getPresetDisplayName(value, language) : value;
+
   const matches = value.trim()
     ? COMMITTEE_PRESETS.filter((p) => {
         const v = value.toLowerCase();
-        const esName = getPresetDisplayName(p.name, language).toLowerCase();
-        const esAcronym = getPresetAcronym(p.name, language).toLowerCase();
+        const localName = getPresetDisplayName(p.name, language).toLowerCase();
+        const localAcronym = getPresetAcronym(p.name, language).toLowerCase();
         return (
           p.name.toLowerCase().includes(v) ||
           p.acronym.toLowerCase().includes(v) ||
-          esName.includes(v) ||
-          (esAcronym && esAcronym.includes(v))
+          localName.includes(v) ||
+          (localAcronym && localAcronym.includes(v))
         );
       })
     : [];
@@ -153,8 +157,17 @@ function CommitteeNameInput({ value, onChange, onPresetSelect }: {
       <input
         ref={inputRef}
         type="text"
-        value={value}
-        onChange={(e) => { onChange(e.target.value); setOpen(true); }}
+        value={displayValue}
+        onChange={(e) => {
+          // If user edits the translated preset name, treat it as a custom entry
+          // (revert to raw typing — clear the preset selection)
+          const typed = e.target.value;
+          const matchedPreset = COMMITTEE_PRESETS.find(
+            (p) => getPresetDisplayName(p.name, language) === typed
+          );
+          onChange(matchedPreset ? matchedPreset.name : typed);
+          setOpen(true);
+        }}
         onFocus={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
         onKeyDown={(e) => {
@@ -446,6 +459,7 @@ function SelectScreen({ onSelect }: { onSelect: () => void }) {
 function CreatePageInner() {
   const t = useT();
   const { language, setLanguage } = useLanguage();
+  const [showLangMenu, setShowLangMenu] = useState(false);
   const router = useRouter();
   const { updateSetting } = useSettingsStore();
   const [chairNames, setChairNames] = useState<string[]>(['']);
@@ -533,36 +547,41 @@ function CreatePageInner() {
         <Link href="/">
           <img src="/GavellingLogo.png" alt="Gavelling" className="h-10 w-auto object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
         </Link>
-        {/* Language toggle — mirrors SiteNav style */}
+        {/* Language toggle — globe dropdown matching SiteNav */}
         <div className="relative ml-auto">
-          <span
-            className="absolute right-0 z-10 pointer-events-none"
-            style={{
-              top: '-8px',
-              backgroundColor: '#1B3828',
-              color: '#EED98A',
-              border: '1.5px solid rgba(238,217,138,0.55)',
-              borderRadius: '5px',
-              padding: '0px 4px',
-              fontSize: '7px',
-              fontWeight: 900,
-              letterSpacing: '0.08em',
-              whiteSpace: 'nowrap',
-              lineHeight: '13px',
-            }}
-          >✨ NEW</span>
-          <div className="flex rounded-lg overflow-hidden" style={{ border: '1.5px solid #C8BAA8' }}>
-            <button
-              onClick={() => setLanguage('en')}
-              className="px-3 py-1.5 text-xs font-black transition-all focus:outline-none"
-              style={{ backgroundColor: language === 'en' ? '#1B3828' : 'transparent', color: language === 'en' ? '#EED98A' : '#6A5A4A' }}
-            >EN</button>
-            <button
-              onClick={() => setLanguage('es')}
-              className="px-3 py-1.5 text-xs font-black transition-all focus:outline-none"
-              style={{ backgroundColor: language === 'es' ? '#1B3828' : 'transparent', color: language === 'es' ? '#EED98A' : '#6A5A4A' }}
-            >ES</button>
-          </div>
+          <button
+            onClick={() => setShowLangMenu((v) => !v)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl transition-colors focus:outline-none"
+            style={{ backgroundColor: showLangMenu ? 'rgba(27,56,40,0.08)' : 'transparent', color: '#1B3828' }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.08)'; }}
+            onMouseLeave={(e) => { if (!showLangMenu) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+          >
+            <span style={{ fontSize: '16px' }}>🌐</span>
+            <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '11px', fontWeight: 700, color: '#6A5A4A' }}>{language.toUpperCase()}</span>
+          </button>
+          {showLangMenu && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setShowLangMenu(false)} />
+              <div className="absolute right-0 top-full mt-2 z-50 rounded-xl overflow-hidden shadow-xl" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', minWidth: '140px' }}>
+                {([['en', t('settings_english')], ['es', t('settings_spanish')], ['fr', t('settings_french')]] as [string, string][]).map(([code, label], i) => (
+                  <React.Fragment key={code}>
+                    {i > 0 && <div style={{ height: '1px', backgroundColor: '#DDD4C0' }} />}
+                    <button
+                      onClick={() => { setLanguage(code as 'en' | 'es' | 'fr'); setShowLangMenu(false); }}
+                      className="w-full flex items-center gap-2.5 px-4 py-3 text-left transition-colors focus:outline-none"
+                      style={{ color: language === code ? '#1B3828' : '#6A5A4A', fontWeight: language === code ? 800 : 600, fontSize: '13px', backgroundColor: language === code ? 'rgba(27,56,40,0.07)' : 'transparent' }}
+                      onMouseEnter={(e) => { if (language !== code) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
+                      onMouseLeave={(e) => { if (language !== code) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                    >
+                      <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '11px', color: '#9A8A78' }}>{code.toUpperCase()}</span>
+                      <span>{label}</span>
+                      {language === code && <span className="ml-auto" style={{ color: '#B6871F' }}>✓</span>}
+                    </button>
+                  </React.Fragment>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       </nav>
 
