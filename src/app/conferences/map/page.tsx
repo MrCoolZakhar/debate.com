@@ -424,10 +424,6 @@ export default function ConferencesMapPage() {
 
       {/* Keyframes — unconditional */}
       <style>{`
-        @keyframes pulse-hint {
-          from { opacity: 0.4; }
-          to { opacity: 1; }
-        }
         @keyframes pulse-skeleton {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.4; }
@@ -499,7 +495,7 @@ export default function ConferencesMapPage() {
             <polygon
               key={cont.key}
               points={cont.points.replace(/%/g, '')}
-              fill={hovered === cont.key ? 'rgba(238,217,138,0.12)' : 'transparent'}
+              fill="transparent"
               stroke="transparent"
               strokeWidth={1.5}
               vectorEffect="non-scaling-stroke"
@@ -511,43 +507,6 @@ export default function ConferencesMapPage() {
         </svg>
       )}
 
-      {/* LAYER 5 — Continent tooltip */}
-      {phase === 'world' && hoveredDef && tooltipPos && (
-        <div
-          style={{
-            position: 'absolute',
-            zIndex: 30,
-            top: tooltipPos.y + '%',
-            left: tooltipPos.x + '%',
-            transform: 'translate(-50%, -50%)',
-            pointerEvents: 'none',
-          }}
-        >
-          <div
-            style={{
-              backgroundColor: '#1B3828',
-              border: '1px solid rgba(238,217,138,0.5)',
-              borderRadius: 8,
-              padding: '6px 16px',
-            }}
-          >
-            <p
-              style={{
-                fontFamily: "'DM Mono', monospace",
-                fontSize: 11,
-                fontWeight: 700,
-                color: '#EED98A',
-                letterSpacing: '0.2em',
-                whiteSpace: 'nowrap',
-                margin: 0,
-                textTransform: 'uppercase',
-              }}
-            >
-              {hoveredDef.label}
-            </p>
-          </div>
-        </div>
-      )}
 
       {/* LAYER 6 — Cloud transition video */}
       <video
@@ -783,14 +742,13 @@ export default function ConferencesMapPage() {
                 fontFamily: "'DM Mono', monospace",
                 fontSize: 11,
                 letterSpacing: '0.18em',
-                color: '#1B3828',
-                backgroundColor: 'rgba(237,231,216,0.88)',
+                color: '#EDE7D8',
+                backgroundColor: '#1B3828',
                 borderRadius: 24,
                 padding: '9px 22px',
-                border: '1px solid rgba(27,56,40,0.18)',
+                border: '1px solid rgba(238,217,138,0.15)',
                 whiteSpace: 'nowrap',
                 margin: 0,
-                animation: 'pulse-hint 2s ease-in-out infinite alternate',
                 boxShadow: '0 2px 12px rgba(27,56,40,0.15)',
               }}
             >
@@ -817,14 +775,13 @@ export default function ConferencesMapPage() {
               fontFamily: "'DM Mono', monospace",
               fontSize: 11,
               letterSpacing: '0.18em',
-              color: '#1B3828',
-              backgroundColor: 'rgba(237,231,216,0.88)',
+              color: '#EDE7D8',
+              backgroundColor: '#1B3828',
               borderRadius: 24,
               padding: '9px 22px',
-              border: '1px solid rgba(27,56,40,0.18)',
+              border: '1px solid rgba(238,217,138,0.15)',
               whiteSpace: 'nowrap',
               margin: 0,
-              animation: 'pulse-hint 2s ease-in-out infinite alternate',
               boxShadow: '0 2px 12px rgba(27,56,40,0.15)',
             }}
           >
@@ -839,13 +796,13 @@ export default function ConferencesMapPage() {
           <Link
             href="/conferences"
             style={{
-              backgroundColor: 'rgba(237,231,216,0.88)',
-              border: '1px solid rgba(27,56,40,0.18)',
+              backgroundColor: '#1B3828',
+              border: '1px solid rgba(238,217,138,0.15)',
               borderRadius: 24,
               padding: '9px 22px',
               fontSize: 11,
               fontWeight: 700,
-              color: '#1B3828',
+              color: '#EDE7D8',
               fontFamily: "'DM Mono', monospace",
               letterSpacing: '0.18em',
               textDecoration: 'none',
