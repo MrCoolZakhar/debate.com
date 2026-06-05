@@ -317,7 +317,7 @@ function SponsorsInput({
       {/* Selected sponsors tags */}
       <div className="flex flex-wrap gap-1.5 mb-2 min-h-[24px]">
         <span className="inline-flex items-center gap-1 text-xs bg-[#1B3828]/20 border border-[#1B3828]/30 text-[#6A5A4A] rounded-full px-2.5 py-0.5 font-medium">
-          {flagFor(myCountry)} {getCountryDisplayName(myCountry, language)} <span className="text-[#9A8A78] ml-0.5">{language === 'es' ? '(tú)' : '(you)'}</span>
+          {flagFor(myCountry)} {getCountryDisplayName(myCountry, language)} <span className="text-[#9A8A78] ml-0.5">{language === 'fr' ? '(vous)' : language === 'es' ? '(tú)' : '(you)'}</span>
         </span>
         {value.map((c) => (
           <span key={c} className="inline-flex items-center gap-1 text-xs bg-[#FAF8F3] border border-[#DDD4C0] text-[#6A5A4A] rounded-full px-2.5 py-0.5">
@@ -832,7 +832,14 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   };
 
   const phaseDisplay = (() => {
-    const mn = language === 'es' ? {
+    const mn = language === 'fr' ? {
+      moderated: 'Caucus modéré',
+      unmoderated: 'Caucus non modéré',
+      consultation: "Consultation de l'assemblée",
+      tour: 'Tour de table',
+      suspendDebate: 'Suspension du débat',
+      endDebate: 'Clôture du débat',
+    } : language === 'es' ? {
       moderated: 'Cáucus Moderado',
       unmoderated: 'Cáucus No Moderado',
       consultation: 'Consulta de Gabinete',

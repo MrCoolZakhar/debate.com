@@ -669,7 +669,14 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
 }) {
   const t = useT();
   const { language } = useLanguage();
-  const DEFAULT_MOTION_NAMES_LOCALIZED = language === 'es' ? {
+  const DEFAULT_MOTION_NAMES_LOCALIZED = language === 'fr' ? {
+    moderated: 'Caucus modéré',
+    unmoderated: 'Caucus non modéré',
+    consultation: "Consultation de l'assemblée",
+    tour: 'Tour de table',
+    suspendDebate: 'Suspension du débat',
+    endDebate: 'Clôture du débat',
+  } : language === 'es' ? {
     moderated: 'Cáucus Moderado',
     unmoderated: 'Cáucus No Moderado',
     consultation: 'Consulta de Gabinete',

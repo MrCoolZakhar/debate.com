@@ -36,7 +36,14 @@ function ExpandedDelegateCard({
 }) {
   const { language } = useLanguage();
   const t = useT();
-  const mn = language === 'es' ? {
+  const mn = language === 'fr' ? {
+    moderated: 'Caucus modéré',
+    unmoderated: 'Caucus non modéré',
+    consultation: "Consultation de l'assemblée",
+    tour: 'Tour de table',
+    suspendDebate: 'Suspension du débat',
+    endDebate: 'Clôture du débat',
+  } : language === 'es' ? {
     moderated: 'Cáucus Moderado',
     unmoderated: 'Cáucus No Moderado',
     consultation: 'Consulta de Gabinete',
@@ -307,7 +314,14 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
   const isUnmoderatedCaucus = committee.phase === 'unmoderated-caucus';
   const isCaucus = isModeratedCaucus || isUnmoderatedCaucus;
 
-  const advisorMotionNames = language === 'es' ? {
+  const advisorMotionNames = language === 'fr' ? {
+    moderated: 'Caucus modéré',
+    unmoderated: 'Caucus non modéré',
+    consultation: "Consultation de l'assemblée",
+    tour: 'Tour de table',
+    suspendDebate: 'Suspension du débat',
+    endDebate: 'Clôture du débat',
+  } : language === 'es' ? {
     moderated: 'Cáucus Moderado',
     unmoderated: 'Cáucus No Moderado',
     consultation: 'Consulta de Gabinete',
