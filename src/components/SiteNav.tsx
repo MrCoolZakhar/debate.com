@@ -8,10 +8,10 @@ import { useLanguage, useT } from '@/contexts/LanguageContext';
 import { Globe } from 'lucide-react';
 
 const NAV_LINKS_CONFIG = [
-  { en: 'SESSIONS',     es: 'SESIONES',     href: '/' },
-  { en: 'CONFERENCES',  es: 'CONFERENCIAS', href: '/conferences' },
-  { en: 'ABOUT US',     es: 'NOSOTROS',     href: '/about' },
-  { en: 'CONTACT',      es: 'CONTÁCTANOS',  href: '/contact' },
+  { en: 'SESSIONS',     es: 'SESIONES',     fr: 'SESSIONS',     href: '/' },
+  { en: 'CONFERENCES',  es: 'CONFERENCIAS', fr: 'CONFÉRENCES',  href: '/conferences' },
+  { en: 'ABOUT US',     es: 'NOSOTROS',     fr: 'QUI SOMMES-NOUS', href: '/about' },
+  { en: 'CONTACT',      es: 'CONTÁCTANOS',  fr: 'CONTACT',      href: '/contact' },
 ];
 
 interface SiteNavProps {

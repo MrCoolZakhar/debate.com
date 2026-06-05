@@ -286,15 +286,74 @@ export const COUNTRY_NAMES_ES: Record<string, string> = {
   PS: 'Palestina', VA: 'Santa Sede', XK: 'Kosovo', CK: 'Islas Cook', NU: 'Niue',
 };
 
+export const COUNTRY_NAMES_FR: Record<string, string> = {
+  AF: 'Afghanistan', AL: 'Albanie', DZ: 'Algérie', AD: 'Andorre', AO: 'Angola',
+  AG: 'Antigua-et-Barbuda', AR: 'Argentine', AM: 'Arménie', AU: 'Australie',
+  AT: 'Autriche', AZ: 'Azerbaïdjan', BS: 'Bahamas', BH: 'Bahreïn', BD: 'Bangladesh',
+  BB: 'Barbade', BY: 'Biélorussie', BE: 'Belgique', BZ: 'Belize', BJ: 'Bénin',
+  BT: 'Bhoutan', BO: 'Bolivie', BA: 'Bosnie-Herzégovine', BW: 'Botswana',
+  BR: 'Brésil', BN: 'Brunéi', BG: 'Bulgarie', BF: 'Burkina Faso', BI: 'Burundi',
+  CV: 'Cap-Vert', KH: 'Cambodge', CM: 'Cameroun', CA: 'Canada', CF: 'République centrafricaine',
+  TD: 'Tchad', CL: 'Chili', CN: 'Chine', CO: 'Colombie', KM: 'Comores',
+  CG: 'Congo', CD: 'République démocratique du Congo', CR: 'Costa Rica',
+  CI: "Côte d'Ivoire", HR: 'Croatie', CU: 'Cuba', CY: 'Chypre',
+  CZ: 'République tchèque', DK: 'Danemark', DJ: 'Djibouti', DM: 'Dominique',
+  DO: 'République dominicaine', EC: 'Équateur', EG: 'Égypte', SV: 'El Salvador',
+  GQ: 'Guinée équatoriale', ER: 'Érythrée', EE: 'Estonie', SZ: 'Eswatini',
+  ET: 'Éthiopie', FJ: 'Fidji', FI: 'Finlande', FR: 'France', GA: 'Gabon',
+  GM: 'Gambie', GE: 'Géorgie', DE: 'Allemagne', GH: 'Ghana', GR: 'Grèce',
+  GD: 'Grenade', GT: 'Guatemala', GN: 'Guinée', GW: 'Guinée-Bissau',
+  GY: 'Guyana', HT: 'Haïti', HN: 'Honduras', HU: 'Hongrie', IS: 'Islande',
+  IN: 'Inde', ID: 'Indonésie', IR: 'Iran', IQ: 'Irak', IE: 'Irlande',
+  IL: 'Israël', IT: 'Italie', JM: 'Jamaïque', JP: 'Japon', JO: 'Jordanie',
+  KZ: 'Kazakhstan', KE: 'Kenya', KI: 'Kiribati', KP: 'Corée du Nord',
+  KR: 'Corée du Sud', KW: 'Koweït', KG: 'Kirghizistan', LA: 'Laos', LV: 'Lettonie',
+  LB: 'Liban', LS: 'Lesotho', LR: 'Libéria', LY: 'Libye', LI: 'Liechtenstein',
+  LT: 'Lituanie', LU: 'Luxembourg', MG: 'Madagascar', MW: 'Malawi',
+  MY: 'Malaisie', MV: 'Maldives', ML: 'Mali', MT: 'Malte', MH: 'Îles Marshall',
+  MR: 'Mauritanie', MU: 'Maurice', MX: 'Mexique', FM: 'Micronésie',
+  MD: 'Moldavie', MC: 'Monaco', MN: 'Mongolie', ME: 'Monténégro', MA: 'Maroc',
+  MZ: 'Mozambique', MM: 'Myanmar', NA: 'Namibie', NR: 'Nauru', NP: 'Népal',
+  NL: 'Pays-Bas', NZ: 'Nouvelle-Zélande', NI: 'Nicaragua', NE: 'Niger',
+  NG: 'Nigéria', NO: 'Norvège', OM: 'Oman', PK: 'Pakistan', PW: 'Palaos',
+  PA: 'Panama', PG: 'Papouasie-Nouvelle-Guinée', PY: 'Paraguay', PE: 'Pérou',
+  PH: 'Philippines', PL: 'Pologne', PT: 'Portugal', QA: 'Qatar', RO: 'Roumanie',
+  RU: 'Russie', RW: 'Rwanda', KN: 'Saint-Kitts-et-Nevis', LC: 'Sainte-Lucie',
+  VC: 'Saint-Vincent-et-les-Grenadines', WS: 'Samoa', SM: 'Saint-Marin',
+  ST: 'Sao Tomé-et-Principe', SA: 'Arabie saoudite', SN: 'Sénégal', RS: 'Serbie',
+  SC: 'Seychelles', SL: 'Sierra Leone', SG: 'Singapour', SK: 'Slovaquie',
+  SI: 'Slovénie', SB: 'Îles Salomon', SO: 'Somalie', ZA: 'Afrique du Sud',
+  SS: 'Soudan du Sud', ES: 'Espagne', LK: 'Sri Lanka', SD: 'Soudan',
+  SR: 'Suriname', SE: 'Suède', CH: 'Suisse', SY: 'Syrie', TW: 'Taïwan',
+  TJ: 'Tadjikistan', TZ: 'Tanzanie', TH: 'Thaïlande', TL: 'Timor oriental',
+  TG: 'Togo', TO: 'Tonga', TT: 'Trinité-et-Tobago', TN: 'Tunisie', TR: 'Turquie',
+  TM: 'Turkménistan', TV: 'Tuvalu', UG: 'Ouganda', UA: 'Ukraine',
+  AE: 'Émirats arabes unis', GB: 'Royaume-Uni', US: 'États-Unis',
+  UY: 'Uruguay', UZ: 'Ouzbékistan', VU: 'Vanuatu', VE: 'Venezuela', VN: 'Viêt Nam',
+  YE: 'Yémen', ZM: 'Zambie', ZW: 'Zimbabwe', EU: 'Union européenne',
+  PS: 'Palestine', VA: 'Saint-Siège', XK: 'Kosovo', CK: 'Îles Cook', NU: 'Niue',
+};
+
 export function getCountryDisplayName(name: string, language: string): string {
-  if (language !== 'es') return name;
+  if (language !== 'es' && language !== 'fr') return name;
+  if (language === 'fr') {
+    if (name === 'African Union') return 'Union africaine';
+    const country = getCountryByName(name);
+    if (!country) return name;
+    const fromDict = COUNTRY_NAMES_FR[country.code];
+    if (fromDict) return fromDict;
+    try {
+      const dn = new Intl.DisplayNames(['fr'], { type: 'region' });
+      return dn.of(country.code) ?? name;
+    } catch {
+      return name;
+    }
+  }
   if (name === 'African Union') return 'Unión Africana';
   const country = getCountryByName(name);
   if (!country) return name;
-  // Try curated dictionary first for accuracy
   const fromDict = COUNTRY_NAMES_ES[country.code];
   if (fromDict) return fromDict;
-  // Fallback: Intl.DisplayNames covers every ISO 3166-1 code including edge cases
   try {
     const dn = new Intl.DisplayNames(['es'], { type: 'region' });
     return dn.of(country.code) ?? name;
