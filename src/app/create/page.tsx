@@ -147,7 +147,7 @@ function CommitteeNameInput({ value, onChange, onPresetSelect }: {
           }
           if (e.key === 'Escape') setOpen(false);
         }}
-        placeholder={language === 'es' ? 'ej. Consejo de Seguridad o CSNU' : 'e.g. Human Rights Council or HRC'}
+        placeholder={language === 'fr' ? 'ex. Conseil des droits de l\'homme ou CDH' : language === 'es' ? 'ej. Consejo de Seguridad o CSNU' : 'e.g. Human Rights Council or HRC'}
         className="w-full bg-white/70 border border-[#C8BAA8] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] focus:ring-2 focus:ring-[#1B3828]/10 transition-all text-sm"
       />
       {open && matches.length > 0 && (
@@ -213,7 +213,7 @@ function SelectScreen({ onSelect }: { onSelect: () => void }) {
     {
       id: 'debate',
       video: '/card_debate.mp4',
-      title: language === 'es' ? <>Debate<br />Regular</> : <>Regular<br />Debate</>,
+      title: language === 'fr' ? <>Débat<br />Ordinaire</> : language === 'es' ? <>Debate<br />Regular</> : <>Regular<br />Debate</>,
       subtitle: t('create_debate_subtitle'),
       badge: t('create_coming_soon'),
       active: false,
@@ -228,7 +228,7 @@ function SelectScreen({ onSelect }: { onSelect: () => void }) {
     {
       id: 'mun',
       video: '/card_mun.mp4',
-      title: language === 'es' ? <>Modelo de<br />Naciones Unidas</> : <>Model United<br />Nations</>,
+      title: language === 'fr' ? <>Modèle des<br />Nations Unies</> : language === 'es' ? <>Modelo de<br />Naciones Unidas</> : <>Model United<br />Nations</>,
       subtitle: t('create_mun_subtitle'),
       badge: null,
       active: true,
@@ -243,7 +243,7 @@ function SelectScreen({ onSelect }: { onSelect: () => void }) {
     {
       id: 'crisis',
       video: '/card_crisis.mp4',
-      title: language === 'es' ? <>Comité de<br />Crisis</> : <>Crisis<br />Committee</>,
+      title: language === 'fr' ? <>Comité de<br />Crise</> : language === 'es' ? <>Comité de<br />Crisis</> : <>Crisis<br />Committee</>,
       subtitle: t('create_crisis_subtitle'),
       badge: t('create_coming_h2'),
       active: false,
@@ -488,7 +488,7 @@ function CreatePageInner() {
       else if (!found) unmatched.push(line);
     }
     setDelegates((p) => [...p, ...matched]);
-    setPasteError(unmatched.length > 0 ? (language === 'es' ? `No se pudo coincidir: ${unmatched.join(', ')}` : `Could not match: ${unmatched.join(', ')}`) : '');
+    setPasteError(unmatched.length > 0 ? (language === 'fr' ? `Impossible de correspondre : ${unmatched.join(', ')}` : language === 'es' ? `No se pudo coincidir: ${unmatched.join(', ')}` : `Could not match: ${unmatched.join(', ')}`) : '');
     setPasteText('');
   };
 
@@ -575,13 +575,13 @@ function CreatePageInner() {
                   {t('create_chair_name')} <span className="font-normal" style={{ color: '#9A8A78' }}>{t('create_optional')}</span>
                 </label>
                 <input type="text" value={chairNames[0]} onChange={(e) => setChairNames([e.target.value])}
-                  placeholder={language === 'es' ? 'Tu nombre' : 'Your name'}
+                  placeholder={language === 'fr' ? 'Votre nom' : language === 'es' ? 'Tu nombre' : 'Your name'}
                   className="w-full bg-white/70 border border-[#C8BAA8] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] focus:ring-2 focus:ring-[#1B3828]/10 transition-all text-sm" />
               </div>
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wide mb-1.5" style={{ color: '#1B3828' }}>{t('create_topic')}</label>
                 <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)}
-                  placeholder={language === 'es' ? 'ej. El derecho a la educación' : 'e.g. The right to education'}
+                  placeholder={language === 'fr' ? "ex. Le droit à l'éducation" : language === 'es' ? 'ej. El derecho a la educación' : 'e.g. The right to education'}
                   className="w-full bg-white/70 border border-[#C8BAA8] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] focus:ring-2 focus:ring-[#1B3828]/10 transition-all text-sm" />
               </div>
             </div>
@@ -590,7 +590,9 @@ function CreatePageInner() {
               <div className="mb-3 px-4 py-3 rounded-xl text-xs shrink-0 flex items-center gap-3" style={{ backgroundColor: '#1B3828', border: '1px solid #3D7A52', color: 'rgba(238,217,138,0.85)' }}>
                 <span className="font-black shrink-0 px-2 py-0.5 rounded-md text-[10px]" style={{ fontFamily: "'DM Mono', monospace", backgroundColor: 'rgba(238,217,138,0.15)', color: '#EED98A', border: '1px solid rgba(238,217,138,0.25)' }}>UNSC</span>
                 <span>
-                  {language === 'es'
+                  {language === 'fr'
+                    ? <><strong style={{ color: '#EED98A' }}>Droit de veto activé :</strong> les nations du P5 (Chine, France, Russie, RU, États-Unis) auront un droit de veto. Personnalisez dans <strong style={{ color: '#EED98A' }}>Paramètres</strong> après le début de la session.</>
+                    : language === 'es'
                     ? <><strong style={{ color: '#EED98A' }}>Poder de Veto activado:</strong> Grupo P5 (China, Francia, Rusia, RU, EE.UU.) tendrán veto. Personaliza en <strong style={{ color: '#EED98A' }}>Configuraciones</strong> al iniciar la sesión.</>
                     : <><strong style={{ color: '#EED98A' }}>Veto power active:</strong> P5 nations (China, France, Russia, UK, USA) will have veto voting. Customize in <strong style={{ color: '#EED98A' }}>Settings</strong> after session starts.</>
                   }
@@ -669,7 +671,7 @@ function CreatePageInner() {
                 <div className="flex-1 flex flex-col min-h-0">
                   <label className="block text-xs font-bold uppercase tracking-wide mb-2" style={{ color: '#1B3828' }}>{t('create_paste_list')}</label>
                   <textarea value={pasteText} onChange={(e) => { setPasteText(e.target.value); setPasteError(''); }}
-                    placeholder={language === 'es' ? 'Francia\nAlemania\nBrasil, India...' : 'France\nGermany\nBrazil, India...'}
+                    placeholder={language === 'fr' ? 'France\nAllemagne\nBrésil, Inde...' : language === 'es' ? 'Francia\nAlemania\nBrasil, India...' : 'France\nGermany\nBrazil, India...'}
                     className="flex-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] focus:ring-2 focus:ring-[#1B3828]/10 transition-all text-sm resize-none min-h-0" />
                 </div>
 

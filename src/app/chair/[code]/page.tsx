@@ -242,7 +242,7 @@ function RtrCountryInput({
             }
             if (e.key === 'Escape') { setQuery(''); onChange(''); }
           }}
-          placeholder={language === 'es' ? 'Agregar país...' : 'Type country...'}
+          placeholder={language === 'fr' ? 'Ajouter un pays...' : language === 'es' ? 'Agregar país...' : 'Type country...'}
           className="flex-1 bg-transparent px-3 py-1.5 text-[#1C1410] text-xs placeholder-[#9A8A78] focus:outline-none"
         />
         {topMatch && query && !value && query.toLowerCase() !== topMatch.country.toLowerCase() && (
@@ -523,7 +523,7 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
 function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false }: { committee: Committee; setCommittee: CommitteeSetter; isViewOnly?: boolean }) {
   const t = useT();
   const { language } = useLanguage();
-  const unmoderatedName = language === 'es' ? 'Cáucus No Moderado' : 'Unmoderated Caucus';
+  const unmoderatedName = language === 'fr' ? 'Caucus non modéré' : language === 'es' ? 'Cáucus No Moderado' : 'Unmoderated Caucus';
   const [running, setRunning] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const caucus = committee.caucus!;
@@ -694,7 +694,7 @@ function ModeratedCaucusMain({
   const speakerTime = caucus.speakingTime;
   const isTdT = caucus.purpose?.startsWith('Tour de Table') ?? false;
   const isRoomOrderTdT = isTdT && (caucus.purpose?.includes('Room Order') ?? false);
-  const caucusTitle = isTdT ? 'TOUR DE TABLE' : (language === 'es' ? 'CÁUCUS MODERADO' : 'MODERATED CAUCUS');
+  const caucusTitle = isTdT ? 'TOUR DE TABLE' : (language === 'fr' ? 'CAUCUS MODÉRÉ' : language === 'es' ? 'CÁUCUS MODERADO' : 'MODERATED CAUCUS');
   const spokenCountries = caucus.spokenCountries ?? [];
 
   // Extend-time UI state
@@ -2170,7 +2170,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                       {isTdTParent ? (
                         <>
                           <p className="text-xs font-mono tracking-widest mb-3 font-bold" style={{ color: '#1B3828' }}>{t('caucus_starting_tdt')}</p>
-                          <h1 className="text-5xl font-black mb-2" style={{ color: '#1B3828' }}>{language === 'es' ? 'Round Robin' : 'Tour de Table'}</h1>
+                          <h1 className="text-5xl font-black mb-2" style={{ color: '#1B3828' }}>Tour de Table</h1>
                           <p className="text-[#6A5A4A] text-sm mb-6">
                             {committee.caucus.purpose?.includes('Room Order')
                               ? t('caucus_tdt_room_order')
@@ -2252,10 +2252,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                   <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
                     <div className="bg-[#EDE7D8] border border-[#DDD4C0]/40 rounded-3xl px-12 py-10 max-w-lg w-full shadow-2xl">
                       <p className="text-xs font-mono tracking-widest mb-3 font-bold" style={{ color: '#1B3828' }}>
-                        {t('caucus_unmod_starting').replace('{name}', (committee.caucus.motionLabel ?? (language === 'es' ? 'CÁUCUS NO MODERADO' : 'UNMODERATED CAUCUS')).toUpperCase())}
+                        {t('caucus_unmod_starting').replace('{name}', (committee.caucus.motionLabel ?? (language === 'fr' ? 'CAUCUS NON MODÉRÉ' : language === 'es' ? 'CÁUCUS NO MODERADO' : 'UNMODERATED CAUCUS')).toUpperCase())}
                       </p>
                       <h1 className="text-5xl font-black mb-2" style={{ color: '#1B3828' }}>
-                        {committee.caucus.motionLabel ?? (language === 'es' ? 'Cáucus No Moderado' : 'Unmoderated Caucus')}
+                        {committee.caucus.motionLabel ?? (language === 'fr' ? 'Caucus non modéré' : language === 'es' ? 'Cáucus No Moderado' : 'Unmoderated Caucus')}
                       </h1>
                       {committee.caucus.purpose && (
                         <p className="text-[#6A5A4A] text-sm mb-6">{committee.caucus.purpose}</p>
@@ -2491,7 +2491,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 value={extraTimeSecs}
                 onChange={(e) => setExtraTimeSecs(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') { const n = parseInt(extraTimeSecs); if (n > 0) { handleAddExtraTime(n); setActivePopover(null); } } }}
-                placeholder={language === 'es' ? 'Tiempo personalizado...' : 'Custom sec...'}
+                placeholder={language === 'fr' ? 'Sec. personnalisées...' : language === 'es' ? 'Tiempo personalizado...' : 'Custom sec...'}
                 style={{ MozAppearance: 'textfield' } as React.CSSProperties}
                 className="flex-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-2 py-1.5 text-[#1C1410] text-xs focus:outline-none focus:border-[#1B3828] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
               />
