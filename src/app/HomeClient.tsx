@@ -568,35 +568,44 @@ export default function HomeClient() {
             <div className="relative z-10 flex items-center px-8 md:px-14">
               <div className="flex flex-col justify-center items-center text-center w-full max-w-2xl mx-auto">
                 {/*
-                  HERO HEADING FONT SIZES — do not increase FR without re-testing on 1024px laptop.
-                  "MUN comme il se doit." is ~40% longer than "MUN done right." so FR must stay
-                  significantly smaller. Target: fits in one line at 1024px with md:whitespace-nowrap.
-                  Derived from EN max (165px) × (15 chars / 21 chars) × (1024px / 1440px) ≈ 84px.
+                  HERO HEADING — wrapper has a fixed height on md+ (195px = EN single line 165px×1.05 + buffer).
+                  This keeps the subtitle and CTA buttons at the same Y position regardless of which language
+                  is active. items-end anchors the text to the bottom edge so the gap to the subtitle is constant.
+                  NEVER remove md:h-[195px] without verifying button positions in all three languages.
+
+                  FONT SIZES per language (all use md:whitespace-nowrap to overflow the max-w-2xl container):
+                  • EN  clamp(48px, 13.5vw, 165px) — "MUN done right."        ~15 chars
+                  • ES  clamp(44px, 11.5vw, 145px) — "MUN como se debe."      ~18 chars
+                  • FR  clamp(36px,  8.8vw, 126px) — "MUN comme il se doit."  ~21 chars
+                  8.8vw gives ~90px at 1024px and ~126px at 1440px, filling the viewport width.
+                  DO NOT increase FR vw/max without re-testing one-line fit at 1024px.
                 */}
-                <h1 className="font-black tracking-tight text-white leading-[1.05] mb-5 text-center md:whitespace-nowrap" style={{ fontSize: language === 'fr' ? 'clamp(24px, 5.8vw, 84px)' : language === 'es' ? 'clamp(44px, 11.5vw, 145px)' : 'clamp(48px, 13.5vw, 165px)' }}>
-                  {language === 'fr' ? (
-                    <>
-                      MUN comme il{' '}
-                      <span style={{ fontFamily: "'Playfair Display', serif", fontStyle: 'italic', fontWeight: 400, color: '#B8844A' }}>
-                        se doit.
-                      </span>
-                    </>
-                  ) : language === 'en' ? (
-                    <>
-                      MUN done{' '}
-                      <span style={{ fontFamily: "'Playfair Display', serif", fontStyle: 'italic', fontWeight: 400, color: '#B8844A' }}>
-                        right.
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      MUN como se{' '}
-                      <span style={{ fontFamily: "'Playfair Display', serif", fontStyle: 'italic', fontWeight: 400, color: '#B8844A' }}>
-                        debe.
-                      </span>
-                    </>
-                  )}
-                </h1>
+                <div className="w-full mb-5 flex items-end justify-center md:h-[195px]">
+                  <h1 className="font-black tracking-tight text-white leading-[1.05] text-center md:whitespace-nowrap" style={{ fontSize: language === 'fr' ? 'clamp(36px, 8.8vw, 126px)' : language === 'es' ? 'clamp(44px, 11.5vw, 145px)' : 'clamp(48px, 13.5vw, 165px)' }}>
+                    {language === 'fr' ? (
+                      <>
+                        MUN comme il{' '}
+                        <span style={{ fontFamily: "'Playfair Display', serif", fontStyle: 'italic', fontWeight: 400, color: '#B8844A' }}>
+                          se doit.
+                        </span>
+                      </>
+                    ) : language === 'en' ? (
+                      <>
+                        MUN done{' '}
+                        <span style={{ fontFamily: "'Playfair Display', serif", fontStyle: 'italic', fontWeight: 400, color: '#B8844A' }}>
+                          right.
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        MUN como se{' '}
+                        <span style={{ fontFamily: "'Playfair Display', serif", fontStyle: 'italic', fontWeight: 400, color: '#B8844A' }}>
+                          debe.
+                        </span>
+                      </>
+                    )}
+                  </h1>
+                </div>
                 <p className="text-reveal-3 text-lg max-w-lg mb-6 leading-relaxed font-medium text-center text-[#1B3828]" style={{
                   opacity: 0,
                   backgroundColor: 'rgba(246,241,233,0.55)',
