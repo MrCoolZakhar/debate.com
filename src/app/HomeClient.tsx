@@ -71,7 +71,7 @@ function RollCallCard() {
       {/* Header */}
       <div className="px-5 py-3 flex items-center justify-between" style={{ borderBottom: '1px solid rgba(61,122,82,0.4)' }}>
         <div>
-          <p className="font-black text-sm uppercase tracking-widest" style={{ color: '#EED98A', fontFamily: "'DM Mono', monospace" }}>{fr ? 'APPEL NOMINAL' : es ? 'Lista de Asistencia' : 'Roll Call'}</p>
+          <p className="font-black text-sm uppercase tracking-widest" style={{ color: '#EED98A', fontFamily: "'DM Mono', monospace" }}>{fr ? 'APPEL' : es ? 'Lista de Asistencia' : 'Roll Call'}</p>
           <p className="text-xs mt-0.5" style={{ color: 'rgba(238,217,138,0.5)' }}>{fr ? "Conseil de sécurité de l'ONU" : es ? 'Consejo de Seguridad de la ONU' : 'UN Security Council'}</p>
         </div>
         <span className="text-[9px] font-mono px-2 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(238,217,138,0.15)', color: '#EED98A', border: '1px solid rgba(238,217,138,0.3)' }}>{fr ? 'PRÉ-SESSION' : es ? 'PRE-SESIÓN' : 'PRE-SESSION'}</span>

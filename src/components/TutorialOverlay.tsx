@@ -127,7 +127,7 @@ function getSteps(language: string): TutorialStep[] {
       otterImage: '/Otter.Tutorial.webp',
       spotlightTargets: ['tab-rollcall'], spotlightRadius: 6,
       bubbleText: language === 'fr'
-        ? <>{G('Appel Nominal')} — cliquez ici pour marquer chaque délégué comme <strong>Absent</strong>, <strong>Présent</strong> ou <strong>Présent et Votant</strong>. Vous pouvez mettre à jour l&apos;assiduité à tout moment pendant la session.</>
+        ? <>{G('Appel')} — cliquer ici pour marquer chaque délégué comme <strong>Absent</strong>, <strong>Présent</strong> ou <strong>Présent et Votant</strong>. Mettre à jour l&apos;assiduité à tout moment pendant la session.</>
         : language === 'es'
         ? <>{G('Lista de Asistencia')} — marca a cada delegado como <strong>Ausente</strong>, <strong>Presente</strong> o <strong>Presente y Votante</strong>. Puedes actualizar la asistencia en cualquier momento.</>
         : <>{G('Roll Call')} — click here to mark each delegate as <strong>Absent</strong>, <strong>Present</strong>, or <strong>Present & Voting</strong>. You can update attendance at any point during the session.</>,
