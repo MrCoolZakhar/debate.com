@@ -676,7 +676,7 @@ function CreatePageInner() {
                             className="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors text-[#1C1410] hover:bg-[#DDD4C0] border-t border-[#DDD4C0]">
                             <Globe size={18} strokeWidth={1.5} className="text-[#9A8A78] shrink-0" />
                             <span className="text-sm flex-1">{search.trim()}</span>
-                            <span className="text-[10px] text-[#1B3828] shrink-0 font-semibold">Add custom</span>
+                            <span className="text-[10px] text-[#1B3828] shrink-0 font-semibold">{t('create_custom_add')}</span>
                           </button>
                         )}
                       </div>
