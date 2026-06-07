@@ -377,11 +377,11 @@ export function SettingsPanel({ committee, onClose }: {
 
               <SectionLabel>{t('settings_section_codes')}</SectionLabel>
               <div className="py-3" style={{ borderBottom: '1px solid #DDD4C0' }}>
-                <div className="text-xs mb-1.5" style={{ color: '#9A8A78' }}>Session code</div>
+                <div className="text-xs mb-1.5" style={{ color: '#9A8A78' }}>{t('settings_session_code_label')}</div>
                 <CodeCopyButton code={committee.code} />
               </div>
               <div className="py-3" style={{ borderBottom: '1px solid #DDD4C0' }}>
-                <div className="text-xs mb-1.5" style={{ color: '#9A8A78' }}>Chair password</div>
+                <div className="text-xs mb-1.5" style={{ color: '#9A8A78' }}>{t('settings_chair_code_label')}</div>
                 <ChairPasswordDisplay password={s.chairJoinSuffix || '????'} />
               </div>
               <Toggle

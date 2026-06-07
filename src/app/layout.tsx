@@ -70,6 +70,7 @@ export const metadata: Metadata = {
     languages: {
       'en-US': 'https://gavelling.com',
       'es': 'https://gavelling.com?lang=es',
+      'fr': 'https://gavelling.com?lang=fr',
     },
   },
   icons: {
