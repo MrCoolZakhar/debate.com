@@ -5,6 +5,14 @@ export const metadata: Metadata = {
   title: 'MUN Resources & Guides — Gavelling Blog',
   description: 'Practical guides for Model UN chairs and delegates: how to run a committee, manage the GSL, handle motions, and run great MUN sessions.',
   alternates: { canonical: 'https://gavelling.com/blog' },
+  openGraph: {
+    title: 'MUN Resources & Guides — Gavelling Blog',
+    description: 'Practical guides for Model UN chairs and delegates.',
+    url: 'https://gavelling.com/blog',
+    siteName: 'Gavelling',
+    images: [{ url: 'https://gavelling.com/og-image.png', width: 1200, height: 630 }],
+    type: 'website',
+  },
 };
 
 const articles = [
@@ -165,8 +173,34 @@ const articles = [
   },
 ];
 
+const itemListSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'ItemList',
+  name: 'MUN Resources & Guides',
+  description: 'Practical guides for Model UN chairs and delegates.',
+  url: 'https://gavelling.com/blog',
+  itemListElement: articles.map((a, i) => ({
+    '@type': 'ListItem',
+    position: i + 1,
+    url: `https://gavelling.com/blog/${a.slug}`,
+    name: a.title,
+  })),
+};
+
+const breadcrumbSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'BreadcrumbList',
+  itemListElement: [
+    { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://gavelling.com' },
+    { '@type': 'ListItem', position: 2, name: 'Blog', item: 'https://gavelling.com/blog' },
+  ],
+};
+
 export default function BlogIndexPage() {
   return (
+    <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(itemListSchema) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
     <div style={{ minHeight: '100vh', backgroundColor: '#EDE7D8', padding: '48px 24px' }}>
       <div style={{ maxWidth: '720px', margin: '0 auto' }}>
         <Link href="/" style={{ fontSize: '13px', color: '#6A5A4A', textDecoration: 'none', display: 'inline-block', marginBottom: '32px' }}>
@@ -194,5 +228,6 @@ export default function BlogIndexPage() {
         </div>
       </div>
     </div>
+    </>
   );
 }
