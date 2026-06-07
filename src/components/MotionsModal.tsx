@@ -220,9 +220,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
 
   return (
     <div className="flex flex-col h-full">
-      {/* PERMANENT NOTE: No scroll in raise motion form. If content doesn't fit, reduce spacing
-          or lay fields side-by-side — never re-add overflow-y-auto here. */}
-      <div className="flex-1 px-7 pt-0 pb-4 space-y-4">
+      <div className="flex-1 px-7 pt-0 pb-4 space-y-4 overflow-y-auto">
         <h2 className="text-3xl font-black tracking-wide" style={{ color: '#1B3828' }}>{editingMotion ? t('motions_edit_heading') : t('motions_raise_heading')}</h2>
 
         {/* Type tabs — always shown */}
@@ -637,7 +635,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
       </div>
       <div className="flex gap-4 flex-1 min-h-0">
         {/* Left column — primary motion being voted on */}
-        <div className="flex-1 flex flex-col min-w-0">
+        <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
           {renderCard(primary, true, 0)}
         </div>
         {/* Right column — queued motions + Raise a Motion button */}
