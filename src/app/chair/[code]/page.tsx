@@ -294,7 +294,7 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, lastSpeakerDelegate
   const displayItems = list.slice(0, 7);
   const overflow = qLen > 7 ? qLen - 7 : 0;
   return (
-    <div className="flex flex-col items-center w-full mb-1" data-tutorial="speakers-queue">
+    <div className="flex flex-col items-center w-full mb-1 shrink-0" data-tutorial="speakers-queue">
       <div className="w-full overflow-x-auto">
       <div className="flex flex-nowrap items-start gap-2 pt-2 pb-1 justify-center min-w-0 px-1">
         {displayItems.map((s, i) => {
@@ -1117,7 +1117,15 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       setCommittee(found ?? null);
       if (found) {
         setSpeakerTimeLimitLocal(found.speakerTimeLimit);
-        setSpeakerTimeRemaining(found.speakerTimeRemaining);
+        if (found.speakerStartedAt) {
+          // Timer was running when the chair left — compute real elapsed time and resume.
+          const elapsed = Math.round((Date.now() - new Date(found.speakerStartedAt).getTime()) / 1000);
+          const remaining = Math.max(0, found.speakerTimeLimit - elapsed);
+          setSpeakerTimeRemaining(remaining);
+          if (remaining > 0) setTimerRunning(true);
+        } else {
+          setSpeakerTimeRemaining(found.speakerTimeRemaining);
+        }
         committeeIdRef.current = found.id;
         if (found.dbChairJoinSuffix) {
           updateSetting(found.code, 'chairJoinSuffix', found.dbChairJoinSuffix);
@@ -2285,10 +2293,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
 {committee.phase === 'speakers-list' && (
                 <>
                 <div className="flex-1 flex flex-row overflow-hidden">
-                  {/* GSL content area — overflow-hidden is intentional. Never use overflow-y-auto here:
-                      it creates a scroll context that causes browser scrollbars to appear, cutting off
-                      the flag queue at top and the Right of Reply button at bottom. */}
-                  <div className="flex-1 flex flex-col items-center justify-start px-4 pt-5 pb-2 overflow-hidden">
+                  {/* GSL content area — overflow-y-auto with hidden scrollbar so content is always
+                      reachable at any zoom level without browser scrollbars affecting layout. */}
+                  <div className="flex-1 flex flex-col items-center justify-start px-4 pt-5 pb-2 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
                     {committee.currentSpeaker ? (
                       <>
                         {(() => {
@@ -2307,7 +2314,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                         })()}
                         <div className="flex flex-col items-center">
                           {/* Current speaker flag */}
-                          <div style={{ width: '168px', height: '112px', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 0 0 2.5px rgba(28,20,16,0.22)', flexShrink: 0, position: 'relative' }}>
+                          <div style={{ width: 'clamp(100px, 18vh, 168px)', height: 'clamp(67px, 12vh, 112px)', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 0 0 2.5px rgba(28,20,16,0.22)', flexShrink: 0, position: 'relative' }}>
                             {(() => {
                               const f = getCountryByName(committee.currentSpeaker.country);
                               return f
@@ -2315,10 +2322,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                                 : <Emoji size="5rem" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>🌐</Emoji>;
                             })()}
                           </div>
-                          <h1 className="text-5xl font-black text-[#1C1410] mt-2 mb-5 text-center">{getCountryDisplayName(committee.currentSpeaker.country, language)}</h1>
-                          <div data-tutorial="timer" className={`text-8xl font-black font-mono mt-0 mb-4 tabular-nums ${
+                          <h1 className="font-black text-[#1C1410] mt-2 mb-5 text-center" style={{ fontSize: 'clamp(1.8rem, 5vh, 3rem)' }}>{getCountryDisplayName(committee.currentSpeaker.country, language)}</h1>
+                          <div data-tutorial="timer" className={`font-black font-mono mt-0 mb-4 tabular-nums ${
                             speakerTimeRemaining <= 10 ? 'text-[#B8844A]' : 'text-[#1C1410]'
-                          }`}>
+                          }`} style={{ fontSize: 'clamp(3.5rem, 12vh, 6rem)' }}>
                             {formatTime(speakerTimeRemaining)}
                             {extraTimeAdded && <span className="text-base ml-2 font-normal text-[#1C1410]">{t('gsl_plus_time')}</span>}
                           </div>
@@ -2332,7 +2339,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                           </div>
                         )}
                         {!sessionEnded && !isViewOnly && (
-                        <div className="flex gap-2 w-full max-w-sm mt-4 flex-wrap justify-center">
+                        <div className="flex gap-2 w-full max-w-sm mt-4 flex-wrap justify-center shrink-0">
                           {/* Restart button */}
                           <button onClick={handleRestartTime}
                             title="Restart time"
@@ -2512,6 +2519,14 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         <TutorialOverlay
           committee={committee}
           onEnd={() => setShowTutorial(false)}
+          onStepId={(id) => {
+            if (id === 'sidebar-view-toggle') {
+              // Ensure sidebar is visible and in AZ view so the toggle can be clicked
+              setShowChat(false);
+              setShowRollCall(true);
+              setGslListView('az');
+            }
+          }}
         />
       )}
       {!isViewOnly && activePopover === 'rightToReply' && (

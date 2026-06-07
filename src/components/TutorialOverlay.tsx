@@ -7,6 +7,7 @@ import { useT, useLanguage } from '@/contexts/LanguageContext';
 interface Props {
   committee: Committee;
   onEnd: () => void;
+  onStepId?: (id: string) => void;
 }
 
 type StepKind = 'questionnaire' | 'spotlight' | 'action' | 'goodbye';
@@ -229,7 +230,7 @@ function useSpotlightRects(targets: string[] = []) {
 
 // ─── Main ────────────────────────────────────────────────────────────────────
 
-export default function TutorialOverlay({ committee, onEnd }: Props) {
+export default function TutorialOverlay({ committee, onEnd, onStepId }: Props) {
   const t = useT();
   const { language } = useLanguage();
   const STEPS = useMemo(() => getSteps(language), [language]);
@@ -269,6 +270,9 @@ export default function TutorialOverlay({ committee, onEnd }: Props) {
       return next;
     });
   }, [onEnd]);
+
+  // Notify parent whenever step changes
+  useEffect(() => { onStepId?.(step.id); }, [step.id, onStepId]);
 
   // Poll action conditions every 200ms (covers both committee-state and DOM-state checks)
   useEffect(() => {
