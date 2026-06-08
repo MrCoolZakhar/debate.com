@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type { Committee } from '@/lib/types';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 
@@ -271,8 +271,13 @@ export default function TutorialOverlay({ committee, onEnd, onStepId }: Props) {
     });
   }, [onEnd]);
 
-  // Notify parent whenever step changes
-  useEffect(() => { onStepId?.(step.id); }, [step.id, onStepId]);
+  // Notify parent whenever step.id changes.
+  // Use a ref so the effect ONLY fires on step changes — not every time the
+  // parent re-renders and passes a new inline function reference (which would
+  // continuously reset the toggle view during the timer's per-second re-renders).
+  const onStepIdRef = useRef(onStepId);
+  onStepIdRef.current = onStepId;
+  useEffect(() => { onStepIdRef.current?.(step.id); }, [step.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Poll action conditions every 200ms (covers both committee-state and DOM-state checks)
   useEffect(() => {
