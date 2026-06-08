@@ -2294,10 +2294,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
 
 {committee.phase === 'speakers-list' && (
                 <>
-                <div className="flex-1 flex flex-row overflow-hidden min-h-0">
-                  {/* GSL content area — overflow-y-auto with hidden scrollbar so content is always
-                      reachable at any zoom level without browser scrollbars affecting layout. */}
-                  <div className="flex-1 min-h-0 flex flex-col items-center justify-start px-4 pt-5 pb-2 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
+                {/* Scroll container: plain div (NOT flex) so overflow-y-auto actually triggers */}
+                <div className="flex-1 min-h-0 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
+                  {/* Inner layout wrapper */}
+                  <div className="flex flex-col items-center px-4 py-4">
                     {committee.currentSpeaker ? (
                       <>
                         {(() => {
@@ -2314,26 +2314,23 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                             />
                           );
                         })()}
-                        <div className="flex flex-col items-center">
-                          {/* Current speaker flag */}
-                          <div style={{ width: 'clamp(100px, 18vh, 168px)', height: 'clamp(67px, 12vh, 112px)', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 0 0 2.5px rgba(28,20,16,0.22)', flexShrink: 0, position: 'relative' }}>
-                            {(() => {
-                              const f = getCountryByName(committee.currentSpeaker.country);
-                              return f
-                                ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                                : <Emoji size="5rem" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>🌐</Emoji>;
-                            })()}
-                          </div>
-                          <h1 className="font-black text-[#1C1410] mt-2 mb-5 text-center" style={{ fontSize: 'clamp(1.8rem, 5vh, 3rem)' }}>{getCountryDisplayName(committee.currentSpeaker.country, language)}</h1>
-                          <div data-tutorial="timer" className={`font-black font-mono mt-0 mb-4 tabular-nums ${
-                            speakerTimeRemaining <= 10 ? 'text-[#B8844A]' : 'text-[#1C1410]'
-                          }`} style={{ fontSize: 'clamp(3.5rem, 12vh, 6rem)' }}>
-                            {formatTime(speakerTimeRemaining)}
-                            {extraTimeAdded && <span className="text-base ml-2 font-normal text-[#1C1410]">{t('gsl_plus_time')}</span>}
-                          </div>
-                          <div className="w-full max-w-2xl h-2 bg-[#DDD4C0] rounded-full overflow-hidden mb-2">
-                            <div className={`h-full rounded-full transition-all ${progress > 20 ? 'bg-[#B6871F]' : 'bg-[#B8844A]'}`} style={{ width: `${progress}%` }} />
-                          </div>
+                        <div style={{ width: 'clamp(80px, 15vh, 168px)', height: 'clamp(54px, 10vh, 112px)', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 0 0 2.5px rgba(28,20,16,0.22)', flexShrink: 0, position: 'relative', marginTop: 'clamp(4px, 1vh, 12px)' }}>
+                          {(() => {
+                            const f = getCountryByName(committee.currentSpeaker.country);
+                            return f
+                              ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                              : <Emoji size="5rem" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>🌐</Emoji>;
+                          })()}
+                        </div>
+                        <h1 className="font-black text-[#1C1410] text-center" style={{ fontSize: 'clamp(1.4rem, 4vh, 3rem)', margin: 'clamp(4px,1vh,10px) 0' }}>{getCountryDisplayName(committee.currentSpeaker.country, language)}</h1>
+                        <div data-tutorial="timer" className={`font-black font-mono tabular-nums ${
+                          speakerTimeRemaining <= 10 ? 'text-[#B8844A]' : 'text-[#1C1410]'
+                        }`} style={{ fontSize: 'clamp(3rem, 11vh, 6rem)', marginBottom: 'clamp(4px,1.5vh,16px)' }}>
+                          {formatTime(speakerTimeRemaining)}
+                          {extraTimeAdded && <span className="text-base ml-2 font-normal text-[#1C1410]">{t('gsl_plus_time')}</span>}
+                        </div>
+                        <div className="w-full max-w-2xl h-2 bg-[#DDD4C0] rounded-full overflow-hidden" style={{ marginBottom: 'clamp(4px,1vh,8px)' }}>
+                          <div className={`h-full rounded-full transition-all ${progress > 20 ? 'bg-[#B6871F]' : 'bg-[#B8844A]'}`} style={{ width: `${progress}%` }} />
                         </div>
                         {gslRequireNextSpeaker && isLastGSLSpeaker && (
                           <div className="mb-2 px-4 py-2 bg-[#B6871F]/10 border border-[#B6871F]/30 rounded-lg text-[#B6871F] text-xs text-center">
@@ -2341,49 +2338,49 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                           </div>
                         )}
                         {!sessionEnded && !isViewOnly && (
-                        <div className="flex flex-col gap-2 w-full max-w-sm mt-2 shrink-0">
-                          {/* Row 1: ↺  START/PAUSE  NEXT  ADD TIME */}
-                          <div className="flex gap-2">
-                            <button onClick={handleRestartTime}
-                              title="Restart time"
-                              className="px-3 py-3 bg-[#DDD4C0] hover:bg-[#C8BAA8] border border-[#C8BAA8] hover:border-[#1B3828] rounded-xl font-bold text-sm text-[#6A5A4A] transition-colors shrink-0">
-                              ↺
-                            </button>
-                            <button onClick={handleToggleTimer}
-                              data-tutorial="timer-toggle"
-                              disabled={gslRequireNextSpeaker && isLastGSLSpeaker}
-                              className={`flex-1 py-3 px-4 rounded-xl font-bold text-base transition-colors focus:outline-none ${
-                                timerRunning ? 'bg-[#B6871F] hover:bg-[#B6871F]/80 text-white' :
-                                (gslRequireNextSpeaker && isLastGSLSpeaker) ? 'bg-[#DDD4C0] text-[#9A8A78] cursor-not-allowed' :
-                                'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'
-                              }`}>
-                              {timerRunning ? (
-                                <span className="flex items-center justify-center gap-2">
-                                  <span className="flex gap-[3px] items-center">
-                                    <span className="w-[3px] h-[13px] rounded-sm bg-current inline-block" />
-                                    <span className="w-[3px] h-[13px] rounded-sm bg-current inline-block" />
-                                  </span>
-                                  <span>{t('gsl_pause')}</span>
+                        <div className="flex gap-2 w-full max-w-sm flex-wrap justify-center" style={{ marginTop: 'clamp(4px,1vh,12px)' }}>
+                          {/* Restart button */}
+                          <button onClick={handleRestartTime}
+                            title="Restart time"
+                            className="px-3 py-3 bg-[#DDD4C0] hover:bg-[#C8BAA8] border border-[#C8BAA8] hover:border-[#1B3828] rounded-xl font-bold text-sm text-[#6A5A4A] transition-colors">
+                            ↺
+                          </button>
+                          {/* Start/Pause */}
+                          <button onClick={handleToggleTimer}
+                            data-tutorial="timer-toggle"
+                            disabled={gslRequireNextSpeaker && isLastGSLSpeaker}
+                            className={`flex-1 py-3 px-6 rounded-xl font-bold text-base transition-colors focus:outline-none ${
+                              timerRunning ? 'bg-[#B6871F] hover:bg-[#B6871F]/80 text-white' :
+                              (gslRequireNextSpeaker && isLastGSLSpeaker) ? 'bg-[#DDD4C0] text-[#9A8A78] cursor-not-allowed' :
+                              'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'
+                            }`}>
+                            {timerRunning ? (
+                              <span className="flex items-center justify-center gap-2">
+                                <span className="flex gap-[3px] items-center">
+                                  <span className="w-[3px] h-[13px] rounded-sm bg-current inline-block" />
+                                  <span className="w-[3px] h-[13px] rounded-sm bg-current inline-block" />
                                 </span>
-                              ) : t('gsl_start')}
-                            </button>
-                            <button onClick={handleNextSpeaker} disabled={committee.speakersList.length === 0}
-                              className="flex-1 bg-[#DDD4C0] hover:bg-[#C8BAA8] disabled:opacity-40 text-[#1C1410] py-3 px-3 rounded-xl font-bold transition-colors focus:outline-none whitespace-nowrap text-sm">
-                              {t('gsl_next')}
-                            </button>
-                            <button
-                              onClick={() => setActivePopover(activePopover === 'extraTime' ? null : 'extraTime')}
-                              data-tutorial="add-time-button"
-                              title="Add time"
-                              className="px-2 py-2 border rounded-xl font-black uppercase tracking-wide transition-colors bg-[#EDE7D8] hover:bg-[#DDD4C0] border-[#DDD4C0] text-[#1B3828] leading-tight text-center shrink-0" style={{ fontSize: '8px', minWidth: '48px' }}>
-                              {t('gsl_add_time').split('\n')[0]}<br />{t('gsl_add_time').split('\n')[1]}
-                            </button>
-                          </div>
-                          {/* Row 2: Right of Reply — always on its own full-width row */}
+                                <span>{t('gsl_pause')}</span>
+                              </span>
+                            ) : t('gsl_start')}
+                          </button>
+                          <button onClick={handleNextSpeaker} disabled={committee.speakersList.length === 0}
+                            className="flex-1 bg-[#DDD4C0] hover:bg-[#C8BAA8] disabled:opacity-40 text-[#1C1410] py-3 px-4 rounded-xl font-bold transition-colors focus:outline-none whitespace-nowrap" style={{ fontSize: 'clamp(11px, 1.2vw, 14px)' }}>
+                            {t('gsl_next')}
+                          </button>
+                          {/* Add Time button */}
+                          <button
+                            onClick={() => setActivePopover(activePopover === 'extraTime' ? null : 'extraTime')}
+                            data-tutorial="add-time-button"
+                            title="Add time"
+                            className="px-2 py-2 border rounded-xl font-black uppercase tracking-wide transition-colors bg-[#EDE7D8] hover:bg-[#DDD4C0] border-[#DDD4C0] text-[#1B3828] leading-tight text-center" style={{ fontSize: '8px', minWidth: '52px' }}>
+                            {t('gsl_add_time').split('\n')[0]}<br />{t('gsl_add_time').split('\n')[1]}
+                          </button>
+                          {/* Right of Reply button */}
                           <button
                             onClick={() => setActivePopover(activePopover === 'rightToReply' ? null : 'rightToReply')}
                             data-tutorial="rtr-button"
-                            className="w-full px-3 py-2.5 border rounded-xl font-black text-xs uppercase tracking-wide transition-colors bg-[#B8844A]/15 hover:bg-[#B8844A]/25 border-[#B8844A]/30 text-[#B8844A]">
+                            className="px-3 py-3 border rounded-xl font-black text-xs uppercase tracking-wide transition-colors bg-[#B8844A]/15 hover:bg-[#B8844A]/25 border-[#B8844A]/30 text-[#B8844A]">
                             {t('gsl_right_to_reply')}
                           </button>
                         </div>
@@ -2416,7 +2413,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                       </>
                     )}
                   </div>
-                </div>{/* end flex-row */}
+                </div>{/* end scroll container */}
                 {!sessionEnded && (
                 <div className="border-t border-[#DDD4C0] px-6 py-2 shrink-0" style={{ backgroundColor: '#F6F1E9' }}>
                   {!isViewOnly && <div className="flex items-center gap-3 mb-2">
