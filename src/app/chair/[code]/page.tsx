@@ -2294,10 +2294,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
 
 {committee.phase === 'speakers-list' && (
                 <>
-                <div className="flex-1 flex flex-row overflow-hidden">
+                <div className="flex-1 flex flex-row overflow-hidden min-h-0">
                   {/* GSL content area — overflow-y-auto with hidden scrollbar so content is always
                       reachable at any zoom level without browser scrollbars affecting layout. */}
-                  <div className="flex-1 flex flex-col items-center justify-start px-4 pt-5 pb-2 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
+                  <div className="flex-1 min-h-0 flex flex-col items-center justify-start px-4 pt-5 pb-2 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
                     {committee.currentSpeaker ? (
                       <>
                         {(() => {
@@ -2341,7 +2341,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                           </div>
                         )}
                         {!sessionEnded && !isViewOnly && (
-                        <div className="flex gap-2 w-full max-w-sm mt-4 flex-wrap justify-center shrink-0">
+                        <div className="flex gap-2 w-full max-w-sm mt-2 flex-wrap justify-center shrink-0">
                           {/* Restart button */}
                           <button onClick={handleRestartTime}
                             title="Restart time"
@@ -2418,8 +2418,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                   </div>
                 </div>{/* end flex-row */}
                 {!sessionEnded && (
-                <div className="border-t border-[#DDD4C0] px-6 py-2" style={{ backgroundColor: '#F6F1E9' }}>
-                  {!isViewOnly && <div className="flex items-center gap-3 mb-4">
+                <div className="border-t border-[#DDD4C0] px-6 py-2 shrink-0" style={{ backgroundColor: '#F6F1E9' }}>
+                  {!isViewOnly && <div className="flex items-center gap-3 mb-2">
                     <span className="text-xs text-[#9A8A78] font-mono shrink-0">{t('gsl_time')}</span>
                     <div className="flex gap-1.5">
                       {[45, 60, 75, 90].map((preset) => (
