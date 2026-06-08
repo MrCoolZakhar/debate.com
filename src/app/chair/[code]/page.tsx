@@ -2170,7 +2170,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 )}
               </aside>
             )}
-            <main className="flex-1 overflow-hidden flex flex-col min-w-0">
+            <main className="flex-1 overflow-hidden flex flex-col min-w-0 min-h-0">
               {committee.phase === 'moderated-caucus' && committee.caucus && (
                 caucusLoading ? (() => {
                   const isTdTParent = committee.caucus?.purpose?.startsWith('Tour de Table') ?? false;
@@ -2341,49 +2341,49 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                           </div>
                         )}
                         {!sessionEnded && !isViewOnly && (
-                        <div className="flex gap-2 w-full max-w-sm mt-2 flex-wrap justify-center shrink-0">
-                          {/* Restart button */}
-                          <button onClick={handleRestartTime}
-                            title="Restart time"
-                            className="px-3 py-3 bg-[#DDD4C0] hover:bg-[#C8BAA8] border border-[#C8BAA8] hover:border-[#1B3828] rounded-xl font-bold text-sm text-[#6A5A4A] transition-colors">
-                            ↺
-                          </button>
-                          {/* Start/Pause */}
-                          <button onClick={handleToggleTimer}
-                            data-tutorial="timer-toggle"
-                            disabled={gslRequireNextSpeaker && isLastGSLSpeaker}
-                            className={`flex-1 py-3 px-6 rounded-xl font-bold text-base transition-colors focus:outline-none ${
-                              timerRunning ? 'bg-[#B6871F] hover:bg-[#B6871F]/80 text-white' :
-                              (gslRequireNextSpeaker && isLastGSLSpeaker) ? 'bg-[#DDD4C0] text-[#9A8A78] cursor-not-allowed' :
-                              'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'
-                            }`}>
-                            {timerRunning ? (
-  <span className="flex items-center justify-center gap-2">
-    <span className="flex gap-[3px] items-center">
-      <span className="w-[3px] h-[13px] rounded-sm bg-current inline-block" />
-      <span className="w-[3px] h-[13px] rounded-sm bg-current inline-block" />
-    </span>
-    <span>{t('gsl_pause')}</span>
-  </span>
-) : t('gsl_start')}
-                          </button>
-                          <button onClick={handleNextSpeaker} disabled={committee.speakersList.length === 0}
-                            className="flex-1 bg-[#DDD4C0] hover:bg-[#C8BAA8] disabled:opacity-40 text-[#1C1410] py-3 px-4 rounded-xl font-bold transition-colors focus:outline-none whitespace-nowrap" style={{ fontSize: 'clamp(11px, 1.2vw, 14px)' }}>
-                            {t('gsl_next')}
-                          </button>
-                          {/* Add Time button */}
-                          <button
-                            onClick={() => setActivePopover(activePopover === 'extraTime' ? null : 'extraTime')}
-                            data-tutorial="add-time-button"
-                            title="Add time"
-                            className="px-2 py-2 border rounded-xl font-black uppercase tracking-wide transition-colors bg-[#EDE7D8] hover:bg-[#DDD4C0] border-[#DDD4C0] text-[#1B3828] leading-tight text-center" style={{ fontSize: '8px', minWidth: '52px' }}>
-                            {t('gsl_add_time').split('\n')[0]}<br />{t('gsl_add_time').split('\n')[1]}
-                          </button>
-                          {/* Right of Reply button */}
+                        <div className="flex flex-col gap-2 w-full max-w-sm mt-2 shrink-0">
+                          {/* Row 1: ↺  START/PAUSE  NEXT  ADD TIME */}
+                          <div className="flex gap-2">
+                            <button onClick={handleRestartTime}
+                              title="Restart time"
+                              className="px-3 py-3 bg-[#DDD4C0] hover:bg-[#C8BAA8] border border-[#C8BAA8] hover:border-[#1B3828] rounded-xl font-bold text-sm text-[#6A5A4A] transition-colors shrink-0">
+                              ↺
+                            </button>
+                            <button onClick={handleToggleTimer}
+                              data-tutorial="timer-toggle"
+                              disabled={gslRequireNextSpeaker && isLastGSLSpeaker}
+                              className={`flex-1 py-3 px-4 rounded-xl font-bold text-base transition-colors focus:outline-none ${
+                                timerRunning ? 'bg-[#B6871F] hover:bg-[#B6871F]/80 text-white' :
+                                (gslRequireNextSpeaker && isLastGSLSpeaker) ? 'bg-[#DDD4C0] text-[#9A8A78] cursor-not-allowed' :
+                                'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'
+                              }`}>
+                              {timerRunning ? (
+                                <span className="flex items-center justify-center gap-2">
+                                  <span className="flex gap-[3px] items-center">
+                                    <span className="w-[3px] h-[13px] rounded-sm bg-current inline-block" />
+                                    <span className="w-[3px] h-[13px] rounded-sm bg-current inline-block" />
+                                  </span>
+                                  <span>{t('gsl_pause')}</span>
+                                </span>
+                              ) : t('gsl_start')}
+                            </button>
+                            <button onClick={handleNextSpeaker} disabled={committee.speakersList.length === 0}
+                              className="flex-1 bg-[#DDD4C0] hover:bg-[#C8BAA8] disabled:opacity-40 text-[#1C1410] py-3 px-3 rounded-xl font-bold transition-colors focus:outline-none whitespace-nowrap text-sm">
+                              {t('gsl_next')}
+                            </button>
+                            <button
+                              onClick={() => setActivePopover(activePopover === 'extraTime' ? null : 'extraTime')}
+                              data-tutorial="add-time-button"
+                              title="Add time"
+                              className="px-2 py-2 border rounded-xl font-black uppercase tracking-wide transition-colors bg-[#EDE7D8] hover:bg-[#DDD4C0] border-[#DDD4C0] text-[#1B3828] leading-tight text-center shrink-0" style={{ fontSize: '8px', minWidth: '48px' }}>
+                              {t('gsl_add_time').split('\n')[0]}<br />{t('gsl_add_time').split('\n')[1]}
+                            </button>
+                          </div>
+                          {/* Row 2: Right of Reply — always on its own full-width row */}
                           <button
                             onClick={() => setActivePopover(activePopover === 'rightToReply' ? null : 'rightToReply')}
                             data-tutorial="rtr-button"
-                            className="px-3 py-3 border rounded-xl font-black text-xs uppercase tracking-wide transition-colors bg-[#B8844A]/15 hover:bg-[#B8844A]/25 border-[#B8844A]/30 text-[#B8844A]">
+                            className="w-full px-3 py-2.5 border rounded-xl font-black text-xs uppercase tracking-wide transition-colors bg-[#B8844A]/15 hover:bg-[#B8844A]/25 border-[#B8844A]/30 text-[#B8844A]">
                             {t('gsl_right_to_reply')}
                           </button>
                         </div>
