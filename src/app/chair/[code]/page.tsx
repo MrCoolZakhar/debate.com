@@ -2295,7 +2295,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
 {committee.phase === 'speakers-list' && (
                 <>
                 {/* Scroll container: plain div (NOT flex) so overflow-y-auto actually triggers */}
-                <div className="flex-1 min-h-0 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
+                <div className="flex-1 overflow-y-auto" style={{ height: 0, minHeight: 0, scrollbarWidth: 'none' }}>
                   {/* Inner layout wrapper */}
                   <div className="flex flex-col items-center px-4 py-4">
                     {committee.currentSpeaker ? (
