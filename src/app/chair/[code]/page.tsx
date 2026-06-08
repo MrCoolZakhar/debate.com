@@ -1048,6 +1048,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const [showDocuments, setShowDocuments] = useState(false);
   const [copied, setCopied] = useState(false);
   const [speakerTimeLimit, setSpeakerTimeLimitLocal] = useState(90);
+  const [speakerTimeLimitInput, setSpeakerTimeLimitInput] = useState<string>('90');
   const [showSettings, setShowSettings] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [chatReadCounts, setChatReadCounts] = useState<Record<string, number>>({});
@@ -1738,6 +1739,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
 
   const handleSetSpeakerTimeLimit = (seconds: number) => {
     setSpeakerTimeLimitLocal(seconds);
+    setSpeakerTimeLimitInput(String(seconds));
     setSpeakerTimeRemaining(seconds);
     updateLocal(setCommittee, (c) => ({ ...c, speakerTimeLimit: seconds, speakerTimeRemaining: seconds }));
     updateSpeakerTimeLimit(committee.id, seconds);
@@ -2420,14 +2422,27 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                   {!isViewOnly && <div className="flex items-center gap-3 mb-4">
                     <span className="text-xs text-[#9A8A78] font-mono shrink-0">{t('gsl_time')}</span>
                     <div className="flex gap-1.5">
-                      {[45, 60, 90].map((t) => (
-                        <button key={t} onClick={() => handleSetSpeakerTimeLimit(t)}
-                          className={`text-xs px-2.5 py-1 rounded-lg transition-colors font-semibold ${speakerTimeLimit === t ? 'bg-[#1B3828] text-white' : 'bg-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
-                          {t}s
+                      {[45, 60, 75, 90].map((preset) => (
+                        <button key={preset} onClick={() => handleSetSpeakerTimeLimit(preset)}
+                          className={`text-xs px-2.5 py-1 rounded-lg transition-colors font-semibold ${speakerTimeLimit === preset ? 'bg-[#1B3828] text-white' : 'bg-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
+                          {preset}s
                         </button>
                       ))}
-                      <input type="number" value={speakerTimeLimit}
-                        onChange={(e) => handleSetSpeakerTimeLimit(parseInt(e.target.value) || 90)}
+                      <input type="number" value={speakerTimeLimitInput}
+                        onChange={(e) => setSpeakerTimeLimitInput(e.target.value)}
+                        onBlur={() => {
+                          const val = parseInt(speakerTimeLimitInput);
+                          if (!isNaN(val) && val > 0) handleSetSpeakerTimeLimit(val);
+                          else setSpeakerTimeLimitInput(String(speakerTimeLimit));
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            const val = parseInt(speakerTimeLimitInput);
+                            if (!isNaN(val) && val > 0) handleSetSpeakerTimeLimit(val);
+                            else setSpeakerTimeLimitInput(String(speakerTimeLimit));
+                            (e.target as HTMLInputElement).blur();
+                          }
+                        }}
                         className="w-14 bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-2 py-1 text-[#1C1410] text-xs focus:outline-none" />
                     </div>
                   </div>}
