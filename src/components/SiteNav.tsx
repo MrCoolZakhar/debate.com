@@ -25,6 +25,7 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [showLangMenu, setShowLangMenu] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const accountMenuRef = useRef<HTMLDivElement>(null);
   const langMenuRef = useRef<HTMLDivElement>(null);
 
@@ -32,6 +33,8 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
   const { language, setLanguage } = useLanguage();
   const t = useT();
   const navLinks = NAV_LINKS_CONFIG.map(l => ({ label: l[language], href: l.href }));
+
+  useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
     function handleMouseDown(e: MouseEvent) {
@@ -61,7 +64,6 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
 
   return (
     <>
-      <style>{`@keyframes skeleton-pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }`}</style>
       <nav
         className="relative z-20 flex items-center justify-between px-6 md:px-14 shrink-0"
         style={{ height: '72px' }}
@@ -194,14 +196,15 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
           </div>
 
           {/* Auth section */}
-          {loading ? (
+          {!mounted || loading ? (
             <div
+              suppressHydrationWarning
               style={{
                 width: '120px',
                 height: '36px',
                 borderRadius: '9999px',
                 backgroundColor: 'rgba(27,56,40,0.12)',
-                animation: 'skeleton-pulse 1.5s ease-in-out infinite',
+                animation: mounted ? 'skeleton-pulse 1.5s ease-in-out infinite' : 'none',
               }}
             />
           ) : user ? (
@@ -459,7 +462,7 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
 
           <div style={{ height: '1px', backgroundColor: '#DDD4C0', margin: '8px 0' }} />
 
-          {user ? (
+          {!mounted || loading ? null : user ? (
             <>
               <div className="px-4 py-2">
                 <p className="text-sm font-bold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
