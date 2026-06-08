@@ -2071,9 +2071,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           })()}
         </div>
       ) : (
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden min-h-0">
         {showChat && !sessionEnded && (
-          <div className="flex-1 flex overflow-hidden">
+          <div className="flex-1 flex overflow-hidden min-h-0">
             <ChatPanel
               committee={committee}
               senderName={myChairName || 'Chair'}
