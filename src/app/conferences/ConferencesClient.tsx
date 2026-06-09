@@ -5,7 +5,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Users, FileText, CreditCard, Zap } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
-import { supabaseAuthClient } from '@/lib/supabase-auth';
+import { getAuthedClient } from '@/lib/supabase-auth';
+import { useAuth } from '@/components/AuthProvider';
 import ConferenceFocusCards, { FocusCard } from '@/components/ConferenceFocusCards';
 
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
@@ -46,20 +47,22 @@ function FeaturedSection() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
   const router = useRouter();
+  const { session } = useAuth();
 
   useEffect(() => {
     async function load() {
       const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-      const { data: confs } = await supabaseAuthClient
+      const anonClient = getAuthedClient('');
+      const { data: confs } = await anonClient
         .from('conferences')
         .select('id, slug, full_name, acronym, city, country, start_date, end_date, banner_url')
         .eq('is_public', true)
-        .eq('status', 'published')
+        .eq('status', 'public')
         .order('start_date', { ascending: true })
         .limit(20);
       if (!confs || confs.length === 0) { setLoading(false); return; }
       const confIds = confs.map((c: FocusCard) => c.id);
-      const { data: apps } = await supabaseAuthClient
+      const { data: apps } = await anonClient
         .from('applications')
         .select('conference_id')
         .in('conference_id', confIds)
@@ -79,10 +82,10 @@ function FeaturedSection() {
     if (!search.trim()) { setSearchResults([]); return; }
     const timer = setTimeout(async () => {
       setSearchLoading(true);
-      const { data } = await supabaseAuthClient
+      const searchClient = getAuthedClient('');
+      const { data } = await searchClient
         .from('conferences')
         .select('id, slug, full_name, acronym, city, country, start_date, end_date, banner_url')
-        .eq('is_public', true)
         .ilike('full_name', '%' + search.trim() + '%')
         .limit(5);
       setSearchResults((data as FocusCard[]) ?? []);
@@ -143,8 +146,9 @@ function FeaturedSection() {
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          minHeight: '100vh',
-          padding: '120px 24px 80px',
+          padding: '0 24px 0',
+          minHeight: 'calc(100vh - 72px)',
+          marginTop: '72px',
         }}
       >
         {/* Title */}

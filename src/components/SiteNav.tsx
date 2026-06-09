@@ -56,7 +56,7 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
     await signOut();
     setAccountMenuOpen(false);
     setMenuOpen(false);
-    router.push('/');
+    window.location.href = '/';
   }
 
   return (

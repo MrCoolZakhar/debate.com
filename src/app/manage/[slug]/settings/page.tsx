@@ -3,7 +3,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useManage } from '@/app/manage/[slug]/layout';
-import { createAuthClient } from '@/lib/supabase-auth';
+import { getAuthedClient } from '@/lib/supabase-auth';
+import { useAuth } from '@/components/AuthProvider';
+import { createClient } from '@supabase/supabase-js';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -233,6 +235,19 @@ function QuestionModal({ existing, onSave, onClose }: {
 export default function SettingsPage() {
   const router = useRouter();
   const { conference, refreshConference } = useManage();
+  const { session } = useAuth();
+  const [activeTab, setActiveTab] = useState<'applications' | 'visual' | 'organizers' | 'privacy'>('applications');
+
+  // Visual tab state
+  const [bannerUploading, setBannerUploading] = useState(false);
+  const [description, setDescription] = useState('');
+  const [instagramUrl, setInstagramUrl] = useState('');
+  const [facebookUrl, setFacebookUrl] = useState('');
+  const [tiktokUrl, setTiktokUrl] = useState('');
+  const [whatsappUrl, setWhatsappUrl] = useState('');
+  const [websiteUrl, setWebsiteUrl] = useState('');
+  const [visualSaving, setVisualSaving] = useState(false);
+  const [visualSaved, setVisualSaved] = useState(false);
 
   const [roleConfigs, setRoleConfigs] = useState<RoleConfig[]>([]);
   const [configVersion, setConfigVersion] = useState(0);
@@ -247,7 +262,8 @@ export default function SettingsPage() {
 
   const loadRoleConfigs = useCallback(async () => {
     if (!conference) return;
-    const supabase = createAuthClient();
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase
       .from('application_role_configs')
       .select('*')
@@ -260,7 +276,8 @@ export default function SettingsPage() {
 
   const loadOrganizers = useCallback(async () => {
     if (!conference) return;
-    const supabase = createAuthClient();
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase
       .from('conference_organizers')
       .select('id, role, user_id, profiles(display_name, email, avatar_url)')
@@ -270,7 +287,8 @@ export default function SettingsPage() {
 
   const ensureRoleConfigs = useCallback(async () => {
     if (!conference) return;
-    const supabase = createAuthClient();
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
     const { data: existing } = await supabase
       .from('application_role_configs')
       .select('id')
@@ -296,7 +314,13 @@ export default function SettingsPage() {
     if (!conference) return;
     loadRoleConfigs();
     loadOrganizers();
-  }, [conference, loadRoleConfigs, loadOrganizers]);
+    setDescription(conference.description ?? '');
+    setInstagramUrl(conference.instagram_url ?? '');
+    setFacebookUrl(conference.facebook_url ?? '');
+    setTiktokUrl(conference.tiktok_url ?? '');
+    setWhatsappUrl(conference.whatsapp_url ?? '');
+    setWebsiteUrl(conference.website_url ?? '');
+  }, [conference?.id, loadRoleConfigs, loadOrganizers]);
 
   useEffect(() => {
     if (!conference || roleConfigs.length > 0) return;
@@ -307,7 +331,8 @@ export default function SettingsPage() {
 
   async function saveRoleConfig(role: string, updates: Partial<RoleConfig>) {
     if (!conference) return;
-    const supabase = createAuthClient();
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
     await supabase
       .from('application_role_configs')
       .update(updates)
@@ -322,7 +347,8 @@ export default function SettingsPage() {
     if (!conference || !inviteEmail.trim()) return;
     setInviting(true);
     setInviteError('');
-    const supabase = createAuthClient();
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
 
     const { data: profile } = await supabase
       .from('profiles')
@@ -354,7 +380,8 @@ export default function SettingsPage() {
   }
 
   async function handleRemoveOrganizer(organizerId: string) {
-    const supabase = createAuthClient();
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
     await supabase.from('conference_organizers').delete().eq('id', organizerId);
     await loadOrganizers();
   }
@@ -363,10 +390,11 @@ export default function SettingsPage() {
 
   async function handlePublicToggle(next: boolean) {
     if (!conference) return;
-    const supabase = createAuthClient();
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
     await supabase.from('conferences').update({
       is_public: next,
-      status: next ? 'published' : 'draft',
+      status: next ? 'public' : 'private',
     }).eq('id', conference.id);
     await refreshConference();
   }
@@ -374,7 +402,8 @@ export default function SettingsPage() {
   async function handleArchive() {
     if (!conference) return;
     if (!window.confirm('Archive this conference? It will be hidden from all listings.')) return;
-    const supabase = createAuthClient();
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
     await supabase.from('conferences').update({
       status: 'archived',
       is_public: false,
@@ -401,6 +430,39 @@ export default function SettingsPage() {
     await saveRoleConfig(selectedRole, { custom_questions: currentQuestions.filter(q => q.id !== id) });
   }
 
+  async function handleBannerUpload(file: File) {
+    if (!session || !conference) return;
+    if (file.size > 5 * 1024 * 1024) { alert('Banner must be under 5MB.'); return; }
+    setBannerUploading(true);
+    const supabase = getAuthedClient(session.access_token);
+    const ext = file.name.split('.').pop();
+    const path = 'banners/' + conference.id + '-' + Date.now() + '.' + ext;
+    const { error } = await supabase.storage.from('conference-assets').upload(path, file, { contentType: file.type, upsert: true });
+    if (error) { alert('Upload failed: ' + error.message); setBannerUploading(false); return; }
+    const { data: urlData } = supabase.storage.from('conference-assets').getPublicUrl(path);
+    await supabase.from('conferences').update({ banner_url: urlData.publicUrl }).eq('id', conference.id);
+    await refreshConference();
+    setBannerUploading(false);
+  }
+
+  async function handleSaveVisual() {
+    if (!session || !conference) return;
+    setVisualSaving(true);
+    const supabase = getAuthedClient(session.access_token);
+    await supabase.from('conferences').update({
+      description: description || null,
+      instagram_url: instagramUrl || null,
+      facebook_url: facebookUrl || null,
+      tiktok_url: tiktokUrl || null,
+      whatsapp_url: whatsappUrl || null,
+      website_url: websiteUrl || null,
+    }).eq('id', conference.id);
+    await refreshConference();
+    setVisualSaving(false);
+    setVisualSaved(true);
+    setTimeout(() => setVisualSaved(false), 2500);
+  }
+
   if (!conference) return null;
 
   const cardStyle: React.CSSProperties = {
@@ -417,18 +479,45 @@ export default function SettingsPage() {
     { key: 'must_pay_before_allocation', label: 'Must pay before allocation', desc: 'Block country assignment until paid' },
   ];
 
+  const TABS: { key: 'applications' | 'visual' | 'organizers' | 'privacy'; label: string }[] = [
+    { key: 'applications', label: 'APPLICATIONS' },
+    { key: 'visual', label: 'VISUAL' },
+    { key: 'organizers', label: 'ORGANIZERS' },
+    { key: 'privacy', label: 'PRIVACY' },
+  ];
+
   return (
     <div className="px-6 md:px-10 py-8 max-w-3xl">
       {/* Header */}
       <p className="text-xs mb-2" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace", letterSpacing: '0.04em' }}>
         {conference.acronym} / Settings
       </p>
-      <h1 className="font-black text-2xl mb-8" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+      <h1 className="font-black text-2xl mb-6" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
         Settings
       </h1>
 
-      {/* ── Card 1: Application Windows & Role Configuration ── */}
-      <div style={cardStyle}>
+      {/* Tabs */}
+      <div className="flex gap-2 mb-8 flex-wrap">
+        {TABS.map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className="px-4 py-1.5 rounded-full text-xs font-bold transition-all focus:outline-none"
+            style={{
+              backgroundColor: activeTab === tab.key ? '#1B3828' : 'transparent',
+              color: activeTab === tab.key ? '#EED98A' : '#9A8A78',
+              border: activeTab === tab.key ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
+              fontFamily: "'DM Mono', monospace",
+              letterSpacing: '0.06em',
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── APPLICATIONS TAB ── */}
+      {activeTab === 'applications' && <div style={cardStyle}>
         <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
           Application Windows
         </p>
@@ -566,10 +655,122 @@ export default function SettingsPage() {
             </div>
           );
         })}
-      </div>
+      </div>}
 
-      {/* ── Card 2: Custom Questions ── */}
-      <div style={cardStyle}>
+      {/* ── VISUAL TAB ── */}
+      {activeTab === 'visual' && (
+        <div>
+          {/* Banner card */}
+          <div style={cardStyle}>
+            <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Conference Banner</p>
+            <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Recommended: 1200x630px. JPG, PNG or WebP. Max 5MB.</p>
+            <div
+              style={{
+                border: '1.5px dashed #DDD4C0', borderRadius: 14, overflow: 'hidden',
+                backgroundColor: '#FAF8F3', minHeight: 140,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                position: 'relative', cursor: 'pointer',
+              }}
+              onClick={() => { if (!bannerUploading) document.getElementById('settings-banner-upload')?.click(); }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
+            >
+              {conference.banner_url ? (
+                <>
+                  <img src={conference.banner_url} alt="Banner" style={{ width: '100%', height: '160px', objectFit: 'cover', display: 'block' }} />
+                  <button
+                    onClick={(e) => { e.stopPropagation(); document.getElementById('settings-banner-upload')?.click(); }}
+                    style={{
+                      position: 'absolute', top: 8, right: 8,
+                      backgroundColor: 'rgba(27,56,40,0.85)', color: '#EDE7D8',
+                      border: 'none', borderRadius: 8, padding: '4px 10px',
+                      fontSize: 11, fontFamily: "'Outfit', sans-serif", fontWeight: 700, cursor: 'pointer',
+                    }}
+                  >
+                    {bannerUploading ? 'UPLOADING...' : 'CHANGE'}
+                  </button>
+                </>
+              ) : bannerUploading ? (
+                <div style={{ textAlign: 'center', padding: 24 }}>
+                  <div className="w-6 h-6 rounded-full border-2 border-t-transparent animate-spin mx-auto mb-2" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
+                  <p style={{ fontSize: 12, color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Uploading...</p>
+                </div>
+              ) : (
+                <div style={{ textAlign: 'center', padding: 24 }}>
+                  <p style={{ fontSize: 13, fontWeight: 700, color: '#1C1410', fontFamily: "'Outfit', sans-serif", marginBottom: 4 }}>Click to upload banner</p>
+                  <p style={{ fontSize: 11, color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Recommended: 1200x630px</p>
+                </div>
+              )}
+              <input
+                id="settings-banner-upload"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                style={{ display: 'none' }}
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleBannerUpload(f); e.target.value = ''; }}
+              />
+            </div>
+          </div>
+
+          {/* Description + socials card */}
+          <div style={cardStyle}>
+            <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Description</p>
+            <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Shown on your public conference page.</p>
+            <textarea
+              rows={6}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Tell delegates about your conference — theme, highlights, what to expect..."
+              style={{ ...inputStyle, resize: 'vertical', lineHeight: '1.6' }}
+              onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
+              onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
+            />
+          </div>
+
+          <div style={cardStyle}>
+            <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Social Media & Links</p>
+            <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Optional. All fields saved together.</p>
+            <div className="flex flex-col gap-3">
+              {([
+                { label: 'Instagram URL', value: instagramUrl, setter: setInstagramUrl },
+                { label: 'Facebook URL', value: facebookUrl, setter: setFacebookUrl },
+                { label: 'TikTok URL', value: tiktokUrl, setter: setTiktokUrl },
+                { label: 'WhatsApp URL', value: whatsappUrl, setter: setWhatsappUrl },
+                { label: 'Website URL', value: websiteUrl, setter: setWebsiteUrl },
+              ] as { label: string; value: string; setter: (v: string) => void }[]).map(({ label, value, setter }) => (
+                <div key={label}>
+                  <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>{label}</label>
+                  <input
+                    type="url"
+                    value={value}
+                    onChange={(e) => setter(e.target.value)}
+                    placeholder="https://"
+                    style={inputStyle}
+                    onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
+                    onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
+                  />
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={handleSaveVisual}
+              disabled={visualSaving}
+              className="w-full mt-6 rounded-xl py-3 font-bold text-sm tracking-widest transition-colors focus:outline-none"
+              style={{
+                backgroundColor: visualSaved ? '#3D7A52' : visualSaving ? '#DDD4C0' : '#1B3828',
+                color: visualSaving ? '#9A8A78' : '#EED98A',
+                fontFamily: "'Outfit', sans-serif",
+                letterSpacing: '0.08em',
+              }}
+              onMouseEnter={(e) => { if (!visualSaving && !visualSaved) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+              onMouseLeave={(e) => { if (!visualSaving && !visualSaved) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+            >
+              {visualSaved ? 'SAVED ✓' : visualSaving ? 'SAVING...' : 'SAVE CHANGES'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'applications' && <div style={cardStyle}>
         <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
           Custom Questions
         </p>
@@ -664,10 +865,9 @@ export default function SettingsPage() {
             </button>
           </>
         )}
-      </div>
+      </div>}
 
-      {/* ── Card 3: Organizing Team ── */}
-      <div style={cardStyle}>
+      {activeTab === 'organizers' && <div style={cardStyle}>
         <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
           Organizing Team
         </p>
@@ -778,10 +978,9 @@ export default function SettingsPage() {
             <p className="text-xs mt-2" style={{ color: '#B8844A', fontFamily: "'Outfit', sans-serif" }}>{inviteError}</p>
           )}
         </div>
-      </div>
+      </div>}
 
-      {/* ── Card 4: Privacy & Publishing ── */}
-      <div style={cardStyle}>
+      {activeTab === 'privacy' && <div style={cardStyle}>
         <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
           Privacy & Publishing
         </p>
@@ -824,7 +1023,7 @@ export default function SettingsPage() {
             ARCHIVE CONFERENCE
           </button>
         </div>
-      </div>
+      </div>}
 
       {/* Question modal */}
       {questionModal.open && (

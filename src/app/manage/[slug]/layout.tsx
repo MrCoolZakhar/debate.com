@@ -8,7 +8,7 @@ import {
   Mail, CreditCard, Settings, Briefcase, Menu, X,
 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
-import { createAuthClient } from '@/lib/supabase-auth';
+import { getAuthedClient } from '@/lib/supabase-auth';
 
 // ── Conference type ────────────────────────────────────────────────────────
 
@@ -112,11 +112,11 @@ function SidebarContent({
   const sections = NAV_SECTIONS(slug);
 
   const statusStyles: Record<string, { bg: string; color: string }> = {
-    draft:     { bg: 'rgba(154,138,120,0.15)', color: '#9A8A78' },
-    published: { bg: 'rgba(61,122,82,0.15)',   color: '#3D7A52' },
-    archived:  { bg: 'rgba(28,20,16,0.1)',     color: '#6A5A4A' },
+    private:  { bg: 'rgba(154,138,120,0.15)', color: '#9A8A78' },
+    public:   { bg: 'rgba(61,122,82,0.15)',   color: '#3D7A52' },
+    archived: { bg: 'rgba(28,20,16,0.1)',     color: '#6A5A4A' },
   };
-  const statusStyle = statusStyles[conference?.status ?? 'draft'] ?? statusStyles.draft;
+  const statusStyle = statusStyles[conference?.status ?? 'private'] ?? statusStyles.private;
 
   return (
     <div className="flex flex-col h-full">
@@ -206,7 +206,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
   const params = useParams<{ slug: string }>();
   const slug = params.slug;
 
-  const { user, profile, signOut, loading: authLoading } = useAuth();
+  const { user, session, profile, signOut, loading: authLoading } = useAuth();
   const [conference, setConference] = useState<Conference | null>(null);
   const [loadingConf, setLoadingConf] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -227,7 +227,8 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
 
   async function loadConference() {
     setLoadingConf(true);
-    const supabase = createAuthClient();
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
 
     const { data: confData } = await supabase
       .from('conferences')
@@ -316,22 +317,19 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
 
         {/* Right: status pill + view page + avatar */}
         <div className="flex items-center gap-4">
-          {conference && (
-            <span
-              className="text-[10px] font-bold px-2.5 py-1 rounded-full hidden sm:inline-block"
-              style={
-                conference.is_public
-                  ? { backgroundColor: 'rgba(61,122,82,0.3)', color: '#7EC89A', border: '1px solid rgba(61,122,82,0.4)', fontFamily: "'DM Mono', monospace" }
-                  : { backgroundColor: 'rgba(238,217,138,0.15)', color: 'rgba(238,217,138,0.7)', border: '1px solid rgba(238,217,138,0.2)', fontFamily: "'DM Mono', monospace" }
-              }
-            >
-              {conference.is_public ? 'LIVE' : 'PRIVATE'}
-            </span>
-          )}
+          <Link
+            href="/conferences/organise"
+            className="text-xs font-semibold hidden sm:inline-flex items-center gap-1 transition-colors focus:outline-none"
+            style={{ color: 'rgba(238,217,138,0.7)', textDecoration: 'none' }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#EED98A'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'rgba(238,217,138,0.7)'; }}
+          >
+            ← BACK
+          </Link>
 
           <Link
             href={`/conferences/${slug}`}
-            className="text-xs font-semibold hidden sm:inline-block transition-colors"
+            className="text-xs font-semibold hidden sm:inline-block transition-colors focus:outline-none"
             style={{ color: 'rgba(238,217,138,0.7)', textDecoration: 'none' }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#EED98A'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'rgba(238,217,138,0.7)'; }}
@@ -339,19 +337,17 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
             VIEW PAGE →
           </Link>
 
-          {/* Avatar / sign-out */}
-          <button
-            onClick={() => signOut()}
-            className="flex items-center justify-center w-7 h-7 rounded-full text-xs font-black focus:outline-none transition-opacity hover:opacity-80"
-            style={{ backgroundColor: '#EED98A', color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}
-            title="Sign out"
+          <Link
+            href="/account/profile"
+            className="flex items-center justify-center w-7 h-7 rounded-full text-xs font-black focus:outline-none transition-opacity hover:opacity-80 flex-shrink-0"
+            style={{ backgroundColor: '#EED98A', color: '#1B3828', fontFamily: "'Outfit', sans-serif", textDecoration: 'none' }}
           >
             {profile?.avatar_url ? (
               <img src={profile.avatar_url} alt="Avatar" className="w-7 h-7 rounded-full object-cover" />
             ) : (
               avatarInitial
             )}
-          </button>
+          </Link>
 
           {/* Mobile hamburger */}
           <button

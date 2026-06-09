@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import SiteNav from '@/components/SiteNav';
 import { useAuth } from '@/components/AuthProvider';
-import { createAuthClient } from '@/lib/supabase-auth';
+import { getAuthedClient } from '@/lib/supabase-auth';
 
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
 
@@ -37,7 +37,7 @@ function formatDateRange(start: string, end: string): string {
 
 function ConferenceManageCard({ conf }: { conf: OrgConference }) {
   const isLive = conf.is_public;
-  const isDraft = conf.status === 'draft' && !conf.is_public;
+  const isDraft = conf.status === 'private' && !conf.is_public;
   const isArchived = conf.status === 'archived';
 
   const statusLabel = isLive ? 'LIVE' : isArchived ? 'ARCHIVED' : 'DRAFT';
@@ -130,7 +130,7 @@ function ConferenceManageCard({ conf }: { conf: OrgConference }) {
 
 export default function ConferencesOrganiseClient() {
   const router = useRouter();
-  const { user, loading: authLoading } = useAuth();
+  const { user, session, loading: authLoading } = useAuth();
 
   const [conferences, setConferences] = useState<OrgConference[]>([]);
   const [loading, setLoading] = useState(true);
@@ -149,7 +149,8 @@ export default function ConferencesOrganiseClient() {
 
     async function fetchConferences() {
       setLoading(true);
-      const supabase = createAuthClient();
+      if (!session) return;
+      const supabase = getAuthedClient(session.access_token);
       let query = supabase
         .from('conferences')
         .select('id, slug, full_name, acronym, city, country, start_date, end_date, is_public, status, logo_url')
@@ -159,7 +160,7 @@ export default function ConferencesOrganiseClient() {
       if (statusFilter === 'ACTIVE') {
         query = query.eq('is_public', true);
       } else if (statusFilter === 'DRAFT') {
-        query = query.eq('status', 'draft');
+        query = query.eq('status', 'private');
       } else if (statusFilter === 'ARCHIVED') {
         query = query.eq('status', 'archived');
       }

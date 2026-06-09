@@ -54,6 +54,17 @@ function SignInInner() {
         }}
       />
 
+      {/* Back link */}
+      <Link
+        href="/"
+        className="relative z-10 flex items-center gap-1.5 text-sm font-semibold mb-6 self-start focus:outline-none"
+        style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", textDecoration: 'none' }}
+        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
+        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
+      >
+        ← Back
+      </Link>
+
       {/* Card */}
       <div
         className="relative z-10 w-full max-w-md"

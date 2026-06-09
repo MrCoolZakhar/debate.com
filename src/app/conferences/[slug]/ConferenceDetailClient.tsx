@@ -403,24 +403,6 @@ export default function ConferenceDetailClient() {
             >
               {conference.format.toUpperCase().replace('-', ' ')}
             </span>
-            {isOrganizer && (
-              <Link
-                href={`/manage/${conference.slug}`}
-                style={{
-                  fontFamily: "'DM Mono', monospace",
-                  fontSize: '10px',
-                  color: '#EED98A',
-                  backgroundColor: 'rgba(238,217,138,0.2)',
-                  backdropFilter: 'blur(4px)',
-                  border: '1px solid rgba(255,255,255,0.15)',
-                  padding: '4px 12px',
-                  borderRadius: '9999px',
-                  textDecoration: 'none',
-                }}
-              >
-                MANAGE →
-              </Link>
-            )}
           </div>
 
           {/* Bottom-left content */}
