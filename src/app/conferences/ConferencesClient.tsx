@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Users, FileText, CreditCard, Zap } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
-import { createAuthClient } from '@/lib/supabase-auth';
+import { supabaseAuthClient } from '@/lib/supabase-auth';
+import ConferenceFocusCards, { FocusCard } from '@/components/ConferenceFocusCards';
 
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
 
@@ -21,6 +23,7 @@ interface FeaturedConf {
   fee_currency: string;
   logo_url: string | null;
   expected_delegates: number;
+  banner_url: string | null;
 }
 
 function formatDateRange(start: string, end: string): string {
@@ -36,129 +39,250 @@ function formatDateRange(start: string, end: string): string {
 // ── Section 1: Featured Conferences ──────────────────────────────────────────
 
 function FeaturedSection() {
-  const [conferences, setConferences] = useState<FeaturedConf[]>([]);
+  const [cards, setCards] = useState<FocusCard[]>([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [searchResults, setSearchResults] = useState<FocusCard[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchFocused, setSearchFocused] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
-    async function fetch() {
-      const supabase = createAuthClient();
-      const { data } = await supabase
+    async function load() {
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const { data: confs } = await supabaseAuthClient
         .from('conferences')
-        .select('id, slug, full_name, acronym, city, country, start_date, end_date, fee_amount, fee_currency, logo_url, expected_delegates')
+        .select('id, slug, full_name, acronym, city, country, start_date, end_date, banner_url')
         .eq('is_public', true)
+        .eq('status', 'published')
         .order('start_date', { ascending: true })
-        .limit(3);
-      setConferences((data as FeaturedConf[]) ?? []);
+        .limit(20);
+      if (!confs || confs.length === 0) { setLoading(false); return; }
+      const confIds = confs.map((c: FocusCard) => c.id);
+      const { data: apps } = await supabaseAuthClient
+        .from('applications')
+        .select('conference_id')
+        .in('conference_id', confIds)
+        .gte('created_at', sevenDaysAgo);
+      const counts: Record<string, number> = {};
+      (apps ?? []).forEach((a: { conference_id: string }) => {
+        counts[a.conference_id] = (counts[a.conference_id] ?? 0) + 1;
+      });
+      const sorted = [...confs].sort((a, b) => (counts[b.id] ?? 0) - (counts[a.id] ?? 0));
+      setCards(sorted.slice(0, 6) as FocusCard[]);
       setLoading(false);
     }
-    fetch();
+    load();
   }, []);
 
-  return (
-    <section style={{ backgroundColor: '#EDE7D8' }} className="px-6 md:px-14 py-20">
-      <div className="flex flex-col md:flex-row gap-12 md:gap-16 items-start">
-        {/* Left column */}
-        <div style={{ maxWidth: '540px' }}>
-          <h2 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, lineHeight: 1.05 }}>
-            <span className="block" style={{ fontSize: 'clamp(36px, 4.5vw, 64px)', color: '#1C1410' }}>Find Your Next</span>
-            <span className="block" style={{ fontSize: 'clamp(36px, 4.5vw, 64px)', color: '#1B3828' }}>Conference.</span>
-          </h2>
-          <p className="mt-4 mb-8 text-base leading-relaxed" style={{ color: '#9A8A78', maxWidth: '440px', fontFamily: "'Outfit', sans-serif" }}>
-            Browse hundreds of MUN conferences worldwide. Apply as a delegate, find your committee, and manage everything through Gavelling.
-          </p>
-          <Link
-            href="/conferences/explore"
-            className="inline-block rounded-2xl py-4 px-8 font-bold text-sm tracking-widest transition-colors focus:outline-none"
-            style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', textDecoration: 'none' }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-          >
-            EXPLORE CONFERENCES AS A DELEGATE →
-          </Link>
-        </div>
+  useEffect(() => {
+    if (!search.trim()) { setSearchResults([]); return; }
+    const timer = setTimeout(async () => {
+      setSearchLoading(true);
+      const { data } = await supabaseAuthClient
+        .from('conferences')
+        .select('id, slug, full_name, acronym, city, country, start_date, end_date, banner_url')
+        .eq('is_public', true)
+        .ilike('full_name', '%' + search.trim() + '%')
+        .limit(5);
+      setSearchResults((data as FocusCard[]) ?? []);
+      setSearchLoading(false);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
 
-        {/* Right column — conference preview cards */}
-        <div className="flex-1 w-full flex flex-col gap-3" style={{ maxWidth: '480px' }}>
-          {loading ? (
-            <>
-              {[0, 1, 2].map(i => (
-                <div key={i} className="animate-pulse rounded-2xl" style={{ height: '80px', backgroundColor: '#DDD4C0' }} />
-              ))}
-            </>
-          ) : conferences.length === 0 ? (
-            <div
-              className="rounded-2xl flex flex-col items-center justify-center py-10 px-6 text-center"
-              style={{ border: '1.5px dashed #DDD4C0', backgroundColor: 'transparent' }}
-            >
-              <p className="text-sm font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-                No conferences listed yet — be the first!
-              </p>
-              <Link
-                href="/conferences/organise"
-                className="text-xs font-bold mt-2 transition-colors"
-                style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif", textDecoration: 'underline' }}
-              >
-                Organise yours →
-              </Link>
-            </div>
-          ) : (
-            conferences.map(conf => (
-              <Link
-                key={conf.id}
-                href={`/conferences/${conf.slug}`}
-                className="block rounded-2xl px-5 py-4 transition-all focus:outline-none"
+  return (
+    <section
+      style={{
+        backgroundColor: '#EDE7D8',
+        position: 'relative',
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+      }}
+    >
+      {/* Grain overlay */}
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          pointerEvents: 'none',
+          zIndex: 1,
+          opacity: 0.07,
+          mixBlendMode: 'multiply',
+          backgroundImage: GRAIN,
+          backgroundRepeat: 'repeat',
+          backgroundSize: '300px',
+        }}
+      />
+
+      {/* Cards background layer */}
+      {!loading && cards.length > 0 && (
+        <div style={{ position: 'absolute', inset: 0, zIndex: 0 }}>
+          <ConferenceFocusCards cards={cards} />
+        </div>
+      )}
+
+      {/* Ivory overlay — keeps text readable over cards */}
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          zIndex: 2,
+          background: 'linear-gradient(to bottom, rgba(237,231,216,0.45) 0%, rgba(237,231,216,0.2) 40%, rgba(237,231,216,0.2) 60%, rgba(237,231,216,0.45) 100%)',
+        }}
+      />
+
+      {/* Content layer */}
+      <div
+        style={{
+          position: 'relative',
+          zIndex: 3,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          minHeight: '100vh',
+          padding: '120px 24px 80px',
+        }}
+      >
+        {/* Title */}
+        <h2 style={{ textAlign: 'center', marginBottom: '40px', margin: '0 0 40px 0' }}>
+          <span
+            style={{
+              display: 'block',
+              fontFamily: "'Outfit', sans-serif",
+              fontWeight: 900,
+              fontSize: 'clamp(52px, 7vw, 96px)',
+              color: '#1C1410',
+              lineHeight: 1.0,
+            }}
+          >
+            Find Your Next
+          </span>
+          <span
+            style={{
+              display: 'block',
+              fontFamily: "'Outfit', sans-serif",
+              fontWeight: 900,
+              fontSize: 'clamp(52px, 7vw, 96px)',
+              color: '#1B3828',
+              lineHeight: 1.0,
+            }}
+          >
+            Conference.
+          </span>
+        </h2>
+
+        {/* Search + button row */}
+        <div
+          style={{
+            display: 'flex',
+            gap: '12px',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '100%',
+            maxWidth: '600px',
+          }}
+        >
+          {/* Search container */}
+          <div style={{ position: 'relative', flex: 1 }}>
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search conferences..."
+              style={{
+                width: '100%',
+                padding: '14px 20px',
+                borderRadius: '14px',
+                border: `1.5px solid ${searchFocused ? '#1B3828' : '#DDD4C0'}`,
+                backgroundColor: 'rgba(250,248,243,0.92)',
+                fontFamily: "'Outfit', sans-serif",
+                fontSize: '14px',
+                color: '#1C1410',
+                outline: 'none',
+                boxShadow: '0 2px 12px rgba(27,56,40,0.06)',
+                boxSizing: 'border-box',
+              }}
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => setSearchFocused(false)}
+            />
+
+            {/* Search results dropdown */}
+            {(searchResults.length > 0 || searchLoading) && (
+              <div
                 style={{
+                  position: 'absolute',
+                  top: 'calc(100% + 8px)',
+                  left: 0,
+                  right: 0,
+                  zIndex: 50,
                   backgroundColor: '#FAF8F3',
                   border: '1px solid #DDD4C0',
-                  textDecoration: 'none',
-                  cursor: 'pointer',
-                }}
-                onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLElement).style.borderColor = '#1B3828';
-                  (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 16px rgba(27,56,40,0.08)';
-                }}
-                onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0';
-                  (e.currentTarget as HTMLElement).style.boxShadow = 'none';
+                  borderRadius: '12px',
+                  boxShadow: '0 8px 24px rgba(27,56,40,0.12)',
+                  overflow: 'hidden',
                 }}
               >
-                {/* Row 1: logo + name + arrow */}
-                <div className="flex items-center gap-3 mb-1">
-                  {conf.logo_url ? (
-                    <img src={conf.logo_url} alt={conf.acronym} style={{ width: '36px', height: '36px', borderRadius: '8px', objectFit: 'cover', flexShrink: 0 }} />
-                  ) : (
-                    <div style={{ width: '36px', height: '36px', borderRadius: '8px', backgroundColor: '#EDE7D8', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <span style={{ fontSize: '10px', fontFamily: "'DM Mono', monospace", color: '#1C1410', fontWeight: 700 }}>
-                        {conf.acronym.slice(0, 3).toUpperCase()}
-                      </span>
-                    </div>
-                  )}
-                  <p className="flex-1 text-sm font-semibold truncate" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-                    {conf.full_name}
-                  </p>
-                  <span style={{ color: '#9A8A78', flexShrink: 0 }}>→</span>
-                </div>
-                {/* Row 2: location + date + fee */}
-                <div className="flex items-center justify-between mt-1">
-                  <span className="text-xs" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                    {conf.city}, {conf.country}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}>
-                      {formatDateRange(conf.start_date, conf.end_date)}
-                    </span>
-                    {conf.fee_amount === 0 ? (
-                      <span className="text-[10px] px-2 py-0.5 rounded-full font-bold" style={{ backgroundColor: 'rgba(61,122,82,0.1)', color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>FREE</span>
-                    ) : (
-                      <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(27,56,40,0.06)', color: '#1C1410', fontFamily: "'DM Mono', monospace" }}>
-                        {conf.fee_currency} {conf.fee_amount.toFixed(0)}
-                      </span>
-                    )}
+                {searchLoading ? (
+                  <div style={{ padding: '12px', fontFamily: "'DM Mono', monospace", fontSize: '11px', color: '#9A8A78' }}>
+                    Searching...
                   </div>
-                </div>
-              </Link>
-            ))
-          )}
+                ) : (
+                  searchResults.map((result, i) => (
+                    <div
+                      key={result.id}
+                      onClick={() => {
+                        router.push(`/conferences/${result.slug}`);
+                        setSearch('');
+                        setSearchResults([]);
+                      }}
+                      style={{
+                        padding: '10px 16px',
+                        cursor: 'pointer',
+                        borderBottom: i < searchResults.length - 1 ? '1px solid rgba(221,212,192,0.5)' : 'none',
+                        backgroundColor: 'transparent',
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                    >
+                      <p style={{ fontFamily: "'Outfit', sans-serif", fontSize: '13px', fontWeight: 700, color: '#1C1410', margin: 0 }}>
+                        {result.full_name}
+                      </p>
+                      <p style={{ fontFamily: "'DM Mono', monospace", fontSize: '10px', color: '#9A8A78', margin: '2px 0 0 0' }}>
+                        {result.city}, {result.country} · {formatDateRange(result.start_date, result.end_date)}
+                      </p>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Explore button */}
+          <Link
+            href="/conferences/explore"
+            style={{
+              backgroundColor: '#1B3828',
+              color: '#EED98A',
+              borderRadius: '14px',
+              padding: '14px 28px',
+              fontFamily: "'Outfit', sans-serif",
+              fontWeight: 800,
+              fontSize: '13px',
+              letterSpacing: '0.08em',
+              textDecoration: 'none',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+              display: 'inline-block',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#2A5A3C'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#1B3828'; }}
+          >
+            EXPLORE →
+          </Link>
         </div>
       </div>
     </section>
