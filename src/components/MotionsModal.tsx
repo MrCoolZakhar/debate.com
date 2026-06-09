@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { Committee, PendingMotion, PendingMotionType } from '@/lib/types';
 import { getCountryByName, getFlagUrl, getCountryDisplayName } from '@/lib/countries';
@@ -536,20 +536,6 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
         >
           {idx + 1}
         </div>
-        {/* Drag handle — top-left, 6-dot grip */}
-        <div
-          className="absolute top-2 left-2 pointer-events-none select-none"
-          style={{ opacity: large ? 0.18 : 0.35 }}
-        >
-          <svg width="12" height="18" viewBox="0 0 12 18" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="3" cy="3"  r="1.5" fill="#1C1410"/>
-            <circle cx="9" cy="3"  r="1.5" fill="#1C1410"/>
-            <circle cx="3" cy="9"  r="1.5" fill="#1C1410"/>
-            <circle cx="9" cy="9"  r="1.5" fill="#1C1410"/>
-            <circle cx="3" cy="15" r="1.5" fill="#1C1410"/>
-            <circle cx="9" cy="15" r="1.5" fill="#1C1410"/>
-          </svg>
-        </div>
         {/* Header: icon + type label + flag in top-right */}
         <div className="flex items-center gap-2">
           <span className={`font-black text-[#1C1410] flex-1 ${large ? 'text-3xl' : 'text-lg'} flex items-center gap-1.5`}>
@@ -656,8 +642,27 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
         </div>
         {/* Right column — queued motions + Raise a Motion button */}
         {/* pt-3 pr-4: give room for the badge that translates outside each card's top-right corner */}
-        <div className="w-72 flex flex-col gap-3 overflow-y-auto pt-3 pr-4">
-          {rest.map((m, i) => renderCard(m, false, i + 1))}
+        <div className="w-72 flex flex-col overflow-y-auto pt-3 pr-4">
+          {rest.map((m, i) => (
+            <React.Fragment key={m.id}>
+              {renderCard(m, false, i + 1)}
+              {i < rest.length - 1 && (
+                <div className="flex items-center gap-2 px-2 pointer-events-none select-none" style={{ opacity: 0.35, height: '20px' }}>
+                  <div className="flex-1 h-px" style={{ backgroundColor: '#C8BAA8' }} />
+                  <svg width="16" height="10" viewBox="0 0 16 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="2"  cy="2" r="1.5" fill="#1C1410"/>
+                    <circle cx="8"  cy="2" r="1.5" fill="#1C1410"/>
+                    <circle cx="14" cy="2" r="1.5" fill="#1C1410"/>
+                    <circle cx="2"  cy="8" r="1.5" fill="#1C1410"/>
+                    <circle cx="8"  cy="8" r="1.5" fill="#1C1410"/>
+                    <circle cx="14" cy="8" r="1.5" fill="#1C1410"/>
+                  </svg>
+                  <div className="flex-1 h-px" style={{ backgroundColor: '#C8BAA8' }} />
+                </div>
+              )}
+              {i === rest.length - 1 && <div style={{ height: '12px' }} />}
+            </React.Fragment>
+          ))}
           {!isViewOnly && (
             <button
               onClick={onBack}
