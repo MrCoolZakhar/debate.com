@@ -790,10 +790,21 @@ function ModeratedCaucusMain({
 
   return (
     <>
-      <div className="relative flex-1 flex flex-col items-center justify-center px-4 py-3 overflow-hidden">
-        {committee.caucus?.currentSpeaker ? (
-          <>
-            {/* Absolute overlay: motion name + topic — does not affect centred layout */}
+      {committee.caucus?.currentSpeaker ? (
+        <>
+          {/* ZONE 1 — Queue locked at top */}
+          {queue.length > 0 && (
+            <div className="shrink-0">
+              <DraggableSpeakersQueue
+                list={queue}
+                onReorder={handleCaucusReorderQueue}
+                onRemove={handleCaucusRemoveFromQueue}
+                isRoomOrderTdT={isRoomOrderTdT}
+              />
+            </div>
+          )}
+          {/* ZONE 2 — Flag + name + timer + progress: compresses as viewport shrinks */}
+          <div className="relative flex-1 min-h-0 flex flex-col items-center justify-center px-4 py-2 overflow-hidden">
             <div className="absolute left-0 top-1/2 -translate-y-1/2 flex flex-col gap-1.5 max-w-[160px] pl-4 pointer-events-none select-none">
               <span className="text-[#1C1410] font-black text-lg leading-tight uppercase">
                 {committee.caucus?.motionLabel ?? caucusTitle}
@@ -809,6 +820,82 @@ function ModeratedCaucusMain({
                 </span>
               )}
             </div>
+            {isRoomOrderTdT ? (
+              <div className="relative w-36 h-36 rounded-full bg-[#DDD4C0] shrink-0 flex items-center justify-center">
+                <span className="text-6xl font-black" style={{ color: '#1B3828' }}>{(() => {
+                  const match = committee.caucus!.currentSpeaker?.match(/(\d+)$/);
+                  return match ? match[1] : '1';
+                })()}</span>
+              </div>
+            ) : (
+              <div style={{ width: 'clamp(120px, 20vh, 220px)', height: 'clamp(80px, 13.3vh, 147px)', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 0 0 2.5px rgba(28,20,16,0.22)', flexShrink: 0, position: 'relative' }}>
+                {(() => {
+                  const f = getCountryByName(committee.caucus!.currentSpeaker!);
+                  return f
+                    ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                    : <Emoji size="5rem" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>🌐</Emoji>;
+                })()}
+              </div>
+            )}
+            <h1 className="font-black text-[#1C1410] text-center" style={{ fontSize: 'clamp(1.2rem, 3.5vh, 2.5rem)', margin: 'clamp(4px,1vh,10px) 0' }}>{getCountryDisplayName(committee.caucus!.currentSpeaker!, language)}</h1>
+            <div className={`font-black font-mono tabular-nums ${speakerTimeRemaining <= 10 ? 'text-[#B8844A]' : 'text-[#1C1410]'}`} style={{ fontSize: 'clamp(2.5rem, 10vh, 6rem)', margin: 'clamp(4px,1vh,8px) 0' }}>
+              {formatTime(speakerTimeRemaining)}
+              {extraTimeAdded && <span className="text-base ml-2 font-normal text-[#1C1410]">{t('gsl_plus_time')}</span>}
+            </div>
+            <div className="w-full max-w-2xl h-2 bg-[#DDD4C0] rounded-full overflow-hidden" style={{ marginBottom: 'clamp(4px,0.5vh,8px)' }}>
+              <div className={`h-full rounded-full transition-all ${caucusProgress > 50 ? 'bg-[#B6871F]' : caucusProgress > 20 ? 'bg-[#B6871F]' : 'bg-red-500'}`} style={{ width: `${caucusProgress}%` }} />
+            </div>
+          </div>
+          {/* ZONE 3 — Action buttons locked just above bottom bar */}
+          {!sessionEnded && !isViewOnly && (
+            <div className="shrink-0 flex gap-2 w-full max-w-sm flex-wrap justify-center px-4 pb-3 mx-auto">
+              <button onClick={handleRestartTime} title="Restart speaker time"
+                className="px-3 py-3 bg-[#DDD4C0] hover:bg-[#C8BAA8] border border-[#C8BAA8] hover:border-[#1B3828] rounded-xl font-bold text-sm text-[#6A5A4A] transition-colors">
+                ↺
+              </button>
+              <button onClick={handleToggleTimer}
+                className={`flex-1 py-3 px-6 rounded-xl font-bold text-base transition-colors focus:outline-none ${timerRunning ? 'bg-[#B6871F] hover:bg-[#B6871F]/80 text-white' : 'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'}`}>
+                {timerRunning ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <span className="flex gap-[3px] items-center">
+                      <span className="w-[3px] h-[13px] rounded-sm bg-current inline-block" />
+                      <span className="w-[3px] h-[13px] rounded-sm bg-current inline-block" />
+                    </span>
+                    <span>{t('gsl_pause')}</span>
+                  </span>
+                ) : t('gsl_start')}
+              </button>
+              <button onClick={handleNextCaucusSpeaker} disabled={queue.length === 0}
+                className="flex-1 bg-[#DDD4C0] hover:bg-[#C8BAA8] disabled:opacity-40 text-[#1C1410] py-3 px-4 rounded-xl font-bold transition-colors focus:outline-none whitespace-nowrap" style={{ fontSize: 'clamp(11px, 1.2vw, 14px)' }}>
+                {t('gsl_next')}
+              </button>
+              <button onClick={() => setActivePopover(activePopover === 'extraTime' ? null : 'extraTime')} title="Add time"
+                className="px-2 py-2 border rounded-xl font-black uppercase tracking-wide transition-colors bg-[#EDE7D8] hover:bg-[#DDD4C0] border-[#DDD4C0] text-[#1B3828] leading-tight text-center" style={{ fontSize: '8px', minWidth: '52px' }}>
+                {t('gsl_add_time').split('\n')[0]}<br />{t('gsl_add_time').split('\n')[1]}
+              </button>
+              {!isTdT && (
+                <button onClick={() => setActivePopover(activePopover === 'rightToReply' ? null : 'rightToReply')}
+                  className="px-3 py-3 border rounded-xl font-black text-xs uppercase tracking-wide transition-colors bg-[#B8844A]/15 hover:bg-[#B8844A]/25 border-[#B8844A]/30 text-[#B8844A]">
+                  {t('gsl_right_to_reply')}
+                </button>
+              )}
+            </div>
+          )}
+        </>
+      ) : (
+        /* No-speaker branch */
+        <div className="relative flex-1 flex flex-col items-center justify-center px-4 py-3 overflow-hidden">
+          <div className="absolute left-0 top-1/2 -translate-y-1/2 flex flex-col gap-1.5 max-w-[160px] pl-4 pointer-events-none select-none">
+            <span className="text-[#1C1410] font-black text-lg leading-tight uppercase">
+              {committee.caucus?.motionLabel ?? caucusTitle}
+            </span>
+            {committee.caucus?.purpose && (
+              <span className="text-[#1C1410]/70 text-sm font-medium leading-snug">
+                {committee.caucus.purpose.replace(/^Tour de Table\s*[\(\-]?\s*/i, '').replace(/^\(/, '').replace(/\)$/, '') || committee.caucus.purpose}
+              </span>
+            )}
+          </div>
+          <div className="flex-1 flex flex-col items-center justify-center w-full text-center">
             {queue.length > 0 && (
               <DraggableSpeakersQueue
                 list={queue}
@@ -817,104 +904,17 @@ function ModeratedCaucusMain({
                 isRoomOrderTdT={isRoomOrderTdT}
               />
             )}
-            <div className="flex flex-col items-center">
-              {isRoomOrderTdT ? (
-                <div className="relative w-36 h-36 rounded-full bg-[#DDD4C0] shrink-0 flex items-center justify-center">
-                  <span className="text-6xl font-black" style={{ color: '#1B3828' }}>{(() => {
-                    const match = committee.caucus!.currentSpeaker?.match(/(\d+)$/);
-                    return match ? match[1] : '1';
-                  })()}</span>
-                </div>
-              ) : (
-                <div style={{ width: '168px', height: '112px', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 0 0 2.5px rgba(28,20,16,0.22)', flexShrink: 0, position: 'relative' }}>
-                  {(() => {
-                    const f = getCountryByName(committee.caucus!.currentSpeaker!);
-                    return f
-                      ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                      : <Emoji size="5rem" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>🌐</Emoji>;
-                  })()}
-                </div>
-              )}
-              <h1 className="text-5xl font-black text-[#1C1410] mt-2 mb-1 text-center">{getCountryDisplayName(committee.caucus!.currentSpeaker!, language)}</h1>
-              <div className={`text-8xl font-black font-mono mt-2 mb-3 tabular-nums ${
-                speakerTimeRemaining <= 10 ? 'text-[#B8844A]' : 'text-[#1C1410]'
-              }`}>
-                {formatTime(speakerTimeRemaining)}
-                {extraTimeAdded && <span className="text-base ml-2 font-normal text-[#1C1410]">{t('gsl_plus_time')}</span>}
-              </div>
-              <div className="w-full max-w-2xl h-2 bg-[#DDD4C0] rounded-full overflow-hidden mb-3">
-                <div className={`h-full rounded-full transition-all ${caucusProgress > 50 ? 'bg-[#B6871F]' : caucusProgress > 20 ? 'bg-[#B6871F]' : 'bg-red-500'}`} style={{ width: `${caucusProgress}%` }} />
-              </div>
-            </div>
-            {!sessionEnded && !isViewOnly && (
-              <div className="flex gap-2 w-full max-w-sm mt-1 flex-wrap justify-center">
-                <button onClick={handleRestartTime} title="Restart speaker time"
-                  className="px-3 py-3 bg-[#DDD4C0] hover:bg-[#C8BAA8] border border-[#C8BAA8] hover:border-[#1B3828] rounded-xl font-bold text-sm text-[#6A5A4A] transition-colors">
-                  ↺
-                </button>
-                <button onClick={handleToggleTimer}
-                  className={`flex-1 py-3 px-6 rounded-xl font-bold text-base transition-colors focus:outline-none ${timerRunning ? 'bg-[#B6871F] hover:bg-[#B6871F]/80 text-white' : 'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'}`}>
-                  {timerRunning ? (
-  <span className="flex items-center justify-center gap-2">
-    <span className="flex gap-[3px] items-center">
-      <span className="w-[3px] h-[13px] rounded-sm bg-current inline-block" />
-      <span className="w-[3px] h-[13px] rounded-sm bg-current inline-block" />
-    </span>
-    <span>{t('gsl_pause')}</span>
-  </span>
-) : t('gsl_start')}
-                </button>
-                <button onClick={handleNextCaucusSpeaker} disabled={queue.length === 0}
-                  className="flex-1 bg-[#DDD4C0] hover:bg-[#C8BAA8] disabled:opacity-40 text-[#1C1410] py-3 px-4 rounded-xl font-bold transition-colors focus:outline-none whitespace-nowrap" style={{ fontSize: 'clamp(11px, 1.2vw, 14px)' }}>
-                  {t('gsl_next')}
-                </button>
-                <button onClick={() => setActivePopover(activePopover === 'extraTime' ? null : 'extraTime')} title="Add time"
-                  className="px-2 py-2 border rounded-xl font-black uppercase tracking-wide transition-colors bg-[#EDE7D8] hover:bg-[#DDD4C0] border-[#DDD4C0] text-[#1B3828] leading-tight text-center" style={{ fontSize: '8px', minWidth: '52px' }}>
-                  {t('gsl_add_time').split('\n')[0]}<br />{t('gsl_add_time').split('\n')[1]}
-                </button>
-                {!isTdT && (
-                  <button onClick={() => setActivePopover(activePopover === 'rightToReply' ? null : 'rightToReply')}
-                    className="px-3 py-3 border rounded-xl font-black text-xs uppercase tracking-wide transition-colors bg-[#B8844A]/15 hover:bg-[#B8844A]/25 border-[#B8844A]/30 text-[#B8844A]">
-                    {t('gsl_right_to_reply')}
-                  </button>
-                )}
-              </div>
+            <h2 className="text-5xl font-black mb-3 text-center" style={{ color: '#1B3828' }}>{t('gsl_no_current_speaker')}</h2>
+            <p className="mb-4 text-center text-sm" style={{ color: '#9A8A78' }}>{t('gsl_add_call_first')}</p>
+            {!sessionEnded && (
+              <button onClick={handleNextCaucusSpeaker} disabled={queue.length === 0}
+                className="bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white px-8 py-3 rounded-xl font-bold transition-colors focus:outline-none">
+                {t('gsl_call_first')}
+              </button>
             )}
-          </>
-        ) : (
-          <>
-            {/* Absolute overlay: motion name + topic — does not affect centred layout */}
-            <div className="absolute left-0 top-1/2 -translate-y-1/2 flex flex-col gap-1.5 max-w-[160px] pl-4 pointer-events-none select-none">
-              <span className="text-[#1C1410] font-black text-lg leading-tight uppercase">
-                {committee.caucus?.motionLabel ?? caucusTitle}
-              </span>
-              {committee.caucus?.purpose && (
-                <span className="text-[#1C1410]/70 text-sm font-medium leading-snug">
-                  {committee.caucus.purpose.replace(/^Tour de Table\s*[\(\-]?\s*/i, '').replace(/^\(/, '').replace(/\)$/, '') || committee.caucus.purpose}
-                </span>
-              )}
-            </div>
-            <div className="flex-1 flex flex-col items-center justify-center w-full text-center">
-              {queue.length > 0 && (
-                <DraggableSpeakersQueue
-                  list={queue}
-                  onReorder={handleCaucusReorderQueue}
-                  onRemove={handleCaucusRemoveFromQueue}
-                  isRoomOrderTdT={isRoomOrderTdT}
-                />
-              )}
-              <h2 className="text-5xl font-black mb-3 text-center" style={{ color: '#1B3828' }}>{t('gsl_no_current_speaker')}</h2>
-              <p className="mb-4 text-center text-sm" style={{ color: '#9A8A78' }}>{t('gsl_add_call_first')}</p>
-              {!sessionEnded && (
-                <button onClick={handleNextCaucusSpeaker} disabled={queue.length === 0}
-                  className="bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white px-8 py-3 rounded-xl font-bold transition-colors focus:outline-none">
-                  {t('gsl_call_first')}
-                </button>
-              )}
-            </div>
-          </>
-        )}
-      </div>
+          </div>
+        </div>
+      )}
 
       {!sessionEnded && (
         <div className="border-t border-[#DDD4C0] px-6 py-2" style={{ backgroundColor: '#F6F1E9' }}>
@@ -2294,12 +2294,12 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
 
 {committee.phase === 'speakers-list' && (
                 <>
-                {/* Scroll container: plain div (NOT flex) so overflow-y-auto actually triggers */}
-                <div className="flex-1 overflow-y-auto" style={{ height: 0, minHeight: 0, scrollbarWidth: 'none' }}>
-                  {/* Inner layout wrapper */}
-                  <div className="flex flex-col items-center px-4 py-4">
-                    {committee.currentSpeaker ? (
-                      <>
+                {/* Three-zone flex column: queue locked top, centre shrinks, buttons locked above bottom bar */}
+                <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                  {committee.currentSpeaker ? (
+                    <>
+                      {/* ZONE 1 — Queue locked at top */}
+                      <div className="shrink-0">
                         {(() => {
                           const gslDisplayList = [
                             { delegateId: committee.currentSpeaker.delegateId, country: committee.currentSpeaker.country },
@@ -2314,7 +2314,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                             />
                           );
                         })()}
-                        <div style={{ width: 'clamp(80px, 15vh, 168px)', height: 'clamp(54px, 10vh, 112px)', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 0 0 2.5px rgba(28,20,16,0.22)', flexShrink: 0, position: 'relative', marginTop: 'clamp(4px, 1vh, 12px)' }}>
+                      </div>
+                      {/* ZONE 2 — Flag + name + timer + progress: compresses as viewport shrinks */}
+                      <div className="flex-1 min-h-0 flex flex-col items-center justify-center overflow-hidden px-4 py-1">
+                        <div style={{ width: 'clamp(120px, 20vh, 220px)', height: 'clamp(80px, 13.3vh, 147px)', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 0 0 2.5px rgba(28,20,16,0.22)', flexShrink: 0, position: 'relative' }}>
                           {(() => {
                             const f = getCountryByName(committee.currentSpeaker.country);
                             return f
@@ -2322,30 +2325,27 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                               : <Emoji size="5rem" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>🌐</Emoji>;
                           })()}
                         </div>
-                        <h1 className="font-black text-[#1C1410] text-center" style={{ fontSize: 'clamp(1.4rem, 4vh, 3rem)', margin: 'clamp(4px,1vh,10px) 0' }}>{getCountryDisplayName(committee.currentSpeaker.country, language)}</h1>
-                        <div data-tutorial="timer" className={`font-black font-mono tabular-nums ${
-                          speakerTimeRemaining <= 10 ? 'text-[#B8844A]' : 'text-[#1C1410]'
-                        }`} style={{ fontSize: 'clamp(3rem, 11vh, 6rem)', marginBottom: 'clamp(4px,1.5vh,16px)' }}>
+                        <h1 className="font-black text-[#1C1410] text-center" style={{ fontSize: 'clamp(1.2rem, 3.5vh, 2.5rem)', margin: 'clamp(4px,1vh,10px) 0' }}>{getCountryDisplayName(committee.currentSpeaker.country, language)}</h1>
+                        <div data-tutorial="timer" className={`font-black font-mono tabular-nums ${speakerTimeRemaining <= 10 ? 'text-[#B8844A]' : 'text-[#1C1410]'}`} style={{ fontSize: 'clamp(2.5rem, 10vh, 6rem)', marginBottom: 'clamp(4px,1vh,12px)' }}>
                           {formatTime(speakerTimeRemaining)}
                           {extraTimeAdded && <span className="text-base ml-2 font-normal text-[#1C1410]">{t('gsl_plus_time')}</span>}
                         </div>
-                        <div className="w-full max-w-2xl h-2 bg-[#DDD4C0] rounded-full overflow-hidden" style={{ marginBottom: 'clamp(4px,1vh,8px)' }}>
+                        <div className="w-full max-w-2xl h-2 bg-[#DDD4C0] rounded-full overflow-hidden" style={{ marginBottom: 'clamp(4px,0.5vh,8px)' }}>
                           <div className={`h-full rounded-full transition-all ${progress > 20 ? 'bg-[#B6871F]' : 'bg-[#B8844A]'}`} style={{ width: `${progress}%` }} />
                         </div>
                         {gslRequireNextSpeaker && isLastGSLSpeaker && (
-                          <div className="mb-2 px-4 py-2 bg-[#B6871F]/10 border border-[#B6871F]/30 rounded-lg text-[#B6871F] text-xs text-center">
+                          <div className="mb-1 px-4 py-1.5 bg-[#B6871F]/10 border border-[#B6871F]/30 rounded-lg text-[#B6871F] text-xs text-center">
                             {t('gsl_never_empty_warning')}
                           </div>
                         )}
-                        {!sessionEnded && !isViewOnly && (
-                        <div className="flex gap-2 w-full max-w-sm flex-wrap justify-center" style={{ marginTop: 'clamp(4px,1vh,12px)' }}>
-                          {/* Restart button */}
-                          <button onClick={handleRestartTime}
-                            title="Restart time"
+                      </div>
+                      {/* ZONE 3 — Action buttons locked just above bottom bar */}
+                      {!sessionEnded && !isViewOnly && (
+                        <div className="shrink-0 flex gap-2 w-full max-w-sm flex-wrap justify-center px-4 pb-3 mx-auto">
+                          <button onClick={handleRestartTime} title="Restart time"
                             className="px-3 py-3 bg-[#DDD4C0] hover:bg-[#C8BAA8] border border-[#C8BAA8] hover:border-[#1B3828] rounded-xl font-bold text-sm text-[#6A5A4A] transition-colors">
                             ↺
                           </button>
-                          {/* Start/Pause */}
                           <button onClick={handleToggleTimer}
                             data-tutorial="timer-toggle"
                             disabled={gslRequireNextSpeaker && isLastGSLSpeaker}
@@ -2368,7 +2368,6 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                             className="flex-1 bg-[#DDD4C0] hover:bg-[#C8BAA8] disabled:opacity-40 text-[#1C1410] py-3 px-4 rounded-xl font-bold transition-colors focus:outline-none whitespace-nowrap" style={{ fontSize: 'clamp(11px, 1.2vw, 14px)' }}>
                             {t('gsl_next')}
                           </button>
-                          {/* Add Time button */}
                           <button
                             onClick={() => setActivePopover(activePopover === 'extraTime' ? null : 'extraTime')}
                             data-tutorial="add-time-button"
@@ -2376,7 +2375,6 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                             className="px-2 py-2 border rounded-xl font-black uppercase tracking-wide transition-colors bg-[#EDE7D8] hover:bg-[#DDD4C0] border-[#DDD4C0] text-[#1B3828] leading-tight text-center" style={{ fontSize: '8px', minWidth: '52px' }}>
                             {t('gsl_add_time').split('\n')[0]}<br />{t('gsl_add_time').split('\n')[1]}
                           </button>
-                          {/* Right of Reply button */}
                           <button
                             onClick={() => setActivePopover(activePopover === 'rightToReply' ? null : 'rightToReply')}
                             data-tutorial="rtr-button"
@@ -2384,36 +2382,34 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                             {t('gsl_right_to_reply')}
                           </button>
                         </div>
-                        )}
-                      </>
-                    ) : (
-                      <>
-                        <div className="flex-1 flex flex-col items-center justify-center w-full text-center">
-                          {committee.speakersList.length > 0 && (
-                            <DraggableSpeakersQueue
-                              list={committee.speakersList}
-                              onReorder={isViewOnly ? undefined : handleReorderSpeakersList}
-                              onRemove={isViewOnly ? undefined : handleRemoveFromSpeakersList}
-                            />
-                          )}
-                          <h2 className="text-5xl font-black mb-3 text-center" style={{ color: '#1B3828' }}>{t('gsl_no_current_speaker')}</h2>
-                          <p className="mb-4 text-center text-sm" style={{ color: '#9A8A78' }}>{t('gsl_add_call_first')}</p>
-                          {committee.speakersList.length === 1 && (
-                            <div className="mb-4 px-4 py-2 bg-[#B6871F]/10 border border-[#B6871F]/30 rounded-lg text-[#B6871F] text-xs text-center">
-                              {t('gsl_one_delegate_warning')}
-                            </div>
-                          )}
-                          {!sessionEnded && !isViewOnly && (
-                            <button data-tutorial="call-first-speaker" onClick={handleNextSpeaker} disabled={committee.speakersList.length < 2}
-                              className="bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white px-8 py-3 rounded-xl font-bold transition-colors focus:outline-none">
-                              {t('gsl_call_first')}
-                            </button>
-                          )}
+                      )}
+                    </>
+                  ) : (
+                    /* No-current-speaker state — simple centred layout */
+                    <div className="flex-1 flex flex-col items-center justify-center w-full text-center px-4">
+                      {committee.speakersList.length > 0 && (
+                        <DraggableSpeakersQueue
+                          list={committee.speakersList}
+                          onReorder={isViewOnly ? undefined : handleReorderSpeakersList}
+                          onRemove={isViewOnly ? undefined : handleRemoveFromSpeakersList}
+                        />
+                      )}
+                      <h2 className="text-5xl font-black mb-3 text-center" style={{ color: '#1B3828' }}>{t('gsl_no_current_speaker')}</h2>
+                      <p className="mb-4 text-center text-sm" style={{ color: '#9A8A78' }}>{t('gsl_add_call_first')}</p>
+                      {committee.speakersList.length === 1 && (
+                        <div className="mb-4 px-4 py-2 bg-[#B6871F]/10 border border-[#B6871F]/30 rounded-lg text-[#B6871F] text-xs text-center">
+                          {t('gsl_one_delegate_warning')}
                         </div>
-                      </>
-                    )}
-                  </div>
-                </div>{/* end scroll container */}
+                      )}
+                      {!sessionEnded && !isViewOnly && (
+                        <button data-tutorial="call-first-speaker" onClick={handleNextSpeaker} disabled={committee.speakersList.length < 2}
+                          className="bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white px-8 py-3 rounded-xl font-bold transition-colors focus:outline-none">
+                          {t('gsl_call_first')}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
                 {!sessionEnded && (
                 <div className="border-t border-[#DDD4C0] px-6 py-2 shrink-0" style={{ backgroundColor: '#F6F1E9' }}>
                   {!isViewOnly && <div className="flex items-center gap-3 mb-2">
