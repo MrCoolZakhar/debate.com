@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { AlertTriangle, Camera, Globe, Music, MessageCircle } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import { useAuth } from '@/components/AuthProvider';
-import { createAuthClient } from '@/lib/supabase-auth';
+import { createClient } from '@supabase/supabase-js';
 import { generateSlug } from '@/lib/utils';
 
 // ── Input / label helpers ──────────────────────────────────────────────────
@@ -165,6 +165,14 @@ export default function NewConferencePage() {
   const router = useRouter();
   const { user, session, profile, loading } = useAuth();
 
+  function getAuthedClient() {
+    return createClient(
+      'https://luruhkwrgisytejswlas.supabase.co',
+      'sb_publishable_k7NdduzaXK358z8ew18ZKA_vBSieDlV',
+      session ? { global: { headers: { Authorization: 'Bearer ' + session.access_token } } } : {}
+    );
+  }
+
   // Auth gate
   useEffect(() => {
     if (!loading && !user) {
@@ -262,18 +270,7 @@ export default function NewConferencePage() {
     setError('');
 
     try {
-      const { createClient } = await import('@supabase/supabase-js');
-      const supabase = createClient(
-        'https://luruhkwrgisytejswlas.supabase.co',
-        'sb_publishable_k7NdduzaXK358z8ew18ZKA_vBSieDlV',
-        {
-          global: {
-            headers: {
-              Authorization: 'Bearer ' + session.access_token,
-            },
-          },
-        }
-      );
+      const supabase = getAuthedClient();
 
       const baseSlug = generateSlug(fullName);
       const slug = baseSlug + '-' + Math.random().toString(36).substring(2, 7);
@@ -331,7 +328,7 @@ export default function NewConferencePage() {
     setBannerUploading(true);
     const ext = file.name.split('.').pop();
     const path = 'banners/' + Date.now() + '-' + Math.random().toString(36).substring(2, 7) + '.' + ext;
-    const client = createAuthClient();
+    const client = getAuthedClient();
     const { error } = await client.storage
       .from('conference-assets')
       .upload(path, file, { contentType: file.type, upsert: false });
