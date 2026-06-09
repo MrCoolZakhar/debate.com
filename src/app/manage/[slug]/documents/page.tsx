@@ -5,7 +5,7 @@ import { FileText, Upload, X, Check } from 'lucide-react';
 import Link from 'next/link';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
-import { createAuthClient } from '@/lib/supabase-auth';
+import { getAuthedClient } from '@/lib/supabase-auth';
 import { getFlagUrl } from '@/lib/countries';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -103,6 +103,7 @@ function UploadStudyGuideModal({
   onClose: () => void;
   onUploaded: () => void;
 }) {
+  const { session } = useAuth();
   const [title, setTitle] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState('');
@@ -123,7 +124,8 @@ function UploadStudyGuideModal({
     if (!selectedFile || !title.trim()) return;
     setUploading(true);
     setUploadError('');
-    const supabase = createAuthClient();
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
     const path = `${conferenceId}/${selectedCommitteeId}/${Date.now()}_${selectedFile.name}`;
     const { error: storageError } = await supabase.storage
       .from('study-guides')
@@ -230,12 +232,14 @@ function SetDeadlineModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const { session } = useAuth();
   const [value, setValue] = useState(currentDeadline ? currentDeadline.slice(0, 16) : '');
   const [saving, setSaving] = useState(false);
 
   async function handleSave() {
     setSaving(true);
-    const supabase = createAuthClient();
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
     await supabase.from('conference_committees').update({ position_paper_deadline: value || null }).eq('id', selectedCommitteeId);
     setSaving(false);
     onSaved();
@@ -275,7 +279,7 @@ function SetDeadlineModal({
 
 export default function DocumentsPage() {
   const { conference } = useManage();
-  const { user } = useAuth();
+  const { user, session } = useAuth();
 
   const [committees, setCommittees] = useState<CommitteeTab[]>([]);
   const [selectedCommitteeId, setSelectedCommitteeId] = useState<string | null>(null);
@@ -293,7 +297,8 @@ export default function DocumentsPage() {
 
   const loadCommittees = useCallback(async () => {
     if (!conference) return [];
-    const supabase = createAuthClient();
+    if (!session) return [];
+    const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase
       .from('conference_committees')
       .select('id, name, abbreviation, position_paper_deadline, notification_email')
@@ -316,7 +321,8 @@ export default function DocumentsPage() {
 
   const loadStudyGuides = useCallback(async () => {
     if (!selectedCommitteeId) return;
-    const supabase = createAuthClient();
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase
       .from('study_guides')
       .select('id, title, file_url, file_name, file_size_bytes, is_published, published_at, created_at')
@@ -327,7 +333,8 @@ export default function DocumentsPage() {
 
   const loadPositionPapers = useCallback(async () => {
     if (!selectedCommitteeId) return;
-    const supabase = createAuthClient();
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase
       .from('position_papers')
       .select(`
@@ -351,7 +358,8 @@ export default function DocumentsPage() {
   // ── Actions ──────────────────────────────────────────────────────────────────
 
   async function handlePublishGuide(guideId: string, publish: boolean) {
-    const supabase = createAuthClient();
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
     await supabase.from('study_guides').update({
       is_published: publish,
       published_at: publish ? new Date().toISOString() : null,
@@ -360,14 +368,16 @@ export default function DocumentsPage() {
   }
 
   async function handleDeleteGuide(guideId: string) {
-    const supabase = createAuthClient();
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
     await supabase.from('study_guides').delete().eq('id', guideId);
     await loadStudyGuides();
   }
 
   async function updatePaperStatus(paperId: string, status: string) {
     if (!user) return;
-    const supabase = createAuthClient();
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
     await supabase.from('position_papers').update({
       status,
       reviewed_by: user.id,
@@ -378,7 +388,8 @@ export default function DocumentsPage() {
 
   async function saveFeedback(paperId: string) {
     if (!user) return;
-    const supabase = createAuthClient();
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
     await supabase.from('position_papers').update({
       chair_feedback: feedbackTexts[paperId] ?? '',
       reviewed_by: user.id,

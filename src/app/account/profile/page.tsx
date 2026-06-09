@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
-import { supabaseAuthClient } from '@/lib/supabase-auth';
+import { getAuthedClient } from '@/lib/supabase-auth';
 import { UN_COUNTRIES } from '@/lib/countries';
 
 const EXPERIENCE_LEVELS = [
@@ -28,7 +28,7 @@ type NotifFields = {
 };
 
 export default function ProfilePage() {
-  const { user, profile, signOut } = useAuth();
+  const { user, session, profile, signOut } = useAuth();
   const router = useRouter();
 
   const [displayName, setDisplayName]       = useState('');
@@ -46,7 +46,8 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (!user) return;
-    const supabase = supabaseAuthClient;
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
 
     supabase
       .from('profiles')
@@ -72,7 +73,8 @@ export default function ProfilePage() {
   async function handleSave() {
     if (!user) return;
     setSaving(true);
-    const supabase = supabaseAuthClient;
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
     await supabase
       .from('profiles')
       .update({
@@ -88,7 +90,8 @@ export default function ProfilePage() {
 
   function handleToggle(field: keyof NotifFields, value: boolean) {
     setNotifications((prev) => ({ ...prev, [field]: value }));
-    const supabase = supabaseAuthClient;
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
     supabase.from('profiles').update({ [field]: value }).eq('id', user!.id);
   }
 

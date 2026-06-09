@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { X, Check } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
-import { createAuthClient } from '@/lib/supabase-auth';
+import { getAuthedClient } from '@/lib/supabase-auth';
+import { useAuth } from '@/components/AuthProvider';
 import { getFlagUrl } from '@/lib/countries';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -100,6 +101,7 @@ interface AssignModalProps {
 }
 
 function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedApp, onClose, onAssigned }: AssignModalProps) {
+  const { session } = useAuth();
   const [selectedApp, setSelectedApp] = useState<AcceptedApp | null>(preSelectedApp ?? null);
   const [selectedSlot, setSelectedSlot] = useState<SlotRow | null>(preSelectedSlot ?? null);
   const [sendEmail, setSendEmail] = useState(false);
@@ -119,7 +121,8 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedApp, o
     if (!userId) { setError('Applicant profile not found.'); return; }
     setSaving(true);
     setError('');
-    const supabase = createAuthClient();
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
 
     const { error: insertErr } = await supabase.from('conference_allocations').insert({
       conference_committee_id: committee.id,
@@ -312,6 +315,7 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedApp, o
 
 export default function AssignmentPage() {
   const { conference } = useManage();
+  const { session } = useAuth();
   const [accepted, setAccepted] = useState<AcceptedApp[]>([]);
   const [committees, setCommittees] = useState<CommitteeData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -326,7 +330,8 @@ export default function AssignmentPage() {
   const loadData = useCallback(async () => {
     if (!conference) return;
     setLoading(true);
-    const supabase = createAuthClient();
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
 
     const [appRes, commRes] = await Promise.all([
       supabase
@@ -370,7 +375,8 @@ export default function AssignmentPage() {
   async function handleSendAllAllocations() {
     if (!committees.length) return;
     setSendingAll(true);
-    const supabase = createAuthClient();
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
     const committeeIds = committees.map(c => c.id);
     await supabase
       .from('conference_allocations')
@@ -382,7 +388,8 @@ export default function AssignmentPage() {
   }
 
   async function handleRemoveAllocation(allocation: AllocationRow, committeeId: string) {
-    const supabase = createAuthClient();
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
     await supabase.from('conference_allocations').delete().eq('id', allocation.id);
     if (allocation.application_id) {
       await supabase.from('applications').update({

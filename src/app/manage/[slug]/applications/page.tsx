@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { Building2, Download } from 'lucide-react';
 import Link from 'next/link';
 import { useManage } from '@/app/manage/[slug]/layout';
-import { createAuthClient } from '@/lib/supabase-auth';
+import { getAuthedClient } from '@/lib/supabase-auth';
+import { useAuth } from '@/components/AuthProvider';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -105,6 +106,7 @@ function FilterPill({ label, active, onClick }: { label: string; active: boolean
 
 export default function ApplicationsPage() {
   const { conference } = useManage();
+  const { session } = useAuth();
   const [applications, setApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
@@ -116,7 +118,8 @@ export default function ApplicationsPage() {
   const loadApplications = useCallback(async () => {
     if (!conference) return;
     setLoading(true);
-    const supabase = createAuthClient();
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase
       .from('applications')
       .select(`
@@ -140,13 +143,15 @@ export default function ApplicationsPage() {
   useEffect(() => { loadApplications(); }, [loadApplications]);
 
   async function handleAccept(appId: string) {
-    const supabase = createAuthClient();
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
     await supabase.from('applications').update({ status: 'accepted' }).eq('id', appId);
     await loadApplications();
   }
 
   async function handleReject(appId: string) {
-    const supabase = createAuthClient();
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
     await supabase.from('applications').update({ status: 'rejected', organizer_note: rejectNote.trim() || null }).eq('id', appId);
     setRejectingId(null);
     setRejectNote('');
@@ -154,7 +159,8 @@ export default function ApplicationsPage() {
   }
 
   async function handleReinstate(appId: string) {
-    const supabase = createAuthClient();
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
     await supabase.from('applications').update({ status: 'submitted', organizer_note: null }).eq('id', appId);
     await loadApplications();
   }

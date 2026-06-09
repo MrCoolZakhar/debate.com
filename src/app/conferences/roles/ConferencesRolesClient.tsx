@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Search, Briefcase, X } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
-import { createAuthClient } from '@/lib/supabase-auth';
+import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
 import { getFlagUrl, getCountryByName } from '@/lib/countries';
 
@@ -538,7 +538,7 @@ function Footer() {
 
 export default function ConferencesRolesClient() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, session } = useAuth();
 
   const [postings, setPostings] = useState<JobPosting[]>([]);
   const [myApplications, setMyApplications] = useState<MyApplication[]>([]);
@@ -552,7 +552,8 @@ export default function ConferencesRolesClient() {
 
   const loadMyApplications = useCallback(async () => {
     if (!user) return;
-    const supabase = createAuthClient();
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase
       .from('job_applications')
       .select('job_posting_id, status')
@@ -563,7 +564,7 @@ export default function ConferencesRolesClient() {
   useEffect(() => {
     async function fetchAll() {
       setLoading(true);
-      const supabase = createAuthClient();
+      const supabase = getAuthedClient('');
 
       const { data: postingsData } = await supabase
         .from('job_postings')
@@ -612,7 +613,8 @@ export default function ConferencesRolesClient() {
   async function handleApply(coverNote: string) {
     if (!user || !selectedPosting) return;
     setApplying(true);
-    const supabase = createAuthClient();
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
     await supabase.from('job_applications').insert({
       job_posting_id: selectedPosting.id,
       user_id: user.id,

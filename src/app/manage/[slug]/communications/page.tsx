@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Mail, AlertTriangle, Link as LinkIcon } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
-import { createAuthClient } from '@/lib/supabase-auth';
+import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -125,7 +125,7 @@ function ToolbarBtn({ onClick, title, children, mono }: {
 
 export default function CommunicationsPage() {
   const { conference } = useManage();
-  const { user } = useAuth();
+  const { user, session } = useAuth();
 
   // ── Data state ──
   const [emailSends, setEmailSends] = useState<EmailSend[]>([]);
@@ -157,7 +157,8 @@ export default function CommunicationsPage() {
 
   const loadEmailSends = useCallback(async () => {
     if (!conference) return;
-    const supabase = createAuthClient();
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase
       .from('email_sends')
       .select('id, subject, recipient_filter, recipient_count, scheduled_at, sent_at, status, created_at, body_html')
@@ -168,7 +169,8 @@ export default function CommunicationsPage() {
 
   const loadCommittees = useCallback(async () => {
     if (!conference) return;
-    const supabase = createAuthClient();
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase
       .from('conference_committees')
       .select('id, name, abbreviation')
@@ -179,7 +181,8 @@ export default function CommunicationsPage() {
 
   const loadAppCounts = useCallback(async () => {
     if (!conference) return;
-    const supabase = createAuthClient();
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase
       .from('applications')
       .select('role, status, payment_status')
@@ -284,7 +287,8 @@ export default function CommunicationsPage() {
 
   async function handleSaveDraft() {
     if (!conference || !user) return;
-    const supabase = createAuthClient();
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
     const recipientFilter = buildRecipientFilter();
     const count = computeRecipientCount();
     const recipientCount = count === -1 ? 0 : count;
@@ -322,7 +326,8 @@ export default function CommunicationsPage() {
     setSending(true);
     setSendError('');
 
-    const supabase = createAuthClient();
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
     const recipientFilter = buildRecipientFilter();
     const count = computeRecipientCount();
     const recipientCount = count === -1 ? 0 : count;
@@ -368,13 +373,15 @@ export default function CommunicationsPage() {
   }
 
   async function handleDeleteDraft(id: string) {
-    const supabase = createAuthClient();
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
     await supabase.from('email_sends').delete().eq('id', id);
     await loadEmailSends();
   }
 
   async function handleCancelScheduled(id: string) {
-    const supabase = createAuthClient();
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
     await supabase.from('email_sends').update({ status: 'draft', scheduled_at: null }).eq('id', id);
     await loadEmailSends();
   }

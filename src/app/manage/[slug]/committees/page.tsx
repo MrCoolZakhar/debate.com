@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Plus, X, Copy, Search, Check } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
-import { createAuthClient } from '@/lib/supabase-auth';
+import { getAuthedClient } from '@/lib/supabase-auth';
+import { useAuth } from '@/components/AuthProvider';
 import { UN_COUNTRIES, getFlagUrl } from '@/lib/countries';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -176,6 +177,7 @@ function AddCommitteeModal({ conferenceId, onClose, onSaved }: {
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const { session } = useAuth();
   const [name, setName] = useState('');
   const [abbreviation, setAbbreviation] = useState('');
   const [topic1, setTopic1] = useState('');
@@ -193,7 +195,8 @@ function AddCommitteeModal({ conferenceId, onClose, onSaved }: {
     setSaving(true);
     setError('');
     const topics = [topic1, topic2, topic3].filter(Boolean);
-    const supabase = createAuthClient();
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
     const { error: err } = await supabase.from('conference_committees').insert({
       conference_id: conferenceId,
       name: name.trim(),
@@ -246,6 +249,7 @@ function EditCommitteeModal({ committee, onClose, onSaved }: {
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const { session } = useAuth();
   const topics = committee.topics ?? [];
   const [name, setName] = useState(committee.name);
   const [abbreviation, setAbbreviation] = useState(committee.abbreviation ?? '');
@@ -264,7 +268,8 @@ function EditCommitteeModal({ committee, onClose, onSaved }: {
     setSaving(true);
     setError('');
     const topicsArr = [topic1, topic2, topic3].filter(Boolean);
-    const supabase = createAuthClient();
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
     const { error: err } = await supabase.from('conference_committees').update({
       name: name.trim(),
       abbreviation: abbreviation.trim() || null,
@@ -315,12 +320,14 @@ function CountrySlotsModal({ committee, onClose }: {
   committee: Committee;
   onClose: () => void;
 }) {
+  const { session } = useAuth();
   const [slots, setSlots] = useState<SlotRow[]>([]);
   const [search, setSearch] = useState('');
   const [loadingSlots, setLoadingSlots] = useState(true);
 
   const loadSlots = useCallback(async () => {
-    const supabase = createAuthClient();
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase
       .from('committee_country_slots')
       .select('id, country_code, country_name, delegation_size')
@@ -338,7 +345,8 @@ function CountrySlotsModal({ committee, onClose }: {
   );
 
   async function handleAddCountry(code: string, name: string) {
-    const supabase = createAuthClient();
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
     await supabase.from('committee_country_slots').insert({
       conference_committee_id: committee.id,
       country_code: code,
@@ -349,7 +357,8 @@ function CountrySlotsModal({ committee, onClose }: {
   }
 
   async function handleRemoveSlot(slotId: string) {
-    const supabase = createAuthClient();
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
     await supabase.from('committee_country_slots').delete().eq('id', slotId);
     await loadSlots();
   }
@@ -452,6 +461,7 @@ function CountrySlotsModal({ committee, onClose }: {
 
 export default function CommitteesPage() {
   const { conference } = useManage();
+  const { session } = useAuth();
   const [committees, setCommittees] = useState<Committee[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
@@ -462,7 +472,8 @@ export default function CommitteesPage() {
   const loadCommittees = useCallback(async () => {
     if (!conference) return;
     setLoading(true);
-    const supabase = createAuthClient();
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase
       .from('conference_committees')
       .select('id, name, abbreviation, topics, difficulty, committee_type, total_slots, session_code, position_paper_deadline, notification_email')
@@ -489,7 +500,8 @@ export default function CommitteesPage() {
 
   async function generateSessionCode(committeeId: string) {
     const code = Math.random().toString(36).substring(2, 8).toUpperCase();
-    const supabase = createAuthClient();
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
     await supabase.from('conference_committees').update({ session_code: code }).eq('id', committeeId);
     await loadCommittees();
   }

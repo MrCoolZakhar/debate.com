@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Search, SlidersHorizontal } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
-import { createAuthClient } from '@/lib/supabase-auth';
+import { getAuthedClient } from '@/lib/supabase-auth';
 import { getFlagUrl, getCountryByName } from '@/lib/countries';
 
 // ── Continent maps ─────────────────────────────────────────────────────────────
@@ -242,7 +242,7 @@ export default function ConferencesExploreClient() {
   useEffect(() => {
     async function fetchConferences() {
       setLoading(true);
-      const supabase = createAuthClient();
+      const supabase = getAuthedClient('');
       const { data } = await supabase
         .from('conferences')
         .select('id, slug, full_name, acronym, country, city, start_date, end_date, expected_delegates, fee_amount, fee_currency, format, student_level, logo_url, is_public')

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Building2, CreditCard, Clock, Users, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
-import { createAuthClient } from '@/lib/supabase-auth';
+import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -102,11 +102,13 @@ function ApplicationsPanel({
   postingId: string;
   onStatusChange: () => void;
 }) {
+  const { session } = useAuth();
   const [apps, setApps] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const supabase = createAuthClient();
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
     supabase
       .from('job_applications')
       .select('id, cover_note, status, submitted_at, profiles (display_name, email, avatar_url)')
@@ -119,7 +121,8 @@ function ApplicationsPanel({
   }, [postingId]);
 
   async function handleStatus(appId: string, newStatus: string) {
-    const supabase = createAuthClient();
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
     await supabase.from('job_applications').update({ status: newStatus }).eq('id', appId);
     setApps(prev => prev.map(a => a.id === appId ? { ...a, status: newStatus } : a));
     onStatusChange();
@@ -616,7 +619,7 @@ type CategoryTab = typeof CATEGORIES[number];
 
 export default function JobBoardPage() {
   const { conference } = useManage();
-  const { user } = useAuth();
+  const { user, session } = useAuth();
 
   const [postings, setPostings] = useState<JobPosting[]>([]);
   const [appCounts, setAppCounts] = useState<Record<string, number>>({});
@@ -629,7 +632,8 @@ export default function JobBoardPage() {
 
   const fetchAll = useCallback(async () => {
     if (!conference) return;
-    const supabase = createAuthClient();
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
 
     const [{ data: postingsData }, { data: committeesData }] = await Promise.all([
       supabase
@@ -678,7 +682,8 @@ export default function JobBoardPage() {
   }) {
     if (!conference || !user) return;
     setSaving(true);
-    const supabase = createAuthClient();
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
     await supabase.from('job_postings').insert({
       conference_id: conference.id,
       posted_by: user.id,
@@ -703,7 +708,8 @@ export default function JobBoardPage() {
     compensation_note: string; deadline: string;
   }) {
     setSaving(true);
-    const supabase = createAuthClient();
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
     await supabase.from('job_postings').update({
       category: data.category,
       role_name: data.role_name,
@@ -720,14 +726,16 @@ export default function JobBoardPage() {
   }
 
   async function handleToggleOpen(posting: JobPosting) {
-    const supabase = createAuthClient();
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
     await supabase.from('job_postings').update({ is_open: !posting.is_open }).eq('id', posting.id);
     setPostings(prev => prev.map(p => p.id === posting.id ? { ...p, is_open: !p.is_open } : p));
   }
 
   async function handleDelete(posting: JobPosting) {
     if (!confirm(`Delete "${posting.role_name}"? This cannot be undone.`)) return;
-    const supabase = createAuthClient();
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
     await supabase.from('job_applications').delete().eq('job_posting_id', posting.id);
     await supabase.from('job_postings').delete().eq('id', posting.id);
     await fetchAll();

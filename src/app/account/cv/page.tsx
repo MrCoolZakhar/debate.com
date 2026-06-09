@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/components/AuthProvider';
-import { supabaseAuthClient } from '@/lib/supabase-auth';
+import { getAuthedClient } from '@/lib/supabase-auth';
 
 interface CVEntry {
   id: string;
@@ -36,6 +36,7 @@ function AddCVEntryModal({
   onAdded: () => void;
   userId: string;
 }) {
+  const { session } = useAuth();
   const [conferenceName, setConferenceName] = useState('');
   const [committee, setCommittee]           = useState('');
   const [allocation, setAllocation]         = useState('');
@@ -51,7 +52,8 @@ function AddCVEntryModal({
       return;
     }
     setSubmitting(true);
-    const supabase = supabaseAuthClient;
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
     const { error: dbErr } = await supabase.from('mun_cv_entries').insert({
       user_id:        userId,
       conference_name: conferenceName,
@@ -221,7 +223,7 @@ function AddCVEntryModal({
 }
 
 export default function CVPage() {
-  const { user, profile } = useAuth();
+  const { user, session, profile } = useAuth();
   const [entries, setEntries]         = useState<CVEntry[]>([]);
   const [loading, setLoading]         = useState(true);
   const [showModal, setShowModal]     = useState(false);
@@ -229,7 +231,8 @@ export default function CVPage() {
 
   async function fetchEntries() {
     if (!user) return;
-    const supabase = supabaseAuthClient;
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase
       .from('mun_cv_entries')
       .select('id, conference_name, committee, allocation, expertise_level, award, source, created_at')
@@ -246,7 +249,8 @@ export default function CVPage() {
 
   async function handleDelete(id: string) {
     setDeletingId(id);
-    const supabase = supabaseAuthClient;
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
     await supabase.from('mun_cv_entries').delete().eq('id', id);
     setEntries((prev) => prev.filter((e) => e.id !== id));
     setDeletingId(null);

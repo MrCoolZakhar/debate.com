@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Users, CheckCircle, MapPin, CreditCard } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
-import { createAuthClient } from '@/lib/supabase-auth';
+import { getAuthedClient } from '@/lib/supabase-auth';
+import { useAuth } from '@/components/AuthProvider';
 
 // ── Setup step component ───────────────────────────────────────────────────
 
@@ -75,13 +76,15 @@ function PublishModal({
   onPublished: () => void;
 }) {
   const [publishing, setPublishing] = useState(false);
+  const { session } = useAuth();
 
   async function handlePublish() {
     setPublishing(true);
-    const supabase = createAuthClient();
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
     await supabase
       .from('conferences')
-      .update({ is_public: true, status: 'published' })
+      .update({ is_public: true, status: 'public' })
       .eq('id', conference.id);
     setPublishing(false);
     onPublished();
@@ -140,13 +143,15 @@ function PublishModal({
 export default function DashboardPage() {
   const router = useRouter();
   const { conference, refreshConference } = useManage();
+  const { session } = useAuth();
   const [showPublishModal, setShowPublishModal] = useState(false);
   const [publishBlockMsg, setPublishBlockMsg] = useState('');
   const [hasCommittees, setHasCommittees] = useState(false);
 
   useEffect(() => {
     if (!conference) return;
-    const supabase = createAuthClient();
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
     supabase
       .from('conference_committees')
       .select('*', { count: 'exact', head: true })
