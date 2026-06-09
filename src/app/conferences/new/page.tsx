@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { AlertTriangle, Camera, Globe, Music, MessageCircle } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import { useAuth } from '@/components/AuthProvider';
-import { createAuthClient } from '@/lib/supabase-auth';
+import { supabaseAuthClient } from '@/lib/supabase-auth';
 import { generateSlug } from '@/lib/utils';
 
 // ── Input / label helpers ──────────────────────────────────────────────────
@@ -198,6 +198,9 @@ export default function NewConferencePage() {
   const [tiktokUrl, setTiktokUrl] = useState('');
   const [whatsappUrl, setWhatsappUrl] = useState('');
   const [websiteUrl, setWebsiteUrl] = useState('');
+  const [bannerUrl, setBannerUrl] = useState<string | null>(null);
+  const [bannerUploading, setBannerUploading] = useState(false);
+  const [isPublic, setIsPublic] = useState(false);
 
   // Pre-fill email from profile
   useEffect(() => {
@@ -254,7 +257,7 @@ export default function NewConferencePage() {
     setSubmitting(true);
     setError('');
 
-    const supabase = createAuthClient();
+    const supabase = supabaseAuthClient;
     const baseSlug = generateSlug(fullName);
     const slug = `${baseSlug}-${Math.random().toString(36).substring(2, 7)}`;
 
@@ -281,7 +284,8 @@ export default function NewConferencePage() {
         tiktok_url: tiktokUrl || null,
         whatsapp_url: whatsappUrl || null,
         website_url: websiteUrl || null,
-        is_public: false,
+        banner_url: bannerUrl,
+        is_public: isPublic,
         status: 'draft',
       })
       .select('slug')
@@ -295,6 +299,30 @@ export default function NewConferencePage() {
     }
 
     router.push(`/manage/${data.slug}`);
+  }
+
+  async function handleBannerUpload(file: File) {
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Banner image must be under 5MB.');
+      return;
+    }
+    setBannerUploading(true);
+    const ext = file.name.split('.').pop();
+    const path = 'banners/' + Date.now() + '-' + Math.random().toString(36).substring(2, 7) + '.' + ext;
+    const { error } = await supabaseAuthClient.storage
+      .from('conference-assets')
+      .upload(path, file, { contentType: file.type, upsert: false });
+    if (error) {
+      alert('Failed to upload banner. Please try again.');
+      setBannerUploading(false);
+      return;
+    }
+    const { data: urlData } = supabaseAuthClient.storage
+      .from('conference-assets')
+      .getPublicUrl(path);
+    setBannerUrl(urlData.publicUrl);
+    setBannerUploading(false);
   }
 
   // Loading / auth spinner
@@ -370,6 +398,12 @@ export default function NewConferencePage() {
                   tiktokUrl={tiktokUrl} setTiktokUrl={setTiktokUrl}
                   whatsappUrl={whatsappUrl} setWhatsappUrl={setWhatsappUrl}
                   websiteUrl={websiteUrl} setWebsiteUrl={setWebsiteUrl}
+                  bannerUrl={bannerUrl}
+                  setBannerUrl={setBannerUrl}
+                  bannerUploading={bannerUploading}
+                  onBannerUpload={handleBannerUpload}
+                  isPublic={isPublic}
+                  setIsPublic={setIsPublic}
                   error={error}
                   submitting={submitting}
                   onBack={() => { setStep(1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
@@ -644,6 +678,10 @@ function Step2({
   tiktokUrl, setTiktokUrl,
   whatsappUrl, setWhatsappUrl,
   websiteUrl, setWebsiteUrl,
+  bannerUrl, setBannerUrl,
+  bannerUploading,
+  onBannerUpload,
+  isPublic, setIsPublic,
   error,
   submitting,
   onBack,
@@ -655,6 +693,10 @@ function Step2({
   tiktokUrl: string; setTiktokUrl: (v: string) => void;
   whatsappUrl: string; setWhatsappUrl: (v: string) => void;
   websiteUrl: string; setWebsiteUrl: (v: string) => void;
+  bannerUrl: string | null; setBannerUrl: (url: string | null) => void;
+  bannerUploading: boolean;
+  onBannerUpload: (file: File) => void;
+  isPublic: boolean; setIsPublic: (v: boolean) => void;
   error: string;
   submitting: boolean;
   onBack: () => void;
@@ -676,6 +718,61 @@ function Step2({
       </p>
 
       <div className="flex flex-col gap-5">
+
+        <Field label="Conference Banner">
+          <div
+            style={{
+              border: '1.5px dashed #DDD4C0',
+              borderRadius: 14,
+              overflow: 'hidden',
+              backgroundColor: '#FAF8F3',
+              minHeight: 140,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              position: 'relative',
+              cursor: 'pointer',
+            }}
+            onClick={() => { if (!bannerUploading) document.getElementById('banner-upload')?.click(); }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
+          >
+            {bannerUrl ? (
+              <>
+                <img src={bannerUrl} alt="Banner" style={{ width: '100%', height: '160px', objectFit: 'cover', display: 'block' }} />
+                <button
+                  onClick={(e) => { e.stopPropagation(); setBannerUrl(null); }}
+                  style={{
+                    position: 'absolute', top: 8, right: 8,
+                    backgroundColor: 'rgba(27,56,40,0.8)', color: '#EDE7D8',
+                    border: 'none', borderRadius: 8, padding: '4px 10px',
+                    fontSize: 11, fontFamily: "'Outfit', sans-serif", fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  CHANGE
+                </button>
+              </>
+            ) : bannerUploading ? (
+              <div style={{ textAlign: 'center', padding: 24 }}>
+                <div className="w-6 h-6 rounded-full border-2 border-t-transparent animate-spin mx-auto mb-2" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
+                <p style={{ fontSize: 12, color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Uploading...</p>
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center', padding: 24 }}>
+                <p style={{ fontSize: 13, fontWeight: 700, color: '#1C1410', fontFamily: "'Outfit', sans-serif", marginBottom: 4 }}>Upload Conference Banner</p>
+                <p style={{ fontSize: 11, color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Recommended: 1200×630px · JPG, PNG or WebP · Max 5MB</p>
+              </div>
+            )}
+            <input
+              id="banner-upload"
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              style={{ display: 'none' }}
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) onBannerUpload(f); }}
+            />
+          </div>
+        </Field>
 
         <Field label="Conference Description">
           <textarea
@@ -725,6 +822,37 @@ function Step2({
               value={websiteUrl}
               onChange={setWebsiteUrl}
             />
+          </div>
+        </Field>
+
+        <Field label="Conference Visibility">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {([
+              { value: false, label: 'PRIVATE', desc: 'Only visible to people with a direct link. Delegates cannot find or apply through Gavelling until you make it public.' },
+              { value: true, label: 'PUBLIC', desc: 'Listed in the Gavelling conference directory. Delegates can find and apply immediately.' },
+            ] as { value: boolean; label: string; desc: string }[]).map(({ value, label, desc }) => (
+              <div
+                key={label}
+                onClick={() => setIsPublic(value)}
+                style={{
+                  display: 'flex', alignItems: 'flex-start', gap: 12,
+                  padding: '12px 16px', borderRadius: 12, cursor: 'pointer',
+                  border: isPublic === value ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
+                  backgroundColor: isPublic === value ? 'rgba(27,56,40,0.04)' : 'transparent',
+                  transition: 'all 150ms ease',
+                }}
+              >
+                <div style={{
+                  width: 18, height: 18, borderRadius: '50%', flexShrink: 0, marginTop: 2,
+                  border: isPublic === value ? '5px solid #1B3828' : '2px solid #DDD4C0',
+                  backgroundColor: 'transparent', transition: 'all 150ms ease',
+                }} />
+                <div>
+                  <p style={{ fontSize: 13, fontWeight: 800, color: '#1C1410', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.06em', marginBottom: 2 }}>{label}</p>
+                  <p style={{ fontSize: 12, color: '#9A8A78', fontFamily: "'Outfit', sans-serif", lineHeight: 1.5 }}>{desc}</p>
+                </div>
+              </div>
+            ))}
           </div>
         </Field>
 
