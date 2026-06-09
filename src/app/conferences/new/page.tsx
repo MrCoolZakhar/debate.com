@@ -321,23 +321,31 @@ export default function NewConferencePage() {
 
   async function handleBannerUpload(file: File) {
     if (!file) return;
+    if (!session) {
+      alert('You must be signed in to upload a banner.');
+      return;
+    }
     if (file.size > 5 * 1024 * 1024) {
       alert('Banner image must be under 5MB.');
       return;
     }
     setBannerUploading(true);
+    const supabase = createClient(
+      'https://luruhkwrgisytejswlas.supabase.co',
+      'sb_publishable_k7NdduzaXK358z8ew18ZKA_vBSieDlV',
+      { global: { headers: { Authorization: 'Bearer ' + session.access_token } } }
+    );
     const ext = file.name.split('.').pop();
     const path = 'banners/' + Date.now() + '-' + Math.random().toString(36).substring(2, 7) + '.' + ext;
-    const client = getAuthedClient();
-    const { error } = await client.storage
+    const { error } = await supabase.storage
       .from('conference-assets')
       .upload(path, file, { contentType: file.type, upsert: false });
     if (error) {
-      alert('Failed to upload banner. Please try again.');
+      alert('Failed to upload banner: ' + error.message);
       setBannerUploading(false);
       return;
     }
-    const { data: urlData } = client.storage
+    const { data: urlData } = supabase.storage
       .from('conference-assets')
       .getPublicUrl(path);
     setBannerUrl(urlData.publicUrl);
