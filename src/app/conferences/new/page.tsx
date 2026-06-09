@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { AlertTriangle, Camera, Globe, Music, MessageCircle } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import { useAuth } from '@/components/AuthProvider';
-import { supabaseAuthClient } from '@/lib/supabase-auth';
+import { createAuthClient } from '@/lib/supabase-auth';
 import { generateSlug } from '@/lib/utils';
 
 // ── Input / label helpers ──────────────────────────────────────────────────
@@ -257,7 +257,7 @@ export default function NewConferencePage() {
     setSubmitting(true);
     setError('');
 
-    const supabase = supabaseAuthClient;
+    const supabase = createAuthClient();
     const baseSlug = generateSlug(fullName);
     const slug = `${baseSlug}-${Math.random().toString(36).substring(2, 7)}`;
 
@@ -294,7 +294,7 @@ export default function NewConferencePage() {
     setSubmitting(false);
 
     if (dbError) {
-      setError('Failed to create conference. Please try again.');
+      setError('Failed to create conference: ' + dbError.message);
       return;
     }
 
@@ -310,7 +310,8 @@ export default function NewConferencePage() {
     setBannerUploading(true);
     const ext = file.name.split('.').pop();
     const path = 'banners/' + Date.now() + '-' + Math.random().toString(36).substring(2, 7) + '.' + ext;
-    const { error } = await supabaseAuthClient.storage
+    const client = createAuthClient();
+    const { error } = await client.storage
       .from('conference-assets')
       .upload(path, file, { contentType: file.type, upsert: false });
     if (error) {
@@ -318,7 +319,7 @@ export default function NewConferencePage() {
       setBannerUploading(false);
       return;
     }
-    const { data: urlData } = supabaseAuthClient.storage
+    const { data: urlData } = client.storage
       .from('conference-assets')
       .getPublicUrl(path);
     setBannerUrl(urlData.publicUrl);
