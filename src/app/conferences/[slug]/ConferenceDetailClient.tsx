@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { Globe, MessageCircle, Music } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import { useAuth } from '@/components/AuthProvider';
-import { createAuthClient } from '@/lib/supabase-auth';
+import { getAuthedClient } from '@/lib/supabase-auth';
 import { getFlagUrl, getCountryByName } from '@/lib/countries';
 
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
@@ -125,7 +125,7 @@ export default function ConferenceDetailClient() {
   const params = useParams<{ slug: string }>();
   const slug = params.slug;
   const router = useRouter();
-  const { user, profile, loading: authLoading } = useAuth();
+  const { user, session, profile, loading: authLoading } = useAuth();
 
   const [conference, setConference] = useState<Conference | null>(null);
   const [committees, setCommittees] = useState<Committee[]>([]);
@@ -140,6 +140,11 @@ export default function ConferenceDetailClient() {
   const [ppError, setPPError] = useState('');
   const [ppNotify, setPPNotify] = useState(false);
   const [isReplacing, setIsReplacing] = useState(false);
+  const [activeTab, setActiveTab] = useState<'overview' | 'documents'>('overview');
+  const [studyGuides, setStudyGuides] = useState<{ id: string; title: string; file_url: string; file_name: string; is_published: boolean }[]>([]);
+  const [studyGuidesLoading, setStudyGuidesLoading] = useState(false);
+  const [ppEnabled, setPpEnabled] = useState(false);
+  const [showPPWarning, setShowPPWarning] = useState(false);
   const ppFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -150,7 +155,7 @@ export default function ConferenceDetailClient() {
 
   async function fetchAll() {
     setLoading(true);
-    const supabase = createAuthClient();
+    const supabase = getAuthedClient('');
 
     const { data: confData } = await supabase
       .from('conferences')
@@ -196,8 +201,9 @@ export default function ConferenceDetailClient() {
     setCommittees((committeesRes.data as Committee[]) ?? []);
     setRoleConfigs((roleConfigsRes.data as RoleConfig[]) ?? []);
 
-    if (user) {
-      const { data: appsData } = await supabase
+    if (user && session) {
+      const authedSupabase = getAuthedClient(session.access_token);
+      const { data: appsData } = await authedSupabase
         .from('applications')
         .select('id, role, status, payment_status')
         .eq('conference_id', conf.id)
@@ -206,7 +212,7 @@ export default function ConferenceDetailClient() {
 
       const committeeIds = (committeesRes.data as Committee[] ?? []).map(c => c.id);
       if (committeeIds.length > 0) {
-        const { data: allocData } = await supabase
+        const { data: allocData } = await authedSupabase
           .from('conference_allocations')
           .select('id, country_code, country_name, conference_committee_id, conference_committees (name, position_paper_deadline)')
           .eq('user_id', user.id)
@@ -214,7 +220,7 @@ export default function ConferenceDetailClient() {
           .maybeSingle();
         setMyAllocation(allocData ?? null);
         if (allocData) {
-          const { data: ppData } = await supabase
+          const { data: ppData } = await authedSupabase
             .from('position_papers')
             .select('id, status, chair_feedback, submitted_at, file_name, notify_on_feedback')
             .eq('conference_committee_id', (allocData as any).conference_committee_id)
@@ -228,9 +234,31 @@ export default function ConferenceDetailClient() {
     setLoading(false);
   }
 
+  const loadDocumentsData = useCallback(async () => {
+    if (!myAllocation || !session) return;
+    setStudyGuidesLoading(true);
+    const supabase = getAuthedClient(session.access_token);
+    const { data: sgData } = await supabase
+      .from('study_guides')
+      .select('id, title, file_url, file_name, is_published')
+      .eq('conference_committee_id', myAllocation.conference_committee_id)
+      .order('created_at', { ascending: true });
+    setStudyGuides((sgData ?? []) as typeof studyGuides);
+    const { data: ccData } = await supabase
+      .from('conference_committees')
+      .select('pp_submissions_enabled')
+      .eq('id', myAllocation.conference_committee_id)
+      .single();
+    setPpEnabled((ccData as any)?.pp_submissions_enabled ?? false);
+    setStudyGuidesLoading(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myAllocation?.conference_committee_id, session?.access_token]);
+
+  useEffect(() => { loadDocumentsData(); }, [loadDocumentsData]);
+
   const loadMyPositionPaper = useCallback(async () => {
-    if (!user || !myAllocation) return;
-    const supabase = createAuthClient();
+    if (!user || !myAllocation || !session) return;
+    const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase
       .from('position_papers')
       .select('id, status, chair_feedback, submitted_at, file_name, notify_on_feedback')
@@ -239,7 +267,7 @@ export default function ConferenceDetailClient() {
       .maybeSingle();
     setMyPositionPaper(data ?? null);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, myAllocation?.conference_committee_id]);
+  }, [user?.id, myAllocation?.conference_committee_id, session?.access_token]);
 
   function handlePPFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -251,9 +279,9 @@ export default function ConferenceDetailClient() {
   }
 
   async function handlePPSubmit() {
-    if (!ppFile || !myAllocation || !user || !conference) return;
+    if (!ppFile || !myAllocation || !user || !conference || !session) return;
     setPPUploading(true);
-    const supabase = createAuthClient();
+    const supabase = getAuthedClient(session.access_token);
     if (myPositionPaper) {
       await supabase.from('position_papers').delete().eq('id', myPositionPaper.id);
     }
@@ -448,8 +476,26 @@ export default function ConferenceDetailClient() {
             {/* Left column */}
             <div className="flex-1 min-w-0">
 
+              {/* Tab bar */}
+              <div className="flex gap-2 mb-6">
+                {(['overview', 'documents'] as const).map(tab => (
+                  <button
+                    key={tab}
+                    onClick={() => setActiveTab(tab)}
+                    className="px-4 py-1.5 rounded-full text-sm font-semibold focus:outline-none"
+                    style={
+                      activeTab === tab
+                        ? { backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif" }
+                        : { backgroundColor: 'transparent', color: '#9A8A78', border: '1px solid #DDD4C0', fontFamily: "'Outfit', sans-serif" }
+                    }
+                  >
+                    {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                  </button>
+                ))}
+              </div>
+
               {/* About */}
-              {conference.description && (
+              {activeTab === 'overview' && conference.description && (
                 <div className="rounded-2xl p-6 mb-6" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
                   <h2 className="font-semibold text-base mb-3" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>About</h2>
                   <p className="text-sm leading-relaxed" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", whiteSpace: 'pre-wrap' }}>
@@ -459,264 +505,347 @@ export default function ConferenceDetailClient() {
               )}
 
               {/* Committees */}
-              <div className="rounded-2xl p-6 mb-6" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
-                <div className="flex justify-between items-center mb-4">
-                  <h2 className="font-semibold text-base" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Committees</h2>
-                  <span
-                    className="px-2 py-0.5 rounded-full"
-                    style={{ fontSize: '10px', fontFamily: "'DM Mono', monospace", backgroundColor: 'rgba(27,56,40,0.08)', color: '#1B3828' }}
-                  >
-                    {committees.length}
-                  </span>
-                </div>
-                {committees.length === 0 ? (
-                  <p className="text-sm" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                    Committees will be announced soon.
-                  </p>
-                ) : (
-                  <div style={{ borderTop: '1px solid #F0EDE6' }}>
-                    {committees.map(c => {
-                      const diff = c.difficulty?.toLowerCase() ?? '';
-                      const diffStyle =
-                        diff === 'beginner'
-                          ? { backgroundColor: 'rgba(61,122,82,0.12)', color: '#1B3828' }
-                          : diff === 'intermediate'
-                          ? { backgroundColor: 'rgba(238,217,138,0.2)', color: '#B8844A' }
-                          : { backgroundColor: 'rgba(139,32,32,0.1)', color: '#8B2020' };
-
-                      return (
-                        <div key={c.id} className="py-3 flex items-start gap-4" style={{ borderBottom: '1px solid #F0EDE6' }}>
-                          {c.difficulty && (
-                            <span
-                              className="flex-shrink-0 px-2 py-0.5 rounded-full mt-0.5"
-                              style={{ ...diffStyle, fontSize: '9px', fontFamily: "'DM Mono', monospace", letterSpacing: '0.05em' }}
-                            >
-                              {c.difficulty.toUpperCase()}
-                            </span>
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <p className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>{c.name}</p>
-                            {c.abbreviation && (
-                              <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}>{c.abbreviation}</p>
-                            )}
-                            {c.topics && c.topics.length > 0 && (
-                              <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                                {c.topics.join(' · ')}
-                              </p>
-                            )}
-                          </div>
-                          {c.total_slots != null && (
-                            <span className="flex-shrink-0 text-xs" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}>
-                              {c.total_slots} slots
-                            </span>
-                          )}
-                        </div>
-                      );
-                    })}
+              {activeTab === 'overview' && (
+                <div className="rounded-2xl p-6 mb-6" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="font-semibold text-base" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Committees</h2>
+                    <span
+                      className="px-2 py-0.5 rounded-full"
+                      style={{ fontSize: '10px', fontFamily: "'DM Mono', monospace", backgroundColor: 'rgba(27,56,40,0.08)', color: '#1B3828' }}
+                    >
+                      {committees.length}
+                    </span>
                   </div>
-                )}
-              </div>
-
-              {/* Position Paper */}
-              {myAllocation && (() => {
-                const deadline = myAllocation.conference_committees?.position_paper_deadline as string | null;
-                const deadlineSoon = deadline ? (new Date(deadline).getTime() - Date.now()) < 7 * 24 * 60 * 60 * 1000 && new Date(deadline) > new Date() : false;
-                const showUploadForm = !myPositionPaper || isReplacing;
-                const ppStatusMap: Record<string, { bg: string; color: string }> = {
-                  submitted: { bg: 'rgba(238,217,138,0.2)',  color: '#B8844A' },
-                  reviewed:  { bg: 'rgba(154,138,120,0.15)', color: '#9A8A78' },
-                  approved:  { bg: 'rgba(61,122,82,0.12)',   color: '#3D7A52' },
-                  rejected:  { bg: 'rgba(139,32,32,0.1)',    color: '#8B2020' },
-                };
-                const ppMonths = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-                function fmtDate(iso: string) {
-                  const d = new Date(iso);
-                  return `${ppMonths[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
-                }
-                return (
-                  <div style={{ background: '#FAF8F3', border: '1px solid #DDD4C0', borderRadius: 16, padding: 24, marginBottom: 24 }}>
-                    <h2 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 15, color: '#1C1410', marginBottom: 4 }}>
-                      Position Paper
-                    </h2>
-                    <p style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#9A8A78', marginBottom: 16 }}>
-                      {myAllocation.conference_committees?.name} · {myAllocation.country_name}
+                  {committees.length === 0 ? (
+                    <p className="text-sm" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                      Committees will be announced soon.
                     </p>
+                  ) : (
+                    <div style={{ borderTop: '1px solid #F0EDE6' }}>
+                      {committees.map(c => {
+                        const diff = c.difficulty?.toLowerCase() ?? '';
+                        const diffStyle =
+                          diff === 'beginner'
+                            ? { backgroundColor: 'rgba(61,122,82,0.12)', color: '#1B3828' }
+                            : diff === 'intermediate'
+                            ? { backgroundColor: 'rgba(238,217,138,0.2)', color: '#B8844A' }
+                            : { backgroundColor: 'rgba(139,32,32,0.1)', color: '#8B2020' };
 
-                    {showUploadForm ? (
-                      <>
-                        {deadline && (
-                          <p style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: deadlineSoon ? '#B8844A' : '#9A8A78', marginBottom: 14 }}>
-                            Due {fmtDate(deadline)}
-                          </p>
-                        )}
-                        <input type="file" accept="application/pdf" onChange={handlePPFileSelect} className="hidden" ref={ppFileInputRef} />
-                        {!ppFile ? (
-                          <div
-                            onClick={() => ppFileInputRef.current?.click()}
-                            style={{ border: '2px dashed #DDD4C0', borderRadius: 12, padding: '24px 12px', textAlign: 'center', cursor: 'pointer', marginBottom: 12, transition: 'border-color 0.15s' }}
-                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
-                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
-                          >
-                            <p style={{ fontSize: 13, color: '#9A8A78', fontFamily: "'Outfit', sans-serif", marginBottom: 2 }}>Click to select PDF</p>
-                            <p style={{ fontSize: 11, color: '#C8BFB0', fontFamily: "'Outfit', sans-serif" }}>Max 5MB</p>
-                          </div>
-                        ) : (
-                          <div style={{ border: '1px solid rgba(61,122,82,0.3)', borderRadius: 10, padding: '10px 14px', backgroundColor: 'rgba(61,122,82,0.04)', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <p style={{ fontSize: 13, color: '#1C1410', fontFamily: "'Outfit', sans-serif", fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ppFile.name}</p>
-                            </div>
-                            <button onClick={() => ppFileInputRef.current?.click()} className="focus:outline-none" style={{ fontSize: 11, color: '#9A8A78', fontFamily: "'Outfit', sans-serif", textDecoration: 'underline', cursor: 'pointer', background: 'none', border: 'none', flexShrink: 0 }}>
-                              Change
-                            </button>
-                          </div>
-                        )}
-                        {ppError && <p style={{ fontSize: 11, color: '#8B2020', fontFamily: "'Outfit', sans-serif", marginBottom: 8 }}>{ppError}</p>}
-                        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: 14 }}>
-                          <input type="checkbox" checked={ppNotify} onChange={e => setPPNotify(e.target.checked)} style={{ accentColor: '#1B3828' }} />
-                          <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: 12, color: '#9A8A78' }}>
-                            Notify me via email when my position paper receives feedback
-                          </span>
-                        </label>
-                        <div style={{ display: 'flex', gap: 8 }}>
-                          {isReplacing && (
-                            <button onClick={() => { setIsReplacing(false); setPPFile(null); setPPError(''); }} className="focus:outline-none" style={{ border: '1px solid #DDD4C0', borderRadius: 12, padding: '10px 16px', fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 13, color: '#1C1410', backgroundColor: 'transparent', cursor: 'pointer' }}>
-                              CANCEL
-                            </button>
-                          )}
-                          <button
-                            onClick={handlePPSubmit}
-                            disabled={!ppFile || ppUploading}
-                            className="focus:outline-none"
-                            style={{ flex: 1, border: 'none', borderRadius: 12, padding: '10px 0', fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 13, backgroundColor: !ppFile || ppUploading ? '#DDD4C0' : '#1B3828', color: !ppFile || ppUploading ? '#9A8A78' : '#EED98A', cursor: !ppFile || ppUploading ? 'default' : 'pointer' }}
-                          >
-                            {ppUploading ? 'UPLOADING...' : 'SUBMIT POSITION PAPER'}
-                          </button>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                          <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#9A8A78', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {myPositionPaper.file_name}
-                          </span>
-                          {(() => {
-                            const s = ppStatusMap[myPositionPaper.status] ?? ppStatusMap.submitted;
-                            return (
-                              <span style={{ backgroundColor: s.bg, color: s.color, fontFamily: "'DM Mono', monospace", fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 9999, letterSpacing: '0.08em', flexShrink: 0 }}>
-                                {myPositionPaper.status.toUpperCase()}
+                        return (
+                          <div key={c.id} className="py-3 flex items-start gap-4" style={{ borderBottom: '1px solid #F0EDE6' }}>
+                            {c.difficulty && (
+                              <span
+                                className="flex-shrink-0 px-2 py-0.5 rounded-full mt-0.5"
+                                style={{ ...diffStyle, fontSize: '9px', fontFamily: "'DM Mono', monospace", letterSpacing: '0.05em' }}
+                              >
+                                {c.difficulty.toUpperCase()}
                               </span>
-                            );
-                          })()}
-                        </div>
-                        <p style={{ fontFamily: "'Outfit', sans-serif", fontSize: 11, color: '#9A8A78', marginBottom: 10 }}>
-                          Submitted {fmtDate(myPositionPaper.submitted_at)}
-                        </p>
-                        {myPositionPaper.chair_feedback && (
-                          <div style={{ backgroundColor: 'rgba(27,56,40,0.04)', borderLeft: '3px solid #DDD4C0', padding: '8px 12px', borderRadius: '0 6px 6px 0', marginBottom: 12 }}>
-                            <p style={{ fontFamily: "'Outfit', sans-serif", fontSize: 12, color: '#1C1410', fontStyle: 'italic' }}>
-                              {myPositionPaper.chair_feedback}
-                            </p>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>{c.name}</p>
+                              {c.abbreviation && (
+                                <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}>{c.abbreviation}</p>
+                              )}
+                              {c.topics && c.topics.length > 0 && (
+                                <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                                  {c.topics.join(' · ')}
+                                </p>
+                              )}
+                            </div>
+                            {c.total_slots != null && (
+                              <span className="flex-shrink-0 text-xs" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}>
+                                {c.total_slots} slots
+                              </span>
+                            )}
                           </div>
-                        )}
-                        <button
-                          onClick={() => { setIsReplacing(true); setPPFile(null); setPPError(''); }}
-                          className="focus:outline-none"
-                          style={{ fontFamily: "'Outfit', sans-serif", fontSize: 11, color: '#9A8A78', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-                          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#1C1410'; }}
-                          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
-                        >
-                          REPLACE
-                        </button>
-                      </>
-                    )}
-                  </div>
-                );
-              })()}
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Organiser */}
-              <div className="rounded-2xl p-6 mb-6" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
-                <h2 className="font-semibold text-base mb-3" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Organised by</h2>
-                <p className="font-medium text-sm" style={{ color: '#1C1410', fontFamily: "'DM Mono', monospace" }}>{conference.acronym}</p>
-                {conference.contact_email && (
-                  <a
-                    href={`mailto:${conference.contact_email}`}
-                    className="block text-xs mt-1 transition-all"
-                    style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", textDecoration: 'none' }}
-                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.textDecoration = 'underline'; }}
-                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.textDecoration = 'none'; }}
-                  >
-                    {conference.contact_email}
-                  </a>
-                )}
-                {(conference.instagram_url || conference.facebook_url || conference.tiktok_url || conference.whatsapp_url || conference.website_url) && (
-                  <div className="flex gap-3 mt-3">
-                    {conference.instagram_url && (
-                      <a
-                        href={conference.instagram_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{ color: '#9A8A78', transition: 'color 0.15s' }}
-                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
-                      >
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-                          <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
-                          <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/>
-                          <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>
-                        </svg>
-                      </a>
-                    )}
-                    {conference.facebook_url && (
-                      <a
-                        href={conference.facebook_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{ color: '#9A8A78', transition: 'color 0.15s' }}
-                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
-                      >
-                        <Globe size={18} />
-                      </a>
-                    )}
-                    {conference.tiktok_url && (
-                      <a
-                        href={conference.tiktok_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{ color: '#9A8A78', transition: 'color 0.15s' }}
-                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
-                      >
-                        <Music size={18} />
-                      </a>
-                    )}
-                    {conference.whatsapp_url && (
-                      <a
-                        href={conference.whatsapp_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{ color: '#9A8A78', transition: 'color 0.15s' }}
-                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
-                      >
-                        <MessageCircle size={18} />
-                      </a>
-                    )}
-                    {conference.website_url && (
-                      <a
-                        href={conference.website_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{ color: '#9A8A78', transition: 'color 0.15s' }}
-                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
-                      >
-                        <Globe size={18} />
-                      </a>
+              {activeTab === 'overview' && (
+                <div className="rounded-2xl p-6 mb-6" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
+                  <h2 className="font-semibold text-base mb-3" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Organised by</h2>
+                  <p className="font-medium text-sm" style={{ color: '#1C1410', fontFamily: "'DM Mono', monospace" }}>{conference.acronym}</p>
+                  {conference.contact_email && (
+                    <a
+                      href={`mailto:${conference.contact_email}`}
+                      className="block text-xs mt-1 transition-all"
+                      style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", textDecoration: 'none' }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.textDecoration = 'underline'; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.textDecoration = 'none'; }}
+                    >
+                      {conference.contact_email}
+                    </a>
+                  )}
+                  {(conference.instagram_url || conference.facebook_url || conference.tiktok_url || conference.whatsapp_url || conference.website_url) && (
+                    <div className="flex gap-3 mt-3">
+                      {conference.instagram_url && (
+                        <a
+                          href={conference.instagram_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: '#9A8A78', transition: 'color 0.15s' }}
+                          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
+                          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
+                        >
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
+                            <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/>
+                            <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>
+                          </svg>
+                        </a>
+                      )}
+                      {conference.facebook_url && (
+                        <a
+                          href={conference.facebook_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: '#9A8A78', transition: 'color 0.15s' }}
+                          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
+                          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
+                        >
+                          <Globe size={18} />
+                        </a>
+                      )}
+                      {conference.tiktok_url && (
+                        <a
+                          href={conference.tiktok_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: '#9A8A78', transition: 'color 0.15s' }}
+                          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
+                          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
+                        >
+                          <Music size={18} />
+                        </a>
+                      )}
+                      {conference.whatsapp_url && (
+                        <a
+                          href={conference.whatsapp_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: '#9A8A78', transition: 'color 0.15s' }}
+                          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
+                          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
+                        >
+                          <MessageCircle size={18} />
+                        </a>
+                      )}
+                      {conference.website_url && (
+                        <a
+                          href={conference.website_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: '#9A8A78', transition: 'color 0.15s' }}
+                          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
+                          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
+                        >
+                          <Globe size={18} />
+                        </a>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Documents tab */}
+              {activeTab === 'documents' && (
+                <div className="flex flex-col gap-6">
+                  {/* Study Guides */}
+                  <div className="rounded-2xl p-6" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
+                    <h2 className="font-semibold text-base mb-4" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Study Guides</h2>
+                    {studyGuidesLoading ? (
+                      <div className="flex justify-center py-6">
+                        <div className="w-5 h-5 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
+                      </div>
+                    ) : !myAllocation ? (
+                      <p className="text-sm" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                        Study guides are available once you are allocated to a committee.
+                      </p>
+                    ) : studyGuides.length === 0 ? (
+                      <p className="text-sm" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                        No study guides have been published yet.
+                      </p>
+                    ) : (
+                      <div style={{ borderTop: '1px solid #F0EDE6' }}>
+                        {studyGuides.map(sg => (
+                          <a
+                            key={sg.id}
+                            href={sg.file_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-3 py-3"
+                            style={{ borderBottom: '1px solid #F0EDE6', textDecoration: 'none' }}
+                          >
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-semibold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sg.title}</p>
+                              <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>{sg.file_name}</p>
+                            </div>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#9A8A78', flexShrink: 0 }}>
+                              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                              <polyline points="7 10 12 15 17 10"/>
+                              <line x1="12" y1="15" x2="12" y2="3"/>
+                            </svg>
+                          </a>
+                        ))}
+                      </div>
                     )}
                   </div>
-                )}
-              </div>
+
+                  {/* Position Paper */}
+                  {myAllocation && (() => {
+                    const deadline = myAllocation.conference_committees?.position_paper_deadline as string | null;
+                    const deadlineSoon = deadline ? (new Date(deadline).getTime() - Date.now()) < 7 * 24 * 60 * 60 * 1000 && new Date(deadline) > new Date() : false;
+                    const showUploadForm = !myPositionPaper || isReplacing;
+                    const ppStatusMap: Record<string, { bg: string; color: string }> = {
+                      submitted: { bg: 'rgba(238,217,138,0.2)',  color: '#B8844A' },
+                      reviewed:  { bg: 'rgba(154,138,120,0.15)', color: '#9A8A78' },
+                      approved:  { bg: 'rgba(61,122,82,0.12)',   color: '#3D7A52' },
+                      rejected:  { bg: 'rgba(139,32,32,0.1)',    color: '#8B2020' },
+                    };
+                    const ppMonths = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                    const fmtDate = (iso: string) => {
+                      const d = new Date(iso);
+                      return `${ppMonths[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+                    };
+                    return (
+                      <div style={{ background: '#FAF8F3', border: '1px solid #DDD4C0', borderRadius: 16, padding: 24 }}>
+                        <h2 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 15, color: '#1C1410', marginBottom: 4 }}>
+                          Position Paper
+                        </h2>
+                        <p style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#9A8A78', marginBottom: 16 }}>
+                          {myAllocation.conference_committees?.name} · {myAllocation.country_name}
+                        </p>
+
+                        {!ppEnabled ? (
+                          <p style={{ fontFamily: "'Outfit', sans-serif", fontSize: 13, color: '#9A8A78' }}>
+                            Position paper submissions are not yet open for your committee.
+                          </p>
+                        ) : showUploadForm ? (
+                          <>
+                            {deadline && (
+                              <p style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: deadlineSoon ? '#B8844A' : '#9A8A78', marginBottom: 14 }}>
+                                Due {fmtDate(deadline)}
+                              </p>
+                            )}
+                            <input type="file" accept="application/pdf" onChange={handlePPFileSelect} className="hidden" ref={ppFileInputRef} />
+                            {!ppFile ? (
+                              <div
+                                onClick={() => ppFileInputRef.current?.click()}
+                                style={{ border: '2px dashed #DDD4C0', borderRadius: 12, padding: '24px 12px', textAlign: 'center', cursor: 'pointer', marginBottom: 12, transition: 'border-color 0.15s' }}
+                                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
+                                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
+                              >
+                                <p style={{ fontSize: 13, color: '#9A8A78', fontFamily: "'Outfit', sans-serif", marginBottom: 2 }}>Click to select PDF</p>
+                                <p style={{ fontSize: 11, color: '#C8BFB0', fontFamily: "'Outfit', sans-serif" }}>Max 5MB</p>
+                              </div>
+                            ) : (
+                              <div style={{ border: '1px solid rgba(61,122,82,0.3)', borderRadius: 10, padding: '10px 14px', backgroundColor: 'rgba(61,122,82,0.04)', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <p style={{ fontSize: 13, color: '#1C1410', fontFamily: "'Outfit', sans-serif", fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ppFile.name}</p>
+                                </div>
+                                <button onClick={() => ppFileInputRef.current?.click()} className="focus:outline-none" style={{ fontSize: 11, color: '#9A8A78', fontFamily: "'Outfit', sans-serif", textDecoration: 'underline', cursor: 'pointer', background: 'none', border: 'none', flexShrink: 0 }}>
+                                  Change
+                                </button>
+                              </div>
+                            )}
+                            {ppError && <p style={{ fontSize: 11, color: '#8B2020', fontFamily: "'Outfit', sans-serif", marginBottom: 8 }}>{ppError}</p>}
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: 14 }}>
+                              <input type="checkbox" checked={ppNotify} onChange={e => setPPNotify(e.target.checked)} style={{ accentColor: '#1B3828' }} />
+                              <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: 12, color: '#9A8A78' }}>
+                                Notify me via email when my position paper receives feedback
+                              </span>
+                            </label>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                              {isReplacing && (
+                                <button onClick={() => { setIsReplacing(false); setPPFile(null); setPPError(''); }} className="focus:outline-none" style={{ border: '1px solid #DDD4C0', borderRadius: 12, padding: '10px 16px', fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 13, color: '#1C1410', backgroundColor: 'transparent', cursor: 'pointer' }}>
+                                  CANCEL
+                                </button>
+                              )}
+                              <button
+                                onClick={handlePPSubmit}
+                                disabled={!ppFile || ppUploading}
+                                className="focus:outline-none"
+                                style={{ flex: 1, border: 'none', borderRadius: 12, padding: '10px 0', fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 13, backgroundColor: !ppFile || ppUploading ? '#DDD4C0' : '#1B3828', color: !ppFile || ppUploading ? '#9A8A78' : '#EED98A', cursor: !ppFile || ppUploading ? 'default' : 'pointer' }}
+                              >
+                                {ppUploading ? 'UPLOADING...' : 'SUBMIT POSITION PAPER'}
+                              </button>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                              <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#9A8A78', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {myPositionPaper.file_name}
+                              </span>
+                              {(() => {
+                                const s = ppStatusMap[myPositionPaper.status] ?? ppStatusMap.submitted;
+                                return (
+                                  <span style={{ backgroundColor: s.bg, color: s.color, fontFamily: "'DM Mono', monospace", fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 9999, letterSpacing: '0.08em', flexShrink: 0 }}>
+                                    {myPositionPaper.status.toUpperCase()}
+                                  </span>
+                                );
+                              })()}
+                            </div>
+                            <p style={{ fontFamily: "'Outfit', sans-serif", fontSize: 11, color: '#9A8A78', marginBottom: 10 }}>
+                              Submitted {fmtDate(myPositionPaper.submitted_at)}
+                            </p>
+                            {myPositionPaper.chair_feedback && (
+                              <div style={{ backgroundColor: 'rgba(27,56,40,0.04)', borderLeft: '3px solid #DDD4C0', padding: '8px 12px', borderRadius: '0 6px 6px 0', marginBottom: 12 }}>
+                                <p style={{ fontFamily: "'Outfit', sans-serif", fontSize: 12, color: '#1C1410', fontStyle: 'italic' }}>
+                                  {myPositionPaper.chair_feedback}
+                                </p>
+                              </div>
+                            )}
+                            <button
+                              onClick={() => setShowPPWarning(true)}
+                              className="focus:outline-none"
+                              style={{ fontFamily: "'Outfit', sans-serif", fontSize: 11, color: '#9A8A78', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#1C1410'; }}
+                              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
+                            >
+                              REPLACE
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {/* Replace warning modal */}
+              {showPPWarning && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center px-6" style={{ backgroundColor: 'rgba(28,20,16,0.5)' }}>
+                  <div className="rounded-2xl p-6 max-w-sm w-full" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
+                    <h3 className="font-semibold text-base mb-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Replace Position Paper?</h3>
+                    <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                      Your current submission will be deleted and replaced. This action cannot be undone.
+                    </p>
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => setShowPPWarning(false)}
+                        className="flex-1 rounded-xl py-2.5 text-sm font-bold focus:outline-none"
+                        style={{ border: '1px solid #DDD4C0', color: '#1C1410', fontFamily: "'Outfit', sans-serif", backgroundColor: 'transparent' }}
+                      >
+                        CANCEL
+                      </button>
+                      <button
+                        onClick={() => { setShowPPWarning(false); setIsReplacing(true); setPPFile(null); setPPError(''); }}
+                        className="flex-1 rounded-xl py-2.5 text-sm font-bold focus:outline-none"
+                        style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif" }}
+                      >
+                        REPLACE
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
             </div>
 
             {/* Right column */}

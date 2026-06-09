@@ -5,7 +5,7 @@ import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import SiteNav from '@/components/SiteNav';
 import { useAuth } from '@/components/AuthProvider';
-import { createAuthClient } from '@/lib/supabase-auth';
+import { getAuthedClient } from '@/lib/supabase-auth';
 import { getFlagUrl } from '@/lib/countries';
 
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
@@ -78,7 +78,7 @@ function ConferenceApplyInner() {
   const searchParams = useSearchParams();
   const role = searchParams.get('role') ?? 'delegate';
   const router = useRouter();
-  const { user, loading: authLoading } = useAuth();
+  const { user, session, loading: authLoading } = useAuth();
 
   // ── Data
   const [conference, setConference] = useState<Conference | null>(null);
@@ -133,7 +133,8 @@ function ConferenceApplyInner() {
 
   async function fetchAll() {
     setLoading(true);
-    const supabase = createAuthClient();
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
 
     const { data: confData } = await supabase
       .from('conferences')
@@ -197,8 +198,9 @@ function ConferenceApplyInner() {
 
   async function fetchSlotsForCommittee(committeeId: string) {
     if (countrySlots[committeeId]) return;
+    if (!session) return;
     setLoadingSlots(true);
-    const supabase = createAuthClient();
+    const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase
       .from('committee_country_slots')
       .select('id, country_code, country_name')
@@ -238,7 +240,8 @@ function ConferenceApplyInner() {
   async function handleSubmit() {
     setSubmitting(true);
     setSubmitError('');
-    const supabase = createAuthClient();
+    if (!session) { setSubmitError('Session expired. Please sign in again.'); setSubmitting(false); return; }
+    const supabase = getAuthedClient(session.access_token);
 
     try {
       let societyId: string | null = null;
