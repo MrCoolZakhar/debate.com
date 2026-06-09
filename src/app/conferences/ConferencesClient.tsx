@@ -59,15 +59,9 @@ function FeaturedSection() {
       <div className="flex flex-col md:flex-row gap-12 md:gap-16 items-start">
         {/* Left column */}
         <div style={{ maxWidth: '540px' }}>
-          <p
-            className="text-[10px] tracking-widest mb-3"
-            style={{ color: 'rgba(28,20,16,0.4)', fontFamily: "'DM Mono', monospace", letterSpacing: '0.2em' }}
-          >
-            CONFERENCES
-          </p>
           <h2 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, lineHeight: 1.05 }}>
-            <span className="block" style={{ fontSize: 'clamp(36px, 4.5vw, 64px)', color: '#1C1410' }}>Find Your Next</span>
-            <span className="block" style={{ fontSize: 'clamp(36px, 4.5vw, 64px)', color: '#1B3828' }}>Conference.</span>
+            <span className="block" style={{ fontSize: 'clamp(36px, 4.5vw, 64px)', color: '#1C1410' }}>FIND YOUR NEXT</span>
+            <span className="block" style={{ fontSize: 'clamp(36px, 4.5vw, 64px)', color: '#1B3828' }}>CONFERENCE.</span>
           </h2>
           <p className="mt-4 mb-8 text-base leading-relaxed" style={{ color: '#9A8A78', maxWidth: '440px', fontFamily: "'Outfit', sans-serif" }}>
             Browse hundreds of MUN conferences worldwide. Apply as a delegate, find your committee, and manage everything through Gavelling.
@@ -191,11 +185,8 @@ function OrganiserSection() {
       <div className="relative flex flex-col md:flex-row gap-12 md:gap-16 items-start">
         {/* Left */}
         <div style={{ maxWidth: '400px' }}>
-          <p className="text-[10px] tracking-widest mb-3" style={{ color: 'rgba(238,217,138,0.6)', fontFamily: "'DM Mono', monospace", letterSpacing: '0.2em' }}>
-            FOR ORGANISERS
-          </p>
           <h2 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, lineHeight: 1.05 }}>
-            <span className="block text-white" style={{ fontSize: 'clamp(32px, 4vw, 52px)' }}>Run your conference.</span>
+            <span className="block text-white" style={{ fontSize: 'clamp(32px, 4vw, 52px)' }}>RUN YOUR CONFERENCE.</span>
             <span className="block" style={{ fontSize: 'clamp(32px, 4vw, 52px)', color: '#EED98A' }}>Fee-free.</span>
           </h2>
           <p className="mt-4 mb-8 text-sm leading-relaxed" style={{ color: 'rgba(237,231,216,0.7)', maxWidth: '400px', fontFamily: "'Outfit', sans-serif" }}>
@@ -247,9 +238,6 @@ function RolesSection() {
       <div className="flex flex-col md:flex-row gap-12 md:gap-16 items-start">
         {/* Left */}
         <div style={{ maxWidth: '420px' }}>
-          <p className="text-[10px] tracking-widest mb-3" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace", letterSpacing: '0.2em' }}>
-            CHAIR &amp; STAFF BOARD
-          </p>
           <h2 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, lineHeight: 1.05 }}>
             <span className="block" style={{ fontSize: 'clamp(28px, 3.5vw, 48px)', color: '#1C1410' }}>Looking to chair?</span>
             <span className="block" style={{ fontSize: 'clamp(28px, 3.5vw, 48px)', color: '#1B3828' }}>Find your next role.</span>
@@ -371,18 +359,6 @@ function GlobeSection() {
           flex: 1,
         }}
       >
-        <p
-          style={{
-            fontFamily: "'DM Mono', monospace",
-            fontSize: '11px',
-            fontWeight: 700,
-            color: 'rgba(238,217,138,0.6)',
-            letterSpacing: '0.2em',
-            margin: '0 0 16px 0',
-          }}
-        >
-          GLOBAL MUN
-        </p>
         <h2 style={{ margin: 0 }}>
           <span
             style={{
