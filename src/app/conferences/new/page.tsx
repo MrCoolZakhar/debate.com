@@ -163,7 +163,7 @@ function StepIndicator({ step }: { step: 1 | 2 }) {
 
 export default function NewConferencePage() {
   const router = useRouter();
-  const { user, profile, loading } = useAuth();
+  const { user, session, profile, loading } = useAuth();
 
   // Auth gate
   useEffect(() => {
@@ -254,51 +254,72 @@ export default function NewConferencePage() {
   }
 
   async function handleCreate() {
+    if (!user || !session) {
+      setError('You must be signed in to create a conference.');
+      return;
+    }
     setSubmitting(true);
     setError('');
 
-    const supabase = createAuthClient();
-    const baseSlug = generateSlug(fullName);
-    const slug = `${baseSlug}-${Math.random().toString(36).substring(2, 7)}`;
+    try {
+      const { createClient } = await import('@supabase/supabase-js');
+      const supabase = createClient(
+        'https://luruhkwrgisytejswlas.supabase.co',
+        'sb_publishable_k7NdduzaXK358z8ew18ZKA_vBSieDlV',
+        {
+          global: {
+            headers: {
+              Authorization: 'Bearer ' + session.access_token,
+            },
+          },
+        }
+      );
 
-    const { data, error: dbError } = await supabase
-      .from('conferences')
-      .insert({
-        slug,
-        organizer_id: user!.id,
-        full_name: fullName,
-        acronym: acronym.toUpperCase(),
-        contact_email: contactEmail,
-        student_level: studentLevel,
-        start_date: startDate,
-        end_date: endDate,
-        country,
-        city,
-        format,
-        expected_delegates: parseInt(expectedDelegates),
-        fee_amount: parseFloat(feeAmount) || 0,
-        fee_currency: feeCurrency,
-        description: description || null,
-        instagram_url: instagramUrl || null,
-        facebook_url: facebookUrl || null,
-        tiktok_url: tiktokUrl || null,
-        whatsapp_url: whatsappUrl || null,
-        website_url: websiteUrl || null,
-        banner_url: bannerUrl,
-        is_public: isPublic,
-        status: 'draft',
-      })
-      .select('slug')
-      .single();
+      const baseSlug = generateSlug(fullName);
+      const slug = baseSlug + '-' + Math.random().toString(36).substring(2, 7);
 
-    setSubmitting(false);
+      const { data, error: dbError } = await supabase
+        .from('conferences')
+        .insert({
+          slug,
+          organizer_id: user.id,
+          full_name: fullName,
+          acronym: acronym.toUpperCase(),
+          contact_email: contactEmail,
+          student_level: studentLevel,
+          start_date: startDate,
+          end_date: endDate,
+          country,
+          city,
+          format,
+          expected_delegates: parseInt(expectedDelegates),
+          fee_amount: parseFloat(feeAmount) || 0,
+          fee_currency: feeCurrency,
+          description: description || null,
+          instagram_url: instagramUrl || null,
+          facebook_url: facebookUrl || null,
+          tiktok_url: tiktokUrl || null,
+          whatsapp_url: whatsappUrl || null,
+          website_url: websiteUrl || null,
+          banner_url: bannerUrl,
+          is_public: isPublic,
+          status: 'draft',
+        })
+        .select('slug')
+        .single();
 
-    if (dbError) {
-      setError('Failed to create conference: ' + dbError.message);
-      return;
+      setSubmitting(false);
+
+      if (dbError) {
+        setError('Failed to create conference: ' + dbError.message);
+        return;
+      }
+
+      router.push('/manage/' + data.slug);
+    } catch (err) {
+      setSubmitting(false);
+      setError('Unexpected error: ' + (err instanceof Error ? err.message : String(err)));
     }
-
-    router.push(`/manage/${data.slug}`);
   }
 
   async function handleBannerUpload(file: File) {
