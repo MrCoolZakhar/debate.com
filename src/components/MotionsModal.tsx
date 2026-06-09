@@ -636,7 +636,8 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
       </div>
       <div className="flex gap-4 flex-1 min-h-0">
         {/* Left column — primary motion being voted on */}
-        <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+        {/* pt-3 pr-4: give room for the badge that translates outside the card's top-right corner */}
+        <div className="flex-1 flex flex-col min-w-0 overflow-y-auto pt-3 pr-4">
           {renderCard(primary, true, 0)}
         </div>
         {/* Right column — queued motions + Raise a Motion button */}
