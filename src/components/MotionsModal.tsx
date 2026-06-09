@@ -536,6 +536,20 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
         >
           {idx + 1}
         </div>
+        {/* Drag handle — top-left, 6-dot grip */}
+        <div
+          className="absolute top-2 left-2 pointer-events-none select-none"
+          style={{ opacity: large ? 0.18 : 0.35 }}
+        >
+          <svg width="12" height="18" viewBox="0 0 12 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="3" cy="3"  r="1.5" fill="#1C1410"/>
+            <circle cx="9" cy="3"  r="1.5" fill="#1C1410"/>
+            <circle cx="3" cy="9"  r="1.5" fill="#1C1410"/>
+            <circle cx="9" cy="9"  r="1.5" fill="#1C1410"/>
+            <circle cx="3" cy="15" r="1.5" fill="#1C1410"/>
+            <circle cx="9" cy="15" r="1.5" fill="#1C1410"/>
+          </svg>
+        </div>
         {/* Header: icon + type label + flag in top-right */}
         <div className="flex items-center gap-2">
           <span className={`font-black text-[#1C1410] flex-1 ${large ? 'text-3xl' : 'text-lg'} flex items-center gap-1.5`}>
