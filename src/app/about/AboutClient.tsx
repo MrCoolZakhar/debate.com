@@ -14,7 +14,7 @@ const AMBASSADORS = [
   // Latin America
   { name: 'Santiago Rosas Peña',      country: 'Venezuela',      initials: 'SR', photo: '/ambassador-photos/santiago_ambassador.png', photoPosition: 'center 35%' },
   // Europe
-  { name: 'Kyle Wilkinson',          country: 'United Kingdom', initials: 'KW', photo: '/ambassador-photos/kyle_ambassador.png', photoPosition: 'center 10%', photoZoom: 1.2 },
+  { name: 'Kyle Wilkinson',          country: 'United Kingdom', initials: 'KW', photo: '/ambassador-photos/kyle_ambassador.png', photoPosition: 'center 50%' },
   { name: 'Celine Nasser',           country: 'United Kingdom', initials: 'CN', photo: '/ambassador-photos/celine_ambassador.png' },
   { name: 'Noelia Alvarez Iglesias', country: 'Spain',          initials: 'NA', photo: '/ambassador-photos/noelia_ambassador.png' },
   { name: 'Félix Losada Ottino',     country: 'Spain',          initials: 'FL', photo: '/ambassador-photos/felix_ambassador.png', photoPosition: 'center 25%' },
@@ -28,7 +28,7 @@ const AMBASSADORS = [
   { name: 'Paolo Marinuzzi',         country: 'Venezuela',      initials: 'PM', photo: '/ambassador-photos/paolo_ambassador.png' },
   { name: 'Anna Cocconi',            country: 'Venezuela',      initials: 'AC', photo: '/ambassador-photos/anna_ambassador.png' },
   // Asia (west to east)
-  { name: 'Farah Lahiani',           country: 'UAE',            initials: 'FH', photo: '/ambassador-photos/farah_ambassador.png', photoPosition: 'center 10%', photoZoom: 1.2 },
+  { name: 'Farah Lahiani',           country: 'UAE',            initials: 'FH', photo: '/ambassador-photos/farah_ambassador.png', photoPosition: 'center 62%' },
   { name: 'Saayoojya Variyath',      country: 'India',          initials: 'SV', photo: '/ambassador-photos/saayoojya_ambassador.png' },
   { name: 'Sri Harsha Vardhan Pachava', country: 'India',       initials: 'SH', photo: '/ambassador-photos/sriharsha_ambassador.png' },
   { name: 'Tyler Serano',            country: 'Philippines',    initials: 'TS', photo: '/ambassador-photos/tyler_ambassador.png' },
@@ -121,7 +121,7 @@ export default function AboutClient() {
           {(() => { const amb = AMBASSADORS[0]; return (
             <div key={amb.name} className="flex flex-col items-center gap-3 shrink-0">
               <div style={{ width: 120, height: 120, borderRadius: '50%', overflow: 'hidden', border: '2px solid rgba(28,20,16,0.15)', backgroundColor: 'rgba(221,212,192,0.5)', flexShrink: 0 }}>
-                {amb.photo ? <img src={amb.photo} alt={amb.name} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: amb.photoPosition ?? 'center top', display: 'block', transform: amb.photoZoom ? `scale(${amb.photoZoom})` : undefined, transformOrigin: amb.photoPosition ?? 'center top' }} /> : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(221,212,192,0.8)', color: '#B6871F', fontWeight: 700, fontSize: 16 }}>{amb.initials}</div>}
+                {amb.photo ? <img src={amb.photo} alt={amb.name} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: amb.photoPosition ?? 'center top', display: 'block' }} /> : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(221,212,192,0.8)', color: '#B6871F', fontWeight: 700, fontSize: 16 }}>{amb.initials}</div>}
               </div>
               <div className="text-center">
                 <p className="text-[#1C1410] text-xs font-bold leading-tight">{amb.name}</p>
@@ -136,7 +136,7 @@ export default function AboutClient() {
               <div key={amb.name} className="flex flex-col items-center gap-3">
                 <div style={{ width: 120, height: 120, borderRadius: '50%', overflow: 'hidden', border: '2px solid rgba(28,20,16,0.15)', backgroundColor: 'rgba(221,212,192,0.5)', flexShrink: 0 }}>
                   {amb.photo ? (
-                    <img src={amb.photo} alt={amb.name} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: amb.photoPosition ?? 'center top', display: 'block', transform: amb.photoZoom ? `scale(${amb.photoZoom})` : undefined, transformOrigin: amb.photoPosition ?? 'center top' }} />
+                    <img src={amb.photo} alt={amb.name} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: amb.photoPosition ?? 'center top', display: 'block' }} />
                   ) : (
                     <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(221,212,192,0.8)', color: '#B6871F', fontWeight: 700, fontSize: 16 }}>{amb.initials}</div>
                   )}
@@ -153,7 +153,7 @@ export default function AboutClient() {
           {(() => { const amb = AMBASSADORS[AMBASSADORS.length - 1]; return (
             <div key={amb.name} className="flex flex-col items-center gap-3 shrink-0">
               <div style={{ width: 120, height: 120, borderRadius: '50%', overflow: 'hidden', border: '2px solid rgba(28,20,16,0.15)', backgroundColor: 'rgba(221,212,192,0.5)', flexShrink: 0 }}>
-                {amb.photo ? <img src={amb.photo} alt={amb.name} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: amb.photoPosition ?? 'center top', display: 'block', transform: amb.photoZoom ? `scale(${amb.photoZoom})` : undefined, transformOrigin: amb.photoPosition ?? 'center top' }} /> : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(221,212,192,0.8)', color: '#B6871F', fontWeight: 700, fontSize: 16 }}>{amb.initials}</div>}
+                {amb.photo ? <img src={amb.photo} alt={amb.name} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: amb.photoPosition ?? 'center top', display: 'block' }} /> : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(221,212,192,0.8)', color: '#B6871F', fontWeight: 700, fontSize: 16 }}>{amb.initials}</div>}
               </div>
               <div className="text-center">
                 <p className="text-[#1C1410] text-xs font-bold leading-tight">{amb.name}</p>
