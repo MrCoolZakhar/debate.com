@@ -471,6 +471,7 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
   const [content, setContent] = useState('');
   const [fileName, setFileName] = useState<string | null>(null);
   const [fileUrl, setFileUrl] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const docCode = autoDocCode(type, committee.documents ?? []);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -480,15 +481,20 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
     (d) => d.title.trim().toLowerCase() === title.trim().toLowerCase()
   );
 
-  const canSubmit = !limitReached && !isSubmitting && !isDuplicate && !!title.trim();
+  const canSubmit = !limitReached && !isSubmitting && !isUploading && !isDuplicate && !!title.trim();
 
   const uploadFile = async (file: File) => {
     setFileName(file.name);
-    const path = committee.id + '/' + Date.now() + '-' + file.name;
-    const { error } = await supabase.storage.from('session-documents').upload(path, file, { upsert: true });
-    if (error) { console.error('Storage upload error:', error); return; }
-    const { data } = supabase.storage.from('session-documents').getPublicUrl(path);
-    setFileUrl(data.publicUrl);
+    setIsUploading(true);
+    try {
+      const path = committee.id + '/' + Date.now() + '-' + file.name;
+      const { error } = await supabase.storage.from('session-documents').upload(path, file, { upsert: true });
+      if (error) { console.error('Storage upload error:', error); setFileName(null); return; }
+      const { data } = supabase.storage.from('session-documents').getPublicUrl(path);
+      setFileUrl(data.publicUrl);
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -554,7 +560,12 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
         </label>
         {fileName ? (
           <div className="flex items-center gap-2 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3">
-            <span className="text-sm text-[#1C1410] flex-1 truncate">📎 {fileName}</span>
+            <span className="text-sm text-[#1C1410] flex-1 truncate flex items-center gap-2">
+              {isUploading
+                ? <><div className="w-3.5 h-3.5 border-2 border-[#1B3828] border-t-transparent rounded-full animate-spin shrink-0" /> Uploading…</>
+                : <>📎 {fileName}</>
+              }
+            </span>
             <button onClick={() => { setFileName(null); setFileUrl(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
               className="text-[#9A8A78] hover:text-red-500 transition-colors text-sm">✕</button>
           </div>
