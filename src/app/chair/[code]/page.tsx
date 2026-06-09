@@ -294,9 +294,9 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, lastSpeakerDelegate
   const displayItems = list.slice(0, 7);
   const overflow = qLen > 7 ? qLen - 7 : 0;
   return (
-    <div className="flex flex-col items-center w-full mb-1 shrink-0" data-tutorial="speakers-queue">
+    <div className="flex flex-col items-center w-full mb-1 shrink-0 pt-2" data-tutorial="speakers-queue">
       <div className="w-full overflow-x-auto">
-      <div className="flex flex-nowrap items-start gap-2 pt-2 pb-1 justify-center min-w-0 px-1">
+      <div className="flex flex-nowrap items-start gap-2 pb-1 justify-center min-w-0 px-1">
         {displayItems.map((s, i) => {
           const isCurrent = currentSpeakerDelegateId && s.delegateId === currentSpeakerDelegateId;
           const flagCountry = getCountryByName(s.country);
