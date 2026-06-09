@@ -60,8 +60,8 @@ function FeaturedSection() {
         {/* Left column */}
         <div style={{ maxWidth: '540px' }}>
           <h2 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, lineHeight: 1.05 }}>
-            <span className="block" style={{ fontSize: 'clamp(36px, 4.5vw, 64px)', color: '#1C1410' }}>FIND YOUR NEXT</span>
-            <span className="block" style={{ fontSize: 'clamp(36px, 4.5vw, 64px)', color: '#1B3828' }}>CONFERENCE.</span>
+            <span className="block" style={{ fontSize: 'clamp(36px, 4.5vw, 64px)', color: '#1C1410' }}>Find Your Next</span>
+            <span className="block" style={{ fontSize: 'clamp(36px, 4.5vw, 64px)', color: '#1B3828' }}>Conference.</span>
           </h2>
           <p className="mt-4 mb-8 text-base leading-relaxed" style={{ color: '#9A8A78', maxWidth: '440px', fontFamily: "'Outfit', sans-serif" }}>
             Browse hundreds of MUN conferences worldwide. Apply as a delegate, find your committee, and manage everything through Gavelling.
@@ -186,7 +186,7 @@ function OrganiserSection() {
         {/* Left */}
         <div style={{ maxWidth: '400px' }}>
           <h2 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, lineHeight: 1.05 }}>
-            <span className="block text-white" style={{ fontSize: 'clamp(32px, 4vw, 52px)' }}>RUN YOUR CONFERENCE.</span>
+            <span className="block text-white" style={{ fontSize: 'clamp(32px, 4vw, 52px)' }}>Run your conference.</span>
             <span className="block" style={{ fontSize: 'clamp(32px, 4vw, 52px)', color: '#EED98A' }}>Fee-free.</span>
           </h2>
           <p className="mt-4 mb-8 text-sm leading-relaxed" style={{ color: 'rgba(237,231,216,0.7)', maxWidth: '400px', fontFamily: "'Outfit', sans-serif" }}>
