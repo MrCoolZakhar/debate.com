@@ -153,6 +153,27 @@ function StageTimer({
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const remainingRef = useRef(totalSeconds);
   remainingRef.current = remaining;
+  const [splitPct, setSplitPct] = useState(50);
+  const isDraggingDivider = useRef(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  const onDividerMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    isDraggingDivider.current = true;
+    const onMouseMove = (ev: MouseEvent) => {
+      if (!isDraggingDivider.current || !containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const pct = ((ev.clientX - rect.left) / rect.width) * 100;
+      setSplitPct(Math.min(65, Math.max(35, pct)));
+    };
+    const onMouseUp = () => {
+      isDraggingDivider.current = false;
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  };
 
   useEffect(() => {
     if (running) {
@@ -170,8 +191,8 @@ function StageTimer({
   const progress = totalSeconds > 0 ? ((totalSeconds - remaining) / totalSeconds) * 100 : 100;
 
   return (
-    <div className={`flex-1 flex ${showDocument ? 'flex-row items-stretch' : 'flex-col items-center justify-center px-8 py-8 text-center'}`}>
-      <div className={`flex flex-col items-center justify-center text-center ${showDocument ? 'w-1/2 px-6 py-8 border-r border-[#DDD4C0]' : 'w-full px-8 py-8'}`}>
+    <div ref={containerRef} className={`flex-1 flex ${showDocument ? 'flex-row items-stretch' : 'flex-col items-center justify-center px-8 py-8 text-center'}`}>
+      <div className={`flex flex-col items-center justify-center text-center ${showDocument ? 'px-6 py-8' : 'w-full px-8 py-8'}`} style={showDocument ? { width: `${splitPct}%` } : undefined}>
       <p className="text-xs font-mono tracking-widest mb-2" style={{ color: '#9A8A78' }}>
         {doc.type === 'working-paper' ? t('documents_working_paper_type') : t('documents_draft_resolution_type')} · {doc.docCode}
       </p>
@@ -246,7 +267,16 @@ function StageTimer({
       </div>
 
       {showDocument && (
-        <div className="w-1/2 flex flex-col p-4 overflow-hidden">
+        <div
+          onMouseDown={onDividerMouseDown}
+          style={{ width: '6px', cursor: 'col-resize', backgroundColor: 'transparent', flexShrink: 0, position: 'relative' }}
+          className="hover:bg-[#DDD4C0] transition-colors"
+        >
+          <div style={{ position: 'absolute', top: 0, bottom: 0, left: '2px', width: '2px', backgroundColor: '#DDD4C0', borderRadius: '1px' }} />
+        </div>
+      )}
+      {showDocument && (
+        <div className="flex flex-col p-4 overflow-hidden" style={{ flex: 1, minWidth: 0 }}>
           {doc.fileUrl ? (
             <iframe
               src={doc.fileUrl}

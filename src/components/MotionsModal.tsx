@@ -448,6 +448,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
   isViewOnly?: boolean;
 }) {
   const t = useT();
+  const { getSettings } = useSettingsStore();
   // Filter out join-request pseudo-motions — those are handled in the chair banner, not here
   const initialSorted = [...(committee.pendingMotions ?? [])]
     .filter((m) => m.type !== ('join-request' as string))
@@ -667,6 +668,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
 }) {
   const t = useT();
   const { language } = useLanguage();
+  const { getSettings } = useSettingsStore();
   const DEFAULT_MOTION_NAMES_LOCALIZED = language === 'fr' ? {
     moderated: 'Caucus modéré',
     unmoderated: 'Caucus non modéré',
@@ -682,7 +684,15 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
     suspendDebate: 'Suspender Debate',
     endDebate: 'Cerrar Debate',
   } : DEFAULT_MOTION_NAMES;
-  const motionNames = { ...DEFAULT_MOTION_NAMES_LOCALIZED };
+  const storedNames = getSettings(committee.code).motionNames;
+  const motionNames = {
+    moderated:     storedNames.moderated     !== DEFAULT_MOTION_NAMES.moderated     ? storedNames.moderated     : DEFAULT_MOTION_NAMES_LOCALIZED.moderated,
+    unmoderated:   storedNames.unmoderated   !== DEFAULT_MOTION_NAMES.unmoderated   ? storedNames.unmoderated   : DEFAULT_MOTION_NAMES_LOCALIZED.unmoderated,
+    consultation:  storedNames.consultation  !== DEFAULT_MOTION_NAMES.consultation  ? storedNames.consultation  : DEFAULT_MOTION_NAMES_LOCALIZED.consultation,
+    tour:          storedNames.tour          !== DEFAULT_MOTION_NAMES.tour          ? storedNames.tour          : DEFAULT_MOTION_NAMES_LOCALIZED.tour,
+    suspendDebate: storedNames.suspendDebate !== DEFAULT_MOTION_NAMES.suspendDebate ? storedNames.suspendDebate : DEFAULT_MOTION_NAMES_LOCALIZED.suspendDebate,
+    endDebate:     storedNames.endDebate     !== DEFAULT_MOTION_NAMES.endDebate     ? storedNames.endDebate     : DEFAULT_MOTION_NAMES_LOCALIZED.endDebate,
+  };
   const typeMeta = buildTypeMeta(motionNames);
   const pending = [...(committee.pendingMotions ?? [])].filter((m) => m.type !== ('join-request' as string)).sort((a, b) => b.disruptiveness - a.disruptiveness);
   const [view, setView] = useState<ModalView>(pending.length === 0 && !isViewOnly ? 'raise' : 'vote');
