@@ -9,7 +9,7 @@ import { Committee } from '@/lib/types';
 import { useSettingsStore } from '@/lib/settingsStore';
 import { Emoji } from '@/components/Emoji';
 import { useAuth } from '@/components/AuthProvider';
-import { getAuthedClient, supabaseAuthClient } from '@/lib/supabase-auth';
+import { getAuthedClient } from '@/lib/supabase-auth';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { getCountryDisplayName } from '@/lib/countries';
 
@@ -167,7 +167,8 @@ function JoinPageInner() {
     };
 
     async function checkConferenceSession() {
-      const { data: confCommittee } = await supabaseAuthClient
+      const anonClient = getAuthedClient('');
+      const { data: confCommittee } = await anonClient
         .from('conference_committees')
         .select(`
           id, name, session_code, conference_id,

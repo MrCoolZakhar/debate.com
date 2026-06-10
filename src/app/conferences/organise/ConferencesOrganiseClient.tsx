@@ -172,7 +172,7 @@ export default function ConferencesOrganiseClient() {
 
     fetchConferences();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, statusFilter]);
+  }, [user?.id, statusFilter, session?.access_token]);
 
   if (authLoading || (!user && !authLoading)) {
     return (

@@ -157,7 +157,7 @@ export default function ConferenceDetailClient() {
     setLoading(true);
     const supabase = getAuthedClient('');
 
-    const { data: confData } = await supabase
+    let { data: confData } = await supabase
       .from('conferences')
       .select(`
         id, slug, full_name, acronym, country, city, format, student_level,
@@ -170,9 +170,32 @@ export default function ConferenceDetailClient() {
       .single();
 
     if (!confData) {
-      setNotFound(true);
-      setLoading(false);
-      return;
+      // Retry with authed client — may be a private conference the logged-in user owns
+      if (session) {
+        const authedRetry = getAuthedClient(session.access_token);
+        const { data: privateConfData } = await authedRetry
+          .from('conferences')
+          .select(`
+            id, slug, full_name, acronym, country, city, format, student_level,
+            start_date, end_date, fee_amount, fee_currency, expected_delegates,
+            description, logo_url, banner_url, is_public, status,
+            instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url,
+            contact_email, organizer_id
+          `)
+          .eq('slug', slug)
+          .single();
+        if (!privateConfData) {
+          setNotFound(true);
+          setLoading(false);
+          return;
+        }
+        // Continue with privateConfData — reassign and fall through
+        confData = privateConfData;
+      } else {
+        setNotFound(true);
+        setLoading(false);
+        return;
+      }
     }
 
     const conf = confData as Conference;

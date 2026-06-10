@@ -43,7 +43,7 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
 
   async function handleSignOut() {
     await signOut();
-    router.push('/');
+    window.location.href = '/';
   }
 
   return (
