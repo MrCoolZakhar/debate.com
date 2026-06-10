@@ -634,11 +634,24 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
       <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs shrink-0 font-semibold" style={{ backgroundColor: '#1B3828', color: '#EED98A' }}>
         <span>{t('motions_drag_hint')}</span>
       </div>
-      <div className="flex gap-4 flex-1 min-h-0">
+      <div className="flex flex-1 min-h-0">
         {/* Left column — primary motion being voted on */}
         {/* pt-3 pr-4: give room for the badge that translates outside the card's top-right corner */}
         <div className="flex-1 flex flex-col min-w-0 overflow-y-auto pt-3 pr-4">
           {renderCard(primary, true, 0)}
+        </div>
+        {/* Vertical divider between column 1 and column 2 */}
+        <div className="flex flex-col items-center gap-2 py-4 pointer-events-none select-none" style={{ opacity: 0.35, width: '20px' }}>
+          <div className="flex-1 w-px" style={{ backgroundColor: '#C8BAA8' }} />
+          <svg width="10" height="16" viewBox="0 0 10 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="2" cy="2"  r="1.5" fill="#1C1410"/>
+            <circle cx="8" cy="2"  r="1.5" fill="#1C1410"/>
+            <circle cx="2" cy="8"  r="1.5" fill="#1C1410"/>
+            <circle cx="8" cy="8"  r="1.5" fill="#1C1410"/>
+            <circle cx="2" cy="14" r="1.5" fill="#1C1410"/>
+            <circle cx="8" cy="14" r="1.5" fill="#1C1410"/>
+          </svg>
+          <div className="flex-1 w-px" style={{ backgroundColor: '#C8BAA8' }} />
         </div>
         {/* Right column — queued motions + Raise a Motion button */}
         {/* pt-3 pr-4: give room for the badge that translates outside each card's top-right corner */}
