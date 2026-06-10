@@ -9,7 +9,7 @@ import { Committee } from '@/lib/types';
 import { useSettingsStore } from '@/lib/settingsStore';
 import { Emoji } from '@/components/Emoji';
 import { useAuth } from '@/components/AuthProvider';
-import { createAuthClient } from '@/lib/supabase-auth';
+import { getAuthedClient, supabaseAuthClient } from '@/lib/supabase-auth';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { getCountryDisplayName } from '@/lib/countries';
 
@@ -34,11 +34,9 @@ function JoinPageInner() {
   const searchParams = useSearchParams();
   const { committees } = useCommitteeStore();
   const { getSettings } = useSettingsStore();
-  const { user, loading: authLoading } = useAuth();
+  const { user, session, loading: authLoading } = useAuth();
   const t = useT();
   const { language } = useLanguage();
-  const supabaseAuth = createAuthClient();
-
   const initialMode = (searchParams.get('mode') as JoinMode) ?? 'delegate';
   const [mode, setMode] = useState<JoinMode>(initialMode);
   const [code, setCode] = useState(searchParams.get('code') ?? '');
@@ -70,9 +68,16 @@ function JoinPageInner() {
   }, []);
 
   useEffect(() => {
-    if (!isConferenceSession || !conferenceCommittee || !user) {
+    if (!isConferenceSession || !conferenceCommittee) {
       setAllocatedCountry(null);
       setAllocationError('');
+      return;
+    }
+
+    // Not logged in — show sign-in prompt
+    if (!user || !session) {
+      setAllocatedCountry(null);
+      setAllocationError('__signin__');
       return;
     }
 
@@ -80,27 +85,58 @@ function JoinPageInner() {
       setAllocationLoading(true);
       setAllocationError('');
 
-      const { data } = await supabaseAuth
+      const supabase = getAuthedClient(session!.access_token);
+
+      // First check if user has ANY allocation in this committee
+      const { data: anyAlloc } = await supabase
         .from('conference_allocations')
-        .select('country_code, country_name')
+        .select('country_code, country_name, user_id')
         .eq('conference_committee_id', conferenceCommittee!.id)
         .eq('user_id', user!.id)
         .maybeSingle();
 
-      if (data) {
-        setAllocatedCountry({ code: data.country_code, name: data.country_name });
+      if (anyAlloc) {
+        // Check mode matches allocation type
+        // Chairs are not in conference_allocations — they are in chair_user_ids on conference_committees
+        // Delegates are in conference_allocations
+        if (mode === 'delegate') {
+          setAllocatedCountry({ code: anyAlloc.country_code, name: anyAlloc.country_name });
+        } else {
+          // User is trying to join as chair but only has a delegate allocation
+          setAllocatedCountry(null);
+          setAllocationError('__wrong_role__');
+        }
       } else {
-        setAllocatedCountry(null);
-        setAllocationError(
-          'It appears your account is not linked to an assigned member of this committee. Please check your allocation or contact your conference organizers.'
-        );
+        // Check if they are a chair for this committee
+        const { data: ccData } = await supabase
+          .from('conference_committees')
+          .select('chair_user_ids')
+          .eq('id', conferenceCommittee!.id)
+          .single();
+
+        const chairIds: string[] = (ccData as any)?.chair_user_ids ?? [];
+        const isChair = chairIds.includes(user!.id);
+
+        if (isChair && mode === 'chair') {
+          // Chair joining correctly — no country allocation needed
+          setAllocatedCountry(null);
+          setAllocationError('');
+        } else if (isChair && mode === 'delegate') {
+          // Chair trying to join as delegate
+          setAllocatedCountry(null);
+          setAllocationError('__wrong_role__');
+        } else {
+          // Not allocated at all
+          setAllocatedCountry(null);
+          setAllocationError('__not_associated__');
+        }
       }
       setAllocationLoading(false);
     }
 
     checkAllocation();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isConferenceSession, conferenceCommittee?.id, user?.id]);
+  }, [isConferenceSession, conferenceCommittee?.id, user?.id, mode]);
 
   function doLookup(upper: string, currentMode: JoinMode = mode) {
     setLookingUp(true);
@@ -131,7 +167,7 @@ function JoinPageInner() {
     };
 
     async function checkConferenceSession() {
-      const { data: confCommittee } = await supabaseAuth
+      const { data: confCommittee } = await supabaseAuthClient
         .from('conference_committees')
         .select(`
           id, name, session_code, conference_id,
@@ -341,30 +377,6 @@ function JoinPageInner() {
                 <div className="flex items-center justify-center py-4">
                   <div className="w-5 h-5 border-2 border-[#1B3828] border-t-transparent rounded-full animate-spin" />
                 </div>
-              ) : !user ? (
-                <div
-                  className="rounded-xl px-4 py-4 text-center"
-                  style={{
-                    backgroundColor: 'rgba(238,217,138,0.08)',
-                    border: '1px solid rgba(238,217,138,0.2)',
-                  }}
-                >
-                  <p className="font-semibold text-sm mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-                    Sign in to join this session
-                  </p>
-                  <p className="text-xs mb-3" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                    This is a conference-linked session. You need a Gavelling account to verify your allocation.
-                  </p>
-                  <button
-                    onClick={() => router.push(`/auth/signin?next=/join?code=${encodeURIComponent(code)}`)}
-                    className="rounded-xl py-2.5 px-6 font-bold text-sm focus:outline-none transition-colors"
-                    style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.06em' }}
-                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-                  >
-                    SIGN IN TO JOIN →
-                  </button>
-                </div>
               ) : allocationLoading ? (
                 <div className="flex items-center gap-2 px-4 py-3 rounded-xl" style={{ backgroundColor: 'rgba(27,56,40,0.06)', border: '1px solid rgba(27,56,40,0.1)' }}>
                   <div className="w-4 h-4 border-2 border-[#1B3828] border-t-transparent rounded-full animate-spin flex-shrink-0" />
@@ -393,22 +405,46 @@ function JoinPageInner() {
                     </p>
                   </div>
                 </div>
-              ) : (
-                <div
-                  className="rounded-xl px-4 py-3"
-                  style={{
-                    backgroundColor: 'rgba(139,32,32,0.06)',
-                    border: '1px solid rgba(139,32,32,0.2)',
-                  }}
-                >
-                  <p className="font-semibold text-sm mb-1" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>
-                    Not assigned to this committee
-                  </p>
-                  <p className="text-xs leading-relaxed" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                    {allocationError}
-                  </p>
-                </div>
-              )}
+              ) : null}
+                {allocationError === '__signin__' && (
+                  <div style={{ border: '1px solid #DDD4C0', borderRadius: 12, padding: 16, backgroundColor: '#FAF8F3', marginTop: 12 }}>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: '#1C1410', fontFamily: "'Outfit', sans-serif", marginBottom: 6 }}>
+                      Sign in to join this session
+                    </p>
+                    <p style={{ fontSize: 12, color: '#9A8A78', fontFamily: "'Outfit', sans-serif", marginBottom: 12 }}>
+                      This is a conference session. You need to sign in to verify your allocation.
+                    </p>
+                    <button
+                      onClick={() => router.push('/auth/signin?next=' + encodeURIComponent('/join?code=' + code + '&mode=' + mode))}
+                      className="w-full focus:outline-none"
+                      style={{ padding: '10px 0', borderRadius: 10, border: 'none', backgroundColor: '#1B3828', fontSize: 13, fontWeight: 700, color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.06em', cursor: 'pointer' }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+                    >
+                      SIGN IN
+                    </button>
+                  </div>
+                )}
+                {allocationError === '__not_associated__' && (
+                  <div style={{ border: '1px solid rgba(139,32,32,0.2)', borderRadius: 12, padding: 16, backgroundColor: 'rgba(139,32,32,0.04)', marginTop: 12 }}>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: '#8B2020', fontFamily: "'Outfit', sans-serif", marginBottom: 4 }}>
+                      Session not associated with your account
+                    </p>
+                    <p style={{ fontSize: 12, color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                      This session code is not linked to your account. Please check your allocation or contact your conference organisers.
+                    </p>
+                  </div>
+                )}
+                {allocationError === '__wrong_role__' && (
+                  <div style={{ border: '1px solid rgba(139,32,32,0.2)', borderRadius: 12, padding: 16, backgroundColor: 'rgba(139,32,32,0.04)', marginTop: 12 }}>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: '#8B2020', fontFamily: "'Outfit', sans-serif", marginBottom: 4 }}>
+                      Allocation mismatch
+                    </p>
+                    <p style={{ fontSize: 12, color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                      This session allocation is not associated with your account for this role. Please try again with the correct mode or contact your conference organisers.
+                    </p>
+                  </div>
+                )}
             </div>
           )}
 
