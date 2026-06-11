@@ -1,6 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 import SiteNav from '@/components/SiteNav';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { getCountryDisplayName } from '@/lib/countries';
@@ -62,8 +68,14 @@ export default function AboutClient() {
   const [form, setForm] = useState({ name: '', email: '', country: '', experience: '' });
   const [submitted, setSubmitted] = useState(false);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!form.name || !form.email || !form.country) return;
+    await supabase.from('ambassador_applications').insert({
+      name: form.name.trim(),
+      email: form.email.trim(),
+      country: form.country.trim(),
+      experience: form.experience.trim() || null,
+    });
     setSubmitted(true);
   };
 
