@@ -296,7 +296,7 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, lastSpeakerDelegate
   return (
     <div className="flex flex-col items-center w-full mb-1 shrink-0 pt-2" data-tutorial="speakers-queue">
       <div className="w-full overflow-x-auto">
-      <div className="flex flex-nowrap items-start gap-2 pb-1 justify-center min-w-0 px-1">
+      <div className="flex flex-nowrap items-start gap-2 py-1 justify-center min-w-0 px-1">
         {displayItems.map((s, i) => {
           const isCurrent = currentSpeakerDelegateId && s.delegateId === currentSpeakerDelegateId;
           const flagCountry = getCountryByName(s.country);
