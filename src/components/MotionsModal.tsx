@@ -493,7 +493,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
   }
 
   const primary = order[0];
-  const rest = order.slice(1, 4);
+  const rest = order.slice(1, 5);
 
   const renderCard = (m: PendingMotion, large: boolean, idx: number) => {
     const meta = typeMeta[m.type];
@@ -526,7 +526,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
         className={`relative bg-transparent rounded-2xl flex flex-col cursor-grab ${
           large
             ? `p-6 space-y-3 flex-1 min-w-0 border-2 ${isPrimary ? 'border-[#1B3828]' : 'border-[#DDD4C0]'}`
-            : 'p-4 space-y-2 border border-[#DDD4C0]'
+            : 'p-3 space-y-1 border border-[#DDD4C0]'
         }`}
       >
         {/* Position badge — straddles the top-right border corner */}
@@ -655,12 +655,12 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
         </div>
         {/* Right column — queued motions + Raise a Motion button */}
         {/* pt-3 pr-4: give room for the badge that translates outside each card's top-right corner */}
-        <div className="w-72 flex flex-col overflow-y-auto pt-3 pr-4">
+        <div className="w-72 flex flex-col pt-3 pr-4">
           {rest.map((m, i) => (
             <React.Fragment key={m.id}>
               {renderCard(m, false, i + 1)}
               {i < rest.length - 1 && (
-                <div className="flex items-center gap-2 px-2 pointer-events-none select-none" style={{ opacity: 0.35, height: '20px' }}>
+                <div className="flex items-center gap-2 px-2 pointer-events-none select-none" style={{ opacity: 0.35, height: '14px' }}>
                   <div className="flex-1 h-px" style={{ backgroundColor: '#C8BAA8' }} />
                   <svg width="16" height="10" viewBox="0 0 16 10" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <circle cx="2"  cy="2" r="1.5" fill="#1C1410"/>
@@ -673,7 +673,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
                   <div className="flex-1 h-px" style={{ backgroundColor: '#C8BAA8' }} />
                 </div>
               )}
-              {i === rest.length - 1 && <div style={{ height: '12px' }} />}
+              {i === rest.length - 1 && <div style={{ height: '6px' }} />}
             </React.Fragment>
           ))}
           {!isViewOnly && (
