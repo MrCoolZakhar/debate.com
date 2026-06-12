@@ -137,41 +137,6 @@ function ProposerInput({ candidates, value, onChange, blockedCountries }: {
   );
 }
 
-// ── Proposer selector with Chair shortcut ────────────────────────────────────
-const CHAIR_KEY = '__chair__';
-
-function ProposerSelector({ candidates, value, onChange, blockedCountries }: {
-  candidates: string[];
-  value: string;
-  onChange: (v: string) => void;
-  blockedCountries?: Set<string>;
-}) {
-  const t = useT();
-  const isChair = value === CHAIR_KEY;
-  return (
-    <div className="space-y-2">
-      {/* Chair quick-select pill */}
-      <button
-        type="button"
-        onClick={() => onChange(isChair ? '' : CHAIR_KEY)}
-        className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-sm font-bold transition-all focus:outline-none ${
-          isChair
-            ? 'bg-[#1B3828] border-[#2A5A3C] text-white'
-            : 'bg-transparent border-[#DDD4C0] text-[#6A5A4A] hover:border-[#1B3828]'
-        }`}
-      >
-        <span>🪑</span>
-        <span>Raised by Chair</span>
-        {isChair && <span className="ml-1 text-xs opacity-70">✓</span>}
-      </button>
-      {/* Delegate picker — hidden when chair is selected */}
-      {!isChair && (
-        <ProposerInput candidates={candidates} value={value} onChange={onChange} blockedCountries={blockedCountries} />
-      )}
-    </div>
-  );
-}
-
 // ── Raise Motion Form ─────────────────────────────────────────────────────────
 function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion, belowQuorum = false, isViewOnly = false }: {
   committee: Committee;
@@ -289,7 +254,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
             {type !== 'moderated' && (
               <div>
                 <label className="block text-lg font-semibold mb-2" style={{ color: '#3D7A52' }}>{t('motions_proposed_by')}</label>
-                <ProposerSelector candidates={presentCountries} value={proposer} onChange={setProposer} blockedCountries={countriesWithMotions} />
+                <ProposerInput candidates={presentCountries} value={proposer} onChange={setProposer} blockedCountries={countriesWithMotions} />
               </div>
             )}
 
@@ -388,7 +353,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
                 </div>
                 <div>
                   <label className="block text-lg font-semibold mb-2" style={{ color: '#3D7A52' }}>{t('motions_proposed_by')}</label>
-                  <ProposerSelector candidates={presentCountries} value={proposer} onChange={setProposer} blockedCountries={countriesWithMotions} />
+                  <ProposerInput candidates={presentCountries} value={proposer} onChange={setProposer} blockedCountries={countriesWithMotions} />
                 </div>
                 {/* Total time + speaking time — side by side to avoid scroll */}
                 <div className="flex gap-4 items-start">
@@ -588,9 +553,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
               </button>
             )}
           </span>
-          {m.proposedBy === CHAIR_KEY
-            ? <span className={`shrink-0 ${large ? 'text-3xl' : 'text-xl'}`}>🪑</span>
-            : f ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ borderRadius: '8px', border: SQUARE_FLAGS.has(f.code) ? 'none' : '1.5px solid rgba(28,20,16,0.10)', objectFit: 'cover' }} className={large ? 'w-14 h-10 inline-block' : 'w-8 h-6 inline-block'} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : null}
+          {f ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ borderRadius: '8px', border: SQUARE_FLAGS.has(f.code) ? 'none' : '1.5px solid rgba(28,20,16,0.10)', objectFit: 'cover' }} className={large ? 'w-14 h-10 inline-block' : 'w-8 h-6 inline-block'} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : null}
         </div>
 
         {/* Topic inline */}
@@ -1003,7 +966,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
     return (
       <div className="fixed inset-0 z-[60] bg-[#F6F1E9] flex flex-col items-center justify-center text-center px-8">
         <p className="text-xs font-mono tracking-widest text-[#9A8A78] mb-6">
-          {typeMeta[specialVoteMotion.type].label.toUpperCase()} · {specialVoteMotion.proposedBy === CHAIR_KEY ? 'Chair' : getCountryDisplayName(specialVoteMotion.proposedBy, language)}
+          {typeMeta[specialVoteMotion.type].label.toUpperCase()} · {getCountryDisplayName(specialVoteMotion.proposedBy, language)}
         </p>
         <h1 className="text-4xl font-black mb-14 tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{t('motions_does_pass')}</h1>
         <div className="flex gap-8">
@@ -1110,10 +1073,8 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
                               <DisruptivenessBadge type={m.type} />
                             </div>
                             <div className="flex items-center gap-1.5 mt-1">
-                              {m.proposedBy === CHAIR_KEY
-                                ? <span className="text-base">🪑</span>
-                                : proposerFlag ? <img src={getFlagUrl(proposerFlag.code)} alt={proposerFlag.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <Emoji size="1rem">🌐</Emoji>}
-                              <span className="text-sm font-semibold text-[#1C1410]">{m.proposedBy === CHAIR_KEY ? 'Chair' : getCountryDisplayName(m.proposedBy, language)}</span>
+                              {proposerFlag ? <img src={getFlagUrl(proposerFlag.code)} alt={proposerFlag.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <Emoji size="1rem">🌐</Emoji>}
+                              <span className="text-sm font-semibold text-[#1C1410]">{getCountryDisplayName(m.proposedBy, language)}</span>
                             </div>
                             {m.topic && <p className="text-sm text-[#6A5A4A] mt-1 font-medium">"{m.topic}"</p>}
                             <div className="flex items-center gap-2 mt-1.5 flex-wrap">
