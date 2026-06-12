@@ -566,21 +566,46 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
         {/* Timings — emphasised */}
         {m.type !== 'tour' && m.totalTime > 0 && (
           <div className="flex flex-col gap-0.5">
-            <p className={`${large ? 'text-sm' : 'text-xs'}`} style={{ color: '#1C1410' }}>
-              <span className="font-semibold" style={{ color: '#1B3828' }}>{t('motions_total_time_display')} </span>
-              <span className="font-black">{fmtTime(totalMins, totalSecs)}</span>
-            </p>
-            {m.type === 'moderated' && m.speakingTime > 0 && (
-              <p className={`${large ? 'text-sm' : 'text-xs'}`} style={{ color: '#1C1410' }}>
-                <span className="font-semibold" style={{ color: '#1B3828' }}>{t('motions_speaker_time_display')} </span>
-                <span className="font-black">{fmtTime(speakMins, speakSecs)}</span>
-              </p>
-            )}
-            {m.type === 'moderated' && m.speakingTime > 0 && m.totalTime > 0 && (
-              <p className={`${large ? 'text-sm' : 'text-xs'}`} style={{ color: '#1C1410' }}>
-                <span className="font-semibold" style={{ color: '#1B3828' }}>{t('motions_total_speakers_display')} </span>
-                <span className="font-black">{Math.floor(m.totalTime / m.speakingTime)} {Math.floor(m.totalTime / m.speakingTime) === 1 ? t('motions_speaker_singular') : t('motions_speaker_plural')}{m.totalTime % m.speakingTime !== 0 ? ' ⚠' : ''}</span>
-              </p>
+            {large ? (
+              <>
+                <p className="text-sm" style={{ color: '#1C1410' }}>
+                  <span className="font-semibold" style={{ color: '#1B3828' }}>{t('motions_total_time_display')} </span>
+                  <span className="font-black">{fmtTime(totalMins, totalSecs)}</span>
+                </p>
+                {m.type === 'moderated' && m.speakingTime > 0 && (
+                  <p className="text-sm" style={{ color: '#1C1410' }}>
+                    <span className="font-semibold" style={{ color: '#1B3828' }}>{t('motions_speaker_time_display')} </span>
+                    <span className="font-black">{fmtTime(speakMins, speakSecs)}</span>
+                  </p>
+                )}
+                {m.type === 'moderated' && m.speakingTime > 0 && m.totalTime > 0 && (
+                  <p className="text-sm" style={{ color: '#1C1410' }}>
+                    <span className="font-semibold" style={{ color: '#1B3828' }}>{t('motions_total_speakers_display')} </span>
+                    <span className="font-black">{Math.floor(m.totalTime / m.speakingTime)} {Math.floor(m.totalTime / m.speakingTime) === 1 ? t('motions_speaker_singular') : t('motions_speaker_plural')}{m.totalTime % m.speakingTime !== 0 ? ' ⚠' : ''}</span>
+                  </p>
+                )}
+              </>
+            ) : (
+              <>
+                {/* Small cards: merge total + speaker time onto one line */}
+                <p className="text-xs" style={{ color: '#1C1410' }}>
+                  <span className="font-semibold" style={{ color: '#1B3828' }}>{t('motions_total_time_display')} </span>
+                  <span className="font-black">{fmtTime(totalMins, totalSecs)}</span>
+                  {m.type === 'moderated' && m.speakingTime > 0 && (
+                    <>
+                      <span className="mx-1 opacity-40">·</span>
+                      <span className="font-semibold" style={{ color: '#1B3828' }}>{t('motions_speaker_time_display')} </span>
+                      <span className="font-black">{fmtTime(speakMins, speakSecs)}</span>
+                    </>
+                  )}
+                </p>
+                {m.type === 'moderated' && m.speakingTime > 0 && m.totalTime > 0 && (
+                  <p className="text-xs" style={{ color: '#1C1410' }}>
+                    <span className="font-semibold" style={{ color: '#1B3828' }}>{t('motions_total_speakers_display')} </span>
+                    <span className="font-black">{Math.floor(m.totalTime / m.speakingTime)} {Math.floor(m.totalTime / m.speakingTime) === 1 ? t('motions_speaker_singular') : t('motions_speaker_plural')}{m.totalTime % m.speakingTime !== 0 ? ' ⚠' : ''}</span>
+                  </p>
+                )}
+              </>
             )}
           </div>
         )}
