@@ -227,6 +227,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   const [votes, setVotes] = useState<DelegateVote[]>([]);
   const [phase, setPhase] = useState<VotingPhase>('voting');
   const [currentVoterIndex, setCurrentVoterIndex] = useState(0);
+  const [passedIds, setPassedIds] = useState<string[]>([]);
   const [rightsIndex, setRightsIndex] = useState(0);
   const [rightsSpeakerTime, setRightsSpeakerTime] = useState(60);
   const [rightsRunning, setRightsRunning] = useState(false);
@@ -378,6 +379,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     setCurrentVoterIndex(0);
     setRightsIndex(0);
     setOrderedRights([]);
+    setPassedIds([]);
     resultPersistedRef.current = false;
   };
 
@@ -388,6 +390,11 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       return [...prev, { delegateId, country, choice }];
     });
     setCurrentVoterIndex((i) => i + 1);
+  };
+
+  const handlePass = (delegateId: string) => {
+    setPassedIds(prev => [...prev, delegateId]);
+    setCurrentVoterIndex(i => i + 1);
   };
 
   const handleFinishVoting = () => {
@@ -523,10 +530,30 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     );
   }
 
-  const currentDelegate = currentVoterIndex < presentDelegates.length
-    ? presentDelegates[currentVoterIndex]
-    : null;
-  const upcomingDelegates = presentDelegates.slice(currentVoterIndex + 1, currentVoterIndex + 6);
+  // Pass-round: derived, no extra state needed
+  const mainRoundComplete = currentVoterIndex >= presentDelegates.length;
+  const passVoterIndex = passedIds.filter(id => votes.some(v => v.delegateId === id)).length;
+  const inPassRound = mainRoundComplete && passVoterIndex < passedIds.length;
+
+  const currentDelegate = (() => {
+    if (!mainRoundComplete) return presentDelegates[currentVoterIndex];
+    if (inPassRound) {
+      const nextId = passedIds[passVoterIndex];
+      return committee.delegates.find(d => d.id === nextId) ?? null;
+    }
+    return null;
+  })();
+
+  const upcomingDelegates = (() => {
+    if (!mainRoundComplete) return presentDelegates.slice(currentVoterIndex + 1, currentVoterIndex + 6);
+    if (inPassRound) {
+      return passedIds
+        .slice(passVoterIndex + 1, passVoterIndex + 6)
+        .map(id => committee.delegates.find(d => d.id === id)!)
+        .filter(Boolean);
+    }
+    return [];
+  })();
 
   return (
     <div className="h-screen bg-[#F6F1E9] flex flex-col overflow-hidden">
@@ -536,7 +563,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
         </span>
         <span className="text-sm font-bold text-[#1C1410] truncate hidden sm:block">{selectedDoc.title}</span>
         <span className="text-xs text-[#9A8A78] shrink-0">
-          {Math.min(currentVoterIndex, presentDelegates.length)}/{presentDelegates.length} voted
+          {votes.length}/{presentDelegates.length} voted
         </span>
         <button
           onClick={() => setSelectedDocId(null)}
@@ -549,6 +576,19 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       {/* ── Active voting: one delegate at a time ── */}
       {phase === 'voting' && currentDelegate && (
         <div className="flex-1 flex flex-col items-center py-6 px-4 overflow-hidden">
+          {inPassRound && (
+            <div className="w-full max-w-3xl mb-2 flex items-center justify-center gap-2 py-1 px-3 rounded-xl"
+              style={{ backgroundColor: 'rgba(182,135,31,0.15)', border: '1px solid rgba(182,135,31,0.35)' }}>
+              <span className="text-[10px] font-black text-amber-400 font-mono tracking-widest">
+                {t('voting_pass_round')}
+              </span>
+              <span className="text-[10px] text-[#9A8A78] font-mono">
+                {t('voting_pass_round_sub')
+                  .replace('{current}', String(passVoterIndex + 1))
+                  .replace('{total}', String(passedIds.length))}
+              </span>
+            </div>
+          )}
           {/* Current voter */}
           <div className="flex-1 flex flex-col items-center justify-center min-h-0">
             <div className="select-none mb-3 flex items-center justify-center">
@@ -606,6 +646,14 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             ) : (
               <button disabled className="flex-1 bg-[#EDE7D8] border border-[#DDD4C0] text-[#9A8A78] font-black text-base py-6 rounded-2xl opacity-40 cursor-not-allowed">
                 {t('voting_abstain_pv')}
+              </button>
+            )}
+            {!inPassRound && (
+              <button
+                onClick={() => handlePass(currentDelegate.id)}
+                className="flex-1 bg-[#EDE7D8] hover:bg-[#DDD4C0] border border-[#DDD4C0] text-[#6A5A4A] font-black text-sm py-6 rounded-2xl transition-colors"
+              >
+                {t('voting_pass')}
               </button>
             )}
             <button
