@@ -802,7 +802,7 @@ function ModeratedCaucusMain({
             </div>
           )}
           {/* ZONE 2 — Flag + name + timer + progress: compresses as viewport shrinks */}
-          <div className="relative flex-1 min-h-0 flex flex-col items-center justify-center px-4 py-2 overflow-hidden">
+          <div className="relative flex-1 min-h-0 flex flex-col items-center justify-center px-4 py-2">
             <div className="absolute left-0 top-1/2 -translate-y-1/2 flex flex-col gap-1.5 max-w-[160px] pl-4 pointer-events-none select-none">
               <span className="text-[#1C1410] font-black text-lg leading-tight uppercase">
                 {committee.caucus?.motionLabel ?? caucusTitle}
@@ -2314,7 +2314,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                         })()}
                       </div>
                       {/* ZONE 2 — Flag + name + timer + progress: compresses as viewport shrinks */}
-                      <div className="flex-1 min-h-0 flex flex-col items-center justify-center overflow-hidden px-4 py-1">
+                      <div className="flex-1 min-h-0 flex flex-col items-center justify-center px-4 py-1">
                         <div style={{ width: 'clamp(120px, 20vh, 220px)', height: 'clamp(80px, 13.3vh, 147px)', borderRadius: '12px', boxShadow: '0 0 0 2.5px rgba(28,20,16,0.22)', flexShrink: 0, position: 'relative' }}>
                           {(() => {
                             const f = getCountryByName(committee.currentSpeaker.country);
