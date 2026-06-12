@@ -1823,6 +1823,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const handleToggleChat = () => {
     const newShow = !showChat;
     setShowChat(newShow);
+    if (!newShow) {
+      setShowRollCall(true);
+    }
     if (newShow) {
       setShowRollCall(false);
       setShowSliders(false);
