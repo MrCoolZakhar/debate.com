@@ -592,7 +592,8 @@ const RollCallPanel = React.memo(RollCallPanelInner, (prev, next) => {
     prev.isTdT === next.isTdT &&
     prev.isRoomOrderTdT === next.isRoomOrderTdT &&
     prev.onListIds === next.onListIds &&
-    prev.listView === next.listView
+    prev.listView === next.listView &&
+    prev.onReorderList === next.onReorderList
   );
 });
 
