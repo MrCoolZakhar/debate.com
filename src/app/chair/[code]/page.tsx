@@ -826,11 +826,11 @@ function ModeratedCaucusMain({
                 })()}</span>
               </div>
             ) : (
-              <div style={{ width: 'clamp(120px, 20vh, 220px)', height: 'clamp(80px, 13.3vh, 147px)', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 0 0 2.5px rgba(28,20,16,0.22)', flexShrink: 0, position: 'relative' }}>
+              <div style={{ width: 'clamp(120px, 20vh, 220px)', height: 'clamp(80px, 13.3vh, 147px)', borderRadius: '12px', boxShadow: '0 0 0 2.5px rgba(28,20,16,0.22)', flexShrink: 0, position: 'relative' }}>
                 {(() => {
                   const f = getCountryByName(committee.caucus!.currentSpeaker!);
                   return f
-                    ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                    ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '12px', display: 'block' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                     : <Emoji size="5rem" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>🌐</Emoji>;
                 })()}
               </div>
@@ -2315,11 +2315,11 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                       </div>
                       {/* ZONE 2 — Flag + name + timer + progress: compresses as viewport shrinks */}
                       <div className="flex-1 min-h-0 flex flex-col items-center justify-center overflow-hidden px-4 py-1">
-                        <div style={{ width: 'clamp(120px, 20vh, 220px)', height: 'clamp(80px, 13.3vh, 147px)', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 0 0 2.5px rgba(28,20,16,0.22)', flexShrink: 0, position: 'relative' }}>
+                        <div style={{ width: 'clamp(120px, 20vh, 220px)', height: 'clamp(80px, 13.3vh, 147px)', borderRadius: '12px', boxShadow: '0 0 0 2.5px rgba(28,20,16,0.22)', flexShrink: 0, position: 'relative' }}>
                           {(() => {
                             const f = getCountryByName(committee.currentSpeaker.country);
                             return f
-                              ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                              ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '12px', display: 'block' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                               : <Emoji size="5rem" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>🌐</Emoji>;
                           })()}
                         </div>
