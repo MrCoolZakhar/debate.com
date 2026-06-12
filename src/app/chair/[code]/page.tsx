@@ -295,8 +295,7 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, lastSpeakerDelegate
   const overflow = qLen > 7 ? qLen - 7 : 0;
   return (
     <div className="flex flex-col items-center w-full mb-1 shrink-0 pt-2" data-tutorial="speakers-queue">
-      <div className="w-full overflow-x-auto">
-      <div className="flex flex-nowrap items-start gap-2 py-1 justify-center min-w-0 px-1">
+      <div className="flex flex-nowrap items-start gap-2 justify-center min-w-0 px-1">
         {displayItems.map((s, i) => {
           const isCurrent = currentSpeakerDelegateId && s.delegateId === currentSpeakerDelegateId;
           const flagCountry = getCountryByName(s.country);
@@ -319,8 +318,8 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, lastSpeakerDelegate
                   <span className="text-2xl font-black" style={{ color: '#1B3828' }}>{i + 2}</span>
                 </div>
               ) : (
-                <div style={{ width: '60px', height: '45px', borderRadius: '8px', overflow: 'hidden', position: 'relative', boxShadow: flagCountry && SQUARE_FLAGS.has(flagCountry.code) ? 'none' : '0 0 0 1.5px rgba(28,20,16,0.20)', backgroundColor: '#F0EBE1', flexShrink: 0 }}>
-                  {flagCountry ? <img src={getFlagUrl(flagCountry.code)} alt={s.country} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <Emoji size="1.5rem" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>🌐</Emoji>}
+                <div style={{ width: '60px', height: '45px', borderRadius: '8px', position: 'relative', boxShadow: flagCountry && SQUARE_FLAGS.has(flagCountry.code) ? 'none' : '0 0 0 1.5px rgba(28,20,16,0.20)', backgroundColor: '#F0EBE1', flexShrink: 0 }}>
+                  {flagCountry ? <img src={getFlagUrl(flagCountry.code)} alt={s.country} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px', display: 'block' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <Emoji size="1.5rem" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>🌐</Emoji>}
                 </div>
               )}
               {!isRoomOrderTdT && (
@@ -338,7 +337,6 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, lastSpeakerDelegate
             </div>
           );
         })}
-      </div>
       </div>
       <div className="text-center h-10 flex items-start justify-center pt-1">
         {overflow > 0 && (
