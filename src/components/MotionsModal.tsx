@@ -70,6 +70,9 @@ function DisruptivenessBadge({ type }: { type: PendingMotionType }) {
   return <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${colors[type]}`}>{labels[type]}</span>;
 }
 
+const CHAIR_KEY = '__chair__';
+const chairDisplayName = (language: string) => language === 'fr' ? 'Président' : language === 'es' ? 'Presidente' : 'Chair';
+
 function ProposerInput({ candidates, value, onChange, blockedCountries }: {
   candidates: string[]; value: string; onChange: (v: string) => void; blockedCountries?: Set<string>;
 }) {
@@ -79,25 +82,28 @@ function ProposerInput({ candidates, value, onChange, blockedCountries }: {
   const [open, setOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const q = query.trim().toLowerCase();
-  const matches = q
-    ? candidates
-        .filter((c) => getCountryDisplayName(c, language).toLowerCase().startsWith(q))
-        .concat(candidates.filter((c) =>
-          !getCountryDisplayName(c, language).toLowerCase().startsWith(q) &&
-          getCountryDisplayName(c, language).toLowerCase().includes(q)
-        ))
+  const dName = (c: string) => c === CHAIR_KEY ? chairDisplayName(language) : getCountryDisplayName(c, language);
+  // Chair entry: always show at top when query is empty or matches "chair"
+  const chairBlocked = blockedCountries?.has(CHAIR_KEY) ?? false;
+  const showChair = !q || chairDisplayName(language).toLowerCase().includes(q);
+  const delegateMatches = q
+    ? candidates.filter((c) => c !== CHAIR_KEY && dName(c).toLowerCase().startsWith(q))
+        .concat(candidates.filter((c) => c !== CHAIR_KEY && !dName(c).toLowerCase().startsWith(q) && dName(c).toLowerCase().includes(q)))
     : [];
+  const matches = showChair ? [CHAIR_KEY, ...delegateMatches] : delegateMatches;
   const top = matches[0] ?? null;
   const commit = (country: string) => {
     if (blockedCountries?.has(country)) return;
-    onChange(country); setQuery(getCountryDisplayName(country, language)); setOpen(false);
+    onChange(country); setQuery(dName(country)); setOpen(false);
   };
   return (
     <div className="relative">
       {value && !open ? (
         <div className="flex items-center gap-3 bg-[#1B3828]/10 border-2 border-[#3D7A52]/40 rounded-xl px-4 py-3">
-          {(() => { const f = getCountryByName(value); return f ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ borderRadius: '6px', border: '1.5px solid rgba(28,20,16,0.10)', objectFit: 'cover' }} className="w-7 h-5 inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : null; })()}
-          <span className="text-sm text-[#1C1410] flex-1 font-semibold">{getCountryDisplayName(value, language)}</span>
+          {value === CHAIR_KEY
+            ? <span className="text-lg leading-none">🪑</span>
+            : (() => { const f = getCountryByName(value); return f ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ borderRadius: '6px', border: '1.5px solid rgba(28,20,16,0.10)', objectFit: 'cover' }} className="w-7 h-5 inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : null; })()}
+          <span className="text-sm text-[#1C1410] flex-1 font-semibold">{dName(value)}</span>
           <button onClick={() => { setOpen(true); setQuery(''); onChange(''); inputRef.current?.focus(); }} className="text-xs font-bold transition-colors focus:outline-none" style={{ color: '#2A5A3C' }}>{t('motions_change')}</button>
         </div>
       ) : (
@@ -107,13 +113,14 @@ function ProposerInput({ candidates, value, onChange, blockedCountries }: {
             onKeyDown={(e) => { if (e.key === 'Enter' && top) { e.preventDefault(); commit(top); } if (e.key === 'Escape') { setQuery(''); setOpen(false); } }}
             placeholder={t('motions_proposer_placeholder')}
             className="flex-1 bg-transparent px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none text-sm" />
-          {top && query && <span className="text-xs text-[#9A8A78] px-3 truncate max-w-[120px]">↵ {getCountryDisplayName(top, language)}</span>}
+          {top && query && <span className="text-xs text-[#9A8A78] px-3 truncate max-w-[120px]">↵ {dName(top)}</span>}
         </div>
       )}
-      {open && query && matches.length > 0 && (
+      {open && (query || showChair) && matches.length > 0 && (
         <div className="absolute top-full left-0 right-0 mt-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl overflow-hidden z-50 shadow-xl max-h-48 overflow-y-auto">
-          {matches.slice(0, 6).map((country, i) => {
-            const found = getCountryByName(country);
+          {matches.slice(0, 7).map((country, i) => {
+            const isChair = country === CHAIR_KEY;
+            const found = isChair ? null : getCountryByName(country);
             const isBlocked = blockedCountries?.has(country) ?? false;
             return (
               <button key={country}
@@ -123,8 +130,10 @@ function ProposerInput({ candidates, value, onChange, blockedCountries }: {
                   isBlocked ? 'opacity-50 cursor-not-allowed bg-[#FAF8F3]' :
                   i === 0 ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'
                 }`}>
-                {found ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <Emoji size="1.125rem">🌐</Emoji>}
-                <span className="text-sm flex-1">{getCountryDisplayName(country, language)}</span>
+                {isChair
+                  ? <span className="text-base leading-none">🪑</span>
+                  : found ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <Emoji size="1.125rem">🌐</Emoji>}
+                <span className="text-sm flex-1">{dName(country)}</span>
                 {isBlocked
                   ? <span className="text-xs text-[#B8844A] shrink-0 font-semibold">{t('motions_motion_on_floor')}</span>
                   : i === 0 && <span className="ml-auto text-xs text-[#9A8A78]">Enter ↵</span>}
@@ -553,7 +562,9 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
               </button>
             )}
           </span>
-          {f ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ borderRadius: '8px', border: SQUARE_FLAGS.has(f.code) ? 'none' : '1.5px solid rgba(28,20,16,0.10)', objectFit: 'cover' }} className={large ? 'w-14 h-10 inline-block' : 'w-8 h-6 inline-block'} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : null}
+          {m.proposedBy === CHAIR_KEY
+            ? <span className={`shrink-0 ${large ? 'text-3xl' : 'text-xl'}`}>🪑</span>
+            : f ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ borderRadius: '8px', border: SQUARE_FLAGS.has(f.code) ? 'none' : '1.5px solid rgba(28,20,16,0.10)', objectFit: 'cover' }} className={large ? 'w-14 h-10 inline-block' : 'w-8 h-6 inline-block'} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : null}
         </div>
 
         {/* Topic inline */}
@@ -966,7 +977,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
     return (
       <div className="fixed inset-0 z-[60] bg-[#F6F1E9] flex flex-col items-center justify-center text-center px-8">
         <p className="text-xs font-mono tracking-widest text-[#9A8A78] mb-6">
-          {typeMeta[specialVoteMotion.type].label.toUpperCase()} · {getCountryDisplayName(specialVoteMotion.proposedBy, language)}
+          {typeMeta[specialVoteMotion.type].label.toUpperCase()} · {specialVoteMotion.proposedBy === CHAIR_KEY ? chairDisplayName(language) : getCountryDisplayName(specialVoteMotion.proposedBy, language)}
         </p>
         <h1 className="text-4xl font-black mb-14 tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{t('motions_does_pass')}</h1>
         <div className="flex gap-8">
@@ -1073,8 +1084,10 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
                               <DisruptivenessBadge type={m.type} />
                             </div>
                             <div className="flex items-center gap-1.5 mt-1">
-                              {proposerFlag ? <img src={getFlagUrl(proposerFlag.code)} alt={proposerFlag.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <Emoji size="1rem">🌐</Emoji>}
-                              <span className="text-sm font-semibold text-[#1C1410]">{getCountryDisplayName(m.proposedBy, language)}</span>
+                              {m.proposedBy === CHAIR_KEY
+                                ? <span className="text-base leading-none">🪑</span>
+                                : proposerFlag ? <img src={getFlagUrl(proposerFlag.code)} alt={proposerFlag.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <Emoji size="1rem">🌐</Emoji>}
+                              <span className="text-sm font-semibold text-[#1C1410]">{m.proposedBy === CHAIR_KEY ? chairDisplayName(language) : getCountryDisplayName(m.proposedBy, language)}</span>
                             </div>
                             {m.topic && <p className="text-sm text-[#6A5A4A] mt-1 font-medium">"{m.topic}"</p>}
                             <div className="flex items-center gap-2 mt-1.5 flex-wrap">
