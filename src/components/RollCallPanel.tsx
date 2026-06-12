@@ -257,6 +257,7 @@ function RollCallPanelInner({
   onDelegateAdd,
   onReorderList,
   isRollCallPhase = false,
+  showStatusSliders = false,
   showBulkActions = false,
   showViewToggle = true,
   isReadOnly = false,
@@ -277,6 +278,7 @@ function RollCallPanelInner({
   onDelegateAdd?: (country: string) => void;
   onReorderList?: (newList: { delegateId: string; country: string }[]) => void;
   isRollCallPhase?: boolean;
+  showStatusSliders?: boolean;
   showBulkActions?: boolean;
   showViewToggle?: boolean;
   isReadOnly?: boolean;
@@ -498,9 +500,9 @@ function RollCallPanelInner({
                     ? 'border'
                     : 'border'
                 } ${
-                  (!isRollCallPhase && onAddToList && !isAbsent) || isRollCallPhase
+                  (!isRollCallPhase && !showStatusSliders && onAddToList && !isAbsent) || isRollCallPhase || showStatusSliders
                     ? 'cursor-pointer'
-                    : isAbsent && !isRollCallPhase
+                    : isAbsent && !isRollCallPhase && !showStatusSliders
                     ? 'cursor-not-allowed'
                     : ''
                 } ${isDraggable ? 'cursor-grab' : ''}`}
@@ -538,10 +540,10 @@ function RollCallPanelInner({
                 <span className={`flex-1 truncate ${isUpNext ? 'text-lg font-bold' : 'text-base'} ${!isAbsent ? 'font-medium' : 'opacity-50'}`} style={{ color: '#EDE7D8' }}>
                   {getCountryDisplayName(d.country, language)}
                 </span>
-                {isAbsent && !isRollCallPhase && (
+                {isAbsent && !(isRollCallPhase || showStatusSliders) && (
                   <span className="text-[10px] shrink-0 font-mono ml-auto uppercase tracking-wide" style={{ color: 'rgba(237,231,216,0.35)' }}>{t('rollcall_absent')}</span>
                 )}
-                {isRollCallPhase && (
+                {(isRollCallPhase || showStatusSliders) && (
                   <div onClick={(e) => e.stopPropagation()} className={`ml-auto shrink-0 ${(isReadOnly || isViewOnly) ? 'pointer-events-none opacity-50' : ''}`}>
                     <StatusSlider status={effectiveStatus} onCycle={() => cycleStatus(d.id, effectiveStatus)} />
                   </div>
@@ -585,6 +587,7 @@ const RollCallPanel = React.memo(RollCallPanelInner, (prev, next) => {
     prev.committee.currentSpeaker === next.committee.currentSpeaker &&
     prev.committee.caucusQueue === next.committee.caucusQueue &&
     prev.isRollCallPhase === next.isRollCallPhase &&
+    prev.showStatusSliders === next.showStatusSliders &&
     prev.showBulkActions === next.showBulkActions &&
     prev.showViewToggle === next.showViewToggle &&
     prev.isReadOnly === next.isReadOnly &&

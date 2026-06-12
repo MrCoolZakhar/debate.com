@@ -2141,7 +2141,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                     onCycleStatus={handleCycleStatus}
                     onStatusChange={handleStatusChange}
                     onDelegateAdd={handleDelegateAdd}
-                    isRollCallPhase={showSliders}
+                    showStatusSliders={showSliders}
                     isReadOnly={sessionEnded}
                     isViewOnly={isViewOnly} />
                 ) : (committee.phase === 'unmoderated-caucus' && committee.caucus) ? (
@@ -2149,7 +2149,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                     onCycleStatus={handleCycleStatus}
                     onStatusChange={handleStatusChange}
                     onDelegateAdd={handleDelegateAdd}
-                    isRollCallPhase={showSliders}
+                    showStatusSliders={showSliders}
                     showViewToggle={false}
                     isReadOnly={sessionEnded}
                     isViewOnly={isViewOnly} />
@@ -2163,7 +2163,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                     onPhaseChange={handlePhaseChange}
                     onDelegateAdd={handleDelegateAdd}
                     onReorderList={handleReorderSpeakersList}
-                    isRollCallPhase={showSliders}
+                    showStatusSliders={showSliders}
                     listView={gslListView}
                     onListViewChange={setGslListView}
                     isReadOnly={sessionEnded}
