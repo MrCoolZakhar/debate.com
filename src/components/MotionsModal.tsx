@@ -159,8 +159,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
   const { getSettings } = useSettingsStore();
   const s = getSettings(committee.code);
   const DEFAULT_ORDER: PendingMotionType[] = ['moderated', 'unmoderated', 'tour', 'consultation'];
-  const typeOrder: PendingMotionType[] = (s.motionOrder ?? DEFAULT_ORDER) as PendingMotionType[];
-  const enabledTypes = typeOrder.filter((motionType) => {
+  const enabledTypes = DEFAULT_ORDER.filter((motionType) => {
     if (motionType === 'moderated')    return s.motionModeratedCaucus !== false;
     if (motionType === 'unmoderated')  return s.motionUnmoderatedCaucus !== false;
     if (motionType === 'consultation') return s.motionCoW !== false;
