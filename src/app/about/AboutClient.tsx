@@ -17,9 +17,12 @@ const AMBASSADORS = [
   // Europe
   { name: 'Kyle Wilkinson',          country: 'United Kingdom', initials: 'KW', photo: '/ambassador-photos/kyle_ambassador.png', photoPosition: 'center 50%' },
   { name: 'Celine Nasser',           country: 'United Kingdom', initials: 'CN', photo: '/ambassador-photos/celine_ambassador.png' },
+  { name: 'Daniel O\'Neil Ferrero',  country: 'Scotland',       initials: 'DF', photo: '/ambassador-photos/Daniel_ambassador.png' },
   { name: 'Noelia Alvarez Iglesias', country: 'Spain',          initials: 'NA', photo: '/ambassador-photos/noelia_ambassador.png' },
   { name: 'Félix Losada Ottino',     country: 'Spain',          initials: 'FL', photo: '/ambassador-photos/felix_ambassador.png', photoPosition: 'center 25%' },
   { name: 'Luca Formichella',        country: 'Italy',          initials: 'LF', photo: '/ambassador-photos/luca_ambassador.png', photoPosition: 'center 20%' },
+  { name: 'Amna Sikandar',           country: 'France',         initials: 'AS', photo: '/ambassador-photos/Amna_ambassador.png' },
+  { name: 'Vlad Gheorghe',           country: 'Romania',        initials: 'VG', photo: '/ambassador-photos/Vlad_ambassador.png' },
   // North America
   { name: 'Spencer Lindsay',         country: 'Canada',         initials: 'SL', photo: '/ambassador-photos/spencer_ambassador.jpeg' },
   { name: 'Armande Loretz',          country: 'France',         initials: 'AL', photo: '/ambassador-photos/armande_ambassador.png' },
