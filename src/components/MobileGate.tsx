@@ -6,10 +6,11 @@ export default function MobileGate({ children }: { children: React.ReactNode }) 
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 768);
-    check();
-    window.addEventListener('resize', check);
-    return () => window.removeEventListener('resize', check);
+    // Use user-agent to detect actual mobile/tablet devices, not screen size.
+    // This means zooming in on a desktop never triggers the gate.
+    const ua = navigator.userAgent;
+    const isTouchDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+    setIsMobile(isTouchDevice);
   }, []);
 
   if (!isMobile) return <>{children}</>;
