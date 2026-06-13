@@ -26,6 +26,7 @@ export interface CommitteeSettings {
   motionCoW: boolean;
   motionTourDeTable: boolean;
   motionNames: MotionNames;
+  motionOrder: ('moderated' | 'unmoderated' | 'consultation' | 'tour')[];
   wpSubmissionLimit: number | null;  // null = unlimited
   drSubmissionLimit: number | null;
   // GSL behaviour
@@ -33,9 +34,6 @@ export interface CommitteeSettings {
   // Tab 3 — Access & Identity
   chairJoinSuffix: string;
   requireChairApproval: boolean;
-  chairSessionPersistence: boolean;
-  chairTakeoverProtection: boolean;
-  requireDelegationName: boolean;
 }
 
 export const DEFAULT_MOTION_NAMES: MotionNames = {
@@ -61,13 +59,11 @@ export const DEFAULT_SETTINGS: CommitteeSettings = {
   motionCoW: true,
   motionTourDeTable: true,
   motionNames: { ...DEFAULT_MOTION_NAMES },
+  motionOrder: ['moderated', 'unmoderated', 'tour', 'consultation'],
   wpSubmissionLimit: null,
   drSubmissionLimit: null,
   chairJoinSuffix: '',
   requireChairApproval: false,
-  chairSessionPersistence: true,
-  chairTakeoverProtection: true,
-  requireDelegationName: true,
   gslRequireNextSpeaker: false,
 };
 

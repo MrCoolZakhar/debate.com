@@ -44,8 +44,6 @@ function buildTypeMeta(motionNames: MotionNames): TypeMeta {
   };
 }
 
-// Regular motion types (moderated first per design spec)
-const TYPE_ORDER: PendingMotionType[] = ['moderated', 'unmoderated', 'tour', 'consultation'];
 
 function requiredVotes(type: PendingMotionType, present: number): { needed: number; fraction: string } {
   if (type === 'consultation' || type === 'tour') return { needed: Math.ceil((present * 2) / 3), fraction: '2/3 majority' };
@@ -160,7 +158,9 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
   const { language } = useLanguage();
   const { getSettings } = useSettingsStore();
   const s = getSettings(committee.code);
-  const enabledTypes = TYPE_ORDER.filter((motionType) => {
+  const DEFAULT_ORDER: PendingMotionType[] = ['moderated', 'unmoderated', 'tour', 'consultation'];
+  const typeOrder: PendingMotionType[] = (s.motionOrder ?? DEFAULT_ORDER) as PendingMotionType[];
+  const enabledTypes = typeOrder.filter((motionType) => {
     if (motionType === 'moderated')    return s.motionModeratedCaucus !== false;
     if (motionType === 'unmoderated')  return s.motionUnmoderatedCaucus !== false;
     if (motionType === 'consultation') return s.motionCoW !== false;

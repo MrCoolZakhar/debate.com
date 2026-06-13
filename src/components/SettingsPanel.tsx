@@ -11,7 +11,7 @@ import { useT, useLanguage } from '@/contexts/LanguageContext';
 type SettingsTab = 'voting' | 'motions' | 'access' | 'points';
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
-  return <p className="text-[10px] font-mono font-bold tracking-widest mb-1 mt-5 first:mt-0" style={{ color: '#1B3828' }}>{children}</p>;
+  return <p className="text-[11px] font-black tracking-wider uppercase mb-1 mt-5 first:mt-0" style={{ color: '#1B3828', letterSpacing: '0.08em' }}>{children}</p>;
 }
 
 function CodeCopyButton({ code }: { code: string }) {
@@ -111,6 +111,147 @@ function RenameRow({ label, defaultName, value, onChange }: {
           title="Reset to default"
         >reset</button>
       )}
+    </div>
+  );
+}
+
+// ── Motion order drag-and-rename tab ──────────────────────────────────────────
+type OrderableType = 'moderated' | 'unmoderated' | 'consultation' | 'tour';
+
+const MOTION_META: Record<OrderableType, {
+  enabledKey: keyof CommitteeSettings;
+  namesKey: keyof MotionNames;
+  defaultName: string;
+  disruptiveness: number;
+}> = {
+  moderated:    { enabledKey: 'motionModeratedCaucus',   namesKey: 'moderated',    defaultName: 'Moderated Caucus',          disruptiveness: 3 },
+  unmoderated:  { enabledKey: 'motionUnmoderatedCaucus', namesKey: 'unmoderated',  defaultName: 'Unmoderated Caucus',        disruptiveness: 2 },
+  consultation: { enabledKey: 'motionCoW',               namesKey: 'consultation', defaultName: 'Consultation of the Whole', disruptiveness: 2 },
+  tour:         { enabledKey: 'motionTourDeTable',       namesKey: 'tour',         defaultName: 'Tour de Table',             disruptiveness: 1 },
+};
+
+function MotionsTab({ s, upd }: {
+  s: CommitteeSettings;
+  upd: <K extends keyof CommitteeSettings>(key: K, value: CommitteeSettings[K]) => void;
+}) {
+  const order: OrderableType[] = (s.motionOrder ?? ['moderated', 'unmoderated', 'tour', 'consultation']) as OrderableType[];
+  const dragItem = useRef<number | null>(null);
+  const dragOver = useRef<number | null>(null);
+  const [dragActive, setDragActive] = useState<number | null>(null);
+
+  function handleDragStart(i: number) { dragItem.current = i; setDragActive(i); }
+  function handleDragEnter(i: number) { dragOver.current = i; }
+  function handleDragEnd() {
+    setDragActive(null);
+    if (dragItem.current === null || dragOver.current === null || dragItem.current === dragOver.current) return;
+    const newOrder = [...order];
+    const [moved] = newOrder.splice(dragItem.current, 1);
+    newOrder.splice(dragOver.current, 0, moved);
+    upd('motionOrder', newOrder);
+    dragItem.current = null;
+    dragOver.current = null;
+  }
+
+  return (
+    <div>
+      <SectionLabel>Motion Types</SectionLabel>
+      <p className="text-xs mb-3 leading-snug" style={{ color: '#9A8A78' }}>
+        Drag to reorder. Toggle to enable or disable. Click the name to rename.
+      </p>
+      <div className="space-y-1 mb-4">
+        {order.map((motionType, i) => {
+          const meta = MOTION_META[motionType];
+          const enabled = s[meta.enabledKey] !== false;
+          const currentName = s.motionNames[meta.namesKey] ?? meta.defaultName;
+          const isDragging = dragActive === i;
+          return (
+            <div
+              key={motionType}
+              draggable
+              onDragStart={() => handleDragStart(i)}
+              onDragEnter={() => handleDragEnter(i)}
+              onDragEnd={handleDragEnd}
+              onDragOver={(e) => e.preventDefault()}
+              className="flex items-center gap-2 px-2 rounded-xl transition-all select-none"
+              style={{
+                border: '1px solid #DDD4C0',
+                backgroundColor: isDragging ? '#EDE7D8' : '#FAF8F3',
+                opacity: isDragging ? 0.5 : 1,
+                cursor: 'grab',
+              }}
+            >
+              {/* Drag handle */}
+              <div className="shrink-0 flex flex-col gap-[3px] px-1 py-2">
+                {[0,1,2].map(r => (
+                  <div key={r} className="flex gap-[3px]">
+                    {[0,1].map(c => <div key={c} className="w-[3px] h-[3px] rounded-full" style={{ backgroundColor: '#C5B9A8' }} />)}
+                  </div>
+                ))}
+              </div>
+              {/* Name (click to rename inline) — flex-1 */}
+              <div className="flex-1 min-w-0">
+                <RenameRow
+                  defaultName={meta.defaultName}
+                  value={currentName}
+                  onChange={(v) => upd('motionNames', { ...s.motionNames, [meta.namesKey]: v })}
+                />
+              </div>
+              {/* Disruptiveness pip bar */}
+              <div className="shrink-0 flex gap-[2px] items-center" title={`Disruptiveness: ${meta.disruptiveness}/4`}>
+                {[1,2,3,4].map((level) => (
+                  <div key={level} className="w-[4px] h-[10px] rounded-sm"
+                    style={{ backgroundColor: level <= meta.disruptiveness ? '#B6871F' : '#DDD4C0' }} />
+                ))}
+              </div>
+              {/* Enable/disable toggle */}
+              <button
+                onClick={() => upd(meta.enabledKey as keyof CommitteeSettings, (!enabled) as CommitteeSettings[typeof meta.enabledKey])}
+                className="relative shrink-0 w-8 h-[18px] rounded-full transition-colors focus:outline-none"
+                style={{ backgroundColor: enabled ? '#1B3828' : '#DDD4C0' }}
+              >
+                <span className={`absolute top-[2px] left-[2px] w-[14px] h-[14px] rounded-full bg-white transition-transform shadow-sm ${enabled ? 'translate-x-[14px]' : 'translate-x-0'}`} />
+              </button>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Suspend/End debate — always at bottom, always enabled, rename only */}
+      <SectionLabel>Procedural Motions</SectionLabel>
+      <p className="text-xs mb-2 leading-snug" style={{ color: '#9A8A78' }}>Always available. Click to rename.</p>
+      <div className="space-y-1">
+        {([
+          { key: 'suspendDebate' as keyof MotionNames, defaultName: 'Suspend Debate' },
+          { key: 'endDebate' as keyof MotionNames, defaultName: 'End Debate' },
+        ]).map(({ key, defaultName }) => (
+          <div key={key} className="flex items-center gap-2 px-2 rounded-xl"
+            style={{ border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3' }}>
+            {/* Invisible grip placeholder for alignment */}
+            <div className="shrink-0 flex flex-col gap-[3px] px-1 py-2 opacity-0 pointer-events-none">
+              {[0,1,2].map(r => (
+                <div key={r} className="flex gap-[3px]">
+                  {[0,1].map(c => <div key={c} className="w-[3px] h-[3px] rounded-full bg-transparent" />)}
+                </div>
+              ))}
+            </div>
+            <div className="flex-1 min-w-0">
+              <RenameRow
+                defaultName={defaultName}
+                value={s.motionNames[key] ?? defaultName}
+                onChange={(v) => upd('motionNames', { ...s.motionNames, [key]: v })}
+              />
+            </div>
+            {/* All 4 pips filled in red — max disruptiveness */}
+            <div className="shrink-0 flex gap-[2px] items-center" title="High disruptiveness">
+              {[1,2,3,4].map((level) => (
+                <div key={level} className="w-[4px] h-[10px] rounded-sm" style={{ backgroundColor: '#8B2020' }} />
+              ))}
+            </div>
+            {/* No toggle — always on, spacer for alignment */}
+            <div className="w-8 shrink-0" />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -397,66 +538,11 @@ export function SettingsPanel({ committee, onClose }: {
           )}
 
           {/* ── Motions ── */}
-          {tab === 'motions' && (
-            <div>
-              <SectionLabel>{t('settings_section_motions')}</SectionLabel>
-              <p className="text-xs mb-3 leading-snug" style={{ color: '#9A8A78' }}>{t('settings_motions_disabled_note')}</p>
-              <Toggle
-                label={t('settings_motion_moderated')}
-                value={s.motionModeratedCaucus}
-                onChange={(v) => upd('motionModeratedCaucus', v)}
-              />
-              <Toggle
-                label={t('settings_motion_unmoderated')}
-                value={s.motionUnmoderatedCaucus}
-                onChange={(v) => upd('motionUnmoderatedCaucus', v)}
-              />
-              <Toggle
-                label={t('settings_motion_cow')}
-                value={s.motionCoW}
-                onChange={(v) => upd('motionCoW', v)}
-              />
-              <Toggle
-                label={t('settings_motion_tdt')}
-                value={s.motionTourDeTable}
-                onChange={(v) => upd('motionTourDeTable', v)}
-              />
-
-              {/* ── Custom motion names ── */}
-              <div className="border-t border-[#DDD4C0] my-3" />
-              <SectionLabel>CUSTOM NAMES</SectionLabel>
-              <p className="text-xs mb-1 leading-snug" style={{ color: '#9A8A78' }}>
-                Click any name to rename it.
-              </p>
-              {([
-                { key: 'moderated',      defaultName: 'Moderated Caucus' },
-                { key: 'unmoderated',    defaultName: 'Unmoderated Caucus' },
-                { key: 'consultation',   defaultName: 'Consultation of the Whole' },
-                { key: 'tour',           defaultName: 'Tour de Table' },
-                { key: 'suspendDebate',  defaultName: 'Suspend Debate' },
-                { key: 'endDebate',      defaultName: 'End Debate' },
-              ] as { key: keyof MotionNames; defaultName: string }[]).map(({ key, defaultName }) => (
-                <RenameRow
-                  key={key}
-                  defaultName={defaultName}
-                  value={s.motionNames[key]}
-                  onChange={(v) => upd('motionNames', { ...s.motionNames, [key]: v })}
-                />
-              ))}
-            </div>
-          )}
+          {tab === 'motions' && <MotionsTab s={s} upd={upd} />}
 
           {/* ── Access & Identity ── */}
           {tab === 'access' && (
             <div>
-              <SectionLabel>GSL</SectionLabel>
-              <Toggle
-                label={t('settings_gsl_require_next_label')}
-                note={t('settings_gsl_require_next_note')}
-                value={s.gslRequireNextSpeaker}
-                onChange={(v) => upd('gslRequireNextSpeaker', v)}
-              />
-
               <SectionLabel>{t('settings_section_codes')}</SectionLabel>
               <div className="py-3" style={{ borderBottom: '1px solid #DDD4C0' }}>
                 <div className="text-xs mb-1.5" style={{ color: '#9A8A78' }}>{t('settings_session_code_label')}</div>
@@ -473,28 +559,13 @@ export function SettingsPanel({ committee, onClose }: {
                 onChange={(v) => upd('requireChairApproval', v)}
               />
 
-              <SectionLabel>{t('settings_section_chair_resign')}</SectionLabel>
+              <SectionLabel>GSL</SectionLabel>
               <Toggle
-                label={t('settings_chair_persistence_label')}
-                note={t('settings_chair_persistence_note')}
-                value={s.chairSessionPersistence}
-                onChange={(v) => upd('chairSessionPersistence', v)}
+                label={t('settings_gsl_require_next_label')}
+                note={t('settings_gsl_require_next_note')}
+                value={s.gslRequireNextSpeaker}
+                onChange={(v) => upd('gslRequireNextSpeaker', v)}
               />
-              <Toggle
-                label={t('settings_chair_takeover_label')}
-                note={t('settings_chair_takeover_note')}
-                value={s.chairTakeoverProtection}
-                onChange={(v) => upd('chairTakeoverProtection', v)}
-              />
-
-              <SectionLabel>{t('settings_section_delegate_identity')}</SectionLabel>
-              <Toggle
-                label={t('settings_require_delegation_label')}
-                note={t('settings_require_delegation_note')}
-                value={s.requireDelegationName}
-                onChange={(v) => upd('requireDelegationName', v)}
-              />
-
             </div>
           )}
 

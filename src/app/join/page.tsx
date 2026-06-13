@@ -277,8 +277,6 @@ function JoinPageInner() {
 
           {/* Delegate country select */}
           {foundCommittee && mode === 'delegate' && (() => {
-            const requireName = getSettings(foundCommittee.code).requireDelegationName;
-            if (!requireName) return null;
             return (
               <div className="mb-4">
                 <label className="block text-sm font-semibold mb-2" style={{ color: '#1C1410' }}>{t('join_country_label')}</label>
@@ -379,7 +377,7 @@ function JoinPageInner() {
             onClick={handleJoin}
             disabled={
               mode === 'delegate'
-                ? (!foundCommittee || (getSettings(foundCommittee?.code ?? '').requireDelegationName && !country))
+                ? (!foundCommittee || !country)
                 : mode === 'chair'
                 ? (!foundCommittee ||
                     (chairNameMode === 'select' ? !chairName : !newChairName.trim()) ||
