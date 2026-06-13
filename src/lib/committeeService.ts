@@ -21,12 +21,15 @@ function generateCode(): string {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
 }
 
-function calcDisruptiveness(type: PendingMotionType, totalTime: number): number {
-  const base = {
-    'end-debate': 6_000_000, 'suspend-debate': 5_000_000,
-    consultation: 4_000_000, tour: 3_000_000, unmoderated: 2_000_000, moderated: 1_000_000,
-  };
-  return base[type] + totalTime;
+function calcDisruptiveness(type: PendingMotionType, totalTime: number, motionOrder?: string[]): number {
+  // Procedural motions keep fixed high scores
+  if (type === 'end-debate') return 6_000_000 + totalTime;
+  if (type === 'suspend-debate') return 5_000_000 + totalTime;
+  // The 4 orderable types: position 0 = 4M base, position 1 = 3M, etc.
+  const order = motionOrder ?? ['moderated', 'unmoderated', 'tour', 'consultation'];
+  const idx = order.indexOf(type);
+  const base = idx >= 0 ? (4 - idx) * 1_000_000 : 1_000_000;
+  return base + totalTime;
 }
 
 type DbRow = Record<string, unknown>;
@@ -372,9 +375,9 @@ export async function clearCurrentSpeaker(committeeId: string): Promise<void> {
 // ============================================================
 
 export async function addPendingMotion(
-  committeeId: string, motion: Omit<PendingMotion, 'id' | 'disruptiveness'>,
+  committeeId: string, motion: Omit<PendingMotion, 'id' | 'disruptiveness'>, motionOrder?: string[],
 ): Promise<string | null> {
-  const disruptiveness = calcDisruptiveness(motion.type, motion.totalTime);
+  const disruptiveness = calcDisruptiveness(motion.type, motion.totalTime, motionOrder);
   const { data, error } = await supabase.from('motions').insert({
     committee_id: committeeId, type: motion.type, proposed_by: motion.proposedBy,
     total_time: motion.totalTime, speaking_time: motion.speakingTime, topic: motion.topic,

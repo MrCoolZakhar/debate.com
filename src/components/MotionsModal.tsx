@@ -753,7 +753,16 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
     suspendDebate: 'Suspender Debate',
     endDebate: 'Cerrar Debate',
   } : DEFAULT_MOTION_NAMES;
-  const storedNames = getSettings(committee.code).motionNames;
+  const committeeSettings = getSettings(committee.code);
+  const storedNames = committeeSettings.motionNames;
+  const motionOrder: string[] = committeeSettings.motionOrder ?? ['moderated', 'unmoderated', 'tour', 'consultation'];
+  const localCalcDisruptiveness = (type: string, totalTime: number) => {
+    if (type === 'end-debate') return 6_000_000 + totalTime;
+    if (type === 'suspend-debate') return 5_000_000 + totalTime;
+    const idx = motionOrder.indexOf(type);
+    const base = idx >= 0 ? (4 - idx) * 1_000_000 : 1_000_000;
+    return base + totalTime;
+  };
   const motionNames = {
     moderated:     storedNames.moderated     !== DEFAULT_MOTION_NAMES.moderated     ? storedNames.moderated     : DEFAULT_MOTION_NAMES_LOCALIZED.moderated,
     unmoderated:   storedNames.unmoderated   !== DEFAULT_MOTION_NAMES.unmoderated   ? storedNames.unmoderated   : DEFAULT_MOTION_NAMES_LOCALIZED.unmoderated,
@@ -778,16 +787,12 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
     )) return;
 
     const tempId = `temp-${Date.now()}`;
-    const base = {
-      'end-debate': 6_000_000, 'suspend-debate': 5_000_000,
-      consultation: 4_000_000, tour: 3_000_000, unmoderated: 2_000_000, moderated: 1_000_000,
-    };
-    const disruptiveness = base[motion.type] + motion.totalTime;
+    const disruptiveness = localCalcDisruptiveness(motion.type, motion.totalTime);
 
     setPendingIds((prev) => new Set([...prev, tempId]));
     update((c) => ({ ...c, pendingMotions: [...(c.pendingMotions ?? []), { ...motion, id: tempId, disruptiveness }] }));
 
-    addPendingMotionInDB(committee.id, motion).then((realId) => {
+    addPendingMotionInDB(committee.id, motion, motionOrder).then((realId) => {
       if (!realId) return;
       update((c) => ({
         ...c,
@@ -820,16 +825,12 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
 
     // Add replacement — same logic as handleRaised but NO duplicate check
     const tempId = `temp-${Date.now()}`;
-    const base: Record<string, number> = {
-      'end-debate': 6_000_000, 'suspend-debate': 5_000_000,
-      consultation: 4_000_000, tour: 3_000_000, unmoderated: 2_000_000, moderated: 1_000_000,
-    };
-    const disruptiveness = (base[motion.type] ?? 0) + motion.totalTime;
+    const disruptiveness = localCalcDisruptiveness(motion.type, motion.totalTime);
 
     setPendingIds((prev) => new Set([...prev, tempId]));
     update((c) => ({ ...c, pendingMotions: [...(c.pendingMotions ?? []), { ...motion, id: tempId, disruptiveness }] }));
 
-    addPendingMotionInDB(committee.id, motion).then((realId) => {
+    addPendingMotionInDB(committee.id, motion, motionOrder).then((realId) => {
       if (!realId) return;
       update((c) => ({
         ...c,

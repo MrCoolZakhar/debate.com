@@ -196,11 +196,11 @@ function MotionsTab({ s, upd }: {
                   onChange={(v) => upd('motionNames', { ...s.motionNames, [meta.namesKey]: v })}
                 />
               </div>
-              {/* Disruptiveness pip bar */}
-              <div className="shrink-0 flex gap-[2px] items-center" title={`Disruptiveness: ${meta.disruptiveness}/4`}>
+              {/* Disruptiveness pip bar — live: top position = 4 pips, bottom = 1 */}
+              <div className="shrink-0 flex gap-[2px] items-center" title={`Disruptiveness: ${4 - i}/4`}>
                 {[1,2,3,4].map((level) => (
                   <div key={level} className="w-[4px] h-[10px] rounded-sm"
-                    style={{ backgroundColor: level <= meta.disruptiveness ? '#B6871F' : '#DDD4C0' }} />
+                    style={{ backgroundColor: level <= (4 - i) ? '#B6871F' : '#DDD4C0' }} />
                 ))}
               </div>
               {/* Enable/disable toggle */}
