@@ -412,7 +412,15 @@ function RollCallPanelInner({
   }, [search]);
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className="flex flex-col h-full overflow-hidden"
+      onWheel={(e) => {
+        // Forward wheel events from the header/footer into the list,
+        // since those areas have no scroll container of their own.
+        if (listRef.current && !listRef.current.contains(e.target as Node)) {
+          listRef.current.scrollBy({ top: e.deltaY });
+        }
+      }}
+    >
       <div className="px-4 pt-4 pb-3 shrink-0 relative z-10" style={{ borderBottom: '1px solid rgba(61,122,82,0.4)' }}>
         <p className="text-lg font-black leading-tight truncate mb-0.5" style={{ color: '#EED98A' }}>{getCommitteeDisplayName(committee.name, language)}</p>
         {committee.topic && (
