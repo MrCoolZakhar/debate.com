@@ -17,12 +17,12 @@ const AMBASSADORS = [
   // Europe
   { name: 'Kyle Wilkinson',          country: 'United Kingdom', initials: 'KW', photo: '/ambassador-photos/kyle_ambassador.png', photoPosition: 'center 50%' },
   { name: 'Celine Nasser',           country: 'United Kingdom', initials: 'CN', photo: '/ambassador-photos/celine_ambassador.png' },
-  { name: 'Daniel O\'Neil Ferrero',  country: 'Scotland',       initials: 'DF', photo: '/ambassador-photos/Daniel_ambassador.png' },
+  { name: 'Daniel O\'Neil Ferrero',  country: 'Scotland',       initials: 'DF', photo: '/ambassador-photos/Daniel_ambassador.png', photoPosition: 'center 20%', photoScale: 1.2 },
   { name: 'Noelia Alvarez Iglesias', country: 'Spain',          initials: 'NA', photo: '/ambassador-photos/noelia_ambassador.png' },
   { name: 'Félix Losada Ottino',     country: 'Spain',          initials: 'FL', photo: '/ambassador-photos/felix_ambassador.png', photoPosition: 'center 25%' },
   { name: 'Luca Formichella',        country: 'Italy',          initials: 'LF', photo: '/ambassador-photos/luca_ambassador.png', photoPosition: 'center 20%' },
   { name: 'Amna Sikandar',           country: 'France',         initials: 'AS', photo: '/ambassador-photos/Amna_ambassador.png' },
-  { name: 'Vlad Gheorghe',           country: 'Romania',        initials: 'VG', photo: '/ambassador-photos/Vlad_ambassador.png' },
+  { name: 'Vlad Gheorghe',           country: 'Romania',        initials: 'VG', photo: '/ambassador-photos/Vlad_ambassador.png', photoPosition: 'center 25%', photoScale: 1.6 },
   // North America
   { name: 'Spencer Lindsay',         country: 'Canada',         initials: 'SL', photo: '/ambassador-photos/spencer_ambassador.jpeg' },
   { name: 'Armande Loretz',          country: 'France',         initials: 'AL', photo: '/ambassador-photos/armande_ambassador.png' },
@@ -131,7 +131,7 @@ export default function AboutClient() {
           {(() => { const amb = AMBASSADORS[0]; return (
             <div key={amb.name} className="flex flex-col items-center gap-3 shrink-0">
               <div style={{ width: 120, height: 120, borderRadius: '50%', overflow: 'hidden', border: '2px solid rgba(28,20,16,0.15)', backgroundColor: 'rgba(221,212,192,0.5)', flexShrink: 0 }}>
-                {amb.photo ? <img src={amb.photo} alt={amb.name} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: amb.photoPosition ?? 'center top', display: 'block' }} /> : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(221,212,192,0.8)', color: '#B6871F', fontWeight: 700, fontSize: 16 }}>{amb.initials}</div>}
+                {amb.photo ? <img src={amb.photo} alt={amb.name} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: amb.photoPosition ?? 'center top', display: 'block', transform: `scale(${(amb as {photoScale?: number}).photoScale ?? 1})`, transformOrigin: amb.photoPosition ?? 'center top' }} /> : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(221,212,192,0.8)', color: '#B6871F', fontWeight: 700, fontSize: 16 }}>{amb.initials}</div>}
               </div>
               <div className="text-center">
                 <p className="text-[#1C1410] text-xs font-bold leading-tight">{amb.name}</p>
@@ -146,7 +146,7 @@ export default function AboutClient() {
               <div key={amb.name} className="flex flex-col items-center gap-3">
                 <div style={{ width: 120, height: 120, borderRadius: '50%', overflow: 'hidden', border: '2px solid rgba(28,20,16,0.15)', backgroundColor: 'rgba(221,212,192,0.5)', flexShrink: 0 }}>
                   {amb.photo ? (
-                    <img src={amb.photo} alt={amb.name} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: amb.photoPosition ?? 'center top', display: 'block' }} />
+                    <img src={amb.photo} alt={amb.name} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: amb.photoPosition ?? 'center top', display: 'block', transform: `scale(${(amb as {photoScale?: number}).photoScale ?? 1})`, transformOrigin: amb.photoPosition ?? 'center top' }} />
                   ) : (
                     <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(221,212,192,0.8)', color: '#B6871F', fontWeight: 700, fontSize: 16 }}>{amb.initials}</div>
                   )}
@@ -163,7 +163,7 @@ export default function AboutClient() {
           {(() => { const amb = AMBASSADORS[AMBASSADORS.length - 1]; return (
             <div key={amb.name} className="flex flex-col items-center gap-3 shrink-0">
               <div style={{ width: 120, height: 120, borderRadius: '50%', overflow: 'hidden', border: '2px solid rgba(28,20,16,0.15)', backgroundColor: 'rgba(221,212,192,0.5)', flexShrink: 0 }}>
-                {amb.photo ? <img src={amb.photo} alt={amb.name} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: amb.photoPosition ?? 'center top', display: 'block' }} /> : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(221,212,192,0.8)', color: '#B6871F', fontWeight: 700, fontSize: 16 }}>{amb.initials}</div>}
+                {amb.photo ? <img src={amb.photo} alt={amb.name} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: amb.photoPosition ?? 'center top', display: 'block', transform: `scale(${(amb as {photoScale?: number}).photoScale ?? 1})`, transformOrigin: amb.photoPosition ?? 'center top' }} /> : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(221,212,192,0.8)', color: '#B6871F', fontWeight: 700, fontSize: 16 }}>{amb.initials}</div>}
               </div>
               <div className="text-center">
                 <p className="text-[#1C1410] text-xs font-bold leading-tight">{amb.name}</p>
