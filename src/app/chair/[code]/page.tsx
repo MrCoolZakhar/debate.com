@@ -1814,11 +1814,13 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     if (isPreSession) return;
     setShowMotions((v) => !v);
     setShowChat(false);
+    setShowRollCall(true);
   };
   const handleDocumentsClick = () => {
     if (isPreSession) return;
     setShowDocuments((v) => !v);
     setShowChat(false);
+    setShowRollCall(true);
   };
   const handleToggleChat = () => {
     const newShow = !showChat;
@@ -2079,7 +2081,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               committee={committee}
               senderName={myChairName || 'Chair'}
               isChair={true}
-              onClose={() => setShowChat(false)}
+              onClose={() => { setShowChat(false); setShowRollCall(true); }}
               readOnly={sessionEnded}
               onConvRead={(key: string, count: number) => setChatReadCounts(prev => ({ ...prev, [key]: count }))}
             />
