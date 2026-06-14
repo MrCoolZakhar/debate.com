@@ -16,9 +16,10 @@ const NAV_LINKS_CONFIG = [
 
 interface SiteNavProps {
   logoOverride?: { src: string; alt: string };
+  floating?: boolean;
 }
 
-export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
+export default function SiteNav({ logoOverride, floating = false }: SiteNavProps = {}) {
   const pathname = usePathname();
   const [hovered, setHovered] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
@@ -28,10 +29,22 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
   const [showLangMenu, setShowLangMenu] = useState(false);
   const navLinks = NAV_LINKS_CONFIG.map(l => ({ label: l[language], href: l.href }));
 
+  const linkIdle    = floating ? 'rgba(237,231,216,0.78)' : 'rgba(28, 20, 16, 0.55)';
+  const linkActive  = floating ? '#FFFFFF'                : '#1B3828';
+  const linkBgActive= floating ? 'rgba(237,231,216,0.12)' : 'rgba(27, 56, 40, 0.07)';
+  const linkBgHover = floating ? 'rgba(237,231,216,0.07)' : 'rgba(27, 56, 40, 0.04)';
+  const dividerColor= floating ? 'rgba(237,231,216,0.22)' : 'rgba(28, 20, 16, 0.2)';
+  const underline   = floating ? '#EED98A'                : '#B6871F';
+  const langColor   = floating ? '#EDE7D8'                : '#1B3828';
+  const ctaColor    = floating ? '#EED98A'                : '#1B3828';
+  const ctaBorder   = floating ? '1.5px solid rgba(238,217,138,0.5)' : '1.5px solid rgba(27, 56, 40, 0.5)';
+  const ctaHoverBg  = floating ? '#EED98A'                : '#1B3828';
+  const ctaHoverFg  = floating ? '#1B3828'                : '#EED98A';
+
   return (
     <>
       <nav
-        className="relative z-20 flex items-center px-6 md:px-14 shrink-0"
+        className={`relative z-30 flex items-center px-6 shrink-0 ${floating ? 'md:px-6 md:mx-auto md:mt-4 md:max-w-5xl md:rounded-full md:sticky md:top-4 md:bg-[#1B3828]/70 md:backdrop-blur-xl md:border md:border-[#EED98A]/20 md:shadow-[0_8px_32px_rgba(27,56,40,0.28)]' : 'md:px-14'}`}
         style={{ height: '72px' }}
       >
         {/* Logo */}
@@ -39,7 +52,7 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
           <img
             src={logoOverride?.src ?? '/GavellingLogo.png'}
             alt={logoOverride?.alt ?? 'Gavelling'}
-            className="h-8 md:h-10 w-auto object-contain"
+            className={`h-8 md:h-10 w-auto object-contain${floating ? ' md:brightness-0 md:invert' : ''}`}
             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
           />
         </Link>
@@ -52,7 +65,7 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
             return (
               <div key={link.label} className="flex items-center">
                 {i > 0 && (
-                  <div style={{ width: '1px', height: '28px', backgroundColor: 'rgba(28, 20, 16, 0.2)', margin: '0 2px' }} />
+                  <div style={{ width: '1px', height: '28px', backgroundColor: dividerColor, margin: '0 2px' }} />
                 )}
                 <Link
                   href={link.href}
@@ -66,11 +79,11 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
                     fontSize: '13px',
                     fontWeight: active ? 900 : 700,
                     letterSpacing: '0.08em',
-                    color: active || hl ? '#1B3828' : 'rgba(28, 20, 16, 0.55)',
+                    color: active || hl ? linkActive : linkIdle,
                     textDecoration: 'none',
                     borderRadius: '8px',
                     transition: 'all 200ms ease',
-                    backgroundColor: active ? 'rgba(27, 56, 40, 0.07)' : hl ? 'rgba(27, 56, 40, 0.04)' : 'transparent',
+                    backgroundColor: active ? linkBgActive : hl ? linkBgHover : 'transparent',
                     transform: hl && !active ? 'translateY(-1px)' : 'translateY(0)',
                   }}
                 >
@@ -81,7 +94,7 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
                     left: '16px',
                     right: '16px',
                     height: active ? '2px' : '1px',
-                    backgroundColor: '#B6871F',
+                    backgroundColor: underline,
                     transform: active || hl ? 'scaleX(1)' : 'scaleX(0)',
                     transformOrigin: 'left',
                     transition: 'transform 200ms ease',
@@ -116,7 +129,7 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
             <button
               onClick={() => setShowLangMenu((v) => !v)}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl transition-all focus:outline-none"
-              style={{ color: '#1B3828', fontSize: '12px', fontWeight: 700, letterSpacing: '0.06em' }}
+              style={{ color: langColor, fontSize: '12px', fontWeight: 700, letterSpacing: '0.06em' }}
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.07)'; }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
             >
@@ -174,14 +187,14 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
           onClick={() => setShowModal(true)}
           onMouseEnter={(e) => {
             const el = e.currentTarget as HTMLElement;
-            el.style.backgroundColor = '#1B3828';
-            el.style.color = '#EED98A';
+            el.style.backgroundColor = ctaHoverBg;
+            el.style.color = ctaHoverFg;
             el.style.transform = 'translateY(-1px)';
           }}
           onMouseLeave={(e) => {
             const el = e.currentTarget as HTMLElement;
             el.style.backgroundColor = 'transparent';
-            el.style.color = '#1B3828';
+            el.style.color = ctaColor;
             el.style.transform = 'translateY(0)';
           }}
           style={{
@@ -190,8 +203,8 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
             fontSize: '13px',
             fontWeight: 800,
             letterSpacing: '0.08em',
-            color: '#1B3828',
-            border: '1.5px solid rgba(27, 56, 40, 0.5)',
+            color: ctaColor,
+            border: ctaBorder,
             borderRadius: '9999px',
             cursor: 'pointer',
             transition: 'all 200ms ease',

@@ -550,7 +550,7 @@ export default function HomeClient() {
             }}
           />
 
-          <SiteNav />
+          <SiteNav floating />
 
           {/* Hero */}
           <section className="relative z-10 flex flex-col items-center justify-center overflow-hidden" style={{ height: 'calc(100vh - 72px)' }}>
