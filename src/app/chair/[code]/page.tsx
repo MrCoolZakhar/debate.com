@@ -1846,7 +1846,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     <MobileGate>
     <div className="h-screen flex flex-col overflow-hidden relative" style={{ backgroundColor: '#EDE7D8' }}>
       <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
-      <header className="border-b border-[#DDD4C0] bg-[#FAF8F3] px-4 h-11 flex items-center gap-2" data-tutorial="topbar">
+      <header className="border-b border-[#DDD4C0] bg-[#FAF8F3] px-4 h-[clamp(34px,5vh,44px)] flex items-center gap-2" data-tutorial="topbar">
         <Link href="/">
           <img src="/GavellingLogo.png" alt="Gavelling" className="w-[14vw] h-auto max-h-8 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
         </Link>
@@ -1854,16 +1854,16 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         {committee.phase !== 'pre-session' && !sessionEnded ? (
           <div className="flex flex-1 min-w-0 h-full items-center" style={{ overflow: 'visible' }}>
             <button data-tutorial="tab-rollcall" onClick={() => { const opening = !showSliders; setShowSliders(opening); if (opening) { setShowChat(false); setGslListView('az'); } else { setGslListView('queue'); } setShowRollCall(true); }}
-              className="flex-1 text-[13px] md:text-[18px] font-bold px-3 relative h-full transition-all duration-200"
+              className="flex-1 text-[clamp(12px,2.3vh,18px)] font-bold px-3 relative h-full transition-all duration-200"
               style={{ color: showSliders ? '#1B3828' : '#1C1410', backgroundColor: showSliders ? 'rgba(27,56,40,0.07)' : 'transparent', fontWeight: showSliders ? 900 : 700 }}
               onMouseEnter={(e) => { if (!showSliders) { const el = e.currentTarget as HTMLElement; el.style.color = '#1B3828'; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; el.style.transform = 'translateY(-1px)'; } }}
               onMouseLeave={(e) => { if (!showSliders) { const el = e.currentTarget as HTMLElement; el.style.color = '#1C1410'; el.style.backgroundColor = 'transparent'; el.style.transform = 'translateY(0)'; } }}>
               {t('tab_roll_call')}
               <span style={{ position: 'absolute', bottom: '4px', left: '12px', right: '12px', height: '2px', backgroundColor: '#B6871F', transform: showSliders ? 'scaleX(1)' : 'scaleX(0)', transformOrigin: 'left', transition: 'transform 200ms ease', borderRadius: '2px' }} />
             </button>
-            <div style={{ width: '1px', height: '28px', backgroundColor: 'rgba(28,20,16,0.2)', margin: '0 2px', flexShrink: 0 }} />
+            <div style={{ width: '1px', height: 'clamp(16px,3.4vh,28px)', backgroundColor: 'rgba(28,20,16,0.2)', margin: '0 2px', flexShrink: 0 }} />
             <button data-tutorial="tab-motions" onClick={handleMotionsClick}
-              className="flex-1 text-[13px] md:text-[18px] font-bold px-3 relative h-full transition-all duration-200"
+              className="flex-1 text-[clamp(12px,2.3vh,18px)] font-bold px-3 relative h-full transition-all duration-200"
               style={{ color: showMotions ? '#1B3828' : '#1C1410', backgroundColor: showMotions ? 'rgba(27,56,40,0.07)' : 'transparent', fontWeight: showMotions ? 900 : 700 }}
               onMouseEnter={(e) => { if (!showMotions) { const el = e.currentTarget as HTMLElement; el.style.color = '#1B3828'; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; el.style.transform = 'translateY(-1px)'; } }}
               onMouseLeave={(e) => { if (!showMotions) { const el = e.currentTarget as HTMLElement; el.style.color = '#1C1410'; el.style.backgroundColor = 'transparent'; el.style.transform = 'translateY(0)'; } }}>
@@ -1875,9 +1875,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               )}
               <span style={{ position: 'absolute', bottom: '4px', left: '12px', right: '12px', height: '2px', backgroundColor: '#B6871F', transform: showMotions ? 'scaleX(1)' : 'scaleX(0)', transformOrigin: 'left', transition: 'transform 200ms ease', borderRadius: '2px' }} />
             </button>
-            <div style={{ width: '1px', height: '28px', backgroundColor: 'rgba(28,20,16,0.2)', margin: '0 2px', flexShrink: 0 }} />
+            <div style={{ width: '1px', height: 'clamp(16px,3.4vh,28px)', backgroundColor: 'rgba(28,20,16,0.2)', margin: '0 2px', flexShrink: 0 }} />
             <button data-tutorial="tab-documents" onClick={handleDocumentsClick}
-              className="flex-1 text-[13px] md:text-[18px] font-bold px-3 relative h-full transition-all duration-200"
+              className="flex-1 text-[clamp(12px,2.3vh,18px)] font-bold px-3 relative h-full transition-all duration-200"
               style={{ color: showDocuments ? '#1B3828' : '#1C1410', backgroundColor: showDocuments ? 'rgba(27,56,40,0.07)' : 'transparent', fontWeight: showDocuments ? 900 : 700 }}
               onMouseEnter={(e) => { if (!showDocuments) { const el = e.currentTarget as HTMLElement; el.style.color = '#1B3828'; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; el.style.transform = 'translateY(-1px)'; } }}
               onMouseLeave={(e) => { if (!showDocuments) { const el = e.currentTarget as HTMLElement; el.style.color = '#1C1410'; el.style.backgroundColor = 'transparent'; el.style.transform = 'translateY(0)'; } }}>
@@ -1885,9 +1885,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               {(() => { const n = (committee.documents ?? []).filter((d) => d.status === 'submitted').length; return n > 0 ? <span className="absolute top-1 right-1 z-10 w-4 h-4 bg-[#1B3828] rounded-full text-white text-[10px] flex items-center justify-center">{n}</span> : null; })()}
               <span style={{ position: 'absolute', bottom: '4px', left: '12px', right: '12px', height: '2px', backgroundColor: '#B6871F', transform: showDocuments ? 'scaleX(1)' : 'scaleX(0)', transformOrigin: 'left', transition: 'transform 200ms ease', borderRadius: '2px' }} />
             </button>
-            <div style={{ width: '1px', height: '28px', backgroundColor: 'rgba(28,20,16,0.2)', margin: '0 2px', flexShrink: 0 }} />
+            <div style={{ width: '1px', height: 'clamp(16px,3.4vh,28px)', backgroundColor: 'rgba(28,20,16,0.2)', margin: '0 2px', flexShrink: 0 }} />
             <button data-tutorial="tab-chat" onClick={() => { if (!isPreSession) handleToggleChat(); }}
-              className="flex-1 text-[13px] md:text-[18px] font-bold px-3 relative h-full transition-all duration-200"
+              className="flex-1 text-[clamp(12px,2.3vh,18px)] font-bold px-3 relative h-full transition-all duration-200"
               style={{ color: showChat ? '#1B3828' : '#1C1410', backgroundColor: showChat ? 'rgba(27,56,40,0.07)' : 'transparent', fontWeight: showChat ? 900 : 700 }}
               onMouseEnter={(e) => { if (!showChat) { const el = e.currentTarget as HTMLElement; el.style.color = '#1B3828'; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; el.style.transform = 'translateY(-1px)'; } }}
               onMouseLeave={(e) => { if (!showChat) { const el = e.currentTarget as HTMLElement; el.style.color = '#1C1410'; el.style.backgroundColor = 'transparent'; el.style.transform = 'translateY(0)'; } }}>
@@ -1928,7 +1928,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         </button>
       </header>
       {isViewOnly && (
-        <div className="shrink-0 flex items-center justify-center gap-2 px-4 py-2 text-xs font-bold"
+        <div className="shrink-0 flex items-center justify-center gap-2 px-4 py-[clamp(3px,0.9vh,8px)] text-xs font-bold"
           style={{ backgroundColor: '#1B3828', color: '#EED98A', borderBottom: '1px solid #2E4A35' }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
@@ -1940,12 +1940,12 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       {sessionEnded && (
         <div className="flex border-b border-[#DDD4C0] bg-[#FAF8F3] shrink-0">
           <button onClick={() => setEndedTab('ended')}
-            className="flex-1 py-2.5 text-sm font-black transition-colors border-b-2 focus:outline-none tracking-wide"
+            className="flex-1 py-[clamp(4px,1.1vh,10px)] text-[clamp(11px,1.7vh,14px)] font-black transition-colors border-b-2 focus:outline-none tracking-wide"
             style={{ color: endedTab === 'ended' ? '#1B3828' : '#9A8A78', borderBottomColor: endedTab === 'ended' ? '#1B3828' : 'transparent', fontFamily: "'Outfit', sans-serif" }}>
             {t('session_end_view')}
           </button>
           <button onClick={() => setEndedTab('session')}
-            className="flex-1 py-2.5 text-sm font-black transition-colors border-b-2 focus:outline-none tracking-wide"
+            className="flex-1 py-[clamp(4px,1.1vh,10px)] text-[clamp(11px,1.7vh,14px)] font-black transition-colors border-b-2 focus:outline-none tracking-wide"
             style={{ color: endedTab === 'session' ? '#1B3828' : '#9A8A78', borderBottomColor: endedTab === 'session' ? '#1B3828' : 'transparent', fontFamily: "'Outfit', sans-serif" }}>
             {t('session_view')}
           </button>
@@ -1955,30 +1955,30 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       {!sessionEnded && sessionSuspended && (
         <div className="flex border-b border-[#DDD4C0] bg-[#FAF8F3] shrink-0">
           <button onClick={() => setSuspendTab('suspend')}
-            className={`flex-1 py-2.5 text-sm font-black transition-colors border-b-2 focus:outline-none tracking-wide`}
+            className={`flex-1 py-[clamp(4px,1.1vh,10px)] text-[clamp(11px,1.7vh,14px)] font-black transition-colors border-b-2 focus:outline-none tracking-wide`}
             style={{ color: suspendTab === 'suspend' ? '#1B3828' : '#9A8A78', borderBottomColor: suspendTab === 'suspend' ? '#1B3828' : 'transparent', fontFamily: "'Outfit', sans-serif" }}>
             {t('session_suspend_view')}
           </button>
           <button onClick={() => setSuspendTab('session')}
-            className={`flex-1 py-2.5 text-sm font-black transition-colors border-b-2 focus:outline-none tracking-wide`}
+            className={`flex-1 py-[clamp(4px,1.1vh,10px)] text-[clamp(11px,1.7vh,14px)] font-black transition-colors border-b-2 focus:outline-none tracking-wide`}
             style={{ color: suspendTab === 'session' ? '#1B3828' : '#9A8A78', borderBottomColor: suspendTab === 'session' ? '#1B3828' : 'transparent', fontFamily: "'Outfit', sans-serif" }}>
             {t('session_session_view')}
           </button>
         </div>
       )}
       {sessionEnded && endedTab === 'session' && (
-        <div className="shrink-0 px-4 py-2 text-center text-sm font-bold" style={{ backgroundColor: '#1B3828', borderBottom: '1px solid #3D7A52', color: '#EED98A', fontFamily: "'Outfit', sans-serif" }}>
+        <div className="shrink-0 px-4 py-[clamp(3px,0.9vh,8px)] text-center text-[clamp(11px,1.7vh,14px)] font-bold" style={{ backgroundColor: '#1B3828', borderBottom: '1px solid #3D7A52', color: '#EED98A', fontFamily: "'Outfit', sans-serif" }}>
           {t('session_ended_banner')}
         </div>
       )}
       {!sessionEnded && sessionSuspended && suspendTab === 'session' && (
-        <div className="shrink-0 px-4 py-2 text-center text-sm font-bold" style={{ backgroundColor: '#1B3828', borderBottom: '1px solid #3D7A52', color: '#EED98A', fontFamily: "'Outfit', sans-serif" }}>
+        <div className="shrink-0 px-4 py-[clamp(3px,0.9vh,8px)] text-center text-[clamp(11px,1.7vh,14px)] font-bold" style={{ backgroundColor: '#1B3828', borderBottom: '1px solid #3D7A52', color: '#EED98A', fontFamily: "'Outfit', sans-serif" }}>
           Session is suspended — delegates cannot see this view
         </div>
       )}
       {/* Join request banner */}
       {(committee.pendingMotions ?? []).filter((m) => m.type === ('join-request' as string)).length > 0 && (
-        <div className="shrink-0 bg-[#EDE7D8] border-b border-[#1B3828]/40 px-4 py-2 flex flex-wrap gap-4">
+        <div className="shrink-0 bg-[#EDE7D8] border-b border-[#1B3828]/40 px-4 py-[clamp(3px,0.9vh,8px)] flex flex-wrap gap-4">
           {(committee.pendingMotions ?? [])
             .filter((m) => m.type === ('join-request' as string))
             .map((m) => {
@@ -2009,7 +2009,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       )}
       {/* GSL speak request banner */}
       {(committee.pendingMotions ?? []).filter((m) => (m.type as string) === 'gsl-request').length > 0 && (
-        <div className="shrink-0 bg-[#1B3828] border-b border-[#3D7A52]/40 px-4 py-2 flex flex-wrap gap-4">
+        <div className="shrink-0 bg-[#1B3828] border-b border-[#3D7A52]/40 px-4 py-[clamp(3px,0.9vh,8px)] flex flex-wrap gap-4">
           {(committee.pendingMotions ?? [])
             .filter((m) => (m.type as string) === 'gsl-request')
             .map((m) => {
@@ -2344,15 +2344,15 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                       </div>
                       {/* ZONE 3 — Action buttons locked just above bottom bar */}
                       {!sessionEnded && !isViewOnly && (
-                        <div className="shrink-0 flex gap-2 w-full max-w-sm flex-wrap justify-center px-4 pb-3 mx-auto">
+                        <div className="shrink-0 flex gap-2 w-full max-w-sm flex-wrap justify-center px-4 pb-[clamp(4px,1.2vh,12px)] pt-[clamp(2px,0.6vh,6px)] mx-auto">
                           <button onClick={handleRestartTime} title="Restart time"
-                            className="px-3 py-3 bg-[#DDD4C0] hover:bg-[#C8BAA8] border border-[#C8BAA8] hover:border-[#1B3828] rounded-xl font-bold text-sm text-[#6A5A4A] transition-colors">
+                            className="px-3 py-[clamp(5px,1.4vh,12px)] bg-[#DDD4C0] hover:bg-[#C8BAA8] border border-[#C8BAA8] hover:border-[#1B3828] rounded-xl font-bold text-[clamp(11px,1.7vh,14px)] text-[#6A5A4A] transition-colors">
                             ↺
                           </button>
                           <button onClick={handleToggleTimer}
                             data-tutorial="timer-toggle"
                             disabled={gslRequireNextSpeaker && isLastGSLSpeaker}
-                            className={`flex-1 py-3 px-6 rounded-xl font-bold text-base transition-colors focus:outline-none ${
+                            className={`flex-1 py-[clamp(5px,1.4vh,12px)] px-6 rounded-xl font-bold text-[clamp(12px,1.9vh,16px)] transition-colors focus:outline-none ${
                               timerRunning ? 'bg-[#B6871F] hover:bg-[#B6871F]/80 text-white' :
                               (gslRequireNextSpeaker && isLastGSLSpeaker) ? 'bg-[#DDD4C0] text-[#9A8A78] cursor-not-allowed' :
                               'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'
@@ -2368,7 +2368,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                             ) : t('gsl_start')}
                           </button>
                           <button onClick={handleNextSpeaker} disabled={committee.speakersList.length === 0}
-                            className="flex-1 bg-[#DDD4C0] hover:bg-[#C8BAA8] disabled:opacity-40 text-[#1C1410] py-3 px-4 rounded-xl font-bold transition-colors focus:outline-none whitespace-nowrap" style={{ fontSize: 'clamp(11px, 1.2vw, 14px)' }}>
+                            className="flex-1 bg-[#DDD4C0] hover:bg-[#C8BAA8] disabled:opacity-40 text-[#1C1410] py-[clamp(5px,1.4vh,12px)] px-4 rounded-xl font-bold transition-colors focus:outline-none whitespace-nowrap" style={{ fontSize: 'clamp(11px, 1.2vw, 14px)' }}>
                             {t('gsl_next')}
                           </button>
                           <button
@@ -2381,7 +2381,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                           <button
                             onClick={() => setActivePopover(activePopover === 'rightToReply' ? null : 'rightToReply')}
                             data-tutorial="rtr-button"
-                            className="px-3 py-3 border rounded-xl font-black text-xs uppercase tracking-wide transition-colors bg-[#B8844A]/15 hover:bg-[#B8844A]/25 border-[#B8844A]/30 text-[#B8844A]">
+                            className="px-3 py-[clamp(5px,1.4vh,12px)] border rounded-xl font-black text-[clamp(9px,1.4vh,12px)] uppercase tracking-wide transition-colors bg-[#B8844A]/15 hover:bg-[#B8844A]/25 border-[#B8844A]/30 text-[#B8844A]">
                             {t('gsl_right_to_reply')}
                           </button>
                         </div>
@@ -2414,13 +2414,13 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                   )}
                 </div>
                 {!sessionEnded && (
-                <div className="border-t border-[#DDD4C0] px-6 py-2 shrink-0" style={{ backgroundColor: '#F6F1E9' }}>
+                <div className="border-t border-[#DDD4C0] px-6 py-[clamp(3px,1vh,8px)] shrink-0" style={{ backgroundColor: '#F6F1E9' }}>
                   {!isViewOnly && <div className="flex items-center gap-3 mb-2">
                     <span className="text-xs text-[#9A8A78] font-mono shrink-0">{t('gsl_time')}</span>
                     <div className="flex gap-1.5">
                       {[45, 60, 75, 90].map((preset) => (
                         <button key={preset} onClick={() => handleSetSpeakerTimeLimit(preset)}
-                          className={`text-xs px-2.5 py-1 rounded-lg transition-colors font-semibold ${speakerTimeLimit === preset ? 'bg-[#1B3828] text-white' : 'bg-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
+                          className={`text-[clamp(10px,1.5vh,12px)] px-2.5 py-[clamp(2px,0.7vh,4px)] rounded-lg transition-colors font-semibold ${speakerTimeLimit === preset ? 'bg-[#1B3828] text-white' : 'bg-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
                           {preset}s
                         </button>
                       ))}
