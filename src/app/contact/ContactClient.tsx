@@ -75,7 +75,7 @@ export default function ContactClient() {
   };
 
   return (
-    <div className="h-screen bg-[#EDE7D8] flex flex-col relative overflow-hidden">
+    <div className="min-h-screen bg-[#EDE7D8] flex flex-col relative">
 
       {/* Grain overlay */}
       <div

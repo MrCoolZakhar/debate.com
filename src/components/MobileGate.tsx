@@ -36,7 +36,14 @@ export default function MobileGate({ children }: { children: React.ReactNode }) 
         width={160}
         height={48}
         style={{ width: 160, height: 'auto', objectFit: 'contain', marginBottom: 32 }}
-        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+        onError={(e) => {
+          const img = e.target as HTMLImageElement;
+          img.style.display = 'none';
+          const fallback = document.createElement('span');
+          fallback.textContent = 'Gavelling';
+          fallback.style.cssText = "font-family:'Playfair Display',serif;font-size:28px;font-weight:700;color:#1C1410;margin-bottom:32px;";
+          img.parentElement?.insertBefore(fallback, img);
+        }}
       />
 
       <p style={{ fontSize: 48, marginBottom: 16, lineHeight: 1 }}>🖥️</p>

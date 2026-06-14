@@ -556,7 +556,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   })();
 
   return (
-    <div className="h-screen bg-[#F6F1E9] flex flex-col overflow-hidden">
+    <div className="min-h-screen min-h-[700px] bg-[#F6F1E9] flex flex-col">
       <Header>
         <span className="text-xs font-mono font-bold text-[#1B3828] bg-[#DDD4C0] px-2 py-0.5 rounded shrink-0">
           {selectedDoc.docCode}
