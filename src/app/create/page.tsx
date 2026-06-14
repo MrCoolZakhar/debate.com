@@ -291,7 +291,7 @@ function SelectScreen({ onSelect }: { onSelect: () => void }) {
   const isHovered = (id: string) => hovered === id;
 
   return (
-    <div className="flex-1 flex flex-col items-center px-8 py-6 relative z-10 overflow-y-auto">
+    <div className="flex-1 flex flex-col items-center justify-center px-8 relative z-10 overflow-hidden">
 
       {/* Bottom surface shadow */}
       <div
@@ -309,8 +309,6 @@ function SelectScreen({ onSelect }: { onSelect: () => void }) {
           background: 'radial-gradient(ellipse 60% 45% at 50% 72%, rgba(27,56,40,0.09) 0%, transparent 70%)',
         }}
       />
-
-      <div className="m-auto w-full flex flex-col items-center relative">
 
       {/* Headline */}
       <h1
@@ -454,8 +452,6 @@ function SelectScreen({ onSelect }: { onSelect: () => void }) {
           );
         })}
       </div>
-
-      </div>{/* end m-auto wrapper */}
     </div>
   );
 }
