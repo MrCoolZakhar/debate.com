@@ -1,6 +1,7 @@
 'use client';
 
 import { use, useEffect, useRef, useState } from 'react';
+import FitToScreen from '@/components/FitToScreen';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
@@ -432,7 +433,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
         <img
           src="/GavellingLogo.png"
           alt="Gavelling"
-          className="w-[16vw] h-auto max-h-8 object-contain"
+          className="w-[150px] h-auto max-h-8 object-contain"
           onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
         />
       </Link>
@@ -556,7 +557,8 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   })();
 
   return (
-    <div className="h-screen bg-[#F6F1E9] flex flex-col overflow-hidden">
+    <FitToScreen>
+    <div className="h-full w-full bg-[#F6F1E9] flex flex-col overflow-hidden">
       <Header>
         <span className="text-xs font-mono font-bold text-[#1B3828] bg-[#DDD4C0] px-2 py-0.5 rounded shrink-0">
           {selectedDoc.docCode}
@@ -594,7 +596,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             <div className="select-none mb-3 flex items-center justify-center">
               {(() => {
                 const f = getCountryByName(currentDelegate.country);
-                const size = 'min(33vw, 27vh)';
+                const size = '220px';
                 return f ? (
                   <div style={{ width: size, aspectRatio: '3 / 2', borderRadius: '14px', overflow: 'hidden', boxShadow: '0 0 0 3.75px rgba(28,20,16,0.22)', flexShrink: 0 }}>
                     <img
@@ -612,7 +614,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
               })()}
             </div>
             <h1
-              style={{ fontSize: 'min(5.5vw, 5vh)' }}
+              style={{ fontSize: '40px' }}
               className="font-black text-[#1C1410] text-center leading-tight mb-1"
             >
               {getCountryDisplayName(currentDelegate.country, language)}
@@ -775,7 +777,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             <div className="select-none mb-3 flex items-center justify-center">
               {(() => {
                 const f = getCountryByName(orderedRights[rightsIndex].country);
-                const size = 'min(27vw, 24vh)';
+                const size = '196px';
                 return f ? (
                   <div style={{ width: size, aspectRatio: '3 / 2', borderRadius: '14px', overflow: 'hidden', boxShadow: '0 0 0 3.75px rgba(28,20,16,0.22)', flexShrink: 0 }}>
                     <img
@@ -793,7 +795,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
               })()}
             </div>
             <h1
-              style={{ fontSize: 'min(5vw, 4vh)' }}
+              style={{ fontSize: '32px' }}
               className="font-black text-[#1C1410] text-center mb-2"
             >
               {getCountryDisplayName(orderedRights[rightsIndex].country, language)}
@@ -1029,5 +1031,6 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
         </div>
       )}
     </div>
+    </FitToScreen>
   );
 }
