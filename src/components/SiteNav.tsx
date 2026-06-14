@@ -44,21 +44,21 @@ export default function SiteNav({ logoOverride, floating = false }: SiteNavProps
   return (
     <>
       <nav
-        className={`relative z-30 flex items-center px-6 shrink-0 ${floating ? 'md:px-6 md:mx-auto md:mt-4 md:max-w-6xl md:rounded-full md:sticky md:top-4 md:bg-[#1B3828]/70 md:backdrop-blur-xl md:border md:border-[#EED98A]/20 md:shadow-[0_8px_32px_rgba(27,56,40,0.28)]' : 'md:px-14'}`}
-        style={{ height: '72px' }}
+        className={`relative z-30 flex items-center px-6 shrink-0 ${floating ? 'md:px-8 md:fixed md:top-4 md:left-6 md:right-6 md:z-40 md:rounded-full md:bg-[#1B3828]/70 md:backdrop-blur-xl md:border md:border-[#EED98A]/20 md:shadow-[0_8px_32px_rgba(27,56,40,0.28)]' : 'md:px-14'}`}
+        style={{ height: floating ? '58px' : '72px' }}
       >
         {/* Logo */}
         <Link href="/" onClick={() => setMenuOpen(false)}>
           <img
             src={logoOverride?.src ?? '/GavellingLogo.png'}
             alt={logoOverride?.alt ?? 'Gavelling'}
-            className={`h-8 md:h-10 w-auto object-contain${floating ? ' md:brightness-0 md:invert' : ''}`}
+            className={`h-8 md:h-10 w-auto object-contain${floating ? ' md:h-8 md:brightness-0 md:invert' : ''}`}
             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
           />
         </Link>
 
         {/* Desktop nav links */}
-        <div className={`hidden md:flex items-center ${floating ? 'md:flex-1 md:justify-center md:gap-1' : 'absolute left-1/2 -translate-x-1/2'}`}>
+        <div className="hidden md:flex items-center absolute left-1/2 -translate-x-1/2">
           {navLinks.map((link, i) => {
             const active = pathname === link.href;
             const hl = hovered === link.label;
