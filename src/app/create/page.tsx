@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect, Suspense } from 'react';
+import FitToScreen from '@/components/FitToScreen';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createCommittee as createCommitteeInDB } from '@/lib/committeeService';
@@ -313,7 +314,7 @@ function SelectScreen({ onSelect }: { onSelect: () => void }) {
       {/* Headline */}
       <h1
         className="font-black uppercase tracking-wide text-center mb-4 relative"
-        style={{ fontSize: 'clamp(30px, 3.8vw, 52px)', lineHeight: 1.05, color: '#1B3828' }}
+        style={{ fontSize: '48px', lineHeight: 1.05, color: '#1B3828' }}
       >
         {t('create_select_type')}
       </h1>
@@ -531,7 +532,8 @@ function CreatePageInner() {
   };
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden relative" style={{ backgroundColor: '#EDE7D8' }}>
+    <FitToScreen>
+    <div className="h-full w-full flex flex-col overflow-hidden relative" style={{ backgroundColor: '#EDE7D8' }}>
       {/* Grain texture — matches landing page */}
       <div
         className="pointer-events-none fixed inset-0 z-[1]"
@@ -790,6 +792,7 @@ function CreatePageInner() {
         )}
       </div>
     </div>
+    </FitToScreen>
   );
 }
 
