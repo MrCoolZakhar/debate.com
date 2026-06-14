@@ -29,36 +29,31 @@ export default function SiteNav({ logoOverride, floating = false }: SiteNavProps
   const [showLangMenu, setShowLangMenu] = useState(false);
   const navLinks = NAV_LINKS_CONFIG.map(l => ({ label: l[language], href: l.href }));
 
-  const linkIdle    = floating ? 'rgba(237,231,216,0.78)' : 'rgba(28, 20, 16, 0.55)';
-  const linkActive  = floating ? '#FFFFFF'                : '#1B3828';
-  const linkBgActive= floating ? 'rgba(237,231,216,0.12)' : 'rgba(27, 56, 40, 0.07)';
-  const linkBgHover = floating ? 'rgba(237,231,216,0.07)' : 'rgba(27, 56, 40, 0.04)';
-  const dividerColor= floating ? 'rgba(237,231,216,0.22)' : 'rgba(28, 20, 16, 0.2)';
-  const underline   = floating ? '#EED98A'                : '#B6871F';
-  const langColor   = floating ? '#EDE7D8'                : '#1B3828';
-  const ctaColor    = floating ? '#EED98A'                : '#1B3828';
-  const ctaBorder   = floating ? '1.5px solid rgba(238,217,138,0.5)' : '1.5px solid rgba(27, 56, 40, 0.5)';
-  const ctaHoverBg  = floating ? '#EED98A'                : '#1B3828';
-  const ctaHoverFg  = floating ? '#1B3828'                : '#EED98A';
+  const linkIdle     = floating ? 'rgba(237,231,216,0.78)' : 'rgba(28, 20, 16, 0.55)';
+  const linkActive   = floating ? '#FFFFFF'                : '#1B3828';
+  const linkBgActive = floating ? 'transparent'            : 'rgba(27, 56, 40, 0.07)';
+  const linkBgHover  = floating ? 'rgba(237,231,216,0.10)' : 'rgba(27, 56, 40, 0.04)';
+  const dividerColor = floating ? 'rgba(237,231,216,0.22)' : 'rgba(28, 20, 16, 0.2)';
+  const underline    = floating ? '#EED98A'                : '#B6871F';
 
   return (
     <>
       <nav
-        className={`relative z-30 flex items-center px-6 shrink-0 ${floating ? 'md:px-8 md:fixed md:top-4 md:left-6 md:right-6 md:z-40 md:rounded-full md:bg-[#1B3828]/70 md:backdrop-blur-xl md:border md:border-[#EED98A]/20 md:shadow-[0_8px_32px_rgba(27,56,40,0.28)]' : 'md:px-14'}`}
-        style={{ height: floating ? '58px' : '72px' }}
+        className={`relative z-30 flex items-center px-6 shrink-0 ${floating ? 'md:px-14 md:fixed md:top-0 md:left-0 md:right-0 md:z-40' : 'md:px-14'}`}
+        style={{ height: '72px' }}
       >
         {/* Logo */}
         <Link href="/" onClick={() => setMenuOpen(false)}>
           <img
             src={logoOverride?.src ?? '/GavellingLogo.png'}
             alt={logoOverride?.alt ?? 'Gavelling'}
-            className={`h-8 md:h-10 w-auto object-contain${floating ? ' md:h-8 md:brightness-0 md:invert' : ''}`}
+            className="h-8 md:h-10 w-auto object-contain"
             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
           />
         </Link>
 
         {/* Desktop nav links */}
-        <div className="hidden md:flex items-center absolute left-1/2 -translate-x-1/2">
+        <div className={`hidden md:flex items-center absolute left-1/2 -translate-x-1/2 ${floating ? 'md:top-1/2 md:-translate-y-1/2 md:rounded-full md:bg-[#1B3828]/70 md:backdrop-blur-xl md:border md:border-[#EED98A]/20 md:shadow-[0_8px_32px_rgba(27,56,40,0.28)] md:px-3 md:py-1.5' : ''}`}>
           {navLinks.map((link, i) => {
             const active = pathname === link.href;
             const hl = hovered === link.label;
@@ -129,7 +124,7 @@ export default function SiteNav({ logoOverride, floating = false }: SiteNavProps
             <button
               onClick={() => setShowLangMenu((v) => !v)}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl transition-all focus:outline-none"
-              style={{ color: langColor, fontSize: '12px', fontWeight: 700, letterSpacing: '0.06em' }}
+              style={{ color: '#1B3828', fontSize: '12px', fontWeight: 700, letterSpacing: '0.06em' }}
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.07)'; }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
             >
@@ -187,14 +182,14 @@ export default function SiteNav({ logoOverride, floating = false }: SiteNavProps
           onClick={() => setShowModal(true)}
           onMouseEnter={(e) => {
             const el = e.currentTarget as HTMLElement;
-            el.style.backgroundColor = ctaHoverBg;
-            el.style.color = ctaHoverFg;
+            el.style.backgroundColor = '#1B3828';
+            el.style.color = '#EED98A';
             el.style.transform = 'translateY(-1px)';
           }}
           onMouseLeave={(e) => {
             const el = e.currentTarget as HTMLElement;
             el.style.backgroundColor = 'transparent';
-            el.style.color = ctaColor;
+            el.style.color = '#1B3828';
             el.style.transform = 'translateY(0)';
           }}
           style={{
@@ -203,8 +198,8 @@ export default function SiteNav({ logoOverride, floating = false }: SiteNavProps
             fontSize: '13px',
             fontWeight: 800,
             letterSpacing: '0.08em',
-            color: ctaColor,
-            border: ctaBorder,
+            color: '#1B3828',
+            border: '1.5px solid rgba(27, 56, 40, 0.5)',
             borderRadius: '9999px',
             cursor: 'pointer',
             transition: 'all 200ms ease',
