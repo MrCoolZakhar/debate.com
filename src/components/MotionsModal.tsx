@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
+import Portal from '@/components/Portal';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { Committee, PendingMotion, PendingMotionType } from '@/lib/types';
 import { getCountryByName, getFlagUrl, getCountryDisplayName } from '@/lib/countries';
@@ -975,7 +976,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
   if (specialVoteMotion) {
     const isSuspend = specialVoteMotion.type === 'suspend-debate';
     return (
-      <div className="fixed inset-0 z-[60] bg-[#F6F1E9] flex flex-col items-center justify-center text-center px-8">
+      <Portal><div className="fixed inset-0 z-[60] bg-[#F6F1E9] flex flex-col items-center justify-center text-center px-8">
         <p className="text-xs font-mono tracking-widest text-[#9A8A78] mb-6">
           {typeMeta[specialVoteMotion.type].label.toUpperCase()} · {specialVoteMotion.proposedBy === CHAIR_KEY ? chairDisplayName(language) : getCountryDisplayName(specialVoteMotion.proposedBy, language)}
         </p>
@@ -1019,12 +1020,12 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
             {t('motions_no')}
           </button>
         </div>
-      </div>
+      </div></Portal>
     );
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+    <Portal><div className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background: 'rgba(5, 8, 20, 0.88)', backdropFilter: 'blur(4px)' }}
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="bg-[#FAF8F3] border border-[#DDD4C0] rounded-3xl w-full shadow-2xl overflow-hidden flex flex-col max-w-5xl" style={{ height: '88vh' }}>
@@ -1136,6 +1137,6 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
           )}
         </div>
       </div>
-    </div>
+    </div></Portal>
   );
 }

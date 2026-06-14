@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect, KeyboardEvent } from 'react';
+import Portal from '@/components/Portal';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { useRouter } from 'next/navigation';
 import { Committee, CommitteeDocument, DocumentType, DocumentStatus } from '@/lib/types';
@@ -337,7 +338,7 @@ function DocumentVote({ doc, committee, onDone, onStatusChange }: {
   // Suspend vote prompt
   if (showSuspendVote && !showSuspended) {
     return (
-      <div className="fixed inset-0 z-[70] bg-[#F6F1E9] flex flex-col items-center justify-center text-center px-8">
+      <Portal><div className="fixed inset-0 z-[70] bg-[#F6F1E9] flex flex-col items-center justify-center text-center px-8">
         <p className="text-xs font-mono tracking-widest text-[#9A8A78] mb-6">MOTION TO SUSPEND DEBATE · {suspendProposer}</p>
         <h1 className="text-4xl font-black mb-14 tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>DOES THIS MOTION PASS?</h1>
         <div className="flex gap-8">
@@ -359,17 +360,17 @@ function DocumentVote({ doc, committee, onDone, onStatusChange }: {
             NO
           </button>
         </div>
-      </div>
+      </div></Portal>
     );
   }
 
   if (showSuspended) {
     return (
-      <div className="fixed inset-0 z-[70] bg-[#F6F1E9] flex flex-col items-center justify-center text-center px-8">
+      <Portal><div className="fixed inset-0 z-[70] bg-[#F6F1E9] flex flex-col items-center justify-center text-center px-8">
         <h1 className="text-6xl font-black text-[#1C1410] mb-4">Session is now suspended.</h1>
         <p className="text-4xl font-black text-[#1C1410] mb-16">See you again soon!</p>
         <p className="text-lg text-[#1C1410]/40">— Press ESC to go back to main menu</p>
-      </div>
+      </div></Portal>
     );
   }
 
@@ -393,7 +394,7 @@ function DocumentVote({ doc, committee, onDone, onStatusChange }: {
 
           {/* Proceed with Session panel */}
           {showProceedPanel && (
-            <div className="fixed inset-0 z-[60] flex items-center justify-center p-4"
+            <Portal><div className="fixed inset-0 z-[60] flex items-center justify-center p-4"
               style={{ background: 'rgba(5, 8, 20, 0.88)', backdropFilter: 'blur(4px)' }}>
               <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-3xl w-full max-w-md shadow-2xl p-8 space-y-6">
                 <h2 className="text-2xl font-black text-[#1C1410]">Proceed with Session</h2>
@@ -427,7 +428,7 @@ function DocumentVote({ doc, committee, onDone, onStatusChange }: {
                   Go back to Session
                 </button>
               </div>
-            </div>
+            </div></Portal>
           )}
         </>
       ) : (
@@ -896,7 +897,7 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
   // Fullscreen stages
   if (activeDoc && stage && stage !== 'setup') {
     return (
-      <div className="fixed inset-0 z-50 bg-[#F6F1E9] flex flex-col">
+      <Portal><div className="fixed inset-0 z-50 bg-[#F6F1E9] flex flex-col">
         <div className="flex items-center justify-between px-6 pt-4 pb-2 border-b border-[#DDD4C0] shrink-0">
           <div className="flex items-center gap-3">
             <span className="text-sm font-bold text-[#1C1410]">{activeDoc.docCode}</span>
@@ -938,25 +939,25 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
             onDone={() => { setStage(null); setActiveDoc(null); }}
             onStatusChange={handleStatusChange} />
         )}
-      </div>
+      </div></Portal>
     );
   }
 
   // Timing setup screen
   if (activeDoc && stage === 'setup') {
     return (
-      <div className="fixed inset-0 z-50 bg-[#F6F1E9] flex flex-col">
+      <Portal><div className="fixed inset-0 z-50 bg-[#F6F1E9] flex flex-col">
         <div className="flex items-center justify-between px-6 pt-4 pb-2 border-b border-[#DDD4C0] shrink-0">
           <span className="text-sm font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>{t('documents_introduce_header')}</span>
           <button onClick={() => { setStage(null); setActiveDoc(null); }} className="text-[#9A8A78] hover:text-[#1C1410] transition-colors text-xl">✕</button>
         </div>
         <TimingSetup doc={activeDoc} onStart={handleTimingConfirmed} onSkip={handleSkipToVote} />
-      </div>
+      </div></Portal>
     );
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+    <Portal><div className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background: 'rgba(5, 8, 20, 0.88)', backdropFilter: 'blur(4px)' }}
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
@@ -1019,6 +1020,6 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
           )}
         </div>
       </div>
-    </div>
+    </div></Portal>
   );
 }

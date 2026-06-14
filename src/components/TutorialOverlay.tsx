@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import Portal from '@/components/Portal';
 import type { Committee } from '@/lib/types';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 
@@ -296,7 +297,7 @@ export default function TutorialOverlay({ committee, onEnd, onStepId }: Props) {
   // ── Questionnaire ─────────────────────────────────────────────────────────
   if (step.kind === 'questionnaire') {
     return (
-      <div className="fixed inset-0 z-[9990] flex items-center justify-center"
+      <Portal><div className="fixed inset-0 z-[9990] flex items-center justify-center"
         style={{ background: 'rgba(27,56,40,0.88)', backdropFilter: 'blur(4px)' }}>
         <div className="bg-[#F6F1E9] rounded-3xl shadow-2xl px-12 py-10 max-w-md w-full text-center flex flex-col items-center gap-6"
           style={{ border: '2px solid rgba(27,56,40,0.2)' }}>
@@ -317,7 +318,7 @@ export default function TutorialOverlay({ committee, onEnd, onStepId }: Props) {
             </button>
           </div>
         </div>
-      </div>
+      </div></Portal>
     );
   }
 

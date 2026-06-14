@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import Portal from '@/components/Portal';
 import { Globe } from 'lucide-react';
 import { useSettingsStore, CommitteeSettings, MotionNames } from '@/lib/settingsStore';
 import { Committee } from '@/lib/types';
@@ -380,7 +381,7 @@ export function SettingsPanel({ committee, onClose }: {
   ];
 
   return (
-    <div
+    <Portal><div
       className="fixed inset-0 z-[60] bg-black/40 flex justify-end"
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
@@ -664,6 +665,6 @@ export function SettingsPanel({ committee, onClose }: {
           <p className="text-[10px] text-center font-mono" style={{ color: '#9A8A78' }}>{t('settings_changes_apply')}</p>
         </div>
       </div>
-    </div>
+    </div></Portal>
   );
 }
