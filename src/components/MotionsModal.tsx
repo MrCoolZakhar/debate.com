@@ -506,6 +506,10 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
 
   const renderCard = (m: PendingMotion, large: boolean, idx: number) => {
     const meta = typeMeta[m.type];
+    if (!meta) {
+      console.warn('Unknown motion type, skipping render:', m.type, m.id);
+      return null;
+    }
     const { needed, fraction } = requiredVotes(m.type, present);
     const totalMins = Math.floor(m.totalTime / 60);
     const totalSecs = m.totalTime % 60;
@@ -978,7 +982,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
     return (
       <Portal><div className="fixed inset-0 z-[60] bg-[#F6F1E9] flex flex-col items-center justify-center text-center px-8">
         <p className="text-xs font-mono tracking-widest text-[#9A8A78] mb-6">
-          {typeMeta[specialVoteMotion.type].label.toUpperCase()} · {specialVoteMotion.proposedBy === CHAIR_KEY ? chairDisplayName(language) : getCountryDisplayName(specialVoteMotion.proposedBy, language)}
+          {(typeMeta[specialVoteMotion.type]?.label ?? specialVoteMotion.type).toUpperCase()} · {specialVoteMotion.proposedBy === CHAIR_KEY ? chairDisplayName(language) : getCountryDisplayName(specialVoteMotion.proposedBy, language)}
         </p>
         <h1 className="text-4xl font-black mb-14 tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{t('motions_does_pass')}</h1>
         <div className="flex gap-8">
@@ -1071,6 +1075,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
                   <p className="text-xs text-[#9A8A78] font-mono">{t('motions_ranked')}</p>
                   {pending.map((m, i) => {
                     const meta = typeMeta[m.type];
+                    if (!meta) return null;
                     const mins = Math.floor(m.totalTime / 60);
                     const secs = m.totalTime % 60;
                     const proposerFlag = getCountryByName(m.proposedBy);

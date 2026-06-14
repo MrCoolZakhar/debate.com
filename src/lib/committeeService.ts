@@ -145,7 +145,7 @@ export async function getCommitteeByCode(code: string): Promise<Committee | null
     supabase.from('speakers_list').select('*').eq('committee_id', committeeRow.id).eq('list_type', 'gsl').order('position', { ascending: true }),
     supabase.from('speakers_list').select('*').eq('committee_id', committeeRow.id).eq('list_type', 'caucus').order('position', { ascending: true }),
     supabase.from('current_speaker').select('*').eq('committee_id', committeeRow.id).maybeSingle(),
-    supabase.from('motions').select('*').eq('committee_id', committeeRow.id).eq('status', 'pending').order('disruptiveness', { ascending: false }),
+    supabase.from('motions').select('*').eq('committee_id', committeeRow.id).eq('status', 'pending').not('type', 'in', '("gsl-request","join-request")').order('disruptiveness', { ascending: false }),
     supabase.from('documents').select('*').eq('committee_id', committeeRow.id).order('created_at', { ascending: true }),
     supabase.from('messages').select('*').eq('committee_id', committeeRow.id).order('created_at', { ascending: true }),
   ]);
