@@ -57,7 +57,7 @@ export default function PreRegisterNudge({ onClose }: { onClose: () => void }) {
         </button>
 
         {/* Green header band */}
-        <div className="relative px-7 pt-6 pb-5 flex flex-col items-center gap-3"
+        <div className="relative px-7 pt-4 pb-4 flex flex-col items-center gap-2"
           style={{ background: 'linear-gradient(150deg, #1B3828 0%, #142B1C 65%, #0E1E13 100%)' }}>
           <div className="pointer-events-none absolute inset-0"
             style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'overlay', opacity: 0.08 }} />
@@ -66,19 +66,19 @@ export default function PreRegisterNudge({ onClose }: { onClose: () => void }) {
             <CalendarIcon size={13} style={{ color: '#EED98A' }} />
             <span className="font-mono uppercase" style={{ fontSize: 11, letterSpacing: '0.18em', color: '#EED98A', fontWeight: 700 }}>{t('prereg_badge')}</span>
           </div>
-          <h2 className="relative text-center font-black text-white tracking-tight leading-[0.95]" style={{ fontSize: 26 }}>
+          <h2 className="relative text-center font-black text-white tracking-tight leading-[0.95]" style={{ fontSize: 22 }}>
             {t('prereg_heading_1')}{' '}
             <span style={{ fontFamily: "'Playfair Display', serif", fontStyle: 'italic', fontWeight: 400, color: '#EED98A' }}>{t('prereg_heading_2')}</span>
           </h2>
         </div>
 
         {/* Body */}
-        <div className="px-7 pt-5 pb-6 flex flex-col gap-4">
+        <div className="px-7 pt-3 pb-5 flex flex-col gap-3">
           {/* Logo mark floats over the band seam */}
-          <div className="flex justify-center -mt-12 mb-1">
+          <div className="flex justify-center -mt-9 mb-0">
             <img src="/GAVELLING__1_.png" alt="Gavelling"
-              width={84} height={84}
-              style={{ width: 84, height: 84, objectFit: 'contain', filter: 'drop-shadow(0 6px 14px rgba(27,56,40,0.25))' }}
+              width={68} height={68}
+              style={{ width: 68, height: 68, objectFit: 'contain', filter: 'drop-shadow(0 6px 14px rgba(27,56,40,0.25))' }}
               onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden'; }} />
           </div>
 
@@ -130,13 +130,6 @@ export default function PreRegisterNudge({ onClose }: { onClose: () => void }) {
                   {loading ? '…' : t('prereg_btn')}
                 </button>
                 <p className="text-[11px] text-center" style={{ color: '#9A8A78' }}>{t('prereg_no_spam')}</p>
-                <button type="button" onClick={onClose}
-                  className="text-[11px] underline mx-auto mt-0.5 transition-colors"
-                  style={{ color: '#9A8A78', background: 'none', border: 'none', cursor: 'pointer' }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#1C1410'; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}>
-                  {t('prereg_nudge_close')}
-                </button>
               </form>
             </>
           )}
