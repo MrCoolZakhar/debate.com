@@ -52,8 +52,8 @@ export default function PreRegisterGate() {
       setShow(true);
     };
 
-    // 6-second timer
-    const timer = setTimeout(trigger, 6000);
+    // Show immediately on page load
+    const timer = setTimeout(trigger, 0);
 
     // Exit-intent (desktop)
     const onMouseOut = (e: MouseEvent) => {
