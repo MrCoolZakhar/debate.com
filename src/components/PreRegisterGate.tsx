@@ -29,14 +29,18 @@ export default function PreRegisterGate() {
   useEffect(() => {
     if (!isAllowedRoute(pathname)) return;
 
-    // Check already registered
-    if (hasPreRegistered()) return;
+    const isDev = typeof window !== 'undefined' && window.location.hostname === 'localhost';
 
-    // Check dismissed cooldown
-    try {
-      const dismissed = localStorage.getItem(DISMISSED_KEY);
-      if (dismissed && Date.now() - Number(dismissed) < DISMISS_COOLDOWN_MS) return;
-    } catch {}
+    // Check already registered (skip in dev)
+    if (!isDev && hasPreRegistered()) return;
+
+    // Check dismissed cooldown (skip in dev)
+    if (!isDev) {
+      try {
+        const dismissed = localStorage.getItem(DISMISSED_KEY);
+        if (dismissed && Date.now() - Number(dismissed) < DISMISS_COOLDOWN_MS) return;
+      } catch {}
+    }
 
     // Record first qualifying view
     try {
