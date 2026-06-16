@@ -25,7 +25,7 @@ export default function FitToScreen({ children }: { children: ReactNode }) {
 
   return (
     <div style={{ position: 'fixed', inset: 0, overflow: 'hidden', backgroundColor: '#EDE7D8' }}>
-      <div style={{ width: dims.width, height: BASE_H, transform: `scale(${dims.scale})`, transformOrigin: 'top left' }}>
+      <div id="fit-root" style={{ width: dims.width, height: BASE_H, transform: `scale(${dims.scale})`, transformOrigin: 'top left' }}>
         {children}
       </div>
     </div>

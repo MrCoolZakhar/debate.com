@@ -61,7 +61,7 @@ function RollCallModal({
   const pvCount = Object.values(rollCallStatuses).filter((s) => s === 'present-voting').length;
   return (
     <Portal><div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(5,4,3,0.92)', backdropFilter: 'blur(4px)' }}>
-      <div className="rounded-2xl w-full max-w-md shadow-2xl flex flex-col" style={{ maxHeight: '85vh', backgroundColor: '#1B3828', border: '1px solid rgba(255,255,255,0.12)' }}>
+      <div className="rounded-2xl w-full max-w-md shadow-2xl flex flex-col" style={{ maxHeight: '85%', backgroundColor: '#1B3828', border: '1px solid rgba(255,255,255,0.12)' }}>
         <div className="px-5 py-4 shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.12)' }}>
           <div className="flex items-center justify-between mb-1">
             <h2 className="text-base font-black text-white">{t('voting_roll_call_heading')}</h2>
