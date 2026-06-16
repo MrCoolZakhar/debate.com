@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { LanguageProvider } from '@/contexts/LanguageContext';
+import PreRegisterGate from '@/components/PreRegisterGate';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://gavelling.com'),
@@ -103,6 +104,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-full bg-[#EDE7D8] text-[#1C1410] antialiased">
         <LanguageProvider>
           {children}
+          <PreRegisterGate />
         </LanguageProvider>
       </body>
     </html>
