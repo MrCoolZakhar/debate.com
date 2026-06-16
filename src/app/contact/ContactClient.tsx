@@ -379,7 +379,7 @@ export default function ContactClient() {
                     </a>
 
                     {/* Book a call */}
-                    <a href="https://calendar.app.google/8VnuxHW7eG7iVZYX7" target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none' }}>
+                    <a href="https://calendar.app.google/BgWXxMdKmEJE3dDq6" target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none' }}>
                       <div style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(27, 56, 40, 0.08)', border: '1px solid rgba(27, 56, 40, 0.14)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1B3828" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                           <rect x="3" y="4" width="18" height="18" rx="2" />

@@ -471,6 +471,8 @@ function CreatePageInner() {
   const [search, setSearch] = useState('');
   const [pasteText, setPasteText] = useState('');
   const [pasteError, setPasteError] = useState('');
+  const [editingIdx, setEditingIdx] = useState<number | null>(null);
+  const [editDraft, setEditDraft] = useState('');
   const [creating, setCreating] = useState(false);
   const [isUNSC, setIsUNSC] = useState(false);
 
@@ -512,16 +514,15 @@ function CreatePageInner() {
   };
 
   const handlePaste = () => {
-    const lines = pasteText.split(/[\n,]+/).map((l) => l.trim()).filter(Boolean);
-    const matched: string[] = [];
-    const unmatched: string[] = [];
-    for (const line of lines) {
-      const found = fuzzyMatchCountry(line);
-      if (found && !delegates.includes(found) && !matched.includes(found)) matched.push(found);
-      else if (!found) unmatched.push(line);
+    const tokens = pasteText.split(/[\n;,\t]|(?:•|\d+\.|[-–—](?=\s))|\s{2,}/).map((l) => l.trim()).filter(Boolean);
+    const toAdd: string[] = [];
+    for (const token of tokens) {
+      const found = fuzzyMatchCountry(token);
+      const resolved = found ?? token;
+      if (!delegates.includes(resolved) && !toAdd.includes(resolved)) toAdd.push(resolved);
     }
-    setDelegates((p) => [...p, ...matched]);
-    setPasteError(unmatched.length > 0 ? (language === 'fr' ? `Impossible de correspondre : ${unmatched.join(', ')}` : language === 'es' ? `No se pudo coincidir: ${unmatched.join(', ')}` : `Could not match: ${unmatched.join(', ')}`) : '');
+    setDelegates((p) => [...p, ...toAdd]);
+    setPasteError('');
     setPasteText('');
   };
 
@@ -710,7 +711,7 @@ function CreatePageInner() {
                 <div className="flex-1 flex flex-col min-h-0">
                   <label className="block text-xs font-bold uppercase tracking-wide mb-2" style={{ color: '#1B3828' }}>{t('create_paste_list')}</label>
                   <textarea value={pasteText} onChange={(e) => { setPasteText(e.target.value); setPasteError(''); }}
-                    placeholder={language === 'fr' ? 'France\nAllemagne\nBrésil, Inde...' : language === 'es' ? 'Francia\nAlemania\nBrasil, India...' : 'France\nGermany\nBrazil, India...'}
+                    placeholder={t('create_paste_placeholder')}
                     className="flex-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] focus:ring-2 focus:ring-[#1B3828]/10 transition-all text-sm resize-none min-h-0" />
                 </div>
 
@@ -746,17 +747,51 @@ function CreatePageInner() {
                     </div>
                   ) : (
                     <div className="overflow-y-auto h-full">
-                      {delegates.map((name) => {
+                      {delegates.map((name, idx) => {
                         const found = getCountryByName(name);
+                        const isCustom = !found;
+                        const isEditing = editingIdx === idx;
                         return (
-                          <div key={name} className="flex items-center gap-3 px-4 py-2.5 border-b border-[#DDD4C0]/50 last:border-0 transition-colors group" onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }} onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = ''; }}>
+                          <div key={idx} className="flex items-center gap-3 px-4 py-2.5 border-b border-[#DDD4C0]/50 last:border-0 transition-colors group" onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }} onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = ''; }}>
                             {found
                               ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                               : <Globe size={16} strokeWidth={1.5} className="text-[#9A8A78] shrink-0" />
                             }
-                            <span className="text-sm flex-1 truncate font-medium" style={{ color: '#1C1410' }}>{getCountryDisplayName(name, language)}</span>
-                            <button onClick={() => setDelegates((p) => p.filter((d) => d !== name))}
-                              className="text-[#9A8A78] group-hover:text-red-500 transition-colors text-sm opacity-0 group-hover:opacity-100">✕</button>
+                            {isEditing ? (
+                              <input
+                                autoFocus
+                                className="text-sm flex-1 bg-transparent border-b border-[#1B3828] outline-none font-medium"
+                                style={{ color: '#1C1410' }}
+                                value={editDraft}
+                                onChange={(e) => setEditDraft(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    const trimmed = editDraft.trim();
+                                    if (!trimmed) { setDelegates((p) => p.filter((_, i) => i !== idx)); }
+                                    else if (!delegates.some((d, i) => i !== idx && d === trimmed)) { setDelegates((p) => p.map((d, i) => i === idx ? trimmed : d)); }
+                                    setEditingIdx(null);
+                                  } else if (e.key === 'Escape') { setEditingIdx(null); }
+                                }}
+                                onBlur={() => {
+                                  const trimmed = editDraft.trim();
+                                  if (!trimmed) { setDelegates((p) => p.filter((_, i) => i !== idx)); }
+                                  else if (!delegates.some((d, i) => i !== idx && d === trimmed)) { setDelegates((p) => p.map((d, i) => i === idx ? trimmed : d)); }
+                                  setEditingIdx(null);
+                                }}
+                              />
+                            ) : (
+                              <span className="text-sm flex-1 truncate font-medium" style={{ color: '#1C1410' }}>{getCountryDisplayName(name, language)}</span>
+                            )}
+                            {!isEditing && isCustom && (
+                              <button onClick={() => { setEditingIdx(idx); setEditDraft(name); }}
+                                className="text-[#9A8A78] hover:text-[#1B3828] transition-colors opacity-0 group-hover:opacity-100 mr-1">
+                                <PenLine size={13} strokeWidth={2} />
+                              </button>
+                            )}
+                            {!isEditing && (
+                              <button onClick={() => setDelegates((p) => p.filter((_, i) => i !== idx))}
+                                className="text-[#9A8A78] group-hover:text-red-500 transition-colors text-sm opacity-0 group-hover:opacity-100">✕</button>
+                            )}
                           </div>
                         );
                       })}
