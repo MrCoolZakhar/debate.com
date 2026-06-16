@@ -16,7 +16,7 @@ export default function PreRegisterNudge({ onClose }: { onClose: () => void }) {
   const [duplicate, setDuplicate] = useState(false);
   const [loading, setLoading] = useState(false);
   const [invalid, setInvalid] = useState(false);
-  const [spots, setSpots] = useState(123);
+  const [spots, setSpots] = useState<number | null>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -34,7 +34,7 @@ export default function PreRegisterNudge({ onClose }: { onClose: () => void }) {
       const res = await fetch('/api/pre-register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
       const data = await res.json();
       if (data.duplicate) { setDuplicate(true); }
-      else if (res.ok) { setSpots((n) => n + 1); }
+      else if (res.ok) { setSpots((n) => (n ?? 0) + 1); }
       else { setLoading(false); return; }
       markPreRegistered();
       setSubmitted(true);
@@ -42,7 +42,7 @@ export default function PreRegisterNudge({ onClose }: { onClose: () => void }) {
     } catch { /* allow retry */ } finally { setLoading(false); }
   };
 
-  const pct = Math.min(100, (spots / SPOTS_TOTAL) * 100);
+  const pct = spots !== null ? Math.min(100, (spots / SPOTS_TOTAL) * 100) : 0;
 
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center p-4"
@@ -103,15 +103,17 @@ export default function PreRegisterNudge({ onClose }: { onClose: () => void }) {
                 </p>
               </div>
 
-              {/* Spots progress */}
-              <div className="flex flex-col gap-1.5">
-                <div className="h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: 'rgba(27,56,40,0.12)' }}>
-                  <div className="h-full rounded-full" style={{ width: `${pct}%`, background: 'linear-gradient(90deg, #1B3828, #2A5A3C)' }} />
+              {/* Spots progress — only render once real count arrives */}
+              {spots !== null && (
+                <div className="flex flex-col gap-1.5">
+                  <div className="h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: 'rgba(27,56,40,0.12)' }}>
+                    <div className="h-full rounded-full" style={{ width: `${pct}%`, background: 'linear-gradient(90deg, #1B3828, #2A5A3C)' }} />
+                  </div>
+                  <p className="text-[11px]" style={{ color: '#9A8A78' }}>
+                    {t('prereg_spots_claimed').replace('{n}', String(spots)).replace('{total}', SPOTS_TOTAL.toLocaleString()).replace('{remaining}', String(SPOTS_TOTAL - spots))}
+                  </p>
                 </div>
-                <p className="text-[11px]" style={{ color: '#9A8A78' }}>
-                  {t('prereg_spots_claimed').replace('{n}', String(spots)).replace('{total}', SPOTS_TOTAL.toLocaleString()).replace('{remaining}', String(SPOTS_TOTAL - spots))}
-                </p>
-              </div>
+              )}
 
               {/* Form */}
               <form onSubmit={handleSubmit} className="flex flex-col gap-2.5">
