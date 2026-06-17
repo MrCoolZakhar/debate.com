@@ -471,6 +471,7 @@ function CreatePageInner() {
   const [search, setSearch] = useState('');
   const [pasteText, setPasteText] = useState('');
   const [pasteError, setPasteError] = useState('');
+  const [pasteReview, setPasteReview] = useState<{ name: string; isCountry: boolean }[] | null>(null);
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
   const [editDraft, setEditDraft] = useState('');
   const [creating, setCreating] = useState(false);
@@ -514,15 +515,41 @@ function CreatePageInner() {
   };
 
   const handlePaste = () => {
-    const tokens = pasteText.split(/[\n;,\t]|(?:•|\d+\.|[-–—](?=\s))|\s{2,}/).map((l) => l.trim()).filter(Boolean);
-    const toAdd: string[] = [];
-    for (const token of tokens) {
-      const found = fuzzyMatchCountry(token);
-      const resolved = found ?? token;
-      if (!delegates.includes(resolved) && !toAdd.includes(resolved)) toAdd.push(resolved);
+    const tokens = pasteText.split(/\r?\n|[,;\t]|\s{2,}|[·•]|\.(?=\s|$)/).map((s) => s.trim()).filter(Boolean);
+    const seen = new Set(delegates.map((d) => d.toLowerCase()));
+    const review: { name: string; isCountry: boolean }[] = [];
+    for (const tok of tokens) {
+      const found = fuzzyMatchCountry(tok);
+      const name = found ?? tok;
+      const key = name.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      review.push({ name, isCountry: !!found });
     }
-    setDelegates((p) => [...p, ...toAdd]);
+    if (review.length === 0) {
+      setPasteError(language === 'fr' ? 'Rien de nouveau à ajouter' : language === 'es' ? 'Nada nuevo que agregar' : 'Nothing new to add');
+      return;
+    }
     setPasteError('');
+    setPasteReview(review);
+  };
+
+  const updateReviewName = (idx: number, value: string) =>
+    setPasteReview((prev) => prev ? prev.map((r, i) => i === idx ? { name: value, isCountry: !!getCountryByName(value.trim()) } : r) : prev);
+
+  const removeReviewIdx = (idx: number) =>
+    setPasteReview((prev) => prev ? prev.filter((_, i) => i !== idx) : prev);
+
+  const commitPasteReview = () => {
+    if (!pasteReview) return;
+    const names = pasteReview.map((r) => r.name.trim()).filter(Boolean);
+    setDelegates((prev) => {
+      const seen = new Set(prev.map((d) => d.toLowerCase()));
+      const add: string[] = [];
+      for (const n of names) { const k = n.toLowerCase(); if (!seen.has(k)) { seen.add(k); add.push(n); } }
+      return [...prev, ...add];
+    });
+    setPasteReview(null);
     setPasteText('');
   };
 
@@ -827,6 +854,61 @@ function CreatePageInner() {
         )}
       </div>
     </div>
+
+    {/* Paste review modal — inside FitToScreen so it scales with the page */}
+    {pasteReview && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        style={{ background: 'rgba(5,4,3,0.5)', backdropFilter: 'blur(4px)' }}
+        onMouseDown={(e) => { if (e.target === e.currentTarget) setPasteReview(null); }}>
+        <div className="w-full max-w-md flex flex-col rounded-2xl shadow-2xl overflow-hidden"
+          style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', maxHeight: '78%' }}>
+          {/* Header */}
+          <div className="px-6 py-4 shrink-0" style={{ borderBottom: '1px solid #DDD4C0' }}>
+            <h2 className="text-lg font-black uppercase tracking-wide" style={{ color: '#1B3828', letterSpacing: '0.04em' }}>{t('create_review_title')}</h2>
+            <p className="text-xs mt-0.5" style={{ color: '#9A8A78' }}>{t('create_review_subtitle').replace('{n}', String(pasteReview.length))}</p>
+          </div>
+          {/* List */}
+          <div className="flex-1 overflow-y-auto min-h-0">
+            {pasteReview.map((r, idx) => {
+              const found = getCountryByName(r.name);
+              return (
+                <div key={idx} className="flex items-center gap-3 px-5 py-2.5 border-b border-[#DDD4C0]/50 last:border-0">
+                  {found
+                    ? <img src={getFlagUrl(found.code)} alt={found.code} width={20} height={20} className="w-5 h-5 object-contain shrink-0" onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden'; }} />
+                    : <Globe size={16} strokeWidth={1.5} className="text-[#9A8A78] shrink-0" />}
+                  {found ? (
+                    <span className="text-sm flex-1 truncate font-medium" style={{ color: '#1C1410' }}>{getCountryDisplayName(r.name, language)}</span>
+                  ) : (
+                    <input value={r.name} onChange={(e) => updateReviewName(idx, e.target.value)}
+                      className="text-sm flex-1 bg-white border border-[#C8BAA8] rounded-lg px-2.5 py-1.5 text-[#1C1410] focus:outline-none focus:border-[#1B3828] focus:ring-2 focus:ring-[#1B3828]/10" />
+                  )}
+                  <span className="text-[10px] font-bold uppercase tracking-wide shrink-0 px-2 py-0.5 rounded-full"
+                    style={found ? { color: '#1B3828', backgroundColor: 'rgba(27,56,40,0.1)' } : { color: '#B6871F', backgroundColor: 'rgba(182,135,31,0.12)' }}>
+                    {found ? t('create_review_country_tag') : t('create_review_custom_tag')}
+                  </span>
+                  <button onClick={() => removeReviewIdx(idx)} className="text-[#9A8A78] hover:text-red-500 transition-colors text-sm shrink-0">✕</button>
+                </div>
+              );
+            })}
+          </div>
+          {/* Footer */}
+          <div className="flex items-center gap-3 px-6 py-4 shrink-0" style={{ borderTop: '1px solid #DDD4C0' }}>
+            <button onClick={() => setPasteReview(null)}
+              className="px-5 py-3 rounded-xl font-bold text-xs uppercase tracking-wide transition-colors"
+              style={{ color: '#6A5A4A', backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0' }}>
+              {t('create_review_cancel')}
+            </button>
+            <button onClick={commitPasteReview} disabled={pasteReview.length === 0}
+              className="flex-1 py-3 rounded-xl font-black text-sm uppercase tracking-widest transition-all disabled:opacity-30"
+              style={{ backgroundColor: '#1B3828', color: '#EED98A' }}
+              onMouseEnter={(e) => { if (pasteReview.length) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}>
+              {t('create_review_proceed')}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
     </FitToScreen>
   );
 }
