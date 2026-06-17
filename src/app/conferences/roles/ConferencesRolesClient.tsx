@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { Search, Briefcase, X } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import { getAuthedClient } from '@/lib/supabase-auth';
+import { supabase as anonSupabase } from '@/lib/supabase';
 import { useAuth } from '@/components/AuthProvider';
 import { getFlagUrl, getCountryByName } from '@/lib/countries';
 
@@ -564,7 +565,7 @@ export default function ConferencesRolesClient() {
   useEffect(() => {
     async function fetchAll() {
       setLoading(true);
-      const supabase = getAuthedClient('');
+      const supabase = anonSupabase;
 
       const { data: postingsData } = await supabase
         .from('job_postings')

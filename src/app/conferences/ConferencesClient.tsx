@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Users, FileText, CreditCard, Zap } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
-import { getAuthedClient } from '@/lib/supabase-auth';
+import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/components/AuthProvider';
 import ConferenceFocusCards, { FocusCard } from '@/components/ConferenceFocusCards';
 
@@ -52,8 +52,7 @@ function FeaturedSection() {
   useEffect(() => {
     async function load() {
       const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-      const anonClient = getAuthedClient('');
-      const { data: confs } = await anonClient
+      const { data: confs } = await supabase
         .from('conferences')
         .select('id, slug, full_name, acronym, city, country, start_date, end_date, banner_url')
         .eq('is_public', true)
@@ -62,7 +61,7 @@ function FeaturedSection() {
         .limit(20);
       if (!confs || confs.length === 0) { setLoading(false); return; }
       const confIds = confs.map((c: FocusCard) => c.id);
-      const { data: apps } = await anonClient
+      const { data: apps } = await supabase
         .from('applications')
         .select('conference_id')
         .in('conference_id', confIds)
@@ -82,8 +81,7 @@ function FeaturedSection() {
     if (!search.trim()) { setSearchResults([]); return; }
     const timer = setTimeout(async () => {
       setSearchLoading(true);
-      const searchClient = getAuthedClient('');
-      const { data } = await searchClient
+      const { data } = await supabase
         .from('conferences')
         .select('id, slug, full_name, acronym, city, country, start_date, end_date, banner_url')
         .ilike('full_name', '%' + search.trim() + '%')

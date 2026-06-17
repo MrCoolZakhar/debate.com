@@ -10,6 +10,7 @@ import { useSettingsStore } from '@/lib/settingsStore';
 import { Emoji } from '@/components/Emoji';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
+import { supabase as anonSupabase } from '@/lib/supabase';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { getCountryDisplayName } from '@/lib/countries';
 
@@ -167,7 +168,7 @@ function JoinPageInner() {
     };
 
     async function checkConferenceSession() {
-      const anonClient = getAuthedClient('');
+      const anonClient = anonSupabase;
       const { data: confCommittee } = await anonClient
         .from('conference_committees')
         .select(`

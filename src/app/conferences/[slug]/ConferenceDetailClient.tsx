@@ -7,6 +7,7 @@ import { Globe, MessageCircle, Music } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
+import { supabase as anonSupabase } from '@/lib/supabase';
 import { getFlagUrl, getCountryByName } from '@/lib/countries';
 
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
@@ -155,7 +156,7 @@ export default function ConferenceDetailClient() {
 
   async function fetchAll() {
     setLoading(true);
-    const supabase = getAuthedClient('');
+    const supabase = anonSupabase;
 
     let { data: confData } = await supabase
       .from('conferences')
