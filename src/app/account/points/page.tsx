@@ -24,13 +24,13 @@ function getTransactionStyle(type: string): { Icon: React.ElementType; color: st
 }
 
 export default function PointsPage() {
-  const { user, session, profile } = useAuth();
+  const { user, session, profile, loading: authLoading } = useAuth();
   const [ledger, setLedger]   = useState<LedgerEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!user) return;
-    if (!session) return;
+    if (authLoading) return;
+    if (!user || !session) return;
     const supabase = getAuthedClient(session.access_token);
 
     supabase
@@ -43,7 +43,7 @@ export default function PointsPage() {
         setLedger((data as LedgerEntry[]) ?? []);
         setLoading(false);
       });
-  }, [user?.id]);
+  }, [authLoading, user?.id, session?.access_token]);
 
   if (loading) {
     return (

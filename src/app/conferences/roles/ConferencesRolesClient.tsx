@@ -539,7 +539,7 @@ function Footer() {
 
 export default function ConferencesRolesClient() {
   const router = useRouter();
-  const { user, session } = useAuth();
+  const { user, session, loading: authLoading } = useAuth();
 
   const [postings, setPostings] = useState<JobPosting[]>([]);
   const [myApplications, setMyApplications] = useState<MyApplication[]>([]);
@@ -552,17 +552,18 @@ export default function ConferencesRolesClient() {
   const [applying, setApplying] = useState(false);
 
   const loadMyApplications = useCallback(async () => {
-    if (!user) return;
-    if (!session) return;
+    if (!user || !session) return;
     const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase
       .from('job_applications')
       .select('job_posting_id, status')
       .eq('user_id', user.id);
     setMyApplications((data as MyApplication[]) ?? []);
-  }, [user]);
+  }, [user, session]);
 
   useEffect(() => {
+    if (authLoading) return;
+
     async function fetchAll() {
       setLoading(true);
       const supabase = anonSupabase;
@@ -595,7 +596,7 @@ export default function ConferencesRolesClient() {
     }
     fetchAll();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]);
+  }, [authLoading, user?.id, session?.access_token]);
 
   const filtered = postings.filter(p => {
     const q = searchQuery.toLowerCase();

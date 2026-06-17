@@ -220,10 +220,11 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
 
   // Fetch conference + ownership gate
   useEffect(() => {
-    if (!user || authLoading) return;
+    if (authLoading) return;
+    if (!user || !session) return;
     loadConference();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, slug, authLoading]);
+  }, [authLoading, user?.id, slug, session?.access_token]);
 
   async function loadConference() {
     setLoadingConf(true);

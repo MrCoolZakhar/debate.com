@@ -28,7 +28,7 @@ type NotifFields = {
 };
 
 export default function ProfilePage() {
-  const { user, session, profile, signOut } = useAuth();
+  const { user, session, profile, signOut, loading: authLoading } = useAuth();
   const router = useRouter();
 
   const [displayName, setDisplayName]       = useState('');
@@ -45,8 +45,8 @@ export default function ProfilePage() {
   const [saved, setSaved]             = useState(false);
 
   useEffect(() => {
-    if (!user) return;
-    if (!session) return;
+    if (authLoading) return;
+    if (!user || !session) return;
     const supabase = getAuthedClient(session.access_token);
 
     supabase
@@ -68,7 +68,7 @@ export default function ProfilePage() {
         }
         setDataLoading(false);
       });
-  }, [user?.id]);
+  }, [authLoading, user?.id, session?.access_token]);
 
   async function handleSave() {
     if (!user) return;

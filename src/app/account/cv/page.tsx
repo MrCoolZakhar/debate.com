@@ -223,7 +223,7 @@ function AddCVEntryModal({
 }
 
 export default function CVPage() {
-  const { user, session, profile } = useAuth();
+  const { user, session, profile, loading: authLoading } = useAuth();
   const [entries, setEntries]         = useState<CVEntry[]>([]);
   const [loading, setLoading]         = useState(true);
   const [showModal, setShowModal]     = useState(false);
@@ -243,9 +243,10 @@ export default function CVPage() {
   }
 
   useEffect(() => {
+    if (authLoading) return;
     fetchEntries();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]);
+  }, [authLoading, user?.id, session?.access_token]);
 
   async function handleDelete(id: string) {
     setDeletingId(id);

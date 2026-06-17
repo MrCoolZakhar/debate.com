@@ -187,13 +187,13 @@ function ConferenceCard({ app }: { app: CalendarApplication }) {
 }
 
 export default function CalendarPage() {
-  const { user, session } = useAuth();
+  const { user, session, loading: authLoading } = useAuth();
   const [applications, setApplications] = useState<CalendarApplication[]>([]);
   const [loading, setLoading]           = useState(true);
 
   useEffect(() => {
-    if (!user) return;
-    if (!session) return;
+    if (authLoading) return;
+    if (!user || !session) return;
     const supabase = getAuthedClient(session.access_token);
 
     supabase
@@ -217,7 +217,7 @@ export default function CalendarPage() {
         setApplications(sorted);
         setLoading(false);
       });
-  }, [user?.id]);
+  }, [authLoading, user?.id, session?.access_token]);
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);

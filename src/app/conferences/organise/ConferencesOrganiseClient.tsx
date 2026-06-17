@@ -145,12 +145,12 @@ export default function ConferencesOrganiseClient() {
 
   // Fetch my conferences
   useEffect(() => {
-    if (!user) return;
+    if (authLoading) return;
+    if (!user || !session) return;
 
     async function fetchConferences() {
       setLoading(true);
-      if (!session) return;
-      const supabase = getAuthedClient(session.access_token);
+      const supabase = getAuthedClient(session!.access_token);
       let query = supabase
         .from('conferences')
         .select('id, slug, full_name, acronym, city, country, start_date, end_date, is_public, status, logo_url')
@@ -172,7 +172,7 @@ export default function ConferencesOrganiseClient() {
 
     fetchConferences();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, statusFilter, session?.access_token]);
+  }, [authLoading, user?.id, statusFilter, session?.access_token]);
 
   if (authLoading || (!user && !authLoading)) {
     return (
