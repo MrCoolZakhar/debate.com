@@ -56,8 +56,8 @@ function CountryChip({ country, onRemove }: { country: string; onRemove: () => v
   const found = getCountryByName(country);
   return (
     <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-[#DDD4C0] border border-[#DDD4C0] rounded-full text-xs text-[#1C1410]">
-      {found ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-4 h-4 object-contain inline-block mr-1" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : '🌐'}{getCountryDisplayName(country, language)}
-      <button onClick={onRemove} className="text-[#9A8A78] hover:text-red-500 ml-0.5 leading-none">✕</button>
+      {found ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-4 h-4 object-contain inline-block me-1" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : '🌐'}{getCountryDisplayName(country, language)}
+      <button onClick={onRemove} className="text-[#9A8A78] hover:text-red-500 ms-0.5 leading-none">✕</button>
     </span>
   );
 }
@@ -90,7 +90,7 @@ function SponsorSelect({ candidates, selected, onChange }: {
               const found = getCountryByName(c);
               return (
                 <button key={c} onMouseDown={(e) => { e.preventDefault(); add(c); }}
-                  className={`w-full flex items-center gap-2 px-3 py-2 text-left transition-colors ${i === 0 ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'}`}>
+                  className={`w-full flex items-center gap-2 px-3 py-2 text-start transition-colors ${i === 0 ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'}`}>
                   {found ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <span>🌐</span>}
                   <span className="text-sm">{getCountryDisplayName(c, language)}</span>
                 </button>
@@ -540,7 +540,7 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
       </div>
       <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl px-4 py-2.5">
         <span className="text-xs text-[#9A8A78] font-mono">{t('documents_doc_code_label')}</span>
-        <span className="ml-3 text-sm font-bold text-[#1C1410] font-mono">{docCode}</span>
+        <span className="ms-3 text-sm font-bold text-[#1C1410] font-mono">{docCode}</span>
       </div>
       <div>
         <label className="block text-sm font-semibold text-[#6A5A4A] mb-1.5">{t('documents_title_label')} <span className="text-red-500">*</span></label>
@@ -975,7 +975,7 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
                   className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-colors relative ${tab === tabItem ? 'bg-[#1B3828] text-white' : 'bg-[#EDE7D8] border border-[#DDD4C0] text-[#6A5A4A] hover:border-[#1B3828]'}`}>
                   {tabItem === 'working-paper' ? t('documents_working_papers_tab') : t('documents_draft_resolutions_tab')}
                   {count > 0 && (
-                    <span className={`ml-1.5 inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-black ${tab === tabItem ? 'bg-white/30 text-white' : 'bg-[#1B3828] text-white'}`}>{count}</span>
+                    <span className={`ms-1.5 inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-black ${tab === tabItem ? 'bg-white/30 text-white' : 'bg-[#1B3828] text-white'}`}>{count}</span>
                   )}
                 </button>
               );

@@ -94,7 +94,7 @@ function RenameRow({ label, defaultName, value, onChange }: {
         ) : (
           <button
             onClick={startEdit}
-            className="text-sm font-semibold text-left w-full truncate flex items-center gap-1.5"
+            className="text-sm font-semibold text-start w-full truncate flex items-center gap-1.5"
             style={{ color: '#1C1410' }}
           >
             <span>{isCustom ? value : defaultName}</span>
@@ -406,19 +406,19 @@ export function SettingsPanel({ committee, onClose }: {
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setShowLangMenu(false)} />
                   <div className="absolute right-0 top-full mt-2 z-50 rounded-xl overflow-hidden shadow-xl" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', minWidth: '140px' }}>
-                    {([['en', t('settings_english')], ['es', t('settings_spanish')], ['fr', t('settings_french')]] as [string, string][]).map(([code, label], i) => (
+                    {([['en', t('settings_english')], ['es', t('settings_spanish')], ['fr', t('settings_french')], ['ar', 'العربية']] as [string, string][]).map(([code, label], i) => (
                       <div key={code}>
                         {i > 0 && <div style={{ height: '1px', backgroundColor: '#DDD4C0' }} />}
                         <button
-                          onClick={() => { setLanguage(code as 'en' | 'es' | 'fr'); setShowLangMenu(false); }}
-                          className="w-full flex items-center gap-2.5 px-4 py-3 text-left transition-colors focus:outline-none"
+                          onClick={() => { setLanguage(code as 'en' | 'es' | 'fr' | 'ar'); setShowLangMenu(false); }}
+                          className="w-full flex items-center gap-2.5 px-4 py-3 text-start transition-colors focus:outline-none"
                           style={{ color: language === code ? '#1B3828' : '#6A5A4A', fontWeight: language === code ? 800 : 600, fontSize: '13px', backgroundColor: language === code ? 'rgba(27,56,40,0.07)' : 'transparent' }}
                           onMouseEnter={(e) => { if (language !== code) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
                           onMouseLeave={(e) => { if (language !== code) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                         >
                           <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '11px', color: '#9A8A78' }}>{code.toUpperCase()}</span>
                           <span>{label}</span>
-                          {language === code && <span className="ml-auto" style={{ color: '#B6871F' }}>✓</span>}
+                          {language === code && <span className="ms-auto" style={{ color: '#B6871F' }}>✓</span>}
                         </button>
                       </div>
                     ))}
@@ -589,13 +589,13 @@ export function SettingsPanel({ committee, onClose }: {
                   return (
                     <div key={d.id} style={{ borderBottom: '1px solid #DDD4C0' }} className="last:border-0">
                       <button
-                        className="w-full flex items-center gap-3 py-3 text-left transition-colors rounded-lg px-1 focus:outline-none"
+                        className="w-full flex items-center gap-3 py-3 text-start transition-colors rounded-lg px-1 focus:outline-none"
                         style={{ color: '#1C1410' }}
                         onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#EDE7D8'; }}
                         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                         onClick={() => setExpandedDelegate(isExpanded ? null : d.id)}
                       >
-                        <span className="text-xs w-5 text-right shrink-0 font-mono" style={{ color: '#9A8A78' }}>{idx + 1}</span>
+                        <span className="text-xs w-5 text-end shrink-0 font-mono" style={{ color: '#9A8A78' }}>{idx + 1}</span>
                         <span className="text-lg leading-none shrink-0">{flag}</span>
                         <span className="flex-1 text-sm font-semibold truncate" style={{ color: '#1C1410' }}>{getCountryDisplayName(d.country, language)}</span>
                         <span className="text-xs font-mono px-2 py-0.5 rounded-full shrink-0" style={{ backgroundColor: d.status === 'absent' ? '#DDD4C0' : '#1B3828', color: d.status === 'absent' ? '#9A8A78' : '#EED98A' }}>

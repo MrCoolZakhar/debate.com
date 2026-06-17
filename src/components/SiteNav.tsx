@@ -8,10 +8,10 @@ import { useLanguage, useT } from '@/contexts/LanguageContext';
 import { Globe } from 'lucide-react';
 
 const NAV_LINKS_CONFIG = [
-  { en: 'SESSIONS',     es: 'SESIONES',     fr: 'SESSIONS',     href: '/' },
-  { en: 'CONFERENCES',  es: 'CONFERENCIAS', fr: 'CONFÉRENCES',  href: '/conferences' },
-  { en: 'ABOUT US',     es: 'NOSOTROS',     fr: 'QUI SOMMES-NOUS', href: '/about' },
-  { en: 'CONTACT',      es: 'CONTÁCTANOS',  fr: 'CONTACT',      href: '/contact' },
+  { en: 'SESSIONS',     es: 'SESIONES',     fr: 'SESSIONS',     ar: 'الجلسات',   href: '/' },
+  { en: 'CONFERENCES',  es: 'CONFERENCIAS', fr: 'CONFÉRENCES',  ar: 'المؤتمرات', href: '/conferences' },
+  { en: 'ABOUT US',     es: 'NOSOTROS',     fr: 'QUI SOMMES-NOUS', ar: 'من نحن', href: '/about' },
+  { en: 'CONTACT',      es: 'CONTÁCTANOS',  fr: 'CONTACT',      ar: 'تواصل معنا', href: '/contact' },
 ];
 
 interface SiteNavProps {
@@ -94,7 +94,7 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
         </div>
 
         {/* Language toggle */}
-        <div className="relative hidden md:block mr-3 ml-auto">
+        <div className="relative hidden md:block me-3 ms-auto">
           <div className="relative" suppressHydrationWarning>
             {/* NEW badge — overlaps the top of the button */}
             <span
@@ -130,38 +130,50 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
               <div className="absolute right-0 top-full mt-2 z-50 rounded-xl overflow-hidden shadow-xl" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', minWidth: '140px' }}>
                 <button
                   onClick={() => { setLanguage('en'); setShowLangMenu(false); }}
-                  className="w-full flex items-center gap-2.5 px-4 py-3 text-left transition-colors focus:outline-none"
+                  className="w-full flex items-center gap-2.5 px-4 py-3 text-start transition-colors focus:outline-none"
                   style={{ color: language === 'en' ? '#1B3828' : '#6A5A4A', fontWeight: language === 'en' ? 800 : 600, fontSize: '13px', backgroundColor: language === 'en' ? 'rgba(27,56,40,0.07)' : 'transparent' }}
                   onMouseEnter={(e) => { if (language !== 'en') (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
                   onMouseLeave={(e) => { if (language !== 'en') (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                 >
                   <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '11px', color: '#9A8A78' }}>EN</span>
                   <span>{t('settings_english')}</span>
-                  {language === 'en' && <span className="ml-auto" style={{ color: '#B6871F' }}>✓</span>}
+                  {language === 'en' && <span className="ms-auto" style={{ color: '#B6871F' }}>✓</span>}
                 </button>
                 <div style={{ height: '1px', backgroundColor: '#DDD4C0' }} />
                 <button
                   onClick={() => { setLanguage('es'); setShowLangMenu(false); }}
-                  className="w-full flex items-center gap-2.5 px-4 py-3 text-left transition-colors focus:outline-none"
+                  className="w-full flex items-center gap-2.5 px-4 py-3 text-start transition-colors focus:outline-none"
                   style={{ color: language === 'es' ? '#1B3828' : '#6A5A4A', fontWeight: language === 'es' ? 800 : 600, fontSize: '13px', backgroundColor: language === 'es' ? 'rgba(27,56,40,0.07)' : 'transparent' }}
                   onMouseEnter={(e) => { if (language !== 'es') (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
                   onMouseLeave={(e) => { if (language !== 'es') (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                 >
                   <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '11px', color: '#9A8A78' }}>ES</span>
                   <span>{t('settings_spanish')}</span>
-                  {language === 'es' && <span className="ml-auto" style={{ color: '#B6871F' }}>✓</span>}
+                  {language === 'es' && <span className="ms-auto" style={{ color: '#B6871F' }}>✓</span>}
                 </button>
                 <div style={{ height: '1px', backgroundColor: '#DDD4C0' }} />
                 <button
                   onClick={() => { setLanguage('fr'); setShowLangMenu(false); }}
-                  className="w-full flex items-center gap-2.5 px-4 py-3 text-left transition-colors focus:outline-none"
+                  className="w-full flex items-center gap-2.5 px-4 py-3 text-start transition-colors focus:outline-none"
                   style={{ color: language === 'fr' ? '#1B3828' : '#6A5A4A', fontWeight: language === 'fr' ? 800 : 600, fontSize: '13px', backgroundColor: language === 'fr' ? 'rgba(27,56,40,0.07)' : 'transparent' }}
                   onMouseEnter={(e) => { if (language !== 'fr') (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
                   onMouseLeave={(e) => { if (language !== 'fr') (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                 >
                   <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '11px', color: '#9A8A78' }}>FR</span>
                   <span>{t('settings_french')}</span>
-                  {language === 'fr' && <span className="ml-auto" style={{ color: '#B6871F' }}>✓</span>}
+                  {language === 'fr' && <span className="ms-auto" style={{ color: '#B6871F' }}>✓</span>}
+                </button>
+                <div style={{ height: '1px', backgroundColor: '#DDD4C0' }} />
+                <button
+                  onClick={() => { setLanguage('ar'); setShowLangMenu(false); }}
+                  className="w-full flex items-center gap-2.5 px-4 py-3 text-start transition-colors focus:outline-none"
+                  style={{ color: language === 'ar' ? '#1B3828' : '#6A5A4A', fontWeight: language === 'ar' ? 800 : 600, fontSize: '13px', backgroundColor: language === 'ar' ? 'rgba(27,56,40,0.07)' : 'transparent' }}
+                  onMouseEnter={(e) => { if (language !== 'ar') (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
+                  onMouseLeave={(e) => { if (language !== 'ar') (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                >
+                  <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '11px', color: '#9A8A78' }}>AR</span>
+                  <span>العربية</span>
+                  {language === 'ar' && <span className="ms-auto" style={{ color: '#B6871F' }}>✓</span>}
                 </button>
               </div>
             </>
@@ -269,7 +281,7 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
 
           <div style={{ height: '1px', backgroundColor: '#DDD4C0', margin: '8px 0' }} />
 
-          <div className="flex gap-2 mb-2">
+          <div className="flex flex-wrap gap-2 mb-2">
             <button
               onClick={() => { setLanguage('en'); setMenuOpen(false); }}
               className="flex-1 py-2.5 rounded-xl text-sm font-black transition-all focus:outline-none"
@@ -290,6 +302,13 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
               style={{ backgroundColor: language === 'fr' ? '#1B3828' : '#EDE7D8', color: language === 'fr' ? '#EED98A' : '#1B3828', border: '1px solid #DDD4C0' }}
             >
               FR — Français
+            </button>
+            <button
+              onClick={() => { setLanguage('ar'); setMenuOpen(false); }}
+              className="flex-1 py-2.5 rounded-xl text-sm font-black transition-all focus:outline-none"
+              style={{ backgroundColor: language === 'ar' ? '#1B3828' : '#EDE7D8', color: language === 'ar' ? '#EED98A' : '#1B3828', border: '1px solid #DDD4C0' }}
+            >
+              AR — العربية
             </button>
           </div>
 

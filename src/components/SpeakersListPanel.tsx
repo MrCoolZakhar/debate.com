@@ -187,7 +187,7 @@ export default function SpeakersListPanel({ committee }: { committee: Committee 
                 <button
                   key={d.id}
                   onClick={() => addToSpeakersList(committee.id, d.id)}
-                  className="w-full text-left text-xs text-[#9A8A78] hover:text-[#1C1410] hover:bg-[#2A5A3C]/40 px-2 py-1.5 rounded transition-colors"
+                  className="w-full text-start text-xs text-[#9A8A78] hover:text-[#1C1410] hover:bg-[#2A5A3C]/40 px-2 py-1.5 rounded transition-colors"
                 >
                   + {d.country}
                 </button>

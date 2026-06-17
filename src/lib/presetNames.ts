@@ -49,7 +49,25 @@ export const PRESET_NAME_FR: Record<string, string> = {
   'ASEAN': 'ASEAN',
 };
 
+export const PRESET_NAME_AR: Record<string, string> = {
+  'UN Security Council': 'مجلس الأمن التابع للأمم المتحدة',
+  'UN Environment Programme': 'برنامج الأمم المتحدة للبيئة',
+  'World Health Organization': 'منظمة الصحة العالمية',
+  'International Monetary Fund': 'صندوق النقد الدولي',
+  'World Bank': 'البنك الدولي',
+  'UN General Assembly': 'الجمعية العامة للأمم المتحدة',
+  'UN Human Rights Council': 'مجلس حقوق الإنسان التابع للأمم المتحدة',
+  'Economic and Social Council': 'المجلس الاقتصادي والاجتماعي',
+  'NATO': 'حلف شمال الأطلسي',
+  'G20': 'مجموعة العشرين',
+  'European Union': 'الاتحاد الأوروبي',
+  'African Union': 'الاتحاد الأفريقي',
+  'Arab League': 'جامعة الدول العربية',
+  'ASEAN': 'رابطة دول جنوب شرق آسيا',
+};
+
 export function getCommitteeDisplayName(name: string, language: string): string {
+  if (language === 'ar') return PRESET_NAME_AR[name] ?? name;
   if (language === 'fr') return PRESET_NAME_FR[name] ?? name;
   if (language === 'es') return PRESET_NAME_ES[name] ?? name;
   return name;

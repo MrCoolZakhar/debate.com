@@ -41,7 +41,9 @@ function getSteps(language: string): TutorialStep[] {
       id: 'welcome', kind: 'spotlight',
       otterImage: '/Otter.Tutorial.webp',
       spotlightTargets: [],
-      bubbleText: language === 'fr'
+      bubbleText: language === 'ar'
+        ? <>مرحباً بك في <strong>قاعة لجنتك</strong>. {GR('المتحدثون')}، {GR('المؤقّتات')}، {GR('التصويت')}، {GR('الاقتراحات')}، {GR('المحادثة')}، {GR('المستندات')} — كل ذلك في مكان واحد، مُصمَّم لإدارة <strong>جلسة المحاكاة الكاملة</strong> من أول ضربة مطرقة إلى آخرها.</>
+        : language === 'fr'
         ? <>Bienvenue dans votre <strong>salle de comité</strong>. {GR('Orateurs')}, {GR('chronomètres')}, {GR('votes')}, {GR('motions')}, {GR('chat')}, {GR('documents')} — tout en un seul endroit, conçu pour gérer votre <strong>session MUN complète</strong> du premier coup de maillet au dernier.</>
         : language === 'es'
         ? <>Bienvenido a tu <strong>sala de comité</strong>. {GR('Oradores')}, {GR('cronómetros')}, {GR('votos')}, {GR('mociones')}, {GR('chat')}, {GR('documentos')} — todo en un solo lugar para dirigir tu <strong>sesión completa de MUN</strong>.</>
@@ -51,7 +53,9 @@ function getSteps(language: string): TutorialStep[] {
       id: 'speakers-bottom-bar', kind: 'spotlight',
       otterImage: '/Otter.Tutorial.webp',
       spotlightTargets: ['speakers-bottom-bar'], spotlightRadius: 12,
-      bubbleText: language === 'fr'
+      bubbleText: language === 'ar'
+        ? <>هذا الشريط هو وسيلتك <strong>لإضافة المندوبين</strong> إلى قائمة المتحدثين. اكتب اسم أي {G('دولة')} ثم اضغط {G('Enter')}.</>
+        : language === 'fr'
         ? <>Cette barre vous permet d&apos;<strong>ajouter des délégués</strong> à la liste des orateurs. Tapez n&apos;importe quel {G('nom de pays')} et appuyez sur {G('Entrée')}.</>
         : language === 'es'
         ? <>Esta barra sirve para <strong>agregar delegados</strong> a la lista de oradores. Escribe cualquier {G('nombre de país')} y presiona {G('Enter')}.</>
@@ -61,7 +65,9 @@ function getSteps(language: string): TutorialStep[] {
       id: 'sidebar-view-toggle', kind: 'action',
       otterImage: '/Otter.Tutorial.webp',
       spotlightTargets: ['sidebar-view-toggle'], spotlightRadius: 99,
-      bubbleText: language === 'fr'
+      bubbleText: language === 'ar'
+        ? <>للوحة الجانبية عرضان — {G('أ-ي')} و{G('القائمة')}. بدّل إلى <strong>القائمة</strong> لرؤية ترتيب المتحدثين.</>
+        : language === 'fr'
         ? <>Le panneau latéral a deux vues — {G('A-Z')} et {G('LISTE')}. Passez sur <strong>LISTE</strong> pour voir l&apos;ordre des orateurs.</>
         : language === 'es'
         ? <>El panel lateral tiene dos opciones — {G('A-Z')} y {G('FILA')}. Cambia a <strong>FILA</strong> para ver el orden de oradores.</>
@@ -76,7 +82,9 @@ function getSteps(language: string): TutorialStep[] {
       otterImage: '/Otter.Tutorial.webp',
       spotlightTargets: ['speakers-bottom-bar', 'speakers-sidebar', 'speakers-autocomplete'],
       spotlightRadius: 12,
-      bubbleText: language === 'fr'
+      bubbleText: language === 'ar'
+        ? <>أضف <strong>3 دول</strong> إلى القائمة — استخدم {G('شريط البحث')} أو انقر على المندوبين في {G('اللوحة الجانبية')}. كلاهما يعمل!</>
+        : language === 'fr'
         ? <>Ajoutez <strong>3 pays</strong> à la liste — utilisez la {G('barre de recherche')} ou cliquez sur des délégués dans le {G('panneau latéral')}. Les deux fonctionnent !</>
         : language === 'es'
         ? <>Agrega <strong>3 países</strong> a la lista — usa la {G('barra de búsqueda')} o haz clic en delegados del {G('panel lateral')}. ¡Ambos funcionan!</>
@@ -87,7 +95,9 @@ function getSteps(language: string): TutorialStep[] {
       id: 'call-first-speaker', kind: 'action',
       otterImage: '/Otter.Tutorial.webp',
       spotlightTargets: ['call-first-speaker'], spotlightRadius: 14,
-      bubbleText: language === 'fr'
+      bubbleText: language === 'ar'
+        ? <>الآن انقر على <strong>استدعاء أول متحدث</strong> لإعطاء الكلمة إلى {G('أول مندوب')}!</>
+        : language === 'fr'
         ? <>Cliquez maintenant sur <strong>APPELER LE PREMIER ORATEUR</strong> pour donner la parole au {G('premier délégué')} !</>
         : language === 'es'
         ? <>Ahora haz clic en <strong>LLAMAR PRIMER ORADOR</strong> para llamar al {G('primer delegado')} al piso.</>
@@ -98,7 +108,9 @@ function getSteps(language: string): TutorialStep[] {
       id: 'timer', kind: 'spotlight',
       otterImage: '/Otter.Tutorial.webp',
       spotlightTargets: ['timer'], spotlightRadius: 12,
-      bubbleText: language === 'fr'
+      bubbleText: language === 'ar'
+        ? <>يبدأ <strong>مؤقّت الكلام</strong> بالعد التنازلي للمندوب الحالي. يتحوّل إلى {G('الكهرماني')} عندما يقترب الوقت من النفاد.</>
+        : language === 'fr'
         ? <>Le <strong>chronomètre</strong> décompte pour le délégué actuel. Il devient {G('ambré')} quand le temps est presque écoulé.</>
         : language === 'es'
         ? <>El <strong>cronómetro</strong> cuenta regresivamente para el delegado actual. Se vuelve {G('ámbar')} cuando el tiempo se acaba.</>
@@ -108,7 +120,9 @@ function getSteps(language: string): TutorialStep[] {
       id: 'add-time', kind: 'spotlight',
       otterImage: '/Otter.Tutorial.webp',
       spotlightTargets: ['add-time-button'], spotlightRadius: 12,
-      bubbleText: language === 'fr'
+      bubbleText: language === 'ar'
+        ? <>تحتاج إلى منح وقت إضافي؟ اضغط {G('+وقت')}. يمكنك أيضاً <strong>إعادة ضبط المؤقّت</strong> بالكامل.</>
+        : language === 'fr'
         ? <>Besoin d&apos;accorder plus de temps ? Appuyez sur {G('+temps')}. Vous pouvez aussi <strong>réinitialiser le chronomètre</strong> complètement.</>
         : language === 'es'
         ? <>¿Necesitas dar más tiempo? Presiona {G('+tiempo')}. También puedes <strong>reiniciar el cronómetro</strong> completamente.</>
@@ -118,7 +132,9 @@ function getSteps(language: string): TutorialStep[] {
       id: 'rtr', kind: 'spotlight',
       otterImage: '/Otter.Tutorial.webp',
       spotlightTargets: ['rtr-button'], spotlightRadius: 12,
-      bubbleText: language === 'fr'
+      bubbleText: language === 'ar'
+        ? <>يتيح {GR('حق الرد')} لمندوب أن يردّ بإيجاز <strong>دون العودة إلى الطابور</strong>. استخدمه باعتدال.</>
+        : language === 'fr'
         ? <>{GR('Droit de Réponse')} permet à un délégué de répondre brièvement <strong>sans reprendre sa place en liste</strong>. À utiliser avec modération.</>
         : language === 'es'
         ? <>{GR('Derecho a Réplica')} permite que un delegado responda brevemente <strong>sin volver a la fila</strong>. Úsalo con moderación.</>
@@ -128,7 +144,9 @@ function getSteps(language: string): TutorialStep[] {
       id: 'tab-rollcall', kind: 'spotlight',
       otterImage: '/Otter.Tutorial.webp',
       spotlightTargets: ['tab-rollcall'], spotlightRadius: 6,
-      bubbleText: language === 'fr'
+      bubbleText: language === 'ar'
+        ? <>{G('تدقيق الحضور')} — انقر هنا لتحديد كل مندوب على أنه <strong>غائب</strong> أو <strong>حاضر</strong> أو <strong>حاضر ومصوّت</strong>. يمكنك تحديث الحضور في أي وقت أثناء الجلسة.</>
+        : language === 'fr'
         ? <>{G('Appel')} — cliquer ici pour marquer chaque délégué comme <strong>Absent</strong>, <strong>Présent</strong> ou <strong>Présent et Votant</strong>. Mettre à jour l&apos;assiduité à tout moment pendant la session.</>
         : language === 'es'
         ? <>{G('Lista de Asistencia')} — marca a cada delegado como <strong>Ausente</strong>, <strong>Presente</strong> o <strong>Presente y Votante</strong>. Puedes actualizar la asistencia en cualquier momento.</>
@@ -138,7 +156,9 @@ function getSteps(language: string): TutorialStep[] {
       id: 'tab-motions', kind: 'spotlight',
       otterImage: '/Otter.Tutorial.webp',
       spotlightTargets: ['tab-motions'], spotlightRadius: 6,
-      bubbleText: language === 'fr'
+      bubbleText: language === 'ar'
+        ? <>{G('الاقتراحات')} — يطرح المندوبون هنا <strong>حواراً منهجياً</strong> و<strong>حواراً حراً</strong> و<strong>جولة متحدثين</strong> و<strong>مشاورات الهيئة</strong>. يمكنك أيضاً <strong>إنهاء</strong> أو <strong>تعليق النقاش</strong> من هذه التبويبة.</>
+        : language === 'fr'
         ? <>{G('Motions')} — les délégués proposent ici un <strong>Caucus modéré</strong>, un <strong>Caucus non modéré</strong>, un <strong>Tour de table</strong> et une <strong>Consultation de l&apos;assemblée</strong>. Vous pouvez aussi <strong>clôturer</strong> ou <strong>suspendre le débat</strong> depuis cet onglet.</>
         : language === 'es'
         ? <>{G('Mociones')} — los delegados levantan <strong>Cáucus Moderado</strong>, <strong>Cáucus No Moderado</strong>, <strong>Round Robin</strong> y <strong>Consulta de Gabinete</strong>. También puedes <strong>cerrar</strong> o <strong>suspender el debate</strong>.</>
@@ -148,7 +168,9 @@ function getSteps(language: string): TutorialStep[] {
       id: 'tab-documents', kind: 'spotlight',
       otterImage: '/Otter.Tutorial.webp',
       spotlightTargets: ['tab-documents'], spotlightRadius: 6,
-      bubbleText: language === 'fr'
+      bubbleText: language === 'ar'
+        ? <>{G('المستندات')} — تظهر هنا <strong>أوراق العمل</strong> و<strong>مشاريع القرارات</strong> المقدَّمة من المندوبين. بعد الموافقة، يحصل المندوبون على صفحة مخصّصة لـ {GR('القراءة')} و{GR('العرض')} و{GR('الأسئلة والأجوبة')}.</>
+        : language === 'fr'
         ? <>{G('Documents')} — les <strong>Documents de travail</strong> et <strong>Projets de résolution</strong> soumis par les délégués apparaissent ici. Une fois approuvés, les délégués obtiennent une page dédiée de {GR('Lecture')}, {GR('Présentation')} et {GR('Q&R')}.</>
         : language === 'es'
         ? <>{G('Documentos')} — las <strong>Hojas de Trabajo</strong> y <strong>Proyectos de Resolución</strong> aparecen aquí. Una vez aprobados, los delegados tienen páginas de {GR('Lectura')}, {GR('Presentación')} y {GR('Preguntas')}.</>
@@ -158,7 +180,9 @@ function getSteps(language: string): TutorialStep[] {
       id: 'tab-chat', kind: 'spotlight',
       otterImage: '/Otter.Tutorial.webp',
       spotlightTargets: ['tab-chat'], spotlightRadius: 6,
-      bubbleText: language === 'fr'
+      bubbleText: language === 'ar'
+        ? <>{G('المحادثة')} — راسل <strong>جميع المندوبين</strong> دفعة واحدة أو أرسل رسائل خاصة فردية. نوصي بإبقائها مفتوحة على <strong>جهازك الشخصي</strong> بدلاً من شاشة اللجنة الرئيسية.</>
+        : language === 'fr'
         ? <>{G('Chat')} — envoyez un message à <strong>tous les délégués</strong> ou des messages privés individuels. Nous recommandons de le garder ouvert sur votre <strong>appareil personnel</strong> plutôt que sur l&apos;écran principal du comité.</>
         : language === 'es'
         ? <>{G('Chat')} — envía mensajes a <strong>todos los delegados</strong> o DM individuales. Recomendamos tenerlo abierto en tu <strong>dispositivo personal</strong>.</>
@@ -168,7 +192,9 @@ function getSteps(language: string): TutorialStep[] {
       id: 'tab-settings', kind: 'spotlight',
       otterImage: '/Otter.Tutorial.webp',
       spotlightTargets: ['tab-settings'], spotlightRadius: 6,
-      bubbleText: language === 'fr'
+      bubbleText: language === 'ar'
+        ? <>{G('الإعدادات')} — اضبط <strong>قواعد التصويت</strong> وأنواع الاقتراحات وأوقات الكلام وضوابط الوصول.</>
+        : language === 'fr'
         ? <>{G('Paramètres')} — configurez les <strong>règles de vote</strong>, les types de motions, les temps de parole et les contrôles d&apos;accès.</>
         : language === 'es'
         ? <>{G('Configuración')} — configura <strong>reglas de votación</strong>, tipos de mociones, tiempos de habla y controles de acceso.</>
@@ -178,7 +204,9 @@ function getSteps(language: string): TutorialStep[] {
       id: 'join-code', kind: 'spotlight',
       otterImage: '/Otter.Tutorial.webp',
       spotlightTargets: ['join-code'], spotlightRadius: 8,
-      bubbleText: language === 'fr'
+      bubbleText: language === 'ar'
+        ? <>هذا <strong>رمز جلستك</strong>. يُدخله المندوبون في {G('gavelling.com')} للانضمام في الوقت الفعلي. {GR('انقر للنسخ')}.</>
+        : language === 'fr'
         ? <>Votre <strong>code de session</strong>. Les délégués l&apos;entrent sur {G('gavelling.com')} pour rejoindre en temps réel. {GR('Cliquez pour copier')}.</>
         : language === 'es'
         ? <>Tu <strong>código de sesión</strong>. Los delegados lo ingresan en {G('gavelling.com')} para unirse en tiempo real. {GR('Haz clic para copiar')}.</>
@@ -187,7 +215,9 @@ function getSteps(language: string): TutorialStep[] {
     {
       id: 'goodbye', kind: 'goodbye',
       otterImage: '/Otter.Tutorial.Outro.webp',
-      bubbleText: language === 'fr'
+      bubbleText: language === 'ar'
+        ? <>استمتع بالاستكشاف! وزوّدنا دائماً بـ {G('ملاحظاتك')} — فهكذا يتحسّن Gavelling. راسلنا على إنستغرام {GR('@wearegavelling')} في أي وقت 🎉</>
+        : language === 'fr'
         ? <>Amusez-vous à explorer ! Et donnez-nous toujours votre {G('avis')} — c&apos;est comme ça que Gavelling s&apos;améliore. Écrivez-nous sur IG {GR('@wearegavelling')} à tout moment 🎉</>
         : language === 'es'
         ? <>¡Diviértete explorando! Y siempre {G('danos tu opinión')} — así mejora Gavelling. Escríbenos en IG {GR('@wearegavelling')} cuando quieras 🎉</>

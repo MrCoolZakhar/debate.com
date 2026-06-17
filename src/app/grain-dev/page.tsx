@@ -58,7 +58,7 @@ export default function GrainDevPage() {
             className="w-[16vw] h-auto max-h-9 object-contain"
             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
           />
-          <span className="ml-4 text-xs font-mono px-2 py-1 rounded" style={{ color: faint, border: `1px solid ${bd}` }}>
+          <span className="ms-4 text-xs font-mono px-2 py-1 rounded" style={{ color: faint, border: `1px solid ${bd}` }}>
             {darkMode ? '🌑 DARK' : '☀️ LIGHT'}
           </span>
         </nav>
@@ -124,7 +124,7 @@ export default function GrainDevPage() {
       <div className="fixed top-0 left-0 right-0 z-50 flex items-center gap-4 px-4 py-2 text-xs"
         style={{ backgroundColor: '#111', borderBottom: '1px solid #333', color: '#aaa' }}>
 
-        <Link href="/" className="text-[#1B3828] hover:text-[#6A5A4A] font-bold mr-2">← back</Link>
+        <Link href="/" className="text-[#1B3828] hover:text-[#6A5A4A] font-bold me-2">← back</Link>
         <span className="font-mono text-yellow-400 font-bold">GRAIN DEV</span>
 
         {/* Dark / Light toggle */}
@@ -191,7 +191,7 @@ export default function GrainDevPage() {
             const css = `opacity: ${opacity};\nmix-blend-mode: ${blendMode};\nbackground-size: ${tileSize}px ${tileSize}px;`;
             navigator.clipboard.writeText(css);
           }}
-          className="ml-auto px-2 py-1 rounded text-[#1B3828] hover:text-[#6A5A4A] border border-[#333] transition-colors"
+          className="ms-auto px-2 py-1 rounded text-[#1B3828] hover:text-[#6A5A4A] border border-[#333] transition-colors"
         >
           Copy CSS
         </button>
@@ -214,7 +214,7 @@ export default function GrainDevPage() {
       </div>
 
       {/* Grain visibility note */}
-      <div className="fixed bottom-4 right-4 text-[10px] font-mono text-[#555] text-right leading-snug">
+      <div className="fixed bottom-4 right-4 text-[10px] font-mono text-[#555] text-end leading-snug">
         grain: opacity {opacity.toFixed(3)} · {blendMode} · {tileSize}px tile
       </div>
     </div>

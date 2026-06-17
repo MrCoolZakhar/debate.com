@@ -70,7 +70,7 @@ function DisruptivenessBadge({ type }: { type: PendingMotionType }) {
 }
 
 const CHAIR_KEY = '__chair__';
-const chairDisplayName = (language: string) => language === 'fr' ? 'Président' : language === 'es' ? 'Presidente' : 'Chair';
+const chairDisplayName = (language: string) => language === 'ar' ? 'الرئيس' : language === 'fr' ? 'Président' : language === 'es' ? 'Presidente' : 'Chair';
 
 function ProposerInput({ candidates, value, onChange, blockedCountries }: {
   candidates: string[]; value: string; onChange: (v: string) => void; blockedCountries?: Set<string>;
@@ -125,7 +125,7 @@ function ProposerInput({ candidates, value, onChange, blockedCountries }: {
               <button key={country}
                 onMouseDown={(e) => { e.preventDefault(); if (!isBlocked) commit(country); }}
                 disabled={isBlocked}
-                className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
+                className={`w-full flex items-center gap-3 px-4 py-2.5 text-start transition-colors ${
                   isBlocked ? 'opacity-50 cursor-not-allowed bg-[#FAF8F3]' :
                   i === 0 ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'
                 }`}>
@@ -135,7 +135,7 @@ function ProposerInput({ candidates, value, onChange, blockedCountries }: {
                 <span className="text-sm flex-1">{dName(country)}</span>
                 {isBlocked
                   ? <span className="text-xs text-[#B8844A] shrink-0 font-semibold">{t('motions_motion_on_floor')}</span>
-                  : i === 0 && <span className="ml-auto text-xs text-[#9A8A78]">Enter ↵</span>}
+                  : i === 0 && <span className="ms-auto text-xs text-[#9A8A78]">Enter ↵</span>}
               </button>
             );
           })}
@@ -357,7 +357,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
                 <div>
                   <label className="block text-lg font-semibold text-[#6A5A4A] mb-2">{t('motions_topic_label')} <span className="text-[#8B2020]">*</span></label>
                   <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)}
-                    placeholder={language === 'fr' ? 'ex. Réponse humanitaire dans les zones de conflit' : language === 'es' ? 'ej. Respuesta humanitaria en zonas de conflicto' : 'e.g. Humanitarian response in conflict zones'}
+                    placeholder={language === 'ar' ? 'مثال: الاستجابة الإنسانية في مناطق النزاع' : language === 'fr' ? 'ex. Réponse humanitaire dans les zones de conflit' : language === 'es' ? 'ej. Respuesta humanitaria en zonas de conflicto' : 'e.g. Humanitarian response in conflict zones'}
                     className="w-full bg-[#FAF8F3] border-2 border-[#DDD4C0] rounded-xl px-4 py-4 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] transition-colors" />
                 </div>
                 <div>
@@ -412,7 +412,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
                         <span className="font-black text-xl leading-tight" style={{ color: '#1B3828' }}>{speakerCount}</span>
                         <span className="text-sm font-semibold" style={{ color: '#6A5A4A' }}>{speakerCount === 1 ? t('motions_delegate_speak').replace('{s}', t('motions_delegate_singular')) : t('motions_delegate_speak').replace('{s}', t('motions_delegate_plural'))}</span>
                         {unusedSecs > 0 && (
-                          <span className="text-xs font-semibold ml-1" style={{ color: '#B8844A' }}>{t('motions_unused_secs').replace('{n}', String(unusedSecs))}</span>
+                          <span className="text-xs font-semibold ms-1" style={{ color: '#B8844A' }}>{t('motions_unused_secs').replace('{n}', String(unusedSecs))}</span>
                         )}
                       </div>
                     )}
@@ -639,7 +639,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
         {isPrimary && (
           <div className="flex items-center gap-2 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-3 py-1.5">
             <span className="text-xs font-semibold" style={{ color: '#1B3828' }}>{fraction === 'Simple majority' ? t('motions_simple_majority') : t('motions_supermajority')}</span>
-            <span className="text-xs font-bold ml-auto" style={{ color: '#1C1410' }}>{t('motions_needs_votes', { needed, present })}</span>
+            <span className="text-xs font-bold ms-auto" style={{ color: '#1C1410' }}>{t('motions_needs_votes', { needed, present })}</span>
           </div>
         )}
 
@@ -676,8 +676,8 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
       </div>
       <div className="flex flex-1 min-h-0">
         {/* Left column — primary motion being voted on */}
-        {/* pt-3 pr-4: give room for the badge that translates outside the card's top-right corner */}
-        <div className="flex-1 flex flex-col min-w-0 overflow-y-auto pt-3 pr-4">
+        {/* pt-3 pe-4: give room for the badge that translates outside the card's top-right corner */}
+        <div className="flex-1 flex flex-col min-w-0 overflow-y-auto pt-3 pe-4">
           {renderCard(primary, true, 0)}
         </div>
         {/* Vertical divider between column 1 and column 2 */}
@@ -694,8 +694,8 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
           <div className="flex-1 w-px" style={{ backgroundColor: '#C8BAA8' }} />
         </div>
         {/* Right column — queued motions + Raise a Motion button */}
-        {/* pt-3 pr-4: give room for the badge that translates outside each card's top-right corner */}
-        <div className="w-72 flex flex-col pt-3 pr-4">
+        {/* pt-3 pe-4: give room for the badge that translates outside each card's top-right corner */}
+        <div className="w-72 flex flex-col pt-3 pe-4">
           {rest.map((m, i) => (
             <React.Fragment key={m.id}>
               {renderCard(m, false, i + 1)}
@@ -742,7 +742,14 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
   const t = useT();
   const { language } = useLanguage();
   const { getSettings } = useSettingsStore();
-  const DEFAULT_MOTION_NAMES_LOCALIZED = language === 'fr' ? {
+  const DEFAULT_MOTION_NAMES_LOCALIZED = language === 'ar' ? {
+    moderated: 'حوار منهجي',
+    unmoderated: 'حوار حر',
+    consultation: 'مشاورات الهيئة',
+    tour: 'جولة المتحدثين',
+    suspendDebate: 'تعليق النقاش',
+    endDebate: 'إنهاء النقاش',
+  } : language === 'fr' ? {
     moderated: 'Caucus modéré',
     unmoderated: 'Caucus non modéré',
     consultation: "Consultation de l'assemblée",

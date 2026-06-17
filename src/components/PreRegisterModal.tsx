@@ -214,7 +214,7 @@ export default function PreRegisterModal({ open, onClose }: { open: boolean; onC
                         {duplicate ? t('prereg_success_duplicate') : t('prereg_success_new')}
                       </span>
                     </div>
-                    <p className="text-xs pl-[28px]" style={{ color: '#9A8A78' }}>{email}</p>
+                    <p className="text-xs ps-[28px]" style={{ color: '#9A8A78' }}>{email}</p>
                   </div>
                 ) : (
                   <form onSubmit={handleSubmit} className="flex flex-col gap-2.5">

@@ -228,7 +228,7 @@ function JoinPageInner() {
                 : <span className="text-xs font-mono font-black shrink-0" style={{ color: '#1B3828' }}>✓</span>
               }
               <div className="min-w-0">
-                <p className="font-black text-sm truncate" style={{ color: '#1C1410' }}>{foundCommittee.name}{foundCommittee.topic ? <span className="font-normal text-xs ml-1.5" style={{ color: '#9A8A78' }}>· {foundCommittee.topic}</span> : ''}</p>
+                <p className="font-black text-sm truncate" style={{ color: '#1C1410' }}>{foundCommittee.name}{foundCommittee.topic ? <span className="font-normal text-xs ms-1.5" style={{ color: '#9A8A78' }}>· {foundCommittee.topic}</span> : ''}</p>
                 <p className="text-xs" style={{ color: '#9A8A78' }}>{foundCommittee.delegates.length} {t('join_delegates_registered')}</p>
                 {foundCommittee.endedAt && <p className="text-xs font-semibold mt-0.5" style={{ color: '#B8844A' }}>{t('join_session_ended')}</p>}
                 {!foundCommittee.endedAt && foundCommittee.suspendedAt && mode === 'delegate' && <p className="text-xs font-semibold mt-0.5" style={{ color: '#B8844A' }}>{t('join_adjourned')}</p>}
@@ -307,7 +307,7 @@ function JoinPageInner() {
                     <button
                       key={n}
                       onClick={() => { setChairNameMode('select'); setChairName(n); }}
-                      className="w-full text-left px-4 py-2.5 rounded-xl border text-sm font-semibold transition-colors focus:outline-none"
+                      className="w-full text-start px-4 py-2.5 rounded-xl border text-sm font-semibold transition-colors focus:outline-none"
                       style={{
                         backgroundColor: chairNameMode === 'select' && chairName === n ? '#1B3828' : '#FAF8F3',
                         borderColor: chairNameMode === 'select' && chairName === n ? '#2A5A3C' : '#DDD4C0',
@@ -319,7 +319,7 @@ function JoinPageInner() {
                   ))}
                   <button
                     onClick={() => { setChairNameMode('new'); setChairName(''); }}
-                    className="w-full text-left px-4 py-2.5 rounded-xl border text-sm font-semibold transition-colors focus:outline-none"
+                    className="w-full text-start px-4 py-2.5 rounded-xl border text-sm font-semibold transition-colors focus:outline-none"
                     style={{
                       backgroundColor: chairNameMode === 'new' ? '#DDD4C0' : '#FAF8F3',
                       borderColor: chairNameMode === 'new' ? '#1B3828' : '#DDD4C0',

@@ -503,7 +503,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                     key={doc.id}
                     onClick={() => !isVoted && startNewVote(doc.id)}
                     disabled={isVoted}
-                    className={`w-full text-left px-4 py-4 rounded-xl border transition-colors ${
+                    className={`w-full text-start px-4 py-4 rounded-xl border transition-colors ${
                       isVoted
                         ? 'border-[#DDD4C0] bg-[#F6F1E9] opacity-60 cursor-not-allowed'
                         : 'border-[#DDD4C0] bg-[#EDE7D8] text-[#6A5A4A] hover:border-[#1B3828]/60 hover:bg-[#1B3828]/10'
@@ -852,9 +852,9 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                   }`}
                 >
                   {!isCurrent && <span className="text-[#9A8A78] text-xs">⠿</span>}
-                  <span className="text-xs w-5 font-mono text-right opacity-60">{absIdx + 1}</span>
+                  <span className="text-xs w-5 font-mono text-end opacity-60">{absIdx + 1}</span>
                   <span>{getFlag(v.country)} {getCountryDisplayName(v.country, language)}</span>
-                  <span className={`ml-auto text-xs font-semibold ${
+                  <span className={`ms-auto text-xs font-semibold ${
                     isCurrent ? 'text-[#EED98A]' :
                     v.choice === 'for-rights' ? 'text-[#2A7A3C]' : 'text-[#8B2020]'
                   }`}>

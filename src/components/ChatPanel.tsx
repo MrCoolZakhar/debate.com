@@ -273,7 +273,7 @@ export default function ChatPanel({
               <button
                 key={conv.key}
                 onClick={() => selectConv(conv.key)}
-                className="w-full text-left px-4 py-3 transition-colors focus:outline-none"
+                className="w-full text-start px-4 py-3 transition-colors focus:outline-none"
                 style={{
                   backgroundColor: isActive ? 'rgba(238,217,138,0.12)' : 'transparent',
                   borderLeft: isActive ? '3px solid #EED98A' : '3px solid transparent',
@@ -315,7 +315,7 @@ export default function ChatPanel({
                     <p className="text-[10px] font-black uppercase tracking-widest px-2 py-1" style={{ color: 'rgba(238,217,138,0.5)' }}>{t('chat_co_chairs')}</p>
                     {coChairCandidates.map((c) => (
                       <button key={c.id} onClick={() => selectConv(c.country)}
-                        className="w-full text-left px-2 py-1.5 rounded-lg text-sm transition-colors focus:outline-none flex items-center gap-2"
+                        className="w-full text-start px-2 py-1.5 rounded-lg text-sm transition-colors focus:outline-none flex items-center gap-2"
                         style={{ color: '#EDE7D8' }}
                         onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(238,217,138,0.1)'; }}
                         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}>
@@ -328,7 +328,7 @@ export default function ChatPanel({
                 )}
                 {dmCandidates.map((d) => (
                   <button key={d.id} onClick={() => selectConv(d.country)}
-                    className="w-full text-left px-2 py-1.5 rounded-lg text-sm transition-colors focus:outline-none"
+                    className="w-full text-start px-2 py-1.5 rounded-lg text-sm transition-colors focus:outline-none"
                     style={{ color: '#EDE7D8' }}
                     onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(238,217,138,0.1)'; }}
                     onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}>
@@ -354,7 +354,7 @@ export default function ChatPanel({
 
         {/* Thread header */}
         <div className="px-5 py-4 shrink-0 flex items-center gap-3" style={{ borderBottom: '1px solid #DDD4C0', backgroundColor: 'rgba(250,248,243,0.6)' }}>
-          <button onClick={goBack} className="sm:hidden text-lg leading-none focus:outline-none" style={{ color: '#1B3828' }} aria-label="Back">←</button>
+          <button onClick={goBack} className="sm:hidden text-lg leading-none focus:outline-none" style={{ color: '#1B3828' }} aria-label="Back"><span className="inline-block rtl:-scale-x-100">←</span></button>
           <div className="min-w-0">
             <h3 className="font-black text-base truncate" style={{ color: '#1B3828' }}>{activeConvObj.label}</h3>
             <p className="text-xs" style={{ color: '#9A8A78' }}>{activeConvObj.messages.length === 1 ? t('chat_message_count_one') : t('chat_message_count_other').replace('{n}', String(activeConvObj.messages.length))}</p>
@@ -422,7 +422,7 @@ export default function ChatPanel({
                 disabled={!msg.trim() || sending}
                 className="px-4 py-2.5 rounded-xl text-sm font-black transition-colors focus:outline-none"
                 style={{ backgroundColor: msg.trim() && !sending ? '#1B3828' : '#DDD4C0', color: msg.trim() && !sending ? '#EDE7D8' : '#9A8A78' }}>
-                {sending ? '…' : '→'}
+                {sending ? '…' : <span className="inline-block rtl:-scale-x-100">→</span>}
               </button>
             </div>
           )}

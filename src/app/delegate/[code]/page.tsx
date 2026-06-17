@@ -318,12 +318,12 @@ function SponsorsInput({
       {/* Selected sponsors tags */}
       <div className="flex flex-wrap gap-1.5 mb-2 min-h-[24px]">
         <span className="inline-flex items-center gap-1 text-xs bg-[#1B3828]/20 border border-[#1B3828]/30 text-[#6A5A4A] rounded-full px-2.5 py-0.5 font-medium">
-          {flagFor(myCountry)} {getCountryDisplayName(myCountry, language)} <span className="text-[#9A8A78] ml-0.5">{language === 'fr' ? '(vous)' : language === 'es' ? '(tú)' : '(you)'}</span>
+          {flagFor(myCountry)} {getCountryDisplayName(myCountry, language)} <span className="text-[#9A8A78] ms-0.5">{language === 'ar' ? '(أنت)' : language === 'fr' ? '(vous)' : language === 'es' ? '(tú)' : '(you)'}</span>
         </span>
         {value.map((c) => (
           <span key={c} className="inline-flex items-center gap-1 text-xs bg-[#FAF8F3] border border-[#DDD4C0] text-[#6A5A4A] rounded-full px-2.5 py-0.5">
             {flagFor(c)} {getCountryDisplayName(c, language)}
-            <button onClick={() => onChange(value.filter((x) => x !== c))} className="ml-1 text-[#9A8A78] hover:text-red-400 font-bold leading-none">×</button>
+            <button onClick={() => onChange(value.filter((x) => x !== c))} className="ms-1 text-[#9A8A78] hover:text-red-400 font-bold leading-none">×</button>
           </span>
         ))}
       </div>
@@ -346,10 +346,10 @@ function SponsorsInput({
               <button
                 key={c}
                 onMouseDown={(e) => { e.preventDefault(); add(c); }}
-                className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors ${i === 0 ? 'bg-[#DDD4C0] text-[#1C1410]' : 'text-[#6A5A4A] hover:bg-[#DDD4C0]'}`}
+                className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-start transition-colors ${i === 0 ? 'bg-[#DDD4C0] text-[#1C1410]' : 'text-[#6A5A4A] hover:bg-[#DDD4C0]'}`}
               >
                 {flagFor(c)} {getCountryDisplayName(c, language)}
-                {i === 0 && <span className="ml-auto text-xs text-[#9A8A78]">↵ Enter</span>}
+                {i === 0 && <span className="ms-auto text-xs text-[#9A8A78]">↵ Enter</span>}
               </button>
             ))}
           </div>
@@ -384,7 +384,7 @@ function DelegateDocCard({ doc }: { doc: CommitteeDocument }) {
     <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl p-3 space-y-2">
       <div className="flex items-center justify-between">
         <div className="font-semibold text-[#1C1410] text-sm">{doc.docCode} — {doc.title}</div>
-        <span className="text-xs font-black ml-2 shrink-0 px-2 py-0.5 rounded-full" style={{ color: statusColor, backgroundColor: statusBg, border: `1px solid ${statusColor}30` }}>{statusLabel}</span>
+        <span className="text-xs font-black ms-2 shrink-0 px-2 py-0.5 rounded-full" style={{ color: statusColor, backgroundColor: statusBg, border: `1px solid ${statusColor}30` }}>{statusLabel}</span>
       </div>
       <div className="text-xs text-[#9A8A78]">
         {doc.sponsors.map((s, i) => (
@@ -582,8 +582,8 @@ function StatisticsTab({ committee, country }: { committee: Committee; country: 
             {myLogs.map((l, i) => (
               <div key={i} className="flex items-center justify-between text-xs rounded-lg px-3 py-2" style={{ backgroundColor: '#FAF8F3' }}>
                 <span className="truncate flex-1" style={{ color: '#6A5A4A' }}>{l.topic || t('delegate_gsl_fallback')}</span>
-                <span className="shrink-0 ml-2 capitalize" style={{ color: '#9A8A78' }}>{l.context.replace(/-/g, ' ')}</span>
-                <span className="font-mono shrink-0 ml-2" style={{ color: '#1C1410' }}>{l.seconds}s</span>
+                <span className="shrink-0 ms-2 capitalize" style={{ color: '#9A8A78' }}>{l.context.replace(/-/g, ' ')}</span>
+                <span className="font-mono shrink-0 ms-2" style={{ color: '#1C1410' }}>{l.seconds}s</span>
               </div>
             ))}
           </div>
@@ -605,8 +605,8 @@ function StatisticsTab({ committee, country }: { committee: Committee; country: 
           <div className="flex items-center gap-2 text-[10px] text-[#7A5A38] font-mono mb-1.5 px-2">
             <span className="w-4 shrink-0" />
             <span className="flex-1">{t('delegate_country_col')}</span>
-            <span className="w-16 text-right">{t('delegate_time_col')}</span>
-            <span className="w-8 text-right">{t('delegate_pts_col')}</span>
+            <span className="w-16 text-end">{t('delegate_time_col')}</span>
+            <span className="w-8 text-end">{t('delegate_pts_col')}</span>
           </div>
           <div className="space-y-1.5">
             {ranking.slice(0, 10).map((r, i) => (
@@ -618,9 +618,9 @@ function StatisticsTab({ committee, country }: { committee: Committee; country: 
                   <div className="w-16 h-1.5 bg-[#DDD4C0] rounded-full overflow-hidden">
                     <div className="h-full bg-[#1B3828] rounded-full" style={{ width: `${(r.seconds / ranking[0].seconds) * 100}%` }} />
                   </div>
-                  <span className="text-xs font-mono text-[#9A8A78] w-10 text-right">{formatTime(r.seconds)}</span>
+                  <span className="text-xs font-mono text-[#9A8A78] w-10 text-end">{formatTime(r.seconds)}</span>
                 </div>
-                <span className="text-xs font-black w-8 text-right shrink-0" style={{ color: '#1B3828' }}>
+                <span className="text-xs font-black w-8 text-end shrink-0" style={{ color: '#1B3828' }}>
                   {pointsByCountry[r.country] ?? 0}
                 </span>
               </div>
@@ -834,7 +834,14 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   };
 
   const phaseDisplay = (() => {
-    const mn = language === 'fr' ? {
+    const mn = language === 'ar' ? {
+      moderated: 'حوار منهجي',
+      unmoderated: 'حوار حر',
+      consultation: 'مشاورات الهيئة',
+      tour: 'جولة المتحدثين',
+      suspendDebate: 'تعليق النقاش',
+      endDebate: 'إنهاء النقاش',
+    } : language === 'fr' ? {
       moderated: 'Caucus modéré',
       unmoderated: 'Caucus non modéré',
       consultation: "Consultation de l'assemblée",
@@ -1164,7 +1171,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                   {committee.caucus && (
                     <div className="mt-3">
                       <div className="text-sm text-[#6A5A4A] mb-2">
-                        {committee.caucus.type === 'moderated' ? t('delegate_moderated') : t('delegate_unmoderated')} {language === 'es' ? 'Cáucus' : 'Caucus'}
+                        {committee.caucus.type === 'moderated' ? t('delegate_moderated') : t('delegate_unmoderated')} {language === 'ar' ? '' : language === 'es' ? 'Cáucus' : 'Caucus'}
                         {committee.caucus.purpose && ` — ${committee.caucus.purpose}`}
                       </div>
                       <div className="text-3xl font-black font-mono text-[#1C1410]">
@@ -1355,7 +1362,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                                 <div key={doc.id} className="rounded-xl p-4 space-y-2" style={{ backgroundColor: '#FAF8F3', border: `1.5px solid ${isPassed ? '#1B3828' : isFailed ? 'rgba(139,32,32,0.4)' : '#DDD4C0'}` }}>
                                   <div className="flex items-start justify-between gap-3">
                                     <div>
-                                      <span className="text-xs font-mono font-bold mr-2" style={{ color: '#1B3828' }}>{doc.docCode}</span>
+                                      <span className="text-xs font-mono font-bold me-2" style={{ color: '#1B3828' }}>{doc.docCode}</span>
                                       <span className="font-semibold text-sm" style={{ color: '#1C1410' }}>{doc.title}</span>
                                     </div>
                                     {isPassed && <span className="shrink-0 text-xs font-black px-2 py-0.5 rounded-full" style={{ backgroundColor: '#1B3828', color: '#EED98A' }}>{t('delegate_passed_badge')}</span>}
@@ -1387,7 +1394,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                               <div key={doc.id} className="rounded-xl p-4 space-y-2" style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #DDD4C0' }}>
                                 <div className="flex items-start justify-between gap-3">
                                   <div>
-                                    <span className="text-xs font-mono font-bold mr-2" style={{ color: '#1B3828' }}>{doc.docCode}</span>
+                                    <span className="text-xs font-mono font-bold me-2" style={{ color: '#1B3828' }}>{doc.docCode}</span>
                                     <span className="font-semibold text-sm" style={{ color: '#1C1410' }}>{doc.title}</span>
                                   </div>
                                   {doc.status === 'submitted' && <span className="shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(27,56,40,0.1)', color: '#1B3828' }}>{t('documents_status_submitted')}</span>}

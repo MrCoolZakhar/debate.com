@@ -141,7 +141,7 @@ function AddCountryInput({ committee, onAdd, onQueryChange }: { committee: Commi
               <button
                 key={c.code}
                 onMouseDown={(e) => { e.preventDefault(); commit(c.name); }}
-                className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-left transition-colors ${
+                className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-start transition-colors ${
                   i === 0 ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'
                 }`}
               >
@@ -153,7 +153,7 @@ function AddCountryInput({ committee, onAdd, onQueryChange }: { committee: Commi
           {showCustomOption && (
             <button
               onMouseDown={(e) => { e.preventDefault(); commit(trimmed); }}
-              className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left transition-colors text-[#1C1410] hover:bg-[#DDD4C0] border-t border-[#DDD4C0]"
+              className="w-full flex items-center gap-2.5 px-3 py-2.5 text-start transition-colors text-[#1C1410] hover:bg-[#DDD4C0] border-t border-[#DDD4C0]"
             >
               <span className="text-base">🌐</span>
               <span className="text-sm flex-1">{trimmed}</span>
@@ -549,10 +549,10 @@ function RollCallPanelInner({
                   {getCountryDisplayName(d.country, language)}
                 </span>
                 {isAbsent && !(isRollCallPhase || showStatusSliders) && (
-                  <span className="text-[10px] shrink-0 font-mono ml-auto uppercase tracking-wide" style={{ color: 'rgba(237,231,216,0.35)' }}>{t('rollcall_absent')}</span>
+                  <span className="text-[10px] shrink-0 font-mono ms-auto uppercase tracking-wide" style={{ color: 'rgba(237,231,216,0.35)' }}>{t('rollcall_absent')}</span>
                 )}
                 {(isRollCallPhase || showStatusSliders) && (
-                  <div onClick={(e) => e.stopPropagation()} className={`ml-auto shrink-0 ${(isReadOnly || isViewOnly) ? 'pointer-events-none opacity-50' : ''}`}>
+                  <div onClick={(e) => e.stopPropagation()} className={`ms-auto shrink-0 ${(isReadOnly || isViewOnly) ? 'pointer-events-none opacity-50' : ''}`}>
                     <StatusSlider status={effectiveStatus} onCycle={() => cycleStatus(d.id, effectiveStatus)} />
                   </div>
                 )}

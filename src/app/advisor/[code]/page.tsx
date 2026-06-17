@@ -37,7 +37,14 @@ function ExpandedDelegateCard({
 }) {
   const { language } = useLanguage();
   const t = useT();
-  const mn = language === 'fr' ? {
+  const mn = language === 'ar' ? {
+    moderated: 'حوار منهجي',
+    unmoderated: 'حوار حر',
+    consultation: 'مشاورات الهيئة',
+    tour: 'جولة المتحدثين',
+    suspendDebate: 'تعليق النقاش',
+    endDebate: 'إنهاء النقاش',
+  } : language === 'fr' ? {
     moderated: 'Caucus modéré',
     unmoderated: 'Caucus non modéré',
     consultation: "Consultation de l'assemblée",
@@ -315,7 +322,14 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
   const isUnmoderatedCaucus = committee.phase === 'unmoderated-caucus';
   const isCaucus = isModeratedCaucus || isUnmoderatedCaucus;
 
-  const advisorMotionNames = language === 'fr' ? {
+  const advisorMotionNames = language === 'ar' ? {
+    moderated: 'حوار منهجي',
+    unmoderated: 'حوار حر',
+    consultation: 'مشاورات الهيئة',
+    tour: 'جولة المتحدثين',
+    suspendDebate: 'تعليق النقاش',
+    endDebate: 'إنهاء النقاش',
+  } : language === 'fr' ? {
     moderated: 'Caucus modéré',
     unmoderated: 'Caucus non modéré',
     consultation: "Consultation de l'assemblée",
