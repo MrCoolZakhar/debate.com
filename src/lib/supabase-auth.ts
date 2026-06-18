@@ -15,6 +15,13 @@ export function getAuthedClient(accessToken: string) {
   return _createSupabaseClient(
     'https://luruhkwrgisytejswlas.supabase.co',
     'sb_publishable_k7NdduzaXK358z8ew18ZKA_vBSieDlV',
-    { global: { headers: { Authorization: 'Bearer ' + accessToken } } }
+    {
+      global: { headers: { Authorization: 'Bearer ' + accessToken } },
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+      },
+    }
   );
 }
