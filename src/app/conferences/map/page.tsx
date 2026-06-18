@@ -150,7 +150,7 @@ async function fetchHighlightedConference(countries: string[]): Promise<string |
     .from('applications')
     .select('conference_id')
     .in('conference_id', confIds)
-    .gte('created_at', sevenDaysAgo);
+    .gte('submitted_at', sevenDaysAgo);
 
   if (!apps || apps.length === 0) return null;
 

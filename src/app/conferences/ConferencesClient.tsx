@@ -65,7 +65,7 @@ function FeaturedSection() {
         .from('applications')
         .select('conference_id')
         .in('conference_id', confIds)
-        .gte('created_at', sevenDaysAgo);
+        .gte('submitted_at', sevenDaysAgo);
       const counts: Record<string, number> = {};
       (apps ?? []).forEach((a: { conference_id: string }) => {
         counts[a.conference_id] = (counts[a.conference_id] ?? 0) + 1;
