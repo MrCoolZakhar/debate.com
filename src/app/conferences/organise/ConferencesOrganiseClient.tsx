@@ -174,7 +174,7 @@ export default function ConferencesOrganiseClient() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading, user?.id, statusFilter, session?.access_token]);
 
-  if (authLoading || (!user && !authLoading)) {
+  if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#EDE7D8' }}>
         <div className="w-7 h-7 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />

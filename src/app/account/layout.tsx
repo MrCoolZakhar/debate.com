@@ -26,7 +26,7 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
     }
   }, [authLoading, user, router, pathname]);
 
-  if (authLoading || !user) {
+  if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#EDE7D8' }}>
         <div
@@ -36,6 +36,8 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
       </div>
     );
   }
+
+  if (!user) return null;
 
   const avatarInitial = (
     profile?.display_name?.[0] ?? user.email?.[0] ?? '?'
