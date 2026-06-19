@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { UN_COUNTRIES } from '@/lib/countries';
@@ -29,7 +28,6 @@ type NotifFields = {
 
 export default function ProfilePage() {
   const { user, session, profile, signOut, loading: authLoading } = useAuth();
-  const router = useRouter();
 
   const [displayName, setDisplayName]       = useState('');
   const [nationality, setNationality]       = useState('');
@@ -97,7 +95,7 @@ export default function ProfilePage() {
 
   async function handleSignOut() {
     await signOut();
-    router.push('/');
+    window.location.href = '/';
   }
 
   if (dataLoading) {

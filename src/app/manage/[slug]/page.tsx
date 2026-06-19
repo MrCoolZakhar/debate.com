@@ -147,6 +147,7 @@ export default function DashboardPage() {
   const [showPublishModal, setShowPublishModal] = useState(false);
   const [publishBlockMsg, setPublishBlockMsg] = useState('');
   const [hasCommittees, setHasCommittees] = useState(false);
+  const [statCounts, setStatCounts] = useState({ total: 0, accepted: 0, assigned: 0, paid: 0 });
 
   useEffect(() => {
     if (!conference) return;
@@ -158,6 +159,27 @@ export default function DashboardPage() {
       .eq('conference_id', conference.id)
       .then(({ count }) => { setHasCommittees((count ?? 0) > 0); });
   }, [conference?.id]);
+
+  useEffect(() => {
+    if (!conference) return;
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
+    const confId = conference.id;
+    (async () => {
+      const [totalRes, acceptedRes, paidRes, assignedRes] = await Promise.all([
+        supabase.from('applications').select('*', { count: 'exact', head: true }).eq('conference_id', confId),
+        supabase.from('applications').select('*', { count: 'exact', head: true }).eq('conference_id', confId).eq('status', 'accepted'),
+        supabase.from('applications').select('*', { count: 'exact', head: true }).eq('conference_id', confId).eq('payment_status', 'paid'),
+        supabase.from('conference_allocations').select('*', { count: 'exact', head: true }).eq('conference_id', confId),
+      ]);
+      setStatCounts({
+        total: totalRes.count ?? 0,
+        accepted: acceptedRes.count ?? 0,
+        paid: paidRes.count ?? 0,
+        assigned: assignedRes.count ?? 0,
+      });
+    })();
+  }, [conference?.id, session?.access_token]);
 
   if (!conference) {
     return (
@@ -196,10 +218,10 @@ export default function DashboardPage() {
   }
 
   const stats = [
-    { icon: Users,       value: 0, label: 'Total Applications' },
-    { icon: CheckCircle, value: 0, label: 'Accepted' },
-    { icon: MapPin,      value: 0, label: 'Assigned' },
-    { icon: CreditCard,  value: 0, label: 'Paid' },
+    { icon: Users,       value: statCounts.total,    label: 'Total Applications' },
+    { icon: CheckCircle, value: statCounts.accepted, label: 'Accepted' },
+    { icon: MapPin,      value: statCounts.assigned, label: 'Assigned' },
+    { icon: CreditCard,  value: statCounts.paid,     label: 'Paid' },
   ];
 
   return (
