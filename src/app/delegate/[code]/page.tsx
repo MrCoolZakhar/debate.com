@@ -972,7 +972,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                       }));
                     }
                   }}
-                  className="flex-1 text-[18px] font-bold px-3 relative h-full transition-all duration-200"
+                  className="flex-1 flex items-center justify-center text-[18px] font-bold px-3 relative h-full transition-all duration-200"
                   style={{ color: isActive ? '#1B3828' : '#1C1410', backgroundColor: isActive ? 'rgba(27,56,40,0.07)' : 'transparent', fontWeight: isActive ? 900 : 700 }}
                   onMouseEnter={(e) => { if (!isActive) { const el = e.currentTarget as HTMLElement; el.style.color = '#1B3828'; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; el.style.transform = 'translateY(-1px)'; } }}
                   onMouseLeave={(e) => { if (!isActive) { const el = e.currentTarget as HTMLElement; el.style.color = '#1C1410'; el.style.backgroundColor = 'transparent'; el.style.transform = 'translateY(0)'; } }}>
