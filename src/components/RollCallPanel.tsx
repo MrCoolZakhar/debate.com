@@ -34,7 +34,7 @@ export function FlagCircle({ country, size = 'md' }: { country: string; size?: '
 
 // ── 3-state slider ────────────────────────────────────────────────────────────
 function StatusSlider({ status, onCycle }: { status: DelegateStatus; onCycle: () => void }) {
-  const thumbPos = status === 'absent' ? 'left-[2px]' : status === 'present' ? 'left-[32px]' : 'left-[62px]';
+  const thumbStart = status === 'absent' ? '2px' : status === 'present' ? '32px' : '62px';
   const thumbColor = status === 'absent' ? 'bg-[#8B2020]' : status === 'present' ? 'bg-[#3D7A52]' : 'bg-[#B6871F]';
   return (
     <button
@@ -47,7 +47,7 @@ function StatusSlider({ status, onCycle }: { status: DelegateStatus; onCycle: ()
         <span className={`text-[10px] font-bold text-center ${status === 'present' ? 'text-white' : 'text-white/40'}`}>P</span>
         <span className={`text-[10px] font-bold text-center ${status === 'present-voting' ? 'text-white' : 'text-white/40'}`}>PV</span>
       </div>
-      <div className={`absolute top-[2px] w-[26px] h-[22px] rounded-full transition-all duration-200 shadow-sm ${thumbPos} ${thumbColor}`} />
+      <div className={`absolute top-[2px] w-[26px] h-[22px] rounded-full transition-all duration-200 shadow-sm ${thumbColor}`} style={{ insetInlineStart: thumbStart }} />
     </button>
   );
 }
@@ -65,8 +65,8 @@ function ViewToggle({ view, onChange }: { view: 'az' | 'queue'; onChange: (v: 'a
       style={{ backgroundColor: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)' }}
       title="Toggle A-Z / Queue view"
     >
-      <div className={`absolute top-[1px] w-[51px] h-[26px] rounded-full transition-all duration-200 ${isQueue ? 'left-[51px]' : 'left-[1px]'}`}
-        style={{ backgroundColor: 'rgba(255,255,255,0.22)' }} />
+      <div className="absolute top-[1px] w-[51px] h-[26px] rounded-full transition-all duration-200"
+        style={{ insetInlineStart: isQueue ? '51px' : '1px', backgroundColor: 'rgba(255,255,255,0.22)' }} />
       <div className="absolute inset-0 flex items-center pointer-events-none z-10">
         <span className={`w-[52px] text-[10px] font-bold text-center leading-none ${!isQueue ? 'text-white' : 'text-white/40'}`}>{t('rollcall_az')}</span>
         <span className={`w-[52px] text-[10px] font-bold text-center leading-none ${isQueue ? 'text-white' : 'text-white/40'}`}>{t('rollcall_queue')}</span>

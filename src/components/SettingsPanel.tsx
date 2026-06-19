@@ -56,13 +56,17 @@ function ChairPasswordDisplay({ password }: { password: string }) {
   );
 }
 
-function RenameRow({ label, defaultName, value, onChange }: {
-  label?: string; defaultName: string; value: string; onChange: (v: string) => void;
+function RenameRow({ label, defaultName, value, onChange, resetValue }: {
+  label?: string; defaultName: string; value: string; onChange: (v: string) => void; resetValue?: string;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
-  const isCustom = value !== defaultName;
+  // `defaultName` is the localized label shown when no custom name is set.
+  // `baseValue` is the canonical value written back to the store (always English)
+  // so localized display text never gets persisted and leak into other locales.
+  const baseValue = resetValue ?? defaultName;
+  const isCustom = value !== baseValue && value !== defaultName;
 
   const startEdit = () => {
     setDraft(isCustom ? value : '');
@@ -71,7 +75,7 @@ function RenameRow({ label, defaultName, value, onChange }: {
   };
   const commit = () => {
     const trimmed = draft.trim();
-    onChange(trimmed || defaultName);
+    onChange(trimmed || baseValue);
     setEditing(false);
   };
 
@@ -104,7 +108,7 @@ function RenameRow({ label, defaultName, value, onChange }: {
       </div>
       {isCustom && !editing && (
         <button
-          onClick={() => onChange(defaultName)}
+          onClick={() => onChange(baseValue)}
           className="text-[10px] font-mono shrink-0 px-1.5 py-0.5 rounded transition-colors"
           style={{ color: '#9A8A78', border: '1px solid #DDD4C0' }}
           onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#8B2020'; (e.currentTarget as HTMLElement).style.borderColor = '#8B2020'; }}
@@ -131,10 +135,21 @@ const MOTION_META: Record<OrderableType, {
   tour:         { enabledKey: 'motionTourDeTable',       namesKey: 'tour',         defaultName: 'Tour de Table',             disruptiveness: 1 },
 };
 
+// Localized display names for the default (un-renamed) motions, keyed by language.
+// The English values stay the canonical store values (see MOTION_META.defaultName).
+const MOTION_NAMES_LOCALIZED: Record<string, Record<string, string>> = {
+  ar: { moderated: 'حوار منهجي', unmoderated: 'حوار حر', consultation: 'مشاورات الهيئة', tour: 'جولة المتحدثين', suspendDebate: 'تعليق النقاش', endDebate: 'إنهاء النقاش' },
+  fr: { moderated: 'Caucus modéré', unmoderated: 'Caucus non modéré', consultation: "Consultation de l'assemblée", tour: 'Tour de table', suspendDebate: 'Suspension du débat', endDebate: 'Clôture du débat' },
+  es: { moderated: 'Cáucus Moderado', unmoderated: 'Cáucus No Moderado', consultation: 'Consulta de Gabinete', tour: 'Round Robin', suspendDebate: 'Suspender Debate', endDebate: 'Cerrar Debate' },
+};
+
 function MotionsTab({ s, upd }: {
   s: CommitteeSettings;
   upd: <K extends keyof CommitteeSettings>(key: K, value: CommitteeSettings[K]) => void;
 }) {
+  const t = useT();
+  const { language } = useLanguage();
+  const locName = (k: string, en: string) => MOTION_NAMES_LOCALIZED[language]?.[k] ?? en;
   const order: OrderableType[] = (s.motionOrder ?? ['moderated', 'unmoderated', 'tour', 'consultation']) as OrderableType[];
   const dragItem = useRef<number | null>(null);
   const dragOver = useRef<number | null>(null);
@@ -155,15 +170,16 @@ function MotionsTab({ s, upd }: {
 
   return (
     <div>
-      <SectionLabel>Motion Types</SectionLabel>
+      <SectionLabel>{t('settings_motion_types_heading')}</SectionLabel>
       <p className="text-xs mb-3 leading-snug" style={{ color: '#9A8A78' }}>
-        Drag to reorder. Toggle to enable or disable. Click the name to rename.
+        {t('settings_motion_types_desc')}
       </p>
       <div className="space-y-1 mb-4">
         {order.map((motionType, i) => {
           const meta = MOTION_META[motionType];
           const enabled = s[meta.enabledKey] !== false;
           const currentName = s.motionNames[meta.namesKey] ?? meta.defaultName;
+          const localizedDefault = locName(meta.namesKey, meta.defaultName);
           const isDragging = dragActive === i;
           return (
             <div
@@ -192,7 +208,8 @@ function MotionsTab({ s, upd }: {
               {/* Name (click to rename inline) — flex-1 */}
               <div className="flex-1 min-w-0">
                 <RenameRow
-                  defaultName={meta.defaultName}
+                  defaultName={localizedDefault}
+                  resetValue={meta.defaultName}
                   value={currentName}
                   onChange={(v) => upd('motionNames', { ...s.motionNames, [meta.namesKey]: v })}
                 />
@@ -218,8 +235,8 @@ function MotionsTab({ s, upd }: {
       </div>
 
       {/* Suspend/End debate — always at bottom, always enabled, rename only */}
-      <SectionLabel>Procedural Motions</SectionLabel>
-      <p className="text-xs mb-2 leading-snug" style={{ color: '#9A8A78' }}>Always available. Click to rename.</p>
+      <SectionLabel>{t('settings_procedural_motions_heading')}</SectionLabel>
+      <p className="text-xs mb-2 leading-snug" style={{ color: '#9A8A78' }}>{t('settings_procedural_motions_desc')}</p>
       <div className="space-y-1">
         {([
           { key: 'suspendDebate' as keyof MotionNames, defaultName: 'Suspend Debate' },
@@ -237,7 +254,8 @@ function MotionsTab({ s, upd }: {
             </div>
             <div className="flex-1 min-w-0">
               <RenameRow
-                defaultName={defaultName}
+                defaultName={locName(key, defaultName)}
+                resetValue={defaultName}
                 value={s.motionNames[key] ?? defaultName}
                 onChange={(v) => upd('motionNames', { ...s.motionNames, [key]: v })}
               />
