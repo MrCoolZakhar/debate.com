@@ -48,13 +48,14 @@
 }
 
 body {
-  font-family: 'Outfit', 'Noto Sans Arabic', system-ui, sans-serif;
+  font-family: 'Outfit', system-ui, sans-serif;
 }
 
-/* Keep Playfair Display (Latin-only display serif) off Arabic text —
-   it has no Arabic glyphs, so fall back to a clean Arabic face. */
+/* Arabic only: prefer Noto Sans Arabic for clean Arabic glyphs. Scoped to
+   :lang(ar) so Latin/English text is completely unaffected (it keeps the
+   original 'Outfit', system-ui stack and never loads/uses the Arabic face). */
 :lang(ar) {
-  font-family: 'Outfit', 'Noto Sans Arabic', system-ui, sans-serif;
+  font-family: 'Noto Sans Arabic', 'Outfit', system-ui, sans-serif;
 }
 
 * {
