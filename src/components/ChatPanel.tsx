@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { Committee, ChatMessage } from '@/lib/types';
-import { getFlagEmoji, getCountryByName, getCountryDisplayName } from '@/lib/countries';
+import { getFlagEmoji, getCountryByName, getCountryDisplayName, compareCountryNames } from '@/lib/countries';
 import { sendMessage as sendMessageToDB } from '@/lib/committeeService';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 
@@ -235,7 +235,7 @@ export default function ChatPanel({
   // Delegates available for new DM
   const dmCandidates = committee.delegates
     .filter((d) => d.country !== senderName && !chairNames.includes(d.country))
-    .sort((a, b) => a.country.localeCompare(b.country));
+    .sort((a, b) => compareCountryNames(a.country, b.country, language));
 
   // Co-chairs available for DM (chair view only) — other chairs in the committee
   const coChairCandidates = isChair

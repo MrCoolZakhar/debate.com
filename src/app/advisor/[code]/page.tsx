@@ -7,7 +7,7 @@ import { getCommitteeByCode, subscribeToCommittee, sendMessage as sendMessageDB 
 import { DEFAULT_MOTION_NAMES } from '@/lib/settingsStore';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
 import { Committee } from '@/lib/types';
-import { getFlagUrl, getCountryByName, getCountryDisplayName } from '@/lib/countries';
+import { getFlagUrl, getCountryByName, getCountryDisplayName, compareCountryNames } from '@/lib/countries';
 import { getCommitteeDisplayName } from '@/lib/presetNames';
 import { Emoji } from '@/components/Emoji';
 import { MajorityPie } from '@/components/RollCallPanel';
@@ -360,17 +360,9 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
     currentSpeaker: string | null;
   } | null;
 
-  const gslProgress = committee.currentSpeaker
-    ? (committee.speakerTimeRemaining / committee.speakerTimeLimit) * 100
-    : 100;
-
-  const caucusSpeakerProgress = caucus && caucus.speakingTime > 0
-    ? (caucus.speakerTimeRemaining / caucus.speakingTime) * 100
-    : 100;
-
   const displayQueue = isCaucus ? (committee.caucusQueue ?? []) : committee.speakersList;
 
-  const sortedDelegates = [...committee.delegates].sort((a, b) => a.country.localeCompare(b.country));
+  const sortedDelegates = [...committee.delegates].sort((a, b) => compareCountryNames(a.country, b.country, language));
   const selectedDelegate = selectedCountry
     ? sortedDelegates.find((d) => d.country === selectedCountry) ?? null
     : null;
@@ -428,11 +420,8 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
               <div className="flex flex-col items-center px-4 py-5 shrink-0" style={{ borderBottom: '1px solid rgba(61,122,82,0.4)' }}>
                 {(() => { const c = getCountryByName(caucus.currentSpeaker); return c ? <img src={getFlagUrl(c.code)} alt={caucus.currentSpeaker} style={{ width: '80px', height: '58px', objectFit: 'cover', borderRadius: '8px', border: '1.5px solid rgba(238,217,138,0.2)' }} /> : null; })()}
                 <h2 className="text-2xl font-black mt-3 mb-1 text-center" style={{ color: '#EDE7D8' }}>{caucus.currentSpeaker}</h2>
-                <div className="text-5xl font-black font-mono tabular-nums mt-1" style={{ color: caucus.speakerTimeRemaining <= 10 ? '#B8844A' : '#EDE7D8' }}>
-                  {formatTime(caucus.speakerTimeRemaining)}
-                </div>
-                <div className="w-full max-w-xs h-1.5 rounded-full overflow-hidden mt-3" style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}>
-                  <div className="h-full rounded-full transition-all" style={{ width: `${caucusSpeakerProgress}%`, backgroundColor: '#EED98A' }} />
+                <div className="text-lg font-bold mt-1" style={{ color: 'rgba(238,217,138,0.7)' }}>
+                  {t('view_is_speaking')}
                 </div>
                 {caucus.purpose && (
                   <p className="text-xs mt-3 text-center" style={{ color: 'rgba(238,217,138,0.5)' }}>{caucus.purpose}</p>
@@ -471,11 +460,8 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
               <div className="flex flex-col items-center px-4 py-5 shrink-0" style={{ borderBottom: '1px solid rgba(61,122,82,0.4)' }}>
                 {(() => { const c = getCountryByName(committee.currentSpeaker.country); return c ? <img src={getFlagUrl(c.code)} alt={committee.currentSpeaker.country} style={{ width: '80px', height: '58px', objectFit: 'cover', borderRadius: '8px', border: '1.5px solid rgba(238,217,138,0.2)' }} /> : null; })()}
                 <h2 className="text-2xl font-black mt-3 mb-1 text-center" style={{ color: '#EDE7D8' }}>{getCountryDisplayName(committee.currentSpeaker.country, language)}</h2>
-                <div className="text-5xl font-black font-mono tabular-nums mt-1" style={{ color: committee.speakerTimeRemaining <= 10 ? '#B8844A' : '#EDE7D8' }}>
-                  {formatTime(committee.speakerTimeRemaining)}
-                </div>
-                <div className="w-full max-w-xs h-1.5 rounded-full overflow-hidden mt-3" style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}>
-                  <div className="h-full rounded-full transition-all" style={{ width: `${gslProgress}%`, backgroundColor: '#EED98A' }} />
+                <div className="text-lg font-bold mt-1" style={{ color: 'rgba(238,217,138,0.7)' }}>
+                  {t('view_is_speaking')}
                 </div>
               </div>
             ) : (

@@ -234,6 +234,15 @@ function MotionsTab({ s, upd }: {
         })}
       </div>
 
+      {s.motionCoW !== false && (
+        <Toggle
+          label={t('settings_cow_timer_label')}
+          note={t('settings_cow_timer_note')}
+          value={s.cowTimerEnabled === true}
+          onChange={(v) => upd('cowTimerEnabled', v)}
+        />
+      )}
+
       {/* Suspend/End debate — always at bottom, always enabled, rename only */}
       <SectionLabel>{t('settings_procedural_motions_heading')}</SectionLabel>
       <p className="text-xs mb-2 leading-snug" style={{ color: '#9A8A78' }}>{t('settings_procedural_motions_desc')}</p>

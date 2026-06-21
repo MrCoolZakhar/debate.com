@@ -424,6 +424,34 @@ export function getCountryDisplayName(name: string, language: string): string {
   }
 }
 
+// Accent/diacritic-insensitive, language-aware comparator on DISPLAY names
+export function compareCountryNames(a: string, b: string, language: string): number {
+  return getCountryDisplayName(a, language).localeCompare(
+    getCountryDisplayName(b, language), language, { sensitivity: 'base' });
+}
+
+// Fold accents + lowercase for matching
+function fold(s: string): string {
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+
+// Match a free-text token to a country across EN + ES + FR names, accent-insensitive
+export function findCountryFlexible(input: string): string | null {
+  const n = fold(input);
+  if (!n) return null;
+  // exact across EN names
+  let hit = UN_COUNTRIES.find((c) => fold(c.name) === n);
+  if (hit) return hit.name;
+  // exact across ES/FR dictionaries (value match → map code back to EN canonical name)
+  for (const dict of [COUNTRY_NAMES_ES, COUNTRY_NAMES_FR]) {
+    const codeEntry = Object.entries(dict).find(([, v]) => fold(v) === n);
+    if (codeEntry) { const c = UN_COUNTRIES.find((u) => u.code === codeEntry[0]); if (c) return c.name; }
+  }
+  // startsWith / includes fallback on EN names
+  hit = UN_COUNTRIES.find((c) => fold(c.name).startsWith(n)) ?? UN_COUNTRIES.find((c) => fold(c.name).includes(n) || n.includes(fold(c.name)));
+  return hit ? hit.name : null;
+}
+
 export function matchesSearch(c: Country, search: string, language: string): boolean {
   const s = search.toLowerCase();
   if (c.name.toLowerCase().includes(s)) return true;

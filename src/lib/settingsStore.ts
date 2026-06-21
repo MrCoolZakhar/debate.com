@@ -24,6 +24,8 @@ export interface CommitteeSettings {
   motionModeratedCaucus: boolean;
   motionUnmoderatedCaucus: boolean;
   motionCoW: boolean;
+  cowTimerEnabled: boolean;     // optional standalone timer during Consultation of the Whole
+  cowTimerSeconds: number;      // default duration for the CoW timer
   motionTourDeTable: boolean;
   motionNames: MotionNames;
   motionOrder: ('moderated' | 'unmoderated' | 'consultation' | 'tour')[];
@@ -57,6 +59,8 @@ export const DEFAULT_SETTINGS: CommitteeSettings = {
   motionModeratedCaucus: true,
   motionUnmoderatedCaucus: true,
   motionCoW: true,
+  cowTimerEnabled: false,
+  cowTimerSeconds: 60,
   motionTourDeTable: true,
   motionNames: { ...DEFAULT_MOTION_NAMES },
   motionOrder: ['moderated', 'unmoderated', 'tour', 'consultation'],

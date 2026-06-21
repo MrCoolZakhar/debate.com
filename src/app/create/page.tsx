@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createCommittee as createCommitteeInDB } from '@/lib/committeeService';
 import { useSettingsStore } from '@/lib/settingsStore';
-import { UN_COUNTRIES, getFlagUrl, getCountryByName, getCountryDisplayName, matchesSearch } from '@/lib/countries';
+import { UN_COUNTRIES, getFlagUrl, getCountryByName, getCountryDisplayName, matchesSearch, findCountryFlexible } from '@/lib/countries';
 import { UNSC_MEMBERS, WHO_MEMBERS, IMF_MEMBERS, WORLD_BANK_MEMBERS, UNEP_MEMBERS } from '@/lib/presets';
 import { Globe, PenLine, ChevronLeft } from 'lucide-react';
 import { FlagImg } from '@/components/FlagImg';
@@ -116,13 +116,7 @@ function fuzzyMatchCountry(raw: string): string | null {
   const n = raw.trim().toLowerCase();
   if (!n) return null;
   if (COUNTRY_ACRONYMS[n]) return COUNTRY_ACRONYMS[n];
-  const exact = UN_COUNTRIES.find((c) => c.name.toLowerCase() === n);
-  if (exact) return exact.name;
-  const sw = UN_COUNTRIES.find((c) => c.name.toLowerCase().startsWith(n));
-  if (sw) return sw.name;
-  const inc = UN_COUNTRIES.find((c) => c.name.toLowerCase().includes(n) || n.includes(c.name.toLowerCase()));
-  if (inc) return inc.name;
-  return null;
+  return findCountryFlexible(raw);
 }
 
 function CommitteeNameInput({ value, onChange, onPresetSelect }: {

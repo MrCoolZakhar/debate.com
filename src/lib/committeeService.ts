@@ -152,6 +152,7 @@ export async function getCommitteeByCode(code: string): Promise<Committee | null
 
   const delegates: Delegate[] = (delegateRows ?? []).map((d: DbRow) => ({
     id: d.id as string, country: d.country as string, status: d.status as DelegateStatus,
+    isObserver: (d.is_observer as boolean) ?? false,
   }));
 
   // GSL only — caucus list is never loaded into speakersList
@@ -213,6 +214,11 @@ export async function setPhase(committeeId: string, phase: SessionPhase): Promis
 export async function setDelegateStatus(delegateId: string, status: DelegateStatus): Promise<void> {
   const { error } = await supabase.from('delegates').update({ status }).eq('id', delegateId);
   if (error) console.error('Error setting delegate status:', error);
+}
+
+export async function setDelegateObserver(delegateId: string, isObserver: boolean): Promise<void> {
+  const { error } = await supabase.from('delegates').update({ is_observer: isObserver }).eq('id', delegateId);
+  if (error) console.error('Error setting delegate observer:', error);
 }
 
 export async function batchSetDelegateStatuses(
@@ -309,7 +315,7 @@ export async function reorderSpeakersList(
 
 export async function addDelegate(committeeId: string, country: string): Promise<string | null> {
   const { data, error } = await supabase.from('delegates')
-    .insert({ committee_id: committeeId, country, status: 'absent' })
+    .insert({ committee_id: committeeId, country, status: 'absent', is_observer: false })
     .select('id').single();
   if (error) { console.error('Error adding delegate:', error); return null; }
   return data.id as string;

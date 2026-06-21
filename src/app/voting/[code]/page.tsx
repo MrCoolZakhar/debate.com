@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { Committee, DelegateStatus } from '@/lib/types';
-import { getCountryByName, getFlagUrl, getCountryDisplayName } from '@/lib/countries';
+import { getCountryByName, getFlagUrl, getCountryDisplayName, compareCountryNames } from '@/lib/countries';
 import { Emoji } from '@/components/Emoji';
 import { MajorityPie } from '@/components/RollCallPanel';
 import { getCommitteeByCode, setPhase as setPhaseInDB, setDelegateStatus as setDelegateStatusInDB, updateDocumentStatus as updateDocumentStatusInDB } from '@/lib/committeeService';
@@ -52,13 +52,14 @@ function RollCallModal({
 }) {
   const t = useT();
   const { language } = useLanguage();
-  const sorted = [...delegates].sort((a, b) => a.country.localeCompare(b.country));
+  // Observers are excluded from the voting roster entirely.
+  const votable = delegates.filter((d) => !d.isObserver);
+  const sorted = [...votable].sort((a, b) => compareCountryNames(a.country, b.country, language));
   const thumbPos = (status: DelegateStatus) =>
     status === 'absent' ? 'left-[2px]' : status === 'present' ? 'left-[32px]' : 'left-[62px]';
   const thumbColor = (status: DelegateStatus) =>
     status === 'absent' ? 'bg-[#8B2020]' : status === 'present' ? 'bg-[#3D7A52]' : 'bg-[#B6871F]';
-  const presentCount = Object.values(rollCallStatuses).filter((s) => s !== 'absent').length;
-  const pvCount = Object.values(rollCallStatuses).filter((s) => s === 'present-voting').length;
+  const presentCount = votable.filter((d) => (rollCallStatuses[d.id] ?? d.status) !== 'absent').length;
   return (
     <Portal><div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(5,4,3,0.92)', backdropFilter: 'blur(4px)' }}>
       <div className="rounded-2xl w-full max-w-md shadow-2xl flex flex-col" style={{ maxHeight: '85%', backgroundColor: '#1B3828', border: '1px solid rgba(255,255,255,0.12)' }}>
@@ -72,7 +73,7 @@ function RollCallModal({
             </div>
           </div>
           <p className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>
-            {t('voting_roll_call_sub').replace('{present}', String(presentCount)).replace('{total}', String(delegates.length))}
+            {t('voting_roll_call_sub').replace('{present}', String(presentCount)).replace('{total}', String(votable.length))}
           </p>
         </div>
         <div className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
@@ -314,15 +315,15 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   const selectedDoc = allDRs.find((d) => d.id === selectedDocId) ?? null;
   // Use roll call statuses (local) if roll call is done, else use DB status
   const presentDelegates = committee.delegates
-    .filter((d) => (rollCallDone ? rollCallStatuses[d.id] ?? d.status : d.status) !== 'absent')
-    .sort((a, b) => a.country.localeCompare(b.country));
+    .filter((d) => !d.isObserver && (rollCallDone ? rollCallStatuses[d.id] ?? d.status : d.status) !== 'absent')
+    .sort((a, b) => compareCountryNames(a.country, b.country, language));
 
   const forCount = votes.filter((v) => v.choice === 'for' || v.choice === 'for-rights').length;
   const againstCount = votes.filter((v) => v.choice === 'against' || v.choice === 'against-rights').length;
   const abstainCount = votes.filter((v) => v.choice === 'abstain').length;
   const withRightsAll = votes
     .filter((v) => v.choice === 'for-rights' || v.choice === 'against-rights')
-    .sort((a, b) => a.country.localeCompare(b.country));
+    .sort((a, b) => compareCountryNames(a.country, b.country, language));
   const withRights = withRightsAll.slice(0, 10);
 
   // Veto check (2c: use vetoCountries if set, else fall back to p5Delegations then hardcoded P5)
@@ -334,7 +335,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   const unanimousRequired = settings.vetoMode === 'unanimous';
   // Unanimous: every present delegate (P and PV) must vote 'for' or 'for-rights'
   const presentAndPvDelegates = committee.delegates.filter(
-    (d) => (rollCallStatuses[d.id] ?? d.status) !== 'absent'
+    (d) => !d.isObserver && (rollCallStatuses[d.id] ?? d.status) !== 'absent'
   );
   const unanimousFail =
     unanimousRequired &&

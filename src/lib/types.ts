@@ -4,6 +4,7 @@ export interface Delegate {
   id: string;
   country: string;
   status: DelegateStatus;
+  isObserver?: boolean;
 }
 
 export type SessionPhase =
@@ -100,6 +101,7 @@ export interface CaucusState {
   proposedBy: string;
   proposerPosition: 'first' | 'last' | null;
   spokenCountries: string[];
+  isConsultation?: boolean;  // true when this caucus is a Consultation of the Whole
 }
 
 export interface ChatMessage {

@@ -531,6 +531,30 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false }: 
   const [showExtendUnmod, setShowExtendUnmod] = useState(false);
   const [extendMinsUnmod, setExtendMinsUnmod] = useState(5);
 
+  // CoW standalone timer — behaves like Right of Reply: own state, own interval, no DB writes
+  const { getSettings } = useSettingsStore();
+  const cowSettings = getSettings(committee.code);
+  const cowEnabled = caucus.isConsultation === true && cowSettings.cowTimerEnabled === true;
+  const cowDefaultSecs = cowSettings.cowTimerSeconds || 60;
+  const [cowOpen, setCowOpen] = useState(false);
+  const [cowActive, setCowActive] = useState(false);
+  const [cowRemaining, setCowRemaining] = useState(cowDefaultSecs);
+  const cowIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (cowActive) {
+      cowIntervalRef.current = setInterval(() => {
+        setCowRemaining((prev) => {
+          if (prev <= 1) { setCowActive(false); return 0; }
+          return prev - 1;
+        });
+      }, 1000);
+    } else {
+      if (cowIntervalRef.current) { clearInterval(cowIntervalRef.current); cowIntervalRef.current = null; }
+    }
+    return () => { if (cowIntervalRef.current) { clearInterval(cowIntervalRef.current); cowIntervalRef.current = null; } };
+  }, [cowActive]);
+
   useEffect(() => {
     if (running) {
       const tick = () => {
@@ -607,10 +631,55 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false }: 
         <button onClick={() => setShowExtendUnmod((v) => !v)} className="px-4 py-3 rounded-xl font-bold bg-[#1B3828] hover:bg-[#2A5A3C] text-[#EDE7D8] transition-colors focus:outline-none">
           {t('caucus_extend')}
         </button>
+        {cowEnabled && (
+          <button onClick={() => { setCowOpen((v) => !v); }} className="px-4 py-3 rounded-xl font-bold bg-[#B8844A]/15 hover:bg-[#B8844A]/25 border border-[#B8844A]/30 text-[#B8844A] transition-colors focus:outline-none">
+            {t('cow_timer')}
+          </button>
+        )}
         <button onClick={handleEndCaucus} className="px-8 py-3 rounded-xl font-black bg-[#8B2020] hover:bg-[#7A1C1C] text-white transition-colors focus:outline-none">
           {t('caucus_end')}
         </button>
       </div>}
+      {/* CoW standalone timer overlay — fixed, independent of the caucus countdown, no DB writes */}
+      {cowEnabled && cowOpen && !isViewOnly && (
+        <div className="fixed z-50" style={{ top: '50%', right: '2rem', transform: 'translateY(-50%)' }}>
+          <div className="bg-[#EDE7D8] border border-[#B8844A]/30 rounded-xl p-4 w-72 shadow-2xl">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-black uppercase tracking-wide" style={{ color: '#B8844A' }}>{t('cow_timer')}</span>
+              <button onClick={() => { setCowOpen(false); setCowActive(false); }} className="text-[#1C1410] hover:text-[#8B2020] text-sm font-bold">✕</button>
+            </div>
+            <div className="flex gap-2 mb-3">
+              {[30, 60, 90].map((s) => (
+                <button key={s} onClick={() => { setCowActive(false); setCowRemaining(s); }}
+                  className={`flex-1 py-1.5 rounded-lg text-xs font-black uppercase tracking-wide transition-colors border ${
+                    cowRemaining === s && !cowActive ? 'bg-[#B8844A] border-[#B8844A] text-[#1C1410]' : 'bg-[#EDE7D8] border-[#DDD4C0] text-[#6A5A4A] hover:border-[#B8844A]/50'
+                  }`}>
+                  {s}s
+                </button>
+              ))}
+            </div>
+            <div className={`text-5xl font-black font-mono text-center mb-3 tabular-nums ${
+              cowRemaining <= 5 ? 'text-red-500' : cowRemaining <= 10 ? 'text-[#B6871F]' : 'text-[#B8844A]'
+            }`}>
+              {Math.floor(cowRemaining / 60)}:{String(cowRemaining % 60).padStart(2, '0')}
+            </div>
+            <div className="w-full h-1.5 bg-[#DDD4C0] rounded-full overflow-hidden mb-3">
+              <div className={`h-full rounded-full transition-all ${cowRemaining / cowDefaultSecs > 0.5 ? 'bg-[#B8844A]' : cowRemaining / cowDefaultSecs > 0.2 ? 'bg-[#B6871F]' : 'bg-red-500'}`}
+                style={{ width: `${Math.min(100, (cowRemaining / cowDefaultSecs) * 100)}%` }} />
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setCowActive((r) => !r)}
+                className={`flex-1 py-2 rounded-lg font-bold text-xs transition-colors ${cowActive ? 'bg-[#B6871F] hover:bg-[#B6871F]/80 text-white' : 'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'}`}>
+                {cowActive ? t('rtr_pause') : t('rtr_start')}
+              </button>
+              <button onClick={() => { setCowActive(false); setCowRemaining(cowDefaultSecs); }}
+                className="px-3 py-2 rounded-lg font-bold text-xs bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#6A5A4A] transition-colors">
+                ↺
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {showExtendUnmod && (
         <div className="mt-4 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3 shadow-xl" style={{ minWidth: '180px' }}>
           <div className="flex gap-1.5 mb-2 justify-center">
@@ -1186,9 +1255,22 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
             setSessionEnded(false);
             setSessionSuspended(false);
           }
-          setCommittee(updated);
-          // Sync isolated timer atom only when local timer is not running
-          if (!timerRunningRef.current) {
+          // A foreign event (delegate GSL request, co-chair write) must never disturb the
+          // live speaker/timer/caucus state owned by the running chair. Merge non-timer fields
+          // and preserve the live ones while the timer is running.
+          if (timerRunningRef.current) {
+            setCommittee((prev) => prev ? {
+              ...updated,
+              currentSpeaker: prev.currentSpeaker,
+              speakerStartedAt: prev.speakerStartedAt,
+              speakerTimeLimit: prev.speakerTimeLimit,
+              speakerTimeRemaining: prev.speakerTimeRemaining,
+              caucus: prev.caucus,
+              phase: prev.phase,
+            } : updated);
+          } else {
+            setCommittee(updated);
+            // Sync isolated timer atom only when local timer is not running
             if (updated.speakerStartedAt) {
               const elapsed = Math.round((Date.now() - new Date(updated.speakerStartedAt).getTime()) / 1000);
               setSpeakerTimeRemaining(Math.max(0, updated.speakerTimeLimit - elapsed));
@@ -1543,14 +1625,15 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     );
   }
 
-  const present = committee.delegates.filter((d) => d.status !== 'absent').length;
+  const present = committee.delegates.filter((d) => d.status !== 'absent' && !d.isObserver).length;
   const progress = committee.currentSpeaker ? (speakerTimeRemaining / committee.speakerTimeLimit) * 100 : 0;
   const isPreSession = committee.phase === 'pre-session';
 
   // ── Quorum enforcement ──────────────────────────────────────────────────────
+  // Observers are excluded from the voting body — they don't count toward quorum.
   const settings = getSettings(committee.code);
-  const presentCount = committee.delegates.filter((d) => d.status !== 'absent').length;
-  const totalCount = committee.delegates.length;
+  const presentCount = committee.delegates.filter((d) => d.status !== 'absent' && !d.isObserver).length;
+  const totalCount = committee.delegates.filter((d) => !d.isObserver).length;
   const quorumMap: Record<string, number> = { 'none': 0, '1-4': 1 / 4, '1-3': 1 / 3, '1-2': 1 / 2 };
   const quorumFraction = quorumMap[settings.quorumThreshold ?? 'none'] ?? 0;
   const belowQuorum = quorumFraction > 0 && totalCount > 0 && (presentCount / totalCount) < quorumFraction;
@@ -1790,22 +1873,24 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   };
 
   const handleApproveGslRequest = async (motionId: string, delegateId: string, country: string) => {
-    await approveGslRequest(committee.id, motionId, delegateId, country);
     const delegate = committee.delegates.find((d) => d.id === delegateId);
     if (!delegate) return;
     updateLocal(setCommittee, (c) => ({
       ...c,
       speakersList: [...c.speakersList, { delegateId, country }],
       pendingMotions: c.pendingMotions.filter((m) => m.id !== motionId),
-    }));
+    }), true);
+    await approveGslRequest(committee.id, motionId, delegateId, country);
+    localUpdateTime.current = Date.now();
   };
 
   const handleDenyGslRequest = async (motionId: string) => {
-    await denyGslRequest(motionId);
     updateLocal(setCommittee, (c) => ({
       ...c,
       pendingMotions: c.pendingMotions.filter((m) => m.id !== motionId),
-    }));
+    }), true);
+    await denyGslRequest(motionId);
+    localUpdateTime.current = Date.now();
   };
 
   const isLastGSLSpeaker = committee.speakersList.length === 0;
@@ -2331,13 +2416,21 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                           })()}
                         </div>
                         <h1 className="font-black text-[#1C1410] text-center" style={{ fontSize: '1.8rem', margin: '8px 0' }}>{getCountryDisplayName(committee.currentSpeaker.country, language)}</h1>
-                        <div data-tutorial="timer" className={`font-black font-mono tabular-nums ${speakerTimeRemaining <= 10 ? 'text-[#B8844A]' : 'text-[#1C1410]'}`} style={{ fontSize: '5rem', marginBottom: '8px' }}>
-                          {formatTime(speakerTimeRemaining)}
-                          {extraTimeAdded && <span className="text-base ms-2 font-normal text-[#1C1410]">{t('gsl_plus_time')}</span>}
-                        </div>
-                        <div className="w-full max-w-2xl h-2 bg-[#DDD4C0] rounded-full overflow-hidden" style={{ marginBottom: '6px' }}>
-                          <div className={`h-full rounded-full transition-all ${progress > 20 ? 'bg-[#B6871F]' : 'bg-[#B8844A]'}`} style={{ width: `${progress}%` }} />
-                        </div>
+                        {isViewOnly ? (
+                          <div className="font-bold text-[#6A5A4A] text-center" style={{ fontSize: '1.5rem', marginBottom: '8px' }}>
+                            {t('view_is_speaking')}
+                          </div>
+                        ) : (
+                          <>
+                            <div data-tutorial="timer" className={`font-black font-mono tabular-nums ${speakerTimeRemaining <= 10 ? 'text-[#B8844A]' : 'text-[#1C1410]'}`} style={{ fontSize: '5rem', marginBottom: '8px' }}>
+                              {formatTime(speakerTimeRemaining)}
+                              {extraTimeAdded && <span className="text-base ms-2 font-normal text-[#1C1410]">{t('gsl_plus_time')}</span>}
+                            </div>
+                            <div className="w-full max-w-2xl h-2 bg-[#DDD4C0] rounded-full overflow-hidden" style={{ marginBottom: '6px' }}>
+                              <div className={`h-full rounded-full transition-all ${progress > 20 ? 'bg-[#B6871F]' : 'bg-[#B8844A]'}`} style={{ width: `${progress}%` }} />
+                            </div>
+                          </>
+                        )}
                         {gslRequireNextSpeaker && isLastGSLSpeaker && (
                           <div className="mb-1 px-4 py-1.5 bg-[#B6871F]/10 border border-[#B6871F]/30 rounded-lg text-[#B6871F] text-xs text-center">
                             {t('gsl_never_empty_warning')}
