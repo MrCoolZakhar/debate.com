@@ -86,6 +86,7 @@ export async function createCommittee(
   topic: string,
   chairNames: string[],
   delegateNames: string[],
+  observerCountries: string[] = [],
 ): Promise<{ code: string; chairJoinSuffix: string } | null> {
   const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 15000));
   const createPromise = async (): Promise<{ code: string; chairJoinSuffix: string } | null> => {
@@ -107,7 +108,8 @@ export async function createCommittee(
     }
 
     if (delegateNames.length > 0) {
-      const delegateRows = delegateNames.map((country) => ({ committee_id: committeeRow.id, country, status: 'absent' }));
+      const obs = new Set(observerCountries.map((c) => c.toLowerCase()));
+      const delegateRows = delegateNames.map((country) => ({ committee_id: committeeRow.id, country, status: 'absent', is_observer: obs.has(country.toLowerCase()) }));
       const BATCH_SIZE = 50;
       for (let i = 0; i < delegateRows.length; i += BATCH_SIZE) {
         const batch = delegateRows.slice(i, i + BATCH_SIZE);

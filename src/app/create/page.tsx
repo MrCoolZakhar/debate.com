@@ -6,9 +6,9 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createCommittee as createCommitteeInDB } from '@/lib/committeeService';
 import { useSettingsStore } from '@/lib/settingsStore';
-import { UN_COUNTRIES, getFlagUrl, getCountryByName, getCountryDisplayName, matchesSearch, findCountryFlexible } from '@/lib/countries';
+import { UN_COUNTRIES, getFlagUrl, getCountryByName, getCountryDisplayName, matchesSearch, findCountryFlexible, compareCountryNames } from '@/lib/countries';
 import { UNSC_MEMBERS, WHO_MEMBERS, IMF_MEMBERS, WORLD_BANK_MEMBERS, UNEP_MEMBERS } from '@/lib/presets';
-import { Globe, PenLine, ChevronLeft } from 'lucide-react';
+import { Globe, PenLine, ChevronLeft, Megaphone } from 'lucide-react';
 import { FlagImg } from '@/components/FlagImg';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { getCommitteeDisplayName } from '@/lib/presetNames';
@@ -462,11 +462,12 @@ function CreatePageInner() {
   const [committeeName, setCommitteeName] = useState('');
   const [topic, setTopic] = useState('');
   const [delegates, setDelegates] = useState<string[]>([]);
+  const [observers, setObservers] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
   const [pasteText, setPasteText] = useState('');
   const [pasteError, setPasteError] = useState('');
   const [pasteReview, setPasteReview] = useState<{ name: string; isCountry: boolean }[] | null>(null);
-  const [editingIdx, setEditingIdx] = useState<number | null>(null);
+  const [editingName, setEditingName] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState('');
   const [creating, setCreating] = useState(false);
   const [isUNSC, setIsUNSC] = useState(false);
@@ -476,7 +477,7 @@ function CreatePageInner() {
     if (!committeeName.trim() || !topic.trim()) return;
     setCreating(true);
     try {
-      const result = await createCommitteeInDB(committeeName.trim(), topic.trim(), names.length > 0 ? names : ['Chair'], delegates);
+      const result = await createCommitteeInDB(committeeName.trim(), topic.trim(), names.length > 0 ? names : ['Chair'], delegates, Array.from(observers));
       if (result) {
         updateSetting(result.code, 'chairJoinSuffix', result.chairJoinSuffix);
         const creatorName = names.length > 0 ? names[0] : 'Chair';
@@ -770,12 +771,23 @@ function CreatePageInner() {
                     </div>
                   ) : (
                     <div className="overflow-y-auto h-full">
-                      {delegates.map((name, idx) => {
+                      {[...delegates].sort((a, b) => compareCountryNames(a, b, language)).map((name) => {
                         const found = getCountryByName(name);
                         const isCustom = !found;
-                        const isEditing = editingIdx === idx;
+                        const isEditing = editingName === name;
+                        const commitRename = (raw: string) => {
+                          const trimmed = raw.trim();
+                          if (!trimmed) {
+                            setDelegates((p) => p.filter((d) => d !== name));
+                            setObservers((prev) => { const n = new Set(prev); n.delete(name); return n; });
+                          } else if (trimmed !== name && !delegates.some((d) => d !== name && d === trimmed)) {
+                            setDelegates((p) => p.map((d) => d === name ? trimmed : d));
+                            setObservers((prev) => { if (!prev.has(name)) return prev; const n = new Set(prev); n.delete(name); n.add(trimmed); return n; });
+                          }
+                          setEditingName(null);
+                        };
                         return (
-                          <div key={idx} className="flex items-center gap-3 px-4 py-2.5 border-b border-[#DDD4C0]/50 last:border-0 transition-colors group" onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }} onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = ''; }}>
+                          <div key={name} className="flex items-center gap-3 px-4 py-2.5 border-b border-[#DDD4C0]/50 last:border-0 transition-colors group" onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }} onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = ''; }}>
                             {found
                               ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                               : <Globe size={16} strokeWidth={1.5} className="text-[#9A8A78] shrink-0" />
@@ -788,31 +800,30 @@ function CreatePageInner() {
                                 value={editDraft}
                                 onChange={(e) => setEditDraft(e.target.value)}
                                 onKeyDown={(e) => {
-                                  if (e.key === 'Enter') {
-                                    const trimmed = editDraft.trim();
-                                    if (!trimmed) { setDelegates((p) => p.filter((_, i) => i !== idx)); }
-                                    else if (!delegates.some((d, i) => i !== idx && d === trimmed)) { setDelegates((p) => p.map((d, i) => i === idx ? trimmed : d)); }
-                                    setEditingIdx(null);
-                                  } else if (e.key === 'Escape') { setEditingIdx(null); }
+                                  if (e.key === 'Enter') { commitRename(editDraft); }
+                                  else if (e.key === 'Escape') { setEditingName(null); }
                                 }}
-                                onBlur={() => {
-                                  const trimmed = editDraft.trim();
-                                  if (!trimmed) { setDelegates((p) => p.filter((_, i) => i !== idx)); }
-                                  else if (!delegates.some((d, i) => i !== idx && d === trimmed)) { setDelegates((p) => p.map((d, i) => i === idx ? trimmed : d)); }
-                                  setEditingIdx(null);
-                                }}
+                                onBlur={() => commitRename(editDraft)}
                               />
                             ) : (
                               <span className="text-sm flex-1 truncate font-medium" style={{ color: '#1C1410' }}>{getCountryDisplayName(name, language)}</span>
                             )}
+                            {!isEditing && (
+                              <button onClick={() => setObservers((prev) => { const n = new Set(prev); n.has(name) ? n.delete(name) : n.add(name); return n; })}
+                                title={t('create_observer_toggle')} aria-pressed={observers.has(name)}
+                                className="shrink-0 transition-transform active:scale-90"
+                                style={{ color: observers.has(name) ? '#B6871F' : '#9A8A78' }}>
+                                <Megaphone size={15} strokeWidth={1.75} />
+                              </button>
+                            )}
                             {!isEditing && isCustom && (
-                              <button onClick={() => { setEditingIdx(idx); setEditDraft(name); }}
+                              <button onClick={() => { setEditingName(name); setEditDraft(name); }}
                                 className="text-[#9A8A78] hover:text-[#1B3828] transition-colors opacity-0 group-hover:opacity-100 me-1">
                                 <PenLine size={13} strokeWidth={2} />
                               </button>
                             )}
                             {!isEditing && (
-                              <button onClick={() => setDelegates((p) => p.filter((_, i) => i !== idx))}
+                              <button onClick={() => { setDelegates((p) => p.filter((d) => d !== name)); setObservers((prev) => { const n = new Set(prev); n.delete(name); return n; }); }}
                                 className="text-[#9A8A78] group-hover:text-red-500 transition-colors text-sm opacity-0 group-hover:opacity-100">✕</button>
                             )}
                           </div>

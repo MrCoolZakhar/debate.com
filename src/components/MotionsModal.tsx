@@ -259,6 +259,17 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
 
         {type && (
           <>
+            {/* Tour de Table & Consultation — optional topic at the very top */}
+            {(type === 'tour' || type === 'consultation') && (
+              <div>
+                <label className="block text-lg font-semibold text-[#6A5A4A] mb-2">
+                  {t('motions_topic_label')} <span className="text-[#9A8A78] text-sm font-normal">({t('motions_optional')})</span>
+                </label>
+                <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)} placeholder={t('motions_topic_optional_ph')}
+                  className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-2.5 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] transition-colors" />
+              </div>
+            )}
+
             {/* For moderated caucus: Topic first, then Proposed By */}
             {type !== 'moderated' && (
               <div>
@@ -270,7 +281,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
             {/* Tour de Table — speaking time per delegate + order */}
             {type === 'tour' && (
               <>
-                <div className="bg-transparent border border-[#DDD4C0] rounded-2xl p-3 space-y-2">
+                <div className="bg-transparent border border-[#DDD4C0] rounded-2xl p-2.5 space-y-1.5">
                   <p className="text-[#1C1410] font-semibold text-xs">
                     {t('motions_all_speak', { n: presentCountries.length })}
                   </p>
@@ -312,19 +323,12 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
                         {t('motions_room_order')}
                       </button>
                     </div>
-                    <div style={{ height: '32px', display: 'flex', alignItems: 'center' }}>
+                    <div style={{ height: '24px', display: 'flex', alignItems: 'center' }}>
                       {tourOrder === 'custom' && (
                         <p className="text-xs text-[#9A8A78] leading-relaxed">{t('motions_room_order_hint')}</p>
                       )}
                     </div>
                   </div>
-                </div>
-                <div>
-                  <label className="block text-lg font-semibold text-[#6A5A4A] mb-2">
-                    {t('motions_topic_label')} <span className="text-[#9A8A78] text-sm font-normal">({t('motions_optional')})</span>
-                  </label>
-                  <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)} placeholder={t('motions_topic_optional_ph')}
-                    className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3 text-[#1C1410] focus:outline-none focus:border-[#1B3828]" />
                 </div>
               </>
             )}
@@ -355,17 +359,6 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
                     </button>
                   ))}
                 </div>
-              </div>
-            )}
-
-            {/* Consultation of the Whole — optional topic */}
-            {type === 'consultation' && (
-              <div>
-                <label className="block text-lg font-semibold text-[#6A5A4A] mb-2">
-                  {t('motions_topic_label')} <span className="text-[#9A8A78] text-sm font-normal">({t('motions_optional')})</span>
-                </label>
-                <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)} placeholder={t('motions_topic_optional_ph')}
-                  className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3 text-[#1C1410] focus:outline-none focus:border-[#1B3828]" />
               </div>
             )}
 

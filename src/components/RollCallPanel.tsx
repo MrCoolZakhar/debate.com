@@ -316,12 +316,14 @@ function RollCallPanelInner({
   const setListView = (v: 'az' | 'queue') => { setListViewInternal(v); onListViewChange?.(v); };
   const [showFullList, setShowFullList] = useState(false);
   const [localStatuses, setLocalStatuses] = useState<Record<string, DelegateStatus>>({});
+  const [localObservers, setLocalObservers] = useState<Record<string, boolean>>({});
   const listRef = useRef<HTMLDivElement>(null);
   const dragIndexRef = useRef<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
   useEffect(() => {
     setLocalStatuses({});
+    setLocalObservers({});
   }, [committee.id]);
 
   const present = committee.delegates.filter((d) => (localStatuses[d.id] ?? d.status) !== 'absent').length;
@@ -344,7 +346,8 @@ function RollCallPanelInner({
   }
 
   const cycleStatus = (id: string, current: DelegateStatus) => {
-    const isObserver = committee.delegates.find((d) => d.id === id)?.isObserver === true;
+    const delegate = committee.delegates.find((d) => d.id === id);
+    const isObserver = (localObservers[id] ?? delegate?.isObserver) === true;
     // Observers cycle absent → present → absent (no present-voting).
     const next: DelegateStatus = isObserver
       ? (current === 'absent' ? 'present' : 'absent')
@@ -358,14 +361,14 @@ function RollCallPanelInner({
     }
   };
 
-  const toggleObserver = (id: string) => {
-    const delegate = committee.delegates.find((d) => d.id === id);
-    if (!delegate) return;
-    const next = !delegate.isObserver;
-    setDelegateObserverInDB(id, next);
+  const toggleObserver = (id: string, current: boolean) => {
+    const next = !current;
+    setLocalObservers((prev) => ({ ...prev, [id]: next }));   // instant visual
+    setDelegateObserverInDB(id, next);                        // fire-and-forget
     // Becoming an observer downgrades present-voting → present.
     if (next) {
-      const cur = localStatuses[id] ?? delegate.status;
+      const delegate = committee.delegates.find((d) => d.id === id);
+      const cur = localStatuses[id] ?? delegate?.status;
       if (cur === 'present-voting') {
         setLocalStatuses((prev) => ({ ...prev, [id]: 'present' }));
         onStatusChange?.(id, 'present');
@@ -489,7 +492,7 @@ function RollCallPanelInner({
           const effectiveStatus = localStatuses[d.id] ?? d.status;
           const isOnList = onListIds?.has(d.id) ?? false;
           const isAbsent = effectiveStatus === 'absent';
-          const isObserver = d.isObserver === true;
+          const isObserver = (localObservers[d.id] ?? d.isObserver) === true;
           const queuePos = queuePositionMap.get(d.id) ?? null;
           const matchesSearch = !search || matchesCountryQuery(d.country, search, language);
           const isDraggable = listView === 'queue' && !isRollCallPhase && queuePositionMap.has(d.id);
@@ -594,9 +597,10 @@ function RollCallPanelInner({
                 {/* Observer placard toggle — available during roll call and mid-session */}
                 {(isRollCallPhase || showStatusSliders) && !(isReadOnly || isViewOnly) && (
                   <button
-                    onClick={(e) => { e.stopPropagation(); toggleObserver(d.id); }}
+                    onClick={(e) => { e.stopPropagation(); toggleObserver(d.id, isObserver); }}
                     title={isObserver ? t('rollcall_observer_remove') : t('rollcall_observer_make')}
-                    className="shrink-0 p-1 rounded-md transition-colors"
+                    aria-pressed={isObserver}
+                    className="shrink-0 p-1 rounded-md transition-transform active:scale-90"
                     style={{ color: isObserver ? 'rgba(238,217,138,0.9)' : 'rgba(237,231,216,0.4)' }}
                   >
                     <Megaphone size={15} />
