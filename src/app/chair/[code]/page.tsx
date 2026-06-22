@@ -20,6 +20,7 @@ import TutorialOverlay from '@/components/TutorialOverlay';
 import {
   getCommitteeByCode,
   subscribeToCommittee,
+  getCurrentSpeakerRow,
   setPhase as setPhaseInDB,
   setDelegateStatus as setDelegateStatusInDB,
   addToSpeakersList as addToSpeakersListInDB,
@@ -1145,6 +1146,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const timerRunningRef = useRef(false);
+  const isViewOnlyRef = useRef(false);
   const committeeIdRef = useRef('');
   const committeePhaseRef = useRef('');
   const speakerTimeLimitRef = useRef(speakerTimeLimit);
@@ -1152,6 +1154,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   // so rapid clicks read the post-click status, not the pre-re-render (stale) status.
   const delegateStatusRef = useRef<Map<string, DelegateStatus>>(new Map());
   timerRunningRef.current = timerRunning;
+  isViewOnlyRef.current = isViewOnly;
   speakerTimeLimitRef.current = speakerTimeLimit;
   committeePhaseRef.current = committee?.phase ?? '';
 
@@ -1219,8 +1222,32 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       setLoading(false);
       if (found) {
         unsubscribe = subscribeToCommittee(found.id, async (table) => {
-          // Timer writes current_speaker every second — chair owns this entirely, never re-fetch.
-          if (table === 'current_speaker') return;
+          // The head chair owns current_speaker (writes it on start/pause/next) — it must
+          // ignore its own echoes. But co-chairs (view-only) don't own it, so they DO need
+          // these events to show the current speaker promptly. Patch with a lightweight
+          // single-row fetch instead of the full committee refetch.
+          if (table === 'current_speaker') {
+            if (!isViewOnlyRef.current) return;
+            const cs = await getCurrentSpeakerRow(found.id);
+            if (!cs) return;
+            setCommittee((prev) => prev ? {
+              ...prev,
+              currentSpeaker: cs.currentSpeaker,
+              speakerStartedAt: cs.speakerStartedAt,
+              // Drop the new speaker from the local GSL list to avoid a transient duplicate
+              // before the speakers_list delete event arrives.
+              speakersList: cs.currentSpeaker
+                ? prev.speakersList.filter((s) => s.delegateId !== cs.currentSpeaker!.delegateId)
+                : prev.speakersList,
+            } : prev);
+            if (cs.speakerStartedAt) {
+              const elapsed = Math.round((Date.now() - new Date(cs.speakerStartedAt).getTime()) / 1000);
+              setSpeakerTimeRemaining(Math.max(0, speakerTimeLimitRef.current - elapsed));
+            } else {
+              setSpeakerTimeRemaining(cs.speakerTimeRemaining);
+            }
+            return;
+          }
 
           const withinDebounce = Date.now() - localUpdateTime.current < 3000;
 

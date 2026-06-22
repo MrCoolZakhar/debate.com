@@ -401,6 +401,25 @@ export async function clearCurrentSpeaker(committeeId: string): Promise<void> {
     .eq('committee_id', committeeId);
 }
 
+// Lightweight single-row fetch of just the current speaker — used by co-chair views
+// to react to current_speaker realtime events without a full committee refetch.
+export async function getCurrentSpeakerRow(committeeId: string): Promise<{
+  currentSpeaker: SpeakerEntry | null; speakerTimeRemaining: number; speakerStartedAt: string | null;
+} | null> {
+  const { data, error } = await supabase.from('current_speaker')
+    .select('delegate_id, country, time_remaining, started_at')
+    .eq('committee_id', committeeId).maybeSingle();
+  if (error) { console.error('Error fetching current speaker:', error); return null; }
+  const row = data as DbRow | null;
+  return {
+    currentSpeaker: row?.country
+      ? { delegateId: row.delegate_id as string, country: row.country as string }
+      : null,
+    speakerTimeRemaining: (row?.time_remaining as number) ?? 0,
+    speakerStartedAt: (row?.started_at as string | null) ?? null,
+  };
+}
+
 // ============================================================
 // MOTIONS
 // ============================================================
