@@ -13,7 +13,7 @@ import { getFlagUrl, getCountryByName, getCountryDisplayName, UN_COUNTRIES, matc
 import { getCommitteeDisplayName } from '@/lib/presetNames';
 import { Emoji } from '@/components/Emoji';
 import { SettingsPanel } from '@/components/SettingsPanel';
-import { useSettingsStore } from '@/lib/settingsStore';
+import { useSettingsStore, type CommitteeSettings } from '@/lib/settingsStore';
 import { supabase } from '@/lib/supabase';
 import ChatPanel from '@/components/ChatPanel';
 import TutorialOverlay from '@/components/TutorialOverlay';
@@ -1097,7 +1097,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const { language } = useLanguage();
   const { code } = use(params);
   const router = useRouter();
-  const { updateSetting, getSettings } = useSettingsStore();
+  const { updateSetting, getSettings, hydrateSettings } = useSettingsStore();
   const searchParams = useSearchParams();
   const myChairName = searchParams.get('chairName') ?? '';
   const [committee, setCommittee] = useState<Committee | null>(null);
@@ -1196,6 +1196,12 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           setSpeakerTimeRemaining(found.speakerTimeRemaining);
         }
         committeeIdRef.current = found.id;
+        if (found.dbSettings) {
+          // DB is the source of truth for committee settings (thresholds, veto, motions, etc.).
+          const { chairJoinSuffix: _cjs, separateChairCode: _scc, ...rest } = found.dbSettings as Record<string, unknown>;
+          void _cjs; void _scc;
+          hydrateSettings(found.code, rest as Partial<CommitteeSettings>);
+        }
         if (found.dbChairJoinSuffix) {
           updateSetting(found.code, 'chairJoinSuffix', found.dbChairJoinSuffix);
         }
@@ -1828,12 +1834,14 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   };
 
   const handleResumeSession = () => {
+    try { localStorage.setItem('gavelling_tutorial_seen_' + committee.id, '1'); } catch {}
     updateLocal(setCommittee, (c) => ({ ...c, phase: 'speakers-list' }));
     setPhaseInDB(committee.id, 'speakers-list');
   };
 
   const handleResumeClick = async () => {
     if (!committee) return;
+    try { localStorage.setItem('gavelling_tutorial_seen_' + committee.id, '1'); } catch {}
     const claimedName = myChairName || committee.chairNames[0] || 'Chair';
     const claimed = await claimResumeSessionInDB(committee.id, claimedName);
     if (!claimed) return;
@@ -2137,7 +2145,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
             const anotherChairResuming = committee.resumingChair && committee.resumingChair !== (myChairName || committee.chairNames[0]);
             return (
               <>
-                <h1 className="text-6xl font-black mb-4 tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{t('session_adjourned')}</h1>
+                <h1 className="text-6xl font-black mb-4 tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{t('session_suspended_title')}</h1>
                 <p className="text-xl mb-12" style={{ color: '#6A5A4A' }}>{t('session_suspended_desc')}</p>
                 {anotherChairResuming ? (
                   <>
@@ -2161,9 +2169,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           })()}
         </div>
       ) : (
-      <div className="flex-1 flex overflow-hidden min-h-0">
+      <div className="relative flex-1 flex overflow-hidden min-h-0">
         {showChat && !sessionEnded && (
-          <div className="flex-1 flex overflow-hidden min-h-0">
+          <div className="absolute inset-0 z-40 flex overflow-hidden min-h-0" style={{ backgroundColor: '#EDE7D8' }}>
             <ChatPanel
               committee={committee}
               senderName={myChairName || 'Chair'}
@@ -2192,7 +2200,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
             </div>
           </div>
         )}
-        {!showChat && committee.phase !== 'pre-session' && (
+        {committee.phase !== 'pre-session' && (
           <>
             {showRollCall && (
               <aside data-tutorial="speakers-sidebar" className="w-[22rem] flex flex-col overflow-hidden shrink-0" style={{ backgroundColor: '#1B3828', borderRight: '1px solid #3D7A52' }}>

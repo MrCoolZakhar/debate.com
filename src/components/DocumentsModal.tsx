@@ -277,7 +277,7 @@ function StageTimer({
         </div>
       )}
       {showDocument && (
-        <div className="flex flex-col p-4 overflow-hidden" style={{ flex: 1, minWidth: 0 }}>
+        <div className="flex flex-col p-4 overflow-hidden min-h-0" style={{ flex: 1, minWidth: 0 }}>
           {doc.fileUrl ? (
             <iframe
               src={doc.fileUrl}
@@ -286,7 +286,7 @@ function StageTimer({
               style={{ minHeight: 0 }}
             />
           ) : doc.content ? (
-            <div className="flex-1 overflow-y-auto bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl p-6">
+            <div className="flex-1 min-h-0 overflow-y-auto bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl p-6">
               <div className="flex items-center gap-3 mb-4">
                 <span className="text-xs font-mono font-bold text-[#1B3828]">{doc.docCode}</span>
                 <span className="text-sm font-bold text-[#1C1410]">{doc.title}</span>
@@ -983,7 +983,7 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
           </div>
         )}
 
-        <div className="overflow-y-auto flex-1 pt-4">
+        <div className="overflow-y-auto flex-1 min-h-0 pt-4">
           {showForm ? (
             <SubmitForm committee={committee} type={tab} onDone={() => setShowForm(false)} onDocumentAdded={handleDocumentAdded} />
           ) : (

@@ -11,7 +11,7 @@ import { getCountryByName, getFlagUrl, getCountryDisplayName, compareCountryName
 import { Emoji } from '@/components/Emoji';
 import { MajorityPie } from '@/components/RollCallPanel';
 import { getCommitteeByCode, setPhase as setPhaseInDB, setDelegateStatus as setDelegateStatusInDB, updateDocumentStatus as updateDocumentStatusInDB } from '@/lib/committeeService';
-import { useSettingsStore } from '@/lib/settingsStore';
+import { useSettingsStore, type CommitteeSettings } from '@/lib/settingsStore';
 import { SettingsPanel } from '@/components/SettingsPanel';
 
 function abbreviateCommitteeName(name: string): string {
@@ -224,6 +224,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   const t = useT();
   const { language } = useLanguage();
   const getSettings = useSettingsStore((s) => s.getSettings);
+  const hydrateSettings = useSettingsStore((s) => s.hydrateSettings);
   const [committee, setCommittee] = useState<Committee | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
@@ -251,6 +252,12 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       const found = await getCommitteeByCode(code);
       setCommittee(found ?? null);
       if (found) {
+        if (found.dbSettings) {
+          // DB is the source of truth — apply the master chair's saved thresholds/veto/etc.
+          const { chairJoinSuffix: _cjs, separateChairCode: _scc, ...rest } = found.dbSettings as Record<string, unknown>;
+          void _cjs; void _scc;
+          hydrateSettings(code, rest as Partial<CommitteeSettings>);
+        }
         const statuses: Record<string, DelegateStatus> = {};
         found.delegates.forEach((d) => { statuses[d.id] = d.status; });
         setRollCallStatuses(statuses);

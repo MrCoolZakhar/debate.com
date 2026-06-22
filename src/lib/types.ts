@@ -151,4 +151,5 @@ export interface Committee {
   resumingChair?: string | null;
   dbChairJoinSuffix?: string | null;
   dbSeparateChairCode?: boolean;
+  dbSettings?: Record<string, unknown> | null;
 }

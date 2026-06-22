@@ -74,6 +74,7 @@ function rowToCommittee(
     resumingChair: (row.resuming_chair as string | null) ?? null,
     dbChairJoinSuffix: ((row.settings as Record<string, unknown>)?.chairJoinSuffix as string) ?? null,
     dbSeparateChairCode: ((row.settings as Record<string, unknown>)?.separateChairCode as boolean) ?? false,
+    dbSettings: (row.settings as Record<string, unknown>) ?? null,
   };
 }
 
@@ -173,6 +174,12 @@ export async function getCommitteeByCode(code: string): Promise<Committee | null
   const speakerTimeRemaining = ((speakerRow as DbRow | null)?.time_remaining as number) ?? 0;
   const speakerStartedAt = ((speakerRow as DbRow | null)?.started_at as string | null) ?? null;
 
+  // The current speaker must never also appear as a GSL queue entry (can happen after
+  // a suspend/resume cycle). GSL list only — caucusQueue is left untouched.
+  const gslDeduped = currentSpeaker
+    ? speakersList.filter((s) => s.delegateId !== currentSpeaker.delegateId)
+    : speakersList;
+
   const pendingMotions: PendingMotion[] = (motionRows ?? []).map((m: DbRow) => ({
     id: m.id as string, type: m.type as PendingMotionType, proposedBy: m.proposed_by as string,
     totalTime: m.total_time as number, speakingTime: m.speaking_time as number,
@@ -197,7 +204,22 @@ export async function getCommitteeByCode(code: string): Promise<Committee | null
     recipient: m.recipient as string | undefined,
   }));
 
-  return rowToCommittee(committeeRow, delegates, speakersList, caucusQueue, currentSpeaker, speakerTimeRemaining, pendingMotions, documents, messages, speakerStartedAt);
+  return rowToCommittee(committeeRow, delegates, gslDeduped, caucusQueue, currentSpeaker, speakerTimeRemaining, pendingMotions, documents, messages, speakerStartedAt);
+}
+
+// ============================================================
+// COMMITTEE SETTINGS (persisted to committees.settings jsonb)
+// ============================================================
+
+export async function saveCommitteeSettings(committeeId: string, settings: object): Promise<void> {
+  // Merge into the existing settings jsonb so chairJoinSuffix/separateChairCode are preserved.
+  const { data: row, error: readErr } = await supabase
+    .from('committees').select('settings').eq('id', committeeId).single();
+  if (readErr) { console.error('Error reading committee settings:', readErr); return; }
+  const current = (row?.settings as Record<string, unknown>) ?? {};
+  const merged = { ...current, ...settings };
+  const { error } = await supabase.from('committees').update({ settings: merged }).eq('id', committeeId);
+  if (error) console.error('Error saving committee settings:', error);
 }
 
 // ============================================================

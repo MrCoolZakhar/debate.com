@@ -76,6 +76,7 @@ interface SettingsStore {
   getSettings: (code: string) => CommitteeSettings;
   updateSetting: <K extends keyof CommitteeSettings>(code: string, key: K, value: CommitteeSettings[K]) => void;
   initSettings: (code: string, partial?: Partial<CommitteeSettings>) => void;
+  hydrateSettings: (code: string, partial: Partial<CommitteeSettings>) => void;
   migrateSettings: (oldCode: string, newCode: string) => void;
 }
 
@@ -96,6 +97,14 @@ export const useSettingsStore = create<SettingsStore>()(
           settings: s.settings[code]
             ? s.settings
             : { ...s.settings, [code]: { ...DEFAULT_SETTINGS, ...partial } },
+        })),
+      // DB is the source of truth on load: merge stored DB values over the current entry.
+      hydrateSettings: (code, partial) =>
+        set((s) => ({
+          settings: {
+            ...s.settings,
+            [code]: { ...DEFAULT_SETTINGS, ...(s.settings[code] ?? {}), ...partial },
+          },
         })),
       migrateSettings: (oldCode, newCode) =>
         set((s) => {

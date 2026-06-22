@@ -5,7 +5,7 @@ import Portal from '@/components/Portal';
 import { Globe } from 'lucide-react';
 import { useSettingsStore, CommitteeSettings, MotionNames } from '@/lib/settingsStore';
 import { Committee } from '@/lib/types';
-import { updateCommitteeChairSuffixInDB } from '@/lib/committeeService';
+import { updateCommitteeChairSuffixInDB, saveCommitteeSettings } from '@/lib/committeeService';
 import { getFlagEmoji, getCountryByName, getCountryDisplayName } from '@/lib/countries';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 
@@ -338,8 +338,11 @@ export function SettingsPanel({ committee, onClose }: {
   const [tab, setTab] = useState<SettingsTab>('access');
   const { getSettings, updateSetting } = useSettingsStore();
   const s = getSettings(committee.code);
-  const upd = <K extends keyof CommitteeSettings>(key: K, value: CommitteeSettings[K]) =>
+  const upd = <K extends keyof CommitteeSettings>(key: K, value: CommitteeSettings[K]) => {
     updateSetting(committee.code, key, value);
+    // Persist the full settings object to the DB so other devices/instances read the same values.
+    saveCommitteeSettings(committee.id, { ...getSettings(committee.code), [key]: value });
+  };
 
   // Points tab — expanded delegate
   const [expandedDelegate, setExpandedDelegate] = useState<string | null>(null);
