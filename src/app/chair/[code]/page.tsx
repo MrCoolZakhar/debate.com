@@ -1230,16 +1230,30 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
             if (!isViewOnlyRef.current) return;
             const cs = await getCurrentSpeakerRow(found.id);
             if (!cs) return;
-            setCommittee((prev) => prev ? {
-              ...prev,
-              currentSpeaker: cs.currentSpeaker,
-              speakerStartedAt: cs.speakerStartedAt,
-              // Drop the new speaker from the local GSL list to avoid a transient duplicate
-              // before the speakers_list delete event arrives.
-              speakersList: cs.currentSpeaker
-                ? prev.speakersList.filter((s) => s.delegateId !== cs.currentSpeaker!.delegateId)
-                : prev.speakersList,
-            } : prev);
+            setCommittee((prev) => {
+              if (!prev) return prev;
+              const patched: Committee = {
+                ...prev,
+                currentSpeaker: cs.currentSpeaker,
+                speakerStartedAt: cs.speakerStartedAt,
+                // Drop the new speaker from the local GSL list to avoid a transient duplicate
+                // before the speakers_list delete event arrives.
+                speakersList: cs.currentSpeaker
+                  ? prev.speakersList.filter((s) => s.delegateId !== cs.currentSpeaker!.delegateId)
+                  : prev.speakersList,
+              };
+              // In a moderated caucus (incl. Tour de Table) the visible speaker comes from
+              // caucus.currentSpeaker (a country string), advanced via the same nextSpeaker
+              // write. Patch it here too so the caucus view updates on this lightweight event
+              // instead of waiting for the heavier committees refetch.
+              if (prev.caucus && prev.caucus.type === 'moderated') {
+                patched.caucus = { ...prev.caucus, currentSpeaker: cs.currentSpeaker?.country ?? null };
+                patched.caucusQueue = cs.currentSpeaker
+                  ? prev.caucusQueue.filter((s) => s.delegateId !== cs.currentSpeaker!.delegateId)
+                  : prev.caucusQueue;
+              }
+              return patched;
+            });
             if (cs.speakerStartedAt) {
               const elapsed = Math.round((Date.now() - new Date(cs.speakerStartedAt).getTime()) / 1000);
               setSpeakerTimeRemaining(Math.max(0, speakerTimeLimitRef.current - elapsed));
