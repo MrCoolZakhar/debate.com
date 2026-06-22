@@ -184,6 +184,7 @@ export async function getCommitteeByCode(code: string): Promise<Committee | null
     id: m.id as string, type: m.type as PendingMotionType, proposedBy: m.proposed_by as string,
     totalTime: m.total_time as number, speakingTime: m.speaking_time as number,
     topic: m.topic as string, speakerList: [], proposerPosition: null,
+    tourOrder: (m.tour_order as 'asc' | 'desc' | 'custom' | null) ?? undefined,
     disruptiveness: m.disruptiveness as number,
   }));
 
@@ -411,6 +412,7 @@ export async function addPendingMotion(
   const { data, error } = await supabase.from('motions').insert({
     committee_id: committeeId, type: motion.type, proposed_by: motion.proposedBy,
     total_time: motion.totalTime, speaking_time: motion.speakingTime, topic: motion.topic,
+    tour_order: motion.tourOrder ?? null,
     status: 'pending', disruptiveness,
   }).select('id').single();
   if (error) { console.error('Error adding motion:', error); return null; }

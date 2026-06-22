@@ -926,11 +926,12 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
     } else if (motion.type === 'tour') {
       // Tour de Table — all present delegates ordered by tourOrder
       // GSL is NEVER touched — tour uses caucusQueue exclusively
+      const tourOrder = motion.tourOrder ?? 'asc';   // explicit default — never silently desc
       const alphabetical = committee.delegates
         .filter((d) => d.status !== 'absent')
         .sort((a, b) => compareCountryNames(a.country, b.country, language));
 
-      if (motion.tourOrder === 'custom') {
+      if (tourOrder === 'custom') {
         // Room Order — empty queue, chair calls speakers manually
         const n = alphabetical.length;
         const totalTourTime = n * motion.speakingTime;
@@ -959,7 +960,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
 
       const sorted = committee.delegates
         .filter((d) => d.status !== 'absent')
-        .sort((a, b) => motion.tourOrder === 'asc'
+        .sort((a, b) => tourOrder === 'asc'
           ? compareCountryNames(a.country, b.country, language)
           : compareCountryNames(b.country, a.country, language));
       const proposerIdx = sorted.findIndex((d) => d.country === motion.proposedBy);
@@ -970,7 +971,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
       const totalTourTime = presentDelegates.length * motion.speakingTime;
       const caucus = {
         active: true, type: 'moderated' as const, motionLabel: typeMeta['tour'].label,
-        purpose: `Tour de Table (${motion.tourOrder === 'desc' ? 'Z→A' : 'A→Z'})`,
+        purpose: `Tour de Table (${tourOrder === 'desc' ? 'Z→A' : 'A→Z'})`,
         proposedBy: motion.proposedBy, totalTime: totalTourTime, remainingTime: totalTourTime,
         speakingTime: motion.speakingTime, speakerTimeRemaining: motion.speakingTime,
         currentSpeaker: null, proposerPosition: null, spokenCountries: [],
