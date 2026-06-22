@@ -808,6 +808,9 @@ function CreatePageInner() {
                             ) : (
                               <span className="text-sm flex-1 truncate font-medium" style={{ color: '#1C1410' }}>{getCountryDisplayName(name, language)}</span>
                             )}
+                            {!isEditing && observers.has(name) && (
+                              <span className="text-[9px] shrink-0 font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-md" style={{ backgroundColor: 'rgba(182,135,31,0.15)', color: '#B6871F', border: '1px solid rgba(182,135,31,0.35)' }}>{t('rollcall_observer')}</span>
+                            )}
                             {!isEditing && (
                               <button onClick={() => setObservers((prev) => { const n = new Set(prev); n.has(name) ? n.delete(name) : n.add(name); return n; })}
                                 title={t('create_observer_toggle')} aria-pressed={observers.has(name)}
