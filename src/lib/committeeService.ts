@@ -667,32 +667,87 @@ export async function logSpeakingTime(
 // FEEDBACK
 // ============================================================
 
+export type FeedbackLevel = 'speech' | 'session' | 'conference';
+
+export interface FeedbackEntry {
+  id: string;
+  country: string;
+  chairName: string;
+  content: string;           // chair's PRIVATE note — never sent to delegates
+  level: FeedbackLevel;
+  factorScores: Record<string, number>;
+  speechContext: string | null;
+  speechSeconds: number | null;
+  createdAt: string;
+}
+
 export async function addFeedback(
   committeeId: string, country: string, chairName: string, content: string,
-): Promise<void> {
-  const { error } = await supabase.from('feedback').insert({
+  opts?: { level?: FeedbackLevel; factorScores?: Record<string, number>; speechContext?: string | null; speechSeconds?: number | null },
+): Promise<string | null> {
+  const { data, error } = await supabase.from('feedback').insert({
     committee_id: committeeId, country, chair_name: chairName, content,
-  });
-  if (error) console.error('Error adding feedback:', error);
+    level: opts?.level ?? 'speech',
+    factor_scores: opts?.factorScores ?? {},
+    speech_context: opts?.speechContext ?? null,
+    speech_seconds: opts?.speechSeconds ?? null,
+  }).select('id').single();
+  if (error) { console.error('Error adding feedback:', error); return null; }
+  return data.id as string;
+}
+
+export async function updateFeedback(
+  id: string, patch: { content?: string; factorScores?: Record<string, number> },
+): Promise<void> {
+  const update: Record<string, unknown> = {};
+  if (patch.content !== undefined) update.content = patch.content;
+  if (patch.factorScores !== undefined) update.factor_scores = patch.factorScores;
+  const { error } = await supabase.from('feedback').update(update).eq('id', id);
+  if (error) console.error('Error updating feedback:', error);
+}
+
+export async function deleteFeedback(id: string): Promise<void> {
+  const { error } = await supabase.from('feedback').delete().eq('id', id);
+  if (error) console.error('Error deleting feedback:', error);
+}
+
+function rowToFeedback(row: DbRow): FeedbackEntry {
+  return {
+    id: row.id as string,
+    country: row.country as string,
+    chairName: row.chair_name as string,
+    content: (row.content as string) ?? '',
+    level: ((row.level as FeedbackLevel) ?? 'speech'),
+    factorScores: (row.factor_scores as Record<string, number>) ?? {},
+    speechContext: (row.speech_context as string | null) ?? null,
+    speechSeconds: (row.speech_seconds as number | null) ?? null,
+    createdAt: row.created_at as string,
+  };
 }
 
 export async function getFeedbackForCommittee(
   committeeId: string,
-): Promise<Record<string, { chairName: string; content: string; createdAt: string }[]>> {
+): Promise<FeedbackEntry[]> {
   const { data, error } = await supabase.from('feedback').select('*')
     .eq('committee_id', committeeId).order('created_at', { ascending: true });
-  if (error || !data) return {};
-  const grouped: Record<string, { chairName: string; content: string; createdAt: string }[]> = {};
-  for (const row of data) {
-    const country = row.country as string;
-    if (!grouped[country]) grouped[country] = [];
-    grouped[country].push({
-      chairName: row.chair_name as string,
-      content: row.content as string,
-      createdAt: row.created_at as string,
-    });
-  }
-  return grouped;
+  if (error || !data) return [];
+  return (data as DbRow[]).map(rowToFeedback);
+}
+
+// Delegate-facing read — NEVER selects content (the chair's private note).
+export async function getDelegateFeedback(
+  committeeId: string, country: string,
+): Promise<{ level: FeedbackLevel; factorScores: Record<string, number>; createdAt: string }[]> {
+  const { data, error } = await supabase.from('feedback')
+    .select('level, factor_scores, created_at')
+    .eq('committee_id', committeeId).eq('country', country)
+    .order('created_at', { ascending: true });
+  if (error || !data) return [];
+  return (data as DbRow[]).map((row) => ({
+    level: ((row.level as FeedbackLevel) ?? 'speech'),
+    factorScores: (row.factor_scores as Record<string, number>) ?? {},
+    createdAt: row.created_at as string,
+  }));
 }
 
 // ============================================================
