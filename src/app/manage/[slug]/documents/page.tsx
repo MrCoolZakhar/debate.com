@@ -308,7 +308,7 @@ export default function DocumentsPage() {
     setCommittees(rows);
     setLoading(false);
     return rows;
-  }, [conference]);
+  }, [conference, session?.access_token]);
 
   useEffect(() => {
     loadCommittees().then(rows => {

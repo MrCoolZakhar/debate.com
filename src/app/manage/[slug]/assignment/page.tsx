@@ -329,8 +329,8 @@ export default function AssignmentPage() {
 
   const loadData = useCallback(async () => {
     if (!conference) return;
-    setLoading(true);
     if (!session) return;
+    setLoading(true);
     const supabase = getAuthedClient(session.access_token);
 
     const [appRes, commRes] = await Promise.all([
@@ -368,7 +368,7 @@ export default function AssignmentPage() {
       setSelectedCommitteeId(comms[0].id);
     }
     setLoading(false);
-  }, [conference, selectedCommitteeId]);
+  }, [conference, selectedCommitteeId, session?.access_token]);
 
   useEffect(() => { loadData(); }, [loadData]);
 

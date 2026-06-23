@@ -117,8 +117,8 @@ export default function ApplicationsPage() {
 
   const loadApplications = useCallback(async () => {
     if (!conference) return;
-    setLoading(true);
     if (!session) return;
+    setLoading(true);
     const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase
       .from('applications')
@@ -138,7 +138,7 @@ export default function ApplicationsPage() {
 
     setApplications((data ?? []) as unknown as Application[]);
     setLoading(false);
-  }, [conference]);
+  }, [conference, session?.access_token]);
 
   useEffect(() => { loadApplications(); }, [loadApplications]);
 

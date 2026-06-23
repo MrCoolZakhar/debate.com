@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState } from 'react';
 import type { User, Session } from '@supabase/supabase-js';
-import { createAuthClient } from '@/lib/supabase-auth';
+import { supabaseAuthClient } from '@/lib/supabase-auth';
 
 interface Profile {
   id: string;
@@ -28,8 +28,6 @@ const AuthContext = createContext<AuthContextType>({
   loading: false,
   signOut: async () => {},
 });
-
-const supabaseAuthClient = createAuthClient();
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);

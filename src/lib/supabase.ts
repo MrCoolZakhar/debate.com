@@ -7,6 +7,13 @@ function getClient(): SupabaseClient {
     _client = createClient(
       'https://luruhkwrgisytejswlas.supabase.co',
       'sb_publishable_k7NdduzaXK358z8ew18ZKA_vBSieDlV',
+      {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false,
+          detectSessionInUrl: false,
+        },
+      },
     );
   }
   return _client;
