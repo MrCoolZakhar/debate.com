@@ -4,7 +4,7 @@ import type { Committee } from './types';
 import { DEFAULT_SCORING, type ScoringConfig } from './settingsStore';
 
 // Parsed __log__ event (superset of the legacy speaking-log entry).
-interface LedgerEvent {
+export interface LedgerEvent {
   country: string;
   type?: string;            // missing type === 'speech' (back-compat)
   sourceId?: string;
@@ -48,6 +48,10 @@ function val(cfg: ScoringConfig, id: string): number | null {
 }
 function name(cfg: ScoringConfig, id: string): string {
   return srcOf(cfg, id)?.name ?? id;
+}
+
+export function parseLedgerEvents(committee: Committee): LedgerEvent[] {
+  return parseLogEvents(committee);
 }
 
 function parseLogEvents(committee: Committee): LedgerEvent[] {

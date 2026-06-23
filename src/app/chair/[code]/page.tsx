@@ -13,6 +13,7 @@ import { getFlagUrl, getCountryByName, getCountryDisplayName, UN_COUNTRIES, matc
 import { getCommitteeDisplayName } from '@/lib/presetNames';
 import { Emoji } from '@/components/Emoji';
 import { SettingsPanel } from '@/components/SettingsPanel';
+import ScoreboardPanel from '@/components/ScoreboardPanel';
 import { useSettingsStore, type CommitteeSettings } from '@/lib/settingsStore';
 import { supabase } from '@/lib/supabase';
 import ChatPanel from '@/components/ChatPanel';
@@ -1120,6 +1121,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const [speakerTimeLimit, setSpeakerTimeLimitLocal] = useState(90);
   const [speakerTimeLimitInput, setSpeakerTimeLimitInput] = useState<string>('90');
   const [showSettings, setShowSettings] = useState(false);
+  const [showScoreboard, setShowScoreboard] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [chatReadCounts, setChatReadCounts] = useState<Record<string, number>>({});
   // Only one of these can be open at a time
@@ -2055,6 +2057,16 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           className="text-xs font-mono bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#1C1410] px-2.5 py-1 rounded-lg transition-colors shrink-0">
           {copied ? '✓' : committee.code}
         </button>
+        <button onClick={() => setShowScoreboard(true)} title="Scoreboard"
+          className="text-[#9A8A78] hover:text-[#1C1410] transition-colors shrink-0"
+          style={{ lineHeight: 0 }}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/>
+            <path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/>
+            <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/>
+            <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>
+          </svg>
+        </button>
         <button data-tutorial="tab-settings" onClick={() => setShowSettings(true)}
           className="text-[#9A8A78] hover:text-[#1C1410] transition-colors shrink-0"
           style={{ lineHeight: 0 }}>
@@ -2627,6 +2639,12 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         <SettingsPanel
           committee={committee}
           onClose={() => setShowSettings(false)}
+        />
+      )}
+      {showScoreboard && (
+        <ScoreboardPanel
+          committee={committee}
+          onClose={() => setShowScoreboard(false)}
         />
       )}
       {/* EXTRA TIME OVERLAY — fixed position, same anchor as RTR overlay */}
