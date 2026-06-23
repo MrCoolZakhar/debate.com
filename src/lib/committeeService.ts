@@ -799,8 +799,12 @@ export async function updateSpeakerTimeLimit(committeeId: string, limitSeconds: 
 // ============================================================
 
 export function subscribeToCommittee(committeeId: string, onChange: (table: string) => void): () => void {
+  // Stable channel name per committee — a re-subscribe must REPLACE the prior connection,
+  // not stack a new one. A unique suffix (e.g. Date.now()) caused every effect re-run /
+  // StrictMode double-invoke / reconnect to open a brand-new websocket under a fresh name,
+  // accumulating connections (the concurrent-peak spike). One multiplexed channel per tab.
   const channel = supabase
-    .channel(`committee-${committeeId}-${Date.now()}`)
+    .channel(`committee-${committeeId}`)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'committees', filter: `id=eq.${committeeId}` }, () => onChange('committees'))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'delegates', filter: `committee_id=eq.${committeeId}` }, () => onChange('delegates'))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'speakers_list', filter: `committee_id=eq.${committeeId}` }, () => onChange('speakers_list'))

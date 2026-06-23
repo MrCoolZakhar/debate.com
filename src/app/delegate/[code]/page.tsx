@@ -11,6 +11,7 @@ import ChatPanel from '@/components/ChatPanel';
 import { useSettingsStore, DEFAULT_MOTION_NAMES } from '@/lib/settingsStore';
 import { getFlagUrl, getCountryByName, getCountryDisplayName, matchesCountryQuery } from '@/lib/countries';
 import { getCommitteeDisplayName } from '@/lib/presetNames';
+import { supabase } from '@/lib/supabase';
 import { Emoji } from '@/components/Emoji';
 import { FlagImg } from '@/components/FlagImg';
 import {
@@ -410,10 +411,29 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
   const [fileUrl, setFileUrl] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [sending, setSending] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Upload the PDF to Supabase Storage and store only the public URL — NOT the file bytes.
+  // Previously this used FileReader.readAsDataURL, base64-inlining the whole PDF into the
+  // documents row. That row is pulled by getCommitteeByCode on every realtime refetch, so a
+  // single attachment fanned out (clients × events) MBs of egress. Mirrors DocumentsModal.
+  const uploadFile = async (file: File) => {
+    setFileName(file.name);
+    setUploading(true);
+    try {
+      const path = committee.id + '/' + Date.now() + '-' + file.name;
+      const { error } = await supabase.storage.from('session-documents').upload(path, file, { upsert: true });
+      if (error) { console.error('Storage upload error:', error); setFileName(null); return; }
+      const { data } = supabase.storage.from('session-documents').getPublicUrl(path);
+      setFileUrl(data.publicUrl);
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const handleSubmit = async () => {
-    if (!title.trim() || sending) return;
+    if (!title.trim() || sending || uploading) return;
     setSending(true);
     await addDocumentInDB(committee.id, {
       type: docType,
@@ -475,25 +495,23 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
         <div>
           <label className="text-xs font-bold mb-1.5 block" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>{t('delegate_doc_attachment_label')} <span className="font-normal" style={{ color: '#9A8A78' }}>{t('delegate_doc_attachment_optional')}</span></label>
           <div className="flex items-center gap-2">
-            <button onClick={() => fileInputRef.current?.click()}
-              className="text-xs bg-[#FAF8F3] border border-[#DDD4C0] hover:border-[#1B3828] text-[#6A5A4A] px-3 py-2 rounded-lg transition-colors">
-              {fileName ? `📎 ${fileName}` : t('delegate_doc_attach_btn')}
+            <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
+              className="text-xs bg-[#FAF8F3] border border-[#DDD4C0] hover:border-[#1B3828] text-[#6A5A4A] px-3 py-2 rounded-lg transition-colors disabled:opacity-60">
+              {uploading ? '⏳ …' : fileName ? `📎 ${fileName}` : t('delegate_doc_attach_btn')}
             </button>
             {fileName && <button onClick={() => { setFileName(null); setFileUrl(null); }} className="text-xs text-[#9A8A78] hover:text-red-400">{t('delegate_doc_remove')}</button>}
           </div>
           <input ref={fileInputRef} type="file" accept=".pdf" className="hidden"
-            onChange={(e) => {
+            onChange={async (e) => {
               const f = e.target.files?.[0];
               if (!f) return;
-              const reader = new FileReader();
-              reader.onload = () => { setFileUrl(reader.result as string); setFileName(f.name); };
-              reader.readAsDataURL(f);
+              await uploadFile(f);
             }} />
         </div>
 
-        <button onClick={handleSubmit} disabled={!title.trim() || sending}
+        <button onClick={handleSubmit} disabled={!title.trim() || sending || uploading}
           className="w-full text-white py-3 rounded-xl text-sm font-black transition-colors focus:outline-none"
-          style={{ backgroundColor: !title.trim() || sending ? '#DDD4C0' : '#1B3828', color: !title.trim() || sending ? '#9A8A78' : 'white', letterSpacing: '0.05em' }}>
+          style={{ backgroundColor: !title.trim() || sending || uploading ? '#DDD4C0' : '#1B3828', color: !title.trim() || sending || uploading ? '#9A8A78' : 'white', letterSpacing: '0.05em' }}>
           {sending ? t('delegate_doc_submitting') : t('delegate_doc_submit_to_chair')}
         </button>
       </div>
