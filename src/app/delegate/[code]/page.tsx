@@ -9,7 +9,8 @@ import { Committee, CommitteeDocument, DocumentType, PendingMotionType, Speaking
 import { TranslationKey } from '@/lib/translations';
 import ChatPanel from '@/components/ChatPanel';
 import { useSettingsStore, DEFAULT_MOTION_NAMES } from '@/lib/settingsStore';
-import { computeObjectiveScore, type LedgerRow } from '@/lib/scoring';
+import { computeObjectiveScore, getScoringConfig, type LedgerRow } from '@/lib/scoring';
+import { getDelegateFeedback } from '@/lib/committeeService';
 import { getFlagUrl, getCountryByName, getCountryDisplayName, matchesCountryQuery } from '@/lib/countries';
 import { getCommitteeDisplayName } from '@/lib/presetNames';
 import { supabase } from '@/lib/supabase';
@@ -400,9 +401,29 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
 function StatisticsTab({ committee, country }: { committee: Committee; country: string }) {
   const { language } = useLanguage();
   const t = useT();
+  const cfg = getScoringConfig(committee);
+  const hideScores = cfg.hideScoresFromDelegates === true;
   const logs = parseSpeakingLogs(committee);
   const { total, rows, tips } = calcPoints(logs, committee, country, t);
   const myLogs = logs.filter((l) => l.country === country);
+
+  // Category subtotals (summary) — delegates see grouped categories, never the chair's itemized ledger.
+  const categories: { label: string; pts: number }[] = [];
+  for (const r of rows) {
+    const existing = categories.find((c) => c.label === r.label);
+    if (existing) existing.pts += r.pts; else categories.push({ label: r.label, pts: r.pts });
+  }
+
+  // End recap — factor scores only (never the chair's private notes).
+  const [recap, setRecap] = useState<{ level: string; factorScores: Record<string, number>; createdAt: string }[]>([]);
+  useEffect(() => {
+    getDelegateFeedback(committee.id, country).then(setRecap);
+  }, [committee.id, country]);
+  const latestRecap = [...recap]
+    .filter((f) => f.level === 'conference')
+    .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))[0]
+    ?? [...recap].filter((f) => f.level === 'session').sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))[0];
+  const recapFactors = cfg.factors.filter((f) => f.enabled && latestRecap && typeof latestRecap.factorScores[f.id] === 'number');
   const totalSeconds = myLogs.reduce((s, l) => s + l.seconds, 0);
 
   // Top speakers by time
@@ -421,30 +442,36 @@ function StatisticsTab({ committee, country }: { committee: Committee; country: 
 
   return (
     <div className="p-4 max-w-2xl mx-auto space-y-5">
-      {/* Score card */}
-      <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid #DDD4C0' }}>
-        <div className="px-5 py-3 flex items-center gap-3" style={{ backgroundColor: '#1B3828', borderBottom: '1px solid #3D7A52' }}>
-          <div className="w-1 h-4 rounded-full" style={{ backgroundColor: '#EED98A' }} />
-          <span className="text-xs font-mono font-bold tracking-widest" style={{ color: '#EED98A' }}>{t('delegate_score_header')}</span>
+      {/* Score card — hidden when chairs disable scores for delegates */}
+      {hideScores ? (
+        <div className="rounded-2xl p-4 text-sm" style={{ border: '1px solid #DDD4C0', backgroundColor: '#EDE7D8', color: '#6A5A4A' }}>
+          {t('delegate_scores_hidden')}
         </div>
-        <div className="p-5" style={{ backgroundColor: '#EDE7D8' }}>
-        <div className="flex items-end gap-3 mb-3">
-          <span className="text-6xl font-black" style={{ color: '#1B3828' }}>{total}</span>
-          <span className="text-lg font-medium mb-1" style={{ color: '#6A5A4A' }}>{t('delegate_pts_label')}</span>
-        </div>
-        {/* Score breakdown — itemized ledger rows */}
-        {rows.length > 0 && (
-          <div className="mt-4 space-y-1.5">
-            {rows.map((r, i) => (
-              <div key={i} className="flex justify-between text-xs gap-2">
-                <span className="truncate" style={{ color: '#6A5A4A' }}>{r.label}{r.detail ? ` · ${r.detail}` : ''}</span>
-                <span className="font-bold shrink-0" style={{ color: r.pts < 0 ? '#8B2020' : '#1B3828' }}>{r.pts < 0 ? '' : '+'}{r.pts}</span>
-              </div>
-            ))}
+      ) : (
+        <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid #DDD4C0' }}>
+          <div className="px-5 py-3 flex items-center gap-3" style={{ backgroundColor: '#1B3828', borderBottom: '1px solid #3D7A52' }}>
+            <div className="w-1 h-4 rounded-full" style={{ backgroundColor: '#EED98A' }} />
+            <span className="text-xs font-mono font-bold tracking-widest" style={{ color: '#EED98A' }}>{t('delegate_score_header')}</span>
           </div>
-        )}
+          <div className="p-5" style={{ backgroundColor: '#EDE7D8' }}>
+          <div className="flex items-end gap-3 mb-3">
+            <span className="text-6xl font-black" style={{ color: '#1B3828' }}>{total}</span>
+            <span className="text-lg font-medium mb-1" style={{ color: '#6A5A4A' }}>{t('delegate_pts_label')}</span>
+          </div>
+          {/* Category subtotals — summary, not the chair's itemized ledger */}
+          {categories.length > 0 && (
+            <div className="mt-4 space-y-1.5">
+              {categories.map((c) => (
+                <div key={c.label} className="flex justify-between text-xs gap-2">
+                  <span className="truncate" style={{ color: '#6A5A4A' }}>{c.label}</span>
+                  <span className="font-bold shrink-0" style={{ color: c.pts < 0 ? '#8B2020' : '#1B3828' }}>{c.pts < 0 ? '' : '+'}{c.pts}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Speaking stats */}
       <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid #DDD4C0' }}>
@@ -453,7 +480,7 @@ function StatisticsTab({ committee, country }: { committee: Committee; country: 
           <span className="text-xs font-mono font-bold tracking-widest" style={{ color: '#EED98A' }}>{t('delegate_speaking_history')}</span>
         </div>
         <div className="p-5" style={{ backgroundColor: '#EDE7D8' }}>
-        <div className="grid grid-cols-3 gap-3 mb-4">
+        <div className={`grid ${hideScores ? 'grid-cols-2' : 'grid-cols-3'} gap-3 mb-4`}>
           <div className="text-center">
             <div className="text-2xl font-black" style={{ color: '#1B3828' }}>{myLogs.length}</div>
             <div className="text-xs" style={{ color: '#9A8A78' }}>{t('delegate_speeches_label')}</div>
@@ -462,10 +489,12 @@ function StatisticsTab({ committee, country }: { committee: Committee; country: 
             <div className="text-2xl font-black" style={{ color: '#1B3828' }}>{formatTime(totalSeconds)}</div>
             <div className="text-xs" style={{ color: '#9A8A78' }}>{t('delegate_total_time_label')}</div>
           </div>
-          <div className="text-center">
-            <div className="text-2xl font-black" style={{ color: '#1B3828' }}>{myRank > 0 ? `#${myRank}` : '—'}</div>
-            <div className="text-xs" style={{ color: '#9A8A78' }}>{t('delegate_rank_label')}</div>
-          </div>
+          {!hideScores && (
+            <div className="text-center">
+              <div className="text-2xl font-black" style={{ color: '#1B3828' }}>{myRank > 0 ? `#${myRank}` : '—'}</div>
+              <div className="text-xs" style={{ color: '#9A8A78' }}>{t('delegate_rank_label')}</div>
+            </div>
+          )}
         </div>
         {myLogs.length > 0 ? (
           <div className="space-y-1.5">
@@ -483,8 +512,8 @@ function StatisticsTab({ committee, country }: { committee: Committee; country: 
         </div>
       </div>
 
-      {/* Committee leaderboard */}
-      {ranking.length > 0 && (
+      {/* Committee leaderboard — hidden when chairs disable scores */}
+      {!hideScores && ranking.length > 0 && (
         <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid #DDD4C0' }}>
           <div className="px-5 py-3 flex items-center gap-3" style={{ backgroundColor: '#1B3828', borderBottom: '1px solid #3D7A52' }}>
             <div className="w-1 h-4 rounded-full" style={{ backgroundColor: '#EED98A' }} />
@@ -517,6 +546,32 @@ function StatisticsTab({ committee, country }: { committee: Committee; country: 
             ))}
           </div>
         </div>
+        </div>
+      )}
+
+      {/* Chair recap — factor scores only, never the chair's private notes */}
+      {latestRecap && recapFactors.length > 0 && (
+        <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid #DDD4C0' }}>
+          <div className="px-5 py-3 flex items-center gap-3" style={{ backgroundColor: '#1B3828', borderBottom: '1px solid #3D7A52' }}>
+            <div className="w-1 h-4 rounded-full" style={{ backgroundColor: '#EED98A' }} />
+            <span className="text-xs font-mono font-bold tracking-widest" style={{ color: '#EED98A' }}>{t('delegate_recap_header')}</span>
+          </div>
+          <div className="p-5 space-y-2.5" style={{ backgroundColor: '#EDE7D8' }}>
+            {recapFactors.map((f) => {
+              const v = latestRecap.factorScores[f.id];
+              return (
+                <div key={f.id}>
+                  <div className="flex justify-between text-xs mb-1">
+                    <span style={{ color: '#6A5A4A' }}>{f.name}</span>
+                    <span className="font-bold" style={{ color: '#1B3828' }}>{v}/{cfg.factorScaleMax}</span>
+                  </div>
+                  <div className="h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: '#DDD4C0' }}>
+                    <div className="h-full rounded-full" style={{ width: `${Math.min(100, (v / cfg.factorScaleMax) * 100)}%`, backgroundColor: '#1B3828' }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
