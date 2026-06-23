@@ -75,6 +75,7 @@ function rowToCommittee(
     dbChairJoinSuffix: ((row.settings as Record<string, unknown>)?.chairJoinSuffix as string) ?? null,
     dbSeparateChairCode: ((row.settings as Record<string, unknown>)?.separateChairCode as boolean) ?? false,
     dbSettings: (row.settings as Record<string, unknown>) ?? null,
+    dbScoring: ((row.settings as Record<string, unknown>)?.scoring as Committee['dbScoring']) ?? null,
   };
 }
 
@@ -779,6 +780,21 @@ export async function updateCommitteeChairSuffixInDB(committeeId: string, chairJ
   await supabase
     .from('committees')
     .update({ settings: { ...currentSettings, chairJoinSuffix } })
+    .eq('id', committeeId);
+}
+
+// Persist the scoring config into the committee settings jsonb so it reaches
+// delegates / FAs / co-chairs on other devices (localStorage never syncs across devices).
+export async function updateCommitteeScoringInDB(committeeId: string, scoring: unknown): Promise<void> {
+  const { data: existing } = await supabase
+    .from('committees')
+    .select('settings')
+    .eq('id', committeeId)
+    .single();
+  const currentSettings = (existing?.settings as Record<string, unknown>) ?? {};
+  await supabase
+    .from('committees')
+    .update({ settings: { ...currentSettings, scoring } })
     .eq('id', committeeId);
 }
 

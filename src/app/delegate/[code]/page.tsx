@@ -9,6 +9,7 @@ import { Committee, CommitteeDocument, DocumentType, PendingMotionType, Speaking
 import { TranslationKey } from '@/lib/translations';
 import ChatPanel from '@/components/ChatPanel';
 import { useSettingsStore, DEFAULT_MOTION_NAMES } from '@/lib/settingsStore';
+import { computeObjectiveScore, type LedgerRow } from '@/lib/scoring';
 import { getFlagUrl, getCountryByName, getCountryDisplayName, matchesCountryQuery } from '@/lib/countries';
 import { getCommitteeDisplayName } from '@/lib/presetNames';
 import { supabase } from '@/lib/supabase';
@@ -122,171 +123,46 @@ function statusChangesRemaining(committeeId: string, country: string): number {
   return Math.max(0, 3 - recent.length);
 }
 
-// Speaking log parsing
+// Speaking log parsing — only SPEECH events (the channel now also carries motion/RTR/manual
+// events, which must not be counted as speeches in the speaking history).
 function parseSpeakingLogs(committee: Committee): SpeakingLogEntry[] {
   return committee.messages
     .filter((m) => m.sender === '__system__' && m.recipient === '__log__' && m.content.startsWith('__log__:'))
     .map((m) => {
-      try { return JSON.parse(m.content.slice('__log__:'.length)) as SpeakingLogEntry; }
+      try { return JSON.parse(m.content.slice('__log__:'.length)) as SpeakingLogEntry & { type?: string }; }
       catch { return null; }
     })
-    .filter(Boolean) as SpeakingLogEntry[];
+    .filter((e): e is SpeakingLogEntry & { type?: string } =>
+      !!e && (!e.type || e.type === 'speech') && typeof e.seconds === 'number')
+    .map((e) => e as SpeakingLogEntry);
 }
 
-// Point calculation
+// Point calculation — total/rows come from the shared objective scorer (single source of
+// truth). Tiers are removed; only universal activity-based tips remain.
 function calcPoints(logs: SpeakingLogEntry[], committee: Committee, country: string, t: (key: TranslationKey) => string): {
   total: number;
-  breakdown: { label: string; pts: number }[];
-  tier: string;
+  rows: LedgerRow[];
   tips: string[];
 } {
+  const { total, rows } = computeObjectiveScore(committee, country);
+
   const myLogs = logs.filter((l) => l.country === country);
-  const breakdown: { label: string; pts: number }[] = [];
-  let total = 0;
-
-  // Attendance (present/PV)
-  const delegate = committee.delegates.find((d) => d.country === country);
-  if (delegate && delegate.status !== 'absent') {
-    breakdown.push({ label: t('delegate_attendance_pts'), pts: 5 });
-    total += 5;
-  }
-
-  // GSL speeches
   const gslSpeeches = myLogs.filter((l) => l.context === 'speakers-list');
-  if (gslSpeeches.length > 0) {
-    const pts = gslSpeeches.length * 10;
-    breakdown.push({ label: t('delegate_breakdown_gsl').replace('{n}', String(gslSpeeches.length)), pts });
-    total += pts;
-  }
-
-  // Caucus speeches
   const caucusSpeeches = myLogs.filter((l) => l.context === 'moderated-caucus' || l.context === 'unmoderated-caucus');
-  if (caucusSpeeches.length > 0) {
-    const pts = caucusSpeeches.length * 8;
-    breakdown.push({ label: t('delegate_breakdown_caucus').replace('{n}', String(caucusSpeeches.length)), pts });
-    total += pts;
-  }
-
-  // Speaking time bonus (1pt per 10 seconds)
   const totalSeconds = myLogs.reduce((s, l) => s + l.seconds, 0);
-  const timePts = Math.floor(totalSeconds / 10);
-  if (timePts > 0) {
-    breakdown.push({ label: t('delegate_breakdown_time').replace('{n}', String(totalSeconds)), pts: timePts });
-    total += timePts;
-  }
-
-  // Documents — 10pts per WP, 20pts per DR, per sponsor
   const myDocs = (committee.documents ?? []).filter((d) => d.sponsors.includes(country));
   const wps = myDocs.filter((d) => d.type === 'working-paper');
   const drs = myDocs.filter((d) => d.type === 'draft-resolution');
-  if (wps.length > 0) {
-    const pts = wps.length * 10;
-    breakdown.push({ label: t('delegate_breakdown_wp').replace('{n}', String(wps.length)), pts });
-    total += pts;
-  }
-  if (drs.length > 0) {
-    const pts = drs.length * 20;
-    breakdown.push({ label: t('delegate_breakdown_dr').replace('{n}', String(drs.length)), pts });
-    total += pts;
-    const passedDrs = drs.filter((d) => d.status === 'passed').length;
-    if (passedDrs > 0) {
-      const passPts = passedDrs * 10;
-      breakdown.push({ label: t('delegate_breakdown_dr_passed').replace('{n}', String(passedDrs)), pts: passPts });
-      total += passPts;
-    }
-  }
 
-  // Motions raised (from system log)
-  const motionsRaised = logs.filter((l) => (l as unknown as Record<string,unknown>).type === 'motion-raised' && l.country === country).length;
-  if (motionsRaised > 0) {
-    const pts = motionsRaised * 5;
-    breakdown.push({ label: t('delegate_breakdown_motions').replace('{n}', String(motionsRaised)), pts });
-    total += pts;
-  }
-
-  // Right of reply (from system log)
-  const rtrCount = logs.filter((l) => (l as unknown as Record<string,unknown>).type === 'right-of-reply' && l.country === country).length;
-  if (rtrCount > 0) {
-    const pts = rtrCount * 5;
-    breakdown.push({ label: t('delegate_breakdown_rtr').replace('{n}', String(rtrCount)), pts });
-    total += pts;
-  }
-
-  // Tier
-  let tier = t('delegate_tier_observer');
-  if (total >= 300) tier = t('delegate_tier_distinguished');
-  else if (total >= 200) tier = t('delegate_tier_delegate');
-  else if (total >= 120) tier = t('delegate_tier_active');
-  else if (total >= 70) tier = t('delegate_tier_debater');
-  else if (total >= 30) tier = t('delegate_tier_participant');
-
+  // Universal conditional tips (no tier buckets)
   const tips: string[] = [];
-
-  if (tier === t('delegate_tier_observer')) {
-    tips.push(t('delegate_tip_gsl_request'));
-    tips.push(t('delegate_tip_mark_present'));
-    tips.push(t('delegate_tip_opening'));
-    tips.push(t('delegate_tip_address'));
-    tips.push(t('delegate_tip_listen'));
-    tips.push(t('delegate_tip_bloc'));
-  }
-
-  if (tier === t('delegate_tier_participant')) {
-    tips.push(t('delegate_tip_caucus_sub'));
-    tips.push(t('delegate_tip_unmod_wp'));
-    tips.push(t('delegate_tip_full_time'));
-    tips.push(t('delegate_tip_propose_caucus'));
-    tips.push(t('delegate_tip_cosponsor'));
-    tips.push(t('delegate_tip_right_of_reply'));
-  }
-
-  if (tier === t('delegate_tier_debater')) {
-    tips.push(t('delegate_tip_substance'));
-    tips.push(t('delegate_tip_wp_cosponsors'));
-    tips.push(t('delegate_tip_yield'));
-    tips.push(t('delegate_tip_raise_motion'));
-    tips.push(t('delegate_tip_escalate_dr'));
-    tips.push(t('delegate_tip_point_of_order'));
-    tips.push(t('delegate_tip_gsl_strategic'));
-  }
-
-  if (tier === t('delegate_tier_active')) {
-    tips.push(t('delegate_tip_impact'));
-    tips.push(t('delegate_tip_lead_dr'));
-    tips.push(t('delegate_tip_coordinate_bloc'));
-    tips.push(t('delegate_tip_rebut'));
-    tips.push(t('delegate_tip_passed_dr'));
-    tips.push(t('delegate_tip_tdt'));
-    tips.push(t('delegate_tip_friendly_amendment'));
-  }
-
-  if (tier === t('delegate_tier_delegate')) {
-    tips.push(t('delegate_tip_close_to_distinguished'));
-    tips.push(t('delegate_tip_help_newer'));
-    tips.push(t('delegate_tip_operative_clauses'));
-    tips.push(t('delegate_tip_unfriendly_amendment'));
-    tips.push(t('delegate_tip_consolidate'));
-    tips.push(t('delegate_tip_point_of_info'));
-    tips.push(t('delegate_tip_yield_questions'));
-  }
-
-  if (tier === t('delegate_tier_distinguished')) {
-    tips.push(t('delegate_tip_highest_tier'));
-    tips.push(t('delegate_tip_legacy'));
-    tips.push(t('delegate_tip_mentor'));
-    tips.push(t('delegate_tip_synthesise'));
-    tips.push(t('delegate_tip_distinguished_driver'));
-    tips.push(t('delegate_tip_closure'));
-  }
-
-  // Universal conditional tips regardless of tier
   if (gslSpeeches.length === 0) tips.push(t('delegate_tip_gsl_not_spoken'));
   if (caucusSpeeches.length === 0 && committee.phase !== 'pre-session') tips.push(t('delegate_tip_no_caucus'));
   if (wps.length === 0 && drs.length === 0) tips.push(t('delegate_tip_no_docs'));
   if (totalSeconds > 0 && totalSeconds < 45) tips.push(t('delegate_tip_speaking_time'));
   if (drs.length === 0 && wps.length > 0) tips.push(t('delegate_tip_have_wp'));
 
-  return { total, breakdown, tier, tips };
+  return { total, rows, tips };
 }
 
 // ── Co-Sponsors input ─────────────────────────────────────────────────────────
@@ -525,7 +401,7 @@ function StatisticsTab({ committee, country }: { committee: Committee; country: 
   const { language } = useLanguage();
   const t = useT();
   const logs = parseSpeakingLogs(committee);
-  const { total, breakdown, tier, tips } = calcPoints(logs, committee, country, t);
+  const { total, rows, tips } = calcPoints(logs, committee, country, t);
   const myLogs = logs.filter((l) => l.country === country);
   const totalSeconds = myLogs.reduce((s, l) => s + l.seconds, 0);
 
@@ -556,17 +432,13 @@ function StatisticsTab({ committee, country }: { committee: Committee; country: 
           <span className="text-6xl font-black" style={{ color: '#1B3828' }}>{total}</span>
           <span className="text-lg font-medium mb-1" style={{ color: '#6A5A4A' }}>{t('delegate_pts_label')}</span>
         </div>
-        <div className="inline-flex items-center gap-1.5 text-sm font-black px-3 py-1 rounded-full" style={{ backgroundColor: '#1B3828', color: '#EED98A' }}>
-          {tier}
-        </div>
-
-        {/* Score breakdown */}
-        {breakdown.length > 0 && (
+        {/* Score breakdown — itemized ledger rows */}
+        {rows.length > 0 && (
           <div className="mt-4 space-y-1.5">
-            {breakdown.map((b) => (
-              <div key={b.label} className="flex justify-between text-xs">
-                <span style={{ color: '#6A5A4A' }}>{b.label}</span>
-                <span className="font-bold" style={{ color: '#1B3828' }}>+{b.pts}</span>
+            {rows.map((r, i) => (
+              <div key={i} className="flex justify-between text-xs gap-2">
+                <span className="truncate" style={{ color: '#6A5A4A' }}>{r.label}{r.detail ? ` · ${r.detail}` : ''}</span>
+                <span className="font-bold shrink-0" style={{ color: r.pts < 0 ? '#8B2020' : '#1B3828' }}>{r.pts < 0 ? '' : '+'}{r.pts}</span>
               </div>
             ))}
           </div>

@@ -6,6 +6,7 @@ import { Globe } from 'lucide-react';
 import { useSettingsStore, CommitteeSettings, MotionNames } from '@/lib/settingsStore';
 import { Committee } from '@/lib/types';
 import { updateCommitteeChairSuffixInDB, saveCommitteeSettings } from '@/lib/committeeService';
+import { computeObjectiveScore } from '@/lib/scoring';
 import { getFlagEmoji, getCountryByName, getCountryDisplayName } from '@/lib/countries';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 
@@ -359,50 +360,6 @@ export function SettingsPanel({ committee, onClose }: {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [s.chairJoinSuffix]);
 
-  // ── Points scoring helpers ──
-  function computeScore(country: string) {
-    const delegate = committee.delegates.find((d) => d.country === country);
-    const isPresent = delegate ? delegate.status !== 'absent' : false;
-
-    const attendancePoints = isPresent ? 5 : 0;
-
-    const wpPoints = committee.documents
-      .filter((doc) => doc.type === 'working-paper' && doc.sponsors.includes(country))
-      .length * 10;
-
-    const drPoints = committee.documents
-      .filter((doc) => doc.type === 'draft-resolution' && doc.sponsors.includes(country))
-      .length * 20;
-
-    const logs = committee.messages
-      .filter((m) => m.sender === '__system__' && m.content.startsWith('__log__:'))
-      .map((m) => {
-        try { return JSON.parse(m.content.slice('__log__:'.length)); } catch { return null; }
-      })
-      .filter((entry): entry is { country: string; seconds: number; context: string; topic: string; timestamp: string } => entry !== null && entry.country === country);
-
-    const speakingPoints = Math.floor(logs.reduce((sum, e) => sum + (e.seconds || 0), 0) / 10);
-
-    const gslSpeeches = logs.filter((e) => e.context === 'speakers-list').length;
-    const caucusSpeeches = logs.filter((e) => e.context === 'moderated-caucus' || e.context === 'unmoderated-caucus' || e.context === 'tour-de-table').length;
-
-    const gslPoints = gslSpeeches * 10;
-    const caucusPoints = caucusSpeeches * 8;
-
-    return {
-      total: attendancePoints + wpPoints + drPoints + speakingPoints + gslPoints + caucusPoints,
-      attendancePoints,
-      wpPoints,
-      drPoints,
-      speakingPoints,
-      gslSpeeches,
-      caucusSpeeches,
-      gslPoints,
-      caucusPoints,
-      logs,
-    };
-  }
-
   const tabs: { id: SettingsTab; label: string }[] = [
     { id: 'access', label: t('settings_tab_access') },
     { id: 'motions', label: t('settings_tab_motions') },
@@ -611,7 +568,7 @@ export function SettingsPanel({ committee, onClose }: {
                 <p className="text-xs" style={{ color: '#9A8A78' }}>{t('settings_points_no_delegates')}</p>
               )}
               {[...committee.delegates]
-                .map((d) => ({ delegate: d, score: computeScore(d.country) }))
+                .map((d) => ({ delegate: d, score: computeObjectiveScore(committee, d.country) }))
                 .sort((a, b) => b.score.total - a.score.total)
                 .map(({ delegate: d, score }, idx) => {
                   const flag = getFlagEmoji(getCountryByName(d.country)?.code ?? '') || '🌐';
@@ -639,47 +596,16 @@ export function SettingsPanel({ committee, onClose }: {
                           <div>
                             <p className="text-[10px] font-mono font-bold tracking-widest mb-1.5" style={{ color: '#1B3828' }}>{t('settings_points_score_breakdown')}</p>
                             <div className="space-y-1">
-                              {[
-                                { label: t('settings_points_attendance'), value: score.attendancePoints },
-                                { label: t('settings_points_wp_sponsored'), value: score.wpPoints },
-                                { label: t('settings_points_dr_sponsored'), value: score.drPoints },
-                                { label: t('settings_points_speaking_time'), value: score.speakingPoints },
-                                { label: t('settings_points_gsl_speeches').replace('{n}', String(score.gslSpeeches)), value: score.gslPoints },
-                                { label: t('settings_points_caucus_speeches').replace('{n}', String(score.caucusSpeeches)), value: score.caucusPoints },
-                              ].map(({ label, value }) => (
-                                <div key={label} className="flex justify-between text-xs">
-                                  <span style={{ color: '#6A5A4A' }}>{label}</span>
-                                  <span className="font-mono" style={{ color: '#1C1410' }}>+{value}</span>
+                              {score.rows.map((r, i) => (
+                                <div key={i} className="flex justify-between text-xs gap-2">
+                                  <span className="truncate" style={{ color: '#6A5A4A' }}>{r.label}{r.detail ? ` · ${r.detail}` : ''}</span>
+                                  <span className="font-mono shrink-0" style={{ color: r.pts < 0 ? '#8B2020' : '#1C1410' }}>{r.pts < 0 ? '' : '+'}{r.pts}</span>
                                 </div>
                               ))}
                               <div className="flex justify-between text-xs pt-1 mt-1" style={{ borderTop: '1px solid #DDD4C0' }}>
                                 <span className="font-semibold" style={{ color: '#1B3828' }}>{t('settings_points_total')}</span>
                                 <span className="font-mono font-black" style={{ color: '#1B3828' }}>+{score.total}</span>
                               </div>
-                            </div>
-                          </div>
-
-                          {score.logs.length > 0 && (
-                            <div>
-                              <p className="text-[10px] font-mono font-bold tracking-widest mb-1.5" style={{ color: '#1B3828' }}>{t('settings_points_speaking_history')}</p>
-                              <div className="space-y-1">
-                                {score.logs.map((entry, i) => (
-                                  <div key={i} className="text-xs">
-                                    <span style={{ color: '#1C1410' }}>{entry.topic || '—'}</span>
-                                    <span style={{ color: '#9A8A78' }}> · {entry.context} · {entry.seconds}s</span>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
-                          <div>
-                            <p className="text-[10px] font-mono font-bold tracking-widest mb-1.5" style={{ color: '#1B3828' }}>{t('settings_points_tips')}</p>
-                            <div className="space-y-1">
-                              {score.gslSpeeches === 0 && <p className="text-xs" style={{ color: '#6A5A4A' }}>{t('settings_points_tip_gsl')}</p>}
-                              {score.caucusSpeeches === 0 && <p className="text-xs" style={{ color: '#6A5A4A' }}>{t('settings_points_tip_caucus')}</p>}
-                              {score.wpPoints === 0 && score.drPoints === 0 && <p className="text-xs" style={{ color: '#6A5A4A' }}>{t('settings_points_tip_paper')}</p>}
-                              {score.gslSpeeches > 0 && score.caucusSpeeches > 0 && (score.wpPoints > 0 || score.drPoints > 0) && <p className="text-xs" style={{ color: '#3D7A52' }}>{t('settings_points_tip_great')}</p>}
                             </div>
                           </div>
                         </div>

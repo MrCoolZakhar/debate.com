@@ -10,6 +10,36 @@ export interface MotionNames {
   endDebate: string;
 }
 
+export interface ScoreSource { id: string; name: string; value: number; enabled: boolean; builtin: boolean; }
+export interface RankingFactor { id: string; name: string; enabled: boolean; }
+export interface ScoringConfig {
+  sources: ScoreSource[];            // built-ins below + chair-added custom ones
+  factors: RankingFactor[];
+  factorScaleMax: number;            // default 10
+  scoreBlend: number;                // 0 = pure objective … 100 = pure quality (default 0)
+  hideScoresFromDelegates: boolean;  // default false
+}
+export const DEFAULT_SCORING: ScoringConfig = {
+  sources: [
+    { id: 'attendance',         name: 'Attendance (P/PV)',  value: 5,  enabled: true, builtin: true },
+    { id: 'gslSpeech',          name: 'GSL speech',         value: 10, enabled: true, builtin: true },
+    { id: 'caucusSpeech',       name: 'Caucus speech',      value: 8,  enabled: true, builtin: true },
+    { id: 'speakingTimePer10s', name: 'Speaking time /10s', value: 1,  enabled: true, builtin: true },
+    { id: 'motionRaised',       name: 'Motion raised',      value: 10, enabled: true, builtin: true },
+    { id: 'rightOfReply',       name: 'Right of reply',     value: 5,  enabled: true, builtin: true },
+    { id: 'wpSponsor',          name: 'Working paper',      value: 10, enabled: true, builtin: true },
+    { id: 'drSponsor',          name: 'Draft resolution',   value: 20, enabled: true, builtin: true },
+    { id: 'drPassed',           name: 'DR passed',          value: 10, enabled: true, builtin: true },
+  ],
+  factors: [
+    { id: 'diplomacy', name: 'Diplomacy', enabled: true },
+    { id: 'speaking', name: 'Public Speaking', enabled: true },
+    { id: 'collaboration', name: 'Collaboration', enabled: true },
+    { id: 'content', name: 'Content & Research', enabled: true },
+  ],
+  factorScaleMax: 10, scoreBlend: 0, hideScoresFromDelegates: false,
+};
+
 export interface CommitteeSettings {
   // Tab 1 — Voting & Majorities
   proceduralThreshold: 'simple' | 'absolute';
@@ -33,6 +63,8 @@ export interface CommitteeSettings {
   drSubmissionLimit: number | null;
   // GSL behaviour
   gslRequireNextSpeaker: boolean;
+  // Scoring & ranking
+  scoring: ScoringConfig;
   // Tab 3 — Access & Identity
   chairJoinSuffix: string;
   requireChairApproval: boolean;
@@ -69,6 +101,7 @@ export const DEFAULT_SETTINGS: CommitteeSettings = {
   chairJoinSuffix: '',
   requireChairApproval: false,
   gslRequireNextSpeaker: false,
+  scoring: DEFAULT_SCORING,
 };
 
 interface SettingsStore {

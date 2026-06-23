@@ -1,3 +1,5 @@
+import type { ScoringConfig } from './settingsStore';
+
 export type DelegateStatus = 'present' | 'absent' | 'present-voting';
 
 export interface Delegate {
@@ -152,4 +154,5 @@ export interface Committee {
   dbChairJoinSuffix?: string | null;
   dbSeparateChairCode?: boolean;
   dbSettings?: Record<string, unknown> | null;
+  dbScoring?: ScoringConfig | null;
 }
