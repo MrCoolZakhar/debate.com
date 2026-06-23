@@ -15,6 +15,7 @@ import { Emoji } from '@/components/Emoji';
 import { SettingsPanel } from '@/components/SettingsPanel';
 import ScoreboardPanel from '@/components/ScoreboardPanel';
 import FeedbackLogPanel from '@/components/FeedbackLogPanel';
+import RecapComposer from '@/components/RecapComposer';
 import { useSettingsStore, type CommitteeSettings } from '@/lib/settingsStore';
 import { supabase } from '@/lib/supabase';
 import ChatPanel from '@/components/ChatPanel';
@@ -1124,6 +1125,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const [showSettings, setShowSettings] = useState(false);
   const [showScoreboard, setShowScoreboard] = useState(false);
   const [showFeedbackLog, setShowFeedbackLog] = useState(false);
+  const [showRecap, setShowRecap] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [chatReadCounts, setChatReadCounts] = useState<Record<string, number>>({});
   // Only one of these can be open at a time
@@ -2090,6 +2092,11 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
             style={{ backgroundColor: showFeedbackLog ? '#EED98A' : 'rgba(238,217,138,0.18)', color: showFeedbackLog ? '#1B3828' : '#EED98A' }}>
             Feedback log
           </button>
+          <button onClick={() => setShowRecap(true)}
+            className="px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors"
+            style={{ backgroundColor: 'rgba(238,217,138,0.18)', color: '#EED98A' }}>
+            Recap
+          </button>
         </div>
       )}
       {isViewOnly && showFeedbackLog && (
@@ -2097,6 +2104,13 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           committee={committee}
           chairName={myChairName || committee.chairNames[0] || 'Chair'}
           onClose={() => setShowFeedbackLog(false)}
+        />
+      )}
+      {isViewOnly && showRecap && (
+        <RecapComposer
+          committee={committee}
+          chairName={myChairName || committee.chairNames[0] || 'Chair'}
+          onClose={() => setShowRecap(false)}
         />
       )}
       {/* Ended tab bar */}

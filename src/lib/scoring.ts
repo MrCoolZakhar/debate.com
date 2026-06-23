@@ -131,3 +131,30 @@ export function computeObjectiveScore(committee: Committee, country: string): { 
   const total = rows.reduce((s, r) => s + r.pts, 0);
   return { total, rows };
 }
+
+// ── Quality (subjective) scoring from chair recaps ──
+export interface QualityFeedback { country?: string; level: string; factorScores: Record<string, number>; createdAt: string; }
+
+// Mean of the latest conference recap's enabled factor scores (fallback: latest session
+// recap), normalised to 0–100. Returns null when there's no recap data.
+export function computeQualityScore(feedback: QualityFeedback[], country: string, cfg: ScoringConfig): number | null {
+  const mine = feedback.filter((f) => !f.country || f.country === country);
+  const latestOf = (lvl: string) =>
+    mine.filter((f) => f.level === lvl).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))[0];
+  const latest = latestOf('conference') ?? latestOf('session');
+  if (!latest) return null;
+  const enabled = cfg.factors.filter((f) => f.enabled);
+  const vals = enabled
+    .map((f) => latest.factorScores[f.id])
+    .filter((v): v is number => typeof v === 'number' && v > 0);
+  if (!vals.length) return null;
+  const mean = vals.reduce((s, v) => s + v, 0) / vals.length;
+  return Math.round((mean / Math.max(1, cfg.factorScaleMax)) * 100);
+}
+
+// Blend objective points with quality (0–100) by blend/100. 0 = pure objective, 100 = pure quality.
+export function computeHeadline(objectiveTotal: number, quality: number | null, blend: number): number {
+  const b = Math.max(0, Math.min(100, blend)) / 100;
+  if (quality == null || b === 0) return objectiveTotal;
+  return Math.round(objectiveTotal * (1 - b) + quality * b);
+}

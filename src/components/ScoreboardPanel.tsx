@@ -1,13 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Portal from '@/components/Portal';
 import { FlagImg } from '@/components/FlagImg';
 import { Committee } from '@/lib/types';
 import { getCountryByName, getCountryDisplayName, compareCountryNames } from '@/lib/countries';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { computeObjectiveScore, computeLedger, parseLedgerEvents, type LedgerRow } from '@/lib/scoring';
-import { logEvent } from '@/lib/committeeService';
+import { computeObjectiveScore, computeLedger, parseLedgerEvents, getScoringConfig, computeQualityScore, computeHeadline, type LedgerRow, type QualityFeedback } from '@/lib/scoring';
+import { logEvent, getFeedbackForCommittee } from '@/lib/committeeService';
 
 interface MatrixRow {
   country: string;
@@ -49,9 +49,23 @@ export default function ScoreboardPanel({ committee, onClose }: { committee: Com
   const [awardAmt, setAwardAmt] = useState('');
   const [awardNote, setAwardNote] = useState('');
   const [deduct, setDeduct] = useState(false);
+  const [feedback, setFeedback] = useState<QualityFeedback[]>([]);
+
+  useEffect(() => {
+    getFeedbackForCommittee(committee.id).then((all) =>
+      setFeedback(all.map((f) => ({ country: f.country, level: f.level, factorScores: f.factorScores, createdAt: f.createdAt }))));
+  }, [committee.id]);
+
+  const cfg = getScoringConfig(committee);
+  // Headline = objective total blended with quality (chair recap factor scores) per config.
+  const headlineFor = (country: string) => {
+    const obj = computeObjectiveScore(committee, country).total;
+    const quality = computeQualityScore(feedback, country, cfg);
+    return computeHeadline(obj, quality, cfg.scoreBlend);
+  };
 
   const ranked = [...committee.delegates]
-    .map((d) => ({ country: d.country, total: computeObjectiveScore(committee, d.country).total }))
+    .map((d) => ({ country: d.country, total: headlineFor(d.country) }))
     .sort((a, b) => b.total - a.total || compareCountryNames(a.country, b.country, language));
 
   const matrix = buildMatrix(committee);
