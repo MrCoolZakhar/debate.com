@@ -71,8 +71,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   async function signOut() {
+    // supabase-js acquires a navigator Web Lock for auth.signOut(). If that lock is held
+    // by a stale or in-flight token refresh, the call can hang indefinitely, blocking the
+    // caller's redirect and leaving the user apparently signed in until a manual reload.
+    // Bound the SDK call with a timeout so it can never block sign-out.
     try {
-      await supabase.auth.signOut({ scope: 'local' });
+      await Promise.race([
+        supabase.auth.signOut({ scope: 'local' }),
+        new Promise<void>((resolve) => setTimeout(resolve, 1200)),
+      ]);
+    } catch {}
+    // Backstop: clear the persisted session directly (the SDK call may have been blocked
+    // before it could), so the post-signout hard navigation always starts logged out.
+    try {
+      Object.keys(localStorage).forEach((k) => {
+        if (k.startsWith('sb-') && k.includes('-auth-token')) localStorage.removeItem(k);
+      });
     } catch {}
     setUser(null);
     setSession(null);
