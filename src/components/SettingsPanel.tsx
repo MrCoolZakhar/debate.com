@@ -3,11 +3,9 @@
 import { useState, useEffect, useRef } from 'react';
 import Portal from '@/components/Portal';
 import { Globe } from 'lucide-react';
-import { useSettingsStore, CommitteeSettings, MotionNames } from '@/lib/settingsStore';
+import { useSettingsStore, CommitteeSettings, MotionNames, DEFAULT_SCORING, type ScoringConfig, type ScoreSource, type RankingFactor } from '@/lib/settingsStore';
 import { Committee } from '@/lib/types';
-import { updateCommitteeChairSuffixInDB, saveCommitteeSettings } from '@/lib/committeeService';
-import { computeObjectiveScore } from '@/lib/scoring';
-import { getFlagEmoji, getCountryByName, getCountryDisplayName } from '@/lib/countries';
+import { updateCommitteeChairSuffixInDB, saveCommitteeSettings, updateCommitteeScoringInDB } from '@/lib/committeeService';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 
 type SettingsTab = 'voting' | 'motions' | 'access' | 'points';
@@ -345,8 +343,24 @@ export function SettingsPanel({ committee, onClose }: {
     saveCommitteeSettings(committee.id, { ...getSettings(committee.code), [key]: value });
   };
 
-  // Points tab — expanded delegate
-  const [expandedDelegate, setExpandedDelegate] = useState<string | null>(null);
+  // Scoring config — local store + DB jsonb (so delegates/FAs on other devices see it)
+  const scoring: ScoringConfig = s.scoring ?? DEFAULT_SCORING;
+  const updScoring = (next: ScoringConfig) => {
+    updateSetting(committee.code, 'scoring', next);
+    updateCommitteeScoringInDB(committee.id, next);
+  };
+  const setSource = (id: string, patch: Partial<ScoreSource>) =>
+    updScoring({ ...scoring, sources: scoring.sources.map((x) => (x.id === id ? { ...x, ...patch } : x)) });
+  const removeSource = (id: string) =>
+    updScoring({ ...scoring, sources: scoring.sources.filter((x) => x.id !== id) });
+  const addSource = () =>
+    updScoring({ ...scoring, sources: [...scoring.sources, { id: `custom-${Date.now()}`, name: 'Custom source', value: 5, enabled: true, builtin: false }] });
+  const setFactor = (id: string, patch: Partial<RankingFactor>) =>
+    updScoring({ ...scoring, factors: scoring.factors.map((x) => (x.id === id ? { ...x, ...patch } : x)) });
+  const removeFactor = (id: string) =>
+    updScoring({ ...scoring, factors: scoring.factors.filter((x) => x.id !== id) });
+  const addFactor = () =>
+    updScoring({ ...scoring, factors: [...scoring.factors, { id: `factor-${Date.now()}`, name: 'New factor', enabled: true }] });
 
   // Auto-generate chairJoinSuffix on mount if none exists; always sync to DB
   useEffect(() => {
@@ -557,62 +571,87 @@ export function SettingsPanel({ committee, onClose }: {
             </div>
           )}
 
-          {/* ── Points ── */}
+          {/* ── Points / Scoring config ── */}
           {tab === 'points' && (
-            <div>
-              <SectionLabel>{t('settings_section_leaderboard')}</SectionLabel>
+            <div style={{ fontFamily: "'Poppins', 'Outfit', sans-serif" }}>
+              {/* Score sources */}
+              <SectionLabel>Score sources</SectionLabel>
               <p className="text-xs mb-3 leading-snug" style={{ color: '#9A8A78' }}>
-                {t('settings_points_scoring_note')}
+                Points awarded automatically as delegates act. Toggle off any you don&apos;t use, or add your own.
               </p>
-              {committee.delegates.length === 0 && (
-                <p className="text-xs" style={{ color: '#9A8A78' }}>{t('settings_points_no_delegates')}</p>
-              )}
-              {[...committee.delegates]
-                .map((d) => ({ delegate: d, score: computeObjectiveScore(committee, d.country) }))
-                .sort((a, b) => b.score.total - a.score.total)
-                .map(({ delegate: d, score }, idx) => {
-                  const flag = getFlagEmoji(getCountryByName(d.country)?.code ?? '') || '🌐';
-                  const isExpanded = expandedDelegate === d.id;
-                  return (
-                    <div key={d.id} style={{ borderBottom: '1px solid #DDD4C0' }} className="last:border-0">
-                      <button
-                        className="w-full flex items-center gap-3 py-3 text-start transition-colors rounded-lg px-1 focus:outline-none"
-                        style={{ color: '#1C1410' }}
-                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#EDE7D8'; }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                        onClick={() => setExpandedDelegate(isExpanded ? null : d.id)}
-                      >
-                        <span className="text-xs w-5 text-end shrink-0 font-mono" style={{ color: '#9A8A78' }}>{idx + 1}</span>
-                        <span className="text-lg leading-none shrink-0">{flag}</span>
-                        <span className="flex-1 text-sm font-semibold truncate" style={{ color: '#1C1410' }}>{getCountryDisplayName(d.country, language)}</span>
-                        <span className="text-xs font-mono px-2 py-0.5 rounded-full shrink-0" style={{ backgroundColor: d.status === 'absent' ? '#DDD4C0' : '#1B3828', color: d.status === 'absent' ? '#9A8A78' : '#EED98A' }}>
-                          {t('settings_points_pts').replace('{n}', String(score.total))}
-                        </span>
-                        <span className="text-xs shrink-0" style={{ color: '#9A8A78' }}>{isExpanded ? '▲' : '▼'}</span>
-                      </button>
-
-                      {isExpanded && (
-                        <div className="mx-1 mb-3 p-3 rounded-xl space-y-3" style={{ backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0' }}>
-                          <div>
-                            <p className="text-[10px] font-mono font-bold tracking-widest mb-1.5" style={{ color: '#1B3828' }}>{t('settings_points_score_breakdown')}</p>
-                            <div className="space-y-1">
-                              {score.rows.map((r, i) => (
-                                <div key={i} className="flex justify-between text-xs gap-2">
-                                  <span className="truncate" style={{ color: '#6A5A4A' }}>{r.label}{r.detail ? ` · ${r.detail}` : ''}</span>
-                                  <span className="font-mono shrink-0" style={{ color: r.pts < 0 ? '#8B2020' : '#1C1410' }}>{r.pts < 0 ? '' : '+'}{r.pts}</span>
-                                </div>
-                              ))}
-                              <div className="flex justify-between text-xs pt-1 mt-1" style={{ borderTop: '1px solid #DDD4C0' }}>
-                                <span className="font-semibold" style={{ color: '#1B3828' }}>{t('settings_points_total')}</span>
-                                <span className="font-mono font-black" style={{ color: '#1B3828' }}>+{score.total}</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      )}
+              <div className="space-y-1.5 mb-3">
+                {scoring.sources.map((src) => (
+                  <div key={src.id} className="flex items-center gap-2 px-2 py-2 rounded-xl" style={{ border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3' }}>
+                    {src.builtin ? (
+                      <span className="flex-1 text-sm font-semibold truncate" style={{ color: '#1C1410' }}>{src.name}</span>
+                    ) : (
+                      <input value={src.name} onChange={(e) => setSource(src.id, { name: e.target.value })}
+                        className="flex-1 min-w-0 text-sm font-semibold bg-transparent border-b border-[#DDD4C0] focus:border-[#1B3828] outline-none" style={{ color: '#1C1410' }} />
+                    )}
+                    <div className="flex items-center gap-1 shrink-0">
+                      <input type="number" value={src.value} onChange={(e) => setSource(src.id, { value: parseInt(e.target.value) || 0 })}
+                        className="w-14 text-sm text-center bg-white border border-[#DDD4C0] rounded-lg px-1.5 py-1 focus:border-[#1B3828] outline-none" style={{ color: '#1C1410' }} />
+                      <span className="text-[10px]" style={{ color: '#9A8A78' }}>pts</span>
                     </div>
-                  );
-                })}
+                    <button onClick={() => setSource(src.id, { enabled: !src.enabled })}
+                      className="relative shrink-0 w-8 h-[18px] rounded-full transition-colors focus:outline-none"
+                      style={{ backgroundColor: src.enabled ? '#1B3828' : '#DDD4C0' }}>
+                      <span className={`absolute top-[2px] left-[2px] w-[14px] h-[14px] rounded-full bg-white transition-transform shadow-sm ${src.enabled ? 'translate-x-[14px]' : 'translate-x-0'}`} />
+                    </button>
+                    {!src.builtin && (
+                      <button onClick={() => removeSource(src.id)} className="shrink-0 text-[#9A8A78] hover:text-[#8B2020] text-sm">✕</button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <button onClick={addSource} className="text-xs font-bold px-3 py-2 rounded-lg transition-colors" style={{ border: '1px solid #DDD4C0', color: '#1B3828', backgroundColor: '#FAF8F3' }}>+ Add source</button>
+
+              {/* Ranking factors */}
+              <div className="mt-6 pt-6" style={{ borderTop: '1px solid #DDD4C0' }}>
+                <SectionLabel>Quality factors</SectionLabel>
+                <p className="text-xs mb-3 leading-snug" style={{ color: '#9A8A78' }}>
+                  Subjective factors chairs rate in recaps (1–{scoring.factorScaleMax}).
+                </p>
+                <div className="space-y-1.5 mb-3">
+                  {scoring.factors.map((f) => (
+                    <div key={f.id} className="flex items-center gap-2 px-2 py-2 rounded-xl" style={{ border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3' }}>
+                      <input value={f.name} onChange={(e) => setFactor(f.id, { name: e.target.value })}
+                        className="flex-1 min-w-0 text-sm font-semibold bg-transparent border-b border-[#DDD4C0] focus:border-[#1B3828] outline-none" style={{ color: '#1C1410' }} />
+                      <button onClick={() => setFactor(f.id, { enabled: !f.enabled })}
+                        className="relative shrink-0 w-8 h-[18px] rounded-full transition-colors focus:outline-none"
+                        style={{ backgroundColor: f.enabled ? '#1B3828' : '#DDD4C0' }}>
+                        <span className={`absolute top-[2px] left-[2px] w-[14px] h-[14px] rounded-full bg-white transition-transform shadow-sm ${f.enabled ? 'translate-x-[14px]' : 'translate-x-0'}`} />
+                      </button>
+                      <button onClick={() => removeFactor(f.id)} className="shrink-0 text-[#9A8A78] hover:text-[#8B2020] text-sm">✕</button>
+                    </div>
+                  ))}
+                </div>
+                <button onClick={addFactor} className="text-xs font-bold px-3 py-2 rounded-lg transition-colors" style={{ border: '1px solid #DDD4C0', color: '#1B3828', backgroundColor: '#FAF8F3' }}>+ Add factor</button>
+                <div className="flex items-center gap-2 mt-3">
+                  <span className="text-xs" style={{ color: '#6A5A4A' }}>Rating scale max</span>
+                  <input type="number" min={2} value={scoring.factorScaleMax} onChange={(e) => updScoring({ ...scoring, factorScaleMax: Math.max(2, parseInt(e.target.value) || 10) })}
+                    className="w-14 text-sm text-center bg-white border border-[#DDD4C0] rounded-lg px-1.5 py-1 focus:border-[#1B3828] outline-none" style={{ color: '#1C1410' }} />
+                </div>
+              </div>
+
+              {/* Blend + hide */}
+              <div className="mt-6 pt-6" style={{ borderTop: '1px solid #DDD4C0' }}>
+                <SectionLabel>Ranking blend</SectionLabel>
+                <div className="flex items-center justify-between text-[10px] font-mono mb-1" style={{ color: '#9A8A78' }}>
+                  <span>Objective</span><span>{scoring.scoreBlend}%</span><span>Quality</span>
+                </div>
+                <input type="range" min={0} max={100} value={scoring.scoreBlend}
+                  onChange={(e) => updScoring({ ...scoring, scoreBlend: parseInt(e.target.value) })}
+                  className="w-full accent-[#1B3828]" />
+                <div className="mt-4">
+                  <Toggle
+                    label="Hide scores from delegates"
+                    note="Delegates keep their speaking recap but won't see point totals or the leaderboard."
+                    value={scoring.hideScoresFromDelegates}
+                    onChange={(v) => updScoring({ ...scoring, hideScoresFromDelegates: v })}
+                  />
+                </div>
+              </div>
             </div>
           )}
         </div>
