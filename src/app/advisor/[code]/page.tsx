@@ -2,6 +2,7 @@
 
 import { use, useEffect, useState } from 'react';
 import FitToScreen from '@/components/FitToScreen';
+import CowDelegationBoard from '@/components/CowDelegationBoard';
 import Link from 'next/link';
 import { getCommitteeByCode, subscribeToCommittee, sendMessage as sendMessageDB } from '@/lib/committeeService';
 import { DEFAULT_MOTION_NAMES } from '@/lib/settingsStore';
@@ -450,6 +451,11 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
               </p>
               {caucus?.purpose && (
                 <p className="text-sm mt-3 text-center" style={{ color: 'rgba(237,231,216,0.7)' }}>{caucus.purpose}</p>
+              )}
+              {committee.caucus?.isConsultation && (
+                <div className="w-full mt-4">
+                  <CowDelegationBoard committee={committee} />
+                </div>
               )}
             </div>
           )}

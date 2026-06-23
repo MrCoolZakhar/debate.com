@@ -16,6 +16,7 @@ import { getCommitteeDisplayName } from '@/lib/presetNames';
 import { supabase } from '@/lib/supabase';
 import { Emoji } from '@/components/Emoji';
 import { FlagImg } from '@/components/FlagImg';
+import CowDelegationBoard from '@/components/CowDelegationBoard';
 import {
   getCommitteeByCode,
   subscribeToCommittee,
@@ -1055,6 +1056,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                   </div>
                   <p className="text-sm" style={{ color: '#9A8A78' }}>{t('delegate_unmod_desc')}</p>
                 </div>
+                {committee.caucus.isConsultation && <CowDelegationBoard committee={committee} />}
               </div>
             )}
 

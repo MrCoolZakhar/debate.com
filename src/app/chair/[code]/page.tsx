@@ -16,6 +16,7 @@ import { SettingsPanel } from '@/components/SettingsPanel';
 import ScoreboardPanel from '@/components/ScoreboardPanel';
 import FeedbackLogPanel from '@/components/FeedbackLogPanel';
 import RecapComposer from '@/components/RecapComposer';
+import CowDelegationBoard from '@/components/CowDelegationBoard';
 import { useSettingsStore, type CommitteeSettings } from '@/lib/settingsStore';
 import { supabase } from '@/lib/supabase';
 import ChatPanel from '@/components/ChatPanel';
@@ -560,6 +561,26 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false }: 
     return () => { if (cowIntervalRef.current) { clearInterval(cowIntervalRef.current); cowIntervalRef.current = null; } };
   }, [cowActive]);
 
+  // CoW open-floor speaker tracking — set who holds the floor by tapping a flag.
+  const cowSpeakerStartRef = useRef<number>(Date.now());
+  const handleCowTap = (countryName: string) => {
+    const prev = caucus.currentSpeaker;
+    if (prev === countryName) return;
+    const now = Date.now();
+    if (prev) {
+      const secs = Math.max(0, Math.round((now - cowSpeakerStartRef.current) / 1000));
+      if (secs > 0) logEvent(committee.id, { country: prev, type: 'speech', context: 'unmoderated-caucus', topic: caucus.purpose ?? committee.topic, seconds: secs });
+    }
+    cowSpeakerStartRef.current = now;
+    const spoken = prev && !(caucus.spokenCountries ?? []).includes(prev)
+      ? [...(caucus.spokenCountries ?? []), prev]
+      : (caucus.spokenCountries ?? []);
+    const updated = { ...caucus, currentSpeaker: countryName, spokenCountries: spoken };
+    updateLocal(setCommittee, (c) => (c.caucus ? { ...c, caucus: updated } : c), true);
+    updateCaucusInDB(committee.id, updated);
+    if (cowEnabled) { setCowRemaining(cowDefaultSecs); setCowActive(true); }
+  };
+
   useEffect(() => {
     if (running) {
       const tick = () => {
@@ -621,6 +642,12 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false }: 
       <div className="w-full max-w-sm h-2 bg-[#DDD4C0] rounded-full overflow-hidden mb-8">
         <div className="h-full bg-[#B6871F] rounded-full transition-all" style={{ width: `${caucus.totalTime > 0 ? (caucus.remainingTime / caucus.totalTime) * 100 : 0}%` }} />
       </div>
+      {/* Consultation of the Whole — live open-floor delegation board (tap to set speaker; co-chairs too) */}
+      {caucus.isConsultation && (
+        <div className="w-full max-w-xl mb-6">
+          <CowDelegationBoard committee={committee} onTap={handleCowTap} />
+        </div>
+      )}
       {!isViewOnly && <div className="flex gap-3 flex-wrap justify-center">
         <button onClick={() => setRunning((r) => !r)} className={`flex-1 py-3 px-6 rounded-xl font-bold text-base transition-colors focus:outline-none ${running ? 'bg-[#B6871F] hover:bg-[#B6871F]/80 text-white' : 'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'}`}>
           {running ? (
