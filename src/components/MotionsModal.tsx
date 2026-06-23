@@ -20,6 +20,7 @@ import {
   clearCaucusList as clearCaucusListInDB,
   suspendDebate as suspendDebateInDB,
   endDebate as endDebateInDB,
+  logEvent,
 } from '@/lib/committeeService';
 
 type ModalView = 'list' | 'raise' | 'vote';
@@ -872,6 +873,11 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
     if (motion.type === 'suspend-debate' || motion.type === 'end-debate') {
       setSpecialVoteMotion(motion);
       return;
+    }
+
+    // The proposer earns a point for getting a motion approved onto the floor.
+    if (motion.proposedBy) {
+      logEvent(committee.id, { country: motion.proposedBy, type: 'motion-raised', sourceId: 'motionRaised' });
     }
 
     if (motion.type === 'unmoderated') {

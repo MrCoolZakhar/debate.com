@@ -21,6 +21,7 @@ import {
   getCommitteeByCode,
   subscribeToCommittee,
   getCurrentSpeakerRow,
+  logEvent,
   setPhase as setPhaseInDB,
   setDelegateStatus as setDelegateStatusInDB,
   addToSpeakersList as addToSpeakersListInDB,
@@ -2726,6 +2727,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 <button
                   onClick={() => {
                     if (!rtrCountry) return;
+                    logEvent(committee.id, { country: rtrCountry, type: 'right-of-reply', sourceId: 'rightOfReply' });
                     setRtrTimeRemaining(rtrSeconds);
                     setRtrTimerActive(false);
                     setRtrOpen(true);

@@ -632,6 +632,25 @@ export async function denyGslRequest(motionId: string): Promise<void> {
 // SPEAKING LOG  (stored as system messages, used for statistics)
 // ============================================================
 
+export type LedgerEventType =
+  | 'speech' | 'motion-raised' | 'right-of-reply'
+  | 'manual-award' | 'manual-deduct' | 'custom';
+
+// Generalised event writer — every point-earning action becomes a logged event on the
+// same messages + `__log__:` channel that speaking time already uses, so points are
+// traceable and motion/RTR points actually fire.
+export async function logEvent(committeeId: string, e: {
+  country: string; type: LedgerEventType; sourceId?: string; // sourceId = which scoring source
+  seconds?: number; context?: string; topic?: string; value?: number; note?: string;
+}): Promise<void> {
+  const payload = JSON.stringify({ ...e, timestamp: new Date().toISOString() });
+  const { error } = await supabase.from('messages').insert({
+    committee_id: committeeId, sender: '__system__',
+    content: `__log__:${payload}`, is_private: true, recipient: '__log__',
+  });
+  if (error) console.error('Error logging event:', error);
+}
+
 export async function logSpeakingTime(
   committeeId: string,
   country: string,
@@ -640,15 +659,7 @@ export async function logSpeakingTime(
   topic: string,
 ): Promise<void> {
   if (seconds <= 0) return;
-  const payload = JSON.stringify({ country, seconds, context, topic, timestamp: new Date().toISOString() });
-  const { error } = await supabase.from('messages').insert({
-    committee_id: committeeId,
-    sender: '__system__',
-    content: `__log__:${payload}`,
-    is_private: true,
-    recipient: '__log__',
-  });
-  if (error) console.error('Error logging speaking time:', error);
+  await logEvent(committeeId, { country, type: 'speech', seconds, context, topic });
 }
 
 // ============================================================
