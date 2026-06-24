@@ -7,6 +7,7 @@ import { useSettingsStore, CommitteeSettings, MotionNames, DEFAULT_SCORING, type
 import { Committee } from '@/lib/types';
 import { updateCommitteeChairSuffixInDB, saveCommitteeSettings, updateCommitteeScoringInDB } from '@/lib/committeeService';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
+import { getCountryByName, getCountryDisplayName, getFlagUrl } from '@/lib/countries';
 
 type SettingsTab = 'voting' | 'motions' | 'access' | 'points';
 
@@ -501,6 +502,7 @@ export function SettingsPanel({ committee, onClose }: {
                   { id: 'none', label: t('settings_veto_none_label'), desc: t('settings_veto_none_desc') },
                   { id: 'p5', label: t('settings_veto_p5_label'), desc: t('settings_veto_p5_desc') },
                   { id: 'unanimous', label: t('settings_veto_unanimous_label'), desc: t('settings_veto_unanimous_desc') },
+                  { id: 'custom', label: t('settings_veto_custom_label'), desc: t('settings_veto_custom_desc') },
                 ] as const).map((option) => (
                   <label key={option.id} className="flex items-start gap-3 cursor-pointer" onClick={() => upd('vetoMode', option.id)}>
                     <div className="mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors"
@@ -520,6 +522,34 @@ export function SettingsPanel({ committee, onClose }: {
                   <p className="text-xs font-semibold mb-1" style={{ color: '#1B3828' }}>{t('settings_p5_delegations')}</p>
                   <p className="text-xs font-mono" style={{ color: '#1C1410' }}>{s.p5Delegations.join(' · ')}</p>
                   <p className="text-xs mt-1" style={{ color: '#9A8A78' }}>{t('settings_p5_note')}</p>
+                </div>
+              )}
+
+              {s.vetoMode === 'custom' && (
+                <div className="mt-2 p-3 rounded-xl" style={{ backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0' }}>
+                  <p className="text-xs font-semibold mb-2" style={{ color: '#1B3828' }}>{t('settings_veto_custom_members')}</p>
+                  <div className="max-h-44 overflow-y-auto flex flex-col gap-1">
+                    {[...committee.delegates]
+                      .sort((a, b) => getCountryDisplayName(a.country, language).localeCompare(getCountryDisplayName(b.country, language), language, { sensitivity: 'base' }))
+                      .map((d) => {
+                        const checked = (s.vetoCountries ?? []).includes(d.country);
+                        const found = getCountryByName(d.country);
+                        return (
+                          <label key={d.id} className="flex items-center gap-2.5 cursor-pointer py-1" onClick={() => {
+                            const cur = s.vetoCountries ?? [];
+                            upd('vetoCountries', checked ? cur.filter((c) => c !== d.country) : [...cur, d.country]);
+                          }}>
+                            <div className="w-4 h-4 rounded border flex items-center justify-center shrink-0"
+                              style={{ borderColor: checked ? '#1B3828' : '#DDD4C0', backgroundColor: checked ? '#1B3828' : 'transparent' }}>
+                              {checked && <span className="text-white text-[10px] leading-none">✓</span>}
+                            </div>
+                            {found && <img src={getFlagUrl(found.code)} alt={found.code} width={18} height={18} loading="eager" className="w-[18px] h-[18px] object-contain shrink-0" onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden'; }} />}
+                            <span className="text-sm" style={{ color: '#1C1410' }}>{getCountryDisplayName(d.country, language)}</span>
+                          </label>
+                        );
+                      })}
+                  </div>
+                  <p className="text-xs mt-2" style={{ color: '#9A8A78' }}>{t('settings_veto_custom_note')}</p>
                 </div>
               )}
 

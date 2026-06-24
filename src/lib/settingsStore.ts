@@ -46,7 +46,7 @@ export interface CommitteeSettings {
   substantiveThreshold: 'simple' | 'supermajority-2-3' | 'consensus';
   amendmentThreshold: 'simple' | 'supermajority-2-3';
   allowAbstentions: boolean;
-  vetoMode: 'none' | 'p5' | 'unanimous';
+  vetoMode: 'none' | 'p5' | 'unanimous' | 'custom';
   p5Delegations: string[];
   vetoCountries: string[];
   quorumThreshold: 'none' | '1-4' | '1-3' | '1-2';

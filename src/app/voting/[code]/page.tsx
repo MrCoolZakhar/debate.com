@@ -333,11 +333,12 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     .sort((a, b) => compareCountryNames(a.country, b.country, language));
   const withRights = withRightsAll.slice(0, 10);
 
-  // Veto check (2c: use vetoCountries if set, else fall back to p5Delegations then hardcoded P5)
-  const vetoList = settings.vetoCountries?.length
-    ? settings.vetoCountries
+  // Veto check: custom → chair-picked vetoCountries; p5 → p5Delegations (fallback to hardcoded P5)
+  const vetoList = settings.vetoMode === 'custom'
+    ? (settings.vetoCountries ?? [])
     : (settings.p5Delegations?.length ? settings.p5Delegations : ["China","France","Russia","United Kingdom","United States"]);
-  const p5Veto = settings.vetoMode === 'p5'
+  const p5Veto = (settings.vetoMode === 'p5' || settings.vetoMode === 'custom')
+    && vetoList.length > 0
     && votes.some((v) => vetoList.includes(v.country) && (v.choice === 'against' || v.choice === 'against-rights'));
   const unanimousRequired = settings.vetoMode === 'unanimous';
   // Unanimous: every present delegate (P and PV) must vote 'for' or 'for-rights'
