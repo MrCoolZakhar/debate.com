@@ -7,6 +7,7 @@ import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
 import { UN_COUNTRIES, getFlagUrl, getCountryByName } from '@/lib/countries';
 import { CountryMatrixPicker } from '@/components/CountryMatrixPicker';
+import { CommitteeNameInput } from '@/components/CommitteeNameInput';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -126,7 +127,7 @@ const labelStyle: React.CSSProperties = {
 function ModalOverlay({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center px-4"
+      className="fixed inset-0 z-50 flex items-center justify-center px-4 py-10"
       style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
       onClick={onClose}
     >
@@ -292,18 +293,22 @@ function AddCommitteeModal({ conferenceId, committeeType, onClose, onSaved }: {
 
   return (
     <ModalOverlay onClose={onClose}>
-      <div className="w-full max-w-2xl rounded-2xl p-6" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', maxHeight: '90vh', overflowY: 'auto' }}>
+      <div className="w-full max-w-2xl rounded-2xl p-6" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', maxHeight: '85vh', overflowY: 'auto' }}>
         <div className="flex items-center justify-end mb-2">
           <button onClick={onClose} className="focus:outline-none" style={{ color: '#9A8A78' }}><X size={18} /></button>
         </div>
         <div className="flex flex-col gap-4">
           <div>
             <label style={labelStyle}>Committee Name *</label>
-            <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. UN Security Council" style={inputStyle} />
-          </div>
-          <div>
-            <label style={labelStyle}>Abbreviation</label>
-            <input value={abbreviation} onChange={e => setAbbreviation(e.target.value)} placeholder="e.g. UNSC, UNHRC" style={inputStyle} />
+            {isCrisis ? (
+              <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. The Cuban Missile Crisis, 1962" style={inputStyle} />
+            ) : (
+              <CommitteeNameInput
+                value={name}
+                onChange={setName}
+                onPresetSelect={(p) => { setName(p.name); setAbbreviation(p.acronym); setCountries(p.members); }}
+              />
+            )}
           </div>
           <div>
             <label style={labelStyle}>Difficulty</label>
