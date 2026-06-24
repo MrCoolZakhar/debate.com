@@ -20,6 +20,12 @@ import CowDelegationBoard from '@/components/CowDelegationBoard';
 import {
   getCommitteeByCode,
   subscribeToCommittee,
+  getCurrentSpeakerRow,
+  getDelegatesList,
+  getSpeakersLists,
+  getMessagesList,
+  getDocumentsList,
+  getPendingMotionsList,
   addToSpeakersList as addToSpeakersListInDB,
   addDocument as addDocumentInDB,
   addPendingMotion as addPendingMotionInDB,
@@ -650,7 +656,72 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
         if (found.endedAt) setSessionEnded(true);
         else if (found.suspendedAt) { wasEverSuspended.current = true; setSessionSuspended(true); }
         committeeIdRef.current = found.id;
-        unsubscribe = subscribeToCommittee(found.id, async () => {
+        const cid = found.id;
+        unsubscribe = subscribeToCommittee(cid, async (table) => {
+          // Patch only the slice that changed instead of re-pulling the whole committee
+          // (7 tables, select('*')) on every event. Session-state transitions (suspend /
+          // end / resume) only ever land on the `committees` table, so that one event type
+          // keeps the full refetch and its setSessionEnded/Suspended logic. All other tables
+          // can never change session state, so a scoped patch is safe.
+          if (table === 'current_speaker') {
+            const cs = await getCurrentSpeakerRow(cid);
+            if (!cs) return;
+            setCommittee((prev) => {
+              if (!prev) return prev;
+              const patched: Committee = {
+                ...prev,
+                currentSpeaker: cs.currentSpeaker,
+                speakerTimeRemaining: cs.speakerTimeRemaining,
+                speakerStartedAt: cs.speakerStartedAt,
+                // Drop the new speaker from the local GSL to avoid a transient duplicate
+                // before the speakers_list delete event arrives (mirrors getCommitteeByCode).
+                speakersList: cs.currentSpeaker
+                  ? prev.speakersList.filter((s) => s.delegateId !== cs.currentSpeaker!.delegateId)
+                  : prev.speakersList,
+              };
+              if (prev.caucus && prev.caucus.type === 'moderated') {
+                patched.caucus = { ...prev.caucus, currentSpeaker: cs.currentSpeaker?.country ?? null };
+                patched.caucusQueue = cs.currentSpeaker
+                  ? prev.caucusQueue.filter((s) => s.delegateId !== cs.currentSpeaker!.delegateId)
+                  : prev.caucusQueue;
+              }
+              return patched;
+            });
+            return;
+          }
+          if (table === 'speakers_list') {
+            const { speakersList, caucusQueue } = await getSpeakersLists(cid);
+            setCommittee((prev) => prev ? {
+              ...prev,
+              speakersList: prev.currentSpeaker
+                ? speakersList.filter((s) => s.delegateId !== prev.currentSpeaker!.delegateId)
+                : speakersList,
+              caucusQueue,
+            } : prev);
+            return;
+          }
+          if (table === 'delegates') {
+            const delegates = await getDelegatesList(cid);
+            setCommittee((prev) => prev ? { ...prev, delegates } : prev);
+            return;
+          }
+          if (table === 'messages') {
+            const messages = await getMessagesList(cid);
+            setCommittee((prev) => prev ? { ...prev, messages } : prev);
+            return;
+          }
+          if (table === 'documents') {
+            const documents = await getDocumentsList(cid);
+            setCommittee((prev) => prev ? { ...prev, documents } : prev);
+            return;
+          }
+          if (table === 'motions') {
+            const pendingMotions = await getPendingMotionsList(cid);
+            setCommittee((prev) => prev ? { ...prev, pendingMotions } : prev);
+            return;
+          }
+
+          // table === 'committees' (and any fallback): session state may have changed.
           const updated = await getCommitteeByCode(code.toUpperCase());
           if (updated) {
             if (updated.endedAt) {

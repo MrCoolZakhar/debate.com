@@ -4,7 +4,17 @@ import { use, useEffect, useState } from 'react';
 import FitToScreen from '@/components/FitToScreen';
 import CowDelegationBoard from '@/components/CowDelegationBoard';
 import Link from 'next/link';
-import { getCommitteeByCode, subscribeToCommittee, sendMessage as sendMessageDB } from '@/lib/committeeService';
+import {
+  getCommitteeByCode,
+  subscribeToCommittee,
+  sendMessage as sendMessageDB,
+  getCurrentSpeakerRow,
+  getDelegatesList,
+  getSpeakersLists,
+  getMessagesList,
+  getDocumentsList,
+  getPendingMotionsList,
+} from '@/lib/committeeService';
 import { DEFAULT_MOTION_NAMES } from '@/lib/settingsStore';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
 import { Committee } from '@/lib/types';
@@ -259,7 +269,66 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
       setLoading(false);
       if (!c) return;
       setCommittee(c);
-      unsub = subscribeToCommittee(c.id, async () => {
+      const cid = c.id;
+      unsub = subscribeToCommittee(cid, async (table) => {
+        // Patch only the changed slice instead of re-pulling the whole committee on every
+        // event. Session-state lives on the `committees` table, so that one keeps the full
+        // refetch; every other table can be patched in place. Mirrors the delegate view.
+        if (table === 'current_speaker') {
+          const cs = await getCurrentSpeakerRow(cid);
+          if (!cs) return;
+          setCommittee((prev) => {
+            if (!prev) return prev;
+            const patched: Committee = {
+              ...prev,
+              currentSpeaker: cs.currentSpeaker,
+              speakerTimeRemaining: cs.speakerTimeRemaining,
+              speakerStartedAt: cs.speakerStartedAt,
+              speakersList: cs.currentSpeaker
+                ? prev.speakersList.filter((s) => s.delegateId !== cs.currentSpeaker!.delegateId)
+                : prev.speakersList,
+            };
+            if (prev.caucus && prev.caucus.type === 'moderated') {
+              patched.caucus = { ...prev.caucus, currentSpeaker: cs.currentSpeaker?.country ?? null };
+              patched.caucusQueue = cs.currentSpeaker
+                ? prev.caucusQueue.filter((s) => s.delegateId !== cs.currentSpeaker!.delegateId)
+                : prev.caucusQueue;
+            }
+            return patched;
+          });
+          return;
+        }
+        if (table === 'speakers_list') {
+          const { speakersList, caucusQueue } = await getSpeakersLists(cid);
+          setCommittee((prev) => prev ? {
+            ...prev,
+            speakersList: prev.currentSpeaker
+              ? speakersList.filter((s) => s.delegateId !== prev.currentSpeaker!.delegateId)
+              : speakersList,
+            caucusQueue,
+          } : prev);
+          return;
+        }
+        if (table === 'delegates') {
+          const delegates = await getDelegatesList(cid);
+          setCommittee((prev) => prev ? { ...prev, delegates } : prev);
+          return;
+        }
+        if (table === 'messages') {
+          const messages = await getMessagesList(cid);
+          setCommittee((prev) => prev ? { ...prev, messages } : prev);
+          return;
+        }
+        if (table === 'documents') {
+          const documents = await getDocumentsList(cid);
+          setCommittee((prev) => prev ? { ...prev, documents } : prev);
+          return;
+        }
+        if (table === 'motions') {
+          const pendingMotions = await getPendingMotionsList(cid);
+          setCommittee((prev) => prev ? { ...prev, pendingMotions } : prev);
+          return;
+        }
         const updated = await getCommitteeByCode(upperCode);
         if (updated) setCommittee(updated);
       });

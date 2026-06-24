@@ -422,6 +422,82 @@ export async function getCurrentSpeakerRow(committeeId: string): Promise<{
 }
 
 // ============================================================
+// SCOPED SINGLE-TABLE FETCHERS
+// Used by the delegate/advisor realtime handlers to patch ONE slice of the
+// committee instead of re-pulling the whole committee (7 tables, select('*'))
+// on every realtime event. This is the egress lever: a current_speaker advance
+// no longer drags the full delegate roster + chat history to every client.
+// The row→app mapping here MUST stay identical to getCommitteeByCode.
+// ============================================================
+
+export async function getDelegatesList(committeeId: string): Promise<Delegate[]> {
+  const { data, error } = await supabase.from('delegates')
+    .select('id, country, status, is_observer')
+    .eq('committee_id', committeeId).order('country', { ascending: true });
+  if (error) { console.error('Error fetching delegates:', error); return []; }
+  return (data ?? []).map((d: DbRow) => ({
+    id: d.id as string, country: d.country as string, status: d.status as DelegateStatus,
+    isObserver: (d.is_observer as boolean) ?? false,
+  }));
+}
+
+// Both GSL and caucus queues in one round-trip (getCommitteeByCode uses two).
+export async function getSpeakersLists(committeeId: string): Promise<{ speakersList: SpeakerEntry[]; caucusQueue: SpeakerEntry[] }> {
+  const { data, error } = await supabase.from('speakers_list')
+    .select('delegate_id, country, list_type, position')
+    .eq('committee_id', committeeId).order('position', { ascending: true });
+  if (error) { console.error('Error fetching speakers lists:', error); return { speakersList: [], caucusQueue: [] }; }
+  const rows = (data ?? []) as DbRow[];
+  const toEntry = (s: DbRow): SpeakerEntry => ({ delegateId: s.delegate_id as string, country: s.country as string });
+  return {
+    speakersList: rows.filter((s) => s.list_type === 'gsl').map(toEntry),
+    caucusQueue: rows.filter((s) => s.list_type === 'caucus').map(toEntry),
+  };
+}
+
+export async function getMessagesList(committeeId: string): Promise<Committee['messages']> {
+  const { data, error } = await supabase.from('messages')
+    .select('id, sender, content, created_at, is_private, recipient')
+    .eq('committee_id', committeeId).order('created_at', { ascending: true });
+  if (error) { console.error('Error fetching messages:', error); return []; }
+  return (data ?? []).map((m: DbRow) => ({
+    id: m.id as string, sender: m.sender as string, content: m.content as string,
+    timestamp: new Date(m.created_at as string), isPrivate: m.is_private as boolean,
+    recipient: m.recipient as string | undefined,
+  }));
+}
+
+export async function getDocumentsList(committeeId: string): Promise<CommitteeDocument[]> {
+  const { data, error } = await supabase.from('documents')
+    .select('*').eq('committee_id', committeeId).order('created_at', { ascending: true });
+  if (error) { console.error('Error fetching documents:', error); return []; }
+  return (data ?? []).map((d: DbRow) => ({
+    id: d.id as string, type: d.type as CommitteeDocument['type'],
+    docCode: d.doc_code as string, title: d.title as string,
+    sponsors: (d.sponsors as string[]) ?? [], content: (d.content as string) ?? '',
+    status: d.status as DocumentStatus, submittedAt: d.created_at as string,
+    fileUrl: d.file_url as string | undefined, fileName: d.file_name as string | undefined,
+    presentationMinutes: d.presentation_minutes as number | undefined,
+    qaMinutes: d.qa_minutes as number | undefined,
+    readingMinutes: d.reading_minutes as number | undefined,
+  }));
+}
+
+export async function getPendingMotionsList(committeeId: string): Promise<PendingMotion[]> {
+  const { data, error } = await supabase.from('motions')
+    .select('*').eq('committee_id', committeeId).eq('status', 'pending')
+    .not('type', 'in', '("gsl-request","join-request")').order('disruptiveness', { ascending: false });
+  if (error) { console.error('Error fetching motions:', error); return []; }
+  return (data ?? []).map((m: DbRow) => ({
+    id: m.id as string, type: m.type as PendingMotionType, proposedBy: m.proposed_by as string,
+    totalTime: m.total_time as number, speakingTime: m.speaking_time as number,
+    topic: m.topic as string, speakerList: [], proposerPosition: null,
+    tourOrder: (m.tour_order as 'asc' | 'desc' | 'custom' | null) ?? undefined,
+    disruptiveness: m.disruptiveness as number,
+  }));
+}
+
+// ============================================================
 // MOTIONS
 // ============================================================
 
