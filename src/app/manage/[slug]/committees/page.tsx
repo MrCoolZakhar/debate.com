@@ -202,8 +202,14 @@ function CommitteeFormFields({ f }: { f: FormState }) {
       <div>
         <label style={labelStyle}>Committee Type</label>
         <select value={f.committeeType} onChange={e => f.setCommitteeType(e.target.value)} style={inputStyle}>
-          {['General Assembly', 'Security Council', 'Specialised', 'Crisis', 'Other'].map(t => (
-            <option key={t} value={t}>{t}</option>
+          {[
+            { value: 'general-assembly', label: 'General Assembly' },
+            { value: 'security-council', label: 'Security Council' },
+            { value: 'specialised', label: 'Specialised' },
+            { value: 'crisis', label: 'Crisis' },
+            { value: 'other', label: 'Other' },
+          ].map(t => (
+            <option key={t.value} value={t.value}>{t.label}</option>
           ))}
         </select>
       </div>
@@ -233,7 +239,7 @@ function AddCommitteeModal({ conferenceId, onClose, onSaved }: {
   const [topic2, setTopic2] = useState('');
   const [topic3, setTopic3] = useState('');
   const [difficulty, setDifficulty] = useState('INTERMEDIATE');
-  const [committeeType, setCommitteeType] = useState('General Assembly');
+  const [committeeType, setCommitteeType] = useState('general-assembly');
   const [totalSlots, setTotalSlots] = useState('40');
   const [notificationEmail, setNotificationEmail] = useState('');
   const [saving, setSaving] = useState(false);
