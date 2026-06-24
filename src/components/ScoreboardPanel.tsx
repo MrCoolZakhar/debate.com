@@ -85,6 +85,14 @@ export default function ScoreboardPanel({ committee, onClose }: { committee: Com
   };
 
   const exportCsv = () => {
+    // Comment on a specific speech (matched by country + context + seconds), as in the drill-in.
+    const commentFor = (country: string, r: LedgerRow): string => {
+      if (r.type !== 'speech') return '';
+      const fb = feedback.find((f) => f.level === 'speech' && f.country === country &&
+        (f.speechContext ?? '') === (r.context ?? '') && (f.speechSeconds ?? 0) === (r.seconds ?? 0));
+      return fb?.content ?? '';
+    };
+
     const header = ['Delegation', 'GSL', 'Caucus', 'Speaking (s)', 'Motions', 'RTR', 'WP', 'DR', 'Manual', 'Total'];
     const lines = [header.join(',')];
     matrix.forEach((r) => {
@@ -93,6 +101,21 @@ export default function ScoreboardPanel({ committee, onClose }: { committee: Com
         r.motions, r.rtr, r.wp, r.dr, r.manual, r.total,
       ].map(csvEscape).join(','));
     });
+
+    // Detailed per-speech / event breakdown (topics + comments + points).
+    lines.push('');
+    lines.push('Per-speech / event breakdown');
+    lines.push(['Delegation', 'Time', 'Source', 'Detail', 'Comment', 'Points'].map(csvEscape).join(','));
+    [...committee.delegates]
+      .sort((a, b) => compareCountryNames(a.country, b.country, language))
+      .forEach((d) => {
+        const led = [...computeLedger(committee, d.country)].sort((a, b) => (a.timestamp || '').localeCompare(b.timestamp || ''));
+        led.forEach((r) => {
+          const time = r.timestamp ? new Date(r.timestamp).toLocaleString() : '';
+          lines.push([getCountryDisplayName(d.country, language), time, r.label, r.detail, commentFor(d.country, r), r.pts].map(csvEscape).join(','));
+        });
+      });
+
     const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
