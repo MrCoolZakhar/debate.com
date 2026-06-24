@@ -140,10 +140,13 @@ function ModalOverlay({ children, onClose }: { children: React.ReactNode; onClos
 function DifficultyToggle({ value, onChange }: { value: string; onChange: (d: string) => void }) {
   return (
     <div className="flex gap-2 flex-wrap mt-1">
-      {(['BEGINNER', 'INTERMEDIATE', 'ADVANCED', 'EXPERT'] as const).map(d => (
+      {(['BEGINNER', 'INTERMEDIATE', 'ADVANCED', 'EXPERT'] as const).map(d => {
+        const slug = d.toLowerCase();
+        const active = value === slug;
+        return (
         <button
           key={d}
-          onClick={() => onChange(d)}
+          onClick={() => onChange(slug)}
           className="focus:outline-none"
           style={{
             padding: '5px 12px',
@@ -151,16 +154,17 @@ function DifficultyToggle({ value, onChange }: { value: string; onChange: (d: st
             fontSize: 10,
             fontFamily: "'DM Mono', monospace",
             fontWeight: 700,
-            border: value === d ? 'none' : '1px solid #DDD4C0',
-            backgroundColor: value === d ? DIFF_COLOR[d] : 'transparent',
-            color: value === d ? 'white' : '#9A8A78',
+            border: active ? 'none' : '1px solid #DDD4C0',
+            backgroundColor: active ? DIFF_COLOR[d] : 'transparent',
+            color: active ? 'white' : '#9A8A78',
             cursor: 'pointer',
             letterSpacing: '0.06em',
           }}
         >
           {d}
         </button>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -240,7 +244,7 @@ function AddCommitteeModal({ conferenceId, onClose, onSaved }: {
   const [topic1, setTopic1] = useState('');
   const [topic2, setTopic2] = useState('');
   const [topic3, setTopic3] = useState('');
-  const [difficulty, setDifficulty] = useState('INTERMEDIATE');
+  const [difficulty, setDifficulty] = useState('intermediate');
   const [committeeType, setCommitteeType] = useState('general-assembly');
   const [notificationEmail, setNotificationEmail] = useState('');
   const [countries, setCountries] = useState<string[]>([]);
@@ -635,7 +639,7 @@ export default function CommitteesPage() {
       {!loading && committees.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {committees.map(c => {
-            const diffColor = DIFF_COLOR[c.difficulty] ?? '#9A8A78';
+            const diffColor = DIFF_COLOR[c.difficulty.toUpperCase()] ?? '#9A8A78';
             const topics = c.topics ?? [];
             const ghostBtn: React.CSSProperties = { border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" };
             return (
