@@ -46,7 +46,7 @@ const labelStyle: React.CSSProperties = {
   marginBottom: 4,
 };
 
-export function CountryMatrixPicker({ value, onChange }: { value: string[]; onChange: (countryNames: string[]) => void }) {
+export function CountryMatrixPicker({ value, onChange, noun = 'country' }: { value: string[]; onChange: (countryNames: string[]) => void; noun?: 'country' | 'character' }) {
   const [search, setSearch] = useState('');
   const [pasteText, setPasteText] = useState('');
   const [pasteError, setPasteError] = useState('');
@@ -96,10 +96,11 @@ export function CountryMatrixPicker({ value, onChange }: { value: string[]; onCh
                   if (e.key === 'Enter') {
                     e.preventDefault();
                     if (available[0]) { addDelegate(available[0].name); setSearch(''); }
+                    else if (search.trim() && !value.includes(search.trim())) { addDelegate(search.trim()); setSearch(''); }
                   }
                   if (e.key === 'Escape') setSearch('');
                 }}
-                placeholder="Search countries..."
+                placeholder={noun === 'character' ? 'Search characters or type a name...' : 'Search countries...'}
                 className="flex-1 bg-transparent px-3 py-2 text-sm focus:outline-none"
                 style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}
               />
@@ -107,7 +108,7 @@ export function CountryMatrixPicker({ value, onChange }: { value: string[]; onCh
                 <span className="text-xs px-2 shrink-0" style={{ color: '#9A8A78' }}>↵ {available[0].name}</span>
               )}
             </div>
-            {search && available.length > 0 && (
+            {search && (available.length > 0 || (search.trim() && !value.includes(search.trim()))) && (
               <div className="absolute top-full left-0 right-0 mt-1 rounded-xl overflow-hidden z-20" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', boxShadow: '0 8px 24px rgba(27,56,40,0.12)' }}>
                 {available.slice(0, 5).map((c, i) => (
                   <button
@@ -123,6 +124,18 @@ export function CountryMatrixPicker({ value, onChange }: { value: string[]; onCh
                     {i === 0 && <span className="text-xs" style={{ color: '#9A8A78' }}>↵</span>}
                   </button>
                 ))}
+                {search.trim() && !value.includes(search.trim()) && (
+                  <button
+                    onMouseDown={(e) => { e.preventDefault(); addDelegate(search.trim()); setSearch(''); }}
+                    className="w-full flex items-center gap-3 px-3 py-2 text-left transition-colors"
+                    style={{ borderTop: available.length > 0 ? '1px solid #EDE7D8' : undefined, backgroundColor: 'transparent' }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#EDE7D8'; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                  >
+                    <span style={{ fontSize: 14, fontWeight: 700, color: '#1B3828', flexShrink: 0, width: 20, textAlign: 'center' }}>+</span>
+                    <span className="text-sm flex-1" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{`Add "${search.trim()}"`}</span>
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -201,8 +214,8 @@ export function CountryMatrixPicker({ value, onChange }: { value: string[]; onCh
         <div className="flex-1 rounded-xl overflow-hidden" style={{ border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3', maxHeight: 260, overflowY: 'auto' }}>
           {value.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full px-3 py-8">
-              <p className="text-xs font-bold uppercase text-center" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>NO DELEGATES</p>
-              <p className="text-xs text-center mt-1" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Search or use bundles to add</p>
+              <p className="text-xs font-bold uppercase text-center" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>{noun === 'character' ? 'NO CHARACTERS' : 'NO DELEGATES'}</p>
+              <p className="text-xs text-center mt-1" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>{noun === 'character' ? 'Search or type a name to add' : 'Search or use bundles to add'}</p>
             </div>
           ) : (
             value.map((name) => {

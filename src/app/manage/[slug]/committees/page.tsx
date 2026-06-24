@@ -233,31 +233,37 @@ function CommitteeFormFields({ f }: { f: FormState }) {
 
 // ── AddCommitteeModal ─────────────────────────────────────────────────────────
 
-function AddCommitteeModal({ conferenceId, onClose, onSaved }: {
+function AddCommitteeModal({ conferenceId, committeeType, onClose, onSaved }: {
   conferenceId: string;
+  committeeType: 'general-assembly' | 'crisis';
   onClose: () => void;
   onSaved: () => void;
 }) {
   const { session } = useAuth();
+  const isCrisis = committeeType === 'crisis';
   const [name, setName] = useState('');
   const [abbreviation, setAbbreviation] = useState('');
-  const [topic1, setTopic1] = useState('');
-  const [topic2, setTopic2] = useState('');
-  const [topic3, setTopic3] = useState('');
+  const [topics, setTopics] = useState<string[]>([]);
+  const [topicInput, setTopicInput] = useState('');
   const [difficulty, setDifficulty] = useState('intermediate');
-  const [committeeType, setCommitteeType] = useState('general-assembly');
-  const [notificationEmail, setNotificationEmail] = useState('');
   const [countries, setCountries] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  function addTopic() {
+    const t = topicInput.trim();
+    if (!t || topics.length >= 3 || topics.includes(t)) return;
+    setTopics([...topics, t]);
+    setTopicInput('');
+  }
+
   async function handleSave() {
     if (!name.trim()) { setError('Committee name is required.'); return; }
-    if (countries.length === 0) { setError('Add at least one country to the committee.'); return; }
+    if (topics.length === 0) { setError('Add at least one topic.'); return; }
+    if (countries.length === 0) { setError(isCrisis ? 'Add at least one character.' : 'Add at least one country.'); return; }
+    if (!session) return;
     setSaving(true);
     setError('');
-    const topics = [topic1, topic2, topic3].filter(Boolean);
-    if (!session) return;
     const supabase = getAuthedClient(session.access_token);
     const { data: created, error: err } = await supabase.from('conference_committees').insert({
       conference_id: conferenceId,
@@ -267,7 +273,7 @@ function AddCommitteeModal({ conferenceId, onClose, onSaved }: {
       difficulty,
       committee_type: committeeType,
       total_slots: countries.length,
-      notification_email: notificationEmail.trim() || null,
+      notification_email: null,
     }).select('id').single();
     if (err || !created) { setSaving(false); setError(err?.message ?? 'Failed to create committee.'); return; }
     await supabase.from('committee_country_slots').insert(
@@ -284,35 +290,58 @@ function AddCommitteeModal({ conferenceId, onClose, onSaved }: {
     onClose();
   }
 
-  const f: FormState = {
-    name, setName, abbreviation, setAbbreviation,
-    topic1, setTopic1, topic2, setTopic2, topic3, setTopic3,
-    difficulty, setDifficulty, committeeType, setCommitteeType,
-    notificationEmail, setNotificationEmail,
-  };
-
   return (
     <ModalOverlay onClose={onClose}>
       <div className="w-full max-w-2xl rounded-2xl p-6" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', maxHeight: '90vh', overflowY: 'auto' }}>
-        <div className="flex items-center justify-between mb-5">
-          <h2 className="font-black text-lg" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Add Committee</h2>
+        <div className="flex items-center justify-end mb-2">
           <button onClick={onClose} className="focus:outline-none" style={{ color: '#9A8A78' }}><X size={18} /></button>
         </div>
-        <CommitteeFormFields f={f} />
+        <div className="flex flex-col gap-4">
+          <div>
+            <label style={labelStyle}>Committee Name *</label>
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. UN Security Council" style={inputStyle} />
+          </div>
+          <div>
+            <label style={labelStyle}>Abbreviation</label>
+            <input value={abbreviation} onChange={e => setAbbreviation(e.target.value)} placeholder="e.g. UNSC, UNHRC" style={inputStyle} />
+          </div>
+          <div>
+            <label style={labelStyle}>Difficulty</label>
+            <select value={difficulty} onChange={e => setDifficulty(e.target.value)} style={inputStyle}>
+              <option value="beginner">Beginner</option>
+              <option value="intermediate">Intermediate</option>
+              <option value="advanced">Advanced</option>
+              <option value="expert">Expert</option>
+            </select>
+          </div>
+          <div>
+            <label style={labelStyle}>Topics * (at least one, up to 3)</label>
+            <div className="flex gap-2">
+              <input value={topicInput} onChange={e => setTopicInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addTopic(); } }} placeholder="Type a topic..." style={{ ...inputStyle, flex: 1 }} disabled={topics.length >= 3} />
+              <button onClick={addTopic} disabled={topics.length >= 3} className="rounded-xl px-4 font-bold text-sm focus:outline-none" style={{ backgroundColor: topics.length >= 3 ? '#DDD4C0' : '#1B3828', color: topics.length >= 3 ? '#9A8A78' : '#EED98A', fontFamily: "'Outfit', sans-serif", whiteSpace: 'nowrap' }}>Add topic</button>
+            </div>
+            {topics.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-2">
+                {topics.map((t, i) => (
+                  <span key={i} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs" style={{ backgroundColor: '#EDE7D8', color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                    {t}
+                    <button onClick={() => setTopics(topics.filter((_, j) => j !== i))} className="focus:outline-none" style={{ color: '#9A8A78' }}><X size={12} /></button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
         <div className="mt-5 pt-5" style={{ borderTop: '1px solid #EDE7D8' }}>
           <p className="text-xs font-semibold mb-3" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace", textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-            Committee Countries
+            {isCrisis ? 'Committee Characters' : 'Committee Countries'}
           </p>
-          <CountryMatrixPicker value={countries} onChange={setCountries} />
+          <CountryMatrixPicker value={countries} onChange={setCountries} noun={isCrisis ? 'character' : 'country'} />
         </div>
         {error && <p className="text-xs mt-3" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{error}</p>}
         <div className="flex gap-3 mt-6">
-          <button onClick={onClose} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ border: '1.5px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}>
-            CANCEL
-          </button>
-          <button onClick={handleSave} disabled={saving} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ backgroundColor: saving ? '#DDD4C0' : '#1B3828', color: saving ? '#9A8A78' : '#EED98A', fontFamily: "'Outfit', sans-serif" }}>
-            {saving ? 'SAVING...' : 'ADD COMMITTEE'}
-          </button>
+          <button onClick={onClose} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ border: '1.5px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}>CANCEL</button>
+          <button onClick={handleSave} disabled={saving} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ backgroundColor: saving ? '#DDD4C0' : '#1B3828', color: saving ? '#9A8A78' : '#EED98A', fontFamily: "'Outfit', sans-serif" }}>{saving ? 'SAVING...' : 'ADD COMMITTEE'}</button>
         </div>
       </div>
     </ModalOverlay>
@@ -540,6 +569,7 @@ export default function CommitteesPage() {
   const [committees, setCommittees] = useState<Committee[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
+  const [pendingType, setPendingType] = useState<'general-assembly' | 'crisis' | null>(null);
   const [editingCommittee, setEditingCommittee] = useState<Committee | null>(null);
   const [slotsCommittee, setSlotsCommittee] = useState<Committee | null>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
@@ -612,7 +642,7 @@ export default function CommitteesPage() {
           </h1>
         </div>
         <button
-          onClick={() => setShowAdd(true)}
+          onClick={() => { setPendingType(null); setShowAdd(true); }}
           className="flex items-center gap-2 rounded-xl py-2.5 px-5 font-bold text-sm focus:outline-none transition-colors"
           style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}
           onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
@@ -772,11 +802,42 @@ export default function CommitteesPage() {
         </div>
       )}
 
-      {showAdd && (
+      {showAdd && !pendingType && (
+        <ModalOverlay onClose={() => setShowAdd(false)}>
+          <div className="rounded-2xl p-8 flex flex-col items-center gap-5" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 360 }}>
+            <div className="w-full flex justify-end">
+              <button onClick={() => setShowAdd(false)} className="focus:outline-none" style={{ color: '#9A8A78' }}><X size={18} /></button>
+            </div>
+            <p className="text-xs font-semibold text-center" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace", textTransform: 'uppercase', letterSpacing: '0.08em' }}>Choose committee type</p>
+            <div className="flex flex-col gap-3 w-full">
+              <button
+                onClick={() => setPendingType('general-assembly')}
+                className="w-full rounded-xl py-4 font-black text-base focus:outline-none transition-colors"
+                style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.04em' }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+              >
+                General Assembly
+              </button>
+              <button
+                onClick={() => setPendingType('crisis')}
+                className="w-full rounded-xl py-4 font-black text-base focus:outline-none transition-colors"
+                style={{ border: '2px solid #1B3828', color: '#1B3828', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.04em' }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+              >
+                Crisis
+              </button>
+            </div>
+          </div>
+        </ModalOverlay>
+      )}
+      {showAdd && pendingType && (
         <AddCommitteeModal
           conferenceId={conference.id}
-          onClose={() => setShowAdd(false)}
-          onSaved={loadCommittees}
+          committeeType={pendingType}
+          onClose={() => { setShowAdd(false); setPendingType(null); }}
+          onSaved={() => { setShowAdd(false); setPendingType(null); loadCommittees(); }}
         />
       )}
       {editingCommittee && (
