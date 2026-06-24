@@ -5,7 +5,8 @@ import { Plus, X, Copy, Search, Check } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
-import { UN_COUNTRIES, getFlagUrl } from '@/lib/countries';
+import { UN_COUNTRIES, getFlagUrl, getCountryByName } from '@/lib/countries';
+import { CountryMatrixPicker } from '@/components/CountryMatrixPicker';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -33,6 +34,7 @@ async function mintConferenceSession(
   confCommitteeId: string,
   name: string,
   topic: string,
+  countries: string[],
 ): Promise<string | null> {
   for (let attempt = 0; attempt < 5; attempt++) {
     const code = Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -62,6 +64,11 @@ async function mintConferenceSession(
       country: null,
       time_remaining: 90,
     });
+    if (countries.length > 0) {
+      await supabase.from('delegates').insert(
+        countries.map((country) => ({ committee_id: sessionRow.id, country, status: 'absent' }))
+      );
+    }
     await supabase
       .from('conference_committees')
       .update({ session_id: sessionRow.id, session_code: code })
@@ -168,7 +175,6 @@ interface FormState {
   topic3: string; setTopic3: (v: string) => void;
   difficulty: string; setDifficulty: (v: string) => void;
   committeeType: string; setCommitteeType: (v: string) => void;
-  totalSlots: string; setTotalSlots: (v: string) => void;
   notificationEmail: string; setNotificationEmail: (v: string) => void;
 }
 
@@ -214,10 +220,6 @@ function CommitteeFormFields({ f }: { f: FormState }) {
         </select>
       </div>
       <div>
-        <label style={labelStyle}>Total Delegate Slots</label>
-        <input type="number" min={1} value={f.totalSlots} onChange={e => f.setTotalSlots(e.target.value)} style={inputStyle} />
-      </div>
-      <div>
         <label style={labelStyle}>Notification Email</label>
         <input value={f.notificationEmail} onChange={e => f.setNotificationEmail(e.target.value)} placeholder="Leave blank to use your account email" type="email" style={inputStyle} />
       </div>
@@ -240,13 +242,14 @@ function AddCommitteeModal({ conferenceId, onClose, onSaved }: {
   const [topic3, setTopic3] = useState('');
   const [difficulty, setDifficulty] = useState('INTERMEDIATE');
   const [committeeType, setCommitteeType] = useState('general-assembly');
-  const [totalSlots, setTotalSlots] = useState('40');
   const [notificationEmail, setNotificationEmail] = useState('');
+  const [countries, setCountries] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   async function handleSave() {
     if (!name.trim()) { setError('Committee name is required.'); return; }
+    if (countries.length === 0) { setError('Add at least one country to the committee.'); return; }
     setSaving(true);
     setError('');
     const topics = [topic1, topic2, topic3].filter(Boolean);
@@ -259,12 +262,19 @@ function AddCommitteeModal({ conferenceId, onClose, onSaved }: {
       topics,
       difficulty,
       committee_type: committeeType,
-      total_slots: parseInt(totalSlots) || 40,
+      total_slots: countries.length,
       notification_email: notificationEmail.trim() || null,
     }).select('id').single();
     if (err || !created) { setSaving(false); setError(err?.message ?? 'Failed to create committee.'); return; }
-    // Creating a committee mints its real, joinable session (GA and crisis alike).
-    await mintConferenceSession(supabase, created.id, name.trim(), topics[0] ?? '');
+    await supabase.from('committee_country_slots').insert(
+      countries.map((country) => ({
+        conference_committee_id: created.id,
+        country_code: getCountryByName(country)?.code ?? country,
+        country_name: country,
+        delegation_size: 1,
+      }))
+    );
+    await mintConferenceSession(supabase, created.id, name.trim(), topics[0] ?? '', countries);
     setSaving(false);
     onSaved();
     onClose();
@@ -274,17 +284,23 @@ function AddCommitteeModal({ conferenceId, onClose, onSaved }: {
     name, setName, abbreviation, setAbbreviation,
     topic1, setTopic1, topic2, setTopic2, topic3, setTopic3,
     difficulty, setDifficulty, committeeType, setCommitteeType,
-    totalSlots, setTotalSlots, notificationEmail, setNotificationEmail,
+    notificationEmail, setNotificationEmail,
   };
 
   return (
     <ModalOverlay onClose={onClose}>
-      <div className="w-full max-w-lg rounded-2xl p-6" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', maxHeight: '90vh', overflowY: 'auto' }}>
+      <div className="w-full max-w-2xl rounded-2xl p-6" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', maxHeight: '90vh', overflowY: 'auto' }}>
         <div className="flex items-center justify-between mb-5">
           <h2 className="font-black text-lg" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Add Committee</h2>
           <button onClick={onClose} className="focus:outline-none" style={{ color: '#9A8A78' }}><X size={18} /></button>
         </div>
         <CommitteeFormFields f={f} />
+        <div className="mt-5 pt-5" style={{ borderTop: '1px solid #EDE7D8' }}>
+          <p className="text-xs font-semibold mb-3" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace", textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            Committee Countries
+          </p>
+          <CountryMatrixPicker value={countries} onChange={setCountries} />
+        </div>
         {error && <p className="text-xs mt-3" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{error}</p>}
         <div className="flex gap-3 mt-6">
           <button onClick={onClose} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ border: '1.5px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}>
@@ -315,7 +331,6 @@ function EditCommitteeModal({ committee, onClose, onSaved }: {
   const [topic3, setTopic3] = useState(topics[2] ?? '');
   const [difficulty, setDifficulty] = useState(committee.difficulty);
   const [committeeType, setCommitteeType] = useState(committee.committee_type);
-  const [totalSlots, setTotalSlots] = useState(String(committee.total_slots));
   const [notificationEmail, setNotificationEmail] = useState(committee.notification_email ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -333,7 +348,6 @@ function EditCommitteeModal({ committee, onClose, onSaved }: {
       topics: topicsArr,
       difficulty,
       committee_type: committeeType,
-      total_slots: parseInt(totalSlots) || 40,
       notification_email: notificationEmail.trim() || null,
     }).eq('id', committee.id);
     setSaving(false);
@@ -346,7 +360,7 @@ function EditCommitteeModal({ committee, onClose, onSaved }: {
     name, setName, abbreviation, setAbbreviation,
     topic1, setTopic1, topic2, setTopic2, topic3, setTopic3,
     difficulty, setDifficulty, committeeType, setCommitteeType,
-    totalSlots, setTotalSlots, notificationEmail, setNotificationEmail,
+    notificationEmail, setNotificationEmail,
   };
 
   return (
@@ -569,7 +583,7 @@ export default function CommitteesPage() {
     if (!session) return;
     if (committee.session_id) return; // already linked to a real session
     const supabase = getAuthedClient(session.access_token);
-    await mintConferenceSession(supabase, committee.id, committee.name, (committee.topics ?? [])[0] ?? '');
+    await mintConferenceSession(supabase, committee.id, committee.name, (committee.topics ?? [])[0] ?? '', []);
     await loadCommittees();
   }
 
