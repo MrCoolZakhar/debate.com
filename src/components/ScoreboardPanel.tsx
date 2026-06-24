@@ -6,8 +6,8 @@ import { FlagImg } from '@/components/FlagImg';
 import { Committee } from '@/lib/types';
 import { getCountryByName, getCountryDisplayName, compareCountryNames } from '@/lib/countries';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { computeObjectiveScore, computeLedger, parseLedgerEvents, getScoringConfig, computeQualityScore, computeHeadline, type LedgerRow, type QualityFeedback } from '@/lib/scoring';
-import { logEvent, getFeedbackForCommittee } from '@/lib/committeeService';
+import { computeObjectiveScore, computeLedger, parseLedgerEvents, getScoringConfig, computeQualityScore, computeHeadline, type LedgerRow } from '@/lib/scoring';
+import { logEvent, getFeedbackForCommittee, type FeedbackEntry } from '@/lib/committeeService';
 
 interface MatrixRow {
   country: string;
@@ -49,11 +49,10 @@ export default function ScoreboardPanel({ committee, onClose }: { committee: Com
   const [awardAmt, setAwardAmt] = useState('');
   const [awardNote, setAwardNote] = useState('');
   const [deduct, setDeduct] = useState(false);
-  const [feedback, setFeedback] = useState<QualityFeedback[]>([]);
+  const [feedback, setFeedback] = useState<FeedbackEntry[]>([]);
 
   useEffect(() => {
-    getFeedbackForCommittee(committee.id).then((all) =>
-      setFeedback(all.map((f) => ({ country: f.country, level: f.level, factorScores: f.factorScores, createdAt: f.createdAt }))));
+    getFeedbackForCommittee(committee.id).then(setFeedback);
   }, [committee.id]);
 
   const cfg = getScoringConfig(committee);
@@ -112,12 +111,21 @@ export default function ScoreboardPanel({ committee, onClose }: { committee: Com
   }
   const drillTotal = drillRows.reduce((s, r) => s + r.pts, 0);
 
+  // The chair's private note on a specific speech (matched by context + seconds).
+  const speechComment = (r: LedgerRow): string | null => {
+    if (r.type !== 'speech' || !selected) return null;
+    const fb = feedback.find((f) => f.level === 'speech' && f.country === selected &&
+      (f.speechContext ?? '') === (r.context ?? '') && (f.speechSeconds ?? 0) === (r.seconds ?? 0));
+    return fb && fb.content ? fb.content : null;
+  };
+
   return (
     <Portal>
+      <style>{`@keyframes sbFade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}`}</style>
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(28,20,16,0.45)' }} onClick={onClose}>
         <div className="w-full max-w-3xl rounded-2xl overflow-hidden flex flex-col" style={{ maxHeight: '88vh', backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', fontFamily: "'Poppins','Outfit',sans-serif" }} onClick={(e) => e.stopPropagation()}>
           {/* Header */}
-          <div className="px-5 py-3 flex items-center gap-3 shrink-0" style={{ backgroundColor: '#1B3828' }}>
+          <div className="px-5 py-3 flex items-center gap-3 shrink-0 sticky top-0 z-10" style={{ backgroundColor: '#1B3828' }}>
             <div className="w-1 h-4 rounded-full" style={{ backgroundColor: '#EED98A' }} />
             <span className="text-sm font-black tracking-wide" style={{ color: '#EED98A' }}>Scoreboard</span>
             <div className="ms-auto flex items-center gap-2">
@@ -140,7 +148,7 @@ export default function ScoreboardPanel({ committee, onClose }: { committee: Com
           <div className="flex-1 min-h-0 overflow-y-auto p-4">
             {/* Ranking + drill-in */}
             {tab === 'ranking' && !selected && (
-              <div className="space-y-1">
+              <div className="space-y-1" style={{ animation: 'sbFade 160ms ease-out' }}>
                 {ranked.map((r, i) => (
                   <button key={r.country} onClick={() => setSelected(r.country)}
                     className="w-full flex items-center gap-3 px-2 py-2.5 rounded-xl text-start transition-colors"
@@ -157,7 +165,7 @@ export default function ScoreboardPanel({ committee, onClose }: { committee: Com
             )}
 
             {tab === 'ranking' && selected && (
-              <div>
+              <div style={{ animation: 'sbFade 160ms ease-out' }}>
                 <button onClick={() => setSelected(null)} className="text-xs font-bold mb-3" style={{ color: '#1B3828' }}>← Back</button>
                 <div className="flex items-center gap-3 mb-4">
                   {flag(selected)}
@@ -173,12 +181,20 @@ export default function ScoreboardPanel({ committee, onClose }: { committee: Com
                       <span className="text-xs font-mono font-bold" style={{ color: g.subtotal < 0 ? '#8B2020' : '#1B3828' }}>{g.subtotal < 0 ? '' : '+'}{g.subtotal}</span>
                     </div>
                     <div className="space-y-0.5">
-                      {g.rows.map((r, i) => (
-                        <div key={i} className="flex justify-between text-xs gap-2 px-2 py-1 rounded" style={{ backgroundColor: '#FFFFFF', border: '1px solid #DDD4C0' }}>
-                          <span className="truncate" style={{ color: '#6A5A4A' }}>{r.detail || r.label}{r.timestamp ? ` · ${new Date(r.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}</span>
-                          <span className="font-mono shrink-0" style={{ color: r.pts < 0 ? '#8B2020' : '#1C1410' }}>{r.pts < 0 ? '' : '+'}{r.pts}</span>
-                        </div>
-                      ))}
+                      {g.rows.map((r, i) => {
+                        const comment = speechComment(r);
+                        return (
+                          <div key={i} className="px-2 py-1 rounded transition-colors" style={{ backgroundColor: '#FFFFFF', border: '1px solid #DDD4C0' }}
+                            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#EDE7D8'; }}
+                            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#FFFFFF'; }}>
+                            <div className="flex justify-between text-xs gap-2">
+                              <span className="truncate" style={{ color: '#6A5A4A' }}>{r.detail || r.label}{r.timestamp ? ` · ${new Date(r.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}</span>
+                              <span className="font-mono shrink-0" style={{ color: r.pts < 0 ? '#8B2020' : '#1C1410' }}>{r.pts < 0 ? '' : '+'}{r.pts}</span>
+                            </div>
+                            {comment && <p className="text-[11px] italic mt-0.5" style={{ color: '#6A5A4A' }}>&ldquo;{comment}&rdquo;</p>}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 ))}

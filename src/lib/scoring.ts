@@ -24,6 +24,8 @@ export interface LedgerRow {
   pts: number;
   detail: string;
   timestamp: string;
+  context?: string;   // speech rows: the speaking context (for matching feedback)
+  seconds?: number;   // speech rows: seconds spoken (for matching feedback)
 }
 
 // committee.dbScoring merged over DEFAULT_SCORING — never reads localStorage.
@@ -89,7 +91,7 @@ export function computeLedger(committee: Committee, country: string): LedgerRow[
       const secs = e.seconds ?? 0;
       const timePts = per10 != null ? Math.floor(secs / 10) * per10 : 0;
       const detail = [e.topic, secs ? `${secs}s` : ''].filter(Boolean).join(' · ');
-      rows.push({ type: 'speech', sourceId: sid, label: name(cfg, sid), country, pts: base + timePts, detail, timestamp: e.timestamp ?? '' });
+      rows.push({ type: 'speech', sourceId: sid, label: name(cfg, sid), country, pts: base + timePts, detail, timestamp: e.timestamp ?? '', context: e.context ?? 'speakers-list', seconds: secs });
     } else if (type === 'motion-raised') {
       const v = val(cfg, 'motionRaised'); if (v == null) continue;
       rows.push({ type, sourceId: 'motionRaised', label: name(cfg, 'motionRaised'), country, pts: v, detail: '', timestamp: e.timestamp ?? '' });
