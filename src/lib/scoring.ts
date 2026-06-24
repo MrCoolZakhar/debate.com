@@ -137,20 +137,36 @@ export function computeObjectiveScore(committee: Committee, country: string): { 
 // ── Quality (subjective) scoring from chair recaps ──
 export interface QualityFeedback { country?: string; level: string; factorScores: Record<string, number>; createdAt: string; }
 
-// Mean of the latest conference recap's enabled factor scores (fallback: latest session
-// recap), normalised to 0–100. Returns null when there's no recap data.
+// Quality 0–100 from chair factor scores. Prefers the latest conference recap, then the
+// latest session recap; with neither (e.g. recap removed), falls back to averaging the
+// per-speech criteria the chair entered in the comment bar. Null when there's no data.
 export function computeQualityScore(feedback: QualityFeedback[], country: string, cfg: ScoringConfig): number | null {
   const mine = feedback.filter((f) => !f.country || f.country === country);
+  const enabled = cfg.factors.filter((f) => f.enabled);
   const latestOf = (lvl: string) =>
     mine.filter((f) => f.level === lvl).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))[0];
   const latest = latestOf('conference') ?? latestOf('session');
-  if (!latest) return null;
-  const enabled = cfg.factors.filter((f) => f.enabled);
-  const vals = enabled
-    .map((f) => latest.factorScores[f.id])
-    .filter((v): v is number => typeof v === 'number' && v > 0);
-  if (!vals.length) return null;
-  const mean = vals.reduce((s, v) => s + v, 0) / vals.length;
+
+  let factorMeans: number[];
+  if (latest) {
+    // Recap path — the single latest recap's enabled factor scores.
+    factorMeans = enabled
+      .map((f) => latest.factorScores[f.id])
+      .filter((v): v is number => typeof v === 'number' && v > 0);
+  } else {
+    // Speech fallback — mean of each factor across all per-speech entries.
+    const speeches = mine.filter((f) => f.level === 'speech');
+    if (!speeches.length) return null;
+    factorMeans = [];
+    for (const f of enabled) {
+      const vals = speeches
+        .map((s) => s.factorScores[f.id])
+        .filter((v): v is number => typeof v === 'number' && v > 0);
+      if (vals.length) factorMeans.push(vals.reduce((s, v) => s + v, 0) / vals.length);
+    }
+  }
+  if (!factorMeans.length) return null;
+  const mean = factorMeans.reduce((s, v) => s + v, 0) / factorMeans.length;
   return Math.round((mean / Math.max(1, cfg.factorScaleMax)) * 100);
 }
 
