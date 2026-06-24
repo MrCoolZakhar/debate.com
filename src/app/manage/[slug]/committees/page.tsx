@@ -18,9 +18,57 @@ interface CommitteeRow {
   committee_type: string;
   total_slots: number;
   session_code: string | null;
+  session_id: string | null;
   pp_submissions_enabled: boolean;
   position_paper_deadline: string | null;
   notification_email: string | null;
+}
+
+// Mint a real, joinable session for a conference committee and link it back.
+// committees/current_speaker carry a public read/write RLS policy, so the authed
+// organizer client can write them directly. Generates a unique 6-char code,
+// retrying on a code-uniqueness collision. Returns the code, or null on failure.
+async function mintConferenceSession(
+  supabase: ReturnType<typeof getAuthedClient>,
+  confCommitteeId: string,
+  name: string,
+  topic: string,
+): Promise<string | null> {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const chairJoinSuffix = Math.floor(1000 + Math.random() * 9000).toString();
+    const { data: sessionRow, error: sErr } = await supabase
+      .from('committees')
+      .insert({
+        code,
+        name,
+        topic: topic || 'TBD',
+        chair_names: [],
+        phase: 'pre-session',
+        speaker_time_limit: 90,
+        settings: { chairJoinSuffix, separateChairCode: true },
+        session_origin: 'conference',
+      })
+      .select('id')
+      .single();
+    if (sErr) {
+      if (sErr.code === '23505') continue; // code collision — try a new code
+      console.error('Error minting conference session:', sErr);
+      return null;
+    }
+    await supabase.from('current_speaker').insert({
+      committee_id: sessionRow.id,
+      delegate_id: null,
+      country: null,
+      time_remaining: 90,
+    });
+    await supabase
+      .from('conference_committees')
+      .update({ session_id: sessionRow.id, session_code: code })
+      .eq('id', confCommitteeId);
+    return code;
+  }
+  return null;
 }
 
 interface Committee extends CommitteeRow {
@@ -198,7 +246,7 @@ function AddCommitteeModal({ conferenceId, onClose, onSaved }: {
     const topics = [topic1, topic2, topic3].filter(Boolean);
     if (!session) return;
     const supabase = getAuthedClient(session.access_token);
-    const { error: err } = await supabase.from('conference_committees').insert({
+    const { data: created, error: err } = await supabase.from('conference_committees').insert({
       conference_id: conferenceId,
       name: name.trim(),
       abbreviation: abbreviation.trim() || null,
@@ -207,9 +255,11 @@ function AddCommitteeModal({ conferenceId, onClose, onSaved }: {
       committee_type: committeeType,
       total_slots: parseInt(totalSlots) || 40,
       notification_email: notificationEmail.trim() || null,
-    });
+    }).select('id').single();
+    if (err || !created) { setSaving(false); setError(err?.message ?? 'Failed to create committee.'); return; }
+    // Creating a committee mints its real, joinable session (GA and crisis alike).
+    await mintConferenceSession(supabase, created.id, name.trim(), topics[0] ?? '');
     setSaving(false);
-    if (err) { setError(err.message); return; }
     onSaved();
     onClose();
   }
@@ -477,7 +527,7 @@ export default function CommitteesPage() {
     const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase
       .from('conference_committees')
-      .select('id, name, abbreviation, topics, difficulty, committee_type, total_slots, session_code, position_paper_deadline, notification_email, pp_submissions_enabled')
+      .select('id, name, abbreviation, topics, difficulty, committee_type, total_slots, session_code, session_id, position_paper_deadline, notification_email, pp_submissions_enabled')
       .eq('conference_id', conference.id)
       .order('name', { ascending: true });
 
@@ -509,11 +559,11 @@ export default function CommitteesPage() {
     await loadCommittees();
   }
 
-  async function generateSessionCode(committeeId: string) {
-    const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+  async function generateSessionCode(committee: CommitteeRow) {
     if (!session) return;
+    if (committee.session_id) return; // already linked to a real session
     const supabase = getAuthedClient(session.access_token);
-    await supabase.from('conference_committees').update({ session_code: code }).eq('id', committeeId);
+    await mintConferenceSession(supabase, committee.id, committee.name, (committee.topics ?? [])[0] ?? '');
     await loadCommittees();
   }
 
@@ -681,7 +731,7 @@ export default function CommitteesPage() {
                     </button>
                     {!c.session_code && (
                       <button
-                        onClick={() => generateSessionCode(c.id)}
+                        onClick={() => generateSessionCode(c)}
                         className="rounded-lg py-1.5 px-4 text-xs font-semibold focus:outline-none transition-colors"
                         style={ghostBtn}
                         onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
