@@ -34,8 +34,8 @@ function speechRows(committee: Committee): SpeechRow[] {
     }));
 }
 
-export default function FeedbackLogPanel({ committee, chairName, onClose }: {
-  committee: Committee; chairName: string; onClose: () => void;
+export default function FeedbackLogPanel({ committee, chairName, currentCountry }: {
+  committee: Committee; chairName: string; currentCountry: string | null;
 }) {
   const { language } = useLanguage();
   const cfg = getScoringConfig(committee);
@@ -43,6 +43,12 @@ export default function FeedbackLogPanel({ committee, chairName, onClose }: {
   const rows = useMemo(() => speechRows(committee), [committee.messages]);
   const [state, setState] = useState<Record<string, RowState>>({});
   const loadedRef = useRef(false);
+  const currentCardRef = useRef<HTMLDivElement | null>(null);
+
+  // Newest first — the leading (left) edge holds the most recent speech.
+  const ordered = useMemo(() => [...rows].reverse(), [rows]);
+  // First card (newest) belonging to the live speaker — the one we ring + scroll to.
+  const highlightKey = currentCountry ? ordered.find((r) => r.country === currentCountry)?.key ?? null : null;
 
   // Pre-fill from existing 'speech' feedback — greedy match by country+context+seconds.
   useEffect(() => {
@@ -67,6 +73,11 @@ export default function FeedbackLogPanel({ committee, chairName, onClose }: {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [committee.id, rows.length]);
 
+  // Scroll the live speaker's card into view when the speaker changes.
+  useEffect(() => {
+    currentCardRef.current?.scrollIntoView({ behavior: 'smooth', inline: 'start', block: 'nearest' });
+  }, [highlightKey]);
+
   const persist = async (row: SpeechRow, content: string, scores: Record<string, number>) => {
     const cur = state[row.key];
     if (cur?.id) {
@@ -90,53 +101,77 @@ export default function FeedbackLogPanel({ committee, chairName, onClose }: {
       return { ...prev, [row.key]: nextRow };
     });
 
+  // +/− stepper: clamp 1…max; stepping below 1 unsets (0).
+  const step = (row: SpeechRow, factorId: string, cur: number, delta: number) => {
+    let next = (cur || 0) + delta;
+    if (next < 1) next = 0;
+    if (next > cfg.factorScaleMax) next = cfg.factorScaleMax;
+    setScore(row, factorId, next);
+  };
+
   return (
-    <div className="fixed top-0 right-0 bottom-0 z-40 w-[26rem] max-w-full flex flex-col shadow-2xl"
-      style={{ backgroundColor: '#FAF8F3', borderLeft: '1px solid #DDD4C0', fontFamily: "'Poppins','Outfit',sans-serif" }}>
-      <div className="px-4 py-3 flex items-center gap-2 shrink-0" style={{ backgroundColor: '#1B3828' }}>
-        <div className="w-1 h-4 rounded-full" style={{ backgroundColor: '#EED98A' }} />
-        <span className="text-sm font-black tracking-wide" style={{ color: '#EED98A' }}>Feedback log</span>
-        <span className="text-[10px]" style={{ color: 'rgba(238,217,138,0.6)' }}>private to chairs</span>
-        <button onClick={onClose} className="ms-auto text-[#EDE7D8] hover:text-white text-lg leading-none">✕</button>
+    <div className="fixed bottom-0 left-0 right-0 z-40 flex flex-col"
+      style={{ backgroundColor: '#FAF8F3', borderTop: '1px solid #DDD4C0', maxHeight: '200px', fontFamily: "'Poppins','Outfit',sans-serif" }}>
+      <div className="flex items-center gap-2 px-4 py-1.5 shrink-0" style={{ borderBottom: '1px solid #DDD4C0' }}>
+        <div className="w-1 h-3.5 rounded-full" style={{ backgroundColor: '#EED98A' }} />
+        <span className="text-xs font-black tracking-wide" style={{ color: '#1B3828' }}>Feedback log</span>
+        <span className="text-[10px]" style={{ color: '#9A8A78' }}>· private to chairs</span>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-2">
-        {rows.length === 0 && (
-          <p className="text-xs text-center py-8" style={{ color: '#9A8A78' }}>Speeches will appear here as delegates speak.</p>
-        )}
-        {[...rows].reverse().map((row) => {
-          const rs = state[row.key] ?? { content: '', scores: {} };
-          return (
-            <div key={row.key} className="rounded-xl p-2.5" style={{ border: '1px solid #DDD4C0', backgroundColor: '#FFFFFF' }}>
-              <div className="flex items-center gap-2 mb-1.5">
-                <FlagImg code={getCountryByName(row.country)?.code ?? ''} size={18} className="shrink-0" />
-                <span className="text-sm font-semibold truncate flex-1" style={{ color: '#1C1410' }}>{getCountryDisplayName(row.country, language)}</span>
-                <span className="text-[10px] font-mono" style={{ color: '#9A8A78' }}>{row.context.replace(/-/g, ' ')} · {row.seconds}s</span>
-                <span className="text-[10px] font-mono" style={{ color: '#9A8A78' }}>{row.timestamp ? new Date(row.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span>
-              </div>
-              <input
-                value={rs.content}
-                onChange={(e) => setNote(row, e.target.value)}
-                onBlur={() => persist(row, rs.content, rs.scores)}
-                placeholder="Private note…"
-                className="w-full text-xs bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-2 py-1.5 outline-none focus:border-[#1B3828]"
-                style={{ color: '#1C1410' }}
-              />
-              {factors.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mt-1.5">
-                  {factors.map((f) => (
-                    <label key={f.id} className="flex items-center gap-1 text-[10px]" style={{ color: '#6A5A4A' }}>
-                      <span className="truncate max-w-[80px]">{f.name}</span>
-                      <input type="number" min={1} max={cfg.factorScaleMax} value={rs.scores[f.id] ?? ''}
-                        onChange={(e) => setScore(row, f.id, parseInt(e.target.value) || 0)}
-                        className="w-10 text-center bg-white border border-[#DDD4C0] rounded px-1 py-0.5 outline-none focus:border-[#1B3828]" />
-                    </label>
-                  ))}
+      <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden">
+        {ordered.length === 0 ? (
+          <p className="text-xs px-4 py-6" style={{ color: '#9A8A78' }}>Speeches will appear here as delegates speak.</p>
+        ) : (
+          <div className="flex gap-2 p-2.5" style={{ width: 'max-content' }}>
+            {ordered.map((row) => {
+              const rs = state[row.key] ?? { content: '', scores: {} };
+              const isCurrent = row.key === highlightKey;
+              return (
+                <div
+                  key={row.key}
+                  ref={isCurrent ? currentCardRef : undefined}
+                  className="rounded-xl p-2.5 shrink-0"
+                  style={{ width: 260, border: '1px solid #DDD4C0', backgroundColor: '#FFFFFF', boxShadow: isCurrent ? '0 0 0 2px #B8844A' : undefined }}
+                >
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <FlagImg code={getCountryByName(row.country)?.code ?? ''} size={18} className="shrink-0" />
+                    <span className="text-sm font-semibold truncate flex-1" style={{ color: '#1C1410' }}>{getCountryDisplayName(row.country, language)}</span>
+                    <span className="text-[9px] font-mono shrink-0" style={{ color: '#9A8A78' }}>
+                      {row.context.replace(/-/g, ' ')} · {row.seconds}s{row.timestamp ? ` · ${new Date(row.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
+                    </span>
+                  </div>
+                  <input
+                    value={rs.content}
+                    onChange={(e) => setNote(row, e.target.value)}
+                    onBlur={() => persist(row, rs.content, rs.scores)}
+                    placeholder="Private note…"
+                    className="w-full text-xs bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-2 py-1.5 outline-none focus:border-[#1B3828]"
+                    style={{ color: '#1C1410' }}
+                  />
+                  {factors.length > 0 && (
+                    <div className="mt-1.5 space-y-1">
+                      {factors.map((f) => {
+                        const v = rs.scores[f.id] ?? 0;
+                        return (
+                          <div key={f.id} className="flex items-center gap-1.5">
+                            <span className="text-[10px] truncate flex-1" style={{ color: '#6A5A4A' }}>{f.name}</span>
+                            <button onClick={() => step(row, f.id, v, -1)} aria-label={`Decrease ${f.name}`}
+                              className="flex items-center justify-center rounded-md font-bold leading-none"
+                              style={{ width: 24, height: 24, border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3', color: '#1B3828' }}>−</button>
+                            <span className="text-xs font-mono text-center" style={{ width: 18, color: v > 0 ? '#1B3828' : '#9A8A78' }}>{v > 0 ? v : '–'}</span>
+                            <button onClick={() => step(row, f.id, v, 1)} aria-label={`Increase ${f.name}`}
+                              className="flex items-center justify-center rounded-md font-bold leading-none"
+                              style={{ width: 24, height: 24, border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3', color: '#1B3828' }}>+</button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          );
-        })}
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );

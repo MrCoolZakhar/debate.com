@@ -1151,7 +1151,6 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const [speakerTimeLimitInput, setSpeakerTimeLimitInput] = useState<string>('90');
   const [showSettings, setShowSettings] = useState(false);
   const [showScoreboard, setShowScoreboard] = useState(false);
-  const [showFeedbackLog, setShowFeedbackLog] = useState(false);
   const [showRecap, setShowRecap] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [chatReadCounts, setChatReadCounts] = useState<Record<string, number>>({});
@@ -2114,23 +2113,18 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
           </svg>
           Viewing only — {headChairName} is managing the session
-          <button onClick={() => setShowFeedbackLog((v) => !v)}
-            className="ms-2 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors"
-            style={{ backgroundColor: showFeedbackLog ? '#EED98A' : 'rgba(238,217,138,0.18)', color: showFeedbackLog ? '#1B3828' : '#EED98A' }}>
-            Feedback log
-          </button>
           <button onClick={() => setShowRecap(true)}
-            className="px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors"
+            className="ms-2 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors"
             style={{ backgroundColor: 'rgba(238,217,138,0.18)', color: '#EED98A' }}>
             Recap
           </button>
         </div>
       )}
-      {isViewOnly && showFeedbackLog && (
+      {isViewOnly && (
         <FeedbackLogPanel
           committee={committee}
           chairName={myChairName || committee.chairNames[0] || 'Chair'}
-          onClose={() => setShowFeedbackLog(false)}
+          currentCountry={committee.caucus?.currentSpeaker ?? committee.currentSpeaker?.country ?? null}
         />
       )}
       {isViewOnly && showRecap && (
@@ -2377,7 +2371,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 )}
               </aside>
             )}
-            <main className="flex-1 overflow-hidden flex flex-col min-w-0 min-h-0">
+            <main className="flex-1 overflow-hidden flex flex-col min-w-0 min-h-0" style={isViewOnly ? { paddingBottom: '200px' } : undefined}>
               {committee.phase === 'moderated-caucus' && committee.caucus && (
                 caucusLoading ? (() => {
                   const isTdTParent = committee.caucus?.purpose?.startsWith('Tour de Table') ?? false;
