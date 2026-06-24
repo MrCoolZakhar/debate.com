@@ -15,7 +15,6 @@ import { Emoji } from '@/components/Emoji';
 import { SettingsPanel } from '@/components/SettingsPanel';
 import ScoreboardPanel from '@/components/ScoreboardPanel';
 import FeedbackLogPanel from '@/components/FeedbackLogPanel';
-import RecapComposer from '@/components/RecapComposer';
 import CowDelegationBoard from '@/components/CowDelegationBoard';
 import { useSettingsStore, type CommitteeSettings } from '@/lib/settingsStore';
 import { supabase } from '@/lib/supabase';
@@ -1151,7 +1150,6 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const [speakerTimeLimitInput, setSpeakerTimeLimitInput] = useState<string>('90');
   const [showSettings, setShowSettings] = useState(false);
   const [showScoreboard, setShowScoreboard] = useState(false);
-  const [showRecap, setShowRecap] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [chatReadCounts, setChatReadCounts] = useState<Record<string, number>>({});
   // Only one of these can be open at a time
@@ -2113,11 +2111,6 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
           </svg>
           Viewing only — {headChairName} is managing the session
-          <button onClick={() => setShowRecap(true)}
-            className="ms-2 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors"
-            style={{ backgroundColor: 'rgba(238,217,138,0.18)', color: '#EED98A' }}>
-            Recap
-          </button>
         </div>
       )}
       {isViewOnly && (
@@ -2125,13 +2118,6 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           committee={committee}
           chairName={myChairName || committee.chairNames[0] || 'Chair'}
           currentCountry={committee.caucus?.currentSpeaker ?? committee.currentSpeaker?.country ?? null}
-        />
-      )}
-      {isViewOnly && showRecap && (
-        <RecapComposer
-          committee={committee}
-          chairName={myChairName || committee.chairNames[0] || 'Chair'}
-          onClose={() => setShowRecap(false)}
         />
       )}
       {/* Ended tab bar */}
