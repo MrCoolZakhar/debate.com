@@ -131,10 +131,11 @@ function ModalOverlay({ children, onClose }: { children: React.ReactNode; onClos
 
 // ── CommitteeEditor (create + edit) ───────────────────────────────────────────
 
-function CommitteeEditor({ conferenceId, committeeType, existing, onClose, onSaved }: {
+function CommitteeEditor({ conferenceId, committeeType, existing, initialCountries, onClose, onSaved }: {
   conferenceId: string;
   committeeType: 'general-assembly' | 'crisis';
   existing?: CommitteeRow | null;
+  initialCountries?: string[];
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -146,29 +147,11 @@ function CommitteeEditor({ conferenceId, committeeType, existing, onClose, onSav
   const [topics, setTopics] = useState<string[]>(existing?.topics ?? []);
   const [topicInput, setTopicInput] = useState('');
   const [difficulty, setDifficulty] = useState(existing?.difficulty ?? 'intermediate');
-  const [countries, setCountries] = useState<string[]>([]);
-  const [initialCountries, setInitialCountries] = useState<string[]>([]);
-  const [loadingMatrix, setLoadingMatrix] = useState<boolean>(!!existing);
+  const [countries, setCountries] = useState<string[]>(initialCountries ?? []);
+  const [baselineCountries] = useState<string[]>(initialCountries ?? []);
+  const [pendingRemovalCount, setPendingRemovalCount] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-
-  useEffect(() => {
-    if (!existing || !session) return;
-    let cancelled = false;
-    (async () => {
-      const supabase = getAuthedClient(session.access_token);
-      const { data } = await supabase
-        .from('committee_country_slots')
-        .select('country_name')
-        .eq('conference_committee_id', existing.id);
-      if (cancelled) return;
-      const names = (data ?? []).map((r: { country_name: string }) => r.country_name);
-      setCountries(names);
-      setInitialCountries(names);
-      setLoadingMatrix(false);
-    })();
-    return () => { cancelled = true; };
-  }, [existing, session]);
 
   function addTopic() {
     const t = topicInput.trim();
@@ -201,30 +184,25 @@ function CommitteeEditor({ conferenceId, committeeType, existing, onClose, onSav
     return true;
   }
 
-  async function doEdit(supabase: ReturnType<typeof getAuthedClient>): Promise<boolean> {
+  async function doEdit(supabase: ReturnType<typeof getAuthedClient>, force: boolean): Promise<'ok' | 'needs_confirm' | 'fail'> {
     const ex = existing!;
-    const added = countries.filter(c => !initialCountries.includes(c));
-    const removed = initialCountries.filter(c => !countries.includes(c));
+    const added = countries.filter(c => !baselineCountries.includes(c));
+    const removed = baselineCountries.filter(c => !countries.includes(c));
 
-    if (removed.length > 0) {
+    if (removed.length > 0 && !force) {
       const { data: allocs } = await supabase
         .from('conference_allocations')
         .select('id')
         .eq('conference_committee_id', ex.id)
         .in('country_name', removed);
-      const n = allocs?.length ?? 0;
-      if (n > 0) {
-        const ok = window.confirm(
-          n + ' of the ' + (isCrisis ? 'characters' : 'countries') + ' you removed ' + (n === 1 ? 'has' : 'have') +
-          ' an allocated delegate. Removing ' + (n === 1 ? 'it' : 'them') + ' will return ' +
-          (n === 1 ? 'that delegate' : 'those delegates') + ' to the allocation pool. Proceed?'
-        );
-        if (!ok) return false;
-        await supabase.from('conference_allocations').delete().eq('conference_committee_id', ex.id).in('country_name', removed);
+      if ((allocs?.length ?? 0) > 0) {
+        setPendingRemovalCount(allocs!.length);
+        return 'needs_confirm';
       }
     }
 
     if (removed.length > 0) {
+      await supabase.from('conference_allocations').delete().eq('conference_committee_id', ex.id).in('country_name', removed);
       await supabase.from('committee_country_slots').delete().eq('conference_committee_id', ex.id).in('country_name', removed);
       if (ex.session_id) {
         await supabase.from('delegates').delete().eq('committee_id', ex.session_id).in('country', removed);
@@ -255,24 +233,32 @@ function CommitteeEditor({ conferenceId, committeeType, existing, onClose, onSav
     if (ex.session_id) {
       await supabase.from('committees').update({ name: name.trim(), topic: topics[0] ?? 'TBD' }).eq('id', ex.session_id);
     }
-    return true;
+    return 'ok';
   }
 
-  async function handleSave() {
+  async function handleSave(force = false) {
     if (!name.trim()) { setError('Committee name is required.'); return; }
     if (topics.length === 0) { setError('Add at least one topic.'); return; }
     if (countries.length === 0) { setError(isCrisis ? 'Add at least one character.' : 'Add at least one country.'); return; }
     if (!session) return;
     setSaving(true); setError('');
     const supabase = getAuthedClient(session.access_token);
-    const ok = isEdit ? await doEdit(supabase) : await doCreate(supabase);
-    setSaving(false);
-    if (!ok) return;
+    if (isEdit) {
+      const res = await doEdit(supabase, force);
+      setSaving(false);
+      if (res === 'needs_confirm') return;
+      if (res !== 'ok') return;
+    } else {
+      const ok = await doCreate(supabase);
+      setSaving(false);
+      if (!ok) return;
+    }
     onSaved();
     onClose();
   }
 
   return (
+    <>
     <ModalOverlay onClose={onClose}>
       <div className="w-full max-w-2xl rounded-2xl p-6" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', maxHeight: '85vh', overflowY: 'auto' }}>
         <div className="flex items-center justify-end mb-2">
@@ -281,14 +267,14 @@ function CommitteeEditor({ conferenceId, committeeType, existing, onClose, onSav
         <div className="flex flex-col gap-4">
           <div>
             <label style={labelStyle}>Committee Name *</label>
-            {(!isCrisis && !isEdit) ? (
+            {!isCrisis ? (
               <CommitteeNameInput
                 value={name}
                 onChange={setName}
-                onPresetSelect={(p) => { setName(p.name); setAbbreviation(p.acronym); setCountries(p.members); }}
+                onPresetSelect={(p) => { setName(p.name); setAbbreviation(p.acronym); if (!isEdit) setCountries(p.members); }}
               />
             ) : (
-              <input value={name} onChange={e => setName(e.target.value)} placeholder={isCrisis ? 'e.g. The Cuban Missile Crisis, 1962' : 'e.g. UN Security Council'} style={inputStyle} />
+              <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. The Cuban Missile Crisis, 1962" style={inputStyle} />
             )}
           </div>
           <div>
@@ -322,23 +308,29 @@ function CommitteeEditor({ conferenceId, committeeType, existing, onClose, onSav
           <p className="text-xs font-semibold mb-3" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace", textTransform: 'uppercase', letterSpacing: '0.06em' }}>
             {isCrisis ? 'Committee Characters' : 'Committee Countries'}
           </p>
-          <div style={{ minHeight: 360 }}>
-            {loadingMatrix ? (
-              <div className="flex items-center justify-center" style={{ minHeight: 360 }}>
-                <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Loading current matrix…</p>
-              </div>
-            ) : (
-              <CountryMatrixPicker value={countries} onChange={setCountries} noun={isCrisis ? 'character' : 'country'} />
-            )}
-          </div>
+          <CountryMatrixPicker value={countries} onChange={setCountries} noun={isCrisis ? 'character' : 'country'} />
         </div>
         {error && <p className="text-xs mt-3" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{error}</p>}
         <div className="flex gap-3 mt-6">
           <button onClick={onClose} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ border: '1.5px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}>CANCEL</button>
-          <button onClick={handleSave} disabled={saving || loadingMatrix} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ backgroundColor: (saving || loadingMatrix) ? '#DDD4C0' : '#1B3828', color: (saving || loadingMatrix) ? '#9A8A78' : '#EED98A', fontFamily: "'Outfit', sans-serif" }}>{saving ? 'SAVING...' : (isEdit ? 'SAVE CHANGES' : 'ADD COMMITTEE')}</button>
+          <button onClick={() => handleSave(false)} disabled={saving} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ backgroundColor: saving ? '#DDD4C0' : '#1B3828', color: saving ? '#9A8A78' : '#EED98A', fontFamily: "'Outfit', sans-serif" }}>{saving ? 'SAVING...' : (isEdit ? 'SAVE CHANGES' : 'ADD COMMITTEE')}</button>
         </div>
       </div>
     </ModalOverlay>
+    {pendingRemovalCount !== null && (
+      <ModalOverlay onClose={() => setPendingRemovalCount(null)}>
+        <div className="rounded-2xl p-6 flex flex-col gap-4" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 380 }}>
+          <p className="text-sm" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", lineHeight: 1.5 }}>
+            {pendingRemovalCount} of the {isCrisis ? 'characters' : 'countries'} you removed {pendingRemovalCount === 1 ? 'has' : 'have'} an allocated delegate. Removing {pendingRemovalCount === 1 ? 'it' : 'them'} will return {pendingRemovalCount === 1 ? 'that delegate' : 'those delegates'} to the allocation pool. Proceed?
+          </p>
+          <div className="flex gap-3">
+            <button onClick={() => setPendingRemovalCount(null)} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ border: '1.5px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}>CANCEL</button>
+            <button onClick={() => { setPendingRemovalCount(null); handleSave(true); }} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ backgroundColor: '#8B2020', color: '#FFFFFF', fontFamily: "'Outfit', sans-serif" }}>PROCEED</button>
+          </div>
+        </div>
+      </ModalOverlay>
+    )}
+    </>
   );
 }
 
@@ -351,7 +343,8 @@ export default function CommitteesPage() {
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [pendingType, setPendingType] = useState<'general-assembly' | 'crisis' | null>(null);
-  const [editingCommittee, setEditingCommittee] = useState<Committee | null>(null);
+  const [editTarget, setEditTarget] = useState<{ committee: Committee; countries: string[] } | null>(null);
+  const [editLoadingId, setEditLoadingId] = useState<string | null>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
   const loadCommittees = useCallback(async () => {
@@ -475,10 +468,6 @@ export default function CommitteesPage() {
                     </span>
                   </div>
 
-                  {c.abbreviation && (
-                    <p className="mt-0.5 text-xs" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}>{c.abbreviation}</p>
-                  )}
-
                   {topics.length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-2">
                       {topics.map((t, i) => (
@@ -546,13 +535,21 @@ export default function CommitteesPage() {
                   {/* Actions */}
                   <div className="flex flex-wrap gap-2 mt-3">
                     <button
-                      onClick={() => setEditingCommittee(c)}
+                      onClick={async () => {
+                        if (!session) return;
+                        setEditLoadingId(c.id);
+                        const supabase = getAuthedClient(session.access_token);
+                        const { data } = await supabase.from('committee_country_slots').select('country_name').eq('conference_committee_id', c.id);
+                        setEditTarget({ committee: c, countries: (data ?? []).map((r: { country_name: string }) => r.country_name) });
+                        setEditLoadingId(null);
+                      }}
+                      disabled={editLoadingId === c.id}
                       className="rounded-lg py-1.5 px-4 text-xs font-semibold focus:outline-none transition-colors"
                       style={ghostBtn}
                       onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
                       onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                     >
-                      EDIT
+                      {editLoadingId === c.id ? 'LOADING…' : 'EDIT'}
                     </button>
                     {!c.session_code && (
                       <button
@@ -611,13 +608,14 @@ export default function CommitteesPage() {
           onSaved={() => { setShowAdd(false); setPendingType(null); loadCommittees(); }}
         />
       )}
-      {editingCommittee && (
+      {editTarget && (
         <CommitteeEditor
           conferenceId={conference.id}
-          committeeType={editingCommittee.committee_type === 'crisis' ? 'crisis' : 'general-assembly'}
-          existing={editingCommittee}
-          onClose={() => setEditingCommittee(null)}
-          onSaved={() => { setEditingCommittee(null); loadCommittees(); }}
+          committeeType={editTarget.committee.committee_type === 'crisis' ? 'crisis' : 'general-assembly'}
+          existing={editTarget.committee}
+          initialCountries={editTarget.countries}
+          onClose={() => setEditTarget(null)}
+          onSaved={() => { setEditTarget(null); loadCommittees(); }}
         />
       )}
     </div>
