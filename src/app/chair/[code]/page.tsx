@@ -2113,13 +2113,6 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           Viewing only — {headChairName} is managing the session
         </div>
       )}
-      {isViewOnly && (
-        <FeedbackLogPanel
-          committee={committee}
-          chairName={myChairName || committee.chairNames[0] || 'Chair'}
-          currentCountry={committee.caucus?.currentSpeaker ?? committee.currentSpeaker?.country ?? null}
-        />
-      )}
       {/* Ended tab bar */}
       {sessionEnded && (
         <div className="flex border-b border-[#DDD4C0] bg-[#FAF8F3] shrink-0">
@@ -2357,7 +2350,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 )}
               </aside>
             )}
-            <main className="flex-1 overflow-hidden flex flex-col min-w-0 min-h-0" style={isViewOnly ? { paddingBottom: '200px' } : undefined}>
+            <main className="flex-1 overflow-hidden flex flex-col min-w-0 min-h-0">
               {committee.phase === 'moderated-caucus' && committee.caucus && (
                 caucusLoading ? (() => {
                   const isTdTParent = committee.caucus?.purpose?.startsWith('Tour de Table') ?? false;
@@ -2647,6 +2640,14 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 </div>
                 )}
                 </>
+              )}
+              {/* Co-chair live feedback feed — docked under the timer, beside (never over) the roll-call sidebar */}
+              {isViewOnly && (
+                <FeedbackLogPanel
+                  committee={committee}
+                  chairName={myChairName || committee.chairNames[0] || 'Chair'}
+                  currentCountry={committee.caucus?.currentSpeaker ?? committee.currentSpeaker?.country ?? null}
+                />
               )}
             </main>
           </>

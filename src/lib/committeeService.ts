@@ -773,11 +773,13 @@ export async function addFeedback(
 }
 
 export async function updateFeedback(
-  id: string, patch: { content?: string; factorScores?: Record<string, number> },
+  id: string, patch: { content?: string; factorScores?: Record<string, number>; speechContext?: string | null; speechSeconds?: number | null },
 ): Promise<void> {
   const update: Record<string, unknown> = {};
   if (patch.content !== undefined) update.content = patch.content;
   if (patch.factorScores !== undefined) update.factor_scores = patch.factorScores;
+  if (patch.speechContext !== undefined) update.speech_context = patch.speechContext;
+  if (patch.speechSeconds !== undefined) update.speech_seconds = patch.speechSeconds;
   const { error } = await supabase.from('feedback').update(update).eq('id', id);
   if (error) console.error('Error updating feedback:', error);
 }
