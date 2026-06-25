@@ -132,7 +132,21 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedApp, o
       application_id: selectedApp.id,
       allocation_sent: false,
     });
-    if (insertErr) { setError(insertErr.message); setSaving(false); return; }
+    if (insertErr) {
+      if (insertErr.code === '23505') {
+        setError(
+          insertErr.message.includes('user_id')
+            ? 'This delegate already has an allocation in this committee.'
+            : insertErr.message.includes('country_code')
+            ? 'This country is already allocated to another delegate.'
+            : 'This allocation already exists.'
+        );
+      } else {
+        setError(insertErr.message);
+      }
+      setSaving(false);
+      return;
+    }
 
     await supabase.from('applications').update({
       status: 'assigned',
