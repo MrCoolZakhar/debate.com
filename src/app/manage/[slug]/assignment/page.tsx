@@ -102,6 +102,7 @@ interface AssignModalProps {
 
 function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedApp, onClose, onAssigned }: AssignModalProps) {
   const { session } = useAuth();
+  const { conference } = useManage();
   const [selectedApp, setSelectedApp] = useState<AcceptedApp | null>(preSelectedApp ?? null);
   const [selectedSlot, setSelectedSlot] = useState<SlotRow | null>(preSelectedSlot ?? null);
   const [sendEmail, setSendEmail] = useState(false);
@@ -122,9 +123,11 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedApp, o
     setSaving(true);
     setError('');
     if (!session) return;
+    if (!conference) { setError('Conference not loaded. Please refresh.'); setSaving(false); return; }
     const supabase = getAuthedClient(session.access_token);
 
     const { error: insertErr } = await supabase.from('conference_allocations').insert({
+      conference_id: conference.id,
       conference_committee_id: committee.id,
       user_id: userId,
       country_code: selectedSlot.country_code,
