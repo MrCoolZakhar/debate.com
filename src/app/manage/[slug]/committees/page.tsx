@@ -346,6 +346,8 @@ export default function CommitteesPage() {
   const [editTarget, setEditTarget] = useState<{ committee: Committee; countries: string[] } | null>(null);
   const [editLoadingId, setEditLoadingId] = useState<string | null>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<CommitteeRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const loadCommittees = useCallback(async () => {
     if (!conference) return;
@@ -398,6 +400,21 @@ export default function CommitteesPage() {
     navigator.clipboard.writeText(code);
     setCopiedCode(code);
     setTimeout(() => setCopiedCode(null), 2000);
+  }
+
+  async function handleDeleteCommittee(c: CommitteeRow) {
+    if (!session) return;
+    setDeleting(true);
+    const supabase = getAuthedClient(session.access_token);
+    // Delete the linked session first — cascades all session children (delegates, speakers_list, current_speaker, motions, documents, messages, feedback).
+    if (c.session_id) {
+      await supabase.from('committees').delete().eq('id', c.session_id);
+    }
+    // Delete the conference committee — cascades slots, allocations, awards, position_papers, study_guides, application_preferences; sets applications/job_postings to null (preserved).
+    await supabase.from('conference_committees').delete().eq('id', c.id);
+    setDeleting(false);
+    setDeleteTarget(null);
+    loadCommittees();
   }
 
   if (!conference) return null;
@@ -551,6 +568,13 @@ export default function CommitteesPage() {
                     >
                       {editLoadingId === c.id ? 'LOADING…' : 'EDIT'}
                     </button>
+                    <button
+                      onClick={() => setDeleteTarget(c)}
+                      className="rounded-xl px-4 py-2 font-bold text-xs focus:outline-none"
+                      style={{ border: '1.5px solid #E4C8C8', color: '#8B2020', backgroundColor: 'transparent', fontFamily: "'DM Mono', monospace", letterSpacing: '0.06em' }}
+                    >
+                      DELETE
+                    </button>
                     {!c.session_code && (
                       <button
                         onClick={() => generateSessionCode(c)}
@@ -617,6 +641,20 @@ export default function CommitteesPage() {
           onClose={() => setEditTarget(null)}
           onSaved={() => { setEditTarget(null); loadCommittees(); }}
         />
+      )}
+      {deleteTarget && (
+        <ModalOverlay onClose={() => { if (!deleting) setDeleteTarget(null); }}>
+          <div className="rounded-2xl p-6 flex flex-col gap-4" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 400 }}>
+            <p className="text-sm font-bold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Delete &ldquo;{deleteTarget.name}&rdquo;?</p>
+            <p className="text-xs" style={{ color: '#6B5D4F', fontFamily: "'Outfit', sans-serif", lineHeight: 1.5 }}>
+              This permanently removes the committee and its live session — including all delegates, documents, messages, country slots, and allocations. Applicants are kept but returned to unassigned. This cannot be undone.
+            </p>
+            <div className="flex gap-3 mt-1">
+              <button onClick={() => setDeleteTarget(null)} disabled={deleting} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ border: '1.5px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}>CANCEL</button>
+              <button onClick={() => handleDeleteCommittee(deleteTarget)} disabled={deleting} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ backgroundColor: deleting ? '#DDD4C0' : '#8B2020', color: deleting ? '#9A8A78' : '#FFFFFF', fontFamily: "'Outfit', sans-serif" }}>{deleting ? 'DELETING...' : 'DELETE'}</button>
+            </div>
+          </div>
+        </ModalOverlay>
       )}
     </div>
   );
