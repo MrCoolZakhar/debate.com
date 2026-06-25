@@ -322,11 +322,15 @@ function CommitteeEditor({ conferenceId, committeeType, existing, onClose, onSav
           <p className="text-xs font-semibold mb-3" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace", textTransform: 'uppercase', letterSpacing: '0.06em' }}>
             {isCrisis ? 'Committee Characters' : 'Committee Countries'}
           </p>
-          {loadingMatrix ? (
-            <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Loading current matrix…</p>
-          ) : (
-            <CountryMatrixPicker value={countries} onChange={setCountries} noun={isCrisis ? 'character' : 'country'} />
-          )}
+          <div style={{ minHeight: 360 }}>
+            {loadingMatrix ? (
+              <div className="flex items-center justify-center" style={{ minHeight: 360 }}>
+                <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Loading current matrix…</p>
+              </div>
+            ) : (
+              <CountryMatrixPicker value={countries} onChange={setCountries} noun={isCrisis ? 'character' : 'country'} />
+            )}
+          </div>
         </div>
         {error && <p className="text-xs mt-3" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{error}</p>}
         <div className="flex gap-3 mt-6">
