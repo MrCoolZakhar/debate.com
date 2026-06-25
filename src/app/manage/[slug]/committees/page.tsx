@@ -584,7 +584,7 @@ export default function CommitteesPage() {
                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
               >
-                General Assembly
+                GENERAL ASSEMBLY
               </button>
               <button
                 onClick={() => setPendingType('crisis')}
@@ -593,7 +593,7 @@ export default function CommitteesPage() {
                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
               >
-                Crisis
+                CRISIS
               </button>
             </div>
           </div>
