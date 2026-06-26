@@ -31,6 +31,7 @@ interface Application {
   assigned_committee_id: string | null;
   assigned_country_code: string | null;
   assigned_country_name: string | null;
+  assigned_committee: { name: string; topics: string[] | null } | null;
   profiles: { display_name: string; email: string; avatar_url: string | null; nationality: string | null } | null;
   societies: { name: string } | null;
   application_preferences: AppPreference[];
@@ -126,6 +127,7 @@ export default function ApplicationsPage() {
         id, user_id, role, status, is_independent, is_head_delegate, experience_level,
         payment_status, submitted_at, organizer_note,
         assigned_committee_id, assigned_country_code, assigned_country_name,
+        assigned_committee:conference_committees!assigned_committee_id (name, topics),
         profiles (display_name, email, avatar_url, nationality),
         societies (name),
         application_preferences (
@@ -486,7 +488,7 @@ export default function ApplicationsPage() {
                     <>
                       {app.assigned_country_name && (
                         <span className="text-xs self-center" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                          {app.assigned_country_name}
+                          {[app.assigned_committee?.name, (app.assigned_committee?.topics ?? []).join(', '), app.assigned_country_name].filter(Boolean).join('  ·  ')}
                         </span>
                       )}
                     </>
