@@ -2107,12 +2107,21 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         </button>
       </header>
       {isViewOnly && (
-        <div className="shrink-0 flex items-center justify-center gap-2 px-4 py-2 text-xs font-bold"
-          style={{ backgroundColor: '#1B3828', color: '#EED98A', borderBottom: '1px solid #2E4A35' }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+        <div
+          className="fixed z-50 flex items-center gap-2 px-3.5 py-2 rounded-full"
+          style={{
+            top: '3.75rem', right: '0.85rem',
+            backgroundColor: 'rgba(139,32,32,0.16)',
+            backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)',
+            border: '1px solid rgba(139,32,32,0.28)',
+            boxShadow: '0 8px 24px rgba(28,20,16,0.14)',
+            color: '#8B2020', fontFamily: "'Poppins','Outfit',sans-serif",
+          }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="shrink-0">
             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
           </svg>
-          Viewing only — {headChairName} is managing the session
+          <span className="text-xs font-bold whitespace-nowrap"><span className="font-black">View only</span> · {headChairName} is chairing</span>
         </div>
       )}
       {/* Ended tab bar */}
