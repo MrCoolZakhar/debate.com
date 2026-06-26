@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { FlagImg } from '@/components/FlagImg';
+import Portal from '@/components/Portal';
 import { Committee } from '@/lib/types';
 import { getCountryByName, getCountryDisplayName } from '@/lib/countries';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -56,6 +57,11 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry 
   const currentCardRef = useRef<HTMLDivElement | null>(null);
   const turnStartRef = useRef<number>(Date.now());
 
+  // Focus-dock state. The focused bubble is the hero (editing UI); the live bubble is
+  // primary by default. Hover lifts/sharpens any non-focused bubble.
+  const [focusKey, setFocusKey] = useState<string | null>(null);
+  const [hoverKey, setHoverKey] = useState<string | null>(null);
+
   // Live card key — a fresh turn (even same country, e.g. right of reply) gets a new card.
   const liveKey = currentCountry ? `live|${currentCountry}|${turnStartRef.current}` : null;
 
@@ -90,12 +96,13 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [committee.id, past.length]);
 
-  // On speaker change: new turn, and after 5s auto-focus the live card (chair can scroll anytime before then).
+  // On speaker change: new turn, focus returns to the live bubble, and it glides to centre.
   useEffect(() => {
     turnStartRef.current = Date.now();
+    setFocusKey(null);
     const id = setTimeout(() => {
-      currentCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }, 5000);
+      currentCardRef.current?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+    }, 60);
     return () => clearTimeout(id);
   }, [currentCountry]);
 
@@ -151,126 +158,185 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry 
       return { ...prev, [item.key]: nextRow };
     });
 
-  // Only the live speaker is expanded by default; past/upcoming collapse to a slim row.
-  const [expanded, setExpanded] = useState<string | null>(null);
-  // Per-factor dropdown menu, keyed `${item.key}|${f.id}`.
-  const [openMenu, setOpenMenu] = useState<string | null>(null);
+  const effectiveFocus = focusKey ?? liveKey;
+
+  // Per-factor dropdown menu, rendered through a Portal so it can't be clipped by the dock.
+  const [menu, setMenu] = useState<{ key: string; item: FeedItem; factorId: string; rect: DOMRect } | null>(null);
   useEffect(() => {
-    if (!openMenu) return;
+    if (!menu) return;
     const onDown = (e: MouseEvent) => {
-      if (!(e.target as HTMLElement).closest('.fb-menu-wrap')) setOpenMenu(null);
+      const t = e.target as HTMLElement;
+      if (!t.closest('.fb-portal-menu') && !t.closest('.fb-chip')) setMenu(null);
     };
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
-  }, [openMenu]);
+  }, [menu]);
 
-  const kindStyle: Record<ItemKind, React.CSSProperties> = {
-    past: { opacity: 0.55, border: '1px solid #DDD4C0', backgroundColor: '#FFFFFF' },
-    live: { opacity: 1, border: '1px solid #DDD4C0', backgroundColor: '#FFFFFF', boxShadow: '0 0 0 2px #B8844A' },
-    next: { opacity: 0.8, border: '1px dashed #DDD4C0', backgroundColor: '#FAF8F3' },
-  };
+  const MENU_W = 174;
+  const BUBBLE_TRANSITION = 'transform 240ms cubic-bezier(.2,.8,.2,1), filter 240ms ease, opacity 240ms ease, box-shadow 240ms ease';
 
   return (
-    <div className="shrink-0 flex flex-col overflow-hidden" style={{ height: 200, margin: '0 12px 12px', border: '1px solid #DDD4C0', borderRadius: 18, boxShadow: '0 8px 28px rgba(28,20,16,0.16)', backgroundColor: '#FAF8F3', fontFamily: "'Poppins','Outfit',sans-serif" }}>
-      <div className="flex items-center gap-2 px-4 py-1.5 shrink-0" style={{ borderBottom: '1px solid #DDD4C0' }}>
-        <div className="w-1 h-3.5 rounded-full" style={{ backgroundColor: '#EED98A' }} />
-        <span className="text-xs font-black tracking-wide" style={{ color: '#1B3828' }}>Feedback log</span>
-        <span className="text-[10px]" style={{ color: '#9A8A78' }}>· private to chairs</span>
+    <div
+      className="shrink-0 flex flex-col overflow-hidden"
+      style={{
+        height: 220, margin: 12, borderRadius: 24,
+        border: '1px solid rgba(221,212,192,0.7)',
+        boxShadow: '0 16px 48px rgba(28,20,16,0.22)',
+        backgroundColor: 'rgba(250,248,243,0.82)',
+        backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)',
+        fontFamily: "'Poppins','Outfit',sans-serif",
+      }}
+    >
+      <style>{`.fb-dock-scroll::-webkit-scrollbar{display:none}`}</style>
+      <div className="flex items-center gap-2 px-4 pt-2 pb-1 shrink-0">
+        <div className="w-1 h-3 rounded-full" style={{ backgroundColor: 'rgba(238,217,138,0.8)' }} />
+        <span className="text-[11px] font-bold tracking-wide" style={{ color: '#9A8A78' }}>Feedback log</span>
+        <span className="text-[10px]" style={{ color: 'rgba(154,138,120,0.7)' }}>· private to chairs</span>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2 flex flex-col gap-1.5">
-        {items.length === 0 ? (
-          <p className="text-xs px-1 py-4" style={{ color: '#9A8A78' }}>Comments appear here as delegates take the floor.</p>
-        ) : items.map((item) => {
-          const rs = state[item.key] ?? { content: '', scores: {}, country: item.country };
-          const label = item.kind === 'next'
-            ? 'up next'
-            : `${item.context.replace(/-/g, ' ')}${item.seconds ? ` · ${item.seconds}s` : ''}${item.timestamp ? ` · ${new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}`;
-          const isLive = item.kind === 'live';
-          const isExpanded = isLive || expanded === item.key;
-          const scored = !!(rs.content && rs.content.trim()) || Object.values(rs.scores).some((x) => (x ?? 0) > 0);
-          return (
-            <div
-              key={item.key}
-              ref={isLive ? currentCardRef : undefined}
-              className="rounded-xl shrink-0"
-              style={{ ...kindStyle[item.kind], padding: isExpanded ? 8 : 6 }}
-            >
-              {!isExpanded ? (
-                /* Collapsed slim row — click to expand */
-                <button onClick={() => setExpanded(item.key)} className="w-full flex items-center gap-2 text-left">
-                  <FlagImg code={getCountryByName(item.country)?.code ?? ''} size={16} className="shrink-0" />
-                  <span className="text-sm font-semibold truncate" style={{ color: '#1C1410' }}>{getCountryDisplayName(item.country, language)}</span>
-                  <span className="text-[9px] font-mono uppercase tracking-wide truncate" style={{ color: '#9A8A78' }}>{label}</span>
-                  {scored && <span className="ms-auto text-xs font-black shrink-0" style={{ color: '#1B3828' }}>✓</span>}
-                </button>
-              ) : (
-                <>
-                  <div
-                    className="flex items-center gap-2 mb-1.5"
-                    onClick={isLive ? undefined : () => setExpanded(null)}
-                    style={{ cursor: isLive ? 'default' : 'pointer' }}
-                  >
-                    <FlagImg code={getCountryByName(item.country)?.code ?? ''} size={18} className="shrink-0" />
-                    <span className="text-sm font-semibold truncate" style={{ color: '#1C1410' }}>{getCountryDisplayName(item.country, language)}</span>
-                    <span className="text-[9px] font-mono uppercase tracking-wide" style={{ color: isLive ? '#B8844A' : '#9A8A78' }}>{label}</span>
-                    {!isLive && <span className="ms-auto text-[10px] shrink-0" style={{ color: '#9A8A78' }}>▴</span>}
-                  </div>
-                  <input
-                    value={rs.content}
-                    onChange={(e) => setNote(item, e.target.value)}
-                    onBlur={() => persist(item, rs.content, rs.scores)}
-                    placeholder="Private note…"
-                    className="w-full text-xs bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-2 py-1.5 outline-none focus:border-[#1B3828]"
-                    style={{ color: '#1C1410' }}
-                  />
-                  {factors.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 mt-1.5">
-                      {factors.map((f) => {
-                        const v = rs.scores[f.id] ?? 0;
-                        const menuKey = `${item.key}|${f.id}`;
-                        const open = openMenu === menuKey;
-                        return (
-                          <div key={f.id} className="fb-menu-wrap relative">
+      {items.length === 0 ? (
+        <p className="text-xs px-4 py-6" style={{ color: '#9A8A78' }}>Comments appear here as delegates take the floor.</p>
+      ) : (
+        <div className="fb-dock-scroll flex-1 min-h-0 flex items-end gap-3 overflow-x-auto px-4 py-5" style={{ scrollbarWidth: 'none' }}>
+          {items.map((item) => {
+            const rs = state[item.key] ?? { content: '', scores: {}, country: item.country };
+            const isLive = item.kind === 'live';
+            const isFocused = item.key === effectiveFocus;
+            const isHover = hoverKey === item.key && !isFocused;
+            const scored = !!(rs.content && rs.content.trim()) || Object.values(rs.scores).some((x) => (x ?? 0) > 0);
+            const label = item.kind === 'next'
+              ? 'up next'
+              : `${item.context.replace(/-/g, ' ')}${item.seconds ? ` · ${item.seconds}s` : ''}${item.timestamp ? ` · ${new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}`;
+
+            // Resolve the bubble's motion state.
+            let transform = 'scale(1)', opacity = 1, filter = 'none';
+            let boxShadow = '0 4px 14px rgba(28,20,16,0.08)';
+            if (isFocused) {
+              transform = 'scale(1.06)'; opacity = 1; filter = 'none';
+              boxShadow = '0 0 0 2px #B8844A, 0 12px 32px rgba(28,20,16,0.18)';
+            } else if (isHover) {
+              transform = 'scale(1.04)'; opacity = 1; filter = 'none';
+              boxShadow = '0 10px 26px rgba(28,20,16,0.16)';
+            } else if (item.kind === 'next') {
+              transform = 'scale(.9)'; opacity = 0.6; filter = 'blur(1.3px) saturate(.95)';
+            } else {
+              // past, or live that isn't currently focused
+              transform = 'scale(.92)'; opacity = item.kind === 'live' ? 0.82 : 0.68; filter = 'none';
+            }
+
+            return (
+              <div
+                key={item.key}
+                ref={isLive ? currentCardRef : undefined}
+                onMouseEnter={() => setHoverKey(item.key)}
+                onMouseLeave={() => setHoverKey((k) => (k === item.key ? null : k))}
+                onClick={isFocused ? undefined : () => setFocusKey(item.key)}
+                className="rounded-2xl shrink-0"
+                style={{
+                  transform, opacity, filter, boxShadow,
+                  transition: BUBBLE_TRANSITION, transformOrigin: 'bottom center',
+                  backgroundColor: 'rgba(255,255,255,0.9)',
+                  border: '1px solid rgba(221,212,192,0.8)',
+                  cursor: isFocused ? 'default' : 'pointer',
+                  width: isFocused ? 300 : undefined,
+                  padding: isFocused ? 14 : '10px 14px',
+                }}
+              >
+                {isFocused ? (
+                  <>
+                    <div
+                      className="flex items-center gap-2.5 mb-2"
+                      onClick={isLive ? undefined : (e) => { e.stopPropagation(); setFocusKey(null); }}
+                      style={{ cursor: isLive ? 'default' : 'pointer' }}
+                    >
+                      <FlagImg code={getCountryByName(item.country)?.code ?? ''} size={38} className="shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xl font-black truncate leading-tight" style={{ color: '#1C1410' }}>{getCountryDisplayName(item.country, language)}</div>
+                        <div className="text-[10px] font-mono uppercase tracking-wide truncate" style={{ color: isLive ? '#B8844A' : '#9A8A78' }}>{label}</div>
+                      </div>
+                      {!isLive && <span className="text-[11px] shrink-0" style={{ color: '#9A8A78' }}>▾</span>}
+                    </div>
+                    <input
+                      value={rs.content}
+                      onChange={(e) => setNote(item, e.target.value)}
+                      onBlur={() => persist(item, rs.content, rs.scores)}
+                      placeholder="Private note…"
+                      className="w-full text-xs bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-2.5 py-2 outline-none focus:border-[#1B3828]"
+                      style={{ color: '#1C1410' }}
+                    />
+                    {factors.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {factors.map((f) => {
+                          const v = rs.scores[f.id] ?? 0;
+                          return (
                             <button
-                              onClick={() => setOpenMenu(open ? null : menuKey)}
-                              className="flex items-center gap-1 rounded-lg text-xs font-semibold"
-                              style={{ minHeight: 28, padding: '0 8px', border: '1px solid #DDD4C0', backgroundColor: v > 0 ? '#1B3828' : '#FFFFFF', color: v > 0 ? '#EED98A' : '#1B3828' }}
+                              key={f.id}
+                              className="fb-chip flex items-center gap-1 rounded-lg text-xs font-semibold"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                                const mk = `${item.key}|${f.id}`;
+                                setMenu((m) => (m?.key === mk ? null : { key: mk, item, factorId: f.id, rect }));
+                              }}
+                              style={{ minHeight: 30, padding: '0 9px', border: '1px solid #DDD4C0', backgroundColor: v > 0 ? '#1B3828' : '#FFFFFF', color: v > 0 ? '#EED98A' : '#1B3828' }}
                             >
-                              <span className="truncate" style={{ maxWidth: 88 }}>{f.name}</span>
+                              <span className="truncate" style={{ maxWidth: 90 }}>{f.name}</span>
                               <span>· {v > 0 ? v : '–'}</span>
                               <span style={{ fontSize: 9, opacity: 0.75 }}>▾</span>
                             </button>
-                            {open && (
-                              <div className="absolute bottom-full mb-1 left-0 z-50 rounded-xl p-2 shadow-lg" style={{ backgroundColor: '#FFFFFF', border: '1px solid #DDD4C0', minWidth: 150 }}>
-                                <div className="grid gap-1" style={{ gridTemplateColumns: 'repeat(5, minmax(0, 1fr))' }}>
-                                  {Array.from({ length: cfg.factorScaleMax }, (_, i) => i + 1).map((n) => (
-                                    <button
-                                      key={n}
-                                      onClick={() => { setScore(item, f.id, n); setOpenMenu(null); }}
-                                      className="rounded-md text-xs font-bold flex items-center justify-center"
-                                      style={{ width: 26, height: 26, border: '1px solid #DDD4C0', backgroundColor: v === n ? '#1B3828' : '#FAF8F3', color: v === n ? '#EED98A' : '#1B3828' }}
-                                    >{n}</button>
-                                  ))}
-                                </div>
-                                <button
-                                  onClick={() => { setScore(item, f.id, 0); setOpenMenu(null); }}
-                                  className="mt-1.5 w-full text-[11px] font-bold rounded-md py-1"
-                                  style={{ color: '#8B2020', border: '1px solid #DDD4C0', backgroundColor: '#FFFFFF' }}
-                                >Clear</button>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </>
-              )}
+                          );
+                        })}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <FlagImg code={getCountryByName(item.country)?.code ?? ''} size={18} className="shrink-0" />
+                    <span className="text-sm font-semibold truncate" style={{ color: '#1C1410', maxWidth: 130 }}>{getCountryDisplayName(item.country, language)}</span>
+                    {scored && <span className="text-xs font-black shrink-0" style={{ color: '#1B3828' }}>✓</span>}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Scoring menu — portaled so the dock's overflow can't clip it; opens upward, right-aligned. */}
+      {menu && (() => {
+        const v = (state[menu.item.key]?.scores ?? {})[menu.factorId] ?? 0;
+        return (
+          <Portal>
+            <div
+              className="fb-portal-menu rounded-xl p-2 shadow-xl"
+              style={{
+                position: 'fixed', zIndex: 50,
+                left: Math.max(8, menu.rect.right - MENU_W),
+                bottom: Math.max(8, window.innerHeight - menu.rect.top + 6),
+                width: MENU_W,
+                backgroundColor: '#FFFFFF', border: '1px solid #DDD4C0',
+                fontFamily: "'Poppins','Outfit',sans-serif",
+              }}
+            >
+              <div className="grid gap-1" style={{ gridTemplateColumns: 'repeat(5, minmax(0, 1fr))' }}>
+                {Array.from({ length: cfg.factorScaleMax }, (_, i) => i + 1).map((n) => (
+                  <button
+                    key={n}
+                    onClick={() => { setScore(menu.item, menu.factorId, n); setMenu(null); }}
+                    className="rounded-md text-xs font-bold flex items-center justify-center"
+                    style={{ height: 26, border: '1px solid #DDD4C0', backgroundColor: v === n ? '#1B3828' : '#FAF8F3', color: v === n ? '#EED98A' : '#1B3828' }}
+                  >{n}</button>
+                ))}
+              </div>
+              <button
+                onClick={() => { setScore(menu.item, menu.factorId, 0); setMenu(null); }}
+                className="mt-1.5 w-full text-[11px] font-bold rounded-md py-1"
+                style={{ color: '#8B2020', border: '1px solid #DDD4C0', backgroundColor: '#FFFFFF' }}
+              >Clear</button>
             </div>
-          );
-        })}
-      </div>
+          </Portal>
+        );
+      })()}
     </div>
   );
 }
