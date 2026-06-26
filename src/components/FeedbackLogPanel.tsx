@@ -54,7 +54,7 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry 
   useEffect(() => { stateRef.current = state; }, [state]);
   const creatingRef = useRef<Set<string>>(new Set());
   const loadedRef = useRef(false);
-  const currentCardRef = useRef<HTMLDivElement | null>(null);
+  const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const turnStartRef = useRef<number>(Date.now());
 
   // Focus-dock state. The focused bubble is the hero (editing UI); the live bubble is
@@ -96,14 +96,10 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [committee.id, past.length]);
 
-  // On speaker change: new turn, focus returns to the live bubble, and it glides to centre.
+  // On speaker change: new turn, focus returns to the live pill (it rolls into the slot).
   useEffect(() => {
     turnStartRef.current = Date.now();
     setFocusKey(null);
-    const id = setTimeout(() => {
-      currentCardRef.current?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
-    }, 60);
-    return () => clearTimeout(id);
   }, [currentCountry]);
 
   // Reconcile live/upcoming comments onto a speech once it's actually logged.
@@ -159,8 +155,18 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry 
     });
 
   const effectiveFocus = focusKey ?? liveKey;
+  const focusIdx = items.findIndex((i) => i.key === effectiveFocus);
 
-  // Per-factor dropdown menu, rendered through a Portal so it can't be clipped by the dock.
+  // Roll the focused row to the vertical centre whenever focus changes.
+  useEffect(() => {
+    if (!effectiveFocus) return;
+    const id = setTimeout(() => {
+      rowRefs.current[effectiveFocus]?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }, 30);
+    return () => clearTimeout(id);
+  }, [effectiveFocus]);
+
+  // Per-factor dropdown menu, rendered through a Portal so it can't be clipped.
   const [menu, setMenu] = useState<{ key: string; item: FeedItem; factorId: string; rect: DOMRect } | null>(null);
   useEffect(() => {
     if (!menu) return;
@@ -173,13 +179,56 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry 
   }, [menu]);
 
   const MENU_W = 174;
-  const BUBBLE_TRANSITION = 'transform 240ms cubic-bezier(.2,.8,.2,1), filter 240ms ease, opacity 240ms ease, box-shadow 240ms ease';
+  const PILL_TRANSITION = 'transform 260ms cubic-bezier(.2,.8,.2,1), filter 260ms ease, opacity 260ms ease, box-shadow 260ms ease, background-color 260ms ease';
+  const PILL_COL = 340;       // fixed left column; pills are right-aligned within it so the wide one extends left
+  const GRID_COL = 156;       // reserved so pills/grids stay aligned across rows
+  const tagFor = (item: FeedItem) => item.context === 'speakers-list' ? 'GSL' : (committee.caucus?.motionLabel ?? 'CAUCUS');
+
+  // Distance-based recede (index 0 = focused).
+  const scaleByDist = [1, 0.94, 0.9, 0.88];
+  const opacityByDist = [1, 0.7, 0.55, 0.45];
+  const blurByDist = [0, 0.6, 1.2, 1.6];
+
+  // One 2×2 metric cell.
+  const metricCell = (item: FeedItem, f: { id: string; name: string }, v: number, interactive: boolean) => {
+    const set = v > 0;
+    if (!interactive) {
+      return (
+        <div key={f.id} className="rounded-lg flex flex-col justify-center px-2 py-1" style={{ border: '1px solid rgba(221,212,192,0.7)', backgroundColor: 'rgba(255,255,255,0.5)' }}>
+          <span className="text-[8px] uppercase tracking-wide truncate" style={{ color: '#B8AE9C' }}>{f.name}</span>
+          <span className="text-sm font-black leading-none" style={{ color: '#9A8A78' }}>{set ? v : '–'}</span>
+        </div>
+      );
+    }
+    return (
+      <button
+        key={f.id}
+        className="fb-chip rounded-lg flex flex-col justify-center px-2 py-1 text-left"
+        onClick={(e) => {
+          e.stopPropagation();
+          const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+          const mk = `${item.key}|${f.id}`;
+          setMenu((m) => (m?.key === mk ? null : { key: mk, item, factorId: f.id, rect }));
+        }}
+        style={{ border: `1px solid ${set ? '#1B3828' : '#DDD4C0'}`, backgroundColor: set ? '#1B3828' : '#FFFFFF' }}
+      >
+        <span className="text-[8px] uppercase tracking-wide truncate" style={{ color: set ? 'rgba(238,217,138,0.8)' : '#9A8A78' }}>{f.name}</span>
+        <span className="text-sm font-black leading-none" style={{ color: set ? '#EED98A' : '#1B3828' }}>{set ? v : '–'}</span>
+      </button>
+    );
+  };
+
+  const metricGrid = (item: FeedItem, rs: RowState, interactive: boolean) => (
+    <div className="grid gap-1.5" style={{ width: GRID_COL, gridTemplateColumns: '1fr 1fr', gridTemplateRows: 'auto auto' }}>
+      {factors.slice(0, 4).map((f) => metricCell(item, f, rs.scores[f.id] ?? 0, interactive))}
+    </div>
+  );
 
   return (
     <div
-      className="shrink-0 flex flex-col overflow-hidden"
+      className="flex-1 min-h-0 flex flex-col"
       style={{
-        height: 220, margin: 12, borderRadius: 24,
+        margin: 12, borderRadius: 24, minHeight: 280,
         border: '1px solid rgba(221,212,192,0.7)',
         boxShadow: '0 16px 48px rgba(28,20,16,0.22)',
         backgroundColor: 'rgba(250,248,243,0.82)',
@@ -188,121 +237,102 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry 
       }}
     >
       <style>{`.fb-dock-scroll::-webkit-scrollbar{display:none}`}</style>
-      <div className="flex items-center gap-2 px-4 pt-2 pb-1 shrink-0">
+      <div className="flex items-center gap-2 px-4 pt-2.5 pb-1 shrink-0">
         <div className="w-1 h-3 rounded-full" style={{ backgroundColor: 'rgba(238,217,138,0.8)' }} />
         <span className="text-[11px] font-bold tracking-wide" style={{ color: '#9A8A78' }}>Feedback log</span>
         <span className="text-[10px]" style={{ color: 'rgba(154,138,120,0.7)' }}>· private to chairs</span>
       </div>
 
       {items.length === 0 ? (
-        <p className="text-xs px-4 py-6" style={{ color: '#9A8A78' }}>Comments appear here as delegates take the floor.</p>
+        <div className="flex-1 flex items-center justify-center">
+          <p className="text-xs px-4" style={{ color: '#9A8A78' }}>Comments appear here as delegates take the floor.</p>
+        </div>
       ) : (
-        <div className="fb-dock-scroll flex-1 min-h-0 flex items-end gap-3 overflow-x-auto px-4 py-5" style={{ scrollbarWidth: 'none' }}>
-          {items.map((item) => {
-            const rs = state[item.key] ?? { content: '', scores: {}, country: item.country };
-            const isLive = item.kind === 'live';
-            const isFocused = item.key === effectiveFocus;
-            const isHover = hoverKey === item.key && !isFocused;
-            const scored = !!(rs.content && rs.content.trim()) || Object.values(rs.scores).some((x) => (x ?? 0) > 0);
-            const label = item.kind === 'next'
-              ? 'up next'
-              : `${item.context.replace(/-/g, ' ')}${item.seconds ? ` · ${item.seconds}s` : ''}${item.timestamp ? ` · ${new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}`;
+        <div className="fb-dock-scroll flex-1 min-h-0 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
+          <div className="min-h-full flex flex-col items-center justify-center gap-3 py-10 px-6">
+            {items.map((item, idx) => {
+              const rs = state[item.key] ?? { content: '', scores: {}, country: item.country };
+              const isLive = item.kind === 'live';
+              const isFocused = item.key === effectiveFocus;
+              const isHover = hoverKey === item.key && !isFocused;
+              const scored = !!(rs.content && rs.content.trim()) || Object.values(rs.scores).some((x) => (x ?? 0) > 0);
+              const dist = focusIdx >= 0 ? Math.min(Math.abs(idx - focusIdx), 3) : 0;
 
-            // Resolve the bubble's motion state.
-            let transform = 'scale(1)', opacity = 1, filter = 'none';
-            let boxShadow = '0 4px 14px rgba(28,20,16,0.08)';
-            if (isFocused) {
-              transform = 'scale(1.06)'; opacity = 1; filter = 'none';
-              boxShadow = '0 0 0 2px #B8844A, 0 12px 32px rgba(28,20,16,0.18)';
-            } else if (isHover) {
-              transform = 'scale(1.04)'; opacity = 1; filter = 'none';
-              boxShadow = '0 10px 26px rgba(28,20,16,0.16)';
-            } else if (item.kind === 'next') {
-              transform = 'scale(.9)'; opacity = 0.6; filter = 'blur(1.3px) saturate(.95)';
-            } else {
-              // past, or live that isn't currently focused
-              transform = 'scale(.92)'; opacity = item.kind === 'live' ? 0.82 : 0.68; filter = 'none';
-            }
+              let scale = scaleByDist[dist], opacity = opacityByDist[dist], blur = blurByDist[dist];
+              let pillBg = '#EDE7D8';
+              let boxShadow = '0 3px 12px rgba(28,20,16,0.07)';
+              if (isFocused) {
+                scale = 1.05; opacity = 1; blur = 0; pillBg = '#FFFFFF';
+                boxShadow = '0 0 0 2px #B8844A, 0 14px 36px rgba(28,20,16,0.18)';
+              } else if (isHover) {
+                scale = 1.04; opacity = 1; blur = 0;
+                boxShadow = '0 10px 26px rgba(28,20,16,0.16)';
+              }
 
-            return (
-              <div
-                key={item.key}
-                ref={isLive ? currentCardRef : undefined}
-                onMouseEnter={() => setHoverKey(item.key)}
-                onMouseLeave={() => setHoverKey((k) => (k === item.key ? null : k))}
-                onClick={isFocused ? undefined : () => setFocusKey(item.key)}
-                className="rounded-2xl shrink-0"
-                style={{
-                  transform, opacity, filter, boxShadow,
-                  transition: BUBBLE_TRANSITION, transformOrigin: 'bottom center',
-                  backgroundColor: 'rgba(255,255,255,0.9)',
-                  border: '1px solid rgba(221,212,192,0.8)',
-                  cursor: isFocused ? 'default' : 'pointer',
-                  width: isFocused ? 300 : undefined,
-                  padding: isFocused ? 14 : '10px 14px',
-                }}
-              >
-                {isFocused ? (
-                  <>
+              return (
+                <div
+                  key={item.key}
+                  ref={(el) => { rowRefs.current[item.key] = el; }}
+                  className="flex items-center gap-4 shrink-0"
+                  style={{ opacity, transition: PILL_TRANSITION }}
+                >
+                  {/* Capsule pill (right-aligned in its column so the wide focused pill extends left) */}
+                  <div style={{ width: PILL_COL, display: 'flex', justifyContent: 'flex-end' }}>
                     <div
-                      className="flex items-center gap-2.5 mb-2"
-                      onClick={isLive ? undefined : (e) => { e.stopPropagation(); setFocusKey(null); }}
-                      style={{ cursor: isLive ? 'default' : 'pointer' }}
+                      onMouseEnter={() => setHoverKey(item.key)}
+                      onMouseLeave={() => setHoverKey((k) => (k === item.key ? null : k))}
+                      onClick={isFocused ? undefined : () => setFocusKey(item.key)}
+                      className="flex items-center"
+                      style={{
+                        width: isFocused ? 330 : 220, height: 56,
+                        borderRadius: 9999, backgroundColor: pillBg,
+                        border: '1px solid rgba(221,212,192,0.85)', boxShadow,
+                        transform: `scale(${scale})`, filter: blur ? `blur(${blur}px)` : 'none',
+                        transformOrigin: 'center', transition: PILL_TRANSITION,
+                        cursor: isFocused ? 'default' : 'pointer',
+                        padding: isFocused ? '0 18px 0 16px' : '0 18px',
+                        gap: 10,
+                      }}
                     >
-                      <FlagImg code={getCountryByName(item.country)?.code ?? ''} size={38} className="shrink-0" />
-                      <div className="min-w-0 flex-1">
-                        <div className="text-xl font-black truncate leading-tight" style={{ color: '#1C1410' }}>{getCountryDisplayName(item.country, language)}</div>
-                        <div className="text-[10px] font-mono uppercase tracking-wide truncate" style={{ color: isLive ? '#B8844A' : '#9A8A78' }}>{label}</div>
-                      </div>
-                      {!isLive && <span className="text-[11px] shrink-0" style={{ color: '#9A8A78' }}>▾</span>}
+                      {isFocused ? (
+                        <>
+                          <span className="text-[10px] font-black uppercase tracking-wider shrink-0" style={{ color: '#1B3828' }}>{tagFor(item)}</span>
+                          <FlagImg code={getCountryByName(item.country)?.code ?? ''} size={26} className="shrink-0" />
+                          <input
+                            value={rs.content}
+                            onChange={(e) => setNote(item, e.target.value)}
+                            onBlur={() => persist(item, rs.content, rs.scores)}
+                            onClick={(e) => e.stopPropagation()}
+                            placeholder="Private note…"
+                            className="flex-1 min-w-0 text-sm bg-transparent border-0 outline-none"
+                            style={{ color: '#1C1410' }}
+                          />
+                          {!isLive && (
+                            <button onClick={(e) => { e.stopPropagation(); setFocusKey(null); }} className="shrink-0 text-[11px]" style={{ color: '#9A8A78' }}>✕</button>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <FlagImg code={getCountryByName(item.country)?.code ?? ''} size={22} className="shrink-0" />
+                          <span className="text-sm font-semibold truncate" style={{ color: '#6A5A4A' }}>{getCountryDisplayName(item.country, language)}</span>
+                          {scored && <span className="ms-auto text-xs font-black shrink-0" style={{ color: '#1B3828' }}>✓</span>}
+                        </>
+                      )}
                     </div>
-                    <input
-                      value={rs.content}
-                      onChange={(e) => setNote(item, e.target.value)}
-                      onBlur={() => persist(item, rs.content, rs.scores)}
-                      placeholder="Private note…"
-                      className="w-full text-xs bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-2.5 py-2 outline-none focus:border-[#1B3828]"
-                      style={{ color: '#1C1410' }}
-                    />
-                    {factors.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 mt-2">
-                        {factors.map((f) => {
-                          const v = rs.scores[f.id] ?? 0;
-                          return (
-                            <button
-                              key={f.id}
-                              className="fb-chip flex items-center gap-1 rounded-lg text-xs font-semibold"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                                const mk = `${item.key}|${f.id}`;
-                                setMenu((m) => (m?.key === mk ? null : { key: mk, item, factorId: f.id, rect }));
-                              }}
-                              style={{ minHeight: 30, padding: '0 9px', border: '1px solid #DDD4C0', backgroundColor: v > 0 ? '#1B3828' : '#FFFFFF', color: v > 0 ? '#EED98A' : '#1B3828' }}
-                            >
-                              <span className="truncate" style={{ maxWidth: 90 }}>{f.name}</span>
-                              <span>· {v > 0 ? v : '–'}</span>
-                              <span style={{ fontSize: 9, opacity: 0.75 }}>▾</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <FlagImg code={getCountryByName(item.country)?.code ?? ''} size={18} className="shrink-0" />
-                    <span className="text-sm font-semibold truncate" style={{ color: '#1C1410', maxWidth: 130 }}>{getCountryDisplayName(item.country, language)}</span>
-                    {scored && <span className="text-xs font-black shrink-0" style={{ color: '#1B3828' }}>✓</span>}
                   </div>
-                )}
-              </div>
-            );
-          })}
+
+                  {/* 2×2 metric grid — interactive for focused, greyed read-only for nearest, absent for distant */}
+                  <div style={{ width: GRID_COL }}>
+                    {factors.length > 0 && (isFocused || dist === 1) && metricGrid(item, rs, isFocused)}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
-      {/* Scoring menu — portaled so the dock's overflow can't clip it; opens upward, right-aligned. */}
+      {/* Scoring menu — portaled so nothing clips it; opens upward, right-aligned to the cell. */}
       {menu && (() => {
         const v = (state[menu.item.key]?.scores ?? {})[menu.factorId] ?? 0;
         return (
