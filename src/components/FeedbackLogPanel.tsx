@@ -180,12 +180,11 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry 
 
   const MENU_W = 174;
   const PILL_TRANSITION = 'transform 260ms cubic-bezier(.2,.8,.2,1), filter 260ms ease, opacity 260ms ease, box-shadow 260ms ease, background-color 260ms ease';
-  const PILL_COL = 340;       // fixed left column; pills are right-aligned within it so the wide one extends left
-  const GRID_COL = 156;       // reserved so pills/grids stay aligned across rows
+  const GRID_COL = 300;       // reserved so pills/grids stay aligned across rows
   const tagFor = (item: FeedItem) => item.context === 'speakers-list' ? 'GSL' : (committee.caucus?.motionLabel ?? 'CAUCUS');
 
-  // Distance-based recede (index 0 = focused).
-  const scaleByDist = [1, 0.94, 0.9, 0.88];
+  // Distance-based recede (index 0 = focused). Gentle on scale so pills stay wide.
+  const scaleByDist = [1, 0.98, 0.96, 0.94];
   const opacityByDist = [1, 0.7, 0.55, 0.45];
   const blurByDist = [0, 0.6, 1.2, 1.6];
 
@@ -194,16 +193,16 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry 
     const set = v > 0;
     if (!interactive) {
       return (
-        <div key={f.id} className="rounded-lg flex flex-col justify-center px-2 py-1" style={{ border: '1px solid rgba(221,212,192,0.7)', backgroundColor: 'rgba(255,255,255,0.5)' }}>
-          <span className="text-[8px] uppercase tracking-wide truncate" style={{ color: '#B8AE9C' }}>{f.name}</span>
-          <span className="text-sm font-black leading-none" style={{ color: '#9A8A78' }}>{set ? v : '–'}</span>
+        <div key={f.id} className="rounded-lg flex flex-col justify-center px-3 py-1.5" style={{ border: '1px solid rgba(221,212,192,0.7)', backgroundColor: 'rgba(255,255,255,0.5)' }}>
+          <span className="text-[9px] uppercase tracking-wide truncate" style={{ color: '#B8AE9C' }}>{f.name}</span>
+          <span className="text-base font-black leading-none" style={{ color: '#9A8A78' }}>{set ? v : '–'}</span>
         </div>
       );
     }
     return (
       <button
         key={f.id}
-        className="fb-chip rounded-lg flex flex-col justify-center px-2 py-1 text-left"
+        className="fb-chip rounded-lg flex flex-col justify-center px-3 py-1.5 text-left"
         onClick={(e) => {
           e.stopPropagation();
           const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -212,60 +211,43 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry 
         }}
         style={{ border: `1px solid ${set ? '#1B3828' : '#DDD4C0'}`, backgroundColor: set ? '#1B3828' : '#FFFFFF' }}
       >
-        <span className="text-[8px] uppercase tracking-wide truncate" style={{ color: set ? 'rgba(238,217,138,0.8)' : '#9A8A78' }}>{f.name}</span>
-        <span className="text-sm font-black leading-none" style={{ color: set ? '#EED98A' : '#1B3828' }}>{set ? v : '–'}</span>
+        <span className="text-[9px] uppercase tracking-wide truncate" style={{ color: set ? 'rgba(238,217,138,0.8)' : '#9A8A78' }}>{f.name}</span>
+        <span className="text-base font-black leading-none" style={{ color: set ? '#EED98A' : '#1B3828' }}>{set ? v : '–'}</span>
       </button>
     );
   };
 
   const metricGrid = (item: FeedItem, rs: RowState, interactive: boolean) => (
-    <div className="grid gap-1.5" style={{ width: GRID_COL, gridTemplateColumns: '1fr 1fr', gridTemplateRows: 'auto auto' }}>
+    <div className="grid gap-2" style={{ width: GRID_COL, gridTemplateColumns: '1fr 1fr', gridTemplateRows: 'auto auto' }}>
       {factors.slice(0, 4).map((f) => metricCell(item, f, rs.scores[f.id] ?? 0, interactive))}
     </div>
   );
 
   return (
-    <div
-      className="flex-1 min-h-0 flex flex-col"
-      style={{
-        margin: 12, borderRadius: 24, minHeight: 280,
-        border: '1px solid rgba(221,212,192,0.7)',
-        boxShadow: '0 16px 48px rgba(28,20,16,0.22)',
-        backgroundColor: 'rgba(250,248,243,0.82)',
-        backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)',
-        fontFamily: "'Poppins','Outfit',sans-serif",
-      }}
-    >
+    <div className="flex-1 min-h-0 flex flex-col" style={{ fontFamily: "'Poppins','Outfit',sans-serif" }}>
       <style>{`.fb-dock-scroll::-webkit-scrollbar{display:none}`}</style>
-      <div className="flex items-center gap-2 px-4 pt-2.5 pb-1 shrink-0">
-        <div className="w-1 h-3 rounded-full" style={{ backgroundColor: 'rgba(238,217,138,0.8)' }} />
-        <span className="text-[11px] font-bold tracking-wide" style={{ color: '#9A8A78' }}>Feedback log</span>
-        <span className="text-[10px]" style={{ color: 'rgba(154,138,120,0.7)' }}>· private to chairs</span>
-      </div>
-
       {items.length === 0 ? (
         <div className="flex-1 flex items-center justify-center">
           <p className="text-xs px-4" style={{ color: '#9A8A78' }}>Comments appear here as delegates take the floor.</p>
         </div>
       ) : (
         <div className="fb-dock-scroll flex-1 min-h-0 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
-          <div className="min-h-full flex flex-col items-center justify-center gap-3 py-10 px-6">
+          <div className="min-h-full flex flex-col justify-center gap-3 py-8 px-6">
             {items.map((item, idx) => {
               const rs = state[item.key] ?? { content: '', scores: {}, country: item.country };
               const isLive = item.kind === 'live';
               const isFocused = item.key === effectiveFocus;
               const isHover = hoverKey === item.key && !isFocused;
-              const scored = !!(rs.content && rs.content.trim()) || Object.values(rs.scores).some((x) => (x ?? 0) > 0);
+              const scored = Object.values(rs.scores).some((x) => (x ?? 0) > 0);
               const dist = focusIdx >= 0 ? Math.min(Math.abs(idx - focusIdx), 3) : 0;
 
               let scale = scaleByDist[dist], opacity = opacityByDist[dist], blur = blurByDist[dist];
-              let pillBg = '#EDE7D8';
               let boxShadow = '0 3px 12px rgba(28,20,16,0.07)';
               if (isFocused) {
-                scale = 1.05; opacity = 1; blur = 0; pillBg = '#FFFFFF';
+                scale = 1; opacity = 1; blur = 0;
                 boxShadow = '0 0 0 2px #B8844A, 0 14px 36px rgba(28,20,16,0.18)';
               } else if (isHover) {
-                scale = 1.04; opacity = 1; blur = 0;
+                scale = 1.02; opacity = 1; blur = 0;
                 boxShadow = '0 10px 26px rgba(28,20,16,0.16)';
               }
 
@@ -273,56 +255,62 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry 
                 <div
                   key={item.key}
                   ref={(el) => { rowRefs.current[item.key] = el; }}
-                  className="flex items-center gap-4 shrink-0"
+                  className="w-full flex items-center gap-3 shrink-0"
                   style={{ opacity, transition: PILL_TRANSITION }}
                 >
-                  {/* Capsule pill (right-aligned in its column so the wide focused pill extends left) */}
-                  <div style={{ width: PILL_COL, display: 'flex', justifyContent: 'flex-end' }}>
+                  {isFocused ? (
+                    /* Active — wide, 2-row writing bubble */
+                    <div
+                      className="flex-1 min-w-0"
+                      style={{
+                        borderRadius: 22, backgroundColor: '#FFFFFF',
+                        border: '1px solid rgba(221,212,192,0.85)', boxShadow,
+                        transform: `scale(${scale})`, transformOrigin: 'center', transition: PILL_TRANSITION,
+                        padding: '12px 16px',
+                      }}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-[11px] font-black uppercase tracking-wider shrink-0" style={{ color: '#1B3828' }}>{tagFor(item)}</span>
+                        <FlagImg code={getCountryByName(item.country)?.code ?? ''} size={26} className="shrink-0" />
+                        <span className="flex-1 min-w-0 truncate text-base font-bold" style={{ color: '#1C1410' }}>{getCountryDisplayName(item.country, language)}</span>
+                        {!isLive && <button onClick={(e) => { e.stopPropagation(); setFocusKey(null); }} className="shrink-0 text-sm" style={{ color: '#9A8A78' }}>✕</button>}
+                      </div>
+                      <textarea
+                        rows={2}
+                        value={rs.content}
+                        onChange={(e) => setNote(item, e.target.value)}
+                        onBlur={() => persist(item, rs.content, rs.scores)}
+                        placeholder="Private note…"
+                        className="w-full mt-2 text-sm rounded-lg px-3 py-2 outline-none resize-none"
+                        style={{ color: '#1C1410', backgroundColor: '#FAF8F3', border: '1px solid #EDE7D8' }}
+                      />
+                    </div>
+                  ) : (
+                    /* Collapsed capsule — shows the note written for this delegate */
                     <div
                       onMouseEnter={() => setHoverKey(item.key)}
                       onMouseLeave={() => setHoverKey((k) => (k === item.key ? null : k))}
-                      onClick={isFocused ? undefined : () => setFocusKey(item.key)}
-                      className="flex items-center"
+                      onClick={() => setFocusKey(item.key)}
+                      className="flex-1 min-w-0 flex items-center gap-3"
                       style={{
-                        width: isFocused ? 330 : 220, height: 56,
-                        borderRadius: 9999, backgroundColor: pillBg,
+                        height: 54, borderRadius: 9999, backgroundColor: '#EDE7D8',
                         border: '1px solid rgba(221,212,192,0.85)', boxShadow,
                         transform: `scale(${scale})`, filter: blur ? `blur(${blur}px)` : 'none',
                         transformOrigin: 'center', transition: PILL_TRANSITION,
-                        cursor: isFocused ? 'default' : 'pointer',
-                        padding: isFocused ? '0 18px 0 16px' : '0 18px',
-                        gap: 10,
+                        cursor: 'pointer', padding: '0 20px',
                       }}
                     >
-                      {isFocused ? (
-                        <>
-                          <span className="text-[10px] font-black uppercase tracking-wider shrink-0" style={{ color: '#1B3828' }}>{tagFor(item)}</span>
-                          <FlagImg code={getCountryByName(item.country)?.code ?? ''} size={26} className="shrink-0" />
-                          <input
-                            value={rs.content}
-                            onChange={(e) => setNote(item, e.target.value)}
-                            onBlur={() => persist(item, rs.content, rs.scores)}
-                            onClick={(e) => e.stopPropagation()}
-                            placeholder="Private note…"
-                            className="flex-1 min-w-0 text-sm bg-transparent border-0 outline-none"
-                            style={{ color: '#1C1410' }}
-                          />
-                          {!isLive && (
-                            <button onClick={(e) => { e.stopPropagation(); setFocusKey(null); }} className="shrink-0 text-[11px]" style={{ color: '#9A8A78' }}>✕</button>
-                          )}
-                        </>
-                      ) : (
-                        <>
-                          <FlagImg code={getCountryByName(item.country)?.code ?? ''} size={22} className="shrink-0" />
-                          <span className="text-sm font-semibold truncate" style={{ color: '#6A5A4A' }}>{getCountryDisplayName(item.country, language)}</span>
-                          {scored && <span className="ms-auto text-xs font-black shrink-0" style={{ color: '#1B3828' }}>✓</span>}
-                        </>
-                      )}
+                      <FlagImg code={getCountryByName(item.country)?.code ?? ''} size={22} className="shrink-0" />
+                      <span className="font-semibold shrink-0" style={{ color: '#1C1410' }}>{getCountryDisplayName(item.country, language)}</span>
+                      {rs.content && rs.content.trim()
+                        ? <span className="flex-1 min-w-0 truncate text-sm" style={{ color: '#6A5A4A' }}>— {rs.content}</span>
+                        : <span className="flex-1" />}
+                      {scored && <span className="shrink-0 text-sm font-black" style={{ color: '#1B3828' }}>✓</span>}
                     </div>
-                  </div>
+                  )}
 
-                  {/* 2×2 metric grid — interactive for focused, greyed read-only for nearest, absent for distant */}
-                  <div style={{ width: GRID_COL }}>
+                  {/* 2×2 metric grid — interactive for focused, greyed read-only for nearest, absent otherwise */}
+                  <div className="shrink-0" style={{ width: GRID_COL }}>
                     {factors.length > 0 && (isFocused || dist === 1) && metricGrid(item, rs, isFocused)}
                   </div>
                 </div>
