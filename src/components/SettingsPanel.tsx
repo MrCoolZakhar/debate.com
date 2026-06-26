@@ -665,7 +665,7 @@ export function SettingsPanel({ committee, onClose }: {
               <div className="mt-6 pt-6" style={{ borderTop: '1px solid #DDD4C0' }}>
                 <SectionLabel>Quality factors</SectionLabel>
                 <p className="text-xs mb-3 leading-snug" style={{ color: '#9A8A78' }}>
-                  Subjective factors chairs rate in recaps (1–{scoring.factorScaleMax}).
+                  Subjective factors chairs rate per speech (0–{scoring.factorScaleMax}).
                 </p>
                 <div className="space-y-1.5 mb-3">
                   {scoring.factors.map((f) => (
@@ -682,10 +682,17 @@ export function SettingsPanel({ committee, onClose }: {
                   ))}
                 </div>
                 <button onClick={addFactor} className="text-xs font-bold px-3 py-2 rounded-lg transition-colors" style={{ border: '1px solid #DDD4C0', color: '#1B3828', backgroundColor: '#FAF8F3' }}>+ Add factor</button>
-                <div className="flex items-center gap-2 mt-3">
-                  <span className="text-xs" style={{ color: '#6A5A4A' }}>Rating scale max</span>
-                  <input type="number" min={2} value={scoring.factorScaleMax} onChange={(e) => updScoring({ ...scoring, factorScaleMax: Math.max(2, parseInt(e.target.value) || 10) })}
-                    className="w-14 text-sm text-center bg-white border border-[#DDD4C0] rounded-lg px-1.5 py-1 focus:border-[#1B3828] outline-none" style={{ color: '#1C1410' }} />
+                <div className="mt-3">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs" style={{ color: '#6A5A4A' }}>Rating scale max</span>
+                    <span className="text-xs font-bold" style={{ color: '#1B3828' }}>{scoring.factorScaleMax}</span>
+                  </div>
+                  <input type="range" min={0} max={100} step={1} value={scoring.factorScaleMax}
+                    onChange={(e) => updScoring({ ...scoring, factorScaleMax: parseInt(e.target.value) })}
+                    className="w-full" style={{ accentColor: '#1B3828' }} />
+                  <div className="flex items-center justify-between text-[10px] font-mono mt-0.5" style={{ color: '#9A8A78' }}>
+                    <span>0</span><span>100</span>
+                  </div>
                 </div>
               </div>
 

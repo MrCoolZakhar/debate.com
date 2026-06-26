@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { FlagImg } from '@/components/FlagImg';
-import Portal from '@/components/Portal';
 import { Committee } from '@/lib/types';
 import { getCountryByName, getCountryDisplayName } from '@/lib/countries';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -166,60 +165,51 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry 
     return () => clearTimeout(id);
   }, [effectiveFocus]);
 
-  // Per-factor dropdown menu, rendered through a Portal so it can't be clipped.
-  const [menu, setMenu] = useState<{ key: string; item: FeedItem; factorId: string; rect: DOMRect } | null>(null);
-  useEffect(() => {
-    if (!menu) return;
-    const onDown = (e: MouseEvent) => {
-      const t = e.target as HTMLElement;
-      if (!t.closest('.fb-portal-menu') && !t.closest('.fb-chip')) setMenu(null);
-    };
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-  }, [menu]);
-
-  const MENU_W = 174;
   const PILL_TRANSITION = 'transform 260ms cubic-bezier(.2,.8,.2,1), filter 260ms ease, opacity 260ms ease, box-shadow 260ms ease, background-color 260ms ease';
   const GRID_COL = 300;       // reserved so pills/grids stay aligned across rows
   const tagFor = (item: FeedItem) => item.context === 'speakers-list' ? 'GSL' : (committee.caucus?.motionLabel ?? 'CAUCUS');
+  const maxScale = Math.max(1, cfg.factorScaleMax);
 
   // Distance-based recede (index 0 = focused). Gentle on scale so pills stay wide.
   const scaleByDist = [1, 0.98, 0.96, 0.94];
   const opacityByDist = [1, 0.7, 0.55, 0.45];
   const blurByDist = [0, 0.6, 1.2, 1.6];
 
-  // One 2×2 metric cell.
-  const metricCell = (item: FeedItem, f: { id: string; name: string }, v: number, interactive: boolean) => {
-    const set = v > 0;
-    if (!interactive) {
-      return (
-        <div key={f.id} className="rounded-lg flex flex-col justify-center px-3 py-1.5" style={{ border: '1px solid rgba(221,212,192,0.7)', backgroundColor: 'rgba(255,255,255,0.5)' }}>
-          <span className="text-[9px] uppercase tracking-wide truncate" style={{ color: '#B8AE9C' }}>{f.name}</span>
-          <span className="text-base font-black leading-none" style={{ color: '#9A8A78' }}>{set ? v : '–'}</span>
-        </div>
-      );
-    }
-    return (
-      <button
-        key={f.id}
-        className="fb-chip rounded-lg flex flex-col justify-center px-3 py-1.5 text-left"
-        onClick={(e) => {
-          e.stopPropagation();
-          const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-          const mk = `${item.key}|${f.id}`;
-          setMenu((m) => (m?.key === mk ? null : { key: mk, item, factorId: f.id, rect }));
-        }}
-        style={{ border: `1px solid ${set ? '#1B3828' : '#DDD4C0'}`, backgroundColor: set ? '#1B3828' : '#FFFFFF' }}
-      >
-        <span className="text-[9px] uppercase tracking-wide truncate" style={{ color: set ? 'rgba(238,217,138,0.8)' : '#9A8A78' }}>{f.name}</span>
-        <span className="text-base font-black leading-none" style={{ color: set ? '#EED98A' : '#1B3828' }}>{set ? v : '–'}</span>
-      </button>
-    );
-  };
-
-  const metricGrid = (item: FeedItem, rs: RowState, interactive: boolean) => (
-    <div className="grid gap-2" style={{ width: GRID_COL, gridTemplateColumns: '1fr 1fr', gridTemplateRows: 'auto auto' }}>
-      {factors.slice(0, 4).map((f) => metricCell(item, f, rs.scores[f.id] ?? 0, interactive))}
+  // Qualitative ratings — sliders (lowest 0 … highest max) on the focused pill;
+  // compact greyed read-only bars on the nearest neighbour.
+  const metricStack = (item: FeedItem, rs: RowState, interactive: boolean) => (
+    <div className="flex flex-col gap-2" style={{ width: GRID_COL }}>
+      {factors.slice(0, 4).map((f) => {
+        const v = rs.scores[f.id] ?? 0;
+        if (!interactive) {
+          return (
+            <div key={f.id} className="flex items-center gap-2">
+              <span className="text-[9px] uppercase tracking-wide truncate" style={{ width: 78, color: '#B8AE9C' }}>{f.name}</span>
+              <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: '#DDD4C0' }}>
+                <div className="h-full rounded-full" style={{ width: `${(v / maxScale) * 100}%`, backgroundColor: '#9A8A78' }} />
+              </div>
+              <span className="text-[11px] font-bold text-right" style={{ width: 26, color: '#9A8A78' }}>{v}</span>
+            </div>
+          );
+        }
+        return (
+          <div key={f.id}>
+            <div className="flex items-baseline justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wide truncate" style={{ color: '#6A5A4A' }}>{f.name}</span>
+              <span className="text-sm font-black" style={{ color: '#1B3828' }}>{v}</span>
+            </div>
+            <input
+              type="range" min={0} max={maxScale} step={1} value={v}
+              onClick={(e) => e.stopPropagation()}
+              onChange={(e) => setScore(item, f.id, parseInt(e.target.value))}
+              className="w-full" style={{ accentColor: '#1B3828' }}
+            />
+            <div className="flex items-center justify-between text-[8px] font-mono" style={{ color: '#B8AE9C', marginTop: -2 }}>
+              <span>0</span><span>{maxScale}</span>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 
@@ -311,7 +301,7 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry 
 
                   {/* 2×2 metric grid — interactive for focused, greyed read-only for nearest, absent otherwise */}
                   <div className="shrink-0" style={{ width: GRID_COL }}>
-                    {factors.length > 0 && (isFocused || dist === 1) && metricGrid(item, rs, isFocused)}
+                    {factors.length > 0 && (isFocused || dist === 1) && metricStack(item, rs, isFocused)}
                   </div>
                 </div>
               );
@@ -319,42 +309,6 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry 
           </div>
         </div>
       )}
-
-      {/* Scoring menu — portaled so nothing clips it; opens upward, right-aligned to the cell. */}
-      {menu && (() => {
-        const v = (state[menu.item.key]?.scores ?? {})[menu.factorId] ?? 0;
-        return (
-          <Portal>
-            <div
-              className="fb-portal-menu rounded-xl p-2 shadow-xl"
-              style={{
-                position: 'fixed', zIndex: 50,
-                left: Math.max(8, menu.rect.right - MENU_W),
-                bottom: Math.max(8, window.innerHeight - menu.rect.top + 6),
-                width: MENU_W,
-                backgroundColor: '#FFFFFF', border: '1px solid #DDD4C0',
-                fontFamily: "'Poppins','Outfit',sans-serif",
-              }}
-            >
-              <div className="grid gap-1" style={{ gridTemplateColumns: 'repeat(5, minmax(0, 1fr))' }}>
-                {Array.from({ length: cfg.factorScaleMax }, (_, i) => i + 1).map((n) => (
-                  <button
-                    key={n}
-                    onClick={() => { setScore(menu.item, menu.factorId, n); setMenu(null); }}
-                    className="rounded-md text-xs font-bold flex items-center justify-center"
-                    style={{ height: 26, border: '1px solid #DDD4C0', backgroundColor: v === n ? '#1B3828' : '#FAF8F3', color: v === n ? '#EED98A' : '#1B3828' }}
-                  >{n}</button>
-                ))}
-              </div>
-              <button
-                onClick={() => { setScore(menu.item, menu.factorId, 0); setMenu(null); }}
-                className="mt-1.5 w-full text-[11px] font-bold rounded-md py-1"
-                style={{ color: '#8B2020', border: '1px solid #DDD4C0', backgroundColor: '#FFFFFF' }}
-              >Clear</button>
-            </div>
-          </Portal>
-        );
-      })()}
     </div>
   );
 }

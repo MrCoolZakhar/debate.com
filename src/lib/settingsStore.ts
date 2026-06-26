@@ -15,7 +15,7 @@ export interface RankingFactor { id: string; name: string; enabled: boolean; }
 export interface ScoringConfig {
   sources: ScoreSource[];            // built-ins below + chair-added custom ones
   factors: RankingFactor[];
-  factorScaleMax: number;            // default 10
+  factorScaleMax: number;            // default 100
   scoreBlend: number;                // 0 = pure objective … 100 = pure quality (default 0)
   hideScoresFromDelegates: boolean;  // default false
 }
@@ -37,7 +37,7 @@ export const DEFAULT_SCORING: ScoringConfig = {
     { id: 'collaboration', name: 'Collaboration', enabled: true },
     { id: 'content', name: 'Content & Research', enabled: true },
   ],
-  factorScaleMax: 10, scoreBlend: 0, hideScoresFromDelegates: false,
+  factorScaleMax: 100, scoreBlend: 0, hideScoresFromDelegates: false,
 };
 
 export interface CommitteeSettings {
