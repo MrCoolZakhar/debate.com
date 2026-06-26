@@ -150,12 +150,19 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry 
       persist(item, nextRow.content, scores);
       return { ...prev, [item.key]: nextRow };
     });
-  const step = (item: FeedItem, factorId: string, cur: number, delta: number) => {
-    let next = (cur || 0) + delta;
-    if (next < 1) next = 0;
-    if (next > cfg.factorScaleMax) next = cfg.factorScaleMax;
-    setScore(item, factorId, next);
-  };
+
+  // Only the live speaker is expanded by default; past/upcoming collapse to a slim row.
+  const [expanded, setExpanded] = useState<string | null>(null);
+  // Per-factor dropdown menu, keyed `${item.key}|${f.id}`.
+  const [openMenu, setOpenMenu] = useState<string | null>(null);
+  useEffect(() => {
+    if (!openMenu) return;
+    const onDown = (e: MouseEvent) => {
+      if (!(e.target as HTMLElement).closest('.fb-menu-wrap')) setOpenMenu(null);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [openMenu]);
 
   const kindStyle: Record<ItemKind, React.CSSProperties> = {
     past: { opacity: 0.55, border: '1px solid #DDD4C0', backgroundColor: '#FFFFFF' },
@@ -164,7 +171,7 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry 
   };
 
   return (
-    <div className="w-full shrink-0 flex flex-col" style={{ height: 200, borderTop: '1px solid #DDD4C0', backgroundColor: '#FAF8F3', fontFamily: "'Poppins','Outfit',sans-serif" }}>
+    <div className="shrink-0 flex flex-col overflow-hidden" style={{ height: 200, margin: '0 12px 12px', border: '1px solid #DDD4C0', borderRadius: 18, boxShadow: '0 8px 28px rgba(28,20,16,0.16)', backgroundColor: '#FAF8F3', fontFamily: "'Poppins','Outfit',sans-serif" }}>
       <div className="flex items-center gap-2 px-4 py-1.5 shrink-0" style={{ borderBottom: '1px solid #DDD4C0' }}>
         <div className="w-1 h-3.5 rounded-full" style={{ backgroundColor: '#EED98A' }} />
         <span className="text-xs font-black tracking-wide" style={{ color: '#1B3828' }}>Feedback log</span>
@@ -179,49 +186,87 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry 
           const label = item.kind === 'next'
             ? 'up next'
             : `${item.context.replace(/-/g, ' ')}${item.seconds ? ` · ${item.seconds}s` : ''}${item.timestamp ? ` · ${new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}`;
+          const isLive = item.kind === 'live';
+          const isExpanded = isLive || expanded === item.key;
+          const scored = !!(rs.content && rs.content.trim()) || Object.values(rs.scores).some((x) => (x ?? 0) > 0);
           return (
             <div
               key={item.key}
-              ref={item.kind === 'live' ? currentCardRef : undefined}
-              className="rounded-xl p-2 shrink-0"
-              style={kindStyle[item.kind]}
+              ref={isLive ? currentCardRef : undefined}
+              className="rounded-xl shrink-0"
+              style={{ ...kindStyle[item.kind], padding: isExpanded ? 8 : 6 }}
             >
-              <div className="flex items-center gap-2 mb-1.5">
-                <FlagImg code={getCountryByName(item.country)?.code ?? ''} size={18} className="shrink-0" />
-                <span className="text-sm font-semibold truncate" style={{ color: '#1C1410' }}>{getCountryDisplayName(item.country, language)}</span>
-                <span className="text-[9px] font-mono uppercase tracking-wide" style={{ color: item.kind === 'live' ? '#B8844A' : '#9A8A78' }}>{label}</span>
-              </div>
-              <div className="flex items-stretch gap-2">
-                <input
-                  value={rs.content}
-                  onChange={(e) => setNote(item, e.target.value)}
-                  onBlur={() => persist(item, rs.content, rs.scores)}
-                  placeholder="Private note…"
-                  className="flex-1 min-w-0 text-xs bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-2 py-1.5 outline-none focus:border-[#1B3828]"
-                  style={{ color: '#1C1410' }}
-                />
-                {factors.length > 0 && (
-                  <div className="flex items-center gap-2 shrink-0">
-                    {factors.slice(0, 4).map((f) => {
-                      const v = rs.scores[f.id] ?? 0;
-                      return (
-                        <div key={f.id} className="flex flex-col items-center">
-                          <span className="text-[8px] uppercase tracking-wide truncate max-w-[56px]" style={{ color: '#9A8A78' }}>{f.name}</span>
-                          <div className="flex items-center gap-1">
-                            <button onClick={() => step(item, f.id, v, -1)} aria-label={`Decrease ${f.name}`}
-                              className="flex items-center justify-center rounded-md font-bold leading-none"
-                              style={{ width: 24, height: 24, border: '1px solid #DDD4C0', backgroundColor: '#FFFFFF', color: '#1B3828' }}>−</button>
-                            <span className="text-xs font-mono text-center" style={{ width: 16, color: v > 0 ? '#1B3828' : '#9A8A78' }}>{v > 0 ? v : '–'}</span>
-                            <button onClick={() => step(item, f.id, v, 1)} aria-label={`Increase ${f.name}`}
-                              className="flex items-center justify-center rounded-md font-bold leading-none"
-                              style={{ width: 24, height: 24, border: '1px solid #DDD4C0', backgroundColor: '#FFFFFF', color: '#1B3828' }}>+</button>
-                          </div>
-                        </div>
-                      );
-                    })}
+              {!isExpanded ? (
+                /* Collapsed slim row — click to expand */
+                <button onClick={() => setExpanded(item.key)} className="w-full flex items-center gap-2 text-left">
+                  <FlagImg code={getCountryByName(item.country)?.code ?? ''} size={16} className="shrink-0" />
+                  <span className="text-sm font-semibold truncate" style={{ color: '#1C1410' }}>{getCountryDisplayName(item.country, language)}</span>
+                  <span className="text-[9px] font-mono uppercase tracking-wide truncate" style={{ color: '#9A8A78' }}>{label}</span>
+                  {scored && <span className="ms-auto text-xs font-black shrink-0" style={{ color: '#1B3828' }}>✓</span>}
+                </button>
+              ) : (
+                <>
+                  <div
+                    className="flex items-center gap-2 mb-1.5"
+                    onClick={isLive ? undefined : () => setExpanded(null)}
+                    style={{ cursor: isLive ? 'default' : 'pointer' }}
+                  >
+                    <FlagImg code={getCountryByName(item.country)?.code ?? ''} size={18} className="shrink-0" />
+                    <span className="text-sm font-semibold truncate" style={{ color: '#1C1410' }}>{getCountryDisplayName(item.country, language)}</span>
+                    <span className="text-[9px] font-mono uppercase tracking-wide" style={{ color: isLive ? '#B8844A' : '#9A8A78' }}>{label}</span>
+                    {!isLive && <span className="ms-auto text-[10px] shrink-0" style={{ color: '#9A8A78' }}>▴</span>}
                   </div>
-                )}
-              </div>
+                  <input
+                    value={rs.content}
+                    onChange={(e) => setNote(item, e.target.value)}
+                    onBlur={() => persist(item, rs.content, rs.scores)}
+                    placeholder="Private note…"
+                    className="w-full text-xs bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-2 py-1.5 outline-none focus:border-[#1B3828]"
+                    style={{ color: '#1C1410' }}
+                  />
+                  {factors.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-1.5">
+                      {factors.map((f) => {
+                        const v = rs.scores[f.id] ?? 0;
+                        const menuKey = `${item.key}|${f.id}`;
+                        const open = openMenu === menuKey;
+                        return (
+                          <div key={f.id} className="fb-menu-wrap relative">
+                            <button
+                              onClick={() => setOpenMenu(open ? null : menuKey)}
+                              className="flex items-center gap-1 rounded-lg text-xs font-semibold"
+                              style={{ minHeight: 28, padding: '0 8px', border: '1px solid #DDD4C0', backgroundColor: v > 0 ? '#1B3828' : '#FFFFFF', color: v > 0 ? '#EED98A' : '#1B3828' }}
+                            >
+                              <span className="truncate" style={{ maxWidth: 88 }}>{f.name}</span>
+                              <span>· {v > 0 ? v : '–'}</span>
+                              <span style={{ fontSize: 9, opacity: 0.75 }}>▾</span>
+                            </button>
+                            {open && (
+                              <div className="absolute bottom-full mb-1 left-0 z-50 rounded-xl p-2 shadow-lg" style={{ backgroundColor: '#FFFFFF', border: '1px solid #DDD4C0', minWidth: 150 }}>
+                                <div className="grid gap-1" style={{ gridTemplateColumns: 'repeat(5, minmax(0, 1fr))' }}>
+                                  {Array.from({ length: cfg.factorScaleMax }, (_, i) => i + 1).map((n) => (
+                                    <button
+                                      key={n}
+                                      onClick={() => { setScore(item, f.id, n); setOpenMenu(null); }}
+                                      className="rounded-md text-xs font-bold flex items-center justify-center"
+                                      style={{ width: 26, height: 26, border: '1px solid #DDD4C0', backgroundColor: v === n ? '#1B3828' : '#FAF8F3', color: v === n ? '#EED98A' : '#1B3828' }}
+                                    >{n}</button>
+                                  ))}
+                                </div>
+                                <button
+                                  onClick={() => { setScore(item, f.id, 0); setOpenMenu(null); }}
+                                  className="mt-1.5 w-full text-[11px] font-bold rounded-md py-1"
+                                  style={{ color: '#8B2020', border: '1px solid #DDD4C0', backgroundColor: '#FFFFFF' }}
+                                >Clear</button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           );
         })}
