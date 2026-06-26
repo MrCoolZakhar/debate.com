@@ -17,6 +17,7 @@ import { supabase } from '@/lib/supabase';
 import { Emoji } from '@/components/Emoji';
 import { FlagImg } from '@/components/FlagImg';
 import CowDelegationBoard from '@/components/CowDelegationBoard';
+import ChatDisabledNotice from '@/components/ChatDisabledNotice';
 import { getCommitteeFlags, sponsorLabel } from '@/lib/committeeFlags';
 import {
   getCommitteeByCode,
@@ -917,13 +918,9 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   const tabs: { key: DelegateTab; label: string }[] = [
     { key: 'session',   label: t('delegate_tab_session') },
     { key: 'documents', label: t('delegate_tab_documents') },
-    ...(chatDisabled ? [] : [{ key: 'chat' as DelegateTab, label: t('delegate_tab_chat') }]),
+    { key: 'chat',      label: t('delegate_tab_chat') },
     { key: 'stats',     label: t('delegate_tab_stats') },
   ];
-  // If chat gets disabled while it's the open tab, fall back to Session.
-  useEffect(() => {
-    if (chatDisabled && tab === 'chat') setTab('session');
-  }, [chatDisabled, tab]);
 
   // ── Absent banner (blocks active interaction)
   const AbsentBanner = () => (
@@ -974,7 +971,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
           <img src="/GavellingLogo.png" alt="Gavelling" className="w-[150px] h-auto max-h-8 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
         </Link>
         <div className="flex flex-1 min-w-0 h-full">
-          {(['session', 'documents', 'chat', 'stats'] as DelegateTab[]).filter((t2) => t2 !== 'chat' || !chatDisabled).map((tab2, i) => {
+          {(['session', 'documents', 'chat', 'stats'] as DelegateTab[]).map((tab2, i) => {
             const labels: Record<DelegateTab, string> = { session: t('delegate_session_tab'), documents: t('delegate_documents_tab'), chat: t('tab_chat'), stats: t('delegate_stats_tab') };
             const isActive = tab === tab2;
             const chatUnread = (() => {
@@ -1452,6 +1449,11 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
         )}
       </div>}
       {/* ── Chat tab ── */}
+      {tab === 'chat' && chatDisabled && (
+        <div className="flex-1 flex overflow-hidden" style={{ height: '100%' }}>
+          <ChatDisabledNotice />
+        </div>
+      )}
       {tab === 'chat' && !chatDisabled && (
         <div className="flex-1 flex overflow-hidden" style={{ height: '100%' }}>
           <ChatPanel
