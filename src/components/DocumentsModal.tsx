@@ -5,6 +5,7 @@ import Portal from '@/components/Portal';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { useRouter } from 'next/navigation';
 import { Committee, CommitteeDocument, DocumentType, DocumentStatus } from '@/lib/types';
+import { sponsorLabel } from '@/lib/committeeFlags';
 import { TranslationKey } from '@/lib/translations';
 import { getCountryByName, getFlagUrl, getCountryDisplayName, matchesCountryQuery, startsWithCountryQuery } from '@/lib/countries';
 import { Emoji } from '@/components/Emoji';
@@ -62,8 +63,8 @@ function CountryChip({ country, onRemove }: { country: string; onRemove: () => v
   );
 }
 
-function SponsorSelect({ candidates, selected, onChange }: {
-  candidates: string[]; selected: string[]; onChange: (v: string[]) => void;
+function SponsorSelect({ candidates, selected, onChange, committee }: {
+  candidates: string[]; selected: string[]; onChange: (v: string[]) => void; committee: Committee;
 }) {
   const t = useT();
   const { language } = useLanguage();
@@ -79,7 +80,7 @@ function SponsorSelect({ candidates, selected, onChange }: {
   };
   return (
     <div>
-      <label className="block text-sm font-semibold text-[#6A5A4A] mb-1.5">{t('documents_sponsors_label')}</label>
+      <label className="block text-sm font-semibold text-[#6A5A4A] mb-1.5">{sponsorLabel(committee, t('documents_sponsors_label'))}</label>
       <div className="relative">
         <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={handleKeyDown}
           placeholder={t('documents_sponsor_placeholder')}
@@ -548,7 +549,7 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
           placeholder={type === 'working-paper' ? t('documents_title_placeholder_wp') : t('documents_title_placeholder_dr')}
           className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] transition-colors" />
       </div>
-      <SponsorSelect candidates={presentCountries} selected={sponsors} onChange={setSponsors} />
+      <SponsorSelect candidates={presentCountries} selected={sponsors} onChange={setSponsors} committee={committee} />
       <div>
         <label className="block text-sm font-semibold text-[#6A5A4A] mb-1.5">{t('documents_google_docs_label')} <span className="text-[#9A8A78] font-normal">({t('documents_google_docs_optional')})</span></label>
         <input type="text" value={content} onChange={(e) => setContent(e.target.value)}
@@ -739,7 +740,7 @@ function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation
           {/* Sponsors with flags */}
           {doc.sponsors.length > 0 && (
             <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-xs font-semibold text-[#6A5A4A] shrink-0">{t('documents_sponsors_label_card')}:</span>
+              <span className="text-xs font-semibold text-[#6A5A4A] shrink-0">{sponsorLabel(committee, t('documents_sponsors_label_card'))}:</span>
               {doc.sponsors.map((s) => {
                 const f = getCountryByName(s);
                 return (

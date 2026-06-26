@@ -68,6 +68,10 @@ export interface CommitteeSettings {
   // Tab 3 — Access & Identity
   chairJoinSuffix: string;
   requireChairApproval: boolean;
+  // Committee display & permissions
+  sponsorLabel: string;          // default ''  (empty → use translated "Sponsors")
+  lockDelegateRollCall: boolean; // default false
+  disableChat: boolean;          // default false
 }
 
 export const DEFAULT_MOTION_NAMES: MotionNames = {
@@ -102,6 +106,9 @@ export const DEFAULT_SETTINGS: CommitteeSettings = {
   requireChairApproval: false,
   gslRequireNextSpeaker: false,
   scoring: DEFAULT_SCORING,
+  sponsorLabel: '',
+  lockDelegateRollCall: false,
+  disableChat: false,
 };
 
 interface SettingsStore {

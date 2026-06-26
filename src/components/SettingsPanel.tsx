@@ -591,6 +591,31 @@ export function SettingsPanel({ committee, onClose }: {
                 onChange={(v) => upd('requireChairApproval', v)}
               />
 
+              <SectionLabel>Committee display &amp; permissions</SectionLabel>
+              <div className="py-3" style={{ borderBottom: '1px solid #DDD4C0' }}>
+                <div className="text-xs mb-1.5" style={{ color: '#9A8A78' }}>Sponsors label</div>
+                <input
+                  type="text"
+                  value={s.sponsorLabel}
+                  placeholder="Sponsors"
+                  onChange={(e) => upd('sponsorLabel', e.target.value)}
+                  className="w-full text-sm bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-3 py-2 outline-none focus:border-[#1B3828]"
+                  style={{ color: '#1C1410' }}
+                />
+              </div>
+              <Toggle
+                label="Lock delegate roll call"
+                note="Delegates can't change their own Present/Voting status"
+                value={s.lockDelegateRollCall}
+                onChange={(v) => upd('lockDelegateRollCall', v)}
+              />
+              <Toggle
+                label="Disable chat"
+                note="Hides chat for delegates and chairs"
+                value={s.disableChat}
+                onChange={(v) => upd('disableChat', v)}
+              />
+
               <SectionLabel>GSL</SectionLabel>
               <Toggle
                 label={t('settings_gsl_require_next_label')}

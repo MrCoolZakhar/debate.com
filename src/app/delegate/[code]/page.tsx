@@ -17,6 +17,7 @@ import { supabase } from '@/lib/supabase';
 import { Emoji } from '@/components/Emoji';
 import { FlagImg } from '@/components/FlagImg';
 import CowDelegationBoard from '@/components/CowDelegationBoard';
+import { getCommitteeFlags, sponsorLabel } from '@/lib/committeeFlags';
 import {
   getCommitteeByCode,
   subscribeToCommittee,
@@ -370,7 +371,7 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
         {/* Co-sponsors */}
         <div>
           <label className="text-xs font-bold mb-1.5 block" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>
-            {t('delegate_doc_sponsors_label')} <span className="font-normal" style={{ color: '#9A8A78' }}>{t('delegate_doc_sponsors_auto')}</span>
+            {sponsorLabel(committee, t('delegate_doc_sponsors_label'))} <span className="font-normal" style={{ color: '#9A8A78' }}>{t('delegate_doc_sponsors_auto')}</span>
           </label>
           <SponsorsInput committee={committee} myCountry={country} value={coSponsors} onChange={setCoSponsors} />
         </div>
@@ -912,12 +913,17 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   };
 
   // Section 7 — shortened tab labels
+  const chatDisabled = getCommitteeFlags(committee).disableChat;
   const tabs: { key: DelegateTab; label: string }[] = [
     { key: 'session',   label: t('delegate_tab_session') },
     { key: 'documents', label: t('delegate_tab_documents') },
-    { key: 'chat',      label: t('delegate_tab_chat') },
+    ...(chatDisabled ? [] : [{ key: 'chat' as DelegateTab, label: t('delegate_tab_chat') }]),
     { key: 'stats',     label: t('delegate_tab_stats') },
   ];
+  // If chat gets disabled while it's the open tab, fall back to Session.
+  useEffect(() => {
+    if (chatDisabled && tab === 'chat') setTab('session');
+  }, [chatDisabled, tab]);
 
   // ── Absent banner (blocks active interaction)
   const AbsentBanner = () => (
@@ -968,7 +974,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
           <img src="/GavellingLogo.png" alt="Gavelling" className="w-[150px] h-auto max-h-8 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
         </Link>
         <div className="flex flex-1 min-w-0 h-full">
-          {(['session', 'documents', 'chat', 'stats'] as DelegateTab[]).map((tab2, i) => {
+          {(['session', 'documents', 'chat', 'stats'] as DelegateTab[]).filter((t2) => t2 !== 'chat' || !chatDisabled).map((tab2, i) => {
             const labels: Record<DelegateTab, string> = { session: t('delegate_session_tab'), documents: t('delegate_documents_tab'), chat: t('tab_chat'), stats: t('delegate_stats_tab') };
             const isActive = tab === tab2;
             const chatUnread = (() => {
@@ -1277,7 +1283,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                   </div>
                 </div>
                 {/* Status toggle — only when already present/PV and session not ended */}
-                {!isAbsent && !sessionEnded && (
+                {!isAbsent && !sessionEnded && !getCommitteeFlags(committee).lockDelegateRollCall && (
                   <div>
                     <div className="flex gap-2">
                       <button
@@ -1446,7 +1452,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
         )}
       </div>}
       {/* ── Chat tab ── */}
-      {tab === 'chat' && (
+      {tab === 'chat' && !chatDisabled && (
         <div className="flex-1 flex overflow-hidden" style={{ height: '100%' }}>
           <ChatPanel
             committee={committee}

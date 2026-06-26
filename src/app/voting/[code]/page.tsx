@@ -12,6 +12,7 @@ import { Emoji } from '@/components/Emoji';
 import { MajorityPie } from '@/components/RollCallPanel';
 import { getCommitteeByCode, setPhase as setPhaseInDB, setDelegateStatus as setDelegateStatusInDB, updateDocumentStatus as updateDocumentStatusInDB } from '@/lib/committeeService';
 import { useSettingsStore, type CommitteeSettings } from '@/lib/settingsStore';
+import { sponsorLabel } from '@/lib/committeeFlags';
 import { SettingsPanel } from '@/components/SettingsPanel';
 
 function abbreviateCommitteeName(name: string): string {
@@ -529,7 +530,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                     </div>
                     <span className="text-base font-bold text-[#1C1410] block">{doc.title}</span>
                     {doc.sponsors.length > 0 && (
-                      <span className="text-xs text-[#9A8A78] block mt-1">{t('voting_sponsors')}: {doc.sponsors.join(', ')}</span>
+                      <span className="text-xs text-[#9A8A78] block mt-1">{sponsorLabel(committee, t('voting_sponsors'))}: {doc.sponsors.join(', ')}</span>
                     )}
                   </button>
                 );

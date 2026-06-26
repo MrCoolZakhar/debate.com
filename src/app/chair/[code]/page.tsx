@@ -19,6 +19,7 @@ import CowDelegationBoard from '@/components/CowDelegationBoard';
 import { useSettingsStore, type CommitteeSettings } from '@/lib/settingsStore';
 import { supabase } from '@/lib/supabase';
 import ChatPanel from '@/components/ChatPanel';
+import { getCommitteeFlags } from '@/lib/committeeFlags';
 import TutorialOverlay from '@/components/TutorialOverlay';
 import {
   getCommitteeByCode,
@@ -2052,6 +2053,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               {(() => { const n = (committee.documents ?? []).filter((d) => d.status === 'submitted').length; return n > 0 ? <span className="absolute top-1 right-1 z-10 w-4 h-4 bg-[#1B3828] rounded-full text-white text-[10px] flex items-center justify-center">{n}</span> : null; })()}
               <span style={{ position: 'absolute', bottom: '4px', left: '12px', right: '12px', height: '2px', backgroundColor: '#B6871F', transform: showDocuments ? 'scaleX(1)' : 'scaleX(0)', transformOrigin: 'left', transition: 'transform 200ms ease', borderRadius: '2px' }} />
             </button>
+            {!getCommitteeFlags(committee).disableChat && (<>
             <div style={{ width: '1px', height: '28px', backgroundColor: 'rgba(28,20,16,0.2)', margin: '0 2px', flexShrink: 0 }} />
             <button data-tutorial="tab-chat" onClick={() => { if (!isPreSession) handleToggleChat(); }}
               className="flex-1 text-[18px] font-bold px-3 relative h-full transition-all duration-200"
@@ -2074,6 +2076,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               })()}
               <span style={{ position: 'absolute', bottom: '4px', left: '12px', right: '12px', height: '2px', backgroundColor: '#B6871F', transform: showChat ? 'scaleX(1)' : 'scaleX(0)', transformOrigin: 'left', transition: 'transform 200ms ease', borderRadius: '2px' }} />
             </button>
+            </>)}
           </div>
         ) : (
           <span className="text-[#9A8A78] text-xs hidden sm:block truncate flex-1">{getCommitteeDisplayName(committee.name, language)} — {committee.topic}</span>
@@ -2252,7 +2255,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         </div>
       ) : (
       <div className="relative flex-1 flex overflow-hidden min-h-0">
-        {showChat && !sessionEnded && (
+        {showChat && !sessionEnded && !getCommitteeFlags(committee).disableChat && (
           <div className="absolute inset-0 z-40 flex overflow-hidden min-h-0" style={{ backgroundColor: '#EDE7D8' }}>
             <ChatPanel
               committee={committee}
@@ -2475,7 +2478,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
 {committee.phase === 'speakers-list' && (
                 <>
                 {/* Three-zone flex column: queue locked top, centre shrinks, buttons locked above bottom bar */}
-                <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                <div className="relative flex-1 flex flex-col min-h-0 overflow-hidden">
+                  <span className="absolute top-2 left-3 z-10 text-[11px] font-black tracking-widest px-2 py-0.5 rounded-md"
+                    style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Poppins', sans-serif" }}>GSL</span>
                   {committee.currentSpeaker ? (
                     <>
                       {/* ZONE 1 — Queue locked at top */}
