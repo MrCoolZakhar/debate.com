@@ -2479,8 +2479,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 <>
                 {/* Three-zone flex column: queue locked top, centre shrinks, buttons locked above bottom bar */}
                 <div className="relative flex-1 flex flex-col min-h-0 overflow-hidden">
-                  <span className="absolute top-2 left-3 z-10 text-[11px] font-black tracking-widest px-2 py-0.5 rounded-md"
-                    style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Poppins', sans-serif" }}>GSL</span>
+                  <span className="absolute top-2 left-3 z-10 text-lg font-black tracking-widest"
+                    style={{ color: '#1C1410', fontFamily: "'Poppins', sans-serif" }}>GSL</span>
                   {committee.currentSpeaker ? (
                     <>
                       {/* ZONE 1 — Queue locked at top */}
