@@ -2606,7 +2606,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                     </div>
                   )}
                 </div>
-                {!sessionEnded && (
+                {!sessionEnded && !isViewOnly && (
                 <div className="border-t border-[#DDD4C0] px-6 py-2 shrink-0" style={{ backgroundColor: '#F6F1E9' }}>
                   {!isViewOnly && <div className="flex items-center gap-3 mb-2">
                     <span className="text-xs text-[#9A8A78] font-mono shrink-0">{t('gsl_time')}</span>
