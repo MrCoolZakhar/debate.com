@@ -1313,7 +1313,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
             if (!updated) return;
             setCommittee((prev) => {
               if (!prev) return prev;
-              let next = { ...prev, pendingMotions: updated.pendingMotions };
+              // messages (speech log + chat) are append-only and NOT part of the optimistic
+              // speaker/timer/caucus state, so refresh them even inside the debounce — otherwise
+              // the acting chair's own just-logged speech is missing from scoring/scoreboard/stats.
+              let next = { ...prev, pendingMotions: updated.pendingMotions, messages: updated.messages };
               if (updated.endedAt) next = { ...next, endedAt: updated.endedAt, expiresAt: updated.expiresAt };
               if (updated.suspendedAt !== prev.suspendedAt) next = { ...next, suspendedAt: updated.suspendedAt, resumingChair: updated.resumingChair, phase: updated.phase };
               return next;
