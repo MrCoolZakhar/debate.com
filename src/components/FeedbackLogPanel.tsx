@@ -166,7 +166,7 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry 
   }, [effectiveFocus]);
 
   const PILL_TRANSITION = 'transform 260ms cubic-bezier(.2,.8,.2,1), filter 260ms ease, opacity 260ms ease, box-shadow 260ms ease, background-color 260ms ease';
-  const GRID_COL = 300;       // reserved so pills/grids stay aligned across rows
+  const GRID_COL = 280;       // reserved so pills/grids stay aligned across rows
   const tagFor = (item: FeedItem) => item.context === 'speakers-list' ? 'GSL' : (committee.caucus?.motionLabel ?? 'CAUCUS');
   const maxScale = Math.max(1, cfg.factorScaleMax);
 
@@ -177,36 +177,32 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry 
 
   // Qualitative ratings — sliders (lowest 0 … highest max) on the focused pill;
   // compact greyed read-only bars on the nearest neighbour.
+  // Compact 2×2 grid of small rating sliders (interactive on the focused pill; greyed
+  // read-only values on the nearest neighbour). The slider track itself reads low→high.
   const metricStack = (item: FeedItem, rs: RowState, interactive: boolean) => (
-    <div className="flex flex-col gap-2" style={{ width: GRID_COL }}>
+    <div className="grid gap-x-4 gap-y-1.5" style={{ width: GRID_COL, gridTemplateColumns: '1fr 1fr' }}>
       {factors.slice(0, 4).map((f) => {
         const v = rs.scores[f.id] ?? 0;
         if (!interactive) {
           return (
-            <div key={f.id} className="flex items-center gap-2">
-              <span className="text-[9px] uppercase tracking-wide truncate" style={{ width: 78, color: '#B8AE9C' }}>{f.name}</span>
-              <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: '#DDD4C0' }}>
-                <div className="h-full rounded-full" style={{ width: `${(v / maxScale) * 100}%`, backgroundColor: '#9A8A78' }} />
-              </div>
-              <span className="text-[11px] font-bold text-right" style={{ width: 26, color: '#9A8A78' }}>{v}</span>
+            <div key={f.id} className="flex items-center gap-1.5">
+              <span className="text-[9px] uppercase tracking-wide truncate flex-1" style={{ color: '#B8AE9C' }}>{f.name}</span>
+              <span className="text-[11px] font-bold shrink-0" style={{ color: '#9A8A78' }}>{v}</span>
             </div>
           );
         }
         return (
           <div key={f.id}>
-            <div className="flex items-baseline justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wide truncate" style={{ color: '#6A5A4A' }}>{f.name}</span>
-              <span className="text-sm font-black" style={{ color: '#1B3828' }}>{v}</span>
+            <div className="flex items-baseline justify-between gap-1">
+              <span className="text-[9px] font-bold uppercase tracking-wide truncate" style={{ color: '#6A5A4A' }}>{f.name}</span>
+              <span className="text-xs font-black shrink-0" style={{ color: '#1B3828' }}>{v}</span>
             </div>
             <input
               type="range" min={0} max={maxScale} step={1} value={v}
               onClick={(e) => e.stopPropagation()}
               onChange={(e) => setScore(item, f.id, parseInt(e.target.value))}
-              className="w-full" style={{ accentColor: '#1B3828' }}
+              className="w-full" style={{ accentColor: '#1B3828', height: 14 }}
             />
-            <div className="flex items-center justify-between text-[8px] font-mono" style={{ color: '#B8AE9C', marginTop: -2 }}>
-              <span>0</span><span>{maxScale}</span>
-            </div>
           </div>
         );
       })}
@@ -222,7 +218,7 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry 
         </div>
       ) : (
         <div className="fb-dock-scroll flex-1 min-h-0 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
-          <div className="min-h-full flex flex-col justify-center gap-3 py-8 px-6">
+          <div className="flex flex-col justify-start gap-2 pt-2 pb-6 px-6">
             {items.map((item, idx) => {
               const rs = state[item.key] ?? { content: '', scores: {}, country: item.country };
               const isLive = item.kind === 'live';
