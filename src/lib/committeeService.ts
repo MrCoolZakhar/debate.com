@@ -958,13 +958,19 @@ export async function updateSpeakerTimeLimit(committeeId: string, limitSeconds: 
 // REAL-TIME SUBSCRIPTIONS
 // ============================================================
 
+// One live channel per committee. A re-subscribe REPLACES the prior connection (no
+// stacking / connection spike), but each new channel gets a UNIQUE topic so its `.on()`
+// handlers are always registered before subscribe() — reusing a fixed topic returns the
+// already-subscribed channel and throws "cannot add postgres_changes callbacks after subscribe()".
+const committeeChannels: Record<string, ReturnType<typeof supabase.channel>> = {};
+
 export function subscribeToCommittee(committeeId: string, onChange: (table: string) => void): () => void {
-  // Stable channel name per committee — a re-subscribe must REPLACE the prior connection,
-  // not stack a new one. A unique suffix (e.g. Date.now()) caused every effect re-run /
-  // StrictMode double-invoke / reconnect to open a brand-new websocket under a fresh name,
-  // accumulating connections (the concurrent-peak spike). One multiplexed channel per tab.
+  // Tear down any prior channel for this committee first.
+  const prev = committeeChannels[committeeId];
+  if (prev) { supabase.removeChannel(prev); delete committeeChannels[committeeId]; }
+
   const channel = supabase
-    .channel(`committee-${committeeId}`)
+    .channel(`committee-${committeeId}-${Date.now()}`)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'committees', filter: `id=eq.${committeeId}` }, () => onChange('committees'))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'delegates', filter: `committee_id=eq.${committeeId}` }, () => onChange('delegates'))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'speakers_list', filter: `committee_id=eq.${committeeId}` }, () => onChange('speakers_list'))
@@ -973,5 +979,9 @@ export function subscribeToCommittee(committeeId: string, onChange: (table: stri
     .on('postgres_changes', { event: '*', schema: 'public', table: 'documents', filter: `committee_id=eq.${committeeId}` }, () => onChange('documents'))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: `committee_id=eq.${committeeId}` }, () => onChange('messages'))
     .subscribe();
-  return () => { supabase.removeChannel(channel); };
+  committeeChannels[committeeId] = channel;
+  return () => {
+    supabase.removeChannel(channel);
+    if (committeeChannels[committeeId] === channel) delete committeeChannels[committeeId];
+  };
 }
