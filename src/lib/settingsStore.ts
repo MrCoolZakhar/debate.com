@@ -99,7 +99,7 @@ export const DEFAULT_SETTINGS: CommitteeSettings = {
   cowTimerSeconds: 60,
   motionTourDeTable: true,
   motionNames: { ...DEFAULT_MOTION_NAMES },
-  motionOrder: ['moderated', 'unmoderated', 'tour', 'consultation'],
+  motionOrder: ['consultation', 'tour', 'unmoderated', 'moderated'],
   wpSubmissionLimit: null,
   drSubmissionLimit: null,
   chairJoinSuffix: '',

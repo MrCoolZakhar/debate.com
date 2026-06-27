@@ -26,7 +26,7 @@ function calcDisruptiveness(type: PendingMotionType, totalTime: number, motionOr
   if (type === 'end-debate') return 6_000_000 + totalTime;
   if (type === 'suspend-debate') return 5_000_000 + totalTime;
   // The 4 orderable types: position 0 = 4M base, position 1 = 3M, etc.
-  const order = motionOrder ?? ['moderated', 'unmoderated', 'tour', 'consultation'];
+  const order = motionOrder ?? ['consultation', 'tour', 'unmoderated', 'moderated'];
   const idx = order.indexOf(type);
   const base = idx >= 0 ? (4 - idx) * 1_000_000 : 1_000_000;
   return base + totalTime;

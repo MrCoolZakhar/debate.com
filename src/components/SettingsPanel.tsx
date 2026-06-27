@@ -123,16 +123,17 @@ function RenameRow({ label, defaultName, value, onChange, resetValue }: {
 // ── Motion order drag-and-rename tab ──────────────────────────────────────────
 type OrderableType = 'moderated' | 'unmoderated' | 'consultation' | 'tour';
 
+// Note: disruptiveness ordering is NOT stored here — it is purely the position
+// in `motionOrder` (top = most disruptive). The pip bar below renders from `4 - i`.
 const MOTION_META: Record<OrderableType, {
   enabledKey: keyof CommitteeSettings;
   namesKey: keyof MotionNames;
   defaultName: string;
-  disruptiveness: number;
 }> = {
-  moderated:    { enabledKey: 'motionModeratedCaucus',   namesKey: 'moderated',    defaultName: 'Moderated Caucus',          disruptiveness: 3 },
-  unmoderated:  { enabledKey: 'motionUnmoderatedCaucus', namesKey: 'unmoderated',  defaultName: 'Unmoderated Caucus',        disruptiveness: 2 },
-  consultation: { enabledKey: 'motionCoW',               namesKey: 'consultation', defaultName: 'Consultation of the Whole', disruptiveness: 2 },
-  tour:         { enabledKey: 'motionTourDeTable',       namesKey: 'tour',         defaultName: 'Tour de Table',             disruptiveness: 1 },
+  moderated:    { enabledKey: 'motionModeratedCaucus',   namesKey: 'moderated',    defaultName: 'Moderated Caucus' },
+  unmoderated:  { enabledKey: 'motionUnmoderatedCaucus', namesKey: 'unmoderated',  defaultName: 'Unmoderated Caucus' },
+  consultation: { enabledKey: 'motionCoW',               namesKey: 'consultation', defaultName: 'Consultation of the Whole' },
+  tour:         { enabledKey: 'motionTourDeTable',       namesKey: 'tour',         defaultName: 'Tour de Table' },
 };
 
 // Localized display names for the default (un-renamed) motions, keyed by language.
@@ -150,7 +151,7 @@ function MotionsTab({ s, upd }: {
   const t = useT();
   const { language } = useLanguage();
   const locName = (k: string, en: string) => MOTION_NAMES_LOCALIZED[language]?.[k] ?? en;
-  const order: OrderableType[] = (s.motionOrder ?? ['moderated', 'unmoderated', 'tour', 'consultation']) as OrderableType[];
+  const order: OrderableType[] = (s.motionOrder ?? ['consultation', 'tour', 'unmoderated', 'moderated']) as OrderableType[];
   const dragItem = useRef<number | null>(null);
   const dragOver = useRef<number | null>(null);
   const [dragActive, setDragActive] = useState<number | null>(null);

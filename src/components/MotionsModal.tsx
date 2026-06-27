@@ -778,7 +778,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
   } : DEFAULT_MOTION_NAMES;
   const committeeSettings = getSettings(committee.code);
   const storedNames = committeeSettings.motionNames;
-  const motionOrder: string[] = committeeSettings.motionOrder ?? ['moderated', 'unmoderated', 'tour', 'consultation'];
+  const motionOrder: string[] = committeeSettings.motionOrder ?? ['consultation', 'tour', 'unmoderated', 'moderated'];
   const localCalcDisruptiveness = (type: string, totalTime: number) => {
     if (type === 'end-debate') return 6_000_000 + totalTime;
     if (type === 'suspend-debate') return 5_000_000 + totalTime;
