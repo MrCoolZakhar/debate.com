@@ -1430,6 +1430,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       const next = Math.max(0, prev.caucus.remainingTime - 1);
       if (next === 0) {
         updateCaucusInDB(prev.id, null);
+        setPhaseInDB(prev.id, 'speakers-list');
         const preCaucusSpeaker = prev.currentSpeaker;
         const newSpeakersList = preCaucusSpeaker
           ? [preCaucusSpeaker, ...prev.speakersList.filter((s) => s.delegateId !== preCaucusSpeaker.delegateId)]
@@ -1848,6 +1849,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         speakerTimeRemaining: speakTime,
       }), true);
       updateCaucusInDB(committee.id, null);
+      setPhaseInDB(committee.id, 'speakers-list');
       await nextSpeakerInDB(committee.id, speakTime, null, null, null);
       localUpdateTime.current = Date.now();
       return;
@@ -1890,6 +1892,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const handleEndCaucus = () => {
     setTimerRunning(false);
     stopSpeakerTimerInDB(committeeIdRef.current);
+    setPhaseInDB(committee.id, 'speakers-list');
     updateCaucusInDB(committee.id, null);
     updateLocal(setCommittee, (c) => ({
       ...c,
@@ -1979,6 +1982,15 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   };
 
   const isLastGSLSpeaker = committee.speakersList.length === 0;
+
+  // Defensive: a caucus phase with a null caucus object is an inconsistent state
+  // (e.g. a legacy session where the caucus ended but the phase change never
+  // reached the DB). The caucus <main> branches require a truthy caucus, so this
+  // would otherwise blank the whole panel. Treat it as the speakers-list view so
+  // the GSL never disappears.
+  const caucusPhaseWithoutCaucus =
+    (committee.phase === 'moderated-caucus' || committee.phase === 'unmoderated-caucus') && !committee.caucus;
+  const showSpeakersListView = committee.phase === 'speakers-list' || caucusPhaseWithoutCaucus;
 
   // Blocked modal handler — only allow after roll call
   const handleMotionsClick = () => {
@@ -2490,7 +2502,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 )
               )}
 
-{committee.phase === 'speakers-list' && (
+{showSpeakersListView && (
                 <>
                 {/* Three-zone flex column: queue locked top, centre shrinks, buttons locked above bottom bar */}
                 <div className="relative flex-1 flex flex-col min-h-0 overflow-hidden">
