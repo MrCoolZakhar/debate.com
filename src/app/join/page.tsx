@@ -56,6 +56,9 @@ function JoinPageInner() {
   const [allocationLoading, setAllocationLoading] = useState(false);
   const [allocationError, setAllocationError] = useState('');
   const [allocatedCountry, setAllocatedCountry] = useState<{ code: string; name: string } | null>(null);
+  // True while we determine whether a found committee is a conference-linked session.
+  // Suppresses the standalone role cards so they don't flash before the conference check resolves.
+  const [checkingConference, setCheckingConference] = useState(false);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -168,6 +171,7 @@ function JoinPageInner() {
     };
 
     async function checkConferenceSession() {
+      setCheckingConference(true);
       const anonClient = anonSupabase;
       const { data: confCommittee } = await anonClient
         .from('conference_committees')
@@ -185,6 +189,7 @@ function JoinPageInner() {
         setConferenceCommittee(null);
         setIsConferenceSession(false);
       }
+      setCheckingConference(false);
     }
 
     // 1. Check local store first (instant)
@@ -229,6 +234,7 @@ function JoinPageInner() {
     setConferenceCommittee(null);
     setAllocatedCountry(null);
     setAllocationError('');
+    setCheckingConference(false);
 
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
@@ -242,7 +248,7 @@ function JoinPageInner() {
     // ── Conference-linked session fork ──
     if (isConferenceSession) {
       if (!user) {
-        router.push(`/auth/signin?next=/join?code=${encodeURIComponent(code)}`);
+        router.push('/auth/signin?next=' + encodeURIComponent('/join?code=' + code + '&mode=' + mode));
         return;
       }
       if (allocationLoading) return;
@@ -450,8 +456,18 @@ function JoinPageInner() {
             </div>
           )}
 
+          {/* Neutral "checking session" placeholder — shown while we determine whether a found
+              committee is a conference-linked session, so the standalone role cards below do
+              not flash for a conference code. */}
+          {foundCommittee && checkingConference && (
+            <div className="mb-5 flex items-center justify-center gap-2 px-4 py-3 rounded-xl" style={{ backgroundColor: 'rgba(27,56,40,0.04)', border: '1px solid rgba(27,56,40,0.1)' }}>
+              <div className="w-4 h-4 border-2 border-[#1B3828] border-t-transparent rounded-full animate-spin flex-shrink-0" />
+              <p className="text-xs font-medium" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>Checking session…</p>
+            </div>
+          )}
+
           {/* Role cards */}
-          {!isConferenceSession && (() => {
+          {!isConferenceSession && !checkingConference && (() => {
             const hasCode = code.trim().length >= 4;
             const isChairCode = code.includes('-');
             const roleCards: { key: JoinMode; label: string; desc: string }[] = [

@@ -9,6 +9,9 @@ function SignInInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const hasCallbackError = searchParams.get('error') === 'auth_callback_failed';
+  const rawNext = searchParams.get('next');
+  // Only allow relative paths (must start with a single "/") to prevent open-redirect.
+  const next = rawNext && rawNext.startsWith('/') && !rawNext.startsWith('//') ? rawNext : '/';
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -22,7 +25,7 @@ function SignInInner() {
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback?next=/`,
+        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
       },
     });
   }
@@ -34,7 +37,7 @@ function SignInInner() {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
     if (error) setError(error.message);
-    else router.push('/');
+    else router.push(next);
   }
 
   return (
