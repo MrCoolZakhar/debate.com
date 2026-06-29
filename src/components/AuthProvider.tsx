@@ -88,6 +88,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (k.startsWith('sb-') && k.includes('-auth-token')) localStorage.removeItem(k);
       });
     } catch {}
+    // The @supabase/ssr browser client persists the session in COOKIES, not localStorage.
+    // Clearing localStorage alone left the session recoverable on the next page load, so the
+    // hard navigation rehydrated it and a second sign-out click was needed. Expire the auth
+    // cookies too so sign-out always takes on the first click.
+    try {
+      document.cookie.split(';').forEach((c) => {
+        const name = c.split('=')[0].trim();
+        if (name.startsWith('sb-') && name.includes('-auth-token')) {
+          document.cookie = name + '=; Max-Age=0; path=/';
+          document.cookie = name + '=; Max-Age=0; path=/; domain=' + window.location.hostname;
+        }
+      });
+    } catch {}
     setUser(null);
     setSession(null);
     setProfile(null);
