@@ -33,6 +33,7 @@ const AMBASSADORS = [
   { name: 'Anna Cocconi',            country: 'Venezuela',      initials: 'AC', photo: '/ambassador-photos/anna_ambassador.png' },
   // Asia (west to east)
   { name: 'Farah Lahiani',           country: 'UAE',            initials: 'FH', photo: '/ambassador-photos/farah_ambassador.png', photoPosition: 'center 62%' },
+  { name: 'Abdul Rehman',            country: 'Pakistan',       initials: 'AR', photo: '/ambassador-photos/abdulrehman_ambassador.png', photoPosition: 'center 30%' },
   { name: 'Saayoojya Variyath',      country: 'India',          initials: 'SV', photo: '/ambassador-photos/saayoojya_ambassador.png' },
   { name: 'Sri Harsha Vardhan Pachava', country: 'India',       initials: 'SH', photo: '/ambassador-photos/sriharsha_ambassador.png' },
   { name: 'Tyler Serano',            country: 'Philippines',    initials: 'TS', photo: '/ambassador-photos/tyler_ambassador.png' },
