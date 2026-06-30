@@ -22,6 +22,8 @@ import {
   requestGslSpot,
   setDelegateStatus as setDelegateStatusInDB,
 } from '@/lib/committeeService';
+import { useAuth } from '@/components/AuthProvider';
+import { detectConferenceSession, verifyConferenceAccess } from '@/lib/conferenceAccess';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function abbreviateCommitteeName(name: string): string {
@@ -667,6 +669,11 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   const searchParams = useSearchParams();
   const country = searchParams.get('country') || '';
 
+  const { user, session, loading: authLoading } = useAuth();
+  // Conference-session access guard. 'checking' until verified. Standalone sessions resolve to
+  // 'allowed' immediately (anonymous by design); conference sessions require a matching allocation.
+  const [accessState, setAccessState] = useState<'checking' | 'allowed' | 'denied' | 'signin'>('checking');
+
   const [committee, setCommittee] = useState<Committee | null>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<DelegateTab>('session');
@@ -727,6 +734,31 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     load();
     return () => unsubscribe?.();
   }, [code]);
+
+  // Conference-session access guard. Runs independently of the committee load. For a standalone
+  // session this resolves to 'allowed' (anonymous). For a conference session it requires a
+  // signed-in user whose allocation matches the requested country, so a crafted
+  // /delegate/CODE?country=... URL can no longer drop someone into a seat that is not theirs.
+  useEffect(() => {
+    let cancelled = false;
+    async function guard() {
+      if (authLoading) return; // stays 'checking' (loader) until auth resolves
+      const isConf = await detectConferenceSession(code);
+      if (cancelled) return;
+      if (!isConf) { setAccessState('allowed'); return; }
+      if (!session || !user) { setAccessState('signin'); return; }
+      const access = await verifyConferenceAccess(code, session.access_token, user.id);
+      if (cancelled) return;
+      if (access.kind === 'delegate' && access.country.name === country) {
+        setAccessState('allowed');
+      } else {
+        setAccessState('denied');
+      }
+    }
+    setAccessState('checking');
+    guard();
+    return () => { cancelled = true; };
+  }, [code, country, authLoading, session?.access_token, user?.id]);
 
   // Browser title abbreviation
   useEffect(() => {
@@ -802,7 +834,37 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     prevPendingRef.current = committee.pendingMotions;
   }, [committee?.pendingMotions, committee?.speakersList, committee?.currentSpeaker, country]);
 
-  if (loading) return <GavelLoader />;
+  if (loading || authLoading || accessState === 'checking') return <GavelLoader />;
+
+  if (accessState === 'signin') {
+    return (
+      <div className="min-h-screen bg-[#EDE7D8] flex items-center justify-center px-6">
+        <div className="text-center max-w-sm">
+          <h1 className="text-2xl font-black mb-2" style={{ color: '#1B3828' }}>Sign in to join this session</h1>
+          <p className="mb-6" style={{ color: '#6A5A4A' }}>This is a conference session. Sign in to verify your allocation.</p>
+          <button
+            onClick={() => router.push('/auth/signin?next=' + encodeURIComponent('/join?code=' + code))}
+            className="font-black text-white px-6 py-3 rounded-xl transition-colors focus:outline-none"
+            style={{ backgroundColor: '#1B3828' }}
+          >
+            SIGN IN
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (accessState === 'denied') {
+    return (
+      <div className="min-h-screen bg-[#EDE7D8] flex items-center justify-center px-6">
+        <div className="text-center max-w-sm">
+          <h1 className="text-2xl font-black mb-2" style={{ color: '#1B3828' }}>Allocation does not match account</h1>
+          <p className="mb-6" style={{ color: '#6A5A4A' }}>This session allocation is not associated with your account. Please try again, or contact your conference organisers.</p>
+          <Link href="/" className="inline-block font-black text-white px-6 py-3 rounded-xl transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828' }}>BACK TO HOME</Link>
+        </div>
+      </div>
+    );
+  }
 
   if (!committee) {
     return (
