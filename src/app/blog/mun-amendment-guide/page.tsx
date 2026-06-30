@@ -1,3 +1,5 @@
+import Link from 'next/link';
+import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
 import React from 'react';
 
@@ -65,7 +67,7 @@ export default function Article() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
       <div style={s.page}>
         <div style={s.wrap}>
-          <a href="/blog" style={s.back}>← MUN Resources</a>
+          <Link href="/blog" style={s.back}>← MUN Resources</Link>
           <h1 style={s.h1}>MUN Amendments Explained — Friendly vs Unfriendly, How to Submit</h1>
           <p style={s.meta}>By Gavelling · June 2026 · 8 min read</p>
           <article style={s.article}>
@@ -111,6 +113,7 @@ export default function Article() {
             <h2 style={s.h2}>Chair's Role with Amendments</h2>
             <p style={s.p}>Chairs must keep track of all amendments submitted, announce them to the committee, determine whether they are friendly or unfriendly, and ensure they are voted on in the correct order before the main resolution vote. In complex committee sessions with multiple resolutions and amendments, this requires careful organisation. Software like Gavelling helps chairs track documents and their status without losing the thread.</p>
 
+            <RelatedGuides currentSlug="mun-amendment-guide" />
             <div style={s.cta}>
               <p style={s.ctaText}>Manage draft resolutions and amendments in committee with Gavelling's document tracking.</p>
               <a href="https://gavelling.com" style={s.ctaLink}>Try Gavelling free →</a>

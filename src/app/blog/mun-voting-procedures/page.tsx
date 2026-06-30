@@ -1,3 +1,5 @@
+import Link from 'next/link';
+import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
 import React from 'react';
 
@@ -65,7 +67,7 @@ export default function Article() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
       <div style={s.page}>
         <div style={s.wrap}>
-          <a href="/blog" style={s.back}>← MUN Resources</a>
+          <Link href="/blog" style={s.back}>← MUN Resources</Link>
           <h1 style={s.h1}>MUN Voting Procedures Explained — In Favour, Against, Abstain</h1>
           <p style={s.meta}>By Gavelling · June 2026 · 10 min read</p>
           <article style={s.article}>
@@ -113,6 +115,7 @@ export default function Article() {
             <p style={s.p}>"With X votes in favour, Y against, and Z abstentions, Resolution [number] is adopted / fails to pass."</p>
             <p style={s.p}>Software like Gavelling handles roll call voting with an interactive per-delegate voting interface, tallies the result automatically, and supports custom thresholds — including veto mode for Security Council simulations.</p>
 
+            <RelatedGuides currentSlug="mun-voting-procedures" />
             <div style={s.cta}>
               <p style={s.ctaText}>Run roll call votes and track results with Gavelling's built-in voting screen.</p>
               <a href="https://gavelling.com" style={s.ctaLink}>Try Gavelling free →</a>

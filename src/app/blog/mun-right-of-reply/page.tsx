@@ -1,3 +1,5 @@
+import Link from 'next/link';
+import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
 import React from 'react';
 
@@ -67,7 +69,7 @@ export default function Article() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
       <div style={s.page}>
         <div style={s.wrap}>
-          <a href="/blog" style={s.back}>← MUN Resources</a>
+          <Link href="/blog" style={s.back}>← MUN Resources</Link>
           <h1 style={s.h1}>Right of Reply in MUN — When and How to Use It</h1>
           <p style={s.meta}>By Gavelling · June 2026 · 7 min read</p>
           <article style={s.article}>
@@ -116,6 +118,7 @@ export default function Article() {
             <h2 style={s.h2}>Right of Reply in the Real UN</h2>
             <p style={s.p}>In real UN sessions, rights of reply can become highly charged diplomatic moments. A real-world example: when a UN General Assembly speech makes a claim about another country's human rights record, the named country's delegation typically invokes the right of reply within minutes, delivers a sharp rebuttal, and the original delegation may or may not respond. These exchanges are part of the public diplomatic record.</p>
 
+            <RelatedGuides currentSlug="mun-right-of-reply" />
             <div style={s.cta}>
               <p style={s.ctaText}>Gavelling lets chairs grant right of reply and insert delegates at the top of the list instantly.</p>
               <a href="https://gavelling.com" style={s.ctaLink}>Try Gavelling free →</a>

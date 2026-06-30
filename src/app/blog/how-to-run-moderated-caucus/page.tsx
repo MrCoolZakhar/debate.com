@@ -1,3 +1,5 @@
+import Link from 'next/link';
+import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
 import React from 'react';
 
@@ -67,7 +69,7 @@ export default function Article() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
       <div style={s.page}>
         <div style={s.wrap}>
-          <a href="/blog" style={s.back}>← MUN Resources</a>
+          <Link href="/blog" style={s.back}>← MUN Resources</Link>
           <h1 style={s.h1}>How to Run a Moderated Caucus in MUN — Chair Guide</h1>
           <p style={s.meta}>By Gavelling · June 2026 · 9 min read</p>
           <article style={s.article}>
@@ -119,6 +121,7 @@ export default function Article() {
             <h2 style={s.h2}>Using Software to Run Moderated Caucuses</h2>
             <p style={s.p}>Manual timers and paper lists work, but they introduce errors — especially when you have multiple co-chairs, large committees, or tight per-speaker times. Gavelling automates the caucus queue, tracks total and per-speaker time simultaneously, and keeps the General Speakers List intact so you can return to it instantly when the caucus ends. It runs on any device and does not require installation.</p>
 
+            <RelatedGuides currentSlug="how-to-run-moderated-caucus" />
             <div style={s.cta}>
               <p style={s.ctaText}>Run your next moderated caucus without the paper chaos.</p>
               <a href="https://gavelling.com" style={s.ctaLink}>Try Gavelling free →</a>

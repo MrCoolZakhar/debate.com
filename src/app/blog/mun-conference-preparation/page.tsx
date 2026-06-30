@@ -1,3 +1,5 @@
+import Link from 'next/link';
+import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
 import React from 'react';
 
@@ -65,7 +67,7 @@ export default function Article() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
       <div style={s.page}>
         <div style={s.wrap}>
-          <a href="/blog" style={s.back}>← MUN Resources</a>
+          <Link href="/blog" style={s.back}>← MUN Resources</Link>
           <h1 style={s.h1}>How to Prepare for a MUN Conference — Complete Pre-Conference Checklist</h1>
           <p style={s.meta}>By Gavelling · June 2026 · 10 min read</p>
           <article style={s.article}>
@@ -123,6 +125,7 @@ export default function Article() {
             <h2 style={s.h2}>After the Conference: Reflect and Improve</h2>
             <p style={s.p}>Write down three things that went well and three things to improve while the experience is fresh. Review any feedback from the dais. Keep your position papers — they are useful templates for future conferences on similar topics.</p>
 
+            <RelatedGuides currentSlug="mun-conference-preparation" />
             <div style={s.cta}>
               <p style={s.ctaText}>Chairs: prepare your committee setup in minutes with Gavelling.</p>
               <a href="https://gavelling.com" style={s.ctaLink}>Try Gavelling free →</a>

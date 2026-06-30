@@ -1,3 +1,5 @@
+import Link from 'next/link';
+import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
 import React from 'react';
 
@@ -64,7 +66,7 @@ export default function Article() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
       <div style={s.page}>
         <div style={s.wrap}>
-          <a href="/blog" style={s.back}>← MUN Resources</a>
+          <Link href="/blog" style={s.back}>← MUN Resources</Link>
           <h1 style={s.h1}>MUN Bloc Building — How to Form and Lead a Coalition</h1>
           <p style={s.meta}>By Gavelling · June 2026 · 9 min read</p>
           <article style={s.article}>
@@ -103,6 +105,7 @@ export default function Article() {
             <h2 style={s.h2}>The Vote Count</h2>
             <p style={s.p}>Before calling for introduction of your draft resolution, do a private head count. Go through every delegation in the room and estimate their vote: In Favour, Against, Abstain, or Unknown. If you cannot reach majority among your known supporters, do not introduce — spend more time persuading the Unknowns first. A failed vote on your resolution is diplomatically damaging and hard to recover from.</p>
 
+            <RelatedGuides currentSlug="mun-bloc-building" />
             <div style={s.cta}>
               <p style={s.ctaText}>Gavelling gives delegates real-time visibility into who is on the GSL, making it easier to spot allies and time your approaches.</p>
               <a href="https://gavelling.com" style={s.ctaLink}>Try Gavelling free →</a>

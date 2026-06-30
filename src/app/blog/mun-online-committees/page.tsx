@@ -1,3 +1,5 @@
+import Link from 'next/link';
+import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
 import React from 'react';
 
@@ -65,7 +67,7 @@ export default function Article() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
       <div style={s.page}>
         <div style={s.wrap}>
-          <a href="/blog" style={s.back}>← MUN Resources</a>
+          <Link href="/blog" style={s.back}>← MUN Resources</Link>
           <h1 style={s.h1}>Online MUN Committees — How to Chair and Participate Remotely</h1>
           <p style={s.meta}>By Gavelling · June 2026 · 10 min read</p>
           <article style={s.article}>
@@ -115,6 +117,7 @@ export default function Article() {
             <h2 style={s.h2}>Hybrid Committees</h2>
             <p style={s.p}>Hybrid committees — where some delegates are in-room and others are remote — are the hardest format to run well. The in-room delegates have natural advantages (easier to get the chair's attention, more energy, better audio). Compensate by actively calling on remote delegates during debate and giving them explicit priority during caucus slot allocation.</p>
 
+            <RelatedGuides currentSlug="mun-online-committees" />
             <div style={s.cta}>
               <p style={s.ctaText}>Gavelling works for in-person, online, and hybrid MUN committees — delegates join from any device.</p>
               <a href="https://gavelling.com" style={s.ctaLink}>Try Gavelling free →</a>

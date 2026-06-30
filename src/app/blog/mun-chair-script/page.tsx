@@ -1,3 +1,5 @@
+import Link from 'next/link';
+import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
 import React from 'react';
 
@@ -67,7 +69,7 @@ export default function Article() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
       <div style={s.page}>
         <div style={s.wrap}>
-          <a href="/blog" style={s.back}>← MUN Resources</a>
+          <Link href="/blog" style={s.back}>← MUN Resources</Link>
           <h1 style={s.h1}>MUN Chair Script — Exact Phrases for Every Situation</h1>
           <p style={s.meta}>By Gavelling · June 2026 · 11 min read</p>
           <article style={s.article}>
@@ -123,6 +125,7 @@ export default function Article() {
 
             <div style={s.callout}><p style={s.calloutText}>The most important script rule: when in doubt, slow down. A pause of two seconds feels much longer from the dais than it looks to the room. Take your time, breathe, and deliver each announcement clearly.</p></div>
 
+            <RelatedGuides currentSlug="mun-chair-script" />
             <div style={s.cta}>
               <p style={s.ctaText}>Gavelling automates the logistics so you can focus on the chair role, not the paperwork.</p>
               <a href="https://gavelling.com" style={s.ctaLink}>Try Gavelling free →</a>

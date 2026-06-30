@@ -1,3 +1,5 @@
+import Link from 'next/link';
+import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
 import React from 'react';
 
@@ -65,7 +67,7 @@ export default function Article() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
       <div style={s.page}>
         <div style={s.wrap}>
-          <a href="/blog" style={s.back}>← MUN Resources</a>
+          <Link href="/blog" style={s.back}>← MUN Resources</Link>
           <h1 style={s.h1}>Free MUN Tools in 2026 — Best Software for Chairs and Delegates</h1>
           <p style={s.meta}>By Gavelling · June 2026 · 9 min read</p>
           <article style={s.article}>
@@ -106,6 +108,7 @@ export default function Article() {
             <p style={s.p}>For the vast majority of conferences — school MUN, regional conferences, even large university conferences — Gavelling covers everything needed without cost, setup, or technical expertise. The only scenario where a custom solution makes sense is a very large conference (300+ delegates) with extremely specific technical requirements and a dedicated IT team.</p>
             <p style={s.p}>For chairs who want to run a tight, professional committee session without spending hours on logistics: start at gavelling.com, create a committee, and share the join code. You will be running roll call in under three minutes.</p>
 
+            <RelatedGuides currentSlug="free-mun-tools" />
             <div style={s.cta}>
               <p style={s.ctaText}>Free, browser-based, no setup. Start your MUN committee in minutes.</p>
               <a href="https://gavelling.com" style={s.ctaLink}>Try Gavelling free →</a>

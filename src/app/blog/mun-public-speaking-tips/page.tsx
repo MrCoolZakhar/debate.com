@@ -1,3 +1,5 @@
+import Link from 'next/link';
+import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
 import React from 'react';
 
@@ -65,7 +67,7 @@ export default function Article() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
       <div style={s.page}>
         <div style={s.wrap}>
-          <a href="/blog" style={s.back}>← MUN Resources</a>
+          <Link href="/blog" style={s.back}>← MUN Resources</Link>
           <h1 style={s.h1}>MUN Public Speaking Tips — How to Speak Confidently in Committee</h1>
           <p style={s.meta}>By Gavelling · June 2026 · 9 min read</p>
           <article style={s.article}>
@@ -115,6 +117,7 @@ export default function Article() {
             <h2 style={s.h2}>Practise by Watching Others</h2>
             <p style={s.p}>Search for recordings of real UN speeches and MUN award-winning speeches. Watch what effective speakers do differently. Pay attention to pace, structure, and how they handle transitions. Then practise with a timer in front of a mirror or a trusted classmate who will give honest feedback.</p>
 
+            <RelatedGuides currentSlug="mun-public-speaking-tips" />
             <div style={s.cta}>
               <p style={s.ctaText}>Track your speaking time and queue position with Gavelling during your next committee session.</p>
               <a href="https://gavelling.com" style={s.ctaLink}>Try Gavelling free →</a>

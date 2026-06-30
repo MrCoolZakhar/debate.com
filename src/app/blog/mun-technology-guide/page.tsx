@@ -1,3 +1,5 @@
+import Link from 'next/link';
+import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
 import React from 'react';
 
@@ -65,7 +67,7 @@ export default function Article() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
       <div style={s.page}>
         <div style={s.wrap}>
-          <a href="/blog" style={s.back}>← MUN Resources</a>
+          <Link href="/blog" style={s.back}>← MUN Resources</Link>
           <h1 style={s.h1}>MUN Technology Guide — Software, Apps, and Tools for Modern Committees</h1>
           <p style={s.meta}>By Gavelling · June 2026 · 9 min read</p>
           <article style={s.article}>
@@ -107,6 +109,7 @@ export default function Article() {
             <h2 style={s.h2}>What Technology Cannot Replace</h2>
             <p style={s.p}>Technology handles logistics; it cannot replace substance. The best committee management software in the world does not fix a poorly prepared chair or a committee with no working papers. Use technology to handle the mechanics — timers, lists, votes — and invest the time saved in better preparation and stronger chair-delegate relationships.</p>
 
+            <RelatedGuides currentSlug="mun-technology-guide" />
             <div style={s.cta}>
               <p style={s.ctaText}>Replace your paper list and phone timer with Gavelling — the purpose-built MUN committee platform.</p>
               <a href="https://gavelling.com" style={s.ctaLink}>Try Gavelling free →</a>
