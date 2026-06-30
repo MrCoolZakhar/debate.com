@@ -7,7 +7,7 @@ import { Users, FileText, CreditCard, Zap } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/components/AuthProvider';
-import ConferenceFocusCards, { FocusCard } from '@/components/ConferenceFocusCards';
+import { FocusCard } from '@/components/ConferenceFocusCards';
 
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
 
@@ -40,42 +40,12 @@ function formatDateRange(start: string, end: string): string {
 // ── Section 1: Featured Conferences ──────────────────────────────────────────
 
 function FeaturedSection() {
-  const [cards, setCards] = useState<FocusCard[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [searchResults, setSearchResults] = useState<FocusCard[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
   const router = useRouter();
   const { session } = useAuth();
-
-  useEffect(() => {
-    async function load() {
-      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-      const { data: confs } = await supabase
-        .from('conferences')
-        .select('id, slug, full_name, acronym, city, country, start_date, end_date, banner_url')
-        .eq('is_public', true)
-        .eq('status', 'public')
-        .order('start_date', { ascending: true })
-        .limit(20);
-      if (!confs || confs.length === 0) { setLoading(false); return; }
-      const confIds = confs.map((c: FocusCard) => c.id);
-      const { data: apps } = await supabase
-        .from('applications')
-        .select('conference_id')
-        .in('conference_id', confIds)
-        .gte('submitted_at', sevenDaysAgo);
-      const counts: Record<string, number> = {};
-      (apps ?? []).forEach((a: { conference_id: string }) => {
-        counts[a.conference_id] = (counts[a.conference_id] ?? 0) + 1;
-      });
-      const sorted = [...confs].sort((a, b) => (counts[b.id] ?? 0) - (counts[a.id] ?? 0));
-      setCards(sorted.slice(0, 6) as FocusCard[]);
-      setLoading(false);
-    }
-    load();
-  }, []);
 
   useEffect(() => {
     if (!search.trim()) { setSearchResults([]); return; }
@@ -118,14 +88,7 @@ function FeaturedSection() {
         }}
       />
 
-      {/* Cards background layer */}
-      {!loading && cards.length > 0 && (
-        <div style={{ position: 'absolute', inset: 0, zIndex: 0 }}>
-          <ConferenceFocusCards cards={cards} />
-        </div>
-      )}
-
-      {/* Ivory overlay — keeps text readable over cards */}
+      {/* Ivory overlay */}
       <div
         style={{
           position: 'absolute',
