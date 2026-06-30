@@ -8,6 +8,7 @@ export function getCommitteeFlags(committee: Pick<Committee, 'dbSettings'>) {
     sponsorLabel: (s.sponsorLabel as string) || '',
     lockDelegateRollCall: (s.lockDelegateRollCall as boolean) ?? false,
     disableChat: (s.disableChat as boolean) ?? false,
+    requireChairApproval: (s.requireChairApproval as boolean) ?? false,
   };
 }
 

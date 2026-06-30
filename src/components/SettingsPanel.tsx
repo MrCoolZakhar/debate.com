@@ -461,15 +461,6 @@ export function SettingsPanel({ committee, onClose }: {
             <div>
               <SectionLabel>{t('settings_section_voting')}</SectionLabel>
               <SelectRow
-                label={t('settings_procedural_threshold')}
-                value={s.proceduralThreshold}
-                onChange={(v) => upd('proceduralThreshold', v as CommitteeSettings['proceduralThreshold'])}
-                options={[
-                  { value: 'simple', label: t('settings_majority_simple') },
-                  { value: 'absolute', label: t('settings_majority_absolute') },
-                ]}
-              />
-              <SelectRow
                 label={t('settings_substantive_threshold')}
                 value={s.substantiveThreshold}
                 onChange={(v) => upd('substantiveThreshold', v as CommitteeSettings['substantiveThreshold'])}
@@ -477,15 +468,6 @@ export function SettingsPanel({ committee, onClose }: {
                   { value: 'simple', label: t('settings_majority_simple') },
                   { value: 'supermajority-2-3', label: t('settings_majority_supermajority') },
                   { value: 'consensus', label: t('settings_majority_consensus') },
-                ]}
-              />
-              <SelectRow
-                label={t('settings_amendment_threshold')}
-                value={s.amendmentThreshold}
-                onChange={(v) => upd('amendmentThreshold', v as CommitteeSettings['amendmentThreshold'])}
-                options={[
-                  { value: 'simple', label: t('settings_majority_simple') },
-                  { value: 'supermajority-2-3', label: t('settings_majority_supermajority') },
                 ]}
               />
 

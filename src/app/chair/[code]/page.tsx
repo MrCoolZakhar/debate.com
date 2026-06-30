@@ -21,6 +21,7 @@ import { supabase } from '@/lib/supabase';
 import ChatPanel from '@/components/ChatPanel';
 import ChatDisabledNotice from '@/components/ChatDisabledNotice';
 import { getCommitteeFlags } from '@/lib/committeeFlags';
+import { chatUnreadTotal } from '@/lib/chatConversations';
 import TutorialOverlay from '@/components/TutorialOverlay';
 import {
   getCommitteeByCode,
@@ -1683,18 +1684,20 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     return () => clearInterval(id);
   }, [committee?.expiresAt]);
 
+  // Read-state (per conversation) is owned here and mutated by ChatPanel via
+  // onReadCountsChange while the panel is open; the header badge below reads the same
+  // map. Persist it across reloads (mirrors the delegate view) so the badge reflects
+  // genuinely new messages, not the whole backlog, after every refresh.
   useEffect(() => {
-    if (!showChat && committee) {
-      const chairNamesLocal = committee.chairNames ?? [];
-      const count = committee.messages.filter(m => {
-        if (m.content.startsWith('__log__:')) return false;
-        if (m.isPrivate && m.sender === 'Faculty Advisor') return false;
-        if (m.isPrivate && m.recipient && !chairNamesLocal.includes(m.recipient) && m.recipient !== 'Chairs') return false;
-        return true;
-      }).length;
-      setChatReadCounts(prev => ({ ...prev, everyone: count }));
-    }
-  }, [showChat, committee]);
+    if (!committee?.code) return;
+    try { const stored = localStorage.getItem(`chat-read-${committee.code}`); if (stored) setChatReadCounts(JSON.parse(stored)); } catch {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [committee?.code]);
+
+  useEffect(() => {
+    if (!committee?.code) return;
+    try { localStorage.setItem(`chat-read-${committee.code}`, JSON.stringify(chatReadCounts)); } catch {}
+  }, [chatReadCounts, committee?.code]);
 
   if (loading) return <GavelLoader />;
 
@@ -2014,14 +2017,6 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     if (newShow) {
       setShowRollCall(false);
       setShowSliders(false);
-      const chairNamesLocal = committee?.chairNames ?? [];
-      const count = committee?.messages.filter(m => {
-        if (m.content.startsWith('__log__:')) return false;
-        if (m.isPrivate && m.sender === 'Faculty Advisor') return false;
-        if (m.isPrivate && m.recipient && !chairNamesLocal.includes(m.recipient) && m.recipient !== 'Chairs') return false;
-        return true;
-      }).length ?? 0;
-      setChatReadCounts(prev => ({ ...prev, everyone: count }));
     }
   };
 
@@ -2077,14 +2072,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               onMouseLeave={(e) => { if (!showChat) { const el = e.currentTarget as HTMLElement; el.style.color = '#1C1410'; el.style.backgroundColor = 'transparent'; el.style.transform = 'translateY(0)'; } }}>
               {t('tab_chat')}
               {(() => {
-                const chairNames = committee.chairNames ?? [];
-                const relevantMsgs = committee.messages.filter((m) => {
-                  if (m.content.startsWith('__log__:')) return false;
-                  if (m.isPrivate && m.sender === 'Faculty Advisor') return false;
-                  if (m.isPrivate && m.recipient && !chairNames.includes(m.recipient) && m.recipient !== 'Chairs') return false;
-                  return true;
-                });
-                const totalUnread = Math.max(0, relevantMsgs.length - (chatReadCounts['everyone'] ?? 0));
+                const totalUnread = chatUnreadTotal(committee.messages, myChairName || 'Chair', true, committee.chairNames ?? [], chatReadCounts);
                 return totalUnread > 0 && !showChat
                   ? <span className="absolute top-1 right-1 z-10 w-4 h-4 bg-[#1B3828] rounded-full text-white text-[10px] flex items-center justify-center">{totalUnread}</span>
                   : null;
@@ -2179,12 +2167,17 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           Session is suspended — delegates cannot see this view
         </div>
       )}
-      {/* Join request banner */}
-      {(committee.pendingMotions ?? []).filter((m) => m.type === ('join-request' as string)).length > 0 && (
-        <div className="shrink-0 bg-[#EDE7D8] border-b border-[#1B3828]/40 px-4 py-2 flex flex-wrap gap-4">
-          {(committee.pendingMotions ?? [])
-            .filter((m) => m.type === ('join-request' as string))
-            .map((m) => {
+      {/* Waiting Room — delegates awaiting chair admission (chair-approval gate) */}
+      {(() => {
+        const joinReqs = (committee.pendingMotions ?? []).filter((m) => m.type === ('join-request' as string));
+        if (joinReqs.length === 0) return null;
+        const wrLabel = language === 'ar' ? 'غرفة الانتظار' : language === 'fr' ? "Salle d'attente" : language === 'es' ? 'Sala de Espera' : 'Waiting Room';
+        return (
+          <div className="shrink-0 border-b border-[#1B3828]/40 px-4 py-2 flex flex-wrap items-center gap-3" style={{ backgroundColor: '#F3EEE2' }}>
+            <span className="shrink-0 inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-wide px-2.5 py-1 rounded-full" style={{ backgroundColor: '#1B3828', color: '#EED98A' }}>
+              🚪 {wrLabel} · {joinReqs.length}
+            </span>
+            {joinReqs.map((m) => {
               let delegateId = '';
               let desiredStatus: 'present' | 'present-voting' = 'present';
               try { const parsed = JSON.parse(m.topic); delegateId = parsed.delegateId; desiredStatus = parsed.desiredStatus; } catch {}
@@ -2193,23 +2186,22 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                 : <Emoji size="1.125rem">🌐</Emoji>;
               return (
-                <div key={m.id} className="flex items-center gap-3 text-sm">
-                  <span className="text-[#B6871F] font-bold shrink-0">🚪 Join Request</span>
+                <div key={m.id} className="flex items-center gap-2.5 text-sm rounded-xl px-2.5 py-1" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
                   <span className="font-mono text-lg">{flagEl}</span>
-                  <span className="text-[#1C1410] font-semibold">{m.proposedBy}</span>
-                  <span className="text-[#6A5A4A] text-xs">{t('session_wants_to_join')}</span>
-                  <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${desiredStatus === 'present-voting' ? 'bg-[#1B3828]/40 text-[#EED98A]' : 'bg-[#1B3828]/50 text-[#EED98A]'}`}>
+                  <span className="text-[#1C1410] font-semibold">{getCountryDisplayName(m.proposedBy, language)}</span>
+                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${desiredStatus === 'present-voting' ? 'bg-[#1B3828] text-[#EED98A]' : 'bg-[#1B3828]/15 text-[#1B3828]'}`}>
                     {desiredStatus === 'present-voting' ? 'P+V' : 'P'}
                   </span>
                   <button onClick={() => handleApproveJoinRequest(m.id, delegateId, desiredStatus)}
-                    className="ms-2 px-3 py-1 bg-[#1B3828]/50 hover:bg-[#2A5A3C]/60 border border-[#3D7A52]/40 text-[#EED98A] text-xs rounded-lg font-semibold transition-colors">{t('session_approve')}</button>
+                    className="ms-1 px-3 py-1 bg-[#1B3828] hover:bg-[#2A5A3C] text-[#EED98A] text-xs rounded-lg font-black transition-colors">{t('session_approve')}</button>
                   <button onClick={() => handleDenyJoinRequest(m.id)}
-                    className="px-3 py-1 bg-[#8B2020]/20 hover:bg-[#7A1C1C]/40 border border-[#8B2020]/40 text-[#8B2020] text-xs rounded-lg font-semibold transition-colors">{t('session_deny')}</button>
+                    className="px-2.5 py-1 bg-transparent hover:bg-[#8B2020]/10 border border-[#8B2020]/40 text-[#8B2020] text-xs rounded-lg font-bold transition-colors">{t('session_deny')}</button>
                 </div>
               );
             })}
-        </div>
-      )}
+          </div>
+        );
+      })()}
       {/* GSL speak request banner */}
       {(committee.pendingMotions ?? []).filter((m) => (m.type as string) === 'gsl-request').length > 0 && (
         <div className="shrink-0 bg-[#1B3828] border-b border-[#3D7A52]/40 px-4 py-2 flex flex-wrap gap-4">
@@ -2289,7 +2281,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 isChair={true}
                 onClose={() => { setShowChat(false); setShowRollCall(true); }}
                 readOnly={sessionEnded}
-                onConvRead={(key: string, count: number) => setChatReadCounts(prev => ({ ...prev, [key]: count }))}
+                readCounts={chatReadCounts}
+                onReadCountsChange={setChatReadCounts}
               />
             )}
           </div>

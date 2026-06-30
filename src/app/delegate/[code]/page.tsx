@@ -19,6 +19,7 @@ import { FlagImg } from '@/components/FlagImg';
 import CowDelegationBoard from '@/components/CowDelegationBoard';
 import ChatDisabledNotice from '@/components/ChatDisabledNotice';
 import { getCommitteeFlags, sponsorLabel } from '@/lib/committeeFlags';
+import { chatUnreadTotal } from '@/lib/chatConversations';
 import {
   getCommitteeByCode,
   subscribeToCommittee,
@@ -806,7 +807,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     return () => clearInterval(id);
   }, [committee?.expiresAt]);
 
-  // Detect GSL request denial
+  // Detect GSL request denial — and waiting-room (join-request) denial
   useEffect(() => {
     if (!committee) return;
     const isOnSpeakersListNow = committee.speakersList.some((s) => s.country === country);
@@ -820,8 +821,20 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     if (isOnSpeakersListNow || isCurrentSpeakerNow) {
       setGslDenied(false);
     }
+    // Waiting room: a join request that vanished while still absent = the chair declined it.
+    const admitted = (committee.delegates.find((d) => d.country === country)?.status ?? 'absent') !== 'absent';
+    const hadJoinReq = (prev ?? []).some((m) => (m.type as string) === 'join-request' && m.proposedBy === country);
+    const hasJoinReq = (committee.pendingMotions ?? []).some((m) => (m.type as string) === 'join-request' && m.proposedBy === country);
+    if (hadJoinReq && !hasJoinReq && !admitted) {
+      setJoinDenied(true);
+      setJoinStatus(null);
+    }
+    if (admitted) {
+      setJoinDenied(false);
+      setJoinStatus(null);
+    }
     prevPendingRef.current = committee.pendingMotions;
-  }, [committee?.pendingMotions, committee?.speakersList, committee?.currentSpeaker, country]);
+  }, [committee?.pendingMotions, committee?.speakersList, committee?.currentSpeaker, committee?.delegates, country]);
 
   if (loading) return <GavelLoader />;
 
@@ -838,6 +851,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   }
 
   const settings = getSettings(committee.code);
+  const requireChairApproval = getCommitteeFlags(committee).requireChairApproval;
   const myDelegate = committee.delegates.find((d) => d.country === country);
   const isAbsent = !myDelegate || myDelegate.status === 'absent';
   const myQueueIndex = committee.speakersList.findIndex((s) => s.country === country);
@@ -897,9 +911,19 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   // ── Join request handler (absent → P or PV)
   const handleRequestJoin = async (desiredStatus: 'present' | 'present-voting') => {
     if (!myDelegate) return;
+    setJoinDenied(false);
+    // Chair approval OFF → delegates self-admit instantly (no waiting room).
+    if (!requireChairApproval) {
+      setCommittee((prev) => prev ? {
+        ...prev,
+        delegates: prev.delegates.map((d) => d.id === myDelegate.id ? { ...d, status: desiredStatus } : d),
+      } : prev);
+      setDelegateStatusInDB(myDelegate.id, desiredStatus);
+      return;
+    }
+    // Chair approval ON → request a seat and wait in the waiting room.
     setJoinRequesting(true);
     setJoinStatus(desiredStatus);
-    setJoinDenied(false);
     await requestJoinSession(committee.id, myDelegate.id, country, desiredStatus);
     setJoinRequesting(false);
   };
@@ -961,6 +985,64 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     );
   }
 
+  // ── Waiting Room — chair-approval gate (blocks the session until admitted) ──
+  if (requireChairApproval && isAbsent && !sessionEnded) {
+    const waitingHeading = language === 'ar' ? 'غرفة الانتظار' : language === 'fr' ? "Salle d'attente" : language === 'es' ? 'Sala de Espera' : 'Waiting Room';
+    const myFlag = getCountryByName(country);
+    return (
+      <FitToScreen>
+        <div className="h-full w-full flex flex-col overflow-hidden relative" style={{ backgroundColor: '#EDE7D8' }}>
+          <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
+          <div className="relative z-[2] flex-1 flex flex-col items-center justify-center text-center px-6">
+            <p className="text-xs font-mono font-bold uppercase tracking-widest mb-1" style={{ color: '#9A8A78' }}>{getCommitteeDisplayName(committee.name, language)}</p>
+            {committee.topic && <p className="text-xs mb-6" style={{ color: '#9A8A78' }}>{committee.topic}</p>}
+            <div className="flex flex-col items-center gap-3 mb-6">
+              {myFlag
+                ? <img src={getFlagUrl(myFlag.code)} alt={country} style={{ width: '104px', height: '74px', objectFit: 'cover', borderRadius: '10px', border: '1.5px solid rgba(28,20,16,0.12)', boxShadow: '0 6px 20px rgba(27,56,40,0.14)' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                : <Emoji size="3.5rem">🌐</Emoji>}
+              <p className="font-black text-2xl" style={{ color: '#1C1410' }}>{getCountryDisplayName(country, language)}</p>
+            </div>
+            <div className="w-full max-w-sm rounded-2xl p-6 relative overflow-hidden" style={{ backgroundColor: '#1B3828', border: '1.5px solid #3D7A52', boxShadow: '0 24px 60px rgba(27,56,40,0.35)' }}>
+              <h1 className="text-2xl font-black mb-2" style={{ color: '#EED98A', fontFamily: "'Outfit', sans-serif" }}>{waitingHeading}</h1>
+              {joinDenied ? (
+                <>
+                  <p className="text-sm mb-4" style={{ color: 'rgba(237,231,216,0.85)' }}>{t('delegate_join_denied')}</p>
+                  <button onClick={() => setJoinDenied(false)}
+                    className="w-full py-2.5 rounded-xl text-sm font-black transition-colors focus:outline-none"
+                    style={{ backgroundColor: '#EED98A', color: '#1B3828' }}>
+                    {t('delegate_request_again')}
+                  </button>
+                </>
+              ) : joinStatus ? (
+                <div className="flex flex-col items-center gap-3 py-2">
+                  <div className="w-6 h-6 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: '#EED98A' }} />
+                  <p className="text-sm" style={{ color: 'rgba(237,231,216,0.85)' }}>{t('delegate_join_waiting')}</p>
+                </div>
+              ) : (
+                <>
+                  <p className="text-sm mb-4" style={{ color: 'rgba(237,231,216,0.85)' }}>{t('delegate_absent_desc')}</p>
+                  <div className="flex gap-2">
+                    <button onClick={() => handleRequestJoin('present')} disabled={joinRequesting}
+                      className="flex-1 py-2.5 rounded-xl text-sm font-bold transition-colors focus:outline-none"
+                      style={{ backgroundColor: 'transparent', border: '1px solid rgba(238,217,138,0.4)', color: '#EED98A' }}>
+                      {t('delegate_present_btn')}
+                    </button>
+                    <button onClick={() => handleRequestJoin('present-voting')} disabled={joinRequesting}
+                      className="flex-1 py-2.5 rounded-xl text-sm font-black transition-colors focus:outline-none"
+                      style={{ backgroundColor: '#EED98A', color: '#1B3828' }}>
+                      {t('delegate_pv_btn')}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+            <p className="text-xs mt-8" style={{ color: '#9A8A78' }}>{t('delegate_adjourned_esc')}</p>
+          </div>
+        </div>
+      </FitToScreen>
+    );
+  }
+
   return (
     <FitToScreen>
     <div className="h-full w-full flex flex-col overflow-hidden" style={{ backgroundColor: '#EDE7D8' }}>
@@ -974,24 +1056,14 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
           {(['session', 'documents', 'chat', 'stats'] as DelegateTab[]).map((tab2, i) => {
             const labels: Record<DelegateTab, string> = { session: t('delegate_session_tab'), documents: t('delegate_documents_tab'), chat: t('tab_chat'), stats: t('delegate_stats_tab') };
             const isActive = tab === tab2;
-            const chatUnread = (() => {
-              if (tab2 !== 'chat') return 0;
-              const total = committee.messages.filter((m) => m.sender !== country && !m.content.startsWith('__log__:') && !m.isPrivate).length;
-              return Math.max(0, total - (chatReadCounts['everyone'] ?? 0));
-            })();
+            const chatUnread = tab2 === 'chat'
+              ? chatUnreadTotal(committee.messages, country, false, committee.chairNames ?? [], chatReadCounts)
+              : 0;
             return (
               <React.Fragment key={tab2}>
                 {i > 0 && <div style={{ width: '1px', height: '28px', alignSelf: 'center', backgroundColor: 'rgba(28,20,16,0.2)', flexShrink: 0 }} />}
                 <button
-                  onClick={() => {
-                    setTab(tab2);
-                    if (tab2 === 'chat') {
-                      setChatReadCounts((prev) => ({
-                        ...prev,
-                        everyone: committee.messages.filter((m) => !m.content.startsWith('__log__:') && !m.isPrivate && m.sender !== country).length,
-                      }));
-                    }
-                  }}
+                  onClick={() => { setTab(tab2); }}
                   className="flex-1 flex items-center justify-center text-[18px] font-bold px-3 relative h-full transition-all duration-200"
                   style={{ color: isActive ? '#1B3828' : '#1C1410', backgroundColor: isActive ? 'rgba(27,56,40,0.07)' : 'transparent', fontWeight: isActive ? 900 : 700 }}
                   onMouseEnter={(e) => { if (!isActive) { const el = e.currentTarget as HTMLElement; el.style.color = '#1B3828'; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; el.style.transform = 'translateY(-1px)'; } }}
@@ -1461,10 +1533,9 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
             senderName={country}
             isChair={false}
             onClose={() => setTab('session')}
-            initialReadCounts={chatReadCounts}
+            readCounts={chatReadCounts}
             onReadCountsChange={setChatReadCounts}
             readOnly={sessionEnded}
-            speakerCard={null}
           />
         </div>
       )}

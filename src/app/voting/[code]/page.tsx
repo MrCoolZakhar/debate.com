@@ -649,17 +649,19 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             >
               {t('voting_in_favour')}<br />{t('voting_with_rights_label')}
             </button>
-            {(rollCallStatuses[currentDelegate.id] ?? currentDelegate.status) === 'present' ? (
-              <button
-                onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'abstain')}
-                className="flex-1 bg-[#DDD4C0] hover:bg-[#C8BAA8] border border-[#C8BAA8] text-[#6A5A4A] font-black text-base py-6 rounded-2xl transition-colors"
-              >
-                {t('voting_abstain')}
-              </button>
-            ) : (
-              <button disabled className="flex-1 bg-[#EDE7D8] border border-[#DDD4C0] text-[#9A8A78] font-black text-base py-6 rounded-2xl opacity-40 cursor-not-allowed">
-                {t('voting_abstain_pv')}
-              </button>
+            {settings.allowAbstentions && (
+              (rollCallStatuses[currentDelegate.id] ?? currentDelegate.status) === 'present' ? (
+                <button
+                  onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'abstain')}
+                  className="flex-1 bg-[#DDD4C0] hover:bg-[#C8BAA8] border border-[#C8BAA8] text-[#6A5A4A] font-black text-base py-6 rounded-2xl transition-colors"
+                >
+                  {t('voting_abstain')}
+                </button>
+              ) : (
+                <button disabled className="flex-1 bg-[#EDE7D8] border border-[#DDD4C0] text-[#9A8A78] font-black text-base py-6 rounded-2xl opacity-40 cursor-not-allowed">
+                  {t('voting_abstain_pv')}
+                </button>
+              )
             )}
             {!inPassRound && (
               <button

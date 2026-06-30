@@ -42,9 +42,7 @@ export const DEFAULT_SCORING: ScoringConfig = {
 
 export interface CommitteeSettings {
   // Tab 1 — Voting & Majorities
-  proceduralThreshold: 'simple' | 'absolute';
   substantiveThreshold: 'simple' | 'supermajority-2-3' | 'consensus';
-  amendmentThreshold: 'simple' | 'supermajority-2-3';
   allowAbstentions: boolean;
   vetoMode: 'none' | 'p5' | 'unanimous' | 'custom';
   p5Delegations: string[];
@@ -84,9 +82,7 @@ export const DEFAULT_MOTION_NAMES: MotionNames = {
 };
 
 export const DEFAULT_SETTINGS: CommitteeSettings = {
-  proceduralThreshold: 'simple',
   substantiveThreshold: 'simple',
-  amendmentThreshold: 'simple',
   allowAbstentions: true,
   vetoMode: 'none',
   p5Delegations: ['China', 'France', 'Russia', 'United Kingdom', 'United States'],
