@@ -9,8 +9,8 @@ import { Committee } from '@/lib/types';
 import { useSettingsStore } from '@/lib/settingsStore';
 import { Emoji } from '@/components/Emoji';
 import { useAuth } from '@/components/AuthProvider';
-import { getAuthedClient } from '@/lib/supabase-auth';
 import { supabase as anonSupabase } from '@/lib/supabase';
+import { detectConferenceSession, verifyConferenceAccess } from '@/lib/conferenceAccess';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { getCountryDisplayName } from '@/lib/countries';
 
@@ -72,7 +72,7 @@ function JoinPageInner() {
   }, []);
 
   useEffect(() => {
-    if (!isConferenceSession || !conferenceCommittee) {
+    if (!isConferenceSession) {
       setAllocatedCountry(null);
       setAllocationError('');
       return;
@@ -89,58 +89,37 @@ function JoinPageInner() {
       setAllocationLoading(true);
       setAllocationError('');
 
-      const supabase = getAuthedClient(session!.access_token);
+      // Resolve access via the shared authed helper. It reads conference_committees and the
+      // user's allocation on the authed client, so it works for PRIVATE conferences too (via the
+      // "associated users read their committee" policy), not just public ones.
+      const access = await verifyConferenceAccess(code.trim().toUpperCase(), session!.access_token, user!.id);
 
-      // First check if user has ANY allocation in this committee
-      const { data: anyAlloc } = await supabase
-        .from('conference_allocations')
-        .select('country_code, country_name, user_id')
-        .eq('conference_committee_id', conferenceCommittee!.id)
-        .eq('user_id', user!.id)
-        .maybeSingle();
-
-      if (anyAlloc) {
-        // Check mode matches allocation type
-        // Chairs are not in conference_allocations — they are in chair_user_ids on conference_committees
-        // Delegates are in conference_allocations
+      if (access.kind === 'delegate') {
         if (mode === 'delegate') {
-          setAllocatedCountry({ code: anyAlloc.country_code, name: anyAlloc.country_name });
+          setAllocatedCountry({ code: access.country.code, name: access.country.name });
         } else {
-          // User is trying to join as chair but only has a delegate allocation
+          setAllocatedCountry(null);
+          setAllocationError('__wrong_role__');
+        }
+      } else if (access.kind === 'chair') {
+        if (mode === 'chair') {
+          setAllocatedCountry(null);
+          setAllocationError('');
+        } else {
           setAllocatedCountry(null);
           setAllocationError('__wrong_role__');
         }
       } else {
-        // Check if they are a chair for this committee
-        const { data: ccData } = await supabase
-          .from('conference_committees')
-          .select('chair_user_ids')
-          .eq('id', conferenceCommittee!.id)
-          .single();
-
-        const chairIds: string[] = (ccData as any)?.chair_user_ids ?? [];
-        const isChair = chairIds.includes(user!.id);
-
-        if (isChair && mode === 'chair') {
-          // Chair joining correctly — no country allocation needed
-          setAllocatedCountry(null);
-          setAllocationError('');
-        } else if (isChair && mode === 'delegate') {
-          // Chair trying to join as delegate
-          setAllocatedCountry(null);
-          setAllocationError('__wrong_role__');
-        } else {
-          // Not allocated at all
-          setAllocatedCountry(null);
-          setAllocationError('__not_associated__');
-        }
+        // organizer / denied / not associated for a delegate or chair join
+        setAllocatedCountry(null);
+        setAllocationError('__not_associated__');
       }
       setAllocationLoading(false);
     }
 
     checkAllocation();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isConferenceSession, conferenceCommittee?.id, user?.id, mode]);
+  }, [isConferenceSession, code, user?.id, mode]);
 
   function doLookup(upper: string, currentMode: JoinMode = mode) {
     setLookingUp(true);
@@ -172,19 +151,22 @@ function JoinPageInner() {
 
     async function checkConferenceSession() {
       setCheckingConference(true);
-      const anonClient = anonSupabase;
-      const { data: confCommittee } = await anonClient
-        .from('conference_committees')
-        .select(`
-          id, name, session_code, conference_id,
-          conferences (full_name, acronym, slug, start_date, end_date)
-        `)
-        .eq('session_code', upper)
-        .maybeSingle();
-
-      if (confCommittee) {
-        setConferenceCommittee(confCommittee as unknown as ConferenceCommittee);
+      // Detect via committees.session_origin (anon-readable) so PRIVATE conferences are gated too —
+      // anon cannot read conference_committees for a private conference.
+      const isConf = await detectConferenceSession(upper);
+      if (isConf) {
         setIsConferenceSession(true);
+        // Best-effort display info: resolves for public conferences; null for private (the gate
+        // shows generic copy, and verification still runs via the authed helper below).
+        const { data: confCommittee } = await anonSupabase
+          .from('conference_committees')
+          .select(`
+            id, name, session_code, conference_id,
+            conferences (full_name, acronym, slug, start_date, end_date)
+          `)
+          .eq('session_code', upper)
+          .maybeSingle();
+        setConferenceCommittee(confCommittee ? (confCommittee as unknown as ConferenceCommittee) : null);
       } else {
         setConferenceCommittee(null);
         setIsConferenceSession(false);
@@ -373,10 +355,12 @@ function JoinPageInner() {
                   CONFERENCE SESSION
                 </p>
                 <p className="font-semibold text-sm text-white" style={{ fontFamily: "'Outfit', sans-serif" }}>
-                  {conferenceCommittee?.conferences?.full_name}
+                  {conferenceCommittee?.conferences?.full_name ?? 'Conference session'}
                 </p>
                 <p className="text-xs mt-0.5" style={{ color: 'rgba(238,217,138,0.6)', fontFamily: "'DM Mono', monospace" }}>
-                  {conferenceCommittee?.conferences?.acronym} · {conferenceCommittee?.name}
+                  {conferenceCommittee
+                    ? `${conferenceCommittee.conferences?.acronym ?? ''} · ${conferenceCommittee.name}`
+                    : 'Sign in to verify your allocation'}
                 </p>
               </div>
 
