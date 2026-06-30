@@ -873,9 +873,7 @@ export default function ConferenceDetailClient() {
             </div>
 
             {/* Right column */}
-            <div className="w-full md:flex-shrink-0 flex flex-col gap-4" style={{ width: '100%', maxWidth: '100%' }}>
-              <style>{`@media (min-width: 768px) { .right-col { width: 340px; } }`}</style>
-              <div className="right-col flex flex-col gap-4 w-full">
+            <div className="w-full md:w-[340px] md:flex-shrink-0 flex flex-col gap-4">
 
                 {/* Key Info */}
                 <div className="rounded-2xl p-6" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
@@ -1085,7 +1083,6 @@ export default function ConferenceDetailClient() {
                   )}
                 </div>
 
-              </div>
             </div>
           </div>
         </div>
