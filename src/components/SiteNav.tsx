@@ -10,7 +10,6 @@ import { Globe } from 'lucide-react';
 const NAV_LINKS_CONFIG = [
   { en: 'SESSIONS',     es: 'SESIONES',     fr: 'SESSIONS',     ar: 'الجلسات',   href: '/' },
   { en: 'CONFERENCES',  es: 'CONFERENCIAS', fr: 'CONFÉRENCES',  ar: 'المؤتمرات', href: '/conferences' },
-  { en: 'RESOURCES',    es: 'RECURSOS',     fr: 'RESSOURCES',   ar: 'الموارد',   href: '/blog' },
   { en: 'ABOUT US',     es: 'NOSOTROS',     fr: 'QUI SOMMES-NOUS', ar: 'من نحن', href: '/about' },
   { en: 'CONTACT',      es: 'CONTÁCTANOS',  fr: 'CONTACT',      ar: 'تواصل معنا', href: '/contact' },
 ];
