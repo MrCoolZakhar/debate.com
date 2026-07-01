@@ -55,7 +55,7 @@ export default function ConferencesClient() {
             </p>
 
             <a
-              href="https://calendar.app.google/8VnuxHW7eG7iVZYX7"
+              href="https://calendar.app.google/BgWXxMdKmEJE3dDq6"
               target="_blank"
               rel="noopener noreferrer"
               onMouseEnter={(e) => {

@@ -2,12 +2,23 @@
 
 import { use, useEffect, useState } from 'react';
 import FitToScreen from '@/components/FitToScreen';
+import CowDelegationBoard from '@/components/CowDelegationBoard';
 import Link from 'next/link';
-import { getCommitteeByCode, subscribeToCommittee, sendMessage as sendMessageDB } from '@/lib/committeeService';
+import {
+  getCommitteeByCode,
+  subscribeToCommittee,
+  sendMessage as sendMessageDB,
+  getCurrentSpeakerRow,
+  getDelegatesList,
+  getSpeakersLists,
+  getMessagesList,
+  getDocumentsList,
+  getPendingMotionsList,
+} from '@/lib/committeeService';
 import { DEFAULT_MOTION_NAMES } from '@/lib/settingsStore';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
 import { Committee } from '@/lib/types';
-import { getFlagUrl, getCountryByName, getCountryDisplayName } from '@/lib/countries';
+import { getFlagUrl, getCountryByName, getCountryDisplayName, compareCountryNames } from '@/lib/countries';
 import { getCommitteeDisplayName } from '@/lib/presetNames';
 import { Emoji } from '@/components/Emoji';
 import { MajorityPie } from '@/components/RollCallPanel';
@@ -37,7 +48,14 @@ function ExpandedDelegateCard({
 }) {
   const { language } = useLanguage();
   const t = useT();
-  const mn = language === 'fr' ? {
+  const mn = language === 'ar' ? {
+    moderated: 'حوار منهجي',
+    unmoderated: 'حوار حر',
+    consultation: 'مشاورات الهيئة',
+    tour: 'جولة المتحدثين',
+    suspendDebate: 'تعليق النقاش',
+    endDebate: 'إنهاء النقاش',
+  } : language === 'fr' ? {
     moderated: 'Caucus modéré',
     unmoderated: 'Caucus non modéré',
     consultation: "Consultation de l'assemblée",
@@ -251,7 +269,66 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
       setLoading(false);
       if (!c) return;
       setCommittee(c);
-      unsub = subscribeToCommittee(c.id, async () => {
+      const cid = c.id;
+      unsub = subscribeToCommittee(cid, async (table) => {
+        // Patch only the changed slice instead of re-pulling the whole committee on every
+        // event. Session-state lives on the `committees` table, so that one keeps the full
+        // refetch; every other table can be patched in place. Mirrors the delegate view.
+        if (table === 'current_speaker') {
+          const cs = await getCurrentSpeakerRow(cid);
+          if (!cs) return;
+          setCommittee((prev) => {
+            if (!prev) return prev;
+            const patched: Committee = {
+              ...prev,
+              currentSpeaker: cs.currentSpeaker,
+              speakerTimeRemaining: cs.speakerTimeRemaining,
+              speakerStartedAt: cs.speakerStartedAt,
+              speakersList: cs.currentSpeaker
+                ? prev.speakersList.filter((s) => s.delegateId !== cs.currentSpeaker!.delegateId)
+                : prev.speakersList,
+            };
+            if (prev.caucus && prev.caucus.type === 'moderated') {
+              patched.caucus = { ...prev.caucus, currentSpeaker: cs.currentSpeaker?.country ?? null };
+              patched.caucusQueue = cs.currentSpeaker
+                ? prev.caucusQueue.filter((s) => s.delegateId !== cs.currentSpeaker!.delegateId)
+                : prev.caucusQueue;
+            }
+            return patched;
+          });
+          return;
+        }
+        if (table === 'speakers_list') {
+          const { speakersList, caucusQueue } = await getSpeakersLists(cid);
+          setCommittee((prev) => prev ? {
+            ...prev,
+            speakersList: prev.currentSpeaker
+              ? speakersList.filter((s) => s.delegateId !== prev.currentSpeaker!.delegateId)
+              : speakersList,
+            caucusQueue,
+          } : prev);
+          return;
+        }
+        if (table === 'delegates') {
+          const delegates = await getDelegatesList(cid);
+          setCommittee((prev) => prev ? { ...prev, delegates } : prev);
+          return;
+        }
+        if (table === 'messages') {
+          const messages = await getMessagesList(cid);
+          setCommittee((prev) => prev ? { ...prev, messages } : prev);
+          return;
+        }
+        if (table === 'documents') {
+          const documents = await getDocumentsList(cid);
+          setCommittee((prev) => prev ? { ...prev, documents } : prev);
+          return;
+        }
+        if (table === 'motions') {
+          const pendingMotions = await getPendingMotionsList(cid);
+          setCommittee((prev) => prev ? { ...prev, pendingMotions } : prev);
+          return;
+        }
         const updated = await getCommitteeByCode(upperCode);
         if (updated) setCommittee(updated);
       });
@@ -315,7 +392,14 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
   const isUnmoderatedCaucus = committee.phase === 'unmoderated-caucus';
   const isCaucus = isModeratedCaucus || isUnmoderatedCaucus;
 
-  const advisorMotionNames = language === 'fr' ? {
+  const advisorMotionNames = language === 'ar' ? {
+    moderated: 'حوار منهجي',
+    unmoderated: 'حوار حر',
+    consultation: 'مشاورات الهيئة',
+    tour: 'جولة المتحدثين',
+    suspendDebate: 'تعليق النقاش',
+    endDebate: 'إنهاء النقاش',
+  } : language === 'fr' ? {
     moderated: 'Caucus modéré',
     unmoderated: 'Caucus non modéré',
     consultation: "Consultation de l'assemblée",
@@ -346,17 +430,9 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
     currentSpeaker: string | null;
   } | null;
 
-  const gslProgress = committee.currentSpeaker
-    ? (committee.speakerTimeRemaining / committee.speakerTimeLimit) * 100
-    : 100;
-
-  const caucusSpeakerProgress = caucus && caucus.speakingTime > 0
-    ? (caucus.speakerTimeRemaining / caucus.speakingTime) * 100
-    : 100;
-
   const displayQueue = isCaucus ? (committee.caucusQueue ?? []) : committee.speakersList;
 
-  const sortedDelegates = [...committee.delegates].sort((a, b) => a.country.localeCompare(b.country));
+  const sortedDelegates = [...committee.delegates].sort((a, b) => compareCountryNames(a.country, b.country, language));
   const selectedDelegate = selectedCountry
     ? sortedDelegates.find((d) => d.country === selectedCountry) ?? null
     : null;
@@ -414,11 +490,8 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
               <div className="flex flex-col items-center px-4 py-5 shrink-0" style={{ borderBottom: '1px solid rgba(61,122,82,0.4)' }}>
                 {(() => { const c = getCountryByName(caucus.currentSpeaker); return c ? <img src={getFlagUrl(c.code)} alt={caucus.currentSpeaker} style={{ width: '80px', height: '58px', objectFit: 'cover', borderRadius: '8px', border: '1.5px solid rgba(238,217,138,0.2)' }} /> : null; })()}
                 <h2 className="text-2xl font-black mt-3 mb-1 text-center" style={{ color: '#EDE7D8' }}>{caucus.currentSpeaker}</h2>
-                <div className="text-5xl font-black font-mono tabular-nums mt-1" style={{ color: caucus.speakerTimeRemaining <= 10 ? '#B8844A' : '#EDE7D8' }}>
-                  {formatTime(caucus.speakerTimeRemaining)}
-                </div>
-                <div className="w-full max-w-xs h-1.5 rounded-full overflow-hidden mt-3" style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}>
-                  <div className="h-full rounded-full transition-all" style={{ width: `${caucusSpeakerProgress}%`, backgroundColor: '#EED98A' }} />
+                <div className="text-lg font-bold mt-1" style={{ color: 'rgba(238,217,138,0.7)' }}>
+                  {t('view_is_speaking')}
                 </div>
                 {caucus.purpose && (
                   <p className="text-xs mt-3 text-center" style={{ color: 'rgba(238,217,138,0.5)' }}>{caucus.purpose}</p>
@@ -448,6 +521,11 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
               {caucus?.purpose && (
                 <p className="text-sm mt-3 text-center" style={{ color: 'rgba(237,231,216,0.7)' }}>{caucus.purpose}</p>
               )}
+              {committee.caucus?.isConsultation && (
+                <div className="w-full mt-4">
+                  <CowDelegationBoard committee={committee} />
+                </div>
+              )}
             </div>
           )}
 
@@ -457,11 +535,8 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
               <div className="flex flex-col items-center px-4 py-5 shrink-0" style={{ borderBottom: '1px solid rgba(61,122,82,0.4)' }}>
                 {(() => { const c = getCountryByName(committee.currentSpeaker.country); return c ? <img src={getFlagUrl(c.code)} alt={committee.currentSpeaker.country} style={{ width: '80px', height: '58px', objectFit: 'cover', borderRadius: '8px', border: '1.5px solid rgba(238,217,138,0.2)' }} /> : null; })()}
                 <h2 className="text-2xl font-black mt-3 mb-1 text-center" style={{ color: '#EDE7D8' }}>{getCountryDisplayName(committee.currentSpeaker.country, language)}</h2>
-                <div className="text-5xl font-black font-mono tabular-nums mt-1" style={{ color: committee.speakerTimeRemaining <= 10 ? '#B8844A' : '#EDE7D8' }}>
-                  {formatTime(committee.speakerTimeRemaining)}
-                </div>
-                <div className="w-full max-w-xs h-1.5 rounded-full overflow-hidden mt-3" style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}>
-                  <div className="h-full rounded-full transition-all" style={{ width: `${gslProgress}%`, backgroundColor: '#EED98A' }} />
+                <div className="text-lg font-bold mt-1" style={{ color: 'rgba(238,217,138,0.7)' }}>
+                  {t('view_is_speaking')}
                 </div>
               </div>
             ) : (

@@ -3,11 +3,11 @@
 import { useState, useEffect, useRef } from 'react';
 import Portal from '@/components/Portal';
 import { Globe } from 'lucide-react';
-import { useSettingsStore, CommitteeSettings, MotionNames } from '@/lib/settingsStore';
+import { useSettingsStore, CommitteeSettings, MotionNames, DEFAULT_SCORING, type ScoringConfig, type ScoreSource, type RankingFactor } from '@/lib/settingsStore';
 import { Committee } from '@/lib/types';
-import { updateCommitteeChairSuffixInDB } from '@/lib/committeeService';
-import { getFlagEmoji, getCountryByName, getCountryDisplayName } from '@/lib/countries';
+import { updateCommitteeChairSuffixInDB, saveCommitteeSettings, updateCommitteeScoringInDB } from '@/lib/committeeService';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
+import { getCountryByName, getCountryDisplayName, getFlagUrl } from '@/lib/countries';
 
 type SettingsTab = 'voting' | 'motions' | 'access' | 'points';
 
@@ -56,13 +56,17 @@ function ChairPasswordDisplay({ password }: { password: string }) {
   );
 }
 
-function RenameRow({ label, defaultName, value, onChange }: {
-  label?: string; defaultName: string; value: string; onChange: (v: string) => void;
+function RenameRow({ label, defaultName, value, onChange, resetValue }: {
+  label?: string; defaultName: string; value: string; onChange: (v: string) => void; resetValue?: string;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
-  const isCustom = value !== defaultName;
+  // `defaultName` is the localized label shown when no custom name is set.
+  // `baseValue` is the canonical value written back to the store (always English)
+  // so localized display text never gets persisted and leak into other locales.
+  const baseValue = resetValue ?? defaultName;
+  const isCustom = value !== baseValue && value !== defaultName;
 
   const startEdit = () => {
     setDraft(isCustom ? value : '');
@@ -71,7 +75,7 @@ function RenameRow({ label, defaultName, value, onChange }: {
   };
   const commit = () => {
     const trimmed = draft.trim();
-    onChange(trimmed || defaultName);
+    onChange(trimmed || baseValue);
     setEditing(false);
   };
 
@@ -94,7 +98,7 @@ function RenameRow({ label, defaultName, value, onChange }: {
         ) : (
           <button
             onClick={startEdit}
-            className="text-sm font-semibold text-left w-full truncate flex items-center gap-1.5"
+            className="text-sm font-semibold text-start w-full truncate flex items-center gap-1.5"
             style={{ color: '#1C1410' }}
           >
             <span>{isCustom ? value : defaultName}</span>
@@ -104,7 +108,7 @@ function RenameRow({ label, defaultName, value, onChange }: {
       </div>
       {isCustom && !editing && (
         <button
-          onClick={() => onChange(defaultName)}
+          onClick={() => onChange(baseValue)}
           className="text-[10px] font-mono shrink-0 px-1.5 py-0.5 rounded transition-colors"
           style={{ color: '#9A8A78', border: '1px solid #DDD4C0' }}
           onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#8B2020'; (e.currentTarget as HTMLElement).style.borderColor = '#8B2020'; }}
@@ -119,23 +123,35 @@ function RenameRow({ label, defaultName, value, onChange }: {
 // ── Motion order drag-and-rename tab ──────────────────────────────────────────
 type OrderableType = 'moderated' | 'unmoderated' | 'consultation' | 'tour';
 
+// Note: disruptiveness ordering is NOT stored here — it is purely the position
+// in `motionOrder` (top = most disruptive). The pip bar below renders from `4 - i`.
 const MOTION_META: Record<OrderableType, {
   enabledKey: keyof CommitteeSettings;
   namesKey: keyof MotionNames;
   defaultName: string;
-  disruptiveness: number;
 }> = {
-  moderated:    { enabledKey: 'motionModeratedCaucus',   namesKey: 'moderated',    defaultName: 'Moderated Caucus',          disruptiveness: 3 },
-  unmoderated:  { enabledKey: 'motionUnmoderatedCaucus', namesKey: 'unmoderated',  defaultName: 'Unmoderated Caucus',        disruptiveness: 2 },
-  consultation: { enabledKey: 'motionCoW',               namesKey: 'consultation', defaultName: 'Consultation of the Whole', disruptiveness: 2 },
-  tour:         { enabledKey: 'motionTourDeTable',       namesKey: 'tour',         defaultName: 'Tour de Table',             disruptiveness: 1 },
+  moderated:    { enabledKey: 'motionModeratedCaucus',   namesKey: 'moderated',    defaultName: 'Moderated Caucus' },
+  unmoderated:  { enabledKey: 'motionUnmoderatedCaucus', namesKey: 'unmoderated',  defaultName: 'Unmoderated Caucus' },
+  consultation: { enabledKey: 'motionCoW',               namesKey: 'consultation', defaultName: 'Consultation of the Whole' },
+  tour:         { enabledKey: 'motionTourDeTable',       namesKey: 'tour',         defaultName: 'Tour de Table' },
+};
+
+// Localized display names for the default (un-renamed) motions, keyed by language.
+// The English values stay the canonical store values (see MOTION_META.defaultName).
+const MOTION_NAMES_LOCALIZED: Record<string, Record<string, string>> = {
+  ar: { moderated: 'حوار منهجي', unmoderated: 'حوار حر', consultation: 'مشاورات الهيئة', tour: 'جولة المتحدثين', suspendDebate: 'تعليق النقاش', endDebate: 'إنهاء النقاش' },
+  fr: { moderated: 'Caucus modéré', unmoderated: 'Caucus non modéré', consultation: "Consultation de l'assemblée", tour: 'Tour de table', suspendDebate: 'Suspension du débat', endDebate: 'Clôture du débat' },
+  es: { moderated: 'Cáucus Moderado', unmoderated: 'Cáucus No Moderado', consultation: 'Consulta de Gabinete', tour: 'Round Robin', suspendDebate: 'Suspender Debate', endDebate: 'Cerrar Debate' },
 };
 
 function MotionsTab({ s, upd }: {
   s: CommitteeSettings;
   upd: <K extends keyof CommitteeSettings>(key: K, value: CommitteeSettings[K]) => void;
 }) {
-  const order: OrderableType[] = (s.motionOrder ?? ['moderated', 'unmoderated', 'tour', 'consultation']) as OrderableType[];
+  const t = useT();
+  const { language } = useLanguage();
+  const locName = (k: string, en: string) => MOTION_NAMES_LOCALIZED[language]?.[k] ?? en;
+  const order: OrderableType[] = (s.motionOrder ?? ['consultation', 'tour', 'unmoderated', 'moderated']) as OrderableType[];
   const dragItem = useRef<number | null>(null);
   const dragOver = useRef<number | null>(null);
   const [dragActive, setDragActive] = useState<number | null>(null);
@@ -155,15 +171,16 @@ function MotionsTab({ s, upd }: {
 
   return (
     <div>
-      <SectionLabel>Motion Types</SectionLabel>
+      <SectionLabel>{t('settings_motion_types_heading')}</SectionLabel>
       <p className="text-xs mb-3 leading-snug" style={{ color: '#9A8A78' }}>
-        Drag to reorder. Toggle to enable or disable. Click the name to rename.
+        {t('settings_motion_types_desc')}
       </p>
       <div className="space-y-1 mb-4">
         {order.map((motionType, i) => {
           const meta = MOTION_META[motionType];
           const enabled = s[meta.enabledKey] !== false;
           const currentName = s.motionNames[meta.namesKey] ?? meta.defaultName;
+          const localizedDefault = locName(meta.namesKey, meta.defaultName);
           const isDragging = dragActive === i;
           return (
             <div
@@ -192,7 +209,8 @@ function MotionsTab({ s, upd }: {
               {/* Name (click to rename inline) — flex-1 */}
               <div className="flex-1 min-w-0">
                 <RenameRow
-                  defaultName={meta.defaultName}
+                  defaultName={localizedDefault}
+                  resetValue={meta.defaultName}
                   value={currentName}
                   onChange={(v) => upd('motionNames', { ...s.motionNames, [meta.namesKey]: v })}
                 />
@@ -217,9 +235,18 @@ function MotionsTab({ s, upd }: {
         })}
       </div>
 
+      {s.motionCoW !== false && (
+        <Toggle
+          label={t('settings_cow_timer_label')}
+          note={t('settings_cow_timer_note')}
+          value={s.cowTimerEnabled === true}
+          onChange={(v) => upd('cowTimerEnabled', v)}
+        />
+      )}
+
       {/* Suspend/End debate — always at bottom, always enabled, rename only */}
-      <SectionLabel>Procedural Motions</SectionLabel>
-      <p className="text-xs mb-2 leading-snug" style={{ color: '#9A8A78' }}>Always available. Click to rename.</p>
+      <SectionLabel>{t('settings_procedural_motions_heading')}</SectionLabel>
+      <p className="text-xs mb-2 leading-snug" style={{ color: '#9A8A78' }}>{t('settings_procedural_motions_desc')}</p>
       <div className="space-y-1">
         {([
           { key: 'suspendDebate' as keyof MotionNames, defaultName: 'Suspend Debate' },
@@ -237,7 +264,8 @@ function MotionsTab({ s, upd }: {
             </div>
             <div className="flex-1 min-w-0">
               <RenameRow
-                defaultName={defaultName}
+                defaultName={locName(key, defaultName)}
+                resetValue={defaultName}
                 value={s.motionNames[key] ?? defaultName}
                 onChange={(v) => upd('motionNames', { ...s.motionNames, [key]: v })}
               />
@@ -311,11 +339,30 @@ export function SettingsPanel({ committee, onClose }: {
   const [tab, setTab] = useState<SettingsTab>('access');
   const { getSettings, updateSetting } = useSettingsStore();
   const s = getSettings(committee.code);
-  const upd = <K extends keyof CommitteeSettings>(key: K, value: CommitteeSettings[K]) =>
+  const upd = <K extends keyof CommitteeSettings>(key: K, value: CommitteeSettings[K]) => {
     updateSetting(committee.code, key, value);
+    // Persist the full settings object to the DB so other devices/instances read the same values.
+    saveCommitteeSettings(committee.id, { ...getSettings(committee.code), [key]: value });
+  };
 
-  // Points tab — expanded delegate
-  const [expandedDelegate, setExpandedDelegate] = useState<string | null>(null);
+  // Scoring config — local store + DB jsonb (so delegates/FAs on other devices see it)
+  const scoring: ScoringConfig = s.scoring ?? DEFAULT_SCORING;
+  const updScoring = (next: ScoringConfig) => {
+    updateSetting(committee.code, 'scoring', next);
+    updateCommitteeScoringInDB(committee.id, next);
+  };
+  const setSource = (id: string, patch: Partial<ScoreSource>) =>
+    updScoring({ ...scoring, sources: scoring.sources.map((x) => (x.id === id ? { ...x, ...patch } : x)) });
+  const removeSource = (id: string) =>
+    updScoring({ ...scoring, sources: scoring.sources.filter((x) => x.id !== id) });
+  const addSource = () =>
+    updScoring({ ...scoring, sources: [...scoring.sources, { id: `custom-${Date.now()}`, name: 'Custom source', value: 5, enabled: true, builtin: false }] });
+  const setFactor = (id: string, patch: Partial<RankingFactor>) =>
+    updScoring({ ...scoring, factors: scoring.factors.map((x) => (x.id === id ? { ...x, ...patch } : x)) });
+  const removeFactor = (id: string) =>
+    updScoring({ ...scoring, factors: scoring.factors.filter((x) => x.id !== id) });
+  const addFactor = () =>
+    updScoring({ ...scoring, factors: [...scoring.factors, { id: `factor-${Date.now()}`, name: 'New factor', enabled: true }] });
 
   // Auto-generate chairJoinSuffix on mount if none exists; always sync to DB
   useEffect(() => {
@@ -328,50 +375,6 @@ export function SettingsPanel({ committee, onClose }: {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [s.chairJoinSuffix]);
-
-  // ── Points scoring helpers ──
-  function computeScore(country: string) {
-    const delegate = committee.delegates.find((d) => d.country === country);
-    const isPresent = delegate ? delegate.status !== 'absent' : false;
-
-    const attendancePoints = isPresent ? 5 : 0;
-
-    const wpPoints = committee.documents
-      .filter((doc) => doc.type === 'working-paper' && doc.sponsors.includes(country))
-      .length * 10;
-
-    const drPoints = committee.documents
-      .filter((doc) => doc.type === 'draft-resolution' && doc.sponsors.includes(country))
-      .length * 20;
-
-    const logs = committee.messages
-      .filter((m) => m.sender === '__system__' && m.content.startsWith('__log__:'))
-      .map((m) => {
-        try { return JSON.parse(m.content.slice('__log__:'.length)); } catch { return null; }
-      })
-      .filter((entry): entry is { country: string; seconds: number; context: string; topic: string; timestamp: string } => entry !== null && entry.country === country);
-
-    const speakingPoints = Math.floor(logs.reduce((sum, e) => sum + (e.seconds || 0), 0) / 10);
-
-    const gslSpeeches = logs.filter((e) => e.context === 'speakers-list').length;
-    const caucusSpeeches = logs.filter((e) => e.context === 'moderated-caucus' || e.context === 'unmoderated-caucus' || e.context === 'tour-de-table').length;
-
-    const gslPoints = gslSpeeches * 10;
-    const caucusPoints = caucusSpeeches * 8;
-
-    return {
-      total: attendancePoints + wpPoints + drPoints + speakingPoints + gslPoints + caucusPoints,
-      attendancePoints,
-      wpPoints,
-      drPoints,
-      speakingPoints,
-      gslSpeeches,
-      caucusSpeeches,
-      gslPoints,
-      caucusPoints,
-      logs,
-    };
-  }
 
   const tabs: { id: SettingsTab; label: string }[] = [
     { id: 'access', label: t('settings_tab_access') },
@@ -406,19 +409,19 @@ export function SettingsPanel({ committee, onClose }: {
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setShowLangMenu(false)} />
                   <div className="absolute right-0 top-full mt-2 z-50 rounded-xl overflow-hidden shadow-xl" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', minWidth: '140px' }}>
-                    {([['en', t('settings_english')], ['es', t('settings_spanish')], ['fr', t('settings_french')]] as [string, string][]).map(([code, label], i) => (
+                    {([['en', t('settings_english')], ['es', t('settings_spanish')], ['fr', t('settings_french')], ['ar', 'العربية']] as [string, string][]).map(([code, label], i) => (
                       <div key={code}>
                         {i > 0 && <div style={{ height: '1px', backgroundColor: '#DDD4C0' }} />}
                         <button
-                          onClick={() => { setLanguage(code as 'en' | 'es' | 'fr'); setShowLangMenu(false); }}
-                          className="w-full flex items-center gap-2.5 px-4 py-3 text-left transition-colors focus:outline-none"
+                          onClick={() => { setLanguage(code as 'en' | 'es' | 'fr' | 'ar'); setShowLangMenu(false); }}
+                          className="w-full flex items-center gap-2.5 px-4 py-3 text-start transition-colors focus:outline-none"
                           style={{ color: language === code ? '#1B3828' : '#6A5A4A', fontWeight: language === code ? 800 : 600, fontSize: '13px', backgroundColor: language === code ? 'rgba(27,56,40,0.07)' : 'transparent' }}
                           onMouseEnter={(e) => { if (language !== code) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
                           onMouseLeave={(e) => { if (language !== code) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                         >
                           <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '11px', color: '#9A8A78' }}>{code.toUpperCase()}</span>
                           <span>{label}</span>
-                          {language === code && <span className="ml-auto" style={{ color: '#B6871F' }}>✓</span>}
+                          {language === code && <span className="ms-auto" style={{ color: '#B6871F' }}>✓</span>}
                         </button>
                       </div>
                     ))}
@@ -458,15 +461,6 @@ export function SettingsPanel({ committee, onClose }: {
             <div>
               <SectionLabel>{t('settings_section_voting')}</SectionLabel>
               <SelectRow
-                label={t('settings_procedural_threshold')}
-                value={s.proceduralThreshold}
-                onChange={(v) => upd('proceduralThreshold', v as CommitteeSettings['proceduralThreshold'])}
-                options={[
-                  { value: 'simple', label: t('settings_majority_simple') },
-                  { value: 'absolute', label: t('settings_majority_absolute') },
-                ]}
-              />
-              <SelectRow
                 label={t('settings_substantive_threshold')}
                 value={s.substantiveThreshold}
                 onChange={(v) => upd('substantiveThreshold', v as CommitteeSettings['substantiveThreshold'])}
@@ -474,15 +468,6 @@ export function SettingsPanel({ committee, onClose }: {
                   { value: 'simple', label: t('settings_majority_simple') },
                   { value: 'supermajority-2-3', label: t('settings_majority_supermajority') },
                   { value: 'consensus', label: t('settings_majority_consensus') },
-                ]}
-              />
-              <SelectRow
-                label={t('settings_amendment_threshold')}
-                value={s.amendmentThreshold}
-                onChange={(v) => upd('amendmentThreshold', v as CommitteeSettings['amendmentThreshold'])}
-                options={[
-                  { value: 'simple', label: t('settings_majority_simple') },
-                  { value: 'supermajority-2-3', label: t('settings_majority_supermajority') },
                 ]}
               />
 
@@ -500,6 +485,7 @@ export function SettingsPanel({ committee, onClose }: {
                   { id: 'none', label: t('settings_veto_none_label'), desc: t('settings_veto_none_desc') },
                   { id: 'p5', label: t('settings_veto_p5_label'), desc: t('settings_veto_p5_desc') },
                   { id: 'unanimous', label: t('settings_veto_unanimous_label'), desc: t('settings_veto_unanimous_desc') },
+                  { id: 'custom', label: t('settings_veto_custom_label'), desc: t('settings_veto_custom_desc') },
                 ] as const).map((option) => (
                   <label key={option.id} className="flex items-start gap-3 cursor-pointer" onClick={() => upd('vetoMode', option.id)}>
                     <div className="mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors"
@@ -519,6 +505,34 @@ export function SettingsPanel({ committee, onClose }: {
                   <p className="text-xs font-semibold mb-1" style={{ color: '#1B3828' }}>{t('settings_p5_delegations')}</p>
                   <p className="text-xs font-mono" style={{ color: '#1C1410' }}>{s.p5Delegations.join(' · ')}</p>
                   <p className="text-xs mt-1" style={{ color: '#9A8A78' }}>{t('settings_p5_note')}</p>
+                </div>
+              )}
+
+              {s.vetoMode === 'custom' && (
+                <div className="mt-2 p-3 rounded-xl" style={{ backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0' }}>
+                  <p className="text-xs font-semibold mb-2" style={{ color: '#1B3828' }}>{t('settings_veto_custom_members')}</p>
+                  <div className="max-h-44 overflow-y-auto flex flex-col gap-1">
+                    {[...committee.delegates]
+                      .sort((a, b) => getCountryDisplayName(a.country, language).localeCompare(getCountryDisplayName(b.country, language), language, { sensitivity: 'base' }))
+                      .map((d) => {
+                        const checked = (s.vetoCountries ?? []).includes(d.country);
+                        const found = getCountryByName(d.country);
+                        return (
+                          <label key={d.id} className="flex items-center gap-2.5 cursor-pointer py-1" onClick={() => {
+                            const cur = s.vetoCountries ?? [];
+                            upd('vetoCountries', checked ? cur.filter((c) => c !== d.country) : [...cur, d.country]);
+                          }}>
+                            <div className="w-4 h-4 rounded border flex items-center justify-center shrink-0"
+                              style={{ borderColor: checked ? '#1B3828' : '#DDD4C0', backgroundColor: checked ? '#1B3828' : 'transparent' }}>
+                              {checked && <span className="text-white text-[10px] leading-none">✓</span>}
+                            </div>
+                            {found && <img src={getFlagUrl(found.code)} alt={found.code} width={18} height={18} loading="eager" className="w-[18px] h-[18px] object-contain shrink-0" onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden'; }} />}
+                            <span className="text-sm" style={{ color: '#1C1410' }}>{getCountryDisplayName(d.country, language)}</span>
+                          </label>
+                        );
+                      })}
+                  </div>
+                  <p className="text-xs mt-2" style={{ color: '#9A8A78' }}>{t('settings_veto_custom_note')}</p>
                 </div>
               )}
 
@@ -560,6 +574,31 @@ export function SettingsPanel({ committee, onClose }: {
                 onChange={(v) => upd('requireChairApproval', v)}
               />
 
+              <SectionLabel>Committee display &amp; permissions</SectionLabel>
+              <div className="py-3" style={{ borderBottom: '1px solid #DDD4C0' }}>
+                <div className="text-xs mb-1.5" style={{ color: '#9A8A78' }}>Sponsors label</div>
+                <input
+                  type="text"
+                  value={s.sponsorLabel}
+                  placeholder="Sponsors"
+                  onChange={(e) => upd('sponsorLabel', e.target.value)}
+                  className="w-full text-sm bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-3 py-2 outline-none focus:border-[#1B3828]"
+                  style={{ color: '#1C1410' }}
+                />
+              </div>
+              <Toggle
+                label="Lock delegate roll call"
+                note="Delegates can't change their own Present/Voting status"
+                value={s.lockDelegateRollCall}
+                onChange={(v) => upd('lockDelegateRollCall', v)}
+              />
+              <Toggle
+                label="Disable chat"
+                note="Hides chat for delegates and chairs"
+                value={s.disableChat}
+                onChange={(v) => upd('disableChat', v)}
+              />
+
               <SectionLabel>GSL</SectionLabel>
               <Toggle
                 label={t('settings_gsl_require_next_label')}
@@ -570,93 +609,94 @@ export function SettingsPanel({ committee, onClose }: {
             </div>
           )}
 
-          {/* ── Points ── */}
+          {/* ── Points / Scoring config ── */}
           {tab === 'points' && (
-            <div>
-              <SectionLabel>{t('settings_section_leaderboard')}</SectionLabel>
+            <div style={{ fontFamily: "'Poppins', 'Outfit', sans-serif" }}>
+              {/* Score sources */}
+              <SectionLabel>Score sources</SectionLabel>
               <p className="text-xs mb-3 leading-snug" style={{ color: '#9A8A78' }}>
-                {t('settings_points_scoring_note')}
+                Points awarded automatically as delegates act. Toggle off any you don&apos;t use, or add your own.
               </p>
-              {committee.delegates.length === 0 && (
-                <p className="text-xs" style={{ color: '#9A8A78' }}>{t('settings_points_no_delegates')}</p>
-              )}
-              {[...committee.delegates]
-                .map((d) => ({ delegate: d, score: computeScore(d.country) }))
-                .sort((a, b) => b.score.total - a.score.total)
-                .map(({ delegate: d, score }, idx) => {
-                  const flag = getFlagEmoji(getCountryByName(d.country)?.code ?? '') || '🌐';
-                  const isExpanded = expandedDelegate === d.id;
-                  return (
-                    <div key={d.id} style={{ borderBottom: '1px solid #DDD4C0' }} className="last:border-0">
-                      <button
-                        className="w-full flex items-center gap-3 py-3 text-left transition-colors rounded-lg px-1 focus:outline-none"
-                        style={{ color: '#1C1410' }}
-                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#EDE7D8'; }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                        onClick={() => setExpandedDelegate(isExpanded ? null : d.id)}
-                      >
-                        <span className="text-xs w-5 text-right shrink-0 font-mono" style={{ color: '#9A8A78' }}>{idx + 1}</span>
-                        <span className="text-lg leading-none shrink-0">{flag}</span>
-                        <span className="flex-1 text-sm font-semibold truncate" style={{ color: '#1C1410' }}>{getCountryDisplayName(d.country, language)}</span>
-                        <span className="text-xs font-mono px-2 py-0.5 rounded-full shrink-0" style={{ backgroundColor: d.status === 'absent' ? '#DDD4C0' : '#1B3828', color: d.status === 'absent' ? '#9A8A78' : '#EED98A' }}>
-                          {t('settings_points_pts').replace('{n}', String(score.total))}
-                        </span>
-                        <span className="text-xs shrink-0" style={{ color: '#9A8A78' }}>{isExpanded ? '▲' : '▼'}</span>
-                      </button>
-
-                      {isExpanded && (
-                        <div className="mx-1 mb-3 p-3 rounded-xl space-y-3" style={{ backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0' }}>
-                          <div>
-                            <p className="text-[10px] font-mono font-bold tracking-widest mb-1.5" style={{ color: '#1B3828' }}>{t('settings_points_score_breakdown')}</p>
-                            <div className="space-y-1">
-                              {[
-                                { label: t('settings_points_attendance'), value: score.attendancePoints },
-                                { label: t('settings_points_wp_sponsored'), value: score.wpPoints },
-                                { label: t('settings_points_dr_sponsored'), value: score.drPoints },
-                                { label: t('settings_points_speaking_time'), value: score.speakingPoints },
-                                { label: t('settings_points_gsl_speeches').replace('{n}', String(score.gslSpeeches)), value: score.gslPoints },
-                                { label: t('settings_points_caucus_speeches').replace('{n}', String(score.caucusSpeeches)), value: score.caucusPoints },
-                              ].map(({ label, value }) => (
-                                <div key={label} className="flex justify-between text-xs">
-                                  <span style={{ color: '#6A5A4A' }}>{label}</span>
-                                  <span className="font-mono" style={{ color: '#1C1410' }}>+{value}</span>
-                                </div>
-                              ))}
-                              <div className="flex justify-between text-xs pt-1 mt-1" style={{ borderTop: '1px solid #DDD4C0' }}>
-                                <span className="font-semibold" style={{ color: '#1B3828' }}>{t('settings_points_total')}</span>
-                                <span className="font-mono font-black" style={{ color: '#1B3828' }}>+{score.total}</span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {score.logs.length > 0 && (
-                            <div>
-                              <p className="text-[10px] font-mono font-bold tracking-widest mb-1.5" style={{ color: '#1B3828' }}>{t('settings_points_speaking_history')}</p>
-                              <div className="space-y-1">
-                                {score.logs.map((entry, i) => (
-                                  <div key={i} className="text-xs">
-                                    <span style={{ color: '#1C1410' }}>{entry.topic || '—'}</span>
-                                    <span style={{ color: '#9A8A78' }}> · {entry.context} · {entry.seconds}s</span>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
-                          <div>
-                            <p className="text-[10px] font-mono font-bold tracking-widest mb-1.5" style={{ color: '#1B3828' }}>{t('settings_points_tips')}</p>
-                            <div className="space-y-1">
-                              {score.gslSpeeches === 0 && <p className="text-xs" style={{ color: '#6A5A4A' }}>{t('settings_points_tip_gsl')}</p>}
-                              {score.caucusSpeeches === 0 && <p className="text-xs" style={{ color: '#6A5A4A' }}>{t('settings_points_tip_caucus')}</p>}
-                              {score.wpPoints === 0 && score.drPoints === 0 && <p className="text-xs" style={{ color: '#6A5A4A' }}>{t('settings_points_tip_paper')}</p>}
-                              {score.gslSpeeches > 0 && score.caucusSpeeches > 0 && (score.wpPoints > 0 || score.drPoints > 0) && <p className="text-xs" style={{ color: '#3D7A52' }}>{t('settings_points_tip_great')}</p>}
-                            </div>
-                          </div>
-                        </div>
-                      )}
+              <div className="space-y-1.5 mb-3">
+                {scoring.sources.map((src) => (
+                  <div key={src.id} className="flex items-center gap-2 px-2 py-2 rounded-xl" style={{ border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3' }}>
+                    {src.builtin ? (
+                      <span className="flex-1 text-sm font-semibold truncate" style={{ color: '#1C1410' }}>{src.name}</span>
+                    ) : (
+                      <input value={src.name} onChange={(e) => setSource(src.id, { name: e.target.value })}
+                        className="flex-1 min-w-0 text-sm font-semibold bg-transparent border-b border-[#DDD4C0] focus:border-[#1B3828] outline-none" style={{ color: '#1C1410' }} />
+                    )}
+                    <div className="flex items-center gap-1 shrink-0">
+                      <input type="number" value={src.value} onChange={(e) => setSource(src.id, { value: parseInt(e.target.value) || 0 })}
+                        className="w-14 text-sm text-center bg-white border border-[#DDD4C0] rounded-lg px-1.5 py-1 focus:border-[#1B3828] outline-none" style={{ color: '#1C1410' }} />
+                      <span className="text-[10px]" style={{ color: '#9A8A78' }}>pts</span>
                     </div>
-                  );
-                })}
+                    <button onClick={() => setSource(src.id, { enabled: !src.enabled })}
+                      className="relative shrink-0 w-8 h-[18px] rounded-full transition-colors focus:outline-none"
+                      style={{ backgroundColor: src.enabled ? '#1B3828' : '#DDD4C0' }}>
+                      <span className={`absolute top-[2px] left-[2px] w-[14px] h-[14px] rounded-full bg-white transition-transform shadow-sm ${src.enabled ? 'translate-x-[14px]' : 'translate-x-0'}`} />
+                    </button>
+                    {!src.builtin && (
+                      <button onClick={() => removeSource(src.id)} className="shrink-0 text-[#9A8A78] hover:text-[#8B2020] text-sm">✕</button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <button onClick={addSource} className="text-xs font-bold px-3 py-2 rounded-lg transition-colors" style={{ border: '1px solid #DDD4C0', color: '#1B3828', backgroundColor: '#FAF8F3' }}>+ Add source</button>
+
+              {/* Ranking factors */}
+              <div className="mt-6 pt-6" style={{ borderTop: '1px solid #DDD4C0' }}>
+                <SectionLabel>Quality factors</SectionLabel>
+                <p className="text-xs mb-3 leading-snug" style={{ color: '#9A8A78' }}>
+                  Subjective factors chairs rate per speech (0–{scoring.factorScaleMax}).
+                </p>
+                <div className="space-y-1.5 mb-3">
+                  {scoring.factors.map((f) => (
+                    <div key={f.id} className="flex items-center gap-2 px-2 py-2 rounded-xl" style={{ border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3' }}>
+                      <input value={f.name} onChange={(e) => setFactor(f.id, { name: e.target.value })}
+                        className="flex-1 min-w-0 text-sm font-semibold bg-transparent border-b border-[#DDD4C0] focus:border-[#1B3828] outline-none" style={{ color: '#1C1410' }} />
+                      <button onClick={() => setFactor(f.id, { enabled: !f.enabled })}
+                        className="relative shrink-0 w-8 h-[18px] rounded-full transition-colors focus:outline-none"
+                        style={{ backgroundColor: f.enabled ? '#1B3828' : '#DDD4C0' }}>
+                        <span className={`absolute top-[2px] left-[2px] w-[14px] h-[14px] rounded-full bg-white transition-transform shadow-sm ${f.enabled ? 'translate-x-[14px]' : 'translate-x-0'}`} />
+                      </button>
+                      <button onClick={() => removeFactor(f.id)} className="shrink-0 text-[#9A8A78] hover:text-[#8B2020] text-sm">✕</button>
+                    </div>
+                  ))}
+                </div>
+                <button onClick={addFactor} className="text-xs font-bold px-3 py-2 rounded-lg transition-colors" style={{ border: '1px solid #DDD4C0', color: '#1B3828', backgroundColor: '#FAF8F3' }}>+ Add factor</button>
+                <div className="mt-3">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs" style={{ color: '#6A5A4A' }}>Rating scale max</span>
+                    <span className="text-xs font-bold" style={{ color: '#1B3828' }}>{scoring.factorScaleMax}</span>
+                  </div>
+                  <input type="range" min={0} max={100} step={1} value={scoring.factorScaleMax}
+                    onChange={(e) => updScoring({ ...scoring, factorScaleMax: parseInt(e.target.value) })}
+                    className="w-full" style={{ accentColor: '#1B3828' }} />
+                  <div className="flex items-center justify-between text-[10px] font-mono mt-0.5" style={{ color: '#9A8A78' }}>
+                    <span>0</span><span>100</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Blend + hide */}
+              <div className="mt-6 pt-6" style={{ borderTop: '1px solid #DDD4C0' }}>
+                <SectionLabel>Ranking blend</SectionLabel>
+                <div className="flex items-center justify-between text-[10px] font-mono mb-1" style={{ color: '#9A8A78' }}>
+                  <span>Objective</span><span>{scoring.scoreBlend}%</span><span>Quality</span>
+                </div>
+                <input type="range" min={0} max={100} value={scoring.scoreBlend}
+                  onChange={(e) => updScoring({ ...scoring, scoreBlend: parseInt(e.target.value) })}
+                  className="w-full accent-[#1B3828]" />
+                <div className="mt-4">
+                  <Toggle
+                    label="Hide scores from delegates"
+                    note="Delegates keep their speaking recap but won't see point totals or the leaderboard."
+                    value={scoring.hideScoresFromDelegates}
+                    onChange={(v) => updScoring({ ...scoring, hideScoresFromDelegates: v })}
+                  />
+                </div>
+              </div>
             </div>
           )}
         </div>

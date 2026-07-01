@@ -44,7 +44,7 @@ export default function PrivacyPage() {
 
             <h3 className="font-bold mb-2" style={{ color: '#1B3828' }}>2a. Session data you enter</h3>
             <p>Gavelling is a session-based tool. No account or email address is required. The following information is entered voluntarily by users and stored for the duration of a session:</p>
-            <ul className="list-disc pl-5 mt-2 space-y-1">
+            <ul className="list-disc ps-5 mt-2 space-y-1">
               <li><strong>Committee information</strong> — committee name, topic, and a randomly generated 6-character session code.</li>
               <li><strong>Delegate names / country assignments</strong> — entered by the chair when creating or managing a session.</li>
               <li><strong>Chair names</strong> — entered by each chair when joining a session.</li>
@@ -57,7 +57,7 @@ export default function PrivacyPage() {
 
             <h3 className="font-bold mt-5 mb-2" style={{ color: '#1B3828' }}>2b. Information stored locally on your device</h3>
             <p>Gavelling uses your browser&apos;s <code>localStorage</code> to remember certain preferences between visits:</p>
-            <ul className="list-disc pl-5 mt-2 space-y-1">
+            <ul className="list-disc ps-5 mt-2 space-y-1">
               <li>Session rejoin state (the code and chair name of your most recent active session).</li>
               <li>Committee settings (voting thresholds, motion types, access controls).</li>
               <li>Chat read-counts (to track which messages you have already read).</li>
@@ -72,7 +72,7 @@ export default function PrivacyPage() {
           <section>
             <h2 className="text-lg font-black mb-3" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>3. How We Use Your Information</h2>
             <p>We use session data exclusively to operate the Gavelling platform:</p>
-            <ul className="list-disc pl-5 mt-2 space-y-1">
+            <ul className="list-disc ps-5 mt-2 space-y-1">
               <li>To display the speakers list, timer, motions, documents, and chat in real time across all connected devices.</li>
               <li>To allow chairs to manage the session and delegates to participate.</li>
               <li>To calculate speaking statistics and session summaries shown within the platform.</li>
@@ -84,7 +84,7 @@ export default function PrivacyPage() {
           <section>
             <h2 className="text-lg font-black mb-3" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>4. Data Retention</h2>
             <p>Session data is retained on our servers for a limited period:</p>
-            <ul className="list-disc pl-5 mt-2 space-y-1">
+            <ul className="list-disc ps-5 mt-2 space-y-1">
               <li><strong>Active sessions</strong> — data is stored for as long as the session is ongoing.</li>
               <li><strong>Ended sessions</strong> — once an &quot;End Debate&quot; motion passes, all session data is scheduled for automatic deletion <strong>72 hours</strong> later.</li>
               <li><strong>Abandoned sessions</strong> — sessions that are never formally ended may be purged periodically at our discretion.</li>
@@ -95,7 +95,7 @@ export default function PrivacyPage() {
           <section>
             <h2 className="text-lg font-black mb-3" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>5. Data Sharing and Third Parties</h2>
             <p>We do not sell, rent, or trade your information. We rely on the following third-party service providers to operate the platform:</p>
-            <ul className="list-disc pl-5 mt-2 space-y-1">
+            <ul className="list-disc ps-5 mt-2 space-y-1">
               <li><strong>Supabase</strong> — our database and real-time infrastructure provider. Session data is stored on Supabase servers. Supabase&apos;s privacy policy is available at <a href="https://supabase.com/privacy" target="_blank" rel="noopener noreferrer" className="underline" style={{ color: '#1B3828' }}>supabase.com/privacy</a>.</li>
               <li><strong>Vercel</strong> — our hosting and deployment provider. Vercel&apos;s privacy policy is available at <a href="https://vercel.com/legal/privacy-policy" target="_blank" rel="noopener noreferrer" className="underline" style={{ color: '#1B3828' }}>vercel.com/legal/privacy-policy</a>.</li>
             </ul>
@@ -116,7 +116,7 @@ export default function PrivacyPage() {
           <section>
             <h2 className="text-lg font-black mb-3" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>8. Your Rights and Choices</h2>
             <p>Because Gavelling does not require accounts or email addresses, we cannot identify you across sessions. However, you may:</p>
-            <ul className="list-disc pl-5 mt-2 space-y-1">
+            <ul className="list-disc ps-5 mt-2 space-y-1">
               <li><strong>Delete session content</strong> — chairs can end a session at any time, which schedules all session data for deletion within 72 hours.</li>
               <li><strong>Clear local data</strong> — you can clear your browser&apos;s <code>localStorage</code> at any time through your browser&apos;s settings to remove all locally stored preferences.</li>
               <li><strong>Request deletion</strong> — if you can identify the session code associated with your data, you may contact us to request early deletion.</li>

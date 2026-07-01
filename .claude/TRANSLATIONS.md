@@ -1,8 +1,9 @@
 # GAVELLING — TRANSLATIONS AGENT BRIEFING
 ## Up-to-date guide for adding a new language to Gavelling
 
-**Last updated after:** French (FR) translation — June 2025  
-**Reference implementation:** Spanish (ES) was first, French (FR) was second — use both as guides.
+**Last updated after:** i18n audit — 2026-06-30 (EN/ES/FR/AR; ar = RTL).  
+**Reference implementation:** Spanish (ES) first, French (FR) second, Arabic (AR, RTL) third — use as guides.  
+**Keep this file current:** whenever strings, locales, or the workflow change, update this doc in the same change. This is the single source of truth — do not maintain a parallel agent file for it.
 
 ---
 
@@ -300,4 +301,49 @@ Typography: `Outfit` for all UI (UPPERCASE for buttons). `DM Mono` for codes/bad
 - Never await DB writes for UI updates — optimistic updates only.
 - Never call any hook inside a `.map()` loop.
 - Never use the old EN/ES pill slider for language toggle — always use the globe dropdown.
-- Never remove `md:h-[195px]` from the hero heading wrapper without re-testing all 3 languages.
+- Never remove `md:h-[195px]` from the hero heading wrapper without re-testing all 4 languages (EN/ES/FR/AR).
+
+---
+
+## MAINTENANCE & AUDIT (run before declaring a locale "done")
+
+### A. Key completeness — `translations.ts`
+`en` is canonical (`TranslationKey = keyof typeof translations.en`). Every key must exist in every locale block, same order. Audit script:
+```js
+// node this against repo root
+const fs=require('fs');let s=fs.readFileSync('src/lib/translations.ts','utf8');
+s=s.replace(/export type Language[^\n]*\n/,'').replace(/export const translations =/,'module.exports =').replace(/\} as const;/,'};').replace(/export type TranslationKey[^\n]*\n?/,'');
+fs.writeFileSync('/tmp/_t.js',s);const T=require('/tmp/_t.js');const en=Object.keys(T.en);
+for(const L of ['es','fr','ar']){const k=new Set(Object.keys(T[L]));
+  const missing=en.filter(x=>!k.has(x)), same=en.filter(x=>k.has(x)&&T[L][x]===T.en[x]);
+  console.log(`\n${L}: present ${k.size} | MISSING ${missing.length} | identical-to-EN ${same.length}`);
+  if(missing.length)console.log('  MISSING:',missing.join(', '));
+  same.forEach(x=>console.log('  ~',x,'=',JSON.stringify(T.en[x])));}
+```
+- **MISSING** keys are always defects (they render English).
+- **identical-to-EN** is only a *candidate* — leave it alone when the value is a genuine cognate (FR/ES: Session, Position, Documents, Motions, Quorum, Abstentions, Consensus, Participant, Absent, Total, Type, Vote, Pause, Tour de Table, Caucus), a symbol/arrow (`A → Z`), an abbreviation (`pts`, `min`, `P+V`), a proper noun / brand (`MUN`, `GAVELLING UNLIMITED`, `— Daniele Vare`), or a language-picker **endonym** (`settings_english='English'`, `settings_spanish='Español'`, `settings_french='Français'` are identical across blocks **on purpose**).
+
+### B. Hardcoded English (bypasses `t()` — the bigger gap)
+These never translate in any locale. Scan and key them:
+```bash
+for f in "src/app/chair/[code]/page.tsx" "src/app/delegate/[code]/page.tsx" \
+  "src/app/voting/[code]/page.tsx" "src/app/advisor/[code]/page.tsx" src/components/*.tsx; do
+  echo "== $f =="; grep -noE '(placeholder|title|aria-label)="[A-Z][a-z][^"]*"|>[A-Z][a-z]+( [A-Za-z,&—-]+){1,}[<.]' "$f" \
+    | grep -vE '\{t\(|\$\{|className|viewBox|GavellingLogo'; done
+```
+
+### MUN glossary (translate the concept, not literally)
+| EN | ES | FR |
+|----|----|----|
+| Moderated Caucus | Cáucus Moderado | Caucus modéré |
+| Unmoderated Caucus | Cáucus No Moderado | Caucus non modéré |
+| Consultation of the Whole | Consulta de Gabinete | Consultation de l'assemblée |
+| Tour de Table | Round Robin | Tour de table |
+| Right of Reply | Derecho de Réplica | Droit de réponse |
+| Faculty Advisor | Asesor de Facultad | Conseiller pédagogique |
+
+### Open backlog (from the 2026-06-30 audit — re-run A/B before acting)
+- **ar:** 4 MISSING → `settings_veto_custom_label`, `settings_veto_custom_desc`, `settings_veto_custom_members`, `settings_veto_custom_note`.
+- **es:** `join_role_advisor = "FACULTY ADVISOR"` still English → "ASESOR DE FACULTAD".
+- **Hardcoded (no `t()`):** chair `View only`; voting `Committee not found`, `No introduced draft resolutions.`; RollCall `Add custom`, `No speakers queued`; Documents `Proceed with Session`, `Motion to Suspend Debate`, `Proposed by`, `No document content saved.`, `Session is now suspended.`; Settings `Sponsors label`, `Score sources`, `Quality factors`, `Rating scale max`, `Ranking blend` (+ many `title=` tooltips, lower priority).
+- **Dead keys** to delete from all 4 blocks: `settings_procedural_threshold`, `settings_amendment_threshold`, `settings_majority_absolute`.

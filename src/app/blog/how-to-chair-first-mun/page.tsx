@@ -1,3 +1,5 @@
+import Link from 'next/link';
+import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
@@ -69,7 +71,7 @@ export default function Article5() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
       <div style={s.page}>
         <div style={s.wrap}>
-          <a href="/blog" style={s.back}>← MUN Resources</a>
+          <Link href="/blog" style={s.back}>← MUN Resources</Link>
           <h1 style={s.h1}>How to Chair Your First MUN Committee — Practical Guide for New Chairs</h1>
           <p style={s.meta}>By Gavelling · June 2026 · 11 min read</p>
           <article style={s.article}>
@@ -97,7 +99,7 @@ export default function Article5() {
               Print your rules of procedure and keep them in front of you. No one expects you to have them memorised. Using them shows competence, not weakness.
             </p>
             <p style={s.p}>
-              See also: <a href="/blog/mun-motions-explained" style={{ color: '#1B3828', fontWeight: 600 }}>MUN Motions Explained</a> — a complete reference to keep open during your session.
+              See also: <Link href="/blog/mun-motions-explained" style={{ color: '#1B3828', fontWeight: 600 }}>MUN Motions Explained</Link> — a complete reference to keep open during your session.
             </p>
 
             <h2 style={s.h2}>2. Preparation Checklist (Before the Conference)</h2>
@@ -218,6 +220,7 @@ export default function Article5() {
               </p>
             </div>
 
+            <RelatedGuides currentSlug="how-to-chair-first-mun" />
             <div style={s.cta}>
               <p style={s.ctaText}>
                 Gavelling was built by chairs, for chairs. It handles the logistics so you can focus on the debate. Set up your first committee free at gavelling.com →

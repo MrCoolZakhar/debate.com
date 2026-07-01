@@ -1,3 +1,5 @@
+import Link from 'next/link';
+import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
 import React from 'react';
 
@@ -65,7 +67,7 @@ export default function Article() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
       <div style={s.page}>
         <div style={s.wrap}>
-          <a href="/blog" style={s.back}>← MUN Resources</a>
+          <Link href="/blog" style={s.back}>← MUN Resources</Link>
           <h1 style={s.h1}>How to Plan a MUN Conference — Step-by-Step for Schools and Clubs</h1>
           <p style={s.meta}>By Gavelling · June 2026 · 13 min read</p>
           <article style={s.article}>
@@ -126,6 +128,7 @@ export default function Article() {
             <h2 style={s.h2}>After the Conference</h2>
             <p style={s.p}>Send a survey within 48 hours. Debrief your secretariat. Document what worked and what did not — write it down before memory fades. Share your notes with next year's planning team. This institutional knowledge is more valuable than any single conference outcome.</p>
 
+            <RelatedGuides currentSlug="mun-conference-planning" />
             <div style={s.cta}>
               <p style={s.ctaText}>Set up all your conference committees in Gavelling for free — no software installation, no IT team required.</p>
               <a href="https://gavelling.com" style={s.ctaLink}>Try Gavelling free →</a>

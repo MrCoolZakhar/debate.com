@@ -1,3 +1,5 @@
+import Link from 'next/link';
+import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
 import React from 'react';
 
@@ -65,7 +67,7 @@ export default function Article() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
       <div style={s.page}>
         <div style={s.wrap}>
-          <a href="/blog" style={s.back}>← MUN Resources</a>
+          <Link href="/blog" style={s.back}>← MUN Resources</Link>
           <h1 style={s.h1}>MUN Rules of Procedure — Complete Reference Guide</h1>
           <p style={s.meta}>By Gavelling · June 2026 · 13 min read</p>
           <article style={s.article}>
@@ -126,6 +128,7 @@ export default function Article() {
             <h2 style={s.h2}>How Rules Differ Across Conferences</h2>
             <p style={s.p}>NMUN uses a parliamentary procedure adapted from actual UN practice — the most faithful simulation available. NAIMUN and HMUN have their own variations. School conferences often adapt rules further for accessibility. Always read the rules of procedure document for your specific conference before committee begins. When in doubt, ask the chair.</p>
 
+            <RelatedGuides currentSlug="mun-rules-of-procedure" />
             <div style={s.cta}>
               <p style={s.ctaText}>Gavelling enforces rules of procedure automatically — motions, timers, speakers lists, and voting all in one place.</p>
               <a href="https://gavelling.com" style={s.ctaLink}>Try Gavelling free →</a>

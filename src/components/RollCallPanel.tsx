@@ -2,13 +2,15 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { Committee, DelegateStatus } from '@/lib/types';
-import { getFlagUrl, getCountryByName, getCountryDisplayName, UN_COUNTRIES, matchesCountryQuery, startsWithCountryQuery } from '@/lib/countries';
+import { getFlagUrl, getCountryByName, getCountryDisplayName, UN_COUNTRIES, matchesCountryQuery, startsWithCountryQuery, compareCountryNames } from '@/lib/countries';
 import { getCommitteeDisplayName } from '@/lib/presetNames';
 import {
   setPhase as setPhaseInDB,
   setDelegateStatus as setDelegateStatusInDB,
   removeFromSpeakersList as removeFromSpeakersListInDB,
+  setDelegateObserver as setDelegateObserverInDB,
 } from '@/lib/committeeService';
+import { Megaphone } from 'lucide-react';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
 
 // ── FlagCircle ────────────────────────────────────────────────────────────────
@@ -33,8 +35,26 @@ export function FlagCircle({ country, size = 'md' }: { country: string; size?: '
 }
 
 // ── 3-state slider ────────────────────────────────────────────────────────────
-function StatusSlider({ status, onCycle }: { status: DelegateStatus; onCycle: () => void }) {
-  const thumbPos = status === 'absent' ? 'left-[2px]' : status === 'present' ? 'left-[32px]' : 'left-[62px]';
+function StatusSlider({ status, onCycle, isObserver = false }: { status: DelegateStatus; onCycle: () => void; isObserver?: boolean }) {
+  // Observers can only be Absent or Present — no present-voting (PV) segment.
+  if (isObserver) {
+    const thumbStart = status === 'absent' ? '2px' : '32px';
+    const thumbColor = status === 'absent' ? 'bg-[#8B2020]' : 'bg-[#3D7A52]';
+    return (
+      <button
+        onClick={(e) => { e.stopPropagation(); onCycle(); }}
+        className="relative w-[60px] h-[30px] rounded-full cursor-pointer shrink-0 select-none transition-all" style={{ backgroundColor: 'rgba(255,255,255,0.10)', border: '1.5px solid rgba(255,255,255,0.22)' }}
+        title="Tap to cycle: Absent → Present"
+      >
+        <div className="absolute inset-0 grid grid-cols-2 items-center pointer-events-none">
+          <span className={`text-[10px] font-bold text-center ${status === 'absent' ? 'text-white' : 'text-white/40'}`}>A</span>
+          <span className={`text-[10px] font-bold text-center ${status !== 'absent' ? 'text-white' : 'text-white/40'}`}>P</span>
+        </div>
+        <div className={`absolute top-[2px] w-[26px] h-[22px] rounded-full transition-all duration-200 shadow-sm ${thumbColor}`} style={{ insetInlineStart: thumbStart }} />
+      </button>
+    );
+  }
+  const thumbStart = status === 'absent' ? '2px' : status === 'present' ? '32px' : '62px';
   const thumbColor = status === 'absent' ? 'bg-[#8B2020]' : status === 'present' ? 'bg-[#3D7A52]' : 'bg-[#B6871F]';
   return (
     <button
@@ -47,7 +67,7 @@ function StatusSlider({ status, onCycle }: { status: DelegateStatus; onCycle: ()
         <span className={`text-[10px] font-bold text-center ${status === 'present' ? 'text-white' : 'text-white/40'}`}>P</span>
         <span className={`text-[10px] font-bold text-center ${status === 'present-voting' ? 'text-white' : 'text-white/40'}`}>PV</span>
       </div>
-      <div className={`absolute top-[2px] w-[26px] h-[22px] rounded-full transition-all duration-200 shadow-sm ${thumbPos} ${thumbColor}`} />
+      <div className={`absolute top-[2px] w-[26px] h-[22px] rounded-full transition-all duration-200 shadow-sm ${thumbColor}`} style={{ insetInlineStart: thumbStart }} />
     </button>
   );
 }
@@ -65,8 +85,8 @@ function ViewToggle({ view, onChange }: { view: 'az' | 'queue'; onChange: (v: 'a
       style={{ backgroundColor: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)' }}
       title="Toggle A-Z / Queue view"
     >
-      <div className={`absolute top-[1px] w-[51px] h-[26px] rounded-full transition-all duration-200 ${isQueue ? 'left-[51px]' : 'left-[1px]'}`}
-        style={{ backgroundColor: 'rgba(255,255,255,0.22)' }} />
+      <div className="absolute top-[1px] w-[51px] h-[26px] rounded-full transition-all duration-200"
+        style={{ insetInlineStart: isQueue ? '51px' : '1px', backgroundColor: 'rgba(255,255,255,0.22)' }} />
       <div className="absolute inset-0 flex items-center pointer-events-none z-10">
         <span className={`w-[52px] text-[10px] font-bold text-center leading-none ${!isQueue ? 'text-white' : 'text-white/40'}`}>{t('rollcall_az')}</span>
         <span className={`w-[52px] text-[10px] font-bold text-center leading-none ${isQueue ? 'text-white' : 'text-white/40'}`}>{t('rollcall_queue')}</span>
@@ -141,7 +161,7 @@ function AddCountryInput({ committee, onAdd, onQueryChange }: { committee: Commi
               <button
                 key={c.code}
                 onMouseDown={(e) => { e.preventDefault(); commit(c.name); }}
-                className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-left transition-colors ${
+                className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-start transition-colors ${
                   i === 0 ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'
                 }`}
               >
@@ -153,7 +173,7 @@ function AddCountryInput({ committee, onAdd, onQueryChange }: { committee: Commi
           {showCustomOption && (
             <button
               onMouseDown={(e) => { e.preventDefault(); commit(trimmed); }}
-              className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left transition-colors text-[#1C1410] hover:bg-[#DDD4C0] border-t border-[#DDD4C0]"
+              className="w-full flex items-center gap-2.5 px-3 py-2.5 text-start transition-colors text-[#1C1410] hover:bg-[#DDD4C0] border-t border-[#DDD4C0]"
             >
               <span className="text-base">🌐</span>
               <span className="text-sm flex-1">{trimmed}</span>
@@ -296,12 +316,14 @@ function RollCallPanelInner({
   const setListView = (v: 'az' | 'queue') => { setListViewInternal(v); onListViewChange?.(v); };
   const [showFullList, setShowFullList] = useState(false);
   const [localStatuses, setLocalStatuses] = useState<Record<string, DelegateStatus>>({});
+  const [localObservers, setLocalObservers] = useState<Record<string, boolean>>({});
   const listRef = useRef<HTMLDivElement>(null);
   const dragIndexRef = useRef<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
   useEffect(() => {
     setLocalStatuses({});
+    setLocalObservers({});
   }, [committee.id]);
 
   const present = committee.delegates.filter((d) => (localStatuses[d.id] ?? d.status) !== 'absent').length;
@@ -324,14 +346,34 @@ function RollCallPanelInner({
   }
 
   const cycleStatus = (id: string, current: DelegateStatus) => {
-    const next: DelegateStatus =
-      current === 'absent' ? 'present' : current === 'present' ? 'present-voting' : 'absent';
+    const delegate = committee.delegates.find((d) => d.id === id);
+    const isObserver = (localObservers[id] ?? delegate?.isObserver) === true;
+    // Observers cycle absent → present → absent (no present-voting).
+    const next: DelegateStatus = isObserver
+      ? (current === 'absent' ? 'present' : 'absent')
+      : (current === 'absent' ? 'present' : current === 'present' ? 'present-voting' : 'absent');
     setLocalStatuses((prev) => ({ ...prev, [id]: next }));
     onStatusChange?.(id, next);
     setDelegateStatusInDB(id, next);
     if (!isRollCallPhase && next === 'absent' && queuePositionMap.has(id)) {
       onRemoveFromList?.(id);
       removeFromSpeakersListInDB(committee.id, id);
+    }
+  };
+
+  const toggleObserver = (id: string, current: boolean) => {
+    const next = !current;
+    setLocalObservers((prev) => ({ ...prev, [id]: next }));   // instant visual
+    setDelegateObserverInDB(id, next);                        // fire-and-forget
+    // Becoming an observer downgrades present-voting → present.
+    if (next) {
+      const delegate = committee.delegates.find((d) => d.id === id);
+      const cur = localStatuses[id] ?? delegate?.status;
+      if (cur === 'present-voting') {
+        setLocalStatuses((prev) => ({ ...prev, [id]: 'present' }));
+        onStatusChange?.(id, 'present');
+        setDelegateStatusInDB(id, 'present');
+      }
     }
   };
 
@@ -375,7 +417,7 @@ function RollCallPanelInner({
   };
 
   // A-Z view: pure alphabetical, no status separation
-  const alphabetical = [...committee.delegates].sort((a, b) => a.country.localeCompare(b.country));
+  const alphabetical = [...committee.delegates].sort((a, b) => compareCountryNames(a.country, b.country, language));
   // allAlpha shared base for queueOrdered (alphabetical among non-queue delegates)
   const allAlpha = alphabetical;
 
@@ -450,6 +492,7 @@ function RollCallPanelInner({
           const effectiveStatus = localStatuses[d.id] ?? d.status;
           const isOnList = onListIds?.has(d.id) ?? false;
           const isAbsent = effectiveStatus === 'absent';
+          const isObserver = (localObservers[d.id] ?? d.isObserver) === true;
           const queuePos = queuePositionMap.get(d.id) ?? null;
           const matchesSearch = !search || matchesCountryQuery(d.country, search, language);
           const isDraggable = listView === 'queue' && !isRollCallPhase && queuePositionMap.has(d.id);
@@ -548,12 +591,27 @@ function RollCallPanelInner({
                 <span className={`flex-1 truncate ${isUpNext ? 'text-lg font-bold' : 'text-base'} ${!isAbsent ? 'font-medium' : 'opacity-50'}`} style={{ color: '#EDE7D8' }}>
                   {getCountryDisplayName(d.country, language)}
                 </span>
+                {isObserver && (
+                  <span className="text-[9px] shrink-0 font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-md" style={{ backgroundColor: 'rgba(238,217,138,0.15)', color: 'rgba(238,217,138,0.85)', border: '1px solid rgba(238,217,138,0.3)' }}>{t('rollcall_observer')}</span>
+                )}
+                {/* Observer placard toggle — available during roll call and mid-session */}
+                {(isRollCallPhase || showStatusSliders) && !(isReadOnly || isViewOnly) && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); toggleObserver(d.id, isObserver); }}
+                    title={isObserver ? t('rollcall_observer_remove') : t('rollcall_observer_make')}
+                    aria-pressed={isObserver}
+                    className="shrink-0 p-1 rounded-md transition-transform active:scale-90"
+                    style={{ color: isObserver ? 'rgba(238,217,138,0.9)' : 'rgba(237,231,216,0.4)' }}
+                  >
+                    <Megaphone size={15} />
+                  </button>
+                )}
                 {isAbsent && !(isRollCallPhase || showStatusSliders) && (
-                  <span className="text-[10px] shrink-0 font-mono ml-auto uppercase tracking-wide" style={{ color: 'rgba(237,231,216,0.35)' }}>{t('rollcall_absent')}</span>
+                  <span className="text-[10px] shrink-0 font-mono ms-auto uppercase tracking-wide" style={{ color: 'rgba(237,231,216,0.35)' }}>{t('rollcall_absent')}</span>
                 )}
                 {(isRollCallPhase || showStatusSliders) && (
-                  <div onClick={(e) => e.stopPropagation()} className={`ml-auto shrink-0 ${(isReadOnly || isViewOnly) ? 'pointer-events-none opacity-50' : ''}`}>
-                    <StatusSlider status={effectiveStatus} onCycle={() => cycleStatus(d.id, effectiveStatus)} />
+                  <div onClick={(e) => e.stopPropagation()} className={`shrink-0 ${(isReadOnly || isViewOnly) ? 'pointer-events-none opacity-50' : ''}`}>
+                    <StatusSlider status={effectiveStatus} onCycle={() => cycleStatus(d.id, effectiveStatus)} isObserver={isObserver} />
                   </div>
                 )}
               </div>

@@ -1,3 +1,5 @@
+import Link from 'next/link';
+import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
 import React from 'react';
 
@@ -65,7 +67,7 @@ export default function Article() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
       <div style={s.page}>
         <div style={s.wrap}>
-          <a href="/blog" style={s.back}>← MUN Resources</a>
+          <Link href="/blog" style={s.back}>← MUN Resources</Link>
           <h1 style={s.h1}>MUN Delegate Tips — How to Stand Out in Any Committee</h1>
           <p style={s.meta}>By Gavelling · June 2026 · 11 min read</p>
           <article style={s.article}>
@@ -119,6 +121,7 @@ export default function Article() {
             <p style={s.p}>Awards vary by conference, but most chairs are looking for the same things: substantive contribution to debate, leadership in bloc-building, quality of resolution language, adherence to rules of procedure, and consistent, respectful engagement with all delegates — not just your allies.</p>
             <p style={s.p}>Being the loudest is not the same as being the best. The delegate who quietly drafts an amendment that bridges two opposing blocs often impresses more than the one who gives six speeches.</p>
 
+            <RelatedGuides currentSlug="mun-delegate-tips" />
             <div style={s.cta}>
               <p style={s.ctaText}>Gavelling gives delegates real-time visibility into their queue position and speaking time.</p>
               <a href="https://gavelling.com" style={s.ctaLink}>Try Gavelling free →</a>

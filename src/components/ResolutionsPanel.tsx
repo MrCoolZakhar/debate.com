@@ -107,7 +107,7 @@ export default function ResolutionsPanel({ committee }: { committee: Committee }
                     <div className="text-sm font-semibold text-[#1C1410] truncate">{res.title}</div>
                     <div className="text-xs text-[#8892aa] mt-0.5">{res.sponsors.join(', ')}</div>
                   </div>
-                  <span className={`text-xs font-bold ml-3 ${cfg.color}`}>{cfg.label}</span>
+                  <span className={`text-xs font-bold ms-3 ${cfg.color}`}>{cfg.label}</span>
                 </div>
                 {expanded === res.id && (
                   <div className="px-3 pb-3 border-t border-[#1e2540]">

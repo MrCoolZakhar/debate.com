@@ -10,6 +10,7 @@ import { useSettingsStore } from '@/lib/settingsStore';
 import { Emoji } from '@/components/Emoji';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { getCountryDisplayName } from '@/lib/countries';
+import FitToScreen from '@/components/FitToScreen';
 import { supabase } from '@/lib/supabase';
 import { PRESET_LOGOS } from '@/lib/presetNames';
 
@@ -171,12 +172,13 @@ function JoinPageInner() {
   const chairAlreadyActive = !!selectedChairName && activeChairNames.has(selectedChairName);
 
   return (
-    <div className="min-h-screen flex flex-col relative" style={{ backgroundColor: '#EDE7D8' }}>
+    <FitToScreen>
+    <div className="h-full w-full flex flex-col overflow-hidden relative" style={{ backgroundColor: '#EDE7D8' }}>
       {/* Grain texture */}
       <div className="pointer-events-none fixed inset-0 z-0" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
       <nav className="relative z-10 border-b border-[#DDD4C0]/60 px-6 h-16 flex items-center justify-between" style={{ backgroundColor: '#EDE7D8' }}>
         <Link href="/" className="flex items-center gap-3">
-          <img src="/GavellingLogo.png" alt="Gavelling" className="w-[16vw] h-auto max-h-9 object-contain" />
+          <img src="/GavellingLogo.png" alt="Gavelling" className="w-[150px] h-auto object-contain" />
         </Link>
         <Link href="/create" className="text-sm text-[#1B3828] hover:text-[#6A5A4A] transition-colors">
           {t('join_create_link')}
@@ -226,7 +228,7 @@ function JoinPageInner() {
                 : <span className="text-xs font-mono font-black shrink-0" style={{ color: '#1B3828' }}>✓</span>
               }
               <div className="min-w-0">
-                <p className="font-black text-sm truncate" style={{ color: '#1C1410' }}>{foundCommittee.name}{foundCommittee.topic ? <span className="font-normal text-xs ml-1.5" style={{ color: '#9A8A78' }}>· {foundCommittee.topic}</span> : ''}</p>
+                <p className="font-black text-sm truncate" style={{ color: '#1C1410' }}>{foundCommittee.name}{foundCommittee.topic ? <span className="font-normal text-xs ms-1.5" style={{ color: '#9A8A78' }}>· {foundCommittee.topic}</span> : ''}</p>
                 <p className="text-xs" style={{ color: '#9A8A78' }}>{foundCommittee.delegates.length} {t('join_delegates_registered')}</p>
                 {foundCommittee.endedAt && <p className="text-xs font-semibold mt-0.5" style={{ color: '#B8844A' }}>{t('join_session_ended')}</p>}
                 {!foundCommittee.endedAt && foundCommittee.suspendedAt && mode === 'delegate' && <p className="text-xs font-semibold mt-0.5" style={{ color: '#B8844A' }}>{t('join_adjourned')}</p>}
@@ -305,7 +307,7 @@ function JoinPageInner() {
                     <button
                       key={n}
                       onClick={() => { setChairNameMode('select'); setChairName(n); }}
-                      className="w-full text-left px-4 py-2.5 rounded-xl border text-sm font-semibold transition-colors focus:outline-none"
+                      className="w-full text-start px-4 py-2.5 rounded-xl border text-sm font-semibold transition-colors focus:outline-none"
                       style={{
                         backgroundColor: chairNameMode === 'select' && chairName === n ? '#1B3828' : '#FAF8F3',
                         borderColor: chairNameMode === 'select' && chairName === n ? '#2A5A3C' : '#DDD4C0',
@@ -317,7 +319,7 @@ function JoinPageInner() {
                   ))}
                   <button
                     onClick={() => { setChairNameMode('new'); setChairName(''); }}
-                    className="w-full text-left px-4 py-2.5 rounded-xl border text-sm font-semibold transition-colors focus:outline-none"
+                    className="w-full text-start px-4 py-2.5 rounded-xl border text-sm font-semibold transition-colors focus:outline-none"
                     style={{
                       backgroundColor: chairNameMode === 'new' ? '#DDD4C0' : '#FAF8F3',
                       borderColor: chairNameMode === 'new' ? '#1B3828' : '#DDD4C0',
@@ -412,6 +414,7 @@ function JoinPageInner() {
         </div>
       </div>
     </div>
+    </FitToScreen>
   );
 }
 

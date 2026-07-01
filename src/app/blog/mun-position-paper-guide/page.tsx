@@ -1,3 +1,5 @@
+import Link from 'next/link';
+import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
 import React from 'react';
 
@@ -65,7 +67,7 @@ export default function Article() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
       <div style={s.page}>
         <div style={s.wrap}>
-          <a href="/blog" style={s.back}>← MUN Resources</a>
+          <Link href="/blog" style={s.back}>← MUN Resources</Link>
           <h1 style={s.h1}>How to Write a MUN Position Paper — Format, Tips & Examples</h1>
           <p style={s.meta}>By Gavelling · June 2026 · 10 min read</p>
           <article style={s.article}>
@@ -112,6 +114,7 @@ export default function Article() {
             <h2 style={s.h2}>Using Your Position Paper in Committee</h2>
             <p style={s.p}>Your position paper is also a speech outline. Your opening GSL speech should cover the same ground in sixty to ninety seconds. Your proposed solutions become the operative clauses of your working paper. If you have written a strong position paper, you have already done most of the intellectual work needed to lead debate.</p>
 
+            <RelatedGuides currentSlug="mun-position-paper-guide" />
             <div style={s.cta}>
               <p style={s.ctaText}>Use Gavelling to manage your committee sessions with the same preparation mindset.</p>
               <a href="https://gavelling.com" style={s.ctaLink}>Try Gavelling free →</a>

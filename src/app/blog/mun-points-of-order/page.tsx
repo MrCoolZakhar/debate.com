@@ -1,3 +1,5 @@
+import Link from 'next/link';
+import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
 import React from 'react';
 
@@ -67,7 +69,7 @@ export default function Article() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
       <div style={s.page}>
         <div style={s.wrap}>
-          <a href="/blog" style={s.back}>← MUN Resources</a>
+          <Link href="/blog" style={s.back}>← MUN Resources</Link>
           <h1 style={s.h1}>Points of Order in MUN — When to Use Them and When Not To</h1>
           <p style={s.meta}>By Gavelling · June 2026 · 8 min read</p>
           <article style={s.article}>
@@ -122,6 +124,7 @@ export default function Article() {
             <h2 style={s.h2}>The Credibility Cost</h2>
             <p style={s.p}>Every point of order you raise is a signal to the chair and to the committee. Raise one legitimate point of order and your procedural knowledge is respected. Raise three spurious ones in a single session and you become the delegate who cried wolf — future valid points are greeted with skepticism. Use this tool deliberately, not reflexively.</p>
 
+            <RelatedGuides currentSlug="mun-points-of-order" />
             <div style={s.cta}>
               <p style={s.ctaText}>Gavelling keeps your committee running on procedure — timers, speakers lists, and motions all enforced automatically.</p>
               <a href="https://gavelling.com" style={s.ctaLink}>Try Gavelling free →</a>

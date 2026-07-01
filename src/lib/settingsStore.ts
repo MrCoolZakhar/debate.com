@@ -10,13 +10,41 @@ export interface MotionNames {
   endDebate: string;
 }
 
+export interface ScoreSource { id: string; name: string; value: number; enabled: boolean; builtin: boolean; }
+export interface RankingFactor { id: string; name: string; enabled: boolean; }
+export interface ScoringConfig {
+  sources: ScoreSource[];            // built-ins below + chair-added custom ones
+  factors: RankingFactor[];
+  factorScaleMax: number;            // default 100
+  scoreBlend: number;                // 0 = pure objective … 100 = pure quality (default 0)
+  hideScoresFromDelegates: boolean;  // default false
+}
+export const DEFAULT_SCORING: ScoringConfig = {
+  sources: [
+    { id: 'attendance',         name: 'Attendance (P/PV)',  value: 5,  enabled: true, builtin: true },
+    { id: 'gslSpeech',          name: 'GSL speech',         value: 10, enabled: true, builtin: true },
+    { id: 'caucusSpeech',       name: 'Caucus speech',      value: 8,  enabled: true, builtin: true },
+    { id: 'speakingTimePer10s', name: 'Speaking time /10s', value: 1,  enabled: true, builtin: true },
+    { id: 'motionRaised',       name: 'Motion raised',      value: 10, enabled: true, builtin: true },
+    { id: 'rightOfReply',       name: 'Right of reply',     value: 5,  enabled: true, builtin: true },
+    { id: 'wpSponsor',          name: 'Working paper',      value: 10, enabled: true, builtin: true },
+    { id: 'drSponsor',          name: 'Draft resolution',   value: 20, enabled: true, builtin: true },
+    { id: 'drPassed',           name: 'DR passed',          value: 10, enabled: true, builtin: true },
+  ],
+  factors: [
+    { id: 'diplomacy', name: 'Diplomacy', enabled: true },
+    { id: 'speaking', name: 'Public Speaking', enabled: true },
+    { id: 'collaboration', name: 'Collaboration', enabled: true },
+    { id: 'content', name: 'Content & Research', enabled: true },
+  ],
+  factorScaleMax: 100, scoreBlend: 0, hideScoresFromDelegates: false,
+};
+
 export interface CommitteeSettings {
   // Tab 1 — Voting & Majorities
-  proceduralThreshold: 'simple' | 'absolute';
   substantiveThreshold: 'simple' | 'supermajority-2-3' | 'consensus';
-  amendmentThreshold: 'simple' | 'supermajority-2-3';
   allowAbstentions: boolean;
-  vetoMode: 'none' | 'p5' | 'unanimous';
+  vetoMode: 'none' | 'p5' | 'unanimous' | 'custom';
   p5Delegations: string[];
   vetoCountries: string[];
   quorumThreshold: 'none' | '1-4' | '1-3' | '1-2';
@@ -24,6 +52,8 @@ export interface CommitteeSettings {
   motionModeratedCaucus: boolean;
   motionUnmoderatedCaucus: boolean;
   motionCoW: boolean;
+  cowTimerEnabled: boolean;     // optional standalone timer during Consultation of the Whole
+  cowTimerSeconds: number;      // default duration for the CoW timer
   motionTourDeTable: boolean;
   motionNames: MotionNames;
   motionOrder: ('moderated' | 'unmoderated' | 'consultation' | 'tour')[];
@@ -31,9 +61,15 @@ export interface CommitteeSettings {
   drSubmissionLimit: number | null;
   // GSL behaviour
   gslRequireNextSpeaker: boolean;
+  // Scoring & ranking
+  scoring: ScoringConfig;
   // Tab 3 — Access & Identity
   chairJoinSuffix: string;
   requireChairApproval: boolean;
+  // Committee display & permissions
+  sponsorLabel: string;          // default ''  (empty → use translated "Sponsors")
+  lockDelegateRollCall: boolean; // default false
+  disableChat: boolean;          // default false
 }
 
 export const DEFAULT_MOTION_NAMES: MotionNames = {
@@ -46,9 +82,7 @@ export const DEFAULT_MOTION_NAMES: MotionNames = {
 };
 
 export const DEFAULT_SETTINGS: CommitteeSettings = {
-  proceduralThreshold: 'simple',
   substantiveThreshold: 'simple',
-  amendmentThreshold: 'simple',
   allowAbstentions: true,
   vetoMode: 'none',
   p5Delegations: ['China', 'France', 'Russia', 'United Kingdom', 'United States'],
@@ -57,14 +91,20 @@ export const DEFAULT_SETTINGS: CommitteeSettings = {
   motionModeratedCaucus: true,
   motionUnmoderatedCaucus: true,
   motionCoW: true,
+  cowTimerEnabled: false,
+  cowTimerSeconds: 60,
   motionTourDeTable: true,
   motionNames: { ...DEFAULT_MOTION_NAMES },
-  motionOrder: ['moderated', 'unmoderated', 'tour', 'consultation'],
+  motionOrder: ['consultation', 'tour', 'unmoderated', 'moderated'],
   wpSubmissionLimit: null,
   drSubmissionLimit: null,
   chairJoinSuffix: '',
   requireChairApproval: false,
   gslRequireNextSpeaker: false,
+  scoring: DEFAULT_SCORING,
+  sponsorLabel: '',
+  lockDelegateRollCall: false,
+  disableChat: false,
 };
 
 interface SettingsStore {
@@ -72,6 +112,7 @@ interface SettingsStore {
   getSettings: (code: string) => CommitteeSettings;
   updateSetting: <K extends keyof CommitteeSettings>(code: string, key: K, value: CommitteeSettings[K]) => void;
   initSettings: (code: string, partial?: Partial<CommitteeSettings>) => void;
+  hydrateSettings: (code: string, partial: Partial<CommitteeSettings>) => void;
   migrateSettings: (oldCode: string, newCode: string) => void;
 }
 
@@ -92,6 +133,14 @@ export const useSettingsStore = create<SettingsStore>()(
           settings: s.settings[code]
             ? s.settings
             : { ...s.settings, [code]: { ...DEFAULT_SETTINGS, ...partial } },
+        })),
+      // DB is the source of truth on load: merge stored DB values over the current entry.
+      hydrateSettings: (code, partial) =>
+        set((s) => ({
+          settings: {
+            ...s.settings,
+            [code]: { ...DEFAULT_SETTINGS, ...(s.settings[code] ?? {}), ...partial },
+          },
         })),
       migrateSettings: (oldCode, newCode) =>
         set((s) => {

@@ -1,3 +1,5 @@
+import Link from 'next/link';
+import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
 import React from 'react';
 
@@ -67,7 +69,7 @@ export default function Article() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
       <div style={s.page}>
         <div style={s.wrap}>
-          <a href="/blog" style={s.back}>← MUN Resources</a>
+          <Link href="/blog" style={s.back}>← MUN Resources</Link>
           <h1 style={s.h1}>How to Write a MUN Opening Speech — Templates and Examples</h1>
           <p style={s.meta}>By Gavelling · June 2026 · 9 min read</p>
           <article style={s.article}>
@@ -120,6 +122,7 @@ export default function Article() {
             <h2 style={s.h2}>Getting on the GSL Early</h2>
             <p style={s.p}>Raise your placard the moment the chair opens the speakers list. Early slots matter — delegates make bloc decisions based on what they hear in the first few speeches. Speaking fifth versus speaking fortieth is a significant advantage.</p>
 
+            <RelatedGuides currentSlug="mun-opening-speech" />
             <div style={s.cta}>
               <p style={s.ctaText}>Track your position on the GSL in real time with Gavelling as a delegate.</p>
               <a href="https://gavelling.com" style={s.ctaLink}>Try Gavelling free →</a>

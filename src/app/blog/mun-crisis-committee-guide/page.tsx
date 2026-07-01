@@ -1,3 +1,5 @@
+import Link from 'next/link';
+import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
 import React from 'react';
 
@@ -65,7 +67,7 @@ export default function Article() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
       <div style={s.page}>
         <div style={s.wrap}>
-          <a href="/blog" style={s.back}>← MUN Resources</a>
+          <Link href="/blog" style={s.back}>← MUN Resources</Link>
           <h1 style={s.h1}>MUN Crisis Committee Guide — How Crisis Committees Work</h1>
           <p style={s.meta}>By Gavelling · June 2026 · 12 min read</p>
           <article style={s.article}>
@@ -108,6 +110,7 @@ export default function Article() {
               <li style={s.li}><strong>Continuous crisis (JCC):</strong> Two linked committees — Joint Crisis Committees — that interact with each other through the crisis staff, often representing opposing sides of a conflict.</li>
             </ul>
 
+            <RelatedGuides currentSlug="mun-crisis-committee-guide" />
             <div style={s.cta}>
               <p style={s.ctaText}>Run your MUN sessions — crisis or GA — with Gavelling's real-time committee management platform.</p>
               <a href="https://gavelling.com" style={s.ctaLink}>Try Gavelling free →</a>

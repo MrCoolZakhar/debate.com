@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import Portal from '@/components/Portal';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { Committee, PendingMotion, PendingMotionType } from '@/lib/types';
-import { getCountryByName, getFlagUrl, getCountryDisplayName } from '@/lib/countries';
+import { getCountryByName, getFlagUrl, getCountryDisplayName, compareCountryNames } from '@/lib/countries';
 
 const SQUARE_FLAGS = new Set(['CH', 'NP']);
 import { Emoji } from '@/components/Emoji';
@@ -20,6 +20,7 @@ import {
   clearCaucusList as clearCaucusListInDB,
   suspendDebate as suspendDebateInDB,
   endDebate as endDebateInDB,
+  logEvent,
 } from '@/lib/committeeService';
 
 type ModalView = 'list' | 'raise' | 'vote';
@@ -70,7 +71,7 @@ function DisruptivenessBadge({ type }: { type: PendingMotionType }) {
 }
 
 const CHAIR_KEY = '__chair__';
-const chairDisplayName = (language: string) => language === 'fr' ? 'Président' : language === 'es' ? 'Presidente' : 'Chair';
+const chairDisplayName = (language: string) => language === 'ar' ? 'الرئيس' : language === 'fr' ? 'Président' : language === 'es' ? 'Presidente' : 'Chair';
 
 function ProposerInput({ candidates, value, onChange, blockedCountries }: {
   candidates: string[]; value: string; onChange: (v: string) => void; blockedCountries?: Set<string>;
@@ -125,7 +126,7 @@ function ProposerInput({ candidates, value, onChange, blockedCountries }: {
               <button key={country}
                 onMouseDown={(e) => { e.preventDefault(); if (!isBlocked) commit(country); }}
                 disabled={isBlocked}
-                className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
+                className={`w-full flex items-center gap-3 px-4 py-2.5 text-start transition-colors ${
                   isBlocked ? 'opacity-50 cursor-not-allowed bg-[#FAF8F3]' :
                   i === 0 ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'
                 }`}>
@@ -135,7 +136,7 @@ function ProposerInput({ candidates, value, onChange, blockedCountries }: {
                 <span className="text-sm flex-1">{dName(country)}</span>
                 {isBlocked
                   ? <span className="text-xs text-[#B8844A] shrink-0 font-semibold">{t('motions_motion_on_floor')}</span>
-                  : i === 0 && <span className="ml-auto text-xs text-[#9A8A78]">Enter ↵</span>}
+                  : i === 0 && <span className="ms-auto text-xs text-[#9A8A78]">Enter ↵</span>}
               </button>
             );
           })}
@@ -259,6 +260,17 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
 
         {type && (
           <>
+            {/* Tour de Table & Consultation — optional topic at the very top */}
+            {(type === 'tour' || type === 'consultation') && (
+              <div>
+                <label className="block text-lg font-semibold text-[#6A5A4A] mb-2">
+                  {t('motions_topic_label')} <span className="text-[#9A8A78] text-sm font-normal">({t('motions_optional')})</span>
+                </label>
+                <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)} placeholder={t('motions_topic_optional_ph')}
+                  className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-2.5 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] transition-colors" />
+              </div>
+            )}
+
             {/* For moderated caucus: Topic first, then Proposed By */}
             {type !== 'moderated' && (
               <div>
@@ -270,7 +282,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
             {/* Tour de Table — speaking time per delegate + order */}
             {type === 'tour' && (
               <>
-                <div className="bg-transparent border border-[#DDD4C0] rounded-2xl p-3 space-y-2">
+                <div className="bg-transparent border border-[#DDD4C0] rounded-2xl p-2.5 space-y-1.5">
                   <p className="text-[#1C1410] font-semibold text-xs">
                     {t('motions_all_speak', { n: presentCountries.length })}
                   </p>
@@ -312,7 +324,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
                         {t('motions_room_order')}
                       </button>
                     </div>
-                    <div style={{ height: '32px', display: 'flex', alignItems: 'center' }}>
+                    <div style={{ height: '24px', display: 'flex', alignItems: 'center' }}>
                       {tourOrder === 'custom' && (
                         <p className="text-xs text-[#9A8A78] leading-relaxed">{t('motions_room_order_hint')}</p>
                       )}
@@ -357,7 +369,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
                 <div>
                   <label className="block text-lg font-semibold text-[#6A5A4A] mb-2">{t('motions_topic_label')} <span className="text-[#8B2020]">*</span></label>
                   <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)}
-                    placeholder={language === 'fr' ? 'ex. Réponse humanitaire dans les zones de conflit' : language === 'es' ? 'ej. Respuesta humanitaria en zonas de conflicto' : 'e.g. Humanitarian response in conflict zones'}
+                    placeholder={language === 'ar' ? 'مثال: الاستجابة الإنسانية في مناطق النزاع' : language === 'fr' ? 'ex. Réponse humanitaire dans les zones de conflit' : language === 'es' ? 'ej. Respuesta humanitaria en zonas de conflicto' : 'e.g. Humanitarian response in conflict zones'}
                     className="w-full bg-[#FAF8F3] border-2 border-[#DDD4C0] rounded-xl px-4 py-4 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] transition-colors" />
                 </div>
                 <div>
@@ -412,7 +424,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
                         <span className="font-black text-xl leading-tight" style={{ color: '#1B3828' }}>{speakerCount}</span>
                         <span className="text-sm font-semibold" style={{ color: '#6A5A4A' }}>{speakerCount === 1 ? t('motions_delegate_speak').replace('{s}', t('motions_delegate_singular')) : t('motions_delegate_speak').replace('{s}', t('motions_delegate_plural'))}</span>
                         {unusedSecs > 0 && (
-                          <span className="text-xs font-semibold ml-1" style={{ color: '#B8844A' }}>{t('motions_unused_secs').replace('{n}', String(unusedSecs))}</span>
+                          <span className="text-xs font-semibold ms-1" style={{ color: '#B8844A' }}>{t('motions_unused_secs').replace('{n}', String(unusedSecs))}</span>
                         )}
                       </div>
                     )}
@@ -460,7 +472,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
   const { getSettings } = useSettingsStore();
   // Filter out join-request pseudo-motions — those are handled in the chair banner, not here
   const initialSorted = [...(committee.pendingMotions ?? [])]
-    .filter((m) => m.type !== ('join-request' as string))
+    .filter((m) => m.type !== ('join-request' as string) && (m.type as string) !== 'gsl-request')
     .sort((a, b) => {
       if (b.disruptiveness !== a.disruptiveness) return b.disruptiveness - a.disruptiveness;
       const aIdx = (committee.pendingMotions ?? []).findIndex((m) => m.id === a.id);
@@ -474,7 +486,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
   // Keep order in sync when motions are removed externally
   const motionIdKey = (committee.pendingMotions ?? []).map((m) => m.id).join(',');
   useEffect(() => {
-    const current = (committee.pendingMotions ?? []).filter((m) => m.type !== ('join-request' as string));
+    const current = (committee.pendingMotions ?? []).filter((m) => m.type !== ('join-request' as string) && (m.type as string) !== 'gsl-request');
     setOrder((prev) => {
       // Match by proposer+type so temp ID → real UUID swaps don't create duplicates
       const currentMap = new Map(current.map((m) => [`${m.proposedBy}|${m.type}`, m]));
@@ -490,7 +502,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [motionIdKey]);
 
-  const present = committee.delegates.filter((d) => d.status !== 'absent').length;
+  const present = committee.delegates.filter((d) => d.status !== 'absent' && !d.isObserver).length;
 
   if (order.length === 0) {
     return (
@@ -639,7 +651,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
         {isPrimary && (
           <div className="flex items-center gap-2 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-3 py-1.5">
             <span className="text-xs font-semibold" style={{ color: '#1B3828' }}>{fraction === 'Simple majority' ? t('motions_simple_majority') : t('motions_supermajority')}</span>
-            <span className="text-xs font-bold ml-auto" style={{ color: '#1C1410' }}>{t('motions_needs_votes', { needed, present })}</span>
+            <span className="text-xs font-bold ms-auto" style={{ color: '#1C1410' }}>{t('motions_needs_votes', { needed, present })}</span>
           </div>
         )}
 
@@ -676,8 +688,8 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
       </div>
       <div className="flex flex-1 min-h-0">
         {/* Left column — primary motion being voted on */}
-        {/* pt-3 pr-4: give room for the badge that translates outside the card's top-right corner */}
-        <div className="flex-1 flex flex-col min-w-0 overflow-y-auto pt-3 pr-4">
+        {/* pt-3 pe-4: give room for the badge that translates outside the card's top-right corner */}
+        <div className="flex-1 flex flex-col min-w-0 overflow-y-auto pt-3 pe-4">
           {renderCard(primary, true, 0)}
         </div>
         {/* Vertical divider between column 1 and column 2 */}
@@ -694,8 +706,8 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
           <div className="flex-1 w-px" style={{ backgroundColor: '#C8BAA8' }} />
         </div>
         {/* Right column — queued motions + Raise a Motion button */}
-        {/* pt-3 pr-4: give room for the badge that translates outside each card's top-right corner */}
-        <div className="w-72 flex flex-col pt-3 pr-4">
+        {/* pt-3 pe-4: give room for the badge that translates outside each card's top-right corner */}
+        <div className="w-72 flex flex-col pt-3 pe-4">
           {rest.map((m, i) => (
             <React.Fragment key={m.id}>
               {renderCard(m, false, i + 1)}
@@ -742,7 +754,14 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
   const t = useT();
   const { language } = useLanguage();
   const { getSettings } = useSettingsStore();
-  const DEFAULT_MOTION_NAMES_LOCALIZED = language === 'fr' ? {
+  const DEFAULT_MOTION_NAMES_LOCALIZED = language === 'ar' ? {
+    moderated: 'حوار منهجي',
+    unmoderated: 'حوار حر',
+    consultation: 'مشاورات الهيئة',
+    tour: 'جولة المتحدثين',
+    suspendDebate: 'تعليق النقاش',
+    endDebate: 'إنهاء النقاش',
+  } : language === 'fr' ? {
     moderated: 'Caucus modéré',
     unmoderated: 'Caucus non modéré',
     consultation: "Consultation de l'assemblée",
@@ -759,7 +778,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
   } : DEFAULT_MOTION_NAMES;
   const committeeSettings = getSettings(committee.code);
   const storedNames = committeeSettings.motionNames;
-  const motionOrder: string[] = committeeSettings.motionOrder ?? ['moderated', 'unmoderated', 'tour', 'consultation'];
+  const motionOrder: string[] = committeeSettings.motionOrder ?? ['consultation', 'tour', 'unmoderated', 'moderated'];
   const localCalcDisruptiveness = (type: string, totalTime: number) => {
     if (type === 'end-debate') return 6_000_000 + totalTime;
     if (type === 'suspend-debate') return 5_000_000 + totalTime;
@@ -776,7 +795,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
     endDebate:     storedNames.endDebate     !== DEFAULT_MOTION_NAMES.endDebate     ? storedNames.endDebate     : DEFAULT_MOTION_NAMES_LOCALIZED.endDebate,
   };
   const typeMeta = buildTypeMeta(motionNames);
-  const pending = [...(committee.pendingMotions ?? [])].filter((m) => m.type !== ('join-request' as string)).sort((a, b) => b.disruptiveness - a.disruptiveness);
+  const pending = [...(committee.pendingMotions ?? [])].filter((m) => m.type !== ('join-request' as string) && (m.type as string) !== 'gsl-request').sort((a, b) => b.disruptiveness - a.disruptiveness);
   const [view, setView] = useState<ModalView>(pending.length === 0 && !isViewOnly ? 'raise' : 'vote');
   const [specialVoteMotion, setSpecialVoteMotion] = useState<PendingMotion | null>(null);
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
@@ -856,6 +875,11 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
       return;
     }
 
+    // The proposer earns a point for getting a motion approved onto the floor.
+    if (motion.proposedBy) {
+      logEvent(committee.id, { country: motion.proposedBy, type: 'motion-raised', sourceId: 'motionRaised' });
+    }
+
     if (motion.type === 'unmoderated') {
       const caucus = {
         active: true, type: 'unmoderated' as const, motionLabel: typeMeta['unmoderated'].label,
@@ -878,7 +902,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
         purpose: motion.topic || '', proposedBy: motion.proposedBy,
         totalTime: motion.totalTime, remainingTime: motion.totalTime,
         speakingTime: 0, speakerTimeRemaining: 0, currentSpeaker: null,
-        proposerPosition: null, spokenCountries: [],
+        proposerPosition: null, spokenCountries: [], isConsultation: true,
       };
       // GSL preserved, caucusQueue cleared, phase → unmoderated-caucus
       update((c) => ({ ...c, phase: 'unmoderated-caucus', caucus, pendingMotions: [], caucusQueue: [], currentSpeaker: null }));
@@ -908,11 +932,12 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
     } else if (motion.type === 'tour') {
       // Tour de Table — all present delegates ordered by tourOrder
       // GSL is NEVER touched — tour uses caucusQueue exclusively
+      const tourOrder = motion.tourOrder ?? 'asc';   // explicit default — never silently desc
       const alphabetical = committee.delegates
         .filter((d) => d.status !== 'absent')
-        .sort((a, b) => a.country.localeCompare(b.country));
+        .sort((a, b) => compareCountryNames(a.country, b.country, language));
 
-      if (motion.tourOrder === 'custom') {
+      if (tourOrder === 'custom') {
         // Room Order — empty queue, chair calls speakers manually
         const n = alphabetical.length;
         const totalTourTime = n * motion.speakingTime;
@@ -941,9 +966,9 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
 
       const sorted = committee.delegates
         .filter((d) => d.status !== 'absent')
-        .sort((a, b) => motion.tourOrder === 'asc'
-          ? a.country.localeCompare(b.country)
-          : b.country.localeCompare(a.country));
+        .sort((a, b) => tourOrder === 'asc'
+          ? compareCountryNames(a.country, b.country, language)
+          : compareCountryNames(b.country, a.country, language));
       const proposerIdx = sorted.findIndex((d) => d.country === motion.proposedBy);
       const presentDelegates = proposerIdx >= 0
         ? [...sorted.slice(proposerIdx), ...sorted.slice(0, proposerIdx)]
@@ -952,7 +977,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
       const totalTourTime = presentDelegates.length * motion.speakingTime;
       const caucus = {
         active: true, type: 'moderated' as const, motionLabel: typeMeta['tour'].label,
-        purpose: `Tour de Table (${motion.tourOrder === 'desc' ? 'Z→A' : 'A→Z'})`,
+        purpose: `Tour de Table (${tourOrder === 'desc' ? 'Z→A' : 'A→Z'})`,
         proposedBy: motion.proposedBy, totalTime: totalTourTime, remainingTime: totalTourTime,
         speakingTime: motion.speakingTime, speakerTimeRemaining: motion.speakingTime,
         currentSpeaker: null, proposerPosition: null, spokenCountries: [],
@@ -1032,7 +1057,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
     <Portal><div className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background: 'rgba(5, 8, 20, 0.88)', backdropFilter: 'blur(4px)' }}
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="bg-[#FAF8F3] border border-[#DDD4C0] rounded-3xl w-full shadow-2xl overflow-hidden flex flex-col max-w-5xl" style={{ height: '88vh' }}>
+      <div className="bg-[#FAF8F3] border border-[#DDD4C0] rounded-3xl w-full shadow-2xl overflow-hidden flex flex-col max-w-5xl" style={{ height: '88%' }}>
         <div className="flex items-center justify-end px-7 pt-6 pb-0 shrink-0">
           <button onClick={onClose} className="text-[#9A8A78] hover:text-[#1C1410] transition-colors text-xl leading-none">✕</button>
         </div>

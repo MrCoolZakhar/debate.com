@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { LanguageProvider } from '@/contexts/LanguageContext';
+import PreRegisterGate from '@/components/PreRegisterGate';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://gavelling.com'),
@@ -71,6 +72,7 @@ export const metadata: Metadata = {
       'en-US': 'https://gavelling.com',
       'es': 'https://gavelling.com?lang=es',
       'fr': 'https://gavelling.com?lang=fr',
+      'ar': 'https://gavelling.com?lang=ar',
     },
   },
   icons: {
@@ -97,12 +99,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital@1&display=swap" rel="stylesheet" />
+        <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
         <meta name="theme-color" content="#1B3828" />
         <link rel="preload" as="image" href="/og-image.png" />
       </head>
       <body className="min-h-full bg-[#EDE7D8] text-[#1C1410] antialiased">
         <LanguageProvider>
           {children}
+          <PreRegisterGate />
         </LanguageProvider>
       </body>
     </html>

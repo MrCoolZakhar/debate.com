@@ -1,3 +1,5 @@
+import Link from 'next/link';
+import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
@@ -65,7 +67,7 @@ export default function Article3() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
       <div style={s.page}>
         <div style={s.wrap}>
-          <a href="/blog" style={s.back}>← MUN Resources</a>
+          <Link href="/blog" style={s.back}>← MUN Resources</Link>
           <h1 style={s.h1}>General Speakers List (GSL) in MUN — Complete Guide for Chairs and Delegates</h1>
           <p style={s.meta}>By Gavelling · June 2026 · 9 min read</p>
           <article style={s.article}>
@@ -170,7 +172,7 @@ export default function Article3() {
               A healthy committee session alternates between GSL debate and caucuses. Too much GSL without caucuses can feel rigid; too many caucuses without GSL debate loses the formal record.
             </p>
             <p style={s.p}>
-              See also: <a href="/blog/mun-motions-explained" style={{ color: '#1B3828', fontWeight: 600 }}>MUN Motions Explained</a> for how caucus motions are proposed and voted on.
+              See also: <Link href="/blog/mun-motions-explained" style={{ color: '#1B3828', fontWeight: 600 }}>MUN Motions Explained</Link> for how caucus motions are proposed and voted on.
             </p>
 
             <h2 style={s.h2}>7. Common Chair Mistakes with the GSL</h2>
@@ -181,6 +183,7 @@ export default function Article3() {
               <li style={s.li}><strong>Forgetting to call the next speaker promptly.</strong> Every second of dead air drains committee energy.</li>
             </ul>
 
+            <RelatedGuides currentSlug="general-speakers-list-guide" />
             <div style={s.cta}>
               <p style={s.ctaText}>
                 Gavelling manages the GSL automatically — queue, timer, and speaker advancement — so you can focus on the debate.

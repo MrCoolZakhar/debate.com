@@ -1,3 +1,5 @@
+import Link from 'next/link';
+import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
@@ -63,7 +65,7 @@ export default function Article1() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
       <div style={s.page}>
         <div style={s.wrap}>
-          <a href="/blog" style={s.back}>← MUN Resources</a>
+          <Link href="/blog" style={s.back}>← MUN Resources</Link>
           <h1 style={s.h1}>How to Run a Model UN Committee — Chair&apos;s Complete Guide (2026)</h1>
           <p style={s.meta}>By Gavelling · June 2026 · 10 min read</p>
           <article style={s.article}>
@@ -159,7 +161,7 @@ export default function Article1() {
               As chair, set a timer and call the committee back to order when time expires. If delegates are in the middle of productive work, the chair may entertain a motion to extend.
             </p>
             <p style={s.p}>
-              See also: <a href="/blog/mun-motions-explained" style={{ color: '#1B3828', fontWeight: 600 }}>MUN Motions Explained</a> for the full rules on caucus motions.
+              See also: <Link href="/blog/mun-motions-explained" style={{ color: '#1B3828', fontWeight: 600 }}>MUN Motions Explained</Link> for the full rules on caucus motions.
             </p>
 
             <h2 style={s.h2}>6. Voting Procedures</h2>
@@ -187,6 +189,7 @@ export default function Article1() {
               If you used Gavelling, the session data — speaker history, votes, chat, documents — is archived automatically and accessible for post-conference review or delegate feedback.
             </p>
 
+            <RelatedGuides currentSlug="how-to-run-mun-committee" />
             <div style={s.cta}>
               <p style={s.ctaText}>
                 Gavelling automates roll call, GSL queue, motion tracking, and voting — so you can focus on running a great debate.

@@ -21,9 +21,18 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     try {
       const saved = localStorage.getItem('gavelling-language') as Language | null;
-      if (saved === 'en' || saved === 'es' || saved === 'fr') setLanguageState(saved);
+      if (saved === 'en' || saved === 'es' || saved === 'fr' || saved === 'ar') setLanguageState(saved);
     } catch {}
   }, []);
+
+  // Drive document direction + lang off the active locale. Arabic is RTL;
+  // everything else is LTR. Runs client-side because locale is persisted in
+  // localStorage (there is no URL/cookie locale routing).
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    document.documentElement.lang = language;
+    document.documentElement.dir = language === 'ar' ? 'rtl' : 'ltr';
+  }, [language]);
 
   const setLanguage = useCallback((lang: Language) => {
     setLanguageState(lang);

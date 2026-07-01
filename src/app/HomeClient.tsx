@@ -50,6 +50,7 @@ function RollCallCard() {
   const { language } = useLanguage();
   const es = language === 'es';
   const fr = language === 'fr';
+  const ar = language === 'ar';
   const shadow = { boxShadow: '0 24px 64px rgba(27,56,40,0.14)' };
   const getFlag = (country: string) => {
     const c = getCountryByName(country);
@@ -65,16 +66,16 @@ function RollCallCard() {
     { country: 'United Kingdom', label: getCountryDisplayName('United Kingdom', language), status: 'absent' },
     { country: 'South Africa', label: getCountryDisplayName('South Africa', language), status: 'present' },
   ];
-  const bulkBtns = fr ? ['Tous P', 'Tous P+V', 'Effacer'] : es ? ['Todos P', 'Todos P+V', 'Borrar'] : ['All Present', 'All P+V', 'Clear'];
+  const bulkBtns = ar ? ['الكل حاضر', 'الكل ح+م', 'مسح'] : fr ? ['Tous P', 'Tous P+V', 'Effacer'] : es ? ['Todos P', 'Todos P+V', 'Borrar'] : ['All Present', 'All P+V', 'Clear'];
   return (
     <div className="w-full rounded-2xl overflow-hidden flex flex-col" style={{ ...shadow, minHeight: '460px', backgroundColor: '#1B3828', border: '1px solid #3D7A52' }}>
       {/* Header */}
       <div className="px-5 py-3 flex items-center justify-between" style={{ borderBottom: '1px solid rgba(61,122,82,0.4)' }}>
         <div>
-          <p className="font-black text-sm uppercase tracking-widest" style={{ color: '#EED98A', fontFamily: "'DM Mono', monospace" }}>{fr ? 'APPEL' : es ? 'Lista de Asistencia' : 'Roll Call'}</p>
-          <p className="text-xs mt-0.5" style={{ color: 'rgba(238,217,138,0.5)' }}>{fr ? "Conseil de sécurité de l'ONU" : es ? 'Consejo de Seguridad de la ONU' : 'UN Security Council'}</p>
+          <p className="font-black text-sm uppercase tracking-widest" style={{ color: '#EED98A', fontFamily: "'DM Mono', monospace" }}>{ar ? 'تدقيق الحضور' : fr ? 'APPEL' : es ? 'Lista de Asistencia' : 'Roll Call'}</p>
+          <p className="text-xs mt-0.5" style={{ color: 'rgba(238,217,138,0.5)' }}>{ar ? 'مجلس الأمن التابع للأمم المتحدة' : fr ? "Conseil de sécurité de l'ONU" : es ? 'Consejo de Seguridad de la ONU' : 'UN Security Council'}</p>
         </div>
-        <span className="text-[9px] font-mono px-2 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(238,217,138,0.15)', color: '#EED98A', border: '1px solid rgba(238,217,138,0.3)' }}>{fr ? 'PRÉ-SESSION' : es ? 'PRE-SESIÓN' : 'PRE-SESSION'}</span>
+        <span className="text-[9px] font-mono px-2 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(238,217,138,0.15)', color: '#EED98A', border: '1px solid rgba(238,217,138,0.3)' }}>{ar ? 'ما قبل الجلسة' : fr ? 'PRÉ-SESSION' : es ? 'PRE-SESIÓN' : 'PRE-SESSION'}</span>
       </div>
       {/* Quick set buttons */}
       <div className="flex gap-2 px-4 py-2.5">
@@ -92,7 +93,7 @@ function RollCallCard() {
               backgroundColor: d.status === 'present-voting' ? '#EED98A' : d.status === 'present' ? 'rgba(61,122,82,0.5)' : 'rgba(255,255,255,0.08)',
               color: d.status === 'present-voting' ? '#1B3828' : d.status === 'present' ? '#EDE7D8' : '#9A8A78',
             }}>
-              {d.status === 'present-voting' ? 'P+V' : d.status === 'present' ? 'P' : (es ? 'Ausente' : 'Absent')}
+              {d.status === 'present-voting' ? 'P+V' : d.status === 'present' ? 'P' : (ar ? 'غائب' : es ? 'Ausente' : 'Absent')}
             </span>
           </div>
         ))}
@@ -100,7 +101,7 @@ function RollCallCard() {
       {/* Quorum bar */}
       <div className="px-4 py-3" style={{ borderTop: '1px solid rgba(61,122,82,0.3)' }}>
         <div className="flex items-center justify-between mb-1.5">
-          <span className="text-[9px] font-mono uppercase tracking-wide" style={{ color: 'rgba(238,217,138,0.5)' }}>{es ? 'Quórum' : 'Quorum'}</span>
+          <span className="text-[9px] font-mono uppercase tracking-wide" style={{ color: 'rgba(238,217,138,0.5)' }}>{ar ? 'النصاب القانوني' : es ? 'Quórum' : 'Quorum'}</span>
           <span className="text-[9px] font-mono font-bold" style={{ color: '#EED98A' }}>6 / 8</span>
         </div>
         <div className="h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}>
@@ -115,6 +116,7 @@ function MotionsCard() {
   const { language } = useLanguage();
   const es = language === 'es';
   const fr = language === 'fr';
+  const ar = language === 'ar';
   const shadow = { boxShadow: '0 24px 64px rgba(27,56,40,0.14)' };
   const getFlag = (country: string) => {
     const c = getCountryByName(country);
@@ -124,11 +126,11 @@ function MotionsCard() {
     <div className="w-full rounded-2xl overflow-hidden" style={{ ...shadow, minHeight: '460px', backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
       {/* Header */}
       <div className="px-5 py-3 flex items-center justify-between" style={{ borderBottom: '1px solid #DDD4C0' }}>
-        <h2 className="text-lg font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{fr ? 'VOTER SUR LES MOTIONS' : es ? 'VOTAR EN MOCIONES' : 'VOTE ON MOTIONS'}</h2>
+        <h2 className="text-lg font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{ar ? 'التصويت على الاقتراحات' : fr ? 'VOTER SUR LES MOTIONS' : es ? 'VOTAR EN MOCIONES' : 'VOTE ON MOTIONS'}</h2>
       </div>
       {/* Drag hint */}
       <div className="mx-4 mt-3 px-3 py-2 rounded-xl text-xs font-semibold" style={{ backgroundColor: '#1B3828', color: '#EED98A' }}>
-        {fr ? 'Faites glisser les motions pour les réorganiser. La plus perturbatrice est votée en premier par défaut.' : es ? 'Arrastra las mociones para reordenar. La más disruptiva se vota primero por defecto.' : 'Drag motions to reorder. Most disruptive voted on first by default.'}
+        {ar ? 'اسحب الاقتراحات لإعادة ترتيبها. يُصوَّت على الأكثر تعطيلاً أولاً افتراضياً.' : fr ? 'Faites glisser les motions pour les réorganiser. La plus perturbatrice est votée en premier par défaut.' : es ? 'Arrastra las mociones para reordenar. La más disruptiva se vota primero por defecto.' : 'Drag motions to reorder. Most disruptive voted on first by default.'}
       </div>
       {/* Motion cards */}
       <div className="px-4 pt-3 pb-4 flex flex-col gap-3">
@@ -136,29 +138,29 @@ function MotionsCard() {
         <div className="rounded-2xl p-4 flex flex-col gap-2" style={{ border: '2px solid #1B3828', backgroundColor: 'transparent' }}>
           <div className="flex items-start justify-between gap-2">
             <div className="flex-1">
-              <p className="font-black text-base" style={{ color: '#1C1410' }}>{fr ? 'Caucus modéré' : es ? 'Cáucus Moderado' : 'Moderated Caucus'}</p>
-              <p className="text-xs font-semibold mt-0.5" style={{ color: '#1B3828' }}>{fr ? 'Sujet : ' : es ? 'Tema: ' : 'Topic: '}<span style={{ color: '#1C1410' }}>{fr ? 'Non-prolifération nucléaire' : es ? 'No Proliferación de Armas Nucleares' : 'Nuclear Non-Proliferation'}</span></p>
-              <p className="text-xs mt-1" style={{ color: '#1C1410' }}><span className="font-semibold" style={{ color: '#1B3828' }}>{fr ? 'Temps Total : ' : es ? 'Tiempo Total: ' : 'Total Time: '}</span><span className="font-black">10m</span></p>
-              <p className="text-xs" style={{ color: '#1C1410' }}><span className="font-semibold" style={{ color: '#1B3828' }}>{fr ? 'Temps par orateur : ' : es ? 'Tiempo por orador: ' : 'Speaker Time: '}</span><span className="font-black">90s</span></p>
-              <p className="text-xs" style={{ color: '#1C1410' }}><span className="font-semibold" style={{ color: '#1B3828' }}>{fr ? 'Total orateurs : ' : es ? 'Total de oradores: ' : 'Total Speakers: '}</span><span className="font-black">{fr ? '6 orateurs' : es ? '6 oradores' : '6 speakers'}</span></p>
+              <p className="font-black text-base" style={{ color: '#1C1410' }}>{ar ? 'حوار منهجي' : fr ? 'Caucus modéré' : es ? 'Cáucus Moderado' : 'Moderated Caucus'}</p>
+              <p className="text-xs font-semibold mt-0.5" style={{ color: '#1B3828' }}>{ar ? 'الموضوع: ' : fr ? 'Sujet : ' : es ? 'Tema: ' : 'Topic: '}<span style={{ color: '#1C1410' }}>{ar ? 'منع الانتشار النووي' : fr ? 'Non-prolifération nucléaire' : es ? 'No Proliferación de Armas Nucleares' : 'Nuclear Non-Proliferation'}</span></p>
+              <p className="text-xs mt-1" style={{ color: '#1C1410' }}><span className="font-semibold" style={{ color: '#1B3828' }}>{ar ? 'الوقت الإجمالي: ' : fr ? 'Temps Total : ' : es ? 'Tiempo Total: ' : 'Total Time: '}</span><span className="font-black">10m</span></p>
+              <p className="text-xs" style={{ color: '#1C1410' }}><span className="font-semibold" style={{ color: '#1B3828' }}>{ar ? 'وقت المتحدث: ' : fr ? 'Temps par orateur : ' : es ? 'Tiempo por orador: ' : 'Speaker Time: '}</span><span className="font-black">90s</span></p>
+              <p className="text-xs" style={{ color: '#1C1410' }}><span className="font-semibold" style={{ color: '#1B3828' }}>{ar ? 'إجمالي المتحدثين: ' : fr ? 'Total orateurs : ' : es ? 'Total de oradores: ' : 'Total Speakers: '}</span><span className="font-black">{ar ? '6 متحدثين' : fr ? '6 orateurs' : es ? '6 oradores' : '6 speakers'}</span></p>
             </div>
             {getFlag('France')}
           </div>
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
-            <span className="text-xs font-semibold flex-1" style={{ color: '#1B3828' }}>{fr ? 'Majorité simple' : es ? 'Mayoría Simple' : 'Simple majority'}</span>
-            <span className="text-xs font-bold" style={{ color: '#1C1410' }}>{fr ? 'Besoin 8 sur 15' : es ? 'Necesita 8 de 15' : 'Needs 8 of 15'}</span>
+            <span className="text-xs font-semibold flex-1" style={{ color: '#1B3828' }}>{ar ? 'الأغلبية البسيطة' : fr ? 'Majorité simple' : es ? 'Mayoría Simple' : 'Simple majority'}</span>
+            <span className="text-xs font-bold" style={{ color: '#1C1410' }}>{ar ? 'يتطلب 8 من 15' : fr ? 'Besoin 8 sur 15' : es ? 'Necesita 8 de 15' : 'Needs 8 of 15'}</span>
           </div>
           <div className="flex gap-2 mt-1">
-            <button className="flex-1 py-2 rounded-xl font-black text-xs text-white focus:outline-none" style={{ backgroundColor: '#1B3828', letterSpacing: '0.05em' }}>{fr ? '✓ ACCEPTER' : es ? '✓ ACEPTAR' : '✓ ACCEPT'}</button>
-            <button className="flex-1 py-2 rounded-xl font-black text-xs focus:outline-none" style={{ backgroundColor: '#DDD4C0', color: '#6A5A4A', letterSpacing: '0.05em' }}>{fr ? '✗ REJETER' : es ? '✗ RECHAZAR' : '✗ REJECT'}</button>
-            <button className="px-3 py-2 rounded-xl font-black text-xs focus:outline-none" style={{ backgroundColor: 'rgba(182,135,31,0.2)', color: '#B6871F', border: '1px solid rgba(182,135,31,0.4)' }}>{fr ? 'MODIFIER' : es ? 'EDITAR' : 'EDIT'}</button>
+            <button className="flex-1 py-2 rounded-xl font-black text-xs text-white focus:outline-none" style={{ backgroundColor: '#1B3828', letterSpacing: '0.05em' }}>{ar ? '✓ قبول' : fr ? '✓ ACCEPTER' : es ? '✓ ACEPTAR' : '✓ ACCEPT'}</button>
+            <button className="flex-1 py-2 rounded-xl font-black text-xs focus:outline-none" style={{ backgroundColor: '#DDD4C0', color: '#6A5A4A', letterSpacing: '0.05em' }}>{ar ? '✗ رفض' : fr ? '✗ REJETER' : es ? '✗ RECHAZAR' : '✗ REJECT'}</button>
+            <button className="px-3 py-2 rounded-xl font-black text-xs focus:outline-none" style={{ backgroundColor: 'rgba(182,135,31,0.2)', color: '#B6871F', border: '1px solid rgba(182,135,31,0.4)' }}>{ar ? 'تعديل' : fr ? 'MODIFIER' : es ? 'EDITAR' : 'EDIT'}</button>
           </div>
         </div>
         {/* Secondary motion — small */}
         <div className="rounded-2xl p-3 flex items-center gap-3" style={{ border: '1px solid #DDD4C0', backgroundColor: 'transparent' }}>
           <div className="flex-1 min-w-0">
-            <p className="font-black text-sm" style={{ color: '#1C1410' }}>{fr ? 'Caucus non modéré' : es ? 'Cáucus No Moderado' : 'Unmoderated Caucus'}</p>
-            <p className="text-xs" style={{ color: '#1C1410' }}><span className="font-semibold" style={{ color: '#1B3828' }}>{fr ? 'Temps Total : ' : es ? 'Tiempo Total: ' : 'Total Time: '}</span><span className="font-black">15m</span></p>
+            <p className="font-black text-sm" style={{ color: '#1C1410' }}>{ar ? 'حوار حر' : fr ? 'Caucus non modéré' : es ? 'Cáucus No Moderado' : 'Unmoderated Caucus'}</p>
+            <p className="text-xs" style={{ color: '#1C1410' }}><span className="font-semibold" style={{ color: '#1B3828' }}>{ar ? 'الوقت الإجمالي: ' : fr ? 'Temps Total : ' : es ? 'Tiempo Total: ' : 'Total Time: '}</span><span className="font-black">15m</span></p>
           </div>
           {getFlag('Germany')}
         </div>
@@ -171,6 +173,7 @@ function SpeakersCard() {
   const { language } = useLanguage();
   const es = language === 'es';
   const fr = language === 'fr';
+  const ar = language === 'ar';
   const [timerSecs, setTimerSecs] = useState(83);
   useEffect(() => {
     const t = setInterval(() => setTimerSecs(s => s > 0 ? s - 1 : 90), 1000);
@@ -198,11 +201,11 @@ function SpeakersCard() {
                 {c ? <img src={getFlagUrl(c.code)} alt={d.country} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div style={{ width: '100%', height: '100%', backgroundColor: '#DDD4C0' }} />}
               </div>
               <span className="text-[9px] font-semibold text-center" style={{ color: '#6A5A4A' }}>{d.label}</span>
-              {d.pos === 2 && <span className="text-[8px] font-bold" style={{ color: '#B8844A' }}>{fr ? 'Suivant' : es ? 'A continuación' : 'Up next'}</span>}
+              {d.pos === 2 && <span className="text-[8px] font-bold" style={{ color: '#B8844A' }}>{ar ? 'التالي' : fr ? 'Suivant' : es ? 'A continuación' : 'Up next'}</span>}
             </div>
           );
         })}
-        <span className="text-xs font-mono self-center flex-shrink-0" style={{ color: '#9A8A78' }}>{fr ? '+8 de plus' : es ? '+8 más' : '+8 more'}</span>
+        <span className="text-xs font-mono self-center flex-shrink-0" style={{ color: '#9A8A78' }}>{ar ? '+8 آخرون' : fr ? '+8 de plus' : es ? '+8 más' : '+8 more'}</span>
       </div>
       {/* Current speaker */}
       <div className="flex flex-col items-center px-6 py-4">
@@ -218,9 +221,9 @@ function SpeakersCard() {
         </div>
         {/* Buttons */}
         <div className="flex gap-2">
-          <button className="px-6 py-2.5 rounded-xl font-black text-sm text-white focus:outline-none" style={{ backgroundColor: '#2A5A3C' }}>{fr ? '▶ DÉMARRER' : es ? '▶ INICIO' : '▶ START'}</button>
-          <button className="px-6 py-2.5 rounded-xl font-black text-sm focus:outline-none" style={{ backgroundColor: 'transparent', border: '1px solid #DDD4C0', color: '#1C1410' }}>{fr ? 'SUIVANT →' : es ? 'SIGUIENTE →' : 'NEXT →'}</button>
-          <button className="px-3 py-2.5 rounded-xl font-black text-xs focus:outline-none" style={{ backgroundColor: 'transparent', border: '1px solid #DDD4C0', color: '#6A5A4A' }}>{fr ? '+TEMPS' : es ? '+TIEMPO' : 'ADD TIME'}</button>
+          <button className="px-6 py-2.5 rounded-xl font-black text-sm text-white focus:outline-none" style={{ backgroundColor: '#2A5A3C' }}>{ar ? '▶ بدء' : fr ? '▶ DÉMARRER' : es ? '▶ INICIO' : '▶ START'}</button>
+          <button className="px-6 py-2.5 rounded-xl font-black text-sm focus:outline-none" style={{ backgroundColor: 'transparent', border: '1px solid #DDD4C0', color: '#1C1410' }}>{ar ? 'التالي ←' : fr ? 'SUIVANT →' : es ? 'SIGUIENTE →' : 'NEXT →'}</button>
+          <button className="px-3 py-2.5 rounded-xl font-black text-xs focus:outline-none" style={{ backgroundColor: 'transparent', border: '1px solid #DDD4C0', color: '#6A5A4A' }}>{ar ? '+ وقت' : fr ? '+TEMPS' : es ? '+TIEMPO' : 'ADD TIME'}</button>
         </div>
       </div>
     </div>
@@ -231,6 +234,7 @@ function DocumentsCard() {
   const { language } = useLanguage();
   const es = language === 'es';
   const fr = language === 'fr';
+  const ar = language === 'ar';
   const [docTimer, setDocTimer] = useState(180);
   useEffect(() => {
     const t = setInterval(() => setDocTimer(s => s > 0 ? s - 1 : 180), 1000);
@@ -244,26 +248,26 @@ function DocumentsCard() {
     <div className="w-full rounded-2xl overflow-hidden flex flex-row" style={{ ...shadow, minHeight: '460px', border: '1px solid #DDD4C0' }}>
       <div className="flex flex-col" style={{ width: '42%', borderRight: '1px solid #DDD4C0', backgroundColor: '#FAF8F3' }}>
         <div className="px-4 py-3" style={{ backgroundColor: '#1B3828' }}>
-          <p className="font-black text-xs uppercase tracking-widest" style={{ color: '#EED98A', fontFamily: "'DM Mono', monospace" }}>{fr ? 'TEMPS DE LECTURE' : es ? 'TIEMPO DE LECTURA' : 'READING TIME'}</p>
+          <p className="font-black text-xs uppercase tracking-widest" style={{ color: '#EED98A', fontFamily: "'DM Mono', monospace" }}>{ar ? 'وقت القراءة' : fr ? 'TEMPS DE LECTURE' : es ? 'TIEMPO DE LECTURA' : 'READING TIME'}</p>
         </div>
         <div className="flex-1 flex flex-col items-center justify-center px-4 py-6 text-center">
           <p className="text-[10px] font-mono tracking-widest uppercase mb-1" style={{ color: '#9A8A78' }}>S/RES/2819 (2026)</p>
-          <p className="font-black text-xs uppercase mb-4" style={{ color: '#1C1410' }}>{fr ? 'Résolution sur les Sanctions en Libye' : es ? 'Resolución de Sanciones a Libia' : 'Libya Sanctions Resolution'}</p>
+          <p className="font-black text-xs uppercase mb-4" style={{ color: '#1C1410' }}>{ar ? 'قرار عقوبات ليبيا' : fr ? 'Résolution sur les Sanctions en Libye' : es ? 'Resolución de Sanciones a Libia' : 'Libya Sanctions Resolution'}</p>
           <p className="font-mono text-3xl font-bold tabular-nums mb-1" style={{ color: '#1C1410' }}>{m}:{s.toString().padStart(2, '0')}</p>
-          <p className="text-[10px] font-mono mb-4" style={{ color: '#9A8A78' }}>{fr ? 'Temps de Lecture' : es ? 'Tiempo de Lectura' : 'Reading Time'}</p>
+          <p className="text-[10px] font-mono mb-4" style={{ color: '#9A8A78' }}>{ar ? 'وقت القراءة' : fr ? 'Temps de Lecture' : es ? 'Tiempo de Lectura' : 'Reading Time'}</p>
           <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: '#DDD4C0' }}>
             <div className="h-full rounded-full transition-all duration-1000" style={{ width: `${(docTimer / 180) * 100}%`, backgroundColor: '#1B3828' }} />
           </div>
           <div className="flex gap-2 mt-6 w-full">
-            <button className="flex-1 py-2 rounded-xl font-black text-xs text-white" style={{ backgroundColor: '#2A5A3C' }}>{fr ? '▶ DÉMARRER' : es ? '▶ INICIO' : '▶ START'}</button>
-            <button className="flex-1 py-2 rounded-xl font-black text-xs" style={{ backgroundColor: 'transparent', border: '1px solid #DDD4C0', color: '#6A5A4A' }}>{fr ? 'PASSER →' : es ? 'SALTAR →' : 'SKIP →'}</button>
+            <button className="flex-1 py-2 rounded-xl font-black text-xs text-white" style={{ backgroundColor: '#2A5A3C' }}>{ar ? '▶ بدء' : fr ? '▶ DÉMARRER' : es ? '▶ INICIO' : '▶ START'}</button>
+            <button className="flex-1 py-2 rounded-xl font-black text-xs" style={{ backgroundColor: 'transparent', border: '1px solid #DDD4C0', color: '#6A5A4A' }}>{ar ? 'تخطٍّ ←' : fr ? 'PASSER →' : es ? 'SALTAR →' : 'SKIP →'}</button>
           </div>
         </div>
       </div>
       <div className="flex flex-col" style={{ flex: 1, backgroundColor: '#EDE7D8' }}>
         <div className="px-3 py-2 flex items-center justify-between" style={{ backgroundColor: '#DDD4C0', borderBottom: '1px solid #C8BAA8' }}>
-          <span className="text-[10px] font-mono uppercase tracking-wide" style={{ color: '#6A5A4A' }}>{fr ? 'Document' : es ? 'Documento' : 'Document'}</span>
-          <span className="text-[10px] font-bold uppercase" style={{ color: '#1B3828' }}>{fr ? 'Masquer' : es ? 'Ocultar Doc' : 'Hide Doc'}</span>
+          <span className="text-[10px] font-mono uppercase tracking-wide" style={{ color: '#6A5A4A' }}>{ar ? 'مستند' : fr ? 'Document' : es ? 'Documento' : 'Document'}</span>
+          <span className="text-[10px] font-bold uppercase" style={{ color: '#1B3828' }}>{ar ? 'إخفاء المستند' : fr ? 'Masquer' : es ? 'Ocultar Doc' : 'Hide Doc'}</span>
         </div>
         <iframe
           src={pdfUrl}
@@ -280,7 +284,13 @@ function ChatCard() {
   const { language } = useLanguage();
   const es = language === 'es';
   const fr = language === 'fr';
-  const messages = fr ? [
+  const ar = language === 'ar';
+  const messages = ar ? [
+    { sender: 'الرئيس', text: 'مرحباً بكم في جلسة مجلس الأمن حول منع الانتشار النووي.', time: '09:02', isChair: true },
+    { sender: 'فرنسا', text: 'فرنسا مستعدة للمشاركة البنّاءة في هذه المسألة.', time: '09:04', isChair: false },
+    { sender: 'الرئيس', text: 'أداؤكم ممتاز! واصلوا التقدّم!', time: '09:06', isChair: true },
+    { sender: 'ألمانيا', text: 'تؤيّد ألمانيا الاقتراح بإجراء حوار منهجي.', time: '09:07', isChair: false },
+  ] : fr ? [
     { sender: 'Pdt.', text: 'Bienvenue à la session du Conseil sur la Non-Prolifération Nucléaire.', time: '09:02', isChair: true },
     { sender: 'France', text: 'La France est prête à s\'engager de manière constructive sur ce sujet.', time: '09:04', isChair: false },
     { sender: 'Pdt.', text: 'Vous faites du excellent travail ! Continuez ainsi !', time: '09:06', isChair: true },
@@ -297,8 +307,10 @@ function ChatCard() {
     { sender: 'Germany', text: 'Germany seconds the motion for a moderated caucus.', time: '09:07', isChair: false },
   ];
   const shadow = { boxShadow: '0 24px 64px rgba(27,56,40,0.14)' };
-  const convs = fr ? ['Tous', 'France', 'Allemagne'] : es ? ['Todos', 'Francia', 'Alemania'] : ['Everyone', 'France', 'Germany'];
-  const convPreviews = fr
+  const convs = ar ? ['الجميع', 'فرنسا', 'ألمانيا'] : fr ? ['Tous', 'France', 'Allemagne'] : es ? ['Todos', 'Francia', 'Alemania'] : ['Everyone', 'France', 'Germany'];
+  const convPreviews = ar
+    ? ['الرئيس: مرحباً...', 'فرنسا: مستعدة...', 'ألمانيا: تؤيّد...']
+    : fr
     ? ['Pdt. : Bienvenue...', 'France : Prête...', 'Allemagne : Soutient...']
     : es
     ? ['Pdte.: Bienvenidos...', 'Francia: Dispuesta...', 'Alemania: Apoya...']
@@ -308,7 +320,7 @@ function ChatCard() {
       {/* Left panel — forest green */}
       <div className="flex flex-col flex-shrink-0" style={{ width: '140px', backgroundColor: '#1B3828', borderRight: '1px solid #3D7A52' }}>
         <div className="px-3 py-3" style={{ borderBottom: '1px solid rgba(61,122,82,0.4)' }}>
-          <p className="font-black text-xs uppercase tracking-widest" style={{ color: '#EED98A', fontFamily: "'Outfit', sans-serif" }}>{fr ? 'MESSAGES' : es ? 'MENSAJES' : 'MESSAGES'}</p>
+          <p className="font-black text-xs uppercase tracking-widest" style={{ color: '#EED98A', fontFamily: "'Outfit', sans-serif" }}>{ar ? 'الرسائل' : fr ? 'MESSAGES' : es ? 'MENSAJES' : 'MESSAGES'}</p>
         </div>
         <div className="flex-1">
           {convs.map((c, i) => (
@@ -319,14 +331,14 @@ function ChatCard() {
           ))}
         </div>
         <div className="px-2 py-2.5" style={{ borderTop: '1px solid rgba(61,122,82,0.4)' }}>
-          <button className="w-full text-xs py-1.5 rounded-lg font-semibold" style={{ color: '#EED98A', border: '1px solid rgba(238,217,138,0.3)' }}>{fr ? '+ Nouveau message' : es ? '+ Nuevo mensaje' : '+ New message'}</button>
+          <button className="w-full text-xs py-1.5 rounded-lg font-semibold" style={{ color: '#EED98A', border: '1px solid rgba(238,217,138,0.3)' }}>{ar ? '+ رسالة جديدة' : fr ? '+ Nouveau message' : es ? '+ Nuevo mensaje' : '+ New message'}</button>
         </div>
       </div>
       {/* Right panel — ivory */}
       <div className="flex-1 flex flex-col" style={{ backgroundColor: '#FAF8F3' }}>
         <div className="px-4 py-3 flex-shrink-0" style={{ borderBottom: '1px solid #DDD4C0', backgroundColor: 'rgba(250,248,243,0.8)' }}>
-          <p className="font-black text-sm" style={{ color: '#1B3828' }}>{fr ? 'Tous' : es ? 'Todos' : 'Everyone'}</p>
-          <p className="text-[10px]" style={{ color: '#9A8A78' }}>{fr ? '4 messages' : es ? '4 mensajes' : '4 messages'}</p>
+          <p className="font-black text-sm" style={{ color: '#1B3828' }}>{ar ? 'الجميع' : fr ? 'Tous' : es ? 'Todos' : 'Everyone'}</p>
+          <p className="text-[10px]" style={{ color: '#9A8A78' }}>{ar ? '4 رسائل' : fr ? '4 messages' : es ? '4 mensajes' : '4 messages'}</p>
         </div>
         <div className="flex-1 px-3 py-3 flex flex-col gap-2.5 overflow-hidden">
           {messages.map((msg, i) => (
@@ -341,13 +353,13 @@ function ChatCard() {
                 }}>
                   {msg.text}
                 </div>
-                <span className="text-[9px] font-mono" style={{ color: '#9A8A78' }}>{msg.isChair ? (fr ? 'Vous' : es ? 'Tú' : 'You') : msg.sender} · {msg.time}</span>
+                <span className="text-[9px] font-mono" style={{ color: '#9A8A78' }}>{msg.isChair ? (ar ? 'أنت' : fr ? 'Vous' : es ? 'Tú' : 'You') : msg.sender} · {msg.time}</span>
               </div>
             </div>
           ))}
         </div>
         <div className="px-3 pb-3 pt-2 flex gap-2 flex-shrink-0" style={{ borderTop: '1px solid #DDD4C0' }}>
-          <div className="flex-1 rounded-xl px-3 py-2 text-xs" style={{ backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0', color: '#9A8A78' }}>{fr ? 'Message au comité…' : es ? 'Mensaje al comité…' : 'Message the committee…'}</div>
+          <div className="flex-1 rounded-xl px-3 py-2 text-xs" style={{ backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0', color: '#9A8A78' }}>{ar ? 'راسل اللجنة…' : fr ? 'Message au comité…' : es ? 'Mensaje al comité…' : 'Message the committee…'}</div>
           <button className="px-3 py-2 rounded-xl text-xs font-black" style={{ backgroundColor: '#1B3828', color: '#EDE7D8' }}>→</button>
         </div>
       </div>
@@ -359,26 +371,27 @@ function ArchiveCard() {
   const { language } = useLanguage();
   const es = language === 'es';
   const fr = language === 'fr';
+  const ar = language === 'ar';
   const base = 'w-full bg-[#FAF8F3] rounded-2xl border border-[#DDD4C0] overflow-hidden';
   const shadow = { boxShadow: '0 24px 64px rgba(27,56,40,0.14)' };
-  const menuItems = fr ? ['Sessions Sauvegardées', 'Statistiques', 'Ma Progression'] : es ? ['Sesiones Guardadas', 'Estadísticas', 'Mi Progreso'] : ['Saved Sessions', 'Session Statistics', 'My Progress'];
+  const menuItems = ar ? ['الجلسات المحفوظة', 'إحصاءات الجلسة', 'تقدّمي'] : fr ? ['Sessions Sauvegardées', 'Statistiques', 'Ma Progression'] : es ? ['Sesiones Guardadas', 'Estadísticas', 'Mi Progreso'] : ['Saved Sessions', 'Session Statistics', 'My Progress'];
   return (
     <div className={base} style={{ ...shadow, minHeight: '460px' }}>
       <div className="bg-[#1B3828] px-5 py-3 flex items-center justify-between">
-        <p className="text-[#EED98A] font-black text-sm uppercase tracking-wide">{fr ? 'Archive de Session' : es ? 'Archivo de Sesión' : 'Session Archive'}</p>
-        <span className="bg-[#3D7A52] text-white text-[9px] font-mono px-2 py-0.5 rounded-full uppercase tracking-widest">{fr ? 'Bientôt' : es ? 'Próximamente' : 'Coming Soon'}</span>
+        <p className="text-[#EED98A] font-black text-sm uppercase tracking-wide">{ar ? 'أرشيف الجلسات' : fr ? 'Archive de Session' : es ? 'Archivo de Sesión' : 'Session Archive'}</p>
+        <span className="bg-[#3D7A52] text-white text-[9px] font-mono px-2 py-0.5 rounded-full uppercase tracking-widest">{ar ? 'قريباً' : fr ? 'Bientôt' : es ? 'Próximamente' : 'Coming Soon'}</span>
       </div>
       <div className="px-5 py-6 flex flex-col items-center text-center">
         <div className="w-14 h-14 rounded-2xl bg-[#EDE7D8] border border-[#DDD4C0] flex items-center justify-center mb-4">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1B3828" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M9 21V9"/></svg>
         </div>
-        <h3 className="font-black text-[#1C1410] uppercase text-sm tracking-wide mb-2">{fr ? 'Votre Tableau de Bord' : es ? 'Tu Panel de Comité' : 'Your Committee Dashboard'}</h3>
-        <p className="text-[#6A5A4A] text-xs leading-relaxed mb-6 max-w-xs">{fr ? 'Suivez les sessions, statistiques et la progression des délégués en un seul endroit.' : es ? 'Seguimiento de sesiones, estadísticas y progreso de delegados en un solo lugar.' : 'Track sessions, statistics, and delegate progress all in one place.'}</p>
+        <h3 className="font-black text-[#1C1410] uppercase text-sm tracking-wide mb-2">{ar ? 'لوحة تحكم لجنتك' : fr ? 'Votre Tableau de Bord' : es ? 'Tu Panel de Comité' : 'Your Committee Dashboard'}</h3>
+        <p className="text-[#6A5A4A] text-xs leading-relaxed mb-6 max-w-xs">{ar ? 'تابع الجلسات والإحصاءات وتقدّم المندوبين في مكان واحد.' : fr ? 'Suivez les sessions, statistiques et la progression des délégués en un seul endroit.' : es ? 'Seguimiento de sesiones, estadísticas y progreso de delegados en un solo lugar.' : 'Track sessions, statistics, and delegate progress all in one place.'}</p>
         <div className="flex flex-col gap-2.5 w-full">
           {menuItems.map((label) => (
             <div key={label} className="flex items-center gap-3 bg-[#1B3828] rounded-xl px-4 py-3.5">
               <div className="w-2 h-2 rounded-full bg-[#EED98A] flex-shrink-0" />
-              <span className="text-sm font-bold text-[#EED98A] uppercase tracking-wide flex-1 text-left">{label}</span>
+              <span className="text-sm font-bold text-[#EED98A] uppercase tracking-wide flex-1 text-start">{label}</span>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#EED98A" strokeWidth="2.5"><path d="M9 18l6-6-6-6"/></svg>
             </div>
           ))}
@@ -581,8 +594,15 @@ export default function HomeClient() {
                   DO NOT increase FR vw/max without re-testing one-line fit at 1024px.
                 */}
                 <div className="w-full mb-5 flex items-end justify-center md:h-[195px]">
-                  <h1 className="font-black tracking-tight text-white leading-[1.05] text-center md:whitespace-nowrap" style={{ fontSize: language === 'fr' ? 'clamp(36px, 8.8vw, 126px)' : language === 'es' ? 'clamp(44px, 11.5vw, 145px)' : 'clamp(48px, 13.5vw, 165px)' }}>
-                    {language === 'fr' ? (
+                  <h1 className="font-black tracking-tight text-white leading-[1.05] text-center md:whitespace-nowrap" style={{ fontSize: language === 'ar' ? 'clamp(34px, 8vw, 120px)' : language === 'fr' ? 'clamp(36px, 8.8vw, 126px)' : language === 'es' ? 'clamp(44px, 11.5vw, 145px)' : 'clamp(48px, 13.5vw, 165px)' }}>
+                    {language === 'ar' ? (
+                      <>
+                        النموذج الأممي{' '}
+                        <span style={{ fontStyle: 'normal', fontWeight: 800, color: '#B8844A' }}>
+                          كما يجب.
+                        </span>
+                      </>
+                    ) : language === 'fr' ? (
                       <>
                         MUN comme il{' '}
                         <span style={{ fontFamily: "'Playfair Display', serif", fontStyle: 'italic', fontWeight: 400, color: '#B8844A' }}>
@@ -698,7 +718,7 @@ export default function HomeClient() {
               {/* LEFT — text + pills centered */}
               <div className="w-full md:w-80 flex-shrink-0 flex flex-col justify-center items-start py-8">
 
-                <h2 className="font-black uppercase tracking-wide leading-tight mb-4" style={{ fontSize: (language === 'es' || language === 'fr') ? 'clamp(22px, 2.6vw, 40px)' : 'clamp(28px, 3.2vw, 48px)' }}>
+                <h2 className="font-black uppercase tracking-wide leading-tight mb-4" style={{ fontSize: (language === 'es' || language === 'fr' || language === 'ar') ? 'clamp(22px, 2.6vw, 40px)' : 'clamp(28px, 3.2vw, 48px)' }}>
                   <span className="text-[#1B3828]">{t('features_title_1')}</span><br />
                   <span className="text-[#B8844A]">{t('features_title_2')}</span>
                 </h2>

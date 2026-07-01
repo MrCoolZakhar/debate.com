@@ -1,3 +1,5 @@
+import Link from 'next/link';
+import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
@@ -70,7 +72,7 @@ export default function Article4() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
       <div style={s.page}>
         <div style={s.wrap}>
-          <a href="/blog" style={s.back}>← MUN Resources</a>
+          <Link href="/blog" style={s.back}>← MUN Resources</Link>
           <h1 style={s.h1}>MUN Motions Explained — Types, How to Propose, and Voting Rules</h1>
           <p style={s.meta}>By Gavelling · June 2026 · 10 min read</p>
           <article style={s.article}>
@@ -208,9 +210,10 @@ export default function Article4() {
               <li style={s.li}><strong>Never let motions drag.</strong> Take the second, call the vote, record the result, move on. Drawn-out motion procedure kills committee energy.</li>
             </ul>
             <p style={s.p}>
-              See also: <a href="/blog/how-to-run-mun-committee" style={{ color: '#1B3828', fontWeight: 600 }}>How to Run a MUN Committee</a> for a complete session walkthrough.
+              See also: <Link href="/blog/how-to-run-mun-committee" style={{ color: '#1B3828', fontWeight: 600 }}>How to Run a MUN Committee</Link> for a complete session walkthrough.
             </p>
 
+            <RelatedGuides currentSlug="mun-motions-explained" />
             <div style={s.cta}>
               <p style={s.ctaText}>
                 Gavelling&apos;s motion queue tracks and sorts every motion automatically — so you can focus on running the vote.

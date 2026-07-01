@@ -9,13 +9,26 @@ import { Committee, CommitteeDocument, DocumentType, PendingMotionType, Speaking
 import { TranslationKey } from '@/lib/translations';
 import ChatPanel from '@/components/ChatPanel';
 import { useSettingsStore, DEFAULT_MOTION_NAMES } from '@/lib/settingsStore';
+import { computeObjectiveScore, getScoringConfig, type LedgerRow } from '@/lib/scoring';
+import { getDelegateFeedback } from '@/lib/committeeService';
 import { getFlagUrl, getCountryByName, getCountryDisplayName, matchesCountryQuery } from '@/lib/countries';
 import { getCommitteeDisplayName } from '@/lib/presetNames';
+import { supabase } from '@/lib/supabase';
 import { Emoji } from '@/components/Emoji';
 import { FlagImg } from '@/components/FlagImg';
+import CowDelegationBoard from '@/components/CowDelegationBoard';
+import ChatDisabledNotice from '@/components/ChatDisabledNotice';
+import { getCommitteeFlags, sponsorLabel } from '@/lib/committeeFlags';
+import { chatUnreadTotal } from '@/lib/chatConversations';
 import {
   getCommitteeByCode,
   subscribeToCommittee,
+  getCurrentSpeakerRow,
+  getDelegatesList,
+  getSpeakersLists,
+  getMessagesList,
+  getDocumentsList,
+  getPendingMotionsList,
   addToSpeakersList as addToSpeakersListInDB,
   addDocument as addDocumentInDB,
   addPendingMotion as addPendingMotionInDB,
@@ -121,171 +134,46 @@ function statusChangesRemaining(committeeId: string, country: string): number {
   return Math.max(0, 3 - recent.length);
 }
 
-// Speaking log parsing
+// Speaking log parsing — only SPEECH events (the channel now also carries motion/RTR/manual
+// events, which must not be counted as speeches in the speaking history).
 function parseSpeakingLogs(committee: Committee): SpeakingLogEntry[] {
   return committee.messages
     .filter((m) => m.sender === '__system__' && m.recipient === '__log__' && m.content.startsWith('__log__:'))
     .map((m) => {
-      try { return JSON.parse(m.content.slice('__log__:'.length)) as SpeakingLogEntry; }
+      try { return JSON.parse(m.content.slice('__log__:'.length)) as SpeakingLogEntry & { type?: string }; }
       catch { return null; }
     })
-    .filter(Boolean) as SpeakingLogEntry[];
+    .filter((e): e is SpeakingLogEntry & { type?: string } =>
+      !!e && (!e.type || e.type === 'speech') && typeof e.seconds === 'number')
+    .map((e) => e as SpeakingLogEntry);
 }
 
-// Point calculation
+// Point calculation — total/rows come from the shared objective scorer (single source of
+// truth). Tiers are removed; only universal activity-based tips remain.
 function calcPoints(logs: SpeakingLogEntry[], committee: Committee, country: string, t: (key: TranslationKey) => string): {
   total: number;
-  breakdown: { label: string; pts: number }[];
-  tier: string;
+  rows: LedgerRow[];
   tips: string[];
 } {
+  const { total, rows } = computeObjectiveScore(committee, country);
+
   const myLogs = logs.filter((l) => l.country === country);
-  const breakdown: { label: string; pts: number }[] = [];
-  let total = 0;
-
-  // Attendance (present/PV)
-  const delegate = committee.delegates.find((d) => d.country === country);
-  if (delegate && delegate.status !== 'absent') {
-    breakdown.push({ label: t('delegate_attendance_pts'), pts: 5 });
-    total += 5;
-  }
-
-  // GSL speeches
   const gslSpeeches = myLogs.filter((l) => l.context === 'speakers-list');
-  if (gslSpeeches.length > 0) {
-    const pts = gslSpeeches.length * 10;
-    breakdown.push({ label: t('delegate_breakdown_gsl').replace('{n}', String(gslSpeeches.length)), pts });
-    total += pts;
-  }
-
-  // Caucus speeches
   const caucusSpeeches = myLogs.filter((l) => l.context === 'moderated-caucus' || l.context === 'unmoderated-caucus');
-  if (caucusSpeeches.length > 0) {
-    const pts = caucusSpeeches.length * 8;
-    breakdown.push({ label: t('delegate_breakdown_caucus').replace('{n}', String(caucusSpeeches.length)), pts });
-    total += pts;
-  }
-
-  // Speaking time bonus (1pt per 10 seconds)
   const totalSeconds = myLogs.reduce((s, l) => s + l.seconds, 0);
-  const timePts = Math.floor(totalSeconds / 10);
-  if (timePts > 0) {
-    breakdown.push({ label: t('delegate_breakdown_time').replace('{n}', String(totalSeconds)), pts: timePts });
-    total += timePts;
-  }
-
-  // Documents — 10pts per WP, 20pts per DR, per sponsor
   const myDocs = (committee.documents ?? []).filter((d) => d.sponsors.includes(country));
   const wps = myDocs.filter((d) => d.type === 'working-paper');
   const drs = myDocs.filter((d) => d.type === 'draft-resolution');
-  if (wps.length > 0) {
-    const pts = wps.length * 10;
-    breakdown.push({ label: t('delegate_breakdown_wp').replace('{n}', String(wps.length)), pts });
-    total += pts;
-  }
-  if (drs.length > 0) {
-    const pts = drs.length * 20;
-    breakdown.push({ label: t('delegate_breakdown_dr').replace('{n}', String(drs.length)), pts });
-    total += pts;
-    const passedDrs = drs.filter((d) => d.status === 'passed').length;
-    if (passedDrs > 0) {
-      const passPts = passedDrs * 10;
-      breakdown.push({ label: t('delegate_breakdown_dr_passed').replace('{n}', String(passedDrs)), pts: passPts });
-      total += passPts;
-    }
-  }
 
-  // Motions raised (from system log)
-  const motionsRaised = logs.filter((l) => (l as unknown as Record<string,unknown>).type === 'motion-raised' && l.country === country).length;
-  if (motionsRaised > 0) {
-    const pts = motionsRaised * 5;
-    breakdown.push({ label: t('delegate_breakdown_motions').replace('{n}', String(motionsRaised)), pts });
-    total += pts;
-  }
-
-  // Right of reply (from system log)
-  const rtrCount = logs.filter((l) => (l as unknown as Record<string,unknown>).type === 'right-of-reply' && l.country === country).length;
-  if (rtrCount > 0) {
-    const pts = rtrCount * 5;
-    breakdown.push({ label: t('delegate_breakdown_rtr').replace('{n}', String(rtrCount)), pts });
-    total += pts;
-  }
-
-  // Tier
-  let tier = t('delegate_tier_observer');
-  if (total >= 300) tier = t('delegate_tier_distinguished');
-  else if (total >= 200) tier = t('delegate_tier_delegate');
-  else if (total >= 120) tier = t('delegate_tier_active');
-  else if (total >= 70) tier = t('delegate_tier_debater');
-  else if (total >= 30) tier = t('delegate_tier_participant');
-
+  // Universal conditional tips (no tier buckets)
   const tips: string[] = [];
-
-  if (tier === t('delegate_tier_observer')) {
-    tips.push(t('delegate_tip_gsl_request'));
-    tips.push(t('delegate_tip_mark_present'));
-    tips.push(t('delegate_tip_opening'));
-    tips.push(t('delegate_tip_address'));
-    tips.push(t('delegate_tip_listen'));
-    tips.push(t('delegate_tip_bloc'));
-  }
-
-  if (tier === t('delegate_tier_participant')) {
-    tips.push(t('delegate_tip_caucus_sub'));
-    tips.push(t('delegate_tip_unmod_wp'));
-    tips.push(t('delegate_tip_full_time'));
-    tips.push(t('delegate_tip_propose_caucus'));
-    tips.push(t('delegate_tip_cosponsor'));
-    tips.push(t('delegate_tip_right_of_reply'));
-  }
-
-  if (tier === t('delegate_tier_debater')) {
-    tips.push(t('delegate_tip_substance'));
-    tips.push(t('delegate_tip_wp_cosponsors'));
-    tips.push(t('delegate_tip_yield'));
-    tips.push(t('delegate_tip_raise_motion'));
-    tips.push(t('delegate_tip_escalate_dr'));
-    tips.push(t('delegate_tip_point_of_order'));
-    tips.push(t('delegate_tip_gsl_strategic'));
-  }
-
-  if (tier === t('delegate_tier_active')) {
-    tips.push(t('delegate_tip_impact'));
-    tips.push(t('delegate_tip_lead_dr'));
-    tips.push(t('delegate_tip_coordinate_bloc'));
-    tips.push(t('delegate_tip_rebut'));
-    tips.push(t('delegate_tip_passed_dr'));
-    tips.push(t('delegate_tip_tdt'));
-    tips.push(t('delegate_tip_friendly_amendment'));
-  }
-
-  if (tier === t('delegate_tier_delegate')) {
-    tips.push(t('delegate_tip_close_to_distinguished'));
-    tips.push(t('delegate_tip_help_newer'));
-    tips.push(t('delegate_tip_operative_clauses'));
-    tips.push(t('delegate_tip_unfriendly_amendment'));
-    tips.push(t('delegate_tip_consolidate'));
-    tips.push(t('delegate_tip_point_of_info'));
-    tips.push(t('delegate_tip_yield_questions'));
-  }
-
-  if (tier === t('delegate_tier_distinguished')) {
-    tips.push(t('delegate_tip_highest_tier'));
-    tips.push(t('delegate_tip_legacy'));
-    tips.push(t('delegate_tip_mentor'));
-    tips.push(t('delegate_tip_synthesise'));
-    tips.push(t('delegate_tip_distinguished_driver'));
-    tips.push(t('delegate_tip_closure'));
-  }
-
-  // Universal conditional tips regardless of tier
   if (gslSpeeches.length === 0) tips.push(t('delegate_tip_gsl_not_spoken'));
   if (caucusSpeeches.length === 0 && committee.phase !== 'pre-session') tips.push(t('delegate_tip_no_caucus'));
   if (wps.length === 0 && drs.length === 0) tips.push(t('delegate_tip_no_docs'));
   if (totalSeconds > 0 && totalSeconds < 45) tips.push(t('delegate_tip_speaking_time'));
   if (drs.length === 0 && wps.length > 0) tips.push(t('delegate_tip_have_wp'));
 
-  return { total, breakdown, tier, tips };
+  return { total, rows, tips };
 }
 
 // ── Co-Sponsors input ─────────────────────────────────────────────────────────
@@ -318,12 +206,12 @@ function SponsorsInput({
       {/* Selected sponsors tags */}
       <div className="flex flex-wrap gap-1.5 mb-2 min-h-[24px]">
         <span className="inline-flex items-center gap-1 text-xs bg-[#1B3828]/20 border border-[#1B3828]/30 text-[#6A5A4A] rounded-full px-2.5 py-0.5 font-medium">
-          {flagFor(myCountry)} {getCountryDisplayName(myCountry, language)} <span className="text-[#9A8A78] ml-0.5">{language === 'fr' ? '(vous)' : language === 'es' ? '(tú)' : '(you)'}</span>
+          {flagFor(myCountry)} {getCountryDisplayName(myCountry, language)} <span className="text-[#9A8A78] ms-0.5">{language === 'ar' ? '(أنت)' : language === 'fr' ? '(vous)' : language === 'es' ? '(tú)' : '(you)'}</span>
         </span>
         {value.map((c) => (
           <span key={c} className="inline-flex items-center gap-1 text-xs bg-[#FAF8F3] border border-[#DDD4C0] text-[#6A5A4A] rounded-full px-2.5 py-0.5">
             {flagFor(c)} {getCountryDisplayName(c, language)}
-            <button onClick={() => onChange(value.filter((x) => x !== c))} className="ml-1 text-[#9A8A78] hover:text-red-400 font-bold leading-none">×</button>
+            <button onClick={() => onChange(value.filter((x) => x !== c))} className="ms-1 text-[#9A8A78] hover:text-red-400 font-bold leading-none">×</button>
           </span>
         ))}
       </div>
@@ -346,10 +234,10 @@ function SponsorsInput({
               <button
                 key={c}
                 onMouseDown={(e) => { e.preventDefault(); add(c); }}
-                className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors ${i === 0 ? 'bg-[#DDD4C0] text-[#1C1410]' : 'text-[#6A5A4A] hover:bg-[#DDD4C0]'}`}
+                className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-start transition-colors ${i === 0 ? 'bg-[#DDD4C0] text-[#1C1410]' : 'text-[#6A5A4A] hover:bg-[#DDD4C0]'}`}
               >
                 {flagFor(c)} {getCountryDisplayName(c, language)}
-                {i === 0 && <span className="ml-auto text-xs text-[#9A8A78]">↵ Enter</span>}
+                {i === 0 && <span className="ms-auto text-xs text-[#9A8A78]">↵ Enter</span>}
               </button>
             ))}
           </div>
@@ -384,7 +272,7 @@ function DelegateDocCard({ doc }: { doc: CommitteeDocument }) {
     <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl p-3 space-y-2">
       <div className="flex items-center justify-between">
         <div className="font-semibold text-[#1C1410] text-sm">{doc.docCode} — {doc.title}</div>
-        <span className="text-xs font-black ml-2 shrink-0 px-2 py-0.5 rounded-full" style={{ color: statusColor, backgroundColor: statusBg, border: `1px solid ${statusColor}30` }}>{statusLabel}</span>
+        <span className="text-xs font-black ms-2 shrink-0 px-2 py-0.5 rounded-full" style={{ color: statusColor, backgroundColor: statusBg, border: `1px solid ${statusColor}30` }}>{statusLabel}</span>
       </div>
       <div className="text-xs text-[#9A8A78]">
         {doc.sponsors.map((s, i) => (
@@ -410,10 +298,29 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
   const [fileUrl, setFileUrl] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [sending, setSending] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Upload the PDF to Supabase Storage and store only the public URL — NOT the file bytes.
+  // Previously this used FileReader.readAsDataURL, base64-inlining the whole PDF into the
+  // documents row. That row is pulled by getCommitteeByCode on every realtime refetch, so a
+  // single attachment fanned out (clients × events) MBs of egress. Mirrors DocumentsModal.
+  const uploadFile = async (file: File) => {
+    setFileName(file.name);
+    setUploading(true);
+    try {
+      const path = committee.id + '/' + Date.now() + '-' + file.name;
+      const { error } = await supabase.storage.from('session-documents').upload(path, file, { upsert: true });
+      if (error) { console.error('Storage upload error:', error); setFileName(null); return; }
+      const { data } = supabase.storage.from('session-documents').getPublicUrl(path);
+      setFileUrl(data.publicUrl);
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const handleSubmit = async () => {
-    if (!title.trim() || sending) return;
+    if (!title.trim() || sending || uploading) return;
     setSending(true);
     await addDocumentInDB(committee.id, {
       type: docType,
@@ -466,7 +373,7 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
         {/* Co-sponsors */}
         <div>
           <label className="text-xs font-bold mb-1.5 block" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>
-            {t('delegate_doc_sponsors_label')} <span className="font-normal" style={{ color: '#9A8A78' }}>{t('delegate_doc_sponsors_auto')}</span>
+            {sponsorLabel(committee, t('delegate_doc_sponsors_label'))} <span className="font-normal" style={{ color: '#9A8A78' }}>{t('delegate_doc_sponsors_auto')}</span>
           </label>
           <SponsorsInput committee={committee} myCountry={country} value={coSponsors} onChange={setCoSponsors} />
         </div>
@@ -475,25 +382,23 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
         <div>
           <label className="text-xs font-bold mb-1.5 block" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>{t('delegate_doc_attachment_label')} <span className="font-normal" style={{ color: '#9A8A78' }}>{t('delegate_doc_attachment_optional')}</span></label>
           <div className="flex items-center gap-2">
-            <button onClick={() => fileInputRef.current?.click()}
-              className="text-xs bg-[#FAF8F3] border border-[#DDD4C0] hover:border-[#1B3828] text-[#6A5A4A] px-3 py-2 rounded-lg transition-colors">
-              {fileName ? `📎 ${fileName}` : t('delegate_doc_attach_btn')}
+            <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
+              className="text-xs bg-[#FAF8F3] border border-[#DDD4C0] hover:border-[#1B3828] text-[#6A5A4A] px-3 py-2 rounded-lg transition-colors disabled:opacity-60">
+              {uploading ? '⏳ …' : fileName ? `📎 ${fileName}` : t('delegate_doc_attach_btn')}
             </button>
             {fileName && <button onClick={() => { setFileName(null); setFileUrl(null); }} className="text-xs text-[#9A8A78] hover:text-red-400">{t('delegate_doc_remove')}</button>}
           </div>
           <input ref={fileInputRef} type="file" accept=".pdf" className="hidden"
-            onChange={(e) => {
+            onChange={async (e) => {
               const f = e.target.files?.[0];
               if (!f) return;
-              const reader = new FileReader();
-              reader.onload = () => { setFileUrl(reader.result as string); setFileName(f.name); };
-              reader.readAsDataURL(f);
+              await uploadFile(f);
             }} />
         </div>
 
-        <button onClick={handleSubmit} disabled={!title.trim() || sending}
+        <button onClick={handleSubmit} disabled={!title.trim() || sending || uploading}
           className="w-full text-white py-3 rounded-xl text-sm font-black transition-colors focus:outline-none"
-          style={{ backgroundColor: !title.trim() || sending ? '#DDD4C0' : '#1B3828', color: !title.trim() || sending ? '#9A8A78' : 'white', letterSpacing: '0.05em' }}>
+          style={{ backgroundColor: !title.trim() || sending || uploading ? '#DDD4C0' : '#1B3828', color: !title.trim() || sending || uploading ? '#9A8A78' : 'white', letterSpacing: '0.05em' }}>
           {sending ? t('delegate_doc_submitting') : t('delegate_doc_submit_to_chair')}
         </button>
       </div>
@@ -506,9 +411,29 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
 function StatisticsTab({ committee, country }: { committee: Committee; country: string }) {
   const { language } = useLanguage();
   const t = useT();
+  const cfg = getScoringConfig(committee);
+  const hideScores = cfg.hideScoresFromDelegates === true;
   const logs = parseSpeakingLogs(committee);
-  const { total, breakdown, tier, tips } = calcPoints(logs, committee, country, t);
+  const { total, rows, tips } = calcPoints(logs, committee, country, t);
   const myLogs = logs.filter((l) => l.country === country);
+
+  // Category subtotals (summary) — delegates see grouped categories, never the chair's itemized ledger.
+  const categories: { label: string; pts: number }[] = [];
+  for (const r of rows) {
+    const existing = categories.find((c) => c.label === r.label);
+    if (existing) existing.pts += r.pts; else categories.push({ label: r.label, pts: r.pts });
+  }
+
+  // End recap — factor scores only (never the chair's private notes).
+  const [recap, setRecap] = useState<{ level: string; factorScores: Record<string, number>; createdAt: string }[]>([]);
+  useEffect(() => {
+    getDelegateFeedback(committee.id, country).then(setRecap);
+  }, [committee.id, country]);
+  const latestRecap = [...recap]
+    .filter((f) => f.level === 'conference')
+    .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))[0]
+    ?? [...recap].filter((f) => f.level === 'session').sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))[0];
+  const recapFactors = cfg.factors.filter((f) => f.enabled && latestRecap && typeof latestRecap.factorScores[f.id] === 'number');
   const totalSeconds = myLogs.reduce((s, l) => s + l.seconds, 0);
 
   // Top speakers by time
@@ -527,34 +452,36 @@ function StatisticsTab({ committee, country }: { committee: Committee; country: 
 
   return (
     <div className="p-4 max-w-2xl mx-auto space-y-5">
-      {/* Score card */}
-      <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid #DDD4C0' }}>
-        <div className="px-5 py-3 flex items-center gap-3" style={{ backgroundColor: '#1B3828', borderBottom: '1px solid #3D7A52' }}>
-          <div className="w-1 h-4 rounded-full" style={{ backgroundColor: '#EED98A' }} />
-          <span className="text-xs font-mono font-bold tracking-widest" style={{ color: '#EED98A' }}>{t('delegate_score_header')}</span>
+      {/* Score card — hidden when chairs disable scores for delegates */}
+      {hideScores ? (
+        <div className="rounded-2xl p-4 text-sm" style={{ border: '1px solid #DDD4C0', backgroundColor: '#EDE7D8', color: '#6A5A4A' }}>
+          {t('delegate_scores_hidden')}
         </div>
-        <div className="p-5" style={{ backgroundColor: '#EDE7D8' }}>
-        <div className="flex items-end gap-3 mb-3">
-          <span className="text-6xl font-black" style={{ color: '#1B3828' }}>{total}</span>
-          <span className="text-lg font-medium mb-1" style={{ color: '#6A5A4A' }}>{t('delegate_pts_label')}</span>
-        </div>
-        <div className="inline-flex items-center gap-1.5 text-sm font-black px-3 py-1 rounded-full" style={{ backgroundColor: '#1B3828', color: '#EED98A' }}>
-          {tier}
-        </div>
-
-        {/* Score breakdown */}
-        {breakdown.length > 0 && (
-          <div className="mt-4 space-y-1.5">
-            {breakdown.map((b) => (
-              <div key={b.label} className="flex justify-between text-xs">
-                <span style={{ color: '#6A5A4A' }}>{b.label}</span>
-                <span className="font-bold" style={{ color: '#1B3828' }}>+{b.pts}</span>
-              </div>
-            ))}
+      ) : (
+        <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid #DDD4C0' }}>
+          <div className="px-5 py-3 flex items-center gap-3" style={{ backgroundColor: '#1B3828', borderBottom: '1px solid #3D7A52' }}>
+            <div className="w-1 h-4 rounded-full" style={{ backgroundColor: '#EED98A' }} />
+            <span className="text-xs font-mono font-bold tracking-widest" style={{ color: '#EED98A' }}>{t('delegate_score_header')}</span>
           </div>
-        )}
+          <div className="p-5" style={{ backgroundColor: '#EDE7D8' }}>
+          <div className="flex items-end gap-3 mb-3">
+            <span className="text-6xl font-black" style={{ color: '#1B3828' }}>{total}</span>
+            <span className="text-lg font-medium mb-1" style={{ color: '#6A5A4A' }}>{t('delegate_pts_label')}</span>
+          </div>
+          {/* Category subtotals — summary, not the chair's itemized ledger */}
+          {categories.length > 0 && (
+            <div className="mt-4 space-y-1.5">
+              {categories.map((c) => (
+                <div key={c.label} className="flex justify-between text-xs gap-2">
+                  <span className="truncate" style={{ color: '#6A5A4A' }}>{c.label}</span>
+                  <span className="font-bold shrink-0" style={{ color: c.pts < 0 ? '#8B2020' : '#1B3828' }}>{c.pts < 0 ? '' : '+'}{c.pts}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Speaking stats */}
       <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid #DDD4C0' }}>
@@ -563,7 +490,7 @@ function StatisticsTab({ committee, country }: { committee: Committee; country: 
           <span className="text-xs font-mono font-bold tracking-widest" style={{ color: '#EED98A' }}>{t('delegate_speaking_history')}</span>
         </div>
         <div className="p-5" style={{ backgroundColor: '#EDE7D8' }}>
-        <div className="grid grid-cols-3 gap-3 mb-4">
+        <div className={`grid ${hideScores ? 'grid-cols-2' : 'grid-cols-3'} gap-3 mb-4`}>
           <div className="text-center">
             <div className="text-2xl font-black" style={{ color: '#1B3828' }}>{myLogs.length}</div>
             <div className="text-xs" style={{ color: '#9A8A78' }}>{t('delegate_speeches_label')}</div>
@@ -572,18 +499,20 @@ function StatisticsTab({ committee, country }: { committee: Committee; country: 
             <div className="text-2xl font-black" style={{ color: '#1B3828' }}>{formatTime(totalSeconds)}</div>
             <div className="text-xs" style={{ color: '#9A8A78' }}>{t('delegate_total_time_label')}</div>
           </div>
-          <div className="text-center">
-            <div className="text-2xl font-black" style={{ color: '#1B3828' }}>{myRank > 0 ? `#${myRank}` : '—'}</div>
-            <div className="text-xs" style={{ color: '#9A8A78' }}>{t('delegate_rank_label')}</div>
-          </div>
+          {!hideScores && (
+            <div className="text-center">
+              <div className="text-2xl font-black" style={{ color: '#1B3828' }}>{myRank > 0 ? `#${myRank}` : '—'}</div>
+              <div className="text-xs" style={{ color: '#9A8A78' }}>{t('delegate_rank_label')}</div>
+            </div>
+          )}
         </div>
         {myLogs.length > 0 ? (
           <div className="space-y-1.5">
             {myLogs.map((l, i) => (
               <div key={i} className="flex items-center justify-between text-xs rounded-lg px-3 py-2" style={{ backgroundColor: '#FAF8F3' }}>
                 <span className="truncate flex-1" style={{ color: '#6A5A4A' }}>{l.topic || t('delegate_gsl_fallback')}</span>
-                <span className="shrink-0 ml-2 capitalize" style={{ color: '#9A8A78' }}>{l.context.replace(/-/g, ' ')}</span>
-                <span className="font-mono shrink-0 ml-2" style={{ color: '#1C1410' }}>{l.seconds}s</span>
+                <span className="shrink-0 ms-2 capitalize" style={{ color: '#9A8A78' }}>{l.context.replace(/-/g, ' ')}</span>
+                <span className="font-mono shrink-0 ms-2" style={{ color: '#1C1410' }}>{l.seconds}s</span>
               </div>
             ))}
           </div>
@@ -593,8 +522,8 @@ function StatisticsTab({ committee, country }: { committee: Committee; country: 
         </div>
       </div>
 
-      {/* Committee leaderboard */}
-      {ranking.length > 0 && (
+      {/* Committee leaderboard — hidden when chairs disable scores */}
+      {!hideScores && ranking.length > 0 && (
         <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid #DDD4C0' }}>
           <div className="px-5 py-3 flex items-center gap-3" style={{ backgroundColor: '#1B3828', borderBottom: '1px solid #3D7A52' }}>
             <div className="w-1 h-4 rounded-full" style={{ backgroundColor: '#EED98A' }} />
@@ -605,8 +534,8 @@ function StatisticsTab({ committee, country }: { committee: Committee; country: 
           <div className="flex items-center gap-2 text-[10px] text-[#7A5A38] font-mono mb-1.5 px-2">
             <span className="w-4 shrink-0" />
             <span className="flex-1">{t('delegate_country_col')}</span>
-            <span className="w-16 text-right">{t('delegate_time_col')}</span>
-            <span className="w-8 text-right">{t('delegate_pts_col')}</span>
+            <span className="w-16 text-end">{t('delegate_time_col')}</span>
+            <span className="w-8 text-end">{t('delegate_pts_col')}</span>
           </div>
           <div className="space-y-1.5">
             {ranking.slice(0, 10).map((r, i) => (
@@ -618,15 +547,41 @@ function StatisticsTab({ committee, country }: { committee: Committee; country: 
                   <div className="w-16 h-1.5 bg-[#DDD4C0] rounded-full overflow-hidden">
                     <div className="h-full bg-[#1B3828] rounded-full" style={{ width: `${(r.seconds / ranking[0].seconds) * 100}%` }} />
                   </div>
-                  <span className="text-xs font-mono text-[#9A8A78] w-10 text-right">{formatTime(r.seconds)}</span>
+                  <span className="text-xs font-mono text-[#9A8A78] w-10 text-end">{formatTime(r.seconds)}</span>
                 </div>
-                <span className="text-xs font-black w-8 text-right shrink-0" style={{ color: '#1B3828' }}>
+                <span className="text-xs font-black w-8 text-end shrink-0" style={{ color: '#1B3828' }}>
                   {pointsByCountry[r.country] ?? 0}
                 </span>
               </div>
             ))}
           </div>
         </div>
+        </div>
+      )}
+
+      {/* Chair recap — factor scores only, never the chair's private notes */}
+      {latestRecap && recapFactors.length > 0 && (
+        <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid #DDD4C0' }}>
+          <div className="px-5 py-3 flex items-center gap-3" style={{ backgroundColor: '#1B3828', borderBottom: '1px solid #3D7A52' }}>
+            <div className="w-1 h-4 rounded-full" style={{ backgroundColor: '#EED98A' }} />
+            <span className="text-xs font-mono font-bold tracking-widest" style={{ color: '#EED98A' }}>{t('delegate_recap_header')}</span>
+          </div>
+          <div className="p-5 space-y-2.5" style={{ backgroundColor: '#EDE7D8' }}>
+            {recapFactors.map((f) => {
+              const v = latestRecap.factorScores[f.id];
+              return (
+                <div key={f.id}>
+                  <div className="flex justify-between text-xs mb-1">
+                    <span style={{ color: '#6A5A4A' }}>{f.name}</span>
+                    <span className="font-bold" style={{ color: '#1B3828' }}>{v}/{cfg.factorScaleMax}</span>
+                  </div>
+                  <div className="h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: '#DDD4C0' }}>
+                    <div className="h-full rounded-full" style={{ width: `${Math.min(100, (v / cfg.factorScaleMax) * 100)}%`, backgroundColor: '#1B3828' }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -704,7 +659,72 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
         if (found.endedAt) setSessionEnded(true);
         else if (found.suspendedAt) { wasEverSuspended.current = true; setSessionSuspended(true); }
         committeeIdRef.current = found.id;
-        unsubscribe = subscribeToCommittee(found.id, async () => {
+        const cid = found.id;
+        unsubscribe = subscribeToCommittee(cid, async (table) => {
+          // Patch only the slice that changed instead of re-pulling the whole committee
+          // (7 tables, select('*')) on every event. Session-state transitions (suspend /
+          // end / resume) only ever land on the `committees` table, so that one event type
+          // keeps the full refetch and its setSessionEnded/Suspended logic. All other tables
+          // can never change session state, so a scoped patch is safe.
+          if (table === 'current_speaker') {
+            const cs = await getCurrentSpeakerRow(cid);
+            if (!cs) return;
+            setCommittee((prev) => {
+              if (!prev) return prev;
+              const patched: Committee = {
+                ...prev,
+                currentSpeaker: cs.currentSpeaker,
+                speakerTimeRemaining: cs.speakerTimeRemaining,
+                speakerStartedAt: cs.speakerStartedAt,
+                // Drop the new speaker from the local GSL to avoid a transient duplicate
+                // before the speakers_list delete event arrives (mirrors getCommitteeByCode).
+                speakersList: cs.currentSpeaker
+                  ? prev.speakersList.filter((s) => s.delegateId !== cs.currentSpeaker!.delegateId)
+                  : prev.speakersList,
+              };
+              if (prev.caucus && prev.caucus.type === 'moderated') {
+                patched.caucus = { ...prev.caucus, currentSpeaker: cs.currentSpeaker?.country ?? null };
+                patched.caucusQueue = cs.currentSpeaker
+                  ? prev.caucusQueue.filter((s) => s.delegateId !== cs.currentSpeaker!.delegateId)
+                  : prev.caucusQueue;
+              }
+              return patched;
+            });
+            return;
+          }
+          if (table === 'speakers_list') {
+            const { speakersList, caucusQueue } = await getSpeakersLists(cid);
+            setCommittee((prev) => prev ? {
+              ...prev,
+              speakersList: prev.currentSpeaker
+                ? speakersList.filter((s) => s.delegateId !== prev.currentSpeaker!.delegateId)
+                : speakersList,
+              caucusQueue,
+            } : prev);
+            return;
+          }
+          if (table === 'delegates') {
+            const delegates = await getDelegatesList(cid);
+            setCommittee((prev) => prev ? { ...prev, delegates } : prev);
+            return;
+          }
+          if (table === 'messages') {
+            const messages = await getMessagesList(cid);
+            setCommittee((prev) => prev ? { ...prev, messages } : prev);
+            return;
+          }
+          if (table === 'documents') {
+            const documents = await getDocumentsList(cid);
+            setCommittee((prev) => prev ? { ...prev, documents } : prev);
+            return;
+          }
+          if (table === 'motions') {
+            const pendingMotions = await getPendingMotionsList(cid);
+            setCommittee((prev) => prev ? { ...prev, pendingMotions } : prev);
+            return;
+          }
+
+          // table === 'committees' (and any fallback): session state may have changed.
           const updated = await getCommitteeByCode(code.toUpperCase());
           if (updated) {
             if (updated.endedAt) {
@@ -787,7 +807,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     return () => clearInterval(id);
   }, [committee?.expiresAt]);
 
-  // Detect GSL request denial
+  // Detect GSL request denial — and waiting-room (join-request) denial
   useEffect(() => {
     if (!committee) return;
     const isOnSpeakersListNow = committee.speakersList.some((s) => s.country === country);
@@ -801,8 +821,20 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     if (isOnSpeakersListNow || isCurrentSpeakerNow) {
       setGslDenied(false);
     }
+    // Waiting room: a join request that vanished while still absent = the chair declined it.
+    const admitted = (committee.delegates.find((d) => d.country === country)?.status ?? 'absent') !== 'absent';
+    const hadJoinReq = (prev ?? []).some((m) => (m.type as string) === 'join-request' && m.proposedBy === country);
+    const hasJoinReq = (committee.pendingMotions ?? []).some((m) => (m.type as string) === 'join-request' && m.proposedBy === country);
+    if (hadJoinReq && !hasJoinReq && !admitted) {
+      setJoinDenied(true);
+      setJoinStatus(null);
+    }
+    if (admitted) {
+      setJoinDenied(false);
+      setJoinStatus(null);
+    }
     prevPendingRef.current = committee.pendingMotions;
-  }, [committee?.pendingMotions, committee?.speakersList, committee?.currentSpeaker, country]);
+  }, [committee?.pendingMotions, committee?.speakersList, committee?.currentSpeaker, committee?.delegates, country]);
 
   if (loading) return <GavelLoader />;
 
@@ -819,6 +851,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   }
 
   const settings = getSettings(committee.code);
+  const requireChairApproval = getCommitteeFlags(committee).requireChairApproval;
   const myDelegate = committee.delegates.find((d) => d.country === country);
   const isAbsent = !myDelegate || myDelegate.status === 'absent';
   const myQueueIndex = committee.speakersList.findIndex((s) => s.country === country);
@@ -834,7 +867,14 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   };
 
   const phaseDisplay = (() => {
-    const mn = language === 'fr' ? {
+    const mn = language === 'ar' ? {
+      moderated: 'حوار منهجي',
+      unmoderated: 'حوار حر',
+      consultation: 'مشاورات الهيئة',
+      tour: 'جولة المتحدثين',
+      suspendDebate: 'تعليق النقاش',
+      endDebate: 'إنهاء النقاش',
+    } : language === 'fr' ? {
       moderated: 'Caucus modéré',
       unmoderated: 'Caucus non modéré',
       consultation: "Consultation de l'assemblée",
@@ -871,9 +911,19 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   // ── Join request handler (absent → P or PV)
   const handleRequestJoin = async (desiredStatus: 'present' | 'present-voting') => {
     if (!myDelegate) return;
+    setJoinDenied(false);
+    // Chair approval OFF → delegates self-admit instantly (no waiting room).
+    if (!requireChairApproval) {
+      setCommittee((prev) => prev ? {
+        ...prev,
+        delegates: prev.delegates.map((d) => d.id === myDelegate.id ? { ...d, status: desiredStatus } : d),
+      } : prev);
+      setDelegateStatusInDB(myDelegate.id, desiredStatus);
+      return;
+    }
+    // Chair approval ON → request a seat and wait in the waiting room.
     setJoinRequesting(true);
     setJoinStatus(desiredStatus);
-    setJoinDenied(false);
     await requestJoinSession(committee.id, myDelegate.id, country, desiredStatus);
     setJoinRequesting(false);
   };
@@ -888,6 +938,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   };
 
   // Section 7 — shortened tab labels
+  const chatDisabled = getCommitteeFlags(committee).disableChat;
   const tabs: { key: DelegateTab; label: string }[] = [
     { key: 'session',   label: t('delegate_tab_session') },
     { key: 'documents', label: t('delegate_tab_documents') },
@@ -934,6 +985,64 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     );
   }
 
+  // ── Waiting Room — chair-approval gate (blocks the session until admitted) ──
+  if (requireChairApproval && isAbsent && !sessionEnded) {
+    const waitingHeading = language === 'ar' ? 'غرفة الانتظار' : language === 'fr' ? "Salle d'attente" : language === 'es' ? 'Sala de Espera' : 'Waiting Room';
+    const myFlag = getCountryByName(country);
+    return (
+      <FitToScreen>
+        <div className="h-full w-full flex flex-col overflow-hidden relative" style={{ backgroundColor: '#EDE7D8' }}>
+          <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
+          <div className="relative z-[2] flex-1 flex flex-col items-center justify-center text-center px-6">
+            <p className="text-xs font-mono font-bold uppercase tracking-widest mb-1" style={{ color: '#9A8A78' }}>{getCommitteeDisplayName(committee.name, language)}</p>
+            {committee.topic && <p className="text-xs mb-6" style={{ color: '#9A8A78' }}>{committee.topic}</p>}
+            <div className="flex flex-col items-center gap-3 mb-6">
+              {myFlag
+                ? <img src={getFlagUrl(myFlag.code)} alt={country} style={{ width: '104px', height: '74px', objectFit: 'cover', borderRadius: '10px', border: '1.5px solid rgba(28,20,16,0.12)', boxShadow: '0 6px 20px rgba(27,56,40,0.14)' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                : <Emoji size="3.5rem">🌐</Emoji>}
+              <p className="font-black text-2xl" style={{ color: '#1C1410' }}>{getCountryDisplayName(country, language)}</p>
+            </div>
+            <div className="w-full max-w-sm rounded-2xl p-6 relative overflow-hidden" style={{ backgroundColor: '#1B3828', border: '1.5px solid #3D7A52', boxShadow: '0 24px 60px rgba(27,56,40,0.35)' }}>
+              <h1 className="text-2xl font-black mb-2" style={{ color: '#EED98A', fontFamily: "'Outfit', sans-serif" }}>{waitingHeading}</h1>
+              {joinDenied ? (
+                <>
+                  <p className="text-sm mb-4" style={{ color: 'rgba(237,231,216,0.85)' }}>{t('delegate_join_denied')}</p>
+                  <button onClick={() => setJoinDenied(false)}
+                    className="w-full py-2.5 rounded-xl text-sm font-black transition-colors focus:outline-none"
+                    style={{ backgroundColor: '#EED98A', color: '#1B3828' }}>
+                    {t('delegate_request_again')}
+                  </button>
+                </>
+              ) : joinStatus ? (
+                <div className="flex flex-col items-center gap-3 py-2">
+                  <div className="w-6 h-6 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: '#EED98A' }} />
+                  <p className="text-sm" style={{ color: 'rgba(237,231,216,0.85)' }}>{t('delegate_join_waiting')}</p>
+                </div>
+              ) : (
+                <>
+                  <p className="text-sm mb-4" style={{ color: 'rgba(237,231,216,0.85)' }}>{t('delegate_absent_desc')}</p>
+                  <div className="flex gap-2">
+                    <button onClick={() => handleRequestJoin('present')} disabled={joinRequesting}
+                      className="flex-1 py-2.5 rounded-xl text-sm font-bold transition-colors focus:outline-none"
+                      style={{ backgroundColor: 'transparent', border: '1px solid rgba(238,217,138,0.4)', color: '#EED98A' }}>
+                      {t('delegate_present_btn')}
+                    </button>
+                    <button onClick={() => handleRequestJoin('present-voting')} disabled={joinRequesting}
+                      className="flex-1 py-2.5 rounded-xl text-sm font-black transition-colors focus:outline-none"
+                      style={{ backgroundColor: '#EED98A', color: '#1B3828' }}>
+                      {t('delegate_pv_btn')}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+            <p className="text-xs mt-8" style={{ color: '#9A8A78' }}>{t('delegate_adjourned_esc')}</p>
+          </div>
+        </div>
+      </FitToScreen>
+    );
+  }
+
   return (
     <FitToScreen>
     <div className="h-full w-full flex flex-col overflow-hidden" style={{ backgroundColor: '#EDE7D8' }}>
@@ -947,25 +1056,15 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
           {(['session', 'documents', 'chat', 'stats'] as DelegateTab[]).map((tab2, i) => {
             const labels: Record<DelegateTab, string> = { session: t('delegate_session_tab'), documents: t('delegate_documents_tab'), chat: t('tab_chat'), stats: t('delegate_stats_tab') };
             const isActive = tab === tab2;
-            const chatUnread = (() => {
-              if (tab2 !== 'chat') return 0;
-              const total = committee.messages.filter((m) => m.sender !== country && !m.content.startsWith('__log__:') && !m.isPrivate).length;
-              return Math.max(0, total - (chatReadCounts['everyone'] ?? 0));
-            })();
+            const chatUnread = tab2 === 'chat'
+              ? chatUnreadTotal(committee.messages, country, false, committee.chairNames ?? [], chatReadCounts)
+              : 0;
             return (
               <React.Fragment key={tab2}>
                 {i > 0 && <div style={{ width: '1px', height: '28px', alignSelf: 'center', backgroundColor: 'rgba(28,20,16,0.2)', flexShrink: 0 }} />}
                 <button
-                  onClick={() => {
-                    setTab(tab2);
-                    if (tab2 === 'chat') {
-                      setChatReadCounts((prev) => ({
-                        ...prev,
-                        everyone: committee.messages.filter((m) => !m.content.startsWith('__log__:') && !m.isPrivate && m.sender !== country).length,
-                      }));
-                    }
-                  }}
-                  className="flex-1 text-[18px] font-bold px-3 relative h-full transition-all duration-200"
+                  onClick={() => { setTab(tab2); }}
+                  className="flex-1 flex items-center justify-center text-[18px] font-bold px-3 relative h-full transition-all duration-200"
                   style={{ color: isActive ? '#1B3828' : '#1C1410', backgroundColor: isActive ? 'rgba(27,56,40,0.07)' : 'transparent', fontWeight: isActive ? 900 : 700 }}
                   onMouseEnter={(e) => { if (!isActive) { const el = e.currentTarget as HTMLElement; el.style.color = '#1B3828'; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; el.style.transform = 'translateY(-1px)'; } }}
                   onMouseLeave={(e) => { if (!isActive) { const el = e.currentTarget as HTMLElement; el.style.color = '#1C1410'; el.style.backgroundColor = 'transparent'; el.style.transform = 'translateY(0)'; } }}>
@@ -1103,6 +1202,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                   </div>
                   <p className="text-sm" style={{ color: '#9A8A78' }}>{t('delegate_unmod_desc')}</p>
                 </div>
+                {committee.caucus.isConsultation && <CowDelegationBoard committee={committee} />}
               </div>
             )}
 
@@ -1164,7 +1264,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                   {committee.caucus && (
                     <div className="mt-3">
                       <div className="text-sm text-[#6A5A4A] mb-2">
-                        {committee.caucus.type === 'moderated' ? t('delegate_moderated') : t('delegate_unmoderated')} {language === 'es' ? 'Cáucus' : 'Caucus'}
+                        {committee.caucus.type === 'moderated' ? t('delegate_moderated') : t('delegate_unmoderated')} {language === 'ar' ? '' : language === 'es' ? 'Cáucus' : 'Caucus'}
                         {committee.caucus.purpose && ` — ${committee.caucus.purpose}`}
                       </div>
                       <div className="text-3xl font-black font-mono text-[#1C1410]">
@@ -1252,7 +1352,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                   </div>
                 </div>
                 {/* Status toggle — only when already present/PV and session not ended */}
-                {!isAbsent && !sessionEnded && (
+                {!isAbsent && !sessionEnded && !getCommitteeFlags(committee).lockDelegateRollCall && (
                   <div>
                     <div className="flex gap-2">
                       <button
@@ -1355,7 +1455,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                                 <div key={doc.id} className="rounded-xl p-4 space-y-2" style={{ backgroundColor: '#FAF8F3', border: `1.5px solid ${isPassed ? '#1B3828' : isFailed ? 'rgba(139,32,32,0.4)' : '#DDD4C0'}` }}>
                                   <div className="flex items-start justify-between gap-3">
                                     <div>
-                                      <span className="text-xs font-mono font-bold mr-2" style={{ color: '#1B3828' }}>{doc.docCode}</span>
+                                      <span className="text-xs font-mono font-bold me-2" style={{ color: '#1B3828' }}>{doc.docCode}</span>
                                       <span className="font-semibold text-sm" style={{ color: '#1C1410' }}>{doc.title}</span>
                                     </div>
                                     {isPassed && <span className="shrink-0 text-xs font-black px-2 py-0.5 rounded-full" style={{ backgroundColor: '#1B3828', color: '#EED98A' }}>{t('delegate_passed_badge')}</span>}
@@ -1387,7 +1487,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                               <div key={doc.id} className="rounded-xl p-4 space-y-2" style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #DDD4C0' }}>
                                 <div className="flex items-start justify-between gap-3">
                                   <div>
-                                    <span className="text-xs font-mono font-bold mr-2" style={{ color: '#1B3828' }}>{doc.docCode}</span>
+                                    <span className="text-xs font-mono font-bold me-2" style={{ color: '#1B3828' }}>{doc.docCode}</span>
                                     <span className="font-semibold text-sm" style={{ color: '#1C1410' }}>{doc.title}</span>
                                   </div>
                                   {doc.status === 'submitted' && <span className="shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(27,56,40,0.1)', color: '#1B3828' }}>{t('documents_status_submitted')}</span>}
@@ -1421,17 +1521,21 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
         )}
       </div>}
       {/* ── Chat tab ── */}
-      {tab === 'chat' && (
+      {tab === 'chat' && chatDisabled && (
+        <div className="flex-1 flex overflow-hidden" style={{ height: '100%' }}>
+          <ChatDisabledNotice />
+        </div>
+      )}
+      {tab === 'chat' && !chatDisabled && (
         <div className="flex-1 flex overflow-hidden" style={{ height: '100%' }}>
           <ChatPanel
             committee={committee}
             senderName={country}
             isChair={false}
             onClose={() => setTab('session')}
-            initialReadCounts={chatReadCounts}
+            readCounts={chatReadCounts}
             onReadCountsChange={setChatReadCounts}
             readOnly={sessionEnded}
-            speakerCard={null}
           />
         </div>
       )}

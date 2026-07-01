@@ -1,3 +1,5 @@
+import Link from 'next/link';
+import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
 import React from 'react';
 
@@ -65,7 +67,7 @@ export default function Article() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
       <div style={s.page}>
         <div style={s.wrap}>
-          <a href="/blog" style={s.back}>← MUN Resources</a>
+          <Link href="/blog" style={s.back}>← MUN Resources</Link>
           <h1 style={s.h1}>How to Write a MUN Resolution — Clauses, Format & Examples</h1>
           <p style={s.meta}>By Gavelling · June 2026 · 12 min read</p>
           <article style={s.article}>
@@ -128,6 +130,7 @@ export default function Article() {
               <li style={s.li}>Be willing to accept friendly amendments that broaden support without gutting your resolution's substance.</li>
             </ul>
 
+            <RelatedGuides currentSlug="mun-resolution-writing" />
             <div style={s.cta}>
               <p style={s.ctaText}>Gavelling lets delegates submit working papers and draft resolutions directly to the chair during committee.</p>
               <a href="https://gavelling.com" style={s.ctaLink}>Try Gavelling free →</a>

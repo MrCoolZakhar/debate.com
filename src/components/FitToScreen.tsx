@@ -25,7 +25,10 @@ export default function FitToScreen({ children }: { children: ReactNode }) {
 
   return (
     <div style={{ position: 'fixed', inset: 0, overflow: 'hidden', backgroundColor: '#EDE7D8' }}>
-      <div style={{ width: dims.width, height: BASE_H, transform: `scale(${dims.scale})`, transformOrigin: 'top left' }}>
+      {/* Pin to the physical top-left so the scale() origin is always at (0,0).
+          Without an explicit left:0, an RTL document right-aligns this narrower
+          box and shifts all content off the right edge. */}
+      <div id="fit-root" style={{ position: 'absolute', top: 0, left: 0, width: dims.width, height: BASE_H, transform: `scale(${dims.scale})`, transformOrigin: 'top left' }}>
         {children}
       </div>
     </div>

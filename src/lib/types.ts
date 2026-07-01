@@ -1,9 +1,12 @@
+import type { ScoringConfig } from './settingsStore';
+
 export type DelegateStatus = 'present' | 'absent' | 'present-voting';
 
 export interface Delegate {
   id: string;
   country: string;
   status: DelegateStatus;
+  isObserver?: boolean;
 }
 
 export type SessionPhase =
@@ -100,6 +103,7 @@ export interface CaucusState {
   proposedBy: string;
   proposerPosition: 'first' | 'last' | null;
   spokenCountries: string[];
+  isConsultation?: boolean;  // true when this caucus is a Consultation of the Whole
 }
 
 export interface ChatMessage {
@@ -149,4 +153,6 @@ export interface Committee {
   resumingChair?: string | null;
   dbChairJoinSuffix?: string | null;
   dbSeparateChairCode?: boolean;
+  dbSettings?: Record<string, unknown> | null;
+  dbScoring?: ScoringConfig | null;
 }

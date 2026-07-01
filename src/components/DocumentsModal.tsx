@@ -5,6 +5,7 @@ import Portal from '@/components/Portal';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { useRouter } from 'next/navigation';
 import { Committee, CommitteeDocument, DocumentType, DocumentStatus } from '@/lib/types';
+import { sponsorLabel } from '@/lib/committeeFlags';
 import { TranslationKey } from '@/lib/translations';
 import { getCountryByName, getFlagUrl, getCountryDisplayName, matchesCountryQuery, startsWithCountryQuery } from '@/lib/countries';
 import { Emoji } from '@/components/Emoji';
@@ -56,14 +57,14 @@ function CountryChip({ country, onRemove }: { country: string; onRemove: () => v
   const found = getCountryByName(country);
   return (
     <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-[#DDD4C0] border border-[#DDD4C0] rounded-full text-xs text-[#1C1410]">
-      {found ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-4 h-4 object-contain inline-block mr-1" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : '🌐'}{getCountryDisplayName(country, language)}
-      <button onClick={onRemove} className="text-[#9A8A78] hover:text-red-500 ml-0.5 leading-none">✕</button>
+      {found ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-4 h-4 object-contain inline-block me-1" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : '🌐'}{getCountryDisplayName(country, language)}
+      <button onClick={onRemove} className="text-[#9A8A78] hover:text-red-500 ms-0.5 leading-none">✕</button>
     </span>
   );
 }
 
-function SponsorSelect({ candidates, selected, onChange }: {
-  candidates: string[]; selected: string[]; onChange: (v: string[]) => void;
+function SponsorSelect({ candidates, selected, onChange, committee }: {
+  candidates: string[]; selected: string[]; onChange: (v: string[]) => void; committee: Committee;
 }) {
   const t = useT();
   const { language } = useLanguage();
@@ -79,7 +80,7 @@ function SponsorSelect({ candidates, selected, onChange }: {
   };
   return (
     <div>
-      <label className="block text-sm font-semibold text-[#6A5A4A] mb-1.5">{t('documents_sponsors_label')}</label>
+      <label className="block text-sm font-semibold text-[#6A5A4A] mb-1.5">{sponsorLabel(committee, t('documents_sponsors_label'))}</label>
       <div className="relative">
         <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={handleKeyDown}
           placeholder={t('documents_sponsor_placeholder')}
@@ -90,7 +91,7 @@ function SponsorSelect({ candidates, selected, onChange }: {
               const found = getCountryByName(c);
               return (
                 <button key={c} onMouseDown={(e) => { e.preventDefault(); add(c); }}
-                  className={`w-full flex items-center gap-2 px-3 py-2 text-left transition-colors ${i === 0 ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'}`}>
+                  className={`w-full flex items-center gap-2 px-3 py-2 text-start transition-colors ${i === 0 ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'}`}>
                   {found ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <span>🌐</span>}
                   <span className="text-sm">{getCountryDisplayName(c, language)}</span>
                 </button>
@@ -277,7 +278,7 @@ function StageTimer({
         </div>
       )}
       {showDocument && (
-        <div className="flex flex-col p-4 overflow-hidden" style={{ flex: 1, minWidth: 0 }}>
+        <div className="flex flex-col p-4 overflow-hidden min-h-0" style={{ flex: 1, minWidth: 0 }}>
           {doc.fileUrl ? (
             <iframe
               src={doc.fileUrl}
@@ -286,7 +287,7 @@ function StageTimer({
               style={{ minHeight: 0 }}
             />
           ) : doc.content ? (
-            <div className="flex-1 overflow-y-auto bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl p-6">
+            <div className="flex-1 min-h-0 overflow-y-auto bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl p-6">
               <div className="flex items-center gap-3 mb-4">
                 <span className="text-xs font-mono font-bold text-[#1B3828]">{doc.docCode}</span>
                 <span className="text-sm font-bold text-[#1C1410]">{doc.title}</span>
@@ -540,7 +541,7 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
       </div>
       <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl px-4 py-2.5">
         <span className="text-xs text-[#9A8A78] font-mono">{t('documents_doc_code_label')}</span>
-        <span className="ml-3 text-sm font-bold text-[#1C1410] font-mono">{docCode}</span>
+        <span className="ms-3 text-sm font-bold text-[#1C1410] font-mono">{docCode}</span>
       </div>
       <div>
         <label className="block text-sm font-semibold text-[#6A5A4A] mb-1.5">{t('documents_title_label')} <span className="text-red-500">*</span></label>
@@ -548,7 +549,7 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
           placeholder={type === 'working-paper' ? t('documents_title_placeholder_wp') : t('documents_title_placeholder_dr')}
           className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] transition-colors" />
       </div>
-      <SponsorSelect candidates={presentCountries} selected={sponsors} onChange={setSponsors} />
+      <SponsorSelect candidates={presentCountries} selected={sponsors} onChange={setSponsors} committee={committee} />
       <div>
         <label className="block text-sm font-semibold text-[#6A5A4A] mb-1.5">{t('documents_google_docs_label')} <span className="text-[#9A8A78] font-normal">({t('documents_google_docs_optional')})</span></label>
         <input type="text" value={content} onChange={(e) => setContent(e.target.value)}
@@ -739,7 +740,7 @@ function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation
           {/* Sponsors with flags */}
           {doc.sponsors.length > 0 && (
             <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-xs font-semibold text-[#6A5A4A] shrink-0">{t('documents_sponsors_label_card')}:</span>
+              <span className="text-xs font-semibold text-[#6A5A4A] shrink-0">{sponsorLabel(committee, t('documents_sponsors_label_card'))}:</span>
               {doc.sponsors.map((s) => {
                 const f = getCountryByName(s);
                 return (
@@ -960,7 +961,7 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
     <Portal><div className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background: 'rgba(5, 8, 20, 0.88)', backdropFilter: 'blur(4px)' }}
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
+      <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden max-h-[92%] flex flex-col">
         <div className="flex items-center justify-between px-7 pt-6 pb-4 shrink-0 border-b border-[#DDD4C0]">
           <h2 className="text-2xl font-black text-[#1C1410]">{t('documents_title')}</h2>
           <button onClick={onClose} className="text-[#9A8A78] hover:text-[#1C1410] transition-colors text-xl leading-none">✕</button>
@@ -975,7 +976,7 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
                   className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-colors relative ${tab === tabItem ? 'bg-[#1B3828] text-white' : 'bg-[#EDE7D8] border border-[#DDD4C0] text-[#6A5A4A] hover:border-[#1B3828]'}`}>
                   {tabItem === 'working-paper' ? t('documents_working_papers_tab') : t('documents_draft_resolutions_tab')}
                   {count > 0 && (
-                    <span className={`ml-1.5 inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-black ${tab === tabItem ? 'bg-white/30 text-white' : 'bg-[#1B3828] text-white'}`}>{count}</span>
+                    <span className={`ms-1.5 inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-black ${tab === tabItem ? 'bg-white/30 text-white' : 'bg-[#1B3828] text-white'}`}>{count}</span>
                   )}
                 </button>
               );
@@ -983,7 +984,7 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
           </div>
         )}
 
-        <div className="overflow-y-auto flex-1 pt-4">
+        <div className="overflow-y-auto flex-1 min-h-0 pt-4">
           {showForm ? (
             <SubmitForm committee={committee} type={tab} onDone={() => setShowForm(false)} onDocumentAdded={handleDocumentAdded} />
           ) : (

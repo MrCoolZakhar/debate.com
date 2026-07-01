@@ -1,3 +1,5 @@
+import Link from 'next/link';
+import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
 import React from 'react';
 
@@ -64,7 +66,7 @@ export default function Article() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
       <div style={s.page}>
         <div style={s.wrap}>
-          <a href="/blog" style={s.back}>← MUN Resources</a>
+          <Link href="/blog" style={s.back}>← MUN Resources</Link>
           <h1 style={s.h1}>MUN Awards Guide — How Best Delegate Is Chosen</h1>
           <p style={s.meta}>By Gavelling · June 2026 · 9 min read</p>
           <article style={s.article}>
@@ -110,6 +112,7 @@ export default function Article() {
             <h2 style={s.h2}>Awards as a Chair</h2>
             <p style={s.p}>For chairs: track delegates throughout the conference, not just at the end. Note specific moments — a standout speech, a key amendment proposal, a bloc merger they brokered. When you sit down to make award decisions, concrete examples beat vague impressions every time. Gavelling's delegate stats panel tracks speaking time and participation metrics that can support your qualitative notes.</p>
 
+            <RelatedGuides currentSlug="mun-awards-guide" />
             <div style={s.cta}>
               <p style={s.ctaText}>Chairs: track delegate participation and speaking stats with Gavelling throughout your session.</p>
               <a href="https://gavelling.com" style={s.ctaLink}>Try Gavelling free →</a>

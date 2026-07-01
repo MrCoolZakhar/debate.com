@@ -1,3 +1,5 @@
+import Link from 'next/link';
+import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
 import React from 'react';
 
@@ -67,7 +69,7 @@ export default function Article() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
       <div style={s.page}>
         <div style={s.wrap}>
-          <a href="/blog" style={s.back}>← MUN Resources</a>
+          <Link href="/blog" style={s.back}>← MUN Resources</Link>
           <h1 style={s.h1}>Tour de Table in MUN — What It Is and How Chairs Run It</h1>
           <p style={s.meta}>By Gavelling · June 2026 · 8 min read</p>
           <article style={s.article}>
@@ -105,6 +107,7 @@ export default function Article() {
             <p style={s.p}>For delegates with alphabetically early countries (Afghanistan, Albania, Algeria), tour de table is a gift — you speak first, set the tone, and have the rest of the tour to watch others respond to your framing. For delegates near the end of the alphabet, tour de table can feel frustrating as positions solidify before you speak. Counter this by being more decisive in your statement — if others have been vague, be specific.</p>
             <p style={s.p}>Tour de table is also strategically valuable for chairs who want to identify which delegates are unprepared early in the session, or to ensure shy delegates get at least one public speaking slot.</p>
 
+            <RelatedGuides currentSlug="tour-de-table-mun" />
             <div style={s.cta}>
               <p style={s.ctaText}>Gavelling manages tour de table automatically — pre-filled queue, individual timers, total time tracking.</p>
               <a href="https://gavelling.com" style={s.ctaLink}>Try Gavelling free →</a>
