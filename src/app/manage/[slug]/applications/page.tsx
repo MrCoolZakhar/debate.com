@@ -440,13 +440,15 @@ export default function ApplicationsPage() {
 
                   {app.status === 'accepted' && (
                     <>
-                      <Link
-                        href={`/manage/${conference.slug}/assignment`}
-                        className="rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none"
-                        style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", textDecoration: 'none', display: 'inline-block' }}
-                      >
-                        ASSIGN →
-                      </Link>
+                      {isDelegate && (
+                        <Link
+                          href={`/manage/${conference.slug}/assignment`}
+                          className="rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none"
+                          style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", textDecoration: 'none', display: 'inline-block' }}
+                        >
+                          ASSIGN →
+                        </Link>
+                      )}
                       {isRejecting ? (
                         <div className="flex items-start gap-2 flex-1">
                           <textarea
