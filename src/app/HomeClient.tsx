@@ -563,10 +563,10 @@ export default function HomeClient() {
             }}
           />
 
-          <SiteNav floating />
+          <SiteNav />
 
-          {/* Hero */}
-          <section className="relative z-10 flex flex-col items-center justify-center overflow-hidden" style={{ height: '100vh' }}>
+          {/* Hero — nav sits in flow above (72px), so the hero fills the rest of the first viewport. */}
+          <section className="relative z-10 flex flex-col items-center justify-center overflow-hidden" style={{ height: 'calc(100vh - 72px)' }}>
             <div className="absolute inset-0 z-0">
               <video autoPlay muted playsInline className="absolute inset-0 w-full h-full object-cover" style={{ opacity: 0.55 }}>
                 <source src="/hero_no_audio.webm" type="video/webm" />

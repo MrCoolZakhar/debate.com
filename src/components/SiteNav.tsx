@@ -16,10 +16,9 @@ const NAV_LINKS_CONFIG = [
 
 interface SiteNavProps {
   logoOverride?: { src: string; alt: string };
-  floating?: boolean;
 }
 
-export default function SiteNav({ logoOverride, floating = false }: SiteNavProps = {}) {
+export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
   const pathname = usePathname();
   const [hovered, setHovered] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
@@ -29,17 +28,70 @@ export default function SiteNav({ logoOverride, floating = false }: SiteNavProps
   const [showLangMenu, setShowLangMenu] = useState(false);
   const navLinks = NAV_LINKS_CONFIG.map(l => ({ label: l[language], href: l.href }));
 
-  const linkIdle     = floating ? 'rgba(237,231,216,0.78)' : 'rgba(28, 20, 16, 0.55)';
-  const linkActive   = floating ? '#FFFFFF'                : '#1B3828';
-  const linkBgActive = floating ? 'transparent'            : 'rgba(27, 56, 40, 0.07)';
-  const linkBgHover  = floating ? 'rgba(237,231,216,0.10)' : 'rgba(27, 56, 40, 0.04)';
-  const dividerColor = floating ? 'rgba(237,231,216,0.22)' : 'rgba(28, 20, 16, 0.2)';
-  const underline    = floating ? '#EED98A'                : '#B6871F';
+  // The floating pill sits on a dark-green glass background, so its links use a
+  // light-on-dark scheme that reads on any page (over the hero video or cream content).
+  const linkIdle    = 'rgba(237,231,216,0.78)';
+  const linkActive  = '#FFFFFF';
+  const linkBgHover = 'rgba(237,231,216,0.10)';
+  const underline   = '#EED98A';
 
   return (
     <>
+      {/*
+        Floating pill nav (desktop only). Fixed to the viewport so it stays visible
+        while the rest of the header — logo (left) and Pre-register (right) — scrolls
+        away with the page. The 72px-tall wrapper vertically aligns the pill with the
+        logo/CTA bar at scroll top; pointer-events are limited to the pill itself so
+        the transparent band never blocks clicks on the content behind it.
+      */}
+      <div className="hidden md:flex fixed top-0 left-1/2 -translate-x-1/2 z-40 h-[72px] items-center pointer-events-none">
+        <div className="flex items-center rounded-full bg-[#1B3828]/70 backdrop-blur-xl border border-[#EED98A]/20 shadow-[0_8px_32px_rgba(27,56,40,0.28)] px-3 py-1.5 pointer-events-auto">
+          {navLinks.map((link) => {
+            const active = pathname === link.href;
+            const hl = hovered === link.label;
+            return (
+              <Link
+                key={link.label}
+                href={link.href}
+                onMouseEnter={() => setHovered(link.label)}
+                onMouseLeave={() => setHovered(null)}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  position: 'relative',
+                  padding: '8px 16px',
+                  fontSize: '13px',
+                  fontWeight: active ? 900 : 700,
+                  letterSpacing: '0.08em',
+                  color: active || hl ? linkActive : linkIdle,
+                  textDecoration: 'none',
+                  borderRadius: '8px',
+                  transition: 'all 200ms ease',
+                  backgroundColor: hl && !active ? linkBgHover : 'transparent',
+                  transform: hl && !active ? 'translateY(-1px)' : 'translateY(0)',
+                }}
+              >
+                {link.label}
+                <span style={{
+                  position: 'absolute',
+                  bottom: '4px',
+                  left: '16px',
+                  right: '16px',
+                  height: active ? '2px' : '1px',
+                  backgroundColor: underline,
+                  transform: active || hl ? 'scaleX(1)' : 'scaleX(0)',
+                  transformOrigin: 'left',
+                  transition: 'transform 200ms ease',
+                  borderRadius: '2px',
+                }} />
+              </Link>
+            );
+          })}
+        </div>
+      </div>
+
       <nav
-        className={`relative z-30 flex items-center px-6 shrink-0 ${floating ? 'md:px-14 md:fixed md:top-0 md:left-0 md:right-0 md:z-40' : 'md:px-14'}`}
+        className="relative z-30 flex items-center px-6 md:px-14 shrink-0"
         style={{ height: '72px' }}
       >
         {/* Logo */}
@@ -51,55 +103,6 @@ export default function SiteNav({ logoOverride, floating = false }: SiteNavProps
             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
           />
         </Link>
-
-        {/* Desktop nav links */}
-        <div className={`hidden md:flex items-center absolute left-1/2 -translate-x-1/2 ${floating ? 'md:top-1/2 md:-translate-y-1/2 md:rounded-full md:bg-[#1B3828]/70 md:backdrop-blur-xl md:border md:border-[#EED98A]/20 md:shadow-[0_8px_32px_rgba(27,56,40,0.28)] md:px-3 md:py-1.5' : ''}`}>
-          {navLinks.map((link, i) => {
-            const active = pathname === link.href;
-            const hl = hovered === link.label;
-            return (
-              <div key={link.label} className="flex items-center">
-                {i > 0 && !floating && (
-                  <div style={{ width: '1px', height: '28px', backgroundColor: dividerColor, margin: '0 2px' }} />
-                )}
-                <Link
-                  href={link.href}
-                  onMouseEnter={() => setHovered(link.label)}
-                  onMouseLeave={() => setHovered(null)}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    position: 'relative',
-                    padding: '8px 16px',
-                    fontSize: '13px',
-                    fontWeight: active ? 900 : 700,
-                    letterSpacing: '0.08em',
-                    color: active || hl ? linkActive : linkIdle,
-                    textDecoration: 'none',
-                    borderRadius: '8px',
-                    transition: 'all 200ms ease',
-                    backgroundColor: active ? linkBgActive : hl ? linkBgHover : 'transparent',
-                    transform: hl && !active ? 'translateY(-1px)' : 'translateY(0)',
-                  }}
-                >
-                  {link.label}
-                  <span style={{
-                    position: 'absolute',
-                    bottom: '4px',
-                    left: '16px',
-                    right: '16px',
-                    height: active ? '2px' : '1px',
-                    backgroundColor: underline,
-                    transform: active || hl ? 'scaleX(1)' : 'scaleX(0)',
-                    transformOrigin: 'left',
-                    transition: 'transform 200ms ease',
-                    borderRadius: '2px',
-                  }} />
-                </Link>
-              </div>
-            );
-          })}
-        </div>
 
         {/* Language toggle */}
         <div className="relative hidden md:block me-3 ms-auto">
