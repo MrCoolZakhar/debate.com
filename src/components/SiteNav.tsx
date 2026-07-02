@@ -61,8 +61,72 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
 
   return (
     <>
+      {/*
+        Floating pill nav (desktop only). Fixed to the viewport so it stays visible
+        while the rest of the header — logo (left), language toggle + auth (right) —
+        scrolls away with the page. The 72px-tall wrapper vertically aligns the pill
+        with the logo/CTA row at scroll top; pointer-events are limited to the pill
+        itself so the transparent band never blocks clicks on the content behind it.
+      */}
+      <div className="hidden md:flex fixed top-0 left-1/2 -translate-x-1/2 z-40 h-[72px] items-center pointer-events-none">
+        <div
+          className="flex items-center rounded-full pointer-events-auto"
+          style={{
+            backgroundColor: 'rgba(250, 248, 243, 0.72)',
+            backdropFilter: 'blur(16px)',
+            WebkitBackdropFilter: 'blur(16px)',
+            border: '1px solid rgba(221, 212, 192, 0.85)',
+            boxShadow: '0 8px 32px rgba(27, 56, 40, 0.12), 0 2px 8px rgba(27, 56, 40, 0.08)',
+            padding: '6px 8px',
+          }}
+        >
+          {navLinks.map((link) => {
+            const active = pathname === link.href;
+            const hl = hovered === link.label;
+            return (
+              <Link
+                key={link.label}
+                href={link.href}
+                onMouseEnter={() => setHovered(link.label)}
+                onMouseLeave={() => setHovered(null)}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  position: 'relative',
+                  padding: '8px 16px',
+                  fontSize: '13px',
+                  fontWeight: active ? 900 : 700,
+                  letterSpacing: '0.08em',
+                  fontFamily: "'Outfit', sans-serif",
+                  color: active ? '#EED98A' : hl ? '#1B3828' : 'rgba(28, 20, 16, 0.55)',
+                  textDecoration: 'none',
+                  borderRadius: '9999px',
+                  transition: 'all 200ms ease',
+                  backgroundColor: active ? '#1B3828' : hl ? 'rgba(27, 56, 40, 0.06)' : 'transparent',
+                  transform: hl && !active ? 'translateY(-1px)' : 'translateY(0)',
+                }}
+              >
+                {link.label}
+                <span style={{
+                  position: 'absolute',
+                  bottom: '4px',
+                  left: '16px',
+                  right: '16px',
+                  height: '1px',
+                  backgroundColor: '#B6871F',
+                  transform: hl && !active ? 'scaleX(1)' : 'scaleX(0)',
+                  transformOrigin: 'left',
+                  transition: 'transform 200ms ease',
+                  borderRadius: '2px',
+                }} />
+              </Link>
+            );
+          })}
+        </div>
+      </div>
+
       <nav
-        className="relative z-20 flex items-center justify-between px-6 md:px-14 shrink-0"
+        className="relative z-30 flex items-center justify-between px-6 md:px-14 shrink-0"
         style={{ height: '72px' }}
       >
         {/* Logo */}
@@ -74,55 +138,6 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
           />
         </Link>
-
-        {/* Desktop nav links */}
-        <div className="hidden md:flex items-center">
-          {navLinks.map((link, i) => {
-            const active = pathname === link.href;
-            const hl = hovered === link.label;
-            return (
-              <div key={link.label} className="flex items-center">
-                {i > 0 && (
-                  <div style={{ width: '1px', height: '28px', backgroundColor: 'rgba(28, 20, 16, 0.2)', margin: '0 2px' }} />
-                )}
-                <Link
-                  href={link.href}
-                  onMouseEnter={() => setHovered(link.label)}
-                  onMouseLeave={() => setHovered(null)}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    position: 'relative',
-                    padding: '8px 16px',
-                    fontSize: '13px',
-                    fontWeight: active ? 900 : 700,
-                    letterSpacing: '0.08em',
-                    color: active || hl ? '#1B3828' : 'rgba(28, 20, 16, 0.55)',
-                    textDecoration: 'none',
-                    borderRadius: '8px',
-                    transition: 'all 200ms ease',
-                    backgroundColor: active ? 'rgba(27, 56, 40, 0.07)' : hl ? 'rgba(27, 56, 40, 0.04)' : 'transparent',
-                    transform: hl && !active ? 'translateY(-1px)' : 'translateY(0)',
-                  }}
-                >
-                  {link.label}
-                  <span style={{
-                    position: 'absolute',
-                    bottom: '4px',
-                    left: '16px',
-                    right: '16px',
-                    height: active ? '2px' : '1px',
-                    backgroundColor: '#B6871F',
-                    transform: active || hl ? 'scaleX(1)' : 'scaleX(0)',
-                    transformOrigin: 'left',
-                    transition: 'transform 200ms ease',
-                    borderRadius: '2px',
-                  }} />
-                </Link>
-              </div>
-            );
-          })}
-        </div>
 
         {/* Desktop right actions */}
         <div className="hidden md:flex items-center gap-3">
