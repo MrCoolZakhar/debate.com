@@ -16,9 +16,15 @@ const NAV_LINKS_CONFIG = [
 
 interface SiteNavProps {
   logoOverride?: { src: string; alt: string };
+  /**
+   * Overlay mode: the header floats transparently over the page's hero media
+   * instead of occupying a 72px ivory strip that cuts the hero off at the top.
+   * Ink-colored controls switch to light-on-dark treatment.
+   */
+  overlay?: boolean;
 }
 
-export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
+export default function SiteNav({ logoOverride, overlay = false }: SiteNavProps = {}) {
   const pathname = usePathname();
   const router = useRouter();
   const [hovered, setHovered] = useState<string | null>(null);
@@ -126,7 +132,7 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
       </div>
 
       <nav
-        className="relative z-30 flex items-center justify-between px-6 md:px-14 shrink-0"
+        className={`${overlay ? 'absolute top-0 left-0 right-0' : 'relative'} z-30 flex items-center justify-between px-6 md:px-14 shrink-0`}
         style={{ height: '72px' }}
       >
         {/* Logo */}
@@ -135,6 +141,7 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
             src={logoOverride?.src ?? '/GavellingLogo.png'}
             alt={logoOverride?.alt ?? 'Gavelling'}
             className="h-8 md:h-10 w-auto object-contain"
+            style={overlay ? { filter: 'brightness(0) saturate(100%) invert(85%) sepia(30%) saturate(500%) hue-rotate(5deg) brightness(105%) drop-shadow(0 2px 6px rgba(0,0,0,0.35))' } : undefined}
             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
           />
         </Link>
@@ -164,8 +171,8 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
               <button
                 onClick={() => setShowLangMenu((v) => !v)}
                 className="flex items-center gap-1.5 px-3 py-2 rounded-xl transition-all focus:outline-none"
-                style={{ color: '#1B3828', fontSize: '12px', fontWeight: 700, letterSpacing: '0.06em' }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.07)'; }}
+                style={{ color: overlay ? '#EDE7D8' : '#1B3828', fontSize: '12px', fontWeight: 700, letterSpacing: '0.06em', textShadow: overlay ? '0 1px 4px rgba(0,0,0,0.35)' : undefined }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = overlay ? 'rgba(250,248,243,0.14)' : 'rgba(27,56,40,0.07)'; }}
                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
               >
                 <Globe size={14} strokeWidth={2} />
@@ -359,10 +366,11 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
               href="/auth/signin"
               className="text-sm font-bold transition-colors focus:outline-none"
               style={{
-                color: '#1B3828',
+                color: overlay ? '#EDE7D8' : '#1B3828',
                 letterSpacing: '0.06em',
                 fontFamily: "'Outfit', sans-serif",
                 textDecoration: 'none',
+                textShadow: overlay ? '0 1px 4px rgba(0,0,0,0.35)' : undefined,
               }}
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.textDecoration = 'underline'; }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.textDecoration = 'none'; }}
@@ -381,21 +389,21 @@ export default function SiteNav({ logoOverride }: SiteNavProps = {}) {
           <span
             className="block w-6 h-0.5 rounded-full transition-all duration-300 origin-center"
             style={{
-              backgroundColor: '#1B3828',
+              backgroundColor: overlay ? '#EDE7D8' : '#1B3828',
               transform: menuOpen ? 'translateY(4px) rotate(45deg)' : 'none',
             }}
           />
           <span
             className="block w-6 h-0.5 rounded-full transition-all duration-300"
             style={{
-              backgroundColor: '#1B3828',
+              backgroundColor: overlay ? '#EDE7D8' : '#1B3828',
               opacity: menuOpen ? 0 : 1,
             }}
           />
           <span
             className="block w-6 h-0.5 rounded-full transition-all duration-300 origin-center"
             style={{
-              backgroundColor: '#1B3828',
+              backgroundColor: overlay ? '#EDE7D8' : '#1B3828',
               transform: menuOpen ? 'translateY(-4px) rotate(-45deg)' : 'none',
             }}
           />

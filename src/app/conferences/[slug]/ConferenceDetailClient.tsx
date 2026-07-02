@@ -484,12 +484,13 @@ export default function ConferenceDetailClient() {
       />
 
       <div className="relative z-10 flex flex-col min-h-screen">
-        <SiteNav />
+        {/* Overlay nav: floats over the hero so the banner reaches the very top */}
+        <SiteNav overlay />
 
         {/* ── Hero ───────────────────────────────────────────────────── */}
         <div
           className="relative w-full overflow-hidden flex-shrink-0"
-          style={{ height: 'clamp(320px, 38vw, 440px)' }}
+          style={{ height: 'clamp(392px, 44vw, 512px)' }}
         >
           {conference.banner_url ? (
             <>
@@ -539,7 +540,7 @@ export default function ConferenceDetailClient() {
           )}
 
           {/* Top-right pills */}
-          <div className="absolute top-4 right-6 md:right-14 flex gap-2 z-10">
+          <div className="absolute right-6 md:right-14 flex gap-2 z-10" style={{ top: '84px' }}>
             <span
               style={{
                 fontFamily: "'DM Mono', monospace",
