@@ -201,9 +201,9 @@ function ConferenceCard({
             src={conf.logo_url}
             alt={conf.acronym}
             style={{
-              width: '48px', height: '48px', borderRadius: '13px', objectFit: 'cover',
+              width: '48px', height: '48px', borderRadius: '13px', objectFit: 'contain', padding: '3px',
               border: '3px solid #FAF8F3', boxShadow: '0 4px 12px rgba(27,56,40,0.15)',
-              backgroundColor: '#EDE7D8', display: 'block',
+              backgroundColor: '#FFFFFF', display: 'block',
             }}
           />
         ) : (

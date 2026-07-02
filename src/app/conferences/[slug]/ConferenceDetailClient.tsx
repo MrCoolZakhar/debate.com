@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Globe, MessageCircle, Music, CalendarDays, MapPin, Users, GraduationCap, Monitor, Mail, FileText, Download } from 'lucide-react';
+import { Globe, MessageCircle, Music, CalendarDays, MapPin, Users, GraduationCap, Monitor, Mail, FileText, Download, Landmark, Lock, ChevronDown, Check, Megaphone } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -42,6 +42,11 @@ interface Conference {
   organizer_id: string;
 }
 
+interface DisplayChair {
+  name: string;
+  avatar_url: string | null;
+}
+
 interface Committee {
   id: string;
   name: string;
@@ -50,6 +55,12 @@ interface Committee {
   difficulty: string;
   committee_type: string;
   total_slots: number | null;
+  display_chairs: DisplayChair[] | null;
+}
+
+interface CommitteeSlot {
+  country_code: string;
+  country_name: string;
 }
 
 interface RoleConfig {
@@ -142,19 +153,6 @@ function SectionCard({ children, className = '' }: { children: React.ReactNode; 
   );
 }
 
-function SectionHeading({ eyebrow, title }: { eyebrow: string; title: string }) {
-  return (
-    <div className="mb-4">
-      <p style={{ fontFamily: "'DM Mono', monospace", fontSize: '9px', letterSpacing: '0.24em', color: '#B6871F', margin: '0 0 4px 0' }}>
-        {eyebrow}
-      </p>
-      <h2 className="font-bold text-[17px]" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", margin: 0 }}>
-        {title}
-      </h2>
-    </div>
-  );
-}
-
 // ── Main component ────────────────────────────────────────────────────────
 
 export default function ConferenceDetailClient() {
@@ -182,6 +180,12 @@ export default function ConferenceDetailClient() {
   const [ppEnabled, setPpEnabled] = useState(false);
   const [showPPWarning, setShowPPWarning] = useState(false);
   const ppFileInputRef = useRef<HTMLInputElement>(null);
+  // Committee roster / occupancy / chair-recruitment (public reads)
+  const [committeeSlots, setCommitteeSlots] = useState<Record<string, CommitteeSlot[]>>({});
+  const [committeeOccupied, setCommitteeOccupied] = useState<Record<string, string[]>>({});
+  const [chairJobs, setChairJobs] = useState<Record<string, string>>({});
+  const [expandedRoster, setExpandedRoster] = useState<string | null>(null);
+  const [pricingOpen, setPricingOpen] = useState(false);
 
   useEffect(() => {
     if (authLoading) return;
@@ -248,7 +252,7 @@ export default function ConferenceDetailClient() {
     const [committeesRes, roleConfigsRes] = await Promise.all([
       supabase
         .from('conference_committees')
-        .select('id, name, abbreviation, topics, difficulty, committee_type, total_slots')
+        .select('id, name, abbreviation, topics, difficulty, committee_type, total_slots, display_chairs')
         .eq('conference_id', conf.id)
         .order('name', { ascending: true }),
       supabase
@@ -259,6 +263,40 @@ export default function ConferenceDetailClient() {
 
     setCommittees((committeesRes.data as Committee[]) ?? []);
     setRoleConfigs((roleConfigsRes.data as RoleConfig[]) ?? []);
+
+    // Public committee extras: full rosters, live occupancy, open chair postings
+    const ccIds = ((committeesRes.data as Committee[]) ?? []).map(c => c.id);
+    if (ccIds.length > 0) {
+      const [slotsRes, occRes, jobsRes] = await Promise.all([
+        supabase
+          .from('committee_country_slots')
+          .select('conference_committee_id, country_code, country_name')
+          .in('conference_committee_id', ccIds)
+          .order('country_name', { ascending: true }),
+        supabase.rpc('get_committee_occupancy', { p_committee_ids: ccIds }),
+        supabase
+          .from('job_postings')
+          .select('id, committee_id')
+          .eq('conference_id', conf.id)
+          .eq('category', 'chairs')
+          .eq('is_open', true),
+      ]);
+      const slotsMap: Record<string, CommitteeSlot[]> = {};
+      for (const row of ((slotsRes.data ?? []) as (CommitteeSlot & { conference_committee_id: string })[])) {
+        (slotsMap[row.conference_committee_id] ??= []).push({ country_code: row.country_code, country_name: row.country_name });
+      }
+      const occMap: Record<string, string[]> = {};
+      for (const row of ((occRes.data ?? []) as { conference_committee_id: string; country_code: string }[])) {
+        (occMap[row.conference_committee_id] ??= []).push(row.country_code);
+      }
+      const jobsMap: Record<string, string> = {};
+      for (const row of ((jobsRes.data ?? []) as { id: string; committee_id: string | null }[])) {
+        if (row.committee_id) jobsMap[row.committee_id] = row.id;
+      }
+      setCommitteeSlots(slotsMap);
+      setCommitteeOccupied(occMap);
+      setChairJobs(jobsMap);
+    }
 
     if (user && session) {
       const authedSupabase = getAuthedClient(session.access_token);
@@ -520,10 +558,12 @@ export default function ConferenceDetailClient() {
                   alt={conference.acronym}
                   className="hidden sm:block flex-shrink-0"
                   style={{
-                    width: '76px', height: '76px', borderRadius: '18px', objectFit: 'cover',
-                    border: '1px solid rgba(255,255,255,0.25)',
+                    width: '84px', height: '84px', borderRadius: '20px', objectFit: 'contain', padding: '8px',
+                    border: '1px solid rgba(255,255,255,0.28)',
                     boxShadow: '0 12px 32px rgba(0,0,0,0.35)',
-                    backgroundColor: '#EDE7D8',
+                    backgroundColor: 'rgba(250,248,243,0.88)',
+                    backdropFilter: 'blur(10px)',
+                    WebkitBackdropFilter: 'blur(10px)',
                   }}
                 />
               )}
@@ -624,18 +664,35 @@ export default function ConferenceDetailClient() {
                     boxShadow: '0 8px 28px rgba(27,56,40,0.1)',
                   }}
                 >
-                  {(['overview', 'documents'] as const).map(tab => (
+                  {([
+                    { key: 'overview' as const, label: 'Overview', icon: Landmark },
+                    { key: 'documents' as const, label: 'Documents', icon: FileText },
+                  ]).map(({ key, label, icon: TabIcon }) => (
                     <button
-                      key={tab}
-                      onClick={() => setActiveTab(tab)}
-                      className="px-5 py-2 rounded-full text-[12px] font-bold transition-all focus:outline-none"
+                      key={key}
+                      onClick={() => setActiveTab(key)}
+                      aria-label={label}
+                      title={label}
+                      className="relative flex items-center justify-center rounded-full transition-all focus:outline-none"
                       style={
-                        activeTab === tab
-                          ? { backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', boxShadow: '0 2px 8px rgba(27,56,40,0.3)' }
-                          : { backgroundColor: 'transparent', color: '#8A7D6C', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em' }
+                        activeTab === key
+                          ? { width: '72px', height: '46px', backgroundColor: '#1B3828', color: '#EED98A', boxShadow: '0 2px 10px rgba(27,56,40,0.32)' }
+                          : { width: '72px', height: '46px', backgroundColor: 'transparent', color: '#8A7D6C' }
                       }
                     >
-                      {tab.toUpperCase()}
+                      <TabIcon size={21} strokeWidth={1.9} />
+                      {key === 'documents' && !myAllocation && (
+                        <span
+                          className="absolute flex items-center justify-center rounded-full"
+                          style={{
+                            top: '7px', right: '13px', width: '15px', height: '15px',
+                            backgroundColor: activeTab === key ? '#EED98A' : '#DDD4C0',
+                            color: '#1B3828',
+                          }}
+                        >
+                          <Lock size={9} strokeWidth={2.4} />
+                        </span>
+                      )}
                     </button>
                   ))}
                 </div>
@@ -644,8 +701,7 @@ export default function ConferenceDetailClient() {
               {/* About */}
               {activeTab === 'overview' && conference.description && (
                 <SectionCard className="mb-6">
-                  <SectionHeading eyebrow="ABOUT" title={`About ${conference.acronym}`} />
-                  <p className="text-sm" style={{ color: '#4A4238', fontFamily: "'Outfit', sans-serif", whiteSpace: 'pre-wrap', lineHeight: 1.85 }}>
+                  <p className="text-[15px]" style={{ color: '#3B342C', fontFamily: "'Outfit', sans-serif", whiteSpace: 'pre-wrap', lineHeight: 1.9 }}>
                     {conference.description}
                   </p>
                 </SectionCard>
@@ -653,112 +709,267 @@ export default function ConferenceDetailClient() {
 
               {/* Committees */}
               {activeTab === 'overview' && (
-                <SectionCard className="mb-6">
-                  <div className="flex justify-between items-start mb-5">
-                    <SectionHeading eyebrow="DEBATE" title="Committees" />
-                    <span
-                      className="px-2.5 py-1 rounded-full mt-1"
-                      style={{ fontSize: '10px', fontFamily: "'DM Mono', monospace", backgroundColor: 'rgba(27,56,40,0.07)', color: '#1B3828' }}
-                    >
-                      {committees.length}
-                    </span>
-                  </div>
+                <div className="flex flex-col gap-4 mb-6">
                   {committees.length === 0 ? (
-                    <p className="text-sm" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                      Committees will be announced soon.
-                    </p>
+                    <SectionCard>
+                      <p className="text-sm" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                        Committees will be announced soon.
+                      </p>
+                    </SectionCard>
                   ) : (
-                    <div className="flex flex-col gap-2.5">
-                      {committees.map(c => {
-                        const diff = c.difficulty?.toLowerCase() ?? '';
-                        const diffStyle = DIFFICULTY_STYLES[diff] ?? DIFFICULTY_STYLES.intermediate;
-                        const isCrisis = c.committee_type === 'crisis';
-                        const monogram = (c.abbreviation || c.name).replace(/[^A-Za-z0-9]/g, '').slice(0, 4).toUpperCase();
+                    committees.map(c => {
+                      const diff = c.difficulty?.toLowerCase() ?? '';
+                      const diffStyle = DIFFICULTY_STYLES[diff] ?? DIFFICULTY_STYLES.intermediate;
+                      const isCrisis = c.committee_type === 'crisis';
+                      const monogram = (c.abbreviation || c.name).replace(/[^A-Za-z0-9]/g, '').slice(0, 6).toUpperCase();
+                      const chairs = c.display_chairs ?? [];
+                      const slots = committeeSlots[c.id] ?? [];
+                      const occupied = new Set(committeeOccupied[c.id] ?? []);
+                      const capacity = slots.length || c.total_slots || 0;
+                      const taken = occupied.size;
+                      const pct = capacity > 0 ? Math.min(100, Math.round((taken / capacity) * 100)) : 0;
+                      const hasChairAd = !!chairJobs[c.id];
+                      const isExpanded = expandedRoster === c.id;
 
-                        return (
-                          <div
-                            key={c.id}
-                            className="flex items-start gap-4 rounded-2xl px-4 py-3.5 transition-colors"
-                            style={{ border: '1px solid rgba(221,212,192,0.7)', backgroundColor: 'rgba(237,231,216,0.25)' }}
-                          >
-                            {/* Monogram badge */}
-                            <div
-                              className="flex-shrink-0 flex items-center justify-center"
-                              style={{
-                                width: '46px', height: '46px', borderRadius: '13px',
-                                backgroundColor: isCrisis ? '#1B3828' : '#EDE7D8',
-                                border: isCrisis ? '1px solid #1B3828' : '1px solid #DDD4C0',
-                              }}
-                            >
-                              <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '10px', fontWeight: 700, color: isCrisis ? '#EED98A' : '#1B3828', letterSpacing: '0.02em' }}>
-                                {monogram}
-                              </span>
-                            </div>
+                      return (
+                        <div
+                          key={c.id}
+                          className="rounded-[22px] overflow-hidden"
+                          style={{
+                            backgroundColor: '#FAF8F3',
+                            border: '1px solid #DDD4C0',
+                            boxShadow: '0 2px 8px rgba(27,56,40,0.05)',
+                          }}
+                        >
+                          <div className="p-5 md:p-6">
+                            <div className="flex items-start gap-4">
+                              {/* Emblem */}
+                              <div
+                                className="flex-shrink-0 relative flex items-center justify-center overflow-hidden"
+                                style={{
+                                  width: '64px', height: '64px', borderRadius: '18px',
+                                  background: isCrisis
+                                    ? 'linear-gradient(135deg, #3C1414 0%, #6E1E1E 100%)'
+                                    : 'linear-gradient(135deg, #16301F 0%, #2A5A3C 100%)',
+                                  boxShadow: '0 8px 20px rgba(27,56,40,0.22)',
+                                }}
+                              >
+                                <div className="pointer-events-none absolute inset-0" style={{ backgroundImage: GRAIN, backgroundSize: '300px', mixBlendMode: 'overlay', opacity: 0.12 }} />
+                                <span style={{ fontFamily: "'DM Mono', monospace", fontSize: monogram.length > 4 ? '10px' : '13px', fontWeight: 700, color: '#EED98A', letterSpacing: '0.04em' }}>
+                                  {monogram}
+                                </span>
+                              </div>
 
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <p className="font-bold text-sm" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", margin: 0 }}>{c.name}</p>
-                                {isCrisis && (
-                                  <span
-                                    className="px-2 py-0.5 rounded-full"
-                                    style={{ fontSize: '8px', fontFamily: "'DM Mono', monospace", letterSpacing: '0.14em', backgroundColor: 'rgba(182,135,31,0.14)', color: '#8A6614', fontWeight: 700 }}
-                                  >
-                                    CRISIS
-                                  </span>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <h3 className="font-bold text-[16px] leading-snug" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", margin: 0 }}>{c.name}</h3>
+                                    {isCrisis && (
+                                      <span
+                                        className="px-2 py-0.5 rounded-full flex-shrink-0"
+                                        style={{ fontSize: '8px', fontFamily: "'DM Mono', monospace", letterSpacing: '0.14em', backgroundColor: 'rgba(110,30,30,0.1)', color: '#8B2020', fontWeight: 700 }}
+                                      >
+                                        CRISIS
+                                      </span>
+                                    )}
+                                  </div>
+                                  {c.difficulty && (
+                                    <span
+                                      className="px-2.5 py-1 rounded-full flex-shrink-0"
+                                      style={{ ...diffStyle, fontSize: '9px', fontFamily: "'DM Mono', monospace", letterSpacing: '0.08em', fontWeight: 700 }}
+                                    >
+                                      {c.difficulty.toUpperCase()}
+                                    </span>
+                                  )}
+                                </div>
+
+                                {/* Chairs */}
+                                {chairs.length > 0 && (
+                                  <div className="flex items-center gap-2.5 mt-2.5">
+                                    <div className="flex flex-shrink-0">
+                                      {chairs.map((ch, i) => (
+                                        ch.avatar_url ? (
+                                          <img
+                                            key={ch.name}
+                                            src={ch.avatar_url}
+                                            alt={ch.name}
+                                            style={{
+                                              width: '30px', height: '30px', borderRadius: '9999px', objectFit: 'cover',
+                                              border: '2px solid #FAF8F3', marginLeft: i > 0 ? '-9px' : 0,
+                                              boxShadow: '0 2px 6px rgba(27,56,40,0.2)', position: 'relative', zIndex: chairs.length - i,
+                                              backgroundColor: '#EDE7D8',
+                                            }}
+                                          />
+                                        ) : (
+                                          <span
+                                            key={ch.name}
+                                            className="flex items-center justify-center"
+                                            style={{
+                                              width: '30px', height: '30px', borderRadius: '9999px',
+                                              border: '2px solid #FAF8F3', marginLeft: i > 0 ? '-9px' : 0,
+                                              backgroundColor: '#1B3828', color: '#EED98A',
+                                              fontSize: '11px', fontWeight: 700, fontFamily: "'Outfit', sans-serif",
+                                              position: 'relative', zIndex: chairs.length - i,
+                                            }}
+                                          >
+                                            {ch.name.charAt(0)}
+                                          </span>
+                                        )
+                                      ))}
+                                    </div>
+                                    <p className="text-[12px] leading-tight" style={{ color: '#6B5F52', fontFamily: "'Outfit', sans-serif", margin: 0 }}>
+                                      Chaired by{' '}
+                                      <span style={{ color: '#1C1410', fontWeight: 600 }}>
+                                        {chairs.map(ch => ch.name).join(' & ')}
+                                      </span>
+                                    </p>
+                                  </div>
                                 )}
                               </div>
-                              {c.topics && c.topics.length > 0 && (
-                                <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
-                                  {c.topics.map(topic => (
-                                    <span
-                                      key={topic}
-                                      className="px-2 py-0.5 rounded-full text-[10px]"
-                                      style={{ backgroundColor: 'rgba(250,248,243,0.9)', border: '1px solid rgba(221,212,192,0.8)', color: '#6B5F52', fontFamily: "'Outfit', sans-serif" }}
-                                    >
-                                      {topic}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
                             </div>
 
-                            <div className="flex-shrink-0 flex flex-col items-end gap-1.5">
-                              {c.difficulty && (
-                                <span
-                                  className="px-2 py-0.5 rounded-full"
-                                  style={{ ...diffStyle, fontSize: '9px', fontFamily: "'DM Mono', monospace", letterSpacing: '0.08em', fontWeight: 700 }}
-                                >
-                                  {c.difficulty.toUpperCase()}
+                            {/* Agenda */}
+                            {c.topics && c.topics.length > 0 && (
+                              <div
+                                className="mt-4 rounded-2xl px-4 py-3"
+                                style={{ backgroundColor: 'rgba(237,231,216,0.45)', border: '1px solid rgba(221,212,192,0.6)' }}
+                              >
+                                <p className="mb-1.5" style={{ fontFamily: "'DM Mono', monospace", fontSize: '8px', letterSpacing: '0.24em', color: '#B6871F', margin: '0 0 6px 0' }}>
+                                  AGENDA
+                                </p>
+                                {c.topics.map(topic => (
+                                  <div key={topic} className="flex items-start gap-2.5 py-1">
+                                    <span aria-hidden style={{ color: '#B6871F', fontSize: '8px', lineHeight: '20px', flexShrink: 0 }}>◆</span>
+                                    <span className="text-[13.5px] font-medium" style={{ color: '#2E2820', fontFamily: "'Outfit', sans-serif", lineHeight: 1.5 }}>
+                                      {topic}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            {/* Chair recruitment ad */}
+                            {hasChairAd && (
+                              <Link
+                                href="/conferences/roles"
+                                className="mt-3 flex items-center gap-2.5 rounded-xl px-4 py-2.5 transition-all"
+                                style={{
+                                  background: 'linear-gradient(100deg, rgba(238,217,138,0.35) 0%, rgba(238,217,138,0.15) 100%)',
+                                  border: '1px solid rgba(182,135,31,0.35)',
+                                  textDecoration: 'none',
+                                }}
+                                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#B6871F'; }}
+                                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(182,135,31,0.35)'; }}
+                              >
+                                <Megaphone size={15} style={{ color: '#8A6614', flexShrink: 0 }} />
+                                <span className="flex-1 text-[12px] font-semibold" style={{ color: '#6E5410', fontFamily: "'Outfit', sans-serif" }}>
+                                  This committee is recruiting chairs
                                 </span>
-                              )}
-                              {c.total_slots != null && (
-                                <span className="text-[10px]" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}>
-                                  {c.total_slots} slots
+                                <span className="text-[10px] font-bold flex-shrink-0" style={{ color: '#8A6614', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em' }}>
+                                  APPLY →
                                 </span>
+                              </Link>
+                            )}
+                          </div>
+
+                          {/* Capacity bar + roster toggle */}
+                          <button
+                            onClick={() => setExpandedRoster(isExpanded ? null : c.id)}
+                            className="w-full px-5 md:px-6 py-3.5 flex items-center gap-3 focus:outline-none transition-colors"
+                            style={{
+                              borderTop: '1px solid rgba(221,212,192,0.6)',
+                              backgroundColor: isExpanded ? 'rgba(27,56,40,0.045)' : 'transparent',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            <div className="flex-1 rounded-full overflow-hidden" style={{ height: '7px', backgroundColor: 'rgba(221,212,192,0.65)' }}>
+                              <div
+                                style={{
+                                  width: `${pct}%`, height: '100%', borderRadius: '9999px',
+                                  background: 'linear-gradient(to right, #2A5A3C, #3D7A52)',
+                                  transition: 'width 500ms cubic-bezier(0.22,1,0.36,1)',
+                                }}
+                              />
+                            </div>
+                            <span className="flex-shrink-0 text-[10.5px]" style={{ color: '#6B5F52', fontFamily: "'DM Mono', monospace", letterSpacing: '0.08em' }}>
+                              {taken}/{capacity} {isCrisis ? 'ROLES' : 'SEATS'} FILLED
+                            </span>
+                            <ChevronDown
+                              size={15}
+                              style={{
+                                color: '#9A8A78', flexShrink: 0,
+                                transform: isExpanded ? 'rotate(180deg)' : 'rotate(0)',
+                                transition: 'transform 240ms ease',
+                              }}
+                            />
+                          </button>
+
+                          {/* Roster */}
+                          {isExpanded && (
+                            <div
+                              className="px-5 md:px-6 py-4 flex flex-wrap gap-2"
+                              style={{ borderTop: '1px solid rgba(221,212,192,0.5)', backgroundColor: 'rgba(237,231,216,0.35)' }}
+                            >
+                              {slots.length === 0 ? (
+                                <span className="text-xs" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                                  The {isCrisis ? 'character' : 'country'} roster will be announced soon.
+                                </span>
+                              ) : (
+                                slots.map(s => {
+                                  const isTaken = occupied.has(s.country_code);
+                                  const co = getCountryByName(s.country_name);
+                                  const flag = co ? getFlagUrl(co.code) : null;
+                                  return (
+                                    <span
+                                      key={s.country_code}
+                                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full"
+                                      style={
+                                        isTaken
+                                          ? { backgroundColor: '#1B3828', border: '1px solid #1B3828' }
+                                          : { backgroundColor: 'rgba(250,248,243,0.9)', border: '1px solid rgba(221,212,192,0.9)' }
+                                      }
+                                    >
+                                      {flag && (
+                                        <img
+                                          src={flag}
+                                          alt=""
+                                          style={{ width: '16px', height: '11px', borderRadius: '2px', objectFit: 'cover', flexShrink: 0, opacity: isTaken ? 0.85 : 1 }}
+                                        />
+                                      )}
+                                      <span className="text-[11px] font-medium" style={{ color: isTaken ? '#EDE7D8' : '#4A4238', fontFamily: "'Outfit', sans-serif" }}>
+                                        {s.country_name}
+                                      </span>
+                                      {isTaken && <Check size={11} strokeWidth={2.6} style={{ color: '#EED98A', flexShrink: 0 }} />}
+                                    </span>
+                                  );
+                                })
                               )}
                             </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                          )}
+                        </div>
+                      );
+                    })
                   )}
-                </SectionCard>
+                </div>
               )}
 
               {/* Organiser */}
               {activeTab === 'overview' && (
                 <SectionCard className="mb-6">
-                  <SectionHeading eyebrow="SECRETARIAT" title="Organised by" />
+                  <p className="mb-3" style={{ fontFamily: "'DM Mono', monospace", fontSize: '9px', letterSpacing: '0.26em', color: '#B6871F', margin: '0 0 12px 0' }}>
+                    ORGANISED BY
+                  </p>
                   <div className="flex items-center gap-4">
                     {conference.logo_url && (
                       <img
                         src={conference.logo_url}
                         alt={conference.acronym}
-                        style={{ width: '44px', height: '44px', borderRadius: '12px', objectFit: 'cover', border: '1px solid #DDD4C0', flexShrink: 0 }}
+                        style={{ width: '58px', height: '58px', borderRadius: '15px', objectFit: 'contain', border: '1px solid #DDD4C0', backgroundColor: '#FFFFFF', padding: '4px', flexShrink: 0 }}
                       />
                     )}
                     <div className="min-w-0">
-                      <p className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: "'DM Mono', monospace", margin: 0 }}>{conference.acronym}</p>
+                      <p className="font-semibold text-[15px]" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", margin: 0 }}>{conference.full_name}</p>
+                      <p className="text-[11px] mt-0.5" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace", margin: 0 }}>{conference.acronym}</p>
                       {conference.contact_email && (
                         <a
                           href={`mailto:${conference.contact_email}`}
@@ -849,20 +1060,41 @@ export default function ConferenceDetailClient() {
                 </SectionCard>
               )}
 
+              {/* Documents tab — locked until allocation */}
+              {activeTab === 'documents' && !myAllocation && (
+                <SectionCard>
+                  <div className="flex flex-col items-center text-center py-10">
+                    <div
+                      className="flex items-center justify-center mb-5"
+                      style={{
+                        width: '64px', height: '64px', borderRadius: '9999px',
+                        backgroundColor: 'rgba(27,56,40,0.07)', border: '1px solid rgba(27,56,40,0.14)',
+                      }}
+                    >
+                      <Lock size={24} strokeWidth={1.8} style={{ color: '#1B3828' }} />
+                    </div>
+                    <p className="text-[15px] font-semibold mb-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                      Documents are locked
+                    </p>
+                    <p className="text-[13px] max-w-[340px]" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", lineHeight: 1.7 }}>
+                      Study guides and position paper submissions unlock once you receive your committee allocation.
+                    </p>
+                  </div>
+                </SectionCard>
+              )}
+
               {/* Documents tab */}
-              {activeTab === 'documents' && (
+              {activeTab === 'documents' && myAllocation && (
                 <div className="flex flex-col gap-6">
                   {/* Study Guides */}
                   <SectionCard>
-                    <SectionHeading eyebrow="PREPARATION" title="Study Guides" />
+                    <p className="mb-3" style={{ fontFamily: "'DM Mono', monospace", fontSize: '9px', letterSpacing: '0.26em', color: '#B6871F', margin: '0 0 12px 0' }}>
+                      STUDY GUIDES
+                    </p>
                     {studyGuidesLoading ? (
                       <div className="flex justify-center py-6">
                         <div className="w-5 h-5 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
                       </div>
-                    ) : !myAllocation ? (
-                      <p className="text-sm" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                        Study guides are available once you are allocated to a committee.
-                      </p>
                     ) : studyGuides.length === 0 ? (
                       <p className="text-sm" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
                         No study guides have been published yet.
@@ -915,8 +1147,10 @@ export default function ConferenceDetailClient() {
                     };
                     return (
                       <SectionCard>
-                        <SectionHeading eyebrow="SUBMISSION" title="Position Paper" />
-                        <p style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#9A8A78', marginTop: -8, marginBottom: 16 }}>
+                        <p style={{ fontFamily: "'DM Mono', monospace", fontSize: '9px', letterSpacing: '0.26em', color: '#B6871F', margin: '0 0 6px 0' }}>
+                          POSITION PAPER
+                        </p>
+                        <p style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#9A8A78', marginBottom: 16 }}>
                           {myAllocation.conference_committees?.name} · {myAllocation.country_name}
                         </p>
 
@@ -1052,62 +1286,183 @@ export default function ConferenceDetailClient() {
             <div className="w-full md:w-[340px] md:flex-shrink-0">
               <div className="flex flex-col gap-4 md:sticky" style={{ top: '12px' }}>
 
-                {/* Fee */}
-                <SectionCard>
-                  {conference.fee_amount === 0 ? (
-                    <>
-                      <p className="mb-1" style={{ fontFamily: "'DM Mono', monospace", fontSize: '9px', letterSpacing: '0.24em', color: '#B6871F' }}>REGISTRATION FEE</p>
-                      <p className="font-black text-3xl" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>FREE</p>
-                      <p className="text-xs mt-1" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                        No registration fee for this conference.
-                      </p>
-                    </>
-                  ) : (
-                    <>
-                      <p className="mb-1" style={{ fontFamily: "'DM Mono', monospace", fontSize: '9px', letterSpacing: '0.24em', color: '#B6871F' }}>REGISTRATION FEE</p>
-                      <p className="font-black" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", fontSize: '34px', lineHeight: 1.1 }}>
-                        {currencySymbol(conference.fee_currency)}{conference.fee_amount.toFixed(0)}
-                        <span className="ml-2 font-semibold" style={{ fontSize: '12px', color: '#9A8A78' }}>per delegate</span>
-                      </p>
-                      <div className="group relative inline-block mt-1.5">
-                        <span className="text-xs cursor-help" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", borderBottom: '1px dotted #C8BFB0' }}>
-                          + 5% Gavelling surcharge
-                        </span>
-                        <span
-                          className="absolute bottom-full left-0 mb-1.5 px-2.5 py-1.5 rounded-lg text-xs whitespace-nowrap pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity"
-                          style={{
-                            backgroundColor: '#1C1410',
-                            color: 'white',
-                            fontFamily: "'Outfit', sans-serif",
-                            fontSize: '11px',
-                            zIndex: 10,
-                            boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
-                          }}
+                {/* Apply CTA — always first */}
+                <div
+                  className="relative rounded-[20px] p-6 overflow-hidden"
+                  style={{ backgroundColor: '#1B3828', boxShadow: '0 16px 40px rgba(27,56,40,0.28)' }}
+                >
+                  <div
+                    className="pointer-events-none absolute inset-0"
+                    style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px', mixBlendMode: 'overlay', opacity: 0.07 }}
+                  />
+                  <div
+                    aria-hidden
+                    className="pointer-events-none absolute"
+                    style={{
+                      top: '-60px', right: '-40px', width: '200px', height: '200px',
+                      background: 'radial-gradient(circle, rgba(238,217,138,0.14) 0%, transparent 65%)',
+                    }}
+                  />
+                  <div className="relative">
+                    {!user ? (
+                      <>
+                        <p className="font-bold text-base mb-1 text-white" style={{ fontFamily: "'Outfit', sans-serif" }}>Sign in to apply</p>
+                        <p className="text-xs mb-4" style={{ color: 'rgba(237,231,216,0.7)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.6 }}>
+                          Create a free account to apply for this conference.
+                        </p>
+                        <button
+                          onClick={() => router.push(`/auth/signin?next=/conferences/${slug}`)}
+                          className="w-full rounded-xl py-3 font-bold text-sm transition-all focus:outline-none"
+                          style={{ backgroundColor: '#EED98A', color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', boxShadow: '0 4px 16px rgba(0,0,0,0.2)' }}
+                          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'white'; }}
+                          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#EED98A'; }}
                         >
-                          Waived with Gavelling Unlimited
+                          SIGN IN TO APPLY →
+                        </button>
+                      </>
+                    ) : !hasOpenRoles ? (
+                      <>
+                        <p className="font-bold text-base text-white" style={{ fontFamily: "'Outfit', sans-serif" }}>No open applications</p>
+                        <p className="text-xs mt-1" style={{ color: 'rgba(237,231,216,0.7)', fontFamily: "'Outfit', sans-serif" }}>
+                          Check back when applications open.
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="font-bold text-base mb-1 text-white" style={{ fontFamily: "'Outfit', sans-serif" }}>Apply to this Conference</p>
+                        <p className="text-xs mb-4" style={{ color: 'rgba(237,231,216,0.7)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.6 }}>
+                          Select your role to begin your application.
+                        </p>
+                        {openRoles.map(r => {
+                          const myApp = myApplications.find(a => a.role === r.role);
+                          const hasApplied = !!myApp;
+                          const label = r.role.replace(/-/g, ' ').toUpperCase();
+                          return (
+                            <button
+                              key={r.role}
+                              disabled={hasApplied}
+                              onClick={() => {
+                                if (!hasApplied) router.push(`/conferences/${slug}/apply?role=${r.role}`);
+                              }}
+                              className="w-full mb-2 last:mb-0 rounded-xl py-2.5 px-4 text-sm font-bold transition-all focus:outline-none"
+                              style={
+                                hasApplied
+                                  ? {
+                                      backgroundColor: 'rgba(238,217,138,0.12)',
+                                      color: 'rgba(238,217,138,0.5)',
+                                      cursor: 'default',
+                                      fontFamily: "'Outfit', sans-serif",
+                                      letterSpacing: '0.05em',
+                                      border: '1px solid rgba(238,217,138,0.15)',
+                                    }
+                                  : {
+                                      backgroundColor: '#EED98A',
+                                      color: '#1B3828',
+                                      fontFamily: "'Outfit', sans-serif",
+                                      letterSpacing: '0.05em',
+                                      boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
+                                    }
+                              }
+                              onMouseEnter={(e) => {
+                                if (!hasApplied) (e.currentTarget as HTMLElement).style.backgroundColor = 'white';
+                              }}
+                              onMouseLeave={(e) => {
+                                if (!hasApplied) (e.currentTarget as HTMLElement).style.backgroundColor = '#EED98A';
+                              }}
+                            >
+                              {hasApplied ? 'Applied ✓' : `APPLY AS ${label} →`}
+                            </button>
+                          );
+                        })}
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Pricing medallion */}
+                <SectionCard>
+                  <div className="flex flex-col items-center pt-2">
+                    <div
+                      className="relative flex flex-col items-center justify-center"
+                      style={{
+                        width: '150px', height: '150px', borderRadius: '9999px',
+                        background: 'radial-gradient(circle at 50% 36%, rgba(238,217,138,0.3) 0%, rgba(250,248,243,0) 72%)',
+                        border: '1.5px solid rgba(182,135,31,0.42)',
+                        boxShadow: '0 10px 30px rgba(27,56,40,0.1), 0 0 0 8px rgba(238,217,138,0.12)',
+                      }}
+                    >
+                      {conference.fee_amount === 0 ? (
+                        <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: '30px', color: '#1B3828', lineHeight: 1 }}>FREE</span>
+                      ) : (
+                        <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: '38px', color: '#1C1410', lineHeight: 1 }}>
+                          {currencySymbol(conference.fee_currency)}{conference.fee_amount.toFixed(0)}
                         </span>
-                      </div>
-                      {hasUnlimited && (
-                        <div className="mt-2">
-                          <span
-                            className="text-[10px] px-2 py-0.5 rounded-full"
-                            style={{
-                              backgroundColor: 'rgba(238,217,138,0.15)',
-                              color: '#B6871F',
-                              fontFamily: "'DM Mono', monospace",
-                            }}
-                          >
-                            ✦ Surcharge waived with your Unlimited plan
-                          </span>
-                        </div>
                       )}
-                    </>
-                  )}
+                      <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '8.5px', letterSpacing: '0.22em', color: '#9A8A78', marginTop: '7px' }}>
+                        PER DELEGATE
+                      </span>
+                    </div>
+
+                    <button
+                      onClick={() => setPricingOpen(v => !v)}
+                      className="mt-4 flex items-center gap-1.5 text-[11px] font-bold focus:outline-none transition-colors"
+                      style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.12em', background: 'none', border: 'none', cursor: 'pointer' }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#B6871F'; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
+                    >
+                      PRICING DETAILS
+                      <ChevronDown
+                        size={13}
+                        style={{ transform: pricingOpen ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform 240ms ease' }}
+                      />
+                    </button>
+
+                    {pricingOpen && (
+                      <div className="w-full mt-4 pt-3" style={{ borderTop: '1px solid rgba(221,212,192,0.6)' }}>
+                        {enabledRoles.map((r, i) => (
+                          <div
+                            key={r.role}
+                            className="flex items-center justify-between py-2"
+                            style={{ borderTop: i === 0 ? 'none' : '1px solid rgba(221,212,192,0.4)' }}
+                          >
+                            <span className="text-[13px] font-medium" style={{ color: '#4A4238', fontFamily: "'Outfit', sans-serif" }}>
+                              {capitalize(r.role.replace(/-/g, ' '))}
+                            </span>
+                            <span className="text-[13px] font-bold" style={{ color: '#1C1410', fontFamily: "'DM Mono', monospace" }}>
+                              {r.fee_amount != null && r.fee_amount > 0
+                                ? `${currencySymbol(r.fee_currency ?? conference.fee_currency)}${r.fee_amount.toFixed(0)}`
+                                : 'Free'}
+                            </span>
+                          </div>
+                        ))}
+                        <p className="text-[10.5px] mt-3" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", lineHeight: 1.65 }}>
+                          A 5% Gavelling surcharge applies at checkout — waived with{' '}
+                          <span style={{ color: '#B6871F', fontWeight: 600 }}>Gavelling Unlimited</span>.
+                        </p>
+                        {hasUnlimited && (
+                          <div className="mt-2">
+                            <span
+                              className="text-[10px] px-2 py-0.5 rounded-full"
+                              style={{
+                                backgroundColor: 'rgba(238,217,138,0.15)',
+                                color: '#B6871F',
+                                fontFamily: "'DM Mono', monospace",
+                              }}
+                            >
+                              ✦ Surcharge waived with your Unlimited plan
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </SectionCard>
 
                 {/* Application Windows */}
                 <SectionCard>
-                  <SectionHeading eyebrow="ROLES" title="Applications" />
+                  <p className="mb-3" style={{ fontFamily: "'DM Mono', monospace", fontSize: '9px', letterSpacing: '0.26em', color: '#B6871F', margin: '0 0 12px 0' }}>
+                    APPLICATION WINDOWS
+                  </p>
                   {enabledRoles.length === 0 ? (
                     <p className="text-sm" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
                       Application details coming soon.
@@ -1165,102 +1520,6 @@ export default function ConferenceDetailClient() {
                     </div>
                   )}
                 </SectionCard>
-
-                {/* Apply CTA */}
-                <div
-                  className="relative rounded-[20px] p-6 overflow-hidden"
-                  style={{ backgroundColor: '#1B3828', boxShadow: '0 16px 40px rgba(27,56,40,0.28)' }}
-                >
-                  <div
-                    className="pointer-events-none absolute inset-0"
-                    style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px', mixBlendMode: 'overlay', opacity: 0.07 }}
-                  />
-                  <div
-                    aria-hidden
-                    className="pointer-events-none absolute"
-                    style={{
-                      top: '-60px', right: '-40px', width: '200px', height: '200px',
-                      background: 'radial-gradient(circle, rgba(238,217,138,0.14) 0%, transparent 65%)',
-                    }}
-                  />
-                  <div className="relative">
-                    {!user ? (
-                      <>
-                        <p className="mb-1" style={{ fontFamily: "'DM Mono', monospace", fontSize: '9px', letterSpacing: '0.24em', color: 'rgba(238,217,138,0.7)' }}>GET STARTED</p>
-                        <p className="font-bold text-base mb-1 text-white" style={{ fontFamily: "'Outfit', sans-serif" }}>Sign in to apply</p>
-                        <p className="text-xs mb-4" style={{ color: 'rgba(237,231,216,0.7)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.6 }}>
-                          Create a free account to apply for this conference.
-                        </p>
-                        <button
-                          onClick={() => router.push(`/auth/signin?next=/conferences/${slug}`)}
-                          className="w-full rounded-xl py-3 font-bold text-sm transition-all focus:outline-none"
-                          style={{ backgroundColor: '#EED98A', color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', boxShadow: '0 4px 16px rgba(0,0,0,0.2)' }}
-                          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'white'; }}
-                          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#EED98A'; }}
-                        >
-                          SIGN IN TO APPLY →
-                        </button>
-                      </>
-                    ) : !hasOpenRoles ? (
-                      <>
-                        <p className="mb-1" style={{ fontFamily: "'DM Mono', monospace", fontSize: '9px', letterSpacing: '0.24em', color: 'rgba(238,217,138,0.7)' }}>APPLICATIONS</p>
-                        <p className="font-bold text-base text-white" style={{ fontFamily: "'Outfit', sans-serif" }}>No open applications</p>
-                        <p className="text-xs mt-1" style={{ color: 'rgba(237,231,216,0.7)', fontFamily: "'Outfit', sans-serif" }}>
-                          Check back when applications open.
-                        </p>
-                      </>
-                    ) : (
-                      <>
-                        <p className="mb-1" style={{ fontFamily: "'DM Mono', monospace", fontSize: '9px', letterSpacing: '0.24em', color: 'rgba(238,217,138,0.7)' }}>GET STARTED</p>
-                        <p className="font-bold text-base mb-1 text-white" style={{ fontFamily: "'Outfit', sans-serif" }}>Apply to this Conference</p>
-                        <p className="text-xs mb-4" style={{ color: 'rgba(237,231,216,0.7)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.6 }}>
-                          Select your role to begin your application.
-                        </p>
-                        {openRoles.map(r => {
-                          const myApp = myApplications.find(a => a.role === r.role);
-                          const hasApplied = !!myApp;
-                          const label = r.role.replace(/-/g, ' ').toUpperCase();
-                          return (
-                            <button
-                              key={r.role}
-                              disabled={hasApplied}
-                              onClick={() => {
-                                if (!hasApplied) router.push(`/conferences/${slug}/apply?role=${r.role}`);
-                              }}
-                              className="w-full mb-2 last:mb-0 rounded-xl py-2.5 px-4 text-sm font-bold transition-all focus:outline-none"
-                              style={
-                                hasApplied
-                                  ? {
-                                      backgroundColor: 'rgba(238,217,138,0.12)',
-                                      color: 'rgba(238,217,138,0.5)',
-                                      cursor: 'default',
-                                      fontFamily: "'Outfit', sans-serif",
-                                      letterSpacing: '0.05em',
-                                      border: '1px solid rgba(238,217,138,0.15)',
-                                    }
-                                  : {
-                                      backgroundColor: '#EED98A',
-                                      color: '#1B3828',
-                                      fontFamily: "'Outfit', sans-serif",
-                                      letterSpacing: '0.05em',
-                                      boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
-                                    }
-                              }
-                              onMouseEnter={(e) => {
-                                if (!hasApplied) (e.currentTarget as HTMLElement).style.backgroundColor = 'white';
-                              }}
-                              onMouseLeave={(e) => {
-                                if (!hasApplied) (e.currentTarget as HTMLElement).style.backgroundColor = '#EED98A';
-                              }}
-                            >
-                              {hasApplied ? 'Applied ✓' : `APPLY AS ${label} →`}
-                            </button>
-                          );
-                        })}
-                      </>
-                    )}
-                  </div>
-                </div>
 
               </div>
             </div>

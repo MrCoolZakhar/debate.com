@@ -248,6 +248,11 @@ export default function SettingsPage() {
   const [websiteUrl, setWebsiteUrl] = useState('');
   const [visualSaving, setVisualSaving] = useState(false);
   const [visualSaved, setVisualSaved] = useState(false);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [feeAmount, setFeeAmount] = useState('');
+  const [feeCurrency, setFeeCurrency] = useState('GBP');
+  const [feeSaving, setFeeSaving] = useState(false);
+  const [feeSaved, setFeeSaved] = useState(false);
 
   const [roleConfigs, setRoleConfigs] = useState<RoleConfig[]>([]);
   const [configVersion, setConfigVersion] = useState(0);
@@ -320,6 +325,8 @@ export default function SettingsPage() {
     setTiktokUrl(conference.tiktok_url ?? '');
     setWhatsappUrl(conference.whatsapp_url ?? '');
     setWebsiteUrl(conference.website_url ?? '');
+    setFeeAmount(conference.fee_amount != null ? String(conference.fee_amount) : '');
+    setFeeCurrency(conference.fee_currency ?? 'GBP');
   }, [conference?.id, loadRoleConfigs, loadOrganizers]);
 
   useEffect(() => {
@@ -443,6 +450,35 @@ export default function SettingsPage() {
     await supabase.from('conferences').update({ banner_url: urlData.publicUrl }).eq('id', conference.id);
     await refreshConference();
     setBannerUploading(false);
+  }
+
+  async function handleLogoUpload(file: File) {
+    if (!session || !conference) return;
+    if (file.size > 5 * 1024 * 1024) { alert('Logo must be under 5MB.'); return; }
+    setLogoUploading(true);
+    const supabase = getAuthedClient(session.access_token);
+    const ext = file.name.split('.').pop();
+    const path = 'logos/' + conference.id + '-' + Date.now() + '.' + ext;
+    const { error } = await supabase.storage.from('conference-assets').upload(path, file, { contentType: file.type, upsert: true });
+    if (error) { alert('Upload failed: ' + error.message); setLogoUploading(false); return; }
+    const { data: urlData } = supabase.storage.from('conference-assets').getPublicUrl(path);
+    await supabase.from('conferences').update({ logo_url: urlData.publicUrl }).eq('id', conference.id);
+    await refreshConference();
+    setLogoUploading(false);
+  }
+
+  async function handleSaveFee() {
+    if (!session || !conference) return;
+    setFeeSaving(true);
+    const supabase = getAuthedClient(session.access_token);
+    await supabase.from('conferences').update({
+      fee_amount: parseFloat(feeAmount) || 0,
+      fee_currency: feeCurrency,
+    }).eq('id', conference.id);
+    await refreshConference();
+    setFeeSaving(false);
+    setFeeSaved(true);
+    setTimeout(() => setFeeSaved(false), 2500);
   }
 
   async function handleSaveVisual() {
@@ -708,6 +744,100 @@ export default function SettingsPage() {
                 style={{ display: 'none' }}
                 onChange={(e) => { const f = e.target.files?.[0]; if (f) handleBannerUpload(f); e.target.value = ''; }}
               />
+            </div>
+          </div>
+
+          {/* Logo card */}
+          <div style={cardStyle}>
+            <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Conference Logo</p>
+            <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Square, transparent PNG recommended. Shown on your public page, directory cards and search. Max 5MB.</p>
+            <div className="flex items-center gap-5">
+              <div
+                style={{
+                  width: 96, height: 96, borderRadius: 20, flexShrink: 0,
+                  border: '1.5px dashed #DDD4C0', backgroundColor: '#FFFFFF',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  overflow: 'hidden', cursor: 'pointer', position: 'relative',
+                }}
+                onClick={() => { if (!logoUploading) document.getElementById('settings-logo-upload')?.click(); }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
+              >
+                {logoUploading ? (
+                  <div className="w-5 h-5 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
+                ) : conference.logo_url ? (
+                  <img src={conference.logo_url} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 6 }} />
+                ) : (
+                  <span style={{ fontSize: 11, color: '#9A8A78', fontFamily: "'Outfit', sans-serif", textAlign: 'center', padding: '0 8px' }}>Click to upload</span>
+                )}
+              </div>
+              <div>
+                <button
+                  onClick={() => { if (!logoUploading) document.getElementById('settings-logo-upload')?.click(); }}
+                  className="rounded-xl py-2 px-4 font-bold text-xs tracking-widest transition-colors focus:outline-none"
+                  style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.07em' }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+                >
+                  {logoUploading ? 'UPLOADING...' : conference.logo_url ? 'REPLACE LOGO' : 'UPLOAD LOGO'}
+                </button>
+              </div>
+              <input
+                id="settings-logo-upload"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                style={{ display: 'none' }}
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleLogoUpload(f); e.target.value = ''; }}
+              />
+            </div>
+          </div>
+
+          {/* Registration fee card */}
+          <div style={cardStyle}>
+            <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Registration Fee</p>
+            <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>The headline delegate fee and the currency you charge in. Per-role fees are set in the Applications tab.</p>
+            <div className="flex items-end gap-3">
+              <div style={{ width: '30%' }}>
+                <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Currency</label>
+                <select
+                  value={feeCurrency}
+                  onChange={(e) => setFeeCurrency(e.target.value)}
+                  style={{ ...inputStyle, cursor: 'pointer' }}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
+                  onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
+                >
+                  {['GBP', 'USD', 'EUR', 'CHF', 'CAD', 'AUD', 'JPY', 'CNY', 'INR', 'BRL', 'MXN'].map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div className="flex-1">
+                <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Fee per delegate</label>
+                <input
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  value={feeAmount}
+                  onChange={(e) => setFeeAmount(e.target.value)}
+                  placeholder="0.00"
+                  style={inputStyle}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
+                  onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
+                />
+              </div>
+              <button
+                onClick={handleSaveFee}
+                disabled={feeSaving}
+                className="rounded-xl py-2.5 px-5 font-bold text-xs tracking-widest transition-colors focus:outline-none flex-shrink-0"
+                style={{
+                  backgroundColor: feeSaved ? '#3D7A52' : feeSaving ? '#DDD4C0' : '#1B3828',
+                  color: feeSaving ? '#9A8A78' : '#EED98A',
+                  fontFamily: "'Outfit', sans-serif",
+                  letterSpacing: '0.07em',
+                }}
+                onMouseEnter={(e) => { if (!feeSaving && !feeSaved) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+                onMouseLeave={(e) => { if (!feeSaving && !feeSaved) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+              >
+                {feeSaved ? 'SAVED ✓' : feeSaving ? 'SAVING...' : 'SAVE'}
+              </button>
             </div>
           </div>
 
