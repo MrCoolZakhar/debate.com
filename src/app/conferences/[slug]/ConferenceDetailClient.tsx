@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Globe, MessageCircle, Music, CalendarDays, MapPin, Users, GraduationCap, Monitor, Mail, FileText, Download, Landmark, Lock, ChevronDown, Check, Megaphone } from 'lucide-react';
+import { Globe, MessageCircle, Music, CalendarDays, MapPin, Users, GraduationCap, Monitor, Mail, FileText, Download, Landmark, Lock, ChevronDown, ChevronLeft, ChevronRight, Check, Megaphone, X } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -56,6 +56,7 @@ interface Committee {
   committee_type: string;
   total_slots: number | null;
   display_chairs: DisplayChair[] | null;
+  logo_url: string | null;
 }
 
 interface CommitteeSlot {
@@ -138,6 +139,25 @@ function ApplicationStatusBadge({ status }: { status: string }) {
   );
 }
 
+function FilterChip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="px-3 py-1.5 rounded-full text-[10px] font-bold transition-all focus:outline-none"
+      style={{
+        backgroundColor: active ? '#1B3828' : 'rgba(237,231,216,0.5)',
+        color: active ? '#EED98A' : '#6B5F52',
+        border: active ? '1px solid #1B3828' : '1px solid rgba(221,212,192,0.9)',
+        fontFamily: "'Outfit', sans-serif",
+        letterSpacing: '0.08em',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
 function SectionCard({ children, className = '' }: { children: React.ReactNode; className?: string }) {
   return (
     <div
@@ -186,6 +206,11 @@ export default function ConferenceDetailClient() {
   const [chairJobs, setChairJobs] = useState<Record<string, string>>({});
   const [expandedRoster, setExpandedRoster] = useState<string | null>(null);
   const [pricingOpen, setPricingOpen] = useState(false);
+  // Committee carousel + filters
+  const carouselRef = useRef<HTMLDivElement>(null);
+  const [filterDifficulty, setFilterDifficulty] = useState('');
+  const [filterSeats, setFilterSeats] = useState<'' | 'open' | 'filling' | 'full'>('');
+  const [filterType, setFilterType] = useState<'' | 'general-assembly' | 'crisis'>('');
 
   useEffect(() => {
     if (authLoading) return;
@@ -252,7 +277,7 @@ export default function ConferenceDetailClient() {
     const [committeesRes, roleConfigsRes] = await Promise.all([
       supabase
         .from('conference_committees')
-        .select('id, name, abbreviation, topics, difficulty, committee_type, total_slots, display_chairs')
+        .select('id, name, abbreviation, topics, difficulty, committee_type, total_slots, display_chairs, logo_url')
         .eq('conference_id', conf.id)
         .order('name', { ascending: true }),
       supabase
@@ -603,38 +628,39 @@ export default function ConferenceDetailClient() {
             <div
               className="grid grid-cols-2 md:grid-cols-5"
               style={{
-                backgroundColor: 'rgba(250,248,243,0.78)',
-                backdropFilter: 'blur(20px) saturate(1.5)',
-                WebkitBackdropFilter: 'blur(20px) saturate(1.5)',
-                border: '1px solid rgba(221,212,192,0.9)',
+                backgroundColor: 'rgba(250,248,243,0.94)',
+                backdropFilter: 'blur(14px)',
+                WebkitBackdropFilter: 'blur(14px)',
+                border: '1px solid rgba(221,212,192,0.95)',
                 borderRadius: '20px',
-                boxShadow: '0 20px 48px rgba(16,28,21,0.18), 0 1px 0 rgba(255,255,255,0.65) inset',
+                boxShadow: '0 16px 40px rgba(16,28,21,0.14)',
                 overflow: 'hidden',
               }}
             >
               {[
-                { icon: CalendarDays, label: 'DATES', value: formatDateRange(conference.start_date, conference.end_date) },
-                { icon: MapPin, label: 'LOCATION', value: isOnline ? 'Online' : `${conference.city}, ${conference.country}` },
-                { icon: Monitor, label: 'FORMAT', value: capitalize(conference.format.replace('-', ' ')) },
-                { icon: GraduationCap, label: 'LEVEL', value: capitalize(conference.student_level) },
-                { icon: Users, label: 'DELEGATES', value: conference.expected_delegates.toLocaleString() },
+                { icon: CalendarDays, label: 'Dates', value: formatDateRange(conference.start_date, conference.end_date) },
+                { icon: MapPin, label: 'Location', value: isOnline ? 'Online' : `${conference.city}, ${conference.country}` },
+                { icon: Monitor, label: 'Format', value: capitalize(conference.format.replace('-', ' ')) },
+                { icon: GraduationCap, label: 'Level', value: capitalize(conference.student_level) },
+                { icon: Users, label: 'Delegates', value: conference.expected_delegates.toLocaleString() },
               ].map((cell, i) => {
                 const Icon = cell.icon;
                 return (
                   <div
                     key={cell.label}
-                    className="px-5 py-4"
+                    title={cell.label}
+                    className="flex items-center gap-3 px-5 py-4"
                     style={{
-                      borderLeft: i > 0 ? '1px solid rgba(221,212,192,0.6)' : 'none',
+                      borderLeft: i > 0 ? '1px solid rgba(221,212,192,0.7)' : 'none',
                     }}
                   >
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <Icon size={11} style={{ color: '#B6871F', flexShrink: 0 }} />
-                      <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '9px', letterSpacing: '0.18em', color: '#9A8A78' }}>
-                        {cell.label}
-                      </span>
-                    </div>
-                    <p className="text-[13px] font-semibold truncate" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", margin: 0 }}>
+                    <span
+                      className="flex items-center justify-center flex-shrink-0"
+                      style={{ width: '32px', height: '32px', borderRadius: '10px', backgroundColor: 'rgba(182,135,31,0.12)' }}
+                    >
+                      <Icon size={16} strokeWidth={2} style={{ color: '#B6871F' }} />
+                    </span>
+                    <p className="text-[15px] font-bold truncate" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", margin: 0 }}>
                       {cell.value}
                     </p>
                   </div>
@@ -707,251 +733,462 @@ export default function ConferenceDetailClient() {
                 </SectionCard>
               )}
 
-              {/* Committees */}
-              {activeTab === 'overview' && (
-                <div className="flex flex-col gap-4 mb-6">
-                  {committees.length === 0 ? (
-                    <SectionCard>
-                      <p className="text-sm" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                        Committees will be announced soon.
-                      </p>
-                    </SectionCard>
-                  ) : (
-                    committees.map(c => {
-                      const diff = c.difficulty?.toLowerCase() ?? '';
-                      const diffStyle = DIFFICULTY_STYLES[diff] ?? DIFFICULTY_STYLES.intermediate;
-                      const isCrisis = c.committee_type === 'crisis';
-                      const monogram = (c.abbreviation || c.name).replace(/[^A-Za-z0-9]/g, '').slice(0, 6).toUpperCase();
-                      const chairs = c.display_chairs ?? [];
-                      const slots = committeeSlots[c.id] ?? [];
-                      const occupied = new Set(committeeOccupied[c.id] ?? []);
-                      const capacity = slots.length || c.total_slots || 0;
-                      const taken = occupied.size;
-                      const pct = capacity > 0 ? Math.min(100, Math.round((taken / capacity) * 100)) : 0;
-                      const hasChairAd = !!chairJobs[c.id];
-                      const isExpanded = expandedRoster === c.id;
+              {/* Committees — filterable horizontal carousel */}
+              {activeTab === 'overview' && (() => {
+                const presentDifficulties = ['beginner', 'intermediate', 'advanced', 'expert']
+                  .filter(d => committees.some(c => (c.difficulty ?? '').toLowerCase() === d));
+                const hasCrisis = committees.some(c => c.committee_type === 'crisis');
+                const hasGA = committees.some(c => c.committee_type !== 'crisis');
+                const committeeStats = (c: Committee) => {
+                  const slots = committeeSlots[c.id] ?? [];
+                  const capacity = slots.length || c.total_slots || 0;
+                  const taken = new Set(committeeOccupied[c.id] ?? []).size;
+                  return { slots, capacity, taken, pct: capacity > 0 ? Math.min(100, Math.round((taken / capacity) * 100)) : 0 };
+                };
+                const filteredCommittees = committees.filter(c => {
+                  if (filterDifficulty && (c.difficulty ?? '').toLowerCase() !== filterDifficulty) return false;
+                  if (filterType === 'crisis' && c.committee_type !== 'crisis') return false;
+                  if (filterType === 'general-assembly' && c.committee_type === 'crisis') return false;
+                  if (filterSeats) {
+                    const { capacity, taken } = committeeStats(c);
+                    if (filterSeats === 'open' && taken >= capacity) return false;
+                    if (filterSeats === 'filling' && (taken === 0 || taken >= capacity)) return false;
+                    if (filterSeats === 'full' && taken < capacity) return false;
+                  }
+                  return true;
+                });
+                const filtersActive = !!(filterDifficulty || filterSeats || filterType);
+                const rosterCommittee = expandedRoster ? committees.find(x => x.id === expandedRoster) : null;
 
-                      return (
+                return (
+                  <div className="mb-6">
+                    {/* Filter bar */}
+                    {committees.length > 0 && (
+                      <div
+                        className="flex flex-wrap items-center gap-1.5 rounded-2xl px-3 py-2.5 mb-4"
+                        style={{
+                          backgroundColor: 'rgba(250,248,243,0.72)',
+                          backdropFilter: 'blur(16px) saturate(1.4)',
+                          WebkitBackdropFilter: 'blur(16px) saturate(1.4)',
+                          border: '1px solid rgba(221,212,192,0.85)',
+                          boxShadow: '0 6px 20px rgba(27,56,40,0.07)',
+                        }}
+                      >
+                        {presentDifficulties.map(d => (
+                          <FilterChip
+                            key={d}
+                            label={d.toUpperCase()}
+                            active={filterDifficulty === d}
+                            onClick={() => setFilterDifficulty(v => v === d ? '' : d)}
+                          />
+                        ))}
+                        <div className="w-px h-5 mx-1" style={{ backgroundColor: 'rgba(221,212,192,0.9)' }} />
+                        <FilterChip label="OPEN SEATS" active={filterSeats === 'open'} onClick={() => setFilterSeats(v => v === 'open' ? '' : 'open')} />
+                        <FilterChip label="FILLING UP" active={filterSeats === 'filling'} onClick={() => setFilterSeats(v => v === 'filling' ? '' : 'filling')} />
+                        <FilterChip label="FULL" active={filterSeats === 'full'} onClick={() => setFilterSeats(v => v === 'full' ? '' : 'full')} />
+                        {hasGA && hasCrisis && (
+                          <>
+                            <div className="w-px h-5 mx-1" style={{ backgroundColor: 'rgba(221,212,192,0.9)' }} />
+                            <FilterChip label="GA" active={filterType === 'general-assembly'} onClick={() => setFilterType(v => v === 'general-assembly' ? '' : 'general-assembly')} />
+                            <FilterChip label="CRISIS" active={filterType === 'crisis'} onClick={() => setFilterType(v => v === 'crisis' ? '' : 'crisis')} />
+                          </>
+                        )}
+                        {filtersActive && (
+                          <button
+                            onClick={() => { setFilterDifficulty(''); setFilterSeats(''); setFilterType(''); }}
+                            className="ml-auto text-[11px] underline focus:outline-none"
+                            style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}
+                          >
+                            Clear
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {committees.length === 0 ? (
+                      <SectionCard>
+                        <p className="text-sm" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                          Committees will be announced soon.
+                        </p>
+                      </SectionCard>
+                    ) : filteredCommittees.length === 0 ? (
+                      <SectionCard>
+                        <p className="text-sm" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                          No committees match these filters.
+                        </p>
+                      </SectionCard>
+                    ) : (
+                      <div className="relative">
+                        {/* Slider arrows */}
+                        {filteredCommittees.length > 2 && (
+                          <>
+                            <button
+                              aria-label="Scroll committees left"
+                              onClick={() => carouselRef.current?.scrollBy({ left: -324, behavior: 'smooth' })}
+                              className="hidden md:flex items-center justify-center absolute z-20 focus:outline-none transition-transform"
+                              style={{
+                                left: '-16px', top: '50%', transform: 'translateY(-50%)',
+                                width: '38px', height: '38px', borderRadius: '9999px',
+                                backgroundColor: 'rgba(250,248,243,0.88)',
+                                backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
+                                border: '1px solid rgba(221,212,192,0.95)',
+                                boxShadow: '0 6px 18px rgba(27,56,40,0.16)',
+                                color: '#1B3828', cursor: 'pointer',
+                              }}
+                            >
+                              <ChevronLeft size={18} />
+                            </button>
+                            <button
+                              aria-label="Scroll committees right"
+                              onClick={() => carouselRef.current?.scrollBy({ left: 324, behavior: 'smooth' })}
+                              className="hidden md:flex items-center justify-center absolute z-20 focus:outline-none transition-transform"
+                              style={{
+                                right: '-16px', top: '50%', transform: 'translateY(-50%)',
+                                width: '38px', height: '38px', borderRadius: '9999px',
+                                backgroundColor: 'rgba(250,248,243,0.88)',
+                                backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
+                                border: '1px solid rgba(221,212,192,0.95)',
+                                boxShadow: '0 6px 18px rgba(27,56,40,0.16)',
+                                color: '#1B3828', cursor: 'pointer',
+                              }}
+                            >
+                              <ChevronRight size={18} />
+                            </button>
+                          </>
+                        )}
+
+                        {/* Card slider */}
                         <div
-                          key={c.id}
-                          className="rounded-[22px] overflow-hidden"
+                          ref={carouselRef}
+                          className="flex gap-4 overflow-x-auto"
                           style={{
-                            backgroundColor: '#FAF8F3',
-                            border: '1px solid #DDD4C0',
-                            boxShadow: '0 2px 8px rgba(27,56,40,0.05)',
+                            scrollSnapType: 'x mandatory',
+                            scrollbarWidth: 'none',
+                            msOverflowStyle: 'none',
+                            padding: '4px 4px 12px 4px',
+                            margin: '-4px -4px 0 -4px',
                           }}
                         >
-                          <div className="p-5 md:p-6">
-                            <div className="flex items-start gap-4">
-                              {/* Emblem */}
-                              <div
-                                className="flex-shrink-0 relative flex items-center justify-center overflow-hidden"
+                          {filteredCommittees.map(c => {
+                            const diff = c.difficulty?.toLowerCase() ?? '';
+                            const diffStyle = DIFFICULTY_STYLES[diff] ?? DIFFICULTY_STYLES.intermediate;
+                            const isCrisis = c.committee_type === 'crisis';
+                            const monogram = (c.abbreviation || c.name).replace(/[^A-Za-z0-9]/g, '').slice(0, 6).toUpperCase();
+                            const chairs = c.display_chairs ?? [];
+                            const { capacity, taken, pct } = committeeStats(c);
+                            const hasChairAd = !!chairJobs[c.id];
+
+                            return (
+                              <article
+                                key={c.id}
+                                className="flex-shrink-0 flex flex-col rounded-[24px]"
                                 style={{
-                                  width: '64px', height: '64px', borderRadius: '18px',
-                                  background: isCrisis
-                                    ? 'linear-gradient(135deg, #3C1414 0%, #6E1E1E 100%)'
-                                    : 'linear-gradient(135deg, #16301F 0%, #2A5A3C 100%)',
-                                  boxShadow: '0 8px 20px rgba(27,56,40,0.22)',
+                                  width: '298px',
+                                  scrollSnapAlign: 'start',
+                                  backgroundColor: 'rgba(250,248,243,0.82)',
+                                  backdropFilter: 'blur(12px)',
+                                  WebkitBackdropFilter: 'blur(12px)',
+                                  border: '1px solid rgba(221,212,192,0.95)',
+                                  boxShadow: '0 10px 30px rgba(27,56,40,0.08)',
                                 }}
                               >
-                                <div className="pointer-events-none absolute inset-0" style={{ backgroundImage: GRAIN, backgroundSize: '300px', mixBlendMode: 'overlay', opacity: 0.12 }} />
-                                <span style={{ fontFamily: "'DM Mono', monospace", fontSize: monogram.length > 4 ? '10px' : '13px', fontWeight: 700, color: '#EED98A', letterSpacing: '0.04em' }}>
-                                  {monogram}
-                                </span>
-                              </div>
-
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-start justify-between gap-3">
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    <h3 className="font-bold text-[16px] leading-snug" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", margin: 0 }}>{c.name}</h3>
-                                    {isCrisis && (
-                                      <span
-                                        className="px-2 py-0.5 rounded-full flex-shrink-0"
-                                        style={{ fontSize: '8px', fontFamily: "'DM Mono', monospace", letterSpacing: '0.14em', backgroundColor: 'rgba(110,30,30,0.1)', color: '#8B2020', fontWeight: 700 }}
-                                      >
-                                        CRISIS
-                                      </span>
-                                    )}
-                                  </div>
-                                  {c.difficulty && (
-                                    <span
-                                      className="px-2.5 py-1 rounded-full flex-shrink-0"
-                                      style={{ ...diffStyle, fontSize: '9px', fontFamily: "'DM Mono', monospace", letterSpacing: '0.08em', fontWeight: 700 }}
+                                <div className="flex flex-col items-center px-5 pt-7 flex-1">
+                                  {/* Emblem */}
+                                  {c.logo_url ? (
+                                    <div
+                                      className="flex items-center justify-center overflow-hidden flex-shrink-0"
+                                      style={{
+                                        width: '92px', height: '92px', borderRadius: '9999px',
+                                        backgroundColor: '#FFFFFF',
+                                        border: '1px solid rgba(221,212,192,0.9)',
+                                        boxShadow: '0 8px 24px rgba(27,56,40,0.15), 0 0 0 6px rgba(237,231,216,0.55)',
+                                      }}
                                     >
-                                      {c.difficulty.toUpperCase()}
+                                      <img src={c.logo_url} alt={c.abbreviation ?? c.name} style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '15px' }} />
+                                    </div>
+                                  ) : (
+                                    <div
+                                      className="relative flex items-center justify-center overflow-hidden flex-shrink-0"
+                                      style={{
+                                        width: '92px', height: '92px', borderRadius: '9999px',
+                                        background: isCrisis
+                                          ? 'linear-gradient(135deg, #3C1414 0%, #6E1E1E 100%)'
+                                          : 'linear-gradient(135deg, #16301F 0%, #2A5A3C 100%)',
+                                        boxShadow: '0 8px 24px rgba(27,56,40,0.22), 0 0 0 6px rgba(237,231,216,0.55)',
+                                      }}
+                                    >
+                                      <div className="pointer-events-none absolute inset-0" style={{ backgroundImage: GRAIN, backgroundSize: '300px', mixBlendMode: 'overlay', opacity: 0.12 }} />
+                                      <span style={{ fontFamily: "'DM Mono', monospace", fontSize: monogram.length > 4 ? '13px' : '16px', fontWeight: 700, color: '#EED98A', letterSpacing: '0.04em' }}>
+                                        {monogram}
+                                      </span>
+                                    </div>
+                                  )}
+
+                                  {/* Name */}
+                                  <h3
+                                    className="text-center font-bold text-[15.5px] leading-snug mt-4"
+                                    style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", margin: '16px 0 0 0', minHeight: '2.6em' }}
+                                  >
+                                    {c.name}
+                                  </h3>
+                                  {isCrisis && (
+                                    <span
+                                      className="px-2.5 py-0.5 rounded-full mt-1.5"
+                                      style={{ fontSize: '8px', fontFamily: "'DM Mono', monospace", letterSpacing: '0.16em', backgroundColor: 'rgba(110,30,30,0.1)', color: '#8B2020', fontWeight: 700 }}
+                                    >
+                                      CRISIS
                                     </span>
                                   )}
-                                </div>
 
-                                {/* Chairs */}
-                                {chairs.length > 0 && (
-                                  <div className="flex items-center gap-2.5 mt-2.5">
-                                    <div className="flex flex-shrink-0">
-                                      {chairs.map((ch, i) => (
-                                        ch.avatar_url ? (
-                                          <img
-                                            key={ch.name}
-                                            src={ch.avatar_url}
-                                            alt={ch.name}
-                                            style={{
-                                              width: '30px', height: '30px', borderRadius: '9999px', objectFit: 'cover',
-                                              border: '2px solid #FAF8F3', marginLeft: i > 0 ? '-9px' : 0,
-                                              boxShadow: '0 2px 6px rgba(27,56,40,0.2)', position: 'relative', zIndex: chairs.length - i,
-                                              backgroundColor: '#EDE7D8',
-                                            }}
-                                          />
-                                        ) : (
-                                          <span
-                                            key={ch.name}
-                                            className="flex items-center justify-center"
-                                            style={{
-                                              width: '30px', height: '30px', borderRadius: '9999px',
-                                              border: '2px solid #FAF8F3', marginLeft: i > 0 ? '-9px' : 0,
-                                              backgroundColor: '#1B3828', color: '#EED98A',
-                                              fontSize: '11px', fontWeight: 700, fontFamily: "'Outfit', sans-serif",
-                                              position: 'relative', zIndex: chairs.length - i,
-                                            }}
-                                          >
-                                            {ch.name.charAt(0)}
+                                  {/* Difficulty / Seats */}
+                                  <div className="w-full grid grid-cols-2 gap-3 mt-4 pt-4" style={{ borderTop: '1px solid rgba(221,212,192,0.6)' }}>
+                                    <div>
+                                      <p style={{ fontFamily: "'DM Mono', monospace", fontSize: '8px', letterSpacing: '0.2em', color: '#9A8A78', margin: '0 0 3px 0' }}>DIFFICULTY</p>
+                                      <span
+                                        className="inline-block px-2 py-0.5 rounded-full"
+                                        style={{ ...diffStyle, fontSize: '10px', fontFamily: "'DM Mono', monospace", letterSpacing: '0.06em', fontWeight: 700 }}
+                                      >
+                                        {capitalize(diff || 'TBD')}
+                                      </span>
+                                    </div>
+                                    <div>
+                                      <p style={{ fontFamily: "'DM Mono', monospace", fontSize: '8px', letterSpacing: '0.2em', color: '#9A8A78', margin: '0 0 3px 0' }}>SIZE</p>
+                                      <p className="text-[13px] font-bold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", margin: 0 }}>
+                                        {capacity} {isCrisis ? 'roles' : 'seats'}
+                                      </p>
+                                    </div>
+                                  </div>
+
+                                  {/* Agenda */}
+                                  {c.topics && c.topics.length > 0 && (
+                                    <div className="w-full mt-4">
+                                      <p style={{ fontFamily: "'DM Mono', monospace", fontSize: '8px', letterSpacing: '0.2em', color: '#B6871F', margin: '0 0 5px 0' }}>AGENDA</p>
+                                      {c.topics.map(topic => (
+                                        <div key={topic} className="flex items-start gap-2 py-0.5">
+                                          <span aria-hidden style={{ color: '#B6871F', fontSize: '7px', lineHeight: '19px', flexShrink: 0 }}>◆</span>
+                                          <span className="text-[12.5px] font-medium" style={{ color: '#2E2820', fontFamily: "'Outfit', sans-serif", lineHeight: 1.5 }}>
+                                            {topic}
                                           </span>
-                                        )
+                                        </div>
                                       ))}
                                     </div>
-                                    <p className="text-[12px] leading-tight" style={{ color: '#6B5F52', fontFamily: "'Outfit', sans-serif", margin: 0 }}>
-                                      Chaired by{' '}
-                                      <span style={{ color: '#1C1410', fontWeight: 600 }}>
-                                        {chairs.map(ch => ch.name).join(' & ')}
+                                  )}
+
+                                  {/* Chairs */}
+                                  {chairs.length > 0 && (
+                                    <div className="w-full mt-4 pt-4" style={{ borderTop: '1px solid rgba(221,212,192,0.6)' }}>
+                                      <p style={{ fontFamily: "'DM Mono', monospace", fontSize: '8px', letterSpacing: '0.2em', color: '#9A8A78', margin: '0 0 8px 0' }}>CHAIRS</p>
+                                      <div className="grid grid-cols-2 gap-2">
+                                        {chairs.map(ch => (
+                                          <div key={ch.name} className="flex flex-col items-center text-center">
+                                            {ch.avatar_url ? (
+                                              <img
+                                                src={ch.avatar_url}
+                                                alt={ch.name}
+                                                style={{
+                                                  width: '44px', height: '44px', borderRadius: '9999px', objectFit: 'cover',
+                                                  border: '2px solid #FAF8F3', boxShadow: '0 3px 10px rgba(27,56,40,0.18)',
+                                                  backgroundColor: '#EDE7D8',
+                                                }}
+                                              />
+                                            ) : (
+                                              <span
+                                                className="flex items-center justify-center"
+                                                style={{
+                                                  width: '44px', height: '44px', borderRadius: '9999px',
+                                                  backgroundColor: '#1B3828', color: '#EED98A',
+                                                  fontSize: '15px', fontWeight: 700, fontFamily: "'Outfit', sans-serif",
+                                                }}
+                                              >
+                                                {ch.name.charAt(0)}
+                                              </span>
+                                            )}
+                                            <span className="text-[11.5px] font-semibold mt-1.5 leading-tight" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                                              {ch.name}
+                                            </span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Chair recruitment ad */}
+                                  {hasChairAd && (
+                                    <Link
+                                      href="/conferences/roles"
+                                      className="w-full mt-4 flex items-center gap-2 rounded-xl px-3 py-2 transition-all"
+                                      style={{
+                                        background: 'linear-gradient(100deg, rgba(238,217,138,0.35) 0%, rgba(238,217,138,0.15) 100%)',
+                                        border: '1px solid rgba(182,135,31,0.35)',
+                                        textDecoration: 'none',
+                                      }}
+                                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#B6871F'; }}
+                                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(182,135,31,0.35)'; }}
+                                    >
+                                      <Megaphone size={13} style={{ color: '#8A6614', flexShrink: 0 }} />
+                                      <span className="flex-1 text-[11px] font-semibold leading-tight" style={{ color: '#6E5410', fontFamily: "'Outfit', sans-serif" }}>
+                                        Recruiting chairs
                                       </span>
-                                    </p>
+                                      <span className="text-[9px] font-bold flex-shrink-0" style={{ color: '#8A6614', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em' }}>
+                                        APPLY →
+                                      </span>
+                                    </Link>
+                                  )}
+
+                                  {/* Capacity */}
+                                  <div className="w-full mt-4">
+                                    <div className="flex items-center justify-between mb-1.5">
+                                      <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '9.5px', letterSpacing: '0.08em', color: '#6B5F52' }}>
+                                        {taken}/{capacity} FILLED
+                                      </span>
+                                      <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '9.5px', color: '#9A8A78' }}>
+                                        {pct}%
+                                      </span>
+                                    </div>
+                                    <div className="rounded-full overflow-hidden" style={{ height: '6px', backgroundColor: 'rgba(221,212,192,0.65)' }}>
+                                      <div
+                                        style={{
+                                          width: `${pct}%`, height: '100%', borderRadius: '9999px',
+                                          background: 'linear-gradient(to right, #2A5A3C, #3D7A52)',
+                                          transition: 'width 500ms cubic-bezier(0.22,1,0.36,1)',
+                                        }}
+                                      />
+                                    </div>
                                   </div>
-                                )}
-                              </div>
-                            </div>
+                                </div>
 
-                            {/* Agenda */}
-                            {c.topics && c.topics.length > 0 && (
-                              <div
-                                className="mt-4 rounded-2xl px-4 py-3"
-                                style={{ backgroundColor: 'rgba(237,231,216,0.45)', border: '1px solid rgba(221,212,192,0.6)' }}
-                              >
-                                <p className="mb-1.5" style={{ fontFamily: "'DM Mono', monospace", fontSize: '8px', letterSpacing: '0.24em', color: '#B6871F', margin: '0 0 6px 0' }}>
-                                  AGENDA
-                                </p>
-                                {c.topics.map(topic => (
-                                  <div key={topic} className="flex items-start gap-2.5 py-1">
-                                    <span aria-hidden style={{ color: '#B6871F', fontSize: '8px', lineHeight: '20px', flexShrink: 0 }}>◆</span>
-                                    <span className="text-[13.5px] font-medium" style={{ color: '#2E2820', fontFamily: "'Outfit', sans-serif", lineHeight: 1.5 }}>
-                                      {topic}
-                                    </span>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
+                                {/* View members */}
+                                <div className="px-5 pb-5 pt-4">
+                                  <button
+                                    onClick={() => setExpandedRoster(c.id)}
+                                    className="w-full rounded-xl py-2.5 text-[11px] font-bold transition-colors focus:outline-none"
+                                    style={{
+                                      backgroundColor: 'transparent',
+                                      color: '#1B3828',
+                                      border: '1.5px solid rgba(27,56,40,0.35)',
+                                      fontFamily: "'Outfit', sans-serif",
+                                      letterSpacing: '0.1em',
+                                      cursor: 'pointer',
+                                    }}
+                                    onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = '#1B3828'; el.style.color = '#EED98A'; }}
+                                    onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = 'transparent'; el.style.color = '#1B3828'; }}
+                                  >
+                                    VIEW {isCrisis ? 'ROLES' : 'MEMBERS'}
+                                  </button>
+                                </div>
+                              </article>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
 
-                            {/* Chair recruitment ad */}
-                            {hasChairAd && (
-                              <Link
-                                href="/conferences/roles"
-                                className="mt-3 flex items-center gap-2.5 rounded-xl px-4 py-2.5 transition-all"
-                                style={{
-                                  background: 'linear-gradient(100deg, rgba(238,217,138,0.35) 0%, rgba(238,217,138,0.15) 100%)',
-                                  border: '1px solid rgba(182,135,31,0.35)',
-                                  textDecoration: 'none',
-                                }}
-                                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#B6871F'; }}
-                                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(182,135,31,0.35)'; }}
-                              >
-                                <Megaphone size={15} style={{ color: '#8A6614', flexShrink: 0 }} />
-                                <span className="flex-1 text-[12px] font-semibold" style={{ color: '#6E5410', fontFamily: "'Outfit', sans-serif" }}>
-                                  This committee is recruiting chairs
-                                </span>
-                                <span className="text-[10px] font-bold flex-shrink-0" style={{ color: '#8A6614', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em' }}>
-                                  APPLY →
-                                </span>
-                              </Link>
-                            )}
-                          </div>
-
-                          {/* Capacity bar + roster toggle */}
-                          <button
-                            onClick={() => setExpandedRoster(isExpanded ? null : c.id)}
-                            className="w-full px-5 md:px-6 py-3.5 flex items-center gap-3 focus:outline-none transition-colors"
-                            style={{
-                              borderTop: '1px solid rgba(221,212,192,0.6)',
-                              backgroundColor: isExpanded ? 'rgba(27,56,40,0.045)' : 'transparent',
-                              cursor: 'pointer',
-                            }}
+                    {/* Roster modal — list format */}
+                    {rosterCommittee && (() => {
+                      const c = rosterCommittee;
+                      const isCrisis = c.committee_type === 'crisis';
+                      const { slots, capacity, taken, pct } = committeeStats(c);
+                      const occupied = new Set(committeeOccupied[c.id] ?? []);
+                      return (
+                        <div
+                          className="fixed inset-0 z-50 flex items-center justify-center px-6"
+                          style={{ backgroundColor: 'rgba(28,20,16,0.45)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)' }}
+                          onClick={() => setExpandedRoster(null)}
+                        >
+                          <div
+                            onClick={(e) => e.stopPropagation()}
+                            className="w-full max-w-md rounded-[24px] overflow-hidden"
+                            style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', boxShadow: '0 28px 72px rgba(16,28,21,0.35)' }}
                           >
-                            <div className="flex-1 rounded-full overflow-hidden" style={{ height: '7px', backgroundColor: 'rgba(221,212,192,0.65)' }}>
-                              <div
-                                style={{
-                                  width: `${pct}%`, height: '100%', borderRadius: '9999px',
-                                  background: 'linear-gradient(to right, #2A5A3C, #3D7A52)',
-                                  transition: 'width 500ms cubic-bezier(0.22,1,0.36,1)',
-                                }}
-                              />
+                            <div className="px-6 pt-6 pb-4">
+                              <div className="flex items-start justify-between gap-4">
+                                <div className="min-w-0">
+                                  <p className="font-bold text-[16px] leading-snug" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", margin: 0 }}>
+                                    {c.name}
+                                  </p>
+                                  <p className="mt-1" style={{ fontFamily: "'DM Mono', monospace", fontSize: '10px', letterSpacing: '0.1em', color: '#9A8A78', margin: '4px 0 0 0' }}>
+                                    {taken}/{capacity} {isCrisis ? 'ROLES' : 'SEATS'} FILLED
+                                  </p>
+                                </div>
+                                <button
+                                  onClick={() => setExpandedRoster(null)}
+                                  aria-label="Close"
+                                  className="flex items-center justify-center flex-shrink-0 rounded-full focus:outline-none transition-colors"
+                                  style={{ width: '32px', height: '32px', border: '1px solid #DDD4C0', color: '#9A8A78', backgroundColor: 'transparent', cursor: 'pointer' }}
+                                  onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#1C1410'; el.style.borderColor = '#9A8A78'; }}
+                                  onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#9A8A78'; el.style.borderColor = '#DDD4C0'; }}
+                                >
+                                  <X size={15} />
+                                </button>
+                              </div>
+                              <div className="mt-3 rounded-full overflow-hidden" style={{ height: '6px', backgroundColor: 'rgba(221,212,192,0.65)' }}>
+                                <div style={{ width: `${pct}%`, height: '100%', borderRadius: '9999px', background: 'linear-gradient(to right, #2A5A3C, #3D7A52)' }} />
+                              </div>
                             </div>
-                            <span className="flex-shrink-0 text-[10.5px]" style={{ color: '#6B5F52', fontFamily: "'DM Mono', monospace", letterSpacing: '0.08em' }}>
-                              {taken}/{capacity} {isCrisis ? 'ROLES' : 'SEATS'} FILLED
-                            </span>
-                            <ChevronDown
-                              size={15}
-                              style={{
-                                color: '#9A8A78', flexShrink: 0,
-                                transform: isExpanded ? 'rotate(180deg)' : 'rotate(0)',
-                                transition: 'transform 240ms ease',
-                              }}
-                            />
-                          </button>
-
-                          {/* Roster */}
-                          {isExpanded && (
-                            <div
-                              className="px-5 md:px-6 py-4 flex flex-wrap gap-2"
-                              style={{ borderTop: '1px solid rgba(221,212,192,0.5)', backgroundColor: 'rgba(237,231,216,0.35)' }}
-                            >
+                            <div className="px-3 pb-4 overflow-y-auto" style={{ maxHeight: '54vh' }}>
                               {slots.length === 0 ? (
-                                <span className="text-xs" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                                <p className="text-sm px-3 py-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
                                   The {isCrisis ? 'character' : 'country'} roster will be announced soon.
-                                </span>
+                                </p>
                               ) : (
-                                slots.map(s => {
+                                slots.map((s, i) => {
                                   const isTaken = occupied.has(s.country_code);
                                   const co = getCountryByName(s.country_name);
                                   const flag = co ? getFlagUrl(co.code) : null;
                                   return (
-                                    <span
+                                    <div
                                       key={s.country_code}
-                                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full"
-                                      style={
-                                        isTaken
-                                          ? { backgroundColor: '#1B3828', border: '1px solid #1B3828' }
-                                          : { backgroundColor: 'rgba(250,248,243,0.9)', border: '1px solid rgba(221,212,192,0.9)' }
-                                      }
+                                      className="flex items-center gap-3 px-3 py-2.5"
+                                      style={{ borderTop: i === 0 ? 'none' : '1px solid rgba(221,212,192,0.45)' }}
                                     >
-                                      {flag && (
+                                      {flag ? (
                                         <img
                                           src={flag}
                                           alt=""
-                                          style={{ width: '16px', height: '11px', borderRadius: '2px', objectFit: 'cover', flexShrink: 0, opacity: isTaken ? 0.85 : 1 }}
+                                          style={{ width: '22px', height: '15px', borderRadius: '3px', objectFit: 'cover', flexShrink: 0, boxShadow: '0 1px 3px rgba(27,56,40,0.25)' }}
                                         />
+                                      ) : (
+                                        <span
+                                          className="flex items-center justify-center flex-shrink-0"
+                                          style={{ width: '22px', height: '22px', borderRadius: '9999px', backgroundColor: 'rgba(27,56,40,0.08)', fontFamily: "'DM Mono', monospace", fontSize: '8px', fontWeight: 700, color: '#1B3828' }}
+                                        >
+                                          {s.country_code.slice(0, 2)}
+                                        </span>
                                       )}
-                                      <span className="text-[11px] font-medium" style={{ color: isTaken ? '#EDE7D8' : '#4A4238', fontFamily: "'Outfit', sans-serif" }}>
+                                      <span
+                                        className="flex-1 text-[13px] font-medium truncate"
+                                        style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}
+                                      >
                                         {s.country_name}
                                       </span>
-                                      {isTaken && <Check size={11} strokeWidth={2.6} style={{ color: '#EED98A', flexShrink: 0 }} />}
-                                    </span>
+                                      {isTaken ? (
+                                        <span
+                                          className="flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
+                                          style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'DM Mono', monospace", letterSpacing: '0.08em' }}
+                                        >
+                                          <Check size={10} strokeWidth={2.6} />
+                                          TAKEN
+                                        </span>
+                                      ) : (
+                                        <span
+                                          className="text-[9px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
+                                          style={{ backgroundColor: 'rgba(61,122,82,0.1)', color: '#2A5A3C', border: '1px solid rgba(61,122,82,0.25)', fontFamily: "'DM Mono', monospace", letterSpacing: '0.08em' }}
+                                        >
+                                          OPEN
+                                        </span>
+                                      )}
+                                    </div>
                                   );
                                 })
                               )}
                             </div>
-                          )}
+                          </div>
                         </div>
                       );
-                    })
-                  )}
-                </div>
-              )}
+                    })()}
+                  </div>
+                );
+              })()}
 
               {/* Organiser */}
               {activeTab === 'overview' && (
