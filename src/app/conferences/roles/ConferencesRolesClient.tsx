@@ -3,7 +3,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Search, Briefcase, X } from 'lucide-react';
+import {
+  Search, Briefcase, X, Gavel, Users, ClipboardList,
+  Banknote, Plane, HeartHandshake, Clock, MapPin, Check, ArrowRight,
+} from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { supabase as anonSupabase } from '@/lib/supabase';
@@ -15,13 +18,29 @@ import { getFlagUrl, getCountryByName } from '@/lib/countries';
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
 
 const FOREST = '#1B3828';
+const FOREST_MID = '#2A5A3C';
 const GOLD = '#EED98A';
+const GOLD_DEEP = '#B6871F';
+const AMBER = '#B8844A';
 const INK = '#1C1410';
 const MUTED = '#9A8A78';
 const CARD_BG = '#FAF8F3';
 const BORDER = '#DDD4C0';
-const DIVIDER = '#F0EDE6';
-const AMBER_TEXT = '#B6871F';
+const DANGER = '#8B2020';
+
+// Category metadata — canonical lowercase keys matching the DB values.
+const CATEGORY_META: Record<string, { label: string; icon: typeof Gavel; color: string; bg: string }> = {
+  chairs:      { label: 'CHAIRS',      icon: Gavel,         color: FOREST,    bg: 'rgba(27,56,40,0.10)' },
+  secretariat: { label: 'SECRETARIAT', icon: ClipboardList, color: GOLD_DEEP, bg: 'rgba(182,135,31,0.12)' },
+  staff:       { label: 'STAFF',       icon: Users,         color: '#6B5D4B', bg: 'rgba(154,138,120,0.16)' },
+};
+
+// Compensation metadata — canonical lowercase-hyphenated keys matching the DB.
+const COMP_META: Record<string, { label: string; icon: typeof Banknote; gold: boolean }> = {
+  'paid':           { label: 'PAID POSITION',  icon: Banknote,       gold: true },
+  'travel-covered': { label: 'TRAVEL COVERED', icon: Plane,          gold: true },
+  'unpaid':         { label: 'VOLUNTEER ROLE', icon: HeartHandshake, gold: false },
+};
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -33,6 +52,7 @@ interface ConferenceInfo {
   city: string | null;
   country: string | null;
   logo_url: string | null;
+  banner_url: string | null;
   start_date: string | null;
   end_date: string | null;
 }
@@ -63,6 +83,15 @@ interface MyApplication {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
+/** Normalise a category/compensation value from the DB to a canonical
+ *  lowercase-hyphenated key ('Travel Covered' → 'travel-covered'). The old
+ *  filter logic compared raw DB values ('chairs') against uppercase pill
+ *  labels ('CHAIRS'), so no filter ever matched — normalising both sides
+ *  to the same canonical key fixes that. */
+function normalizeKey(value: string | null | undefined): string {
+  return (value ?? '').trim().toLowerCase().replace(/[\s_]+/g, '-');
+}
+
 function formatDateRange(start: string | null, end: string | null): string {
   if (!start) return '';
   const s = new Date(start);
@@ -80,32 +109,49 @@ function formatDateRange(start: string | null, end: string | null): string {
   return `${s.toLocaleDateString('en-GB', { ...opts, year: 'numeric' })} – ${e.toLocaleDateString('en-GB', { ...opts, year: 'numeric' })}`;
 }
 
-function isDeadlineSoon(deadline: string): boolean {
-  const ms = new Date(deadline).getTime() - Date.now();
-  return ms > 0 && ms < 7 * 24 * 60 * 60 * 1000;
+function daysUntil(iso: string): number {
+  return Math.ceil((new Date(iso).getTime() - Date.now()) / 86_400_000);
 }
 
 function fmtDeadline(iso: string) {
   return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
+/** Split a free-text requirements field into short skill chips. */
+function requirementChips(requirements: string): string[] {
+  let parts = requirements.split(/[;\n•]+/);
+  if (parts.length === 1) parts = requirements.split(/,\s*/);
+  return parts
+    .map(p => p.trim().replace(/\.+$/, '').replace(/^and\s+/i, ''))
+    .filter(Boolean)
+    .map(p => p.charAt(0).toUpperCase() + p.slice(1))
+    .slice(0, 4);
+}
+
 // ── Filter pill ────────────────────────────────────────────────────────────
 
 function FilterPill({
-  label, active, onClick,
-}: { label: string; active: boolean; onClick: () => void }) {
+  label, active, onClick, icon: Icon,
+}: { label: string; active: boolean; onClick: () => void; icon?: typeof Gavel }) {
   return (
     <button
       onClick={onClick}
-      className="px-3 py-1.5 rounded-full text-xs font-bold tracking-widest transition-all focus:outline-none"
+      className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold transition-all focus:outline-none flex-shrink-0"
       style={{
         backgroundColor: active ? FOREST : 'transparent',
-        color: active ? GOLD : INK,
-        border: active ? `1.5px solid ${FOREST}` : `1.5px solid ${BORDER}`,
+        color: active ? GOLD : '#4A4238',
+        border: active ? `1px solid ${FOREST}` : '1px solid rgba(221,212,192,0.9)',
         fontFamily: "'DM Mono', monospace",
-        letterSpacing: '0.07em',
+        letterSpacing: '0.08em',
+      }}
+      onMouseEnter={(e) => {
+        if (!active) (e.currentTarget as HTMLElement).style.borderColor = FOREST;
+      }}
+      onMouseLeave={(e) => {
+        if (!active) (e.currentTarget as HTMLElement).style.borderColor = 'rgba(221,212,192,0.9)';
       }}
     >
+      {Icon && <Icon size={11} strokeWidth={2.25} />}
       {label}
     </button>
   );
@@ -129,24 +175,20 @@ function PostingCard({
   const conf = posting.conferences;
   const dateRange = formatDateRange(conf?.start_date ?? null, conf?.end_date ?? null);
 
-  const catColor =
-    posting.category === 'CHAIRS' ? FOREST :
-    posting.category === 'SECRETARIAT' ? AMBER_TEXT :
-    MUTED;
+  const catKey = normalizeKey(posting.category);
+  const cat = CATEGORY_META[catKey] ?? CATEGORY_META.staff;
+  const CatIcon = cat.icon;
 
-  const catBg =
-    posting.category === 'CHAIRS' ? 'rgba(27,56,40,0.1)' :
-    posting.category === 'SECRETARIAT' ? 'rgba(238,217,138,0.15)' :
-    'rgba(154,138,120,0.1)';
-
-  const compStyle =
-    posting.compensation === 'PAID'
-      ? { backgroundColor: 'rgba(61,122,82,0.1)', color: FOREST }
-      : posting.compensation === 'TRAVEL COVERED'
-      ? { backgroundColor: 'rgba(238,217,138,0.15)', color: AMBER_TEXT }
-      : { backgroundColor: 'rgba(154,138,120,0.12)', color: MUTED };
+  const compKey = normalizeKey(posting.compensation);
+  const comp = COMP_META[compKey] ?? { label: (posting.compensation || 'UNSPECIFIED').toUpperCase(), icon: Briefcase, gold: false };
+  const CompIcon = comp.icon;
 
   const countryObj = conf?.country ? getCountryByName(conf.country) : null;
+  const chips = posting.requirements ? requirementChips(posting.requirements) : [];
+
+  const deadlineDays = posting.deadline ? daysUntil(posting.deadline) : null;
+  const deadlineUrgent = deadlineDays !== null && deadlineDays > 0 && deadlineDays <= 7;
+  const deadlineCritical = deadlineDays !== null && deadlineDays > 0 && deadlineDays <= 2;
 
   let applyBtn: React.ReactNode;
   if (myApp) {
@@ -154,18 +196,19 @@ function PostingCard({
       myApp.status === 'accepted'
         ? { backgroundColor: 'rgba(61,122,82,0.12)', color: FOREST }
         : myApp.status === 'rejected'
-        ? { backgroundColor: 'rgba(220,53,69,0.08)', color: '#DC3545' }
+        ? { backgroundColor: 'rgba(139,32,32,0.08)', color: DANGER }
         : { backgroundColor: 'rgba(27,56,40,0.08)', color: FOREST };
     const label =
-      myApp.status === 'accepted' ? 'ACCEPTED ✓' :
+      myApp.status === 'accepted' ? 'ACCEPTED' :
       myApp.status === 'rejected' ? 'REJECTED' :
-      'APPLIED ✓';
+      'APPLIED';
     applyBtn = (
       <button
         disabled
-        className="w-full rounded-xl py-2.5 font-bold text-sm cursor-default focus:outline-none"
-        style={{ fontFamily: "'Outfit', sans-serif", ...btnStyle }}
+        className="w-full flex items-center justify-center gap-1.5 rounded-xl py-2.5 font-bold text-[12px] cursor-default focus:outline-none"
+        style={{ fontFamily: "'Outfit', sans-serif", letterSpacing: '0.06em', ...btnStyle }}
       >
+        {myApp.status !== 'rejected' && <Check size={13} strokeWidth={2.5} />}
         {label}
       </button>
     );
@@ -173,13 +216,13 @@ function PostingCard({
     applyBtn = (
       <button
         onClick={onSignIn}
-        className="w-full rounded-xl py-2.5 font-bold text-sm focus:outline-none transition-all"
+        className="group/btn w-full flex items-center justify-center gap-1.5 rounded-xl py-2.5 font-bold text-[12px] focus:outline-none transition-all"
         style={{
           fontFamily: "'Outfit', sans-serif",
           border: `1.5px solid ${BORDER}`,
           backgroundColor: 'transparent',
-          color: MUTED,
-          letterSpacing: '0.04em',
+          color: '#6B5D4B',
+          letterSpacing: '0.06em',
         }}
         onMouseEnter={(e) => {
           (e.currentTarget as HTMLElement).style.borderColor = FOREST;
@@ -187,163 +230,295 @@ function PostingCard({
         }}
         onMouseLeave={(e) => {
           (e.currentTarget as HTMLElement).style.borderColor = BORDER;
-          (e.currentTarget as HTMLElement).style.color = MUTED;
+          (e.currentTarget as HTMLElement).style.color = '#6B5D4B';
         }}
       >
-        SIGN IN TO APPLY →
+        SIGN IN TO APPLY
+        <ArrowRight size={13} strokeWidth={2.5} className="transition-transform group-hover/btn:translate-x-0.5" />
       </button>
     );
   } else {
     applyBtn = (
       <button
         onClick={() => onApply(posting)}
-        className="w-full rounded-xl py-2.5 font-bold text-sm focus:outline-none transition-all"
+        className="group/btn w-full flex items-center justify-center gap-1.5 rounded-xl py-2.5 font-bold text-[12px] focus:outline-none transition-all"
         style={{
           fontFamily: "'Outfit', sans-serif",
           backgroundColor: FOREST,
           color: GOLD,
-          letterSpacing: '0.04em',
+          letterSpacing: '0.06em',
         }}
-        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = FOREST_MID; }}
         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = FOREST; }}
       >
-        APPLY FOR THIS ROLE →
+        APPLY FOR THIS ROLE
+        <ArrowRight size={13} strokeWidth={2.5} className="transition-transform group-hover/btn:translate-x-0.5" />
       </button>
     );
   }
 
   return (
-    <div
-      className="rounded-2xl overflow-hidden flex flex-col transition-all"
-      style={{ backgroundColor: CARD_BG, border: `1px solid ${BORDER}` }}
+    <article
+      className="rounded-2xl flex flex-col transition-all"
+      style={{
+        backgroundColor: CARD_BG,
+        border: `1px solid ${BORDER}`,
+        boxShadow: '0 2px 10px rgba(27,56,40,0.05)',
+        overflow: 'visible',
+      }}
       onMouseEnter={(e) => {
-        (e.currentTarget as HTMLElement).style.borderColor = FOREST;
-        (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 20px rgba(27,56,40,0.08)';
+        const el = e.currentTarget as HTMLElement;
+        el.style.borderColor = 'rgba(27,56,40,0.45)';
+        el.style.boxShadow = '0 16px 40px rgba(27,56,40,0.14)';
+        el.style.transform = 'translateY(-3px)';
       }}
       onMouseLeave={(e) => {
-        (e.currentTarget as HTMLElement).style.borderColor = BORDER;
-        (e.currentTarget as HTMLElement).style.boxShadow = 'none';
+        const el = e.currentTarget as HTMLElement;
+        el.style.borderColor = BORDER;
+        el.style.boxShadow = '0 2px 10px rgba(27,56,40,0.05)';
+        el.style.transform = 'translateY(0)';
       }}
     >
-      {/* Top color strip */}
-      <div style={{ height: '5px', backgroundColor: catColor }} />
+      {/* ── Banner + free-floating logo ── */}
+      <div
+        className="relative"
+        style={{ height: '92px', borderRadius: '15px 15px 0 0', overflow: 'hidden' }}
+      >
+        {conf?.banner_url ? (
+          <>
+            <img
+              src={conf.banner_url}
+              alt=""
+              className="absolute inset-0 w-full h-full object-cover"
+              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+            />
+            <div
+              className="absolute inset-0"
+              style={{ background: 'linear-gradient(180deg, rgba(27,56,40,0.10) 0%, rgba(27,56,40,0.55) 100%)' }}
+            />
+          </>
+        ) : (
+          <div
+            className="absolute inset-0"
+            style={{ background: `linear-gradient(135deg, ${FOREST} 0%, ${FOREST_MID} 100%)` }}
+          />
+        )}
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{ backgroundImage: GRAIN, backgroundSize: '300px', mixBlendMode: 'overlay', opacity: 0.12 }}
+        />
 
-      {/* Body */}
-      <div className="p-5 flex flex-col flex-1">
-        {/* Row 1: category + compensation */}
-        <div className="flex items-center gap-2">
-          <span
-            className="text-[9px] font-bold px-2 py-0.5 rounded-full"
-            style={{ backgroundColor: catBg, color: catColor, fontFamily: "'DM Mono', monospace" }}
-          >
-            {posting.category}
-          </span>
-          <div className="flex-1" />
-          <span
-            className="text-[9px] font-bold px-2 py-0.5 rounded-full"
-            style={{ ...compStyle, fontFamily: "'DM Mono', monospace" }}
-          >
-            {posting.compensation}
-          </span>
+        {/* Category chip — glass, on the banner */}
+        <span
+          className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-bold"
+          style={{
+            backgroundColor: 'rgba(250,248,243,0.88)',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+            border: '1px solid rgba(221,212,192,0.85)',
+            color: cat.color,
+            fontFamily: "'DM Mono', monospace",
+            letterSpacing: '0.1em',
+          }}
+        >
+          <CatIcon size={10} strokeWidth={2.5} />
+          {cat.label}
+        </span>
+      </div>
+
+      {/* Free-floating logo — overlaps the banner edge, no chip behind it */}
+      {conf?.logo_url && (
+        <div className="relative" style={{ height: 0 }}>
+          <img
+            src={conf.logo_url}
+            alt={conf.acronym}
+            style={{
+              position: 'absolute',
+              left: '20px',
+              top: '-34px',
+              height: '58px',
+              width: 'auto',
+              maxWidth: '96px',
+              objectFit: 'contain',
+              filter: 'drop-shadow(0 6px 14px rgba(27,56,40,0.38))',
+            }}
+            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+          />
         </div>
+      )}
 
+      {/* ── Body ── */}
+      <div className="px-5 pb-5 flex flex-col flex-1" style={{ paddingTop: conf?.logo_url ? '32px' : '18px' }}>
         {/* Role name */}
-        <p className="mt-2 font-semibold text-base leading-snug" style={{ color: INK, fontFamily: "'Outfit', sans-serif" }}>
+        <h3
+          className="font-bold leading-snug"
+          style={{ color: INK, fontFamily: "'Outfit', sans-serif", fontSize: '18px', margin: 0 }}
+        >
           {posting.role_name}
-        </p>
+        </h3>
 
-        {/* Conference name */}
+        {/* Conference + committee eyebrow line */}
         {conf && (
-          <div className="mt-1 flex items-center gap-2">
-            {conf.logo_url ? (
-              <img
-                src={conf.logo_url}
-                alt={conf.acronym}
-                className="rounded object-cover flex-shrink-0"
-                style={{ width: '20px', height: '20px' }}
-                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-              />
-            ) : (
-              <span
-                className="text-[10px] flex-shrink-0"
-                style={{ color: MUTED, fontFamily: "'DM Mono', monospace" }}
-              >
-                {conf.acronym}
+          <p className="mt-1 text-xs flex items-center gap-1.5 flex-wrap" style={{ fontFamily: "'Outfit', sans-serif" }}>
+            <Link
+              href={`/conferences/${conf.slug}`}
+              className="font-semibold transition-colors"
+              style={{ color: '#6B5D4B', textDecoration: 'none' }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = FOREST; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#6B5D4B'; }}
+            >
+              {conf.full_name}
+            </Link>
+            {posting.conference_committees?.name && (
+              <>
+                <span style={{ color: GOLD_DEEP, fontSize: '7px' }}>◆</span>
+                <span style={{ color: MUTED }}>{posting.conference_committees.name}</span>
+              </>
+            )}
+          </p>
+        )}
+
+        {/* Location + dates — prominent */}
+        {(conf?.country || dateRange) && (
+          <div className="mt-3 flex items-center gap-2 flex-wrap">
+            {conf?.country && (
+              <span className="flex items-center gap-1.5">
+                {countryObj ? (
+                  <img
+                    src={getFlagUrl(countryObj.code)}
+                    alt={conf.country}
+                    style={{ width: '19px', height: '13px', objectFit: 'cover', borderRadius: '2.5px', flexShrink: 0, boxShadow: '0 1px 3px rgba(28,20,16,0.25)' }}
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                  />
+                ) : (
+                  <MapPin size={13} style={{ color: MUTED }} />
+                )}
+                <span className="text-[13px] font-semibold" style={{ color: INK, fontFamily: "'Outfit', sans-serif" }}>
+                  {[conf.city, conf.country].filter(Boolean).join(', ')}
+                </span>
               </span>
             )}
-            <p className="text-xs truncate" style={{ color: MUTED, fontFamily: "'Outfit', sans-serif" }}>
-              {conf.full_name}
-            </p>
-          </div>
-        )}
-
-        {/* Location */}
-        {conf?.country && (
-          <div className="mt-0.5 flex items-center gap-1.5">
-            {countryObj && (
-              <img
-                src={getFlagUrl(countryObj.code)}
-                alt={conf.country}
-                style={{ width: '14px', height: '10px', objectFit: 'cover', borderRadius: '2px', flexShrink: 0 }}
-                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-              />
+            {conf?.country && dateRange && <span style={{ color: GOLD_DEEP, fontSize: '7px' }}>◆</span>}
+            {dateRange && (
+              <span className="text-[11px]" style={{ color: MUTED, fontFamily: "'DM Mono', monospace" }}>
+                {dateRange}
+              </span>
             )}
-            <p className="text-xs" style={{ color: MUTED, fontFamily: "'Outfit', sans-serif" }}>
-              {[conf.city, conf.country].filter(Boolean).join(', ')}
-            </p>
           </div>
         )}
 
-        {/* Dates */}
-        {dateRange && (
-          <p className="mt-0.5 text-xs" style={{ color: MUTED, fontFamily: "'DM Mono', monospace" }}>
-            {dateRange}
-          </p>
-        )}
+        {/* Reward — gold treatment */}
+        <div
+          className="mt-3 flex items-start gap-2.5 rounded-xl px-3 py-2.5"
+          style={comp.gold
+            ? { backgroundColor: 'rgba(238,217,138,0.20)', border: '1px solid rgba(182,135,31,0.30)' }
+            : { backgroundColor: 'rgba(154,138,120,0.08)', border: '1px solid rgba(221,212,192,0.7)' }}
+        >
+          <CompIcon
+            size={15}
+            strokeWidth={2.25}
+            style={{ color: comp.gold ? GOLD_DEEP : MUTED, marginTop: '1px', flexShrink: 0 }}
+          />
+          <div className="min-w-0">
+            <p
+              className="text-[10px] font-bold"
+              style={{ color: comp.gold ? GOLD_DEEP : '#6B5D4B', fontFamily: "'DM Mono', monospace", letterSpacing: '0.12em', margin: 0 }}
+            >
+              {comp.label}
+            </p>
+            {posting.compensation_note && (
+              <p className="text-[11px] leading-snug mt-0.5" style={{ color: comp.gold ? '#7A5B18' : MUTED, fontFamily: "'Outfit', sans-serif", margin: 0 }}>
+                {posting.compensation_note}
+              </p>
+            )}
+          </div>
+        </div>
 
-        {/* Committee */}
-        {posting.conference_committees?.name && (
-          <p className="mt-0.5 text-xs" style={{ color: MUTED, fontFamily: "'Outfit', sans-serif" }}>
-            · {posting.conference_committees.name}
-          </p>
+        {/* What they're looking for — skill chips */}
+        {chips.length > 0 && (
+          <div className="mt-3">
+            <p
+              className="text-[9px] font-bold mb-1.5"
+              style={{ color: GOLD_DEEP, fontFamily: "'DM Mono', monospace", letterSpacing: '0.18em', margin: 0, marginBottom: '6px' }}
+            >
+              LOOKING FOR
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {chips.map((chip, i) => (
+                <span
+                  key={i}
+                  className="text-[10.5px] px-2 py-1 rounded-full"
+                  style={{
+                    backgroundColor: 'rgba(27,56,40,0.06)',
+                    border: '1px solid rgba(27,56,40,0.12)',
+                    color: '#3A4A3E',
+                    fontFamily: "'Outfit', sans-serif",
+                    fontWeight: 500,
+                    lineHeight: 1.3,
+                  }}
+                >
+                  {chip}
+                </span>
+              ))}
+            </div>
+          </div>
         )}
 
         {/* Description */}
         {posting.description && (
           <p
-            className="mt-2 text-xs leading-relaxed flex-1"
+            className="mt-3 text-xs leading-relaxed"
             style={{
-              color: INK,
+              color: '#5A4F42',
               fontFamily: "'Outfit', sans-serif",
               display: '-webkit-box',
-              WebkitLineClamp: 3,
+              WebkitLineClamp: 2,
               WebkitBoxOrient: 'vertical',
               overflow: 'hidden',
+              margin: 0,
+              marginTop: '12px',
             }}
           >
             {posting.description}
           </p>
         )}
 
-        {/* Deadline */}
-        {posting.deadline && (
-          <p
-            className="mt-2 text-xs font-semibold"
-            style={{
-              color: isDeadlineSoon(posting.deadline) ? '#B8844A' : MUTED,
-              fontFamily: "'Outfit', sans-serif",
-            }}
-          >
-            Closes {fmtDeadline(posting.deadline)}
-          </p>
-        )}
+        <div className="flex-1" />
 
-        {/* Apply button */}
-        <div className="mt-4 pt-3" style={{ borderTop: `1px solid ${DIVIDER}` }}>
+        {/* Deadline + apply */}
+        <div className="mt-4 pt-3.5" style={{ borderTop: '1px solid #F0EDE6' }}>
+          <div className="flex items-center gap-1.5 mb-3">
+            <Clock
+              size={12}
+              strokeWidth={2.25}
+              style={{ color: deadlineCritical ? DANGER : deadlineUrgent ? AMBER : MUTED }}
+            />
+            {posting.deadline ? (
+              <p
+                className="text-[11px] font-semibold"
+                style={{
+                  color: deadlineCritical ? DANGER : deadlineUrgent ? AMBER : MUTED,
+                  fontFamily: "'DM Mono', monospace",
+                  letterSpacing: '0.04em',
+                  margin: 0,
+                }}
+              >
+                {deadlineCritical && deadlineDays !== null
+                  ? `CLOSES IN ${deadlineDays * 24 <= 24 ? '24H' : '48H'}`
+                  : deadlineUrgent && deadlineDays !== null
+                  ? `${deadlineDays} DAYS LEFT — CLOSES ${fmtDeadline(posting.deadline).toUpperCase()}`
+                  : `CLOSES ${fmtDeadline(posting.deadline).toUpperCase()}`}
+              </p>
+            ) : (
+              <p className="text-[11px] font-semibold" style={{ color: MUTED, fontFamily: "'DM Mono', monospace", letterSpacing: '0.04em', margin: 0 }}>
+                ROLLING APPLICATIONS
+              </p>
+            )}
+          </div>
           {applyBtn}
         </div>
       </div>
-    </div>
+    </article>
   );
 }
 
@@ -367,19 +542,21 @@ function ApplyModal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
+      style={{ backgroundColor: 'rgba(28,20,16,0.45)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
         className="relative"
         style={{
           backgroundColor: CARD_BG,
+          border: `1px solid ${BORDER}`,
           borderRadius: '20px',
           padding: '24px',
           maxWidth: '448px',
           width: 'calc(100% - 32px)',
           maxHeight: '90vh',
           overflowY: 'auto',
+          boxShadow: '0 24px 64px rgba(27,56,40,0.25)',
         }}
       >
         {/* Close */}
@@ -415,12 +592,12 @@ function ApplyModal({
               className="mt-2 rounded-lg p-2.5"
               style={{ backgroundColor: 'rgba(238,217,138,0.15)', border: '1px solid rgba(238,217,138,0.3)' }}
             >
-              <p className="text-xs" style={{ color: AMBER_TEXT, fontFamily: "'Outfit', sans-serif" }}>
+              <p className="text-xs" style={{ color: GOLD_DEEP, fontFamily: "'Outfit', sans-serif" }}>
                 Consider adding entries to your MUN CV to strengthen your application.{' '}
                 <Link
                   href="/account/cv"
                   className="font-semibold underline focus:outline-none"
-                  style={{ color: AMBER_TEXT }}
+                  style={{ color: GOLD_DEEP }}
                 >
                   Add now →
                 </Link>
@@ -470,7 +647,7 @@ function ApplyModal({
             letterSpacing: '0.05em',
           }}
           onMouseEnter={(e) => {
-            if (!applying) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C';
+            if (!applying) (e.currentTarget as HTMLElement).style.backgroundColor = FOREST_MID;
           }}
           onMouseLeave={(e) => {
             (e.currentTarget as HTMLElement).style.backgroundColor = FOREST;
@@ -496,7 +673,7 @@ function Footer() {
         backgroundImage: FOOTER_GRAIN,
         backgroundRepeat: 'repeat',
         backgroundSize: '300px 300px',
-        backgroundColor: '#F6F1E9',
+        backgroundColor: '#EDE7D8',
       }}
     >
       <div className="flex flex-col items-center gap-4 md:grid md:grid-cols-3 md:gap-0 md:items-center">
@@ -537,6 +714,13 @@ function Footer() {
 
 // ── Main component ─────────────────────────────────────────────────────────
 
+const CATEGORY_FILTERS = ['chairs', 'secretariat', 'staff'] as const;
+const COMP_FILTERS = [
+  { key: 'paid', label: 'PAID' },
+  { key: 'travel-covered', label: 'TRAVEL COVERED' },
+  { key: 'unpaid', label: 'VOLUNTEER' },
+] as const;
+
 export default function ConferencesRolesClient() {
   const router = useRouter();
   const { user, session, loading: authLoading } = useAuth();
@@ -546,8 +730,8 @@ export default function ConferencesRolesClient() {
   const [cvCount, setCvCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('all');
-  const [compensationFilter, setCompensationFilter] = useState('all');
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [compensationFilter, setCompensationFilter] = useState('');
   const [selectedPosting, setSelectedPosting] = useState<JobPosting | null>(null);
   const [applying, setApplying] = useState(false);
 
@@ -573,7 +757,7 @@ export default function ConferencesRolesClient() {
         .select(`
           id, category, role_name, description, requirements,
           compensation, compensation_note, deadline, is_open, created_at,
-          conferences (id, slug, full_name, acronym, city, country, logo_url, start_date, end_date),
+          conferences (id, slug, full_name, acronym, city, country, logo_url, banner_url, start_date, end_date),
           conference_committees (name)
         `)
         .eq('is_open', true)
@@ -598,19 +782,31 @@ export default function ConferencesRolesClient() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading, user?.id, session?.access_token]);
 
+  // FIX: filters previously compared raw DB values ('chairs', 'travel-covered')
+  // against uppercase display labels ('CHAIRS', 'TRAVEL COVERED') so nothing
+  // ever matched. Both sides are now normalised to canonical lowercase keys.
   const filtered = postings.filter(p => {
     const q = searchQuery.toLowerCase();
     const matchSearch = !q ||
       p.role_name.toLowerCase().includes(q) ||
       (p.conferences?.full_name ?? '').toLowerCase().includes(q) ||
-      (p.conferences?.city ?? '').toLowerCase().includes(q);
-    const matchCategory = categoryFilter === 'all' || p.category === categoryFilter;
-    const matchComp = compensationFilter === 'all' || p.compensation === compensationFilter;
+      (p.conferences?.acronym ?? '').toLowerCase().includes(q) ||
+      (p.conferences?.city ?? '').toLowerCase().includes(q) ||
+      (p.conferences?.country ?? '').toLowerCase().includes(q) ||
+      (p.requirements ?? '').toLowerCase().includes(q);
+    const matchCategory = !categoryFilter || normalizeKey(p.category) === categoryFilter;
+    const matchComp = !compensationFilter || normalizeKey(p.compensation) === compensationFilter;
     return matchSearch && matchCategory && matchComp;
   });
 
   const totalOpen = postings.length;
   const conferencesHiring = new Set(postings.map(p => p.conferences?.id).filter(Boolean)).size;
+  const fundedRoles = postings.filter(p => {
+    const k = normalizeKey(p.compensation);
+    return k === 'paid' || k === 'travel-covered';
+  }).length;
+
+  const hasActiveFilters = !!searchQuery || !!categoryFilter || !!compensationFilter;
 
   async function handleApply(coverNote: string) {
     if (!user || !selectedPosting) return;
@@ -632,8 +828,7 @@ export default function ConferencesRolesClient() {
     myApplications.map(a => [a.job_posting_id, a])
   );
 
-  const categories = ['all', 'CHAIRS', 'SECRETARIAT', 'STAFF'];
-  const compensations = ['all', 'PAID', 'UNPAID', 'TRAVEL COVERED'];
+  const pad = (n: number) => String(n).padStart(2, '0');
 
   return (
     <div className="min-h-screen flex flex-col relative" style={{ backgroundColor: '#EDE7D8' }}>
@@ -649,128 +844,167 @@ export default function ConferencesRolesClient() {
         }}
       />
 
+      {/* Soft ambient washes behind the header */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute z-0"
+        style={{
+          top: '-140px', left: '8%', width: '620px', height: '420px',
+          background: 'radial-gradient(ellipse at center, rgba(238,217,138,0.22) 0%, transparent 65%)',
+          filter: 'blur(48px)',
+        }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute z-0"
+        style={{
+          top: '-80px', right: '4%', width: '520px', height: '380px',
+          background: 'radial-gradient(ellipse at center, rgba(42,90,60,0.13) 0%, transparent 65%)',
+          filter: 'blur(48px)',
+        }}
+      />
+
       <div className="relative z-10 flex flex-col min-h-screen">
         <SiteNav />
 
-        {/* Hero bar */}
-        <div className="px-6 md:px-14 py-10" style={{ backgroundColor: FOREST }}>
+        {/* ── Editorial header ─────────────────────────────────────── */}
+        <header className="px-6 md:px-14 pt-8 pb-8">
           <p
-            className="text-[10px] tracking-[0.2em] mb-1"
-            style={{ color: GOLD, fontFamily: "'DM Mono', monospace" }}
+            className="mb-2"
+            style={{ fontFamily: "'DM Mono', monospace", fontSize: '10px', letterSpacing: '0.28em', color: GOLD_DEEP }}
           >
             CHAIR &amp; STAFF BOARD
           </p>
           <h1
-            className="font-black text-3xl text-white mb-2"
-            style={{ fontFamily: "'Outfit', sans-serif" }}
+            style={{
+              fontFamily: "'Outfit', sans-serif", fontWeight: 900,
+              fontSize: 'clamp(36px, 4.5vw, 60px)', lineHeight: 1.02, color: INK, margin: 0,
+            }}
           >
-            Find Your Next Role
+            Find Your Next{' '}
+            <span style={{ color: FOREST }}>Role</span>
+            <span style={{ color: GOLD_DEEP }}>.</span>
           </h1>
           <p
-            className="text-sm"
-            style={{ color: 'rgba(237,231,216,0.7)', fontFamily: "'Outfit', sans-serif" }}
+            className="mt-3"
+            style={{ fontFamily: "'Outfit', sans-serif", fontSize: '14px', color: '#8A7D6C', maxWidth: '460px', lineHeight: 1.6 }}
           >
-            Open positions for chairs, secretariat, and staff across MUN conferences.
+            Open positions for chairs, secretariat, and staff across MUN conferences worldwide.
           </p>
 
-          {/* Stats */}
-          <div className="mt-6 flex gap-6 flex-wrap">
-            {[
-              { value: totalOpen, label: 'OPEN POSITIONS' },
-              { value: conferencesHiring, label: 'CONFERENCES HIRING' },
-            ].map(({ value, label }) => (
-              <div key={label}>
+          {/* DM Mono stat fragments */}
+          {!loading && (
+            <p
+              className="mt-5 flex items-center gap-2.5 flex-wrap"
+              style={{ fontFamily: "'DM Mono', monospace", fontSize: '11px', letterSpacing: '0.08em', color: '#6B5D4B', margin: 0, marginTop: '20px' }}
+            >
+              <span><span style={{ color: FOREST, fontWeight: 700 }}>{pad(totalOpen)}</span> OPEN ROLES</span>
+              <span style={{ color: GOLD_DEEP, fontSize: '8px' }}>◆</span>
+              <span><span style={{ color: FOREST, fontWeight: 700 }}>{pad(conferencesHiring)}</span> CONFERENCE{conferencesHiring === 1 ? '' : 'S'} HIRING</span>
+              <span style={{ color: GOLD_DEEP, fontSize: '8px' }}>◆</span>
+              <span><span style={{ color: GOLD_DEEP, fontWeight: 700 }}>{pad(fundedRoles)}</span> WITH REWARDS</span>
+            </p>
+          )}
+        </header>
+
+        {/* ── Floating glass filter pill bar ───────────────────────── */}
+        <div className="sticky z-30 px-4 md:px-10" style={{ top: '12px' }}>
+          <div
+            style={{
+              backgroundColor: 'rgba(250,248,243,0.72)',
+              backdropFilter: 'blur(20px) saturate(1.5)',
+              WebkitBackdropFilter: 'blur(20px) saturate(1.5)',
+              border: '1px solid rgba(221,212,192,0.85)',
+              borderRadius: '28px',
+              boxShadow: '0 12px 40px rgba(27,56,40,0.12), 0 1px 0 rgba(255,255,255,0.6) inset',
+            }}
+          >
+            <div className="flex items-center gap-2 px-3 py-2 flex-wrap">
+              {/* Search */}
+              <div className="relative flex items-center flex-1" style={{ minWidth: '170px' }}>
+                <Search size={15} className="absolute left-3 pointer-events-none" style={{ color: MUTED }} />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search roles, conferences, cities…"
+                  className="w-full py-2 pl-9 pr-3 text-sm focus:outline-none"
+                  style={{
+                    border: 'none',
+                    backgroundColor: 'transparent',
+                    color: INK,
+                    fontFamily: "'Outfit', sans-serif",
+                  }}
+                />
+              </div>
+
+              <div className="hidden md:block w-px h-6 flex-shrink-0" style={{ backgroundColor: 'rgba(221,212,192,0.9)' }} />
+
+              {/* Category pills — toggle on/off */}
+              {CATEGORY_FILTERS.map(key => (
+                <FilterPill
+                  key={key}
+                  label={CATEGORY_META[key].label}
+                  icon={CATEGORY_META[key].icon}
+                  active={categoryFilter === key}
+                  onClick={() => setCategoryFilter(f => f === key ? '' : key)}
+                />
+              ))}
+
+              <div className="hidden md:block w-px h-6 flex-shrink-0" style={{ backgroundColor: 'rgba(221,212,192,0.9)' }} />
+
+              {/* Compensation pills */}
+              {COMP_FILTERS.map(({ key, label }) => (
+                <FilterPill
+                  key={key}
+                  label={label}
+                  active={compensationFilter === key}
+                  onClick={() => setCompensationFilter(f => f === key ? '' : key)}
+                />
+              ))}
+
+              {/* Count / clear */}
+              <div className="ml-auto flex items-center gap-2 flex-shrink-0">
+                {hasActiveFilters && (
+                  <button
+                    onClick={() => { setSearchQuery(''); setCategoryFilter(''); setCompensationFilter(''); }}
+                    className="flex items-center gap-1 text-[10px] font-bold focus:outline-none transition-colors"
+                    style={{ color: MUTED, fontFamily: "'DM Mono', monospace", letterSpacing: '0.08em' }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = DANGER; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = MUTED; }}
+                  >
+                    <X size={11} />
+                    CLEAR
+                  </button>
+                )}
                 <p
-                  className="font-black text-2xl text-white"
-                  style={{ fontFamily: "'Outfit', sans-serif" }}
+                  className="text-[11px]"
+                  style={{ color: MUTED, fontFamily: "'DM Mono', monospace", margin: 0 }}
                 >
-                  {value}
-                </p>
-                <p
-                  className="text-xs"
-                  style={{ color: 'rgba(238,217,138,0.6)', fontFamily: "'DM Mono', monospace" }}
-                >
-                  {label}
+                  {filtered.length} ROLE{filtered.length !== 1 ? 'S' : ''}
                 </p>
               </div>
-            ))}
+            </div>
           </div>
         </div>
 
-        {/* Filter bar */}
-        <div
-          className="px-6 md:px-14 py-3 flex flex-wrap gap-3 items-center sticky z-10"
-          style={{
-            top: '72px',
-            backgroundColor: CARD_BG,
-            borderBottom: `1px solid ${BORDER}`,
-          }}
-        >
-          {/* Search */}
-          <div className="relative flex-shrink-0">
-            <Search
-              size={16}
-              className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
-              style={{ color: MUTED }}
-            />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search roles or conferences..."
-              className="rounded-xl py-2.5 pl-10 pr-4 text-sm focus:outline-none transition-colors"
-              style={{
-                width: '260px',
-                border: `1px solid ${BORDER}`,
-                backgroundColor: CARD_BG,
-                color: INK,
-                fontFamily: "'Outfit', sans-serif",
-              }}
-              onFocus={(e) => { (e.currentTarget as HTMLElement).style.borderColor = FOREST; }}
-              onBlur={(e) => { (e.currentTarget as HTMLElement).style.borderColor = BORDER; }}
-            />
-          </div>
-
-          <div className="w-px h-5 flex-shrink-0" style={{ backgroundColor: BORDER }} />
-
-          {categories.map(c => (
-            <FilterPill
-              key={c}
-              label={c === 'all' ? 'ALL' : c}
-              active={categoryFilter === c}
-              onClick={() => setCategoryFilter(c)}
-            />
-          ))}
-
-          <div className="w-px h-5 flex-shrink-0" style={{ backgroundColor: BORDER }} />
-
-          {compensations.map(c => (
-            <FilterPill
-              key={c}
-              label={c === 'all' ? 'ALL' : c}
-              active={compensationFilter === c}
-              onClick={() => setCompensationFilter(c)}
-            />
-          ))}
-
-          <p
-            className="ml-auto text-xs flex-shrink-0"
-            style={{ color: MUTED, fontFamily: "'DM Mono', monospace" }}
-          >
-            {filtered.length} position{filtered.length !== 1 ? 's' : ''}
-          </p>
-        </div>
-
-        {/* Main content */}
-        <main className="flex-1 px-6 md:px-14 py-10">
+        {/* ── Main content ─────────────────────────────────────────── */}
+        <main className="flex-1 px-6 md:px-14 pt-10 pb-14">
           {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
               {Array.from({ length: 6 }).map((_, i) => (
                 <div
                   key={i}
-                  className="rounded-2xl animate-pulse"
-                  style={{ height: '160px', backgroundColor: BORDER }}
-                />
+                  className="rounded-2xl overflow-hidden"
+                  style={{ backgroundColor: CARD_BG, border: `1px solid ${BORDER}` }}
+                >
+                  <div className="animate-pulse" style={{ height: '92px', backgroundColor: '#E4DCCB' }} />
+                  <div className="p-5">
+                    <div className="animate-pulse rounded-lg mb-3" style={{ width: '60%', height: '16px', backgroundColor: '#EDE7D8' }} />
+                    <div className="animate-pulse rounded-full mb-4" style={{ width: '45%', height: '11px', backgroundColor: '#EDE7D8' }} />
+                    <div className="animate-pulse rounded-xl" style={{ width: '100%', height: '44px', backgroundColor: '#F0EBDD' }} />
+                  </div>
+                </div>
               ))}
             </div>
           ) : filtered.length === 0 ? (
@@ -800,7 +1034,7 @@ export default function ConferencesRolesClient() {
                       letterSpacing: '0.07em',
                       textDecoration: 'none',
                     }}
-                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = FOREST_MID; }}
                     onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = FOREST; }}
                   >
                     LIST YOUR CONFERENCE →
@@ -817,8 +1051,8 @@ export default function ConferencesRolesClient() {
                   <button
                     onClick={() => {
                       setSearchQuery('');
-                      setCategoryFilter('all');
-                      setCompensationFilter('all');
+                      setCategoryFilter('');
+                      setCompensationFilter('');
                     }}
                     className="text-sm font-semibold focus:outline-none"
                     style={{ color: FOREST, textDecoration: 'underline' }}
@@ -829,7 +1063,7 @@ export default function ConferencesRolesClient() {
               )}
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 items-stretch">
               {filtered.map(posting => (
                 <PostingCard
                   key={posting.id}
