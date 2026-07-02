@@ -416,8 +416,9 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
     endDebate: 'Cerrar Debate',
   } : { ...DEFAULT_MOTION_NAMES };
   const advisorPhaseDisplay = (() => {
-    if (committee.phase === 'moderated-caucus') return advisorMotionNames.moderated;
-    if (committee.phase === 'unmoderated-caucus') return advisorMotionNames.unmoderated;
+    // Prefer the chair's (possibly renamed) motion label, synced to every device via the caucus record.
+    if (committee.phase === 'moderated-caucus') return committee.caucus?.motionLabel || advisorMotionNames.moderated;
+    if (committee.phase === 'unmoderated-caucus') return committee.caucus?.motionLabel || advisorMotionNames.unmoderated;
     return committee.phase.replace(/-/g, ' ');
   })();
 
@@ -515,9 +516,10 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
                 {formatTime(caucus?.remainingTime ?? 0)}
               </div>
               <p className="text-xs mt-2 font-mono uppercase tracking-wider" style={{ color: 'rgba(238,217,138,0.5)' }}>
-                {caucus?.type === 'consultation' ? advisorMotionNames.consultation :
+                {committee.caucus?.motionLabel ||
+                 (caucus?.type === 'consultation' ? advisorMotionNames.consultation :
                  caucus?.type === 'tour' ? advisorMotionNames.tour :
-                 advisorMotionNames.unmoderated}
+                 advisorMotionNames.unmoderated)}
               </p>
               {caucus?.purpose && (
                 <p className="text-sm mt-3 text-center" style={{ color: 'rgba(237,231,216,0.7)' }}>{caucus.purpose}</p>

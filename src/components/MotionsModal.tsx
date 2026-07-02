@@ -12,7 +12,6 @@ import { useSettingsStore, DEFAULT_MOTION_NAMES, MotionNames } from '@/lib/setti
 import {
   addPendingMotion as addPendingMotionInDB,
   removePendingMotion as removePendingMotionInDB,
-  clearPendingMotions as clearPendingMotionsInDB,
   setPhase as setPhaseInDB,
   updateCaucus as updateCaucusInDB,
   addToCaucusList as addToCaucusListInDB,
@@ -888,9 +887,9 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
         speakingTime: 0, speakerTimeRemaining: 0, currentSpeaker: null,
         proposerPosition: null, spokenCountries: [],
       };
-      update((c) => ({ ...c, phase: 'unmoderated-caucus', caucus, pendingMotions: [], caucusQueue: [], currentSpeaker: null }));
+      update((c) => ({ ...c, phase: 'unmoderated-caucus', caucus, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== motion.id), caucusQueue: [], currentSpeaker: null }));
       onClose();
-      clearPendingMotionsInDB(committee.id);
+      removePendingMotionInDB(motion.id);
       clearCaucusListInDB(committee.id);
       updateCaucusInDB(committee.id, caucus);
       setPhaseInDB(committee.id, 'unmoderated-caucus');
@@ -905,9 +904,9 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
         proposerPosition: null, spokenCountries: [], isConsultation: true,
       };
       // GSL preserved, caucusQueue cleared, phase → unmoderated-caucus
-      update((c) => ({ ...c, phase: 'unmoderated-caucus', caucus, pendingMotions: [], caucusQueue: [], currentSpeaker: null }));
+      update((c) => ({ ...c, phase: 'unmoderated-caucus', caucus, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== motion.id), caucusQueue: [], currentSpeaker: null }));
       onClose();
-      clearPendingMotionsInDB(committee.id);
+      removePendingMotionInDB(motion.id);
       clearCaucusListInDB(committee.id);
       updateCaucusInDB(committee.id, caucus);
       setPhaseInDB(committee.id, 'unmoderated-caucus');
@@ -921,9 +920,9 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
         speakingTime: motion.speakingTime, speakerTimeRemaining: motion.speakingTime,
         currentSpeaker: null, proposerPosition: null, spokenCountries: [],
       };
-      update((c) => ({ ...c, phase: 'moderated-caucus', caucus, pendingMotions: [], caucusQueue: [], currentSpeaker: null }));
+      update((c) => ({ ...c, phase: 'moderated-caucus', caucus, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== motion.id), caucusQueue: [], currentSpeaker: null }));
       onClose();
-      clearPendingMotionsInDB(committee.id);
+      removePendingMotionInDB(motion.id);
       clearCaucusListInDB(committee.id);
       updateCaucusInDB(committee.id, caucus);
       setPhaseInDB(committee.id, 'moderated-caucus');
@@ -953,9 +952,9 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
           delegateId: `room-order-${i + 1}`,
           country: `Speaker ${i + 1}`,
         }));
-        update((c) => ({ ...c, phase: 'moderated-caucus', caucus, pendingMotions: [], caucusQueue, currentSpeaker: null }));
+        update((c) => ({ ...c, phase: 'moderated-caucus', caucus, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== motion.id), caucusQueue, currentSpeaker: null }));
         onClose();
-        clearPendingMotionsInDB(committee.id);
+        removePendingMotionInDB(motion.id);
         updateCaucusInDB(committee.id, caucus);
         setPhaseInDB(committee.id, 'moderated-caucus');
         clearCaucusListInDB(committee.id).then(() =>
@@ -985,9 +984,9 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
       const caucusQueue = presentDelegates.map((d) => ({ delegateId: d.id, country: d.country }));
 
       // GSL preserved, caucusQueue filled with ordered delegates
-      update((c) => ({ ...c, phase: 'moderated-caucus', caucus, pendingMotions: [], caucusQueue, currentSpeaker: null }));
+      update((c) => ({ ...c, phase: 'moderated-caucus', caucus, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== motion.id), caucusQueue, currentSpeaker: null }));
       onClose();
-      clearPendingMotionsInDB(committee.id);
+      removePendingMotionInDB(motion.id);
       updateCaucusInDB(committee.id, caucus);
       setPhaseInDB(committee.id, 'moderated-caucus');
       // Await clear before insert to prevent race condition (DELETE winning after INSERT)

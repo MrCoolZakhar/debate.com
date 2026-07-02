@@ -894,8 +894,10 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
       suspendDebate: 'Suspender Debate',
       endDebate: 'Cerrar Debate',
     } : { ...DEFAULT_MOTION_NAMES };
-    if (committee.phase === 'moderated-caucus') return mn.moderated ?? PHASE_LABELS['moderated-caucus'];
-    if (committee.phase === 'unmoderated-caucus') return mn.unmoderated ?? PHASE_LABELS['unmoderated-caucus'];
+    // Prefer the chair's (possibly renamed) motion label, which the caucus record syncs to
+    // every device — so custom names like "Directive Debate" show to delegates, not just the dais.
+    if (committee.phase === 'moderated-caucus') return committee.caucus?.motionLabel || mn.moderated || PHASE_LABELS['moderated-caucus'];
+    if (committee.phase === 'unmoderated-caucus') return committee.caucus?.motionLabel || mn.unmoderated || PHASE_LABELS['unmoderated-caucus'];
     return PHASE_LABEL[committee.phase] ?? PHASE_LABELS[committee.phase] ?? committee.phase;
   })();
 
@@ -1146,7 +1148,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                   <FlagImg code={getCountryByName(country)?.code ?? ''} size={88} className="rounded-full shadow-lg" />
                 </div>
                 <div className="rounded-xl p-5 text-center" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
-                  <p className="text-3xl font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>{t('delegate_moderated_caucus_label')}</p>
+                  <p className="text-3xl font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>{committee.caucus.motionLabel || t('delegate_moderated_caucus_label')}</p>
                   <p className="text-xl mt-2" style={{ color: '#6A5A4A' }}>{committee.caucus.purpose}</p>
                   {committee.caucus.currentSpeaker && (
                     <div className="mt-4">
@@ -1195,7 +1197,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                   <FlagImg code={getCountryByName(country)?.code ?? ''} size={88} className="rounded-full shadow-lg" />
                 </div>
                 <div className="rounded-xl p-6 text-center space-y-3" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
-                  <p className="text-3xl font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>{t('delegate_unmoderated_caucus_label')}</p>
+                  <p className="text-3xl font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>{committee.caucus.motionLabel || t('delegate_unmoderated_caucus_label')}</p>
                   {committee.caucus.purpose && (
                     <p className="text-xl" style={{ color: '#6A5A4A' }}>{committee.caucus.purpose}</p>
                   )}

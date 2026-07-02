@@ -606,20 +606,17 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false }: 
     setPhaseInDB(committee.id, 'speakers-list');
     updateCaucusInDB(committee.id, null);
     updateLocal(setCommittee, (c) => {
-      const preCaucusSpeaker = c.currentSpeaker;
-      const newSpeakersList = preCaucusSpeaker
-        ? [preCaucusSpeaker, ...c.speakersList.filter((s) => s.delegateId !== preCaucusSpeaker.delegateId)]
-        : c.speakersList;
-      if (preCaucusSpeaker) {
-        reorderSpeakersListInDB(c.id, newSpeakersList, 'gsl');
-      }
+      // Ending a caucus never touches the GSL — the speakers list is returned exactly as it
+      // was before the caucus. (Previously prepended currentSpeaker into the GSL; harmless in
+      // an unmoderated caucus, which has no currentSpeaker, but removed so a future refactor
+      // cannot resurrect the GSL/caucus-mixing bug.)
       return {
         ...c,
         caucus: null,
         phase: 'speakers-list' as const,
         caucusQueue: [],
         currentSpeaker: null,
-        speakersList: newSpeakersList,
+        speakersList: c.speakersList,
         speakerTimeRemaining: c.speakerTimeLimit,
       };
     }, true);
@@ -1184,6 +1181,11 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const committeeIdRef = useRef('');
   const committeePhaseRef = useRef('');
   const speakerTimeLimitRef = useRef(speakerTimeLimit);
+  // Accumulates seconds granted via +time to the CURRENT speaker so speaking-time logging
+  // counts against the extended limit, not the base — otherwise a speaker given extra time
+  // who yields early underflows to a negative value and their speech is silently dropped.
+  // Reset on every speaker transition (Next / Call First / Restart).
+  const extraTimeAddedSecsRef = useRef(0);
   // Mutable map of delegateId → current status — updated immediately on each cycle
   // so rapid clicks read the post-click status, not the pre-re-render (stale) status.
   const delegateStatusRef = useRef<Map<string, DelegateStatus>>(new Map());
@@ -1432,12 +1434,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       if (next === 0) {
         updateCaucusInDB(prev.id, null);
         setPhaseInDB(prev.id, 'speakers-list');
-        const preCaucusSpeaker = prev.currentSpeaker;
-        const newSpeakersList = preCaucusSpeaker
-          ? [preCaucusSpeaker, ...prev.speakersList.filter((s) => s.delegateId !== preCaucusSpeaker.delegateId)]
-          : prev.speakersList;
-        if (preCaucusSpeaker) reorderSpeakersListInDB(prev.id, newSpeakersList, 'gsl');
-        return { ...prev, caucus: null, phase: 'speakers-list' as const, caucusQueue: [], currentSpeaker: null, speakersList: newSpeakersList };
+        // Auto-expiry must mirror the manual End button: clear the caucus and its speaker but
+        // NEVER prepend the current caucus speaker (or a Room-Order "Speaker N" placeholder)
+        // into the permanent GSL. The GSL is returned exactly as it was before the caucus.
+        return { ...prev, caucus: null, phase: 'speakers-list' as const, caucusQueue: [], currentSpeaker: null, speakersList: prev.speakersList };
       }
       return { ...prev, caucus: { ...prev.caucus, remainingTime: next } };
     }, true);
@@ -1734,7 +1734,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     setExtraTimeAdded(false);
 
     if (committee.currentSpeaker) {
-      const secondsSpoken = committee.speakerTimeLimit - speakerTimeRemaining;
+      // Count elapsed time against the EXTENDED limit (base + any +time granted) so a speaker
+      // given extra time who yields early still logs their real speech instead of underflowing
+      // to a negative value that gets silently dropped from scoring/stats.
+      const secondsSpoken = Math.max(0, (committee.speakerTimeLimit + extraTimeAddedSecsRef.current) - speakerTimeRemaining);
       if (secondsSpoken > 0) {
         const ctx = committee.phase === 'moderated-caucus' ? 'moderated-caucus' : 'speakers-list';
         const topic = committee.phase === 'moderated-caucus'
@@ -1743,6 +1746,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         logSpeakingTime(committee.id, committee.currentSpeaker.country, secondsSpoken, ctx, topic);
       }
     }
+    extraTimeAddedSecsRef.current = 0;
 
     const removeDelegateId = committee.speakersList[0]?.delegateId ?? null;
     const [next, ...rest] = committee.speakersList;
@@ -1771,6 +1775,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
 
   const handleAddExtraTime = (secs: number) => {
     setSpeakerTimeRemaining((prev) => prev + secs);
+    extraTimeAddedSecsRef.current += secs;
     setExtraTimeAdded(true);
     setActivePopover(null);
     setExtraTimeSecs('');
@@ -1793,6 +1798,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     setTimerRunning(false);
     stopSpeakerTimerInDB(committeeIdRef.current);
     setExtraTimeAdded(false);
+    extraTimeAddedSecsRef.current = 0;
     if (committee?.phase === 'moderated-caucus' && committee.caucus) {
       const speakTime = committee.caucus.speakingTime;
       const spentSeconds = Math.max(0, speakTime - speakerTimeRemaining);
@@ -1823,13 +1829,19 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     const [next, ...rest] = queue;
     const speakTime = committee.caucus.speakingTime;
     const prevCountry = committee.currentSpeaker?.country ?? null;
-    const spentOnCurrent = Math.max(0, speakTime - speakerTimeRemaining);
+    // Count against the EXTENDED per-speaker limit (base + any +time) so extra time never
+    // underflows the log and drops a real caucus speech (mirrors the GSL Next fix).
+    const spentOnCurrent = Math.max(0, (speakTime + extraTimeAddedSecsRef.current) - speakerTimeRemaining);
     const newRemaining = committee.caucus.remainingTime;
     const newSpoken = prevCountry && !(committee.caucus.spokenCountries ?? []).includes(prevCountry)
       ? [...(committee.caucus.spokenCountries ?? []), prevCountry]
       : (committee.caucus.spokenCountries ?? []);
 
-    if (prevCountry && spentOnCurrent > 0) {
+    // Room-Order Tour de Table speakers are anonymous "Speaker N" placeholders, not real
+    // delegations — logging their time would credit a nonexistent country, so skip logging
+    // entirely for Room Order (do not log to anyone).
+    const isRoomOrder = committee.caucus.purpose?.includes('Room Order') ?? false;
+    if (prevCountry && spentOnCurrent > 0 && !isRoomOrder) {
       logSpeakingTime(
         committee.id,
         prevCountry,
@@ -1838,6 +1850,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         committee.caucus.purpose ?? committee.topic,
       );
     }
+    extraTimeAddedSecsRef.current = 0;
 
     setSpeakerTimeRemaining(speakTime);
     localUpdateTime.current = Date.now();
