@@ -151,11 +151,25 @@ export default function ConferencesOrganiseClient() {
     async function fetchConferences() {
       setLoading(true);
       const supabase = getAuthedClient(session!.access_token);
+
+      // Conferences I organize = ones I own (organizer_id) OR ones I co-organize
+      // (a conference_organizers row). RLS already permits reading both.
+      const { data: memberships } = await supabase
+        .from('conference_organizers')
+        .select('conference_id')
+        .eq('user_id', user!.id);
+      const memberIds = (memberships ?? []).map(m => m.conference_id as string);
+
       let query = supabase
         .from('conferences')
         .select('id, slug, full_name, acronym, city, country, start_date, end_date, is_public, status, logo_url')
-        .eq('organizer_id', user!.id)
         .order('start_date', { ascending: true });
+
+      if (memberIds.length > 0) {
+        query = query.or(`organizer_id.eq.${user!.id},id.in.(${memberIds.join(',')})`);
+      } else {
+        query = query.eq('organizer_id', user!.id);
+      }
 
       if (statusFilter === 'ACTIVE') {
         query = query.eq('is_public', true);
