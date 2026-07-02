@@ -4,9 +4,9 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { LabConference, VariantSwitcher } from './shared';
-import VariantAtlas from './VariantAtlas';
-import VariantBroadsheet from './VariantBroadsheet';
-import VariantDepartures from './VariantDepartures';
+import VariantCentrefold from './VariantCentrefold';
+import VariantFolio from './VariantFolio';
+import VariantPanorama from './VariantPanorama';
 
 export default function LandingLabClient() {
   const searchParams = useSearchParams();
@@ -29,9 +29,9 @@ export default function LandingLabClient() {
 
   return (
     <>
-      {variant === 1 && <VariantAtlas conferences={conferences} />}
-      {variant === 2 && <VariantBroadsheet conferences={conferences} />}
-      {variant === 3 && <VariantDepartures conferences={conferences} />}
+      {variant === 1 && <VariantCentrefold conferences={conferences} />}
+      {variant === 2 && <VariantFolio conferences={conferences} />}
+      {variant === 3 && <VariantPanorama conferences={conferences} />}
       <VariantSwitcher current={variant} />
     </>
   );

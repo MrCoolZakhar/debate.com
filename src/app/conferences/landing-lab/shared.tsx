@@ -1,6 +1,9 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { Users, FileText, CreditCard, Zap, type LucideIcon } from 'lucide-react';
 
 // ── Shared constants / types / helpers for the landing lab ──────────────────
 
@@ -40,6 +43,161 @@ export function shortDate(d: string): string {
 
 export function feeLabel(c: LabConference): string {
   return c.fee_amount === 0 ? 'FREE' : `${c.fee_currency} ${c.fee_amount.toFixed(0)}`;
+}
+
+// ── Production copy (voice preserved from ConferencesClient.tsx) ─────────────
+
+export const COPY = {
+  heroLine1: 'Find Your Next',
+  heroLine2: 'Conference.',
+  searchPlaceholder: 'Search conferences...',
+  organiserTitle1: 'Run your conference.',
+  organiserTitle2: 'Fee-free.',
+  organiserBody:
+    'Zero platform fees for organisers. Gavelling handles registration, allocations, document management, session integration, and automated communications.',
+  organiserCta: 'START A CONFERENCE →',
+  rolesTitle1: 'Looking to chair?',
+  rolesTitle2: 'Find your next role.',
+  rolesBody:
+    'Conferences post open positions for chairs, secretariat, and staff. Apply directly through your Gavelling profile — your MUN CV travels with you.',
+  rolesCta: 'FIND YOUR NEXT OPPORTUNITY →',
+  globeTitle1: 'MUN Across',
+  globeTitle2: 'the Globe.',
+  globeBody:
+    'From The Hague to Singapore, Tokyo to New York. Explore conferences on every continent and find your next destination.',
+  globeCta: 'EXPLORE CONFERENCES WORLDWIDE →',
+} as const;
+
+export const ORGANISER_CARDS: { icon: LucideIcon; title: string; desc: string }[] = [
+  { icon: Users, title: 'Smart Assignment', desc: 'Preferences + experience scores. One-click auto-assign.' },
+  { icon: FileText, title: 'Document Portal', desc: 'Study guides, position papers, feedback — all in one place.' },
+  { icon: CreditCard, title: 'Transparent Fees', desc: '5% delegate surcharge, waived with Gavelling Unlimited. You keep 100%.' },
+  { icon: Zap, title: 'Automated Comms', desc: 'Acceptance emails, allocation codes, reminders — sent automatically.' },
+];
+
+export const ROLES_PILLS = ['CHAIRS', 'SECRETARIAT', 'STAFF'] as const;
+
+// ── Shared search box (filters the fetched public conferences locally) ──────
+
+export function LabSearch({
+  conferences,
+  appearance,
+}: {
+  conferences: LabConference[];
+  appearance: 'field' | 'underline' | 'glass';
+}) {
+  const router = useRouter();
+  const [query, setQuery] = useState('');
+  const [focused, setFocused] = useState(false);
+
+  const q = query.trim().toLowerCase();
+  const results = q
+    ? conferences.filter(c =>
+        c.full_name.toLowerCase().includes(q) ||
+        c.acronym.toLowerCase().includes(q) ||
+        c.city.toLowerCase().includes(q) ||
+        c.country.toLowerCase().includes(q)
+      ).slice(0, 5)
+    : [];
+
+  const baseInput: React.CSSProperties = {
+    width: '100%',
+    fontFamily: "'Outfit', sans-serif",
+    fontSize: '14px',
+    color: '#1C1410',
+    outline: 'none',
+    boxSizing: 'border-box',
+  };
+
+  const inputStyle: React.CSSProperties =
+    appearance === 'underline'
+      ? {
+          ...baseInput,
+          padding: '12px 2px',
+          border: 'none',
+          borderBottom: `1.5px solid ${focused ? '#1B3828' : '#DDD4C0'}`,
+          borderRadius: 0,
+          backgroundColor: 'transparent',
+          fontSize: '16px',
+          transition: 'border-color 200ms ease',
+        }
+      : appearance === 'glass'
+      ? {
+          ...baseInput,
+          padding: '14px 20px',
+          borderRadius: '14px',
+          border: `1.5px solid ${focused ? '#1B3828' : 'rgba(221,212,192,0.9)'}`,
+          backgroundColor: 'rgba(250,248,243,0.88)',
+          backdropFilter: 'blur(14px)',
+          WebkitBackdropFilter: 'blur(14px)',
+          boxShadow: '0 10px 32px rgba(27,56,40,0.18)',
+        }
+      : {
+          ...baseInput,
+          padding: '14px 20px',
+          borderRadius: '14px',
+          border: `1.5px solid ${focused ? '#1B3828' : '#DDD4C0'}`,
+          backgroundColor: 'rgba(250,248,243,0.92)',
+          boxShadow: '0 2px 12px rgba(27,56,40,0.06)',
+        };
+
+  return (
+    <div style={{ position: 'relative', flex: 1 }}>
+      <input
+        type="text"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter') router.push('/conferences/explore'); }}
+        placeholder={COPY.searchPlaceholder}
+        style={inputStyle}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+      />
+      {q.length > 0 && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 'calc(100% + 8px)',
+            left: 0,
+            right: 0,
+            zIndex: 50,
+            backgroundColor: '#FAF8F3',
+            border: '1px solid #DDD4C0',
+            borderRadius: '12px',
+            boxShadow: '0 12px 32px rgba(27,56,40,0.14)',
+            overflow: 'hidden',
+          }}
+        >
+          {results.map(result => (
+            <div
+              key={result.id}
+              onMouseDown={() => router.push(`/conferences/${result.slug}`)}
+              style={{ padding: '10px 16px', cursor: 'pointer', borderBottom: '1px solid rgba(221,212,192,0.5)' }}
+              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+            >
+              <p style={{ fontFamily: "'Outfit', sans-serif", fontSize: '13px', fontWeight: 700, color: '#1C1410', margin: 0 }}>
+                {result.full_name}
+              </p>
+              <p style={{ fontFamily: "'DM Mono', monospace", fontSize: '10px', color: '#9A8A78', margin: '2px 0 0 0' }}>
+                {result.city}, {result.country} · {formatDateRange(result.start_date, result.end_date)}
+              </p>
+            </div>
+          ))}
+          <div
+            onMouseDown={() => router.push('/conferences/explore')}
+            style={{ padding: '10px 16px', cursor: 'pointer' }}
+            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+          >
+            <p style={{ fontFamily: "'DM Mono', monospace", fontSize: '10.5px', letterSpacing: '0.12em', color: '#1B3828', margin: 0 }}>
+              SEARCH THE FULL DIRECTORY →
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ── Fixed glass variant switcher pill ────────────────────────────────────────
