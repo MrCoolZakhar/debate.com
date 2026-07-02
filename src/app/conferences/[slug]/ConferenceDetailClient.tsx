@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Globe, MessageCircle, Music, CalendarDays, MapPin, Users, GraduationCap, Monitor, Mail, FileText, Download, Landmark, Lock, ChevronDown, ChevronLeft, ChevronRight, Check, Megaphone, X } from 'lucide-react';
+import { Globe, MessageCircle, Music, CalendarDays, MapPin, Users, GraduationCap, Monitor, Mail, FileText, Download, Landmark, Lock, ChevronDown, ChevronLeft, ChevronRight, Check, X, Plus, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -139,21 +139,30 @@ function ApplicationStatusBadge({ status }: { status: string }) {
   );
 }
 
-function FilterChip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+function SortButton({ label, dir, onClick }: { label: string; dir: 'asc' | 'desc' | null; onClick: () => void }) {
+  const active = dir !== null;
   return (
     <button
       onClick={onClick}
-      className="px-3 py-1.5 rounded-full text-[10px] font-bold transition-all focus:outline-none"
+      className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[10.5px] font-bold transition-all focus:outline-none"
       style={{
         backgroundColor: active ? '#1B3828' : 'rgba(237,231,216,0.5)',
         color: active ? '#EED98A' : '#6B5F52',
         border: active ? '1px solid #1B3828' : '1px solid rgba(221,212,192,0.9)',
         fontFamily: "'Outfit', sans-serif",
-        letterSpacing: '0.08em',
+        letterSpacing: '0.09em',
         whiteSpace: 'nowrap',
+        cursor: 'pointer',
       }}
     >
       {label}
+      {dir === 'asc' ? (
+        <ArrowDown size={12} strokeWidth={2.4} />
+      ) : dir === 'desc' ? (
+        <ArrowUp size={12} strokeWidth={2.4} />
+      ) : (
+        <ArrowUpDown size={12} strokeWidth={2} style={{ opacity: 0.5 }} />
+      )}
     </button>
   );
 }
@@ -206,11 +215,10 @@ export default function ConferenceDetailClient() {
   const [chairJobs, setChairJobs] = useState<Record<string, string>>({});
   const [expandedRoster, setExpandedRoster] = useState<string | null>(null);
   const [pricingOpen, setPricingOpen] = useState(false);
-  // Committee carousel + filters
+  // Committee carousel + sorting (click: asc -> desc -> reset)
   const carouselRef = useRef<HTMLDivElement>(null);
-  const [filterDifficulty, setFilterDifficulty] = useState('');
-  const [filterSeats, setFilterSeats] = useState<'' | 'open' | 'filling' | 'full'>('');
-  const [filterType, setFilterType] = useState<'' | 'general-assembly' | 'crisis'>('');
+  const [sortKey, setSortKey] = useState<'' | 'difficulty' | 'availability' | 'type'>('');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
   useEffect(() => {
     if (authLoading) return;
@@ -583,12 +591,8 @@ export default function ConferenceDetailClient() {
                   alt={conference.acronym}
                   className="hidden sm:block flex-shrink-0"
                   style={{
-                    width: '84px', height: '84px', borderRadius: '20px', objectFit: 'contain', padding: '8px',
-                    border: '1px solid rgba(255,255,255,0.28)',
-                    boxShadow: '0 12px 32px rgba(0,0,0,0.35)',
-                    backgroundColor: 'rgba(250,248,243,0.88)',
-                    backdropFilter: 'blur(10px)',
-                    WebkitBackdropFilter: 'blur(10px)',
+                    width: '124px', height: '124px', objectFit: 'contain',
+                    filter: 'drop-shadow(0 14px 28px rgba(0,0,0,0.5))',
                   }}
                 />
               )}
@@ -733,39 +737,46 @@ export default function ConferenceDetailClient() {
                 </SectionCard>
               )}
 
-              {/* Committees — filterable horizontal carousel */}
+              {/* Committees — sortable horizontal slider */}
               {activeTab === 'overview' && (() => {
-                const presentDifficulties = ['beginner', 'intermediate', 'advanced', 'expert']
-                  .filter(d => committees.some(c => (c.difficulty ?? '').toLowerCase() === d));
-                const hasCrisis = committees.some(c => c.committee_type === 'crisis');
-                const hasGA = committees.some(c => c.committee_type !== 'crisis');
                 const committeeStats = (c: Committee) => {
                   const slots = committeeSlots[c.id] ?? [];
                   const capacity = slots.length || c.total_slots || 0;
                   const taken = new Set(committeeOccupied[c.id] ?? []).size;
                   return { slots, capacity, taken, pct: capacity > 0 ? Math.min(100, Math.round((taken / capacity) * 100)) : 0 };
                 };
-                const filteredCommittees = committees.filter(c => {
-                  if (filterDifficulty && (c.difficulty ?? '').toLowerCase() !== filterDifficulty) return false;
-                  if (filterType === 'crisis' && c.committee_type !== 'crisis') return false;
-                  if (filterType === 'general-assembly' && c.committee_type === 'crisis') return false;
-                  if (filterSeats) {
-                    const { capacity, taken } = committeeStats(c);
-                    if (filterSeats === 'open' && taken >= capacity) return false;
-                    if (filterSeats === 'filling' && (taken === 0 || taken >= capacity)) return false;
-                    if (filterSeats === 'full' && taken < capacity) return false;
-                  }
-                  return true;
-                });
-                const filtersActive = !!(filterDifficulty || filterSeats || filterType);
+                const DIFF_ORDER: Record<string, number> = { beginner: 0, intermediate: 1, advanced: 2, expert: 3 };
+                const sortedCommittees = [...committees];
+                if (sortKey) {
+                  sortedCommittees.sort((a, b) => {
+                    let va = 0, vb = 0;
+                    if (sortKey === 'difficulty') {
+                      va = DIFF_ORDER[(a.difficulty ?? '').toLowerCase()] ?? 99;
+                      vb = DIFF_ORDER[(b.difficulty ?? '').toLowerCase()] ?? 99;
+                    } else if (sortKey === 'availability') {
+                      va = committeeStats(a).pct;
+                      vb = committeeStats(b).pct;
+                    } else {
+                      va = a.committee_type === 'crisis' ? 1 : 0;
+                      vb = b.committee_type === 'crisis' ? 1 : 0;
+                    }
+                    return sortDir === 'asc' ? va - vb : vb - va;
+                  });
+                }
+                const cycleSort = (key: 'difficulty' | 'availability' | 'type') => {
+                  if (sortKey !== key) { setSortKey(key); setSortDir('asc'); }
+                  else if (sortDir === 'asc') { setSortDir('desc'); }
+                  else { setSortKey(''); setSortDir('asc'); }
+                };
+                const ROMAN = ['I', 'II', 'III'];
                 const rosterCommittee = expandedRoster ? committees.find(x => x.id === expandedRoster) : null;
 
                 return (
                   <div className="mb-6">
-                    {/* Filter bar */}
-                    {committees.length > 0 && (
+                    {/* Sort bar */}
+                    {committees.length > 1 && (
                       <div
-                        className="flex flex-wrap items-center gap-1.5 rounded-2xl px-3 py-2.5 mb-4"
+                        className="inline-flex flex-wrap items-center gap-1.5 rounded-full px-2 py-1.5 mb-4"
                         style={{
                           backgroundColor: 'rgba(250,248,243,0.72)',
                           backdropFilter: 'blur(16px) saturate(1.4)',
@@ -774,34 +785,21 @@ export default function ConferenceDetailClient() {
                           boxShadow: '0 6px 20px rgba(27,56,40,0.07)',
                         }}
                       >
-                        {presentDifficulties.map(d => (
-                          <FilterChip
-                            key={d}
-                            label={d.toUpperCase()}
-                            active={filterDifficulty === d}
-                            onClick={() => setFilterDifficulty(v => v === d ? '' : d)}
-                          />
-                        ))}
-                        <div className="w-px h-5 mx-1" style={{ backgroundColor: 'rgba(221,212,192,0.9)' }} />
-                        <FilterChip label="OPEN SEATS" active={filterSeats === 'open'} onClick={() => setFilterSeats(v => v === 'open' ? '' : 'open')} />
-                        <FilterChip label="FILLING UP" active={filterSeats === 'filling'} onClick={() => setFilterSeats(v => v === 'filling' ? '' : 'filling')} />
-                        <FilterChip label="FULL" active={filterSeats === 'full'} onClick={() => setFilterSeats(v => v === 'full' ? '' : 'full')} />
-                        {hasGA && hasCrisis && (
-                          <>
-                            <div className="w-px h-5 mx-1" style={{ backgroundColor: 'rgba(221,212,192,0.9)' }} />
-                            <FilterChip label="GA" active={filterType === 'general-assembly'} onClick={() => setFilterType(v => v === 'general-assembly' ? '' : 'general-assembly')} />
-                            <FilterChip label="CRISIS" active={filterType === 'crisis'} onClick={() => setFilterType(v => v === 'crisis' ? '' : 'crisis')} />
-                          </>
-                        )}
-                        {filtersActive && (
-                          <button
-                            onClick={() => { setFilterDifficulty(''); setFilterSeats(''); setFilterType(''); }}
-                            className="ml-auto text-[11px] underline focus:outline-none"
-                            style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}
-                          >
-                            Clear
-                          </button>
-                        )}
+                        <SortButton
+                          label="DIFFICULTY"
+                          dir={sortKey === 'difficulty' ? sortDir : null}
+                          onClick={() => cycleSort('difficulty')}
+                        />
+                        <SortButton
+                          label="AVAILABILITY"
+                          dir={sortKey === 'availability' ? sortDir : null}
+                          onClick={() => cycleSort('availability')}
+                        />
+                        <SortButton
+                          label="GA / CRISIS"
+                          dir={sortKey === 'type' ? sortDir : null}
+                          onClick={() => cycleSort('type')}
+                        />
                       </div>
                     )}
 
@@ -811,21 +809,15 @@ export default function ConferenceDetailClient() {
                           Committees will be announced soon.
                         </p>
                       </SectionCard>
-                    ) : filteredCommittees.length === 0 ? (
-                      <SectionCard>
-                        <p className="text-sm" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                          No committees match these filters.
-                        </p>
-                      </SectionCard>
                     ) : (
                       <div className="relative">
                         {/* Slider arrows */}
-                        {filteredCommittees.length > 2 && (
+                        {sortedCommittees.length > 2 && (
                           <>
                             <button
                               aria-label="Scroll committees left"
                               onClick={() => carouselRef.current?.scrollBy({ left: -324, behavior: 'smooth' })}
-                              className="hidden md:flex items-center justify-center absolute z-20 focus:outline-none transition-transform"
+                              className="hidden md:flex items-center justify-center absolute z-20 focus:outline-none"
                               style={{
                                 left: '-16px', top: '50%', transform: 'translateY(-50%)',
                                 width: '38px', height: '38px', borderRadius: '9999px',
@@ -841,7 +833,7 @@ export default function ConferenceDetailClient() {
                             <button
                               aria-label="Scroll committees right"
                               onClick={() => carouselRef.current?.scrollBy({ left: 324, behavior: 'smooth' })}
-                              className="hidden md:flex items-center justify-center absolute z-20 focus:outline-none transition-transform"
+                              className="hidden md:flex items-center justify-center absolute z-20 focus:outline-none"
                               style={{
                                 right: '-16px', top: '50%', transform: 'translateY(-50%)',
                                 width: '38px', height: '38px', borderRadius: '9999px',
@@ -869,14 +861,14 @@ export default function ConferenceDetailClient() {
                             margin: '-4px -4px 0 -4px',
                           }}
                         >
-                          {filteredCommittees.map(c => {
+                          {sortedCommittees.map(c => {
                             const diff = c.difficulty?.toLowerCase() ?? '';
                             const diffStyle = DIFFICULTY_STYLES[diff] ?? DIFFICULTY_STYLES.intermediate;
                             const isCrisis = c.committee_type === 'crisis';
                             const monogram = (c.abbreviation || c.name).replace(/[^A-Za-z0-9]/g, '').slice(0, 6).toUpperCase();
                             const chairs = c.display_chairs ?? [];
                             const { capacity, taken, pct } = committeeStats(c);
-                            const hasChairAd = !!chairJobs[c.id];
+                            const chairSeatOpen = chairs.length < 2 || !!chairJobs[c.id];
 
                             return (
                               <article
@@ -893,28 +885,25 @@ export default function ConferenceDetailClient() {
                                 }}
                               >
                                 <div className="flex flex-col items-center px-5 pt-7 flex-1">
-                                  {/* Emblem */}
+                                  {/* Emblem — free-floating */}
                                   {c.logo_url ? (
-                                    <div
-                                      className="flex items-center justify-center overflow-hidden flex-shrink-0"
+                                    <img
+                                      src={c.logo_url}
+                                      alt={c.abbreviation ?? c.name}
                                       style={{
-                                        width: '92px', height: '92px', borderRadius: '9999px',
-                                        backgroundColor: '#FFFFFF',
-                                        border: '1px solid rgba(221,212,192,0.9)',
-                                        boxShadow: '0 8px 24px rgba(27,56,40,0.15), 0 0 0 6px rgba(237,231,216,0.55)',
+                                        width: '104px', height: '104px', objectFit: 'contain', flexShrink: 0,
+                                        filter: 'drop-shadow(0 10px 18px rgba(27,56,40,0.28))',
                                       }}
-                                    >
-                                      <img src={c.logo_url} alt={c.abbreviation ?? c.name} style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '15px' }} />
-                                    </div>
+                                    />
                                   ) : (
                                     <div
                                       className="relative flex items-center justify-center overflow-hidden flex-shrink-0"
                                       style={{
-                                        width: '92px', height: '92px', borderRadius: '9999px',
+                                        width: '96px', height: '96px', borderRadius: '9999px',
                                         background: isCrisis
                                           ? 'linear-gradient(135deg, #3C1414 0%, #6E1E1E 100%)'
                                           : 'linear-gradient(135deg, #16301F 0%, #2A5A3C 100%)',
-                                        boxShadow: '0 8px 24px rgba(27,56,40,0.22), 0 0 0 6px rgba(237,231,216,0.55)',
+                                        boxShadow: '0 10px 24px rgba(27,56,40,0.26)',
                                       }}
                                     >
                                       <div className="pointer-events-none absolute inset-0" style={{ backgroundImage: GRAIN, backgroundSize: '300px', mixBlendMode: 'overlay', opacity: 0.12 }} />
@@ -926,47 +915,48 @@ export default function ConferenceDetailClient() {
 
                                   {/* Name */}
                                   <h3
-                                    className="text-center font-bold text-[15.5px] leading-snug mt-4"
-                                    style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", margin: '16px 0 0 0', minHeight: '2.6em' }}
+                                    className="text-center font-bold text-[15.5px] leading-snug"
+                                    style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", margin: '18px 0 0 0', minHeight: '2.6em' }}
                                   >
                                     {c.name}
                                   </h3>
-                                  {isCrisis && (
-                                    <span
-                                      className="px-2.5 py-0.5 rounded-full mt-1.5"
-                                      style={{ fontSize: '8px', fontFamily: "'DM Mono', monospace", letterSpacing: '0.16em', backgroundColor: 'rgba(110,30,30,0.1)', color: '#8B2020', fontWeight: 700 }}
-                                    >
-                                      CRISIS
-                                    </span>
-                                  )}
 
-                                  {/* Difficulty / Seats */}
-                                  <div className="w-full grid grid-cols-2 gap-3 mt-4 pt-4" style={{ borderTop: '1px solid rgba(221,212,192,0.6)' }}>
-                                    <div>
-                                      <p style={{ fontFamily: "'DM Mono', monospace", fontSize: '8px', letterSpacing: '0.2em', color: '#9A8A78', margin: '0 0 3px 0' }}>DIFFICULTY</p>
+                                  {/* Meta row */}
+                                  <div className="flex items-center gap-2 mt-1.5">
+                                    {c.difficulty && (
                                       <span
-                                        className="inline-block px-2 py-0.5 rounded-full"
+                                        className="px-2.5 py-0.5 rounded-full"
                                         style={{ ...diffStyle, fontSize: '10px', fontFamily: "'DM Mono', monospace", letterSpacing: '0.06em', fontWeight: 700 }}
                                       >
-                                        {capitalize(diff || 'TBD')}
+                                        {capitalize(diff)}
                                       </span>
-                                    </div>
-                                    <div>
-                                      <p style={{ fontFamily: "'DM Mono', monospace", fontSize: '8px', letterSpacing: '0.2em', color: '#9A8A78', margin: '0 0 3px 0' }}>SIZE</p>
-                                      <p className="text-[13px] font-bold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", margin: 0 }}>
-                                        {capacity} {isCrisis ? 'roles' : 'seats'}
-                                      </p>
-                                    </div>
+                                    )}
+                                    <span aria-hidden style={{ color: 'rgba(182,135,31,0.55)', fontSize: '7px' }}>◆</span>
+                                    <span className="text-[12px] font-semibold" style={{ color: '#6B5F52', fontFamily: "'Outfit', sans-serif" }}>
+                                      {capacity} {isCrisis ? 'roles' : 'seats'}
+                                    </span>
+                                    {isCrisis && (
+                                      <>
+                                        <span aria-hidden style={{ color: 'rgba(182,135,31,0.55)', fontSize: '7px' }}>◆</span>
+                                        <span className="text-[10px] font-bold" style={{ color: '#8B2020', fontFamily: "'DM Mono', monospace", letterSpacing: '0.12em' }}>
+                                          CRISIS
+                                        </span>
+                                      </>
+                                    )}
                                   </div>
 
-                                  {/* Agenda */}
+                                  {/* Topics — roman numerals */}
                                   {c.topics && c.topics.length > 0 && (
-                                    <div className="w-full mt-4">
-                                      <p style={{ fontFamily: "'DM Mono', monospace", fontSize: '8px', letterSpacing: '0.2em', color: '#B6871F', margin: '0 0 5px 0' }}>AGENDA</p>
-                                      {c.topics.map(topic => (
-                                        <div key={topic} className="flex items-start gap-2 py-0.5">
-                                          <span aria-hidden style={{ color: '#B6871F', fontSize: '7px', lineHeight: '19px', flexShrink: 0 }}>◆</span>
-                                          <span className="text-[12.5px] font-medium" style={{ color: '#2E2820', fontFamily: "'Outfit', sans-serif", lineHeight: 1.5 }}>
+                                    <div className="w-full mt-5 pt-4" style={{ borderTop: '1px solid rgba(221,212,192,0.55)' }}>
+                                      {c.topics.map((topic, ti) => (
+                                        <div key={topic} className="flex items-start gap-2.5 py-1">
+                                          <span
+                                            className="flex-shrink-0 text-right"
+                                            style={{ fontFamily: "'DM Mono', monospace", fontSize: '11px', color: '#B6871F', width: '18px', lineHeight: '19px' }}
+                                          >
+                                            {ROMAN[ti] ?? String(ti + 1)}.
+                                          </span>
+                                          <span className="text-[12.5px] font-medium" style={{ color: '#2E2820', fontFamily: "'Outfit', sans-serif", lineHeight: 1.55 }}>
                                             {topic}
                                           </span>
                                         </div>
@@ -974,66 +964,64 @@ export default function ConferenceDetailClient() {
                                     </div>
                                   )}
 
-                                  {/* Chairs */}
-                                  {chairs.length > 0 && (
-                                    <div className="w-full mt-4 pt-4" style={{ borderTop: '1px solid rgba(221,212,192,0.6)' }}>
-                                      <p style={{ fontFamily: "'DM Mono', monospace", fontSize: '8px', letterSpacing: '0.2em', color: '#9A8A78', margin: '0 0 8px 0' }}>CHAIRS</p>
-                                      <div className="grid grid-cols-2 gap-2">
-                                        {chairs.map(ch => (
-                                          <div key={ch.name} className="flex flex-col items-center text-center">
-                                            {ch.avatar_url ? (
-                                              <img
-                                                src={ch.avatar_url}
-                                                alt={ch.name}
-                                                style={{
-                                                  width: '44px', height: '44px', borderRadius: '9999px', objectFit: 'cover',
-                                                  border: '2px solid #FAF8F3', boxShadow: '0 3px 10px rgba(27,56,40,0.18)',
-                                                  backgroundColor: '#EDE7D8',
-                                                }}
-                                              />
-                                            ) : (
-                                              <span
-                                                className="flex items-center justify-center"
-                                                style={{
-                                                  width: '44px', height: '44px', borderRadius: '9999px',
-                                                  backgroundColor: '#1B3828', color: '#EED98A',
-                                                  fontSize: '15px', fontWeight: 700, fontFamily: "'Outfit', sans-serif",
-                                                }}
-                                              >
-                                                {ch.name.charAt(0)}
-                                              </span>
-                                            )}
-                                            <span className="text-[11.5px] font-semibold mt-1.5 leading-tight" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-                                              {ch.name}
+                                  {/* Dais */}
+                                  <div className="w-full mt-4 pt-4" style={{ borderTop: '1px solid rgba(221,212,192,0.55)' }}>
+                                    <div className="flex items-start justify-center gap-6">
+                                      {chairs.map(ch => (
+                                        <div key={ch.name} className="flex flex-col items-center text-center" style={{ width: '96px' }}>
+                                          {ch.avatar_url ? (
+                                            <img
+                                              src={ch.avatar_url}
+                                              alt={ch.name}
+                                              style={{
+                                                width: '52px', height: '52px', borderRadius: '9999px', objectFit: 'cover',
+                                                boxShadow: '0 4px 12px rgba(27,56,40,0.22)',
+                                                backgroundColor: '#EDE7D8',
+                                              }}
+                                            />
+                                          ) : (
+                                            <span
+                                              className="flex items-center justify-center"
+                                              style={{
+                                                width: '52px', height: '52px', borderRadius: '9999px',
+                                                backgroundColor: '#1B3828', color: '#EED98A',
+                                                fontSize: '17px', fontWeight: 700, fontFamily: "'Outfit', sans-serif",
+                                              }}
+                                            >
+                                              {ch.name.charAt(0)}
                                             </span>
-                                          </div>
-                                        ))}
-                                      </div>
+                                          )}
+                                          <span className="text-[11.5px] font-semibold mt-2 leading-tight" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                                            {ch.name}
+                                          </span>
+                                        </div>
+                                      ))}
+                                      {chairSeatOpen && (
+                                        <Link
+                                          href="/conferences/roles"
+                                          className="flex flex-col items-center text-center group"
+                                          style={{ width: '96px', textDecoration: 'none' }}
+                                        >
+                                          <span
+                                            className="flex items-center justify-center transition-all"
+                                            style={{
+                                              width: '52px', height: '52px', borderRadius: '9999px',
+                                              border: '1.5px dashed rgba(27,56,40,0.4)',
+                                              color: '#1B3828',
+                                              backgroundColor: 'rgba(27,56,40,0.04)',
+                                            }}
+                                            onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = '#1B3828'; el.style.color = '#EED98A'; el.style.borderStyle = 'solid'; }}
+                                            onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; el.style.color = '#1B3828'; el.style.borderStyle = 'dashed'; }}
+                                          >
+                                            <Plus size={20} strokeWidth={2.2} />
+                                          </span>
+                                          <span className="text-[10px] font-bold mt-2" style={{ color: '#B6871F', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.12em' }}>
+                                            APPLY NOW
+                                          </span>
+                                        </Link>
+                                      )}
                                     </div>
-                                  )}
-
-                                  {/* Chair recruitment ad */}
-                                  {hasChairAd && (
-                                    <Link
-                                      href="/conferences/roles"
-                                      className="w-full mt-4 flex items-center gap-2 rounded-xl px-3 py-2 transition-all"
-                                      style={{
-                                        background: 'linear-gradient(100deg, rgba(238,217,138,0.35) 0%, rgba(238,217,138,0.15) 100%)',
-                                        border: '1px solid rgba(182,135,31,0.35)',
-                                        textDecoration: 'none',
-                                      }}
-                                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#B6871F'; }}
-                                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(182,135,31,0.35)'; }}
-                                    >
-                                      <Megaphone size={13} style={{ color: '#8A6614', flexShrink: 0 }} />
-                                      <span className="flex-1 text-[11px] font-semibold leading-tight" style={{ color: '#6E5410', fontFamily: "'Outfit', sans-serif" }}>
-                                        Recruiting chairs
-                                      </span>
-                                      <span className="text-[9px] font-bold flex-shrink-0" style={{ color: '#8A6614', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em' }}>
-                                        APPLY →
-                                      </span>
-                                    </Link>
-                                  )}
+                                  </div>
 
                                   {/* Capacity */}
                                   <div className="w-full mt-4">
@@ -1201,7 +1189,7 @@ export default function ConferenceDetailClient() {
                       <img
                         src={conference.logo_url}
                         alt={conference.acronym}
-                        style={{ width: '58px', height: '58px', borderRadius: '15px', objectFit: 'contain', border: '1px solid #DDD4C0', backgroundColor: '#FFFFFF', padding: '4px', flexShrink: 0 }}
+                        style={{ width: '80px', height: '80px', objectFit: 'contain', filter: 'drop-shadow(0 8px 16px rgba(27,56,40,0.28))', flexShrink: 0 }}
                       />
                     )}
                     <div className="min-w-0">
