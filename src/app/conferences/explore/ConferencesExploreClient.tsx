@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Search, SlidersHorizontal } from 'lucide-react';
+import { Search, SlidersHorizontal, ArrowRight, ArrowLeft, Users, CalendarDays } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import { supabase } from '@/lib/supabase';
 import { getFlagUrl, getCountryByName } from '@/lib/countries';
@@ -30,6 +30,8 @@ const CONTINENT_LABELS: Record<string, string> = {
 
 const CONTINENT_KEYS = ['north-america', 'south-america', 'europe', 'africa', 'asia', 'oceania'] as const;
 
+const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
+
 // ── Types ──────────────────────────────────────────────────────────────────
 
 interface Conference {
@@ -47,6 +49,7 @@ interface Conference {
   format: string;
   student_level: string;
   logo_url: string | null;
+  banner_url: string | null;
   is_public: boolean;
 }
 
@@ -62,19 +65,34 @@ function formatDateRange(start: string, end: string): string {
   return `${s.getDate()} ${months[s.getMonth()]} – ${e.getDate()} ${months[e.getMonth()]} ${e.getFullYear()}`;
 }
 
+// Deterministic forest-tone gradient per conference (used when no banner art exists)
+const CARD_GRADIENTS: [string, string][] = [
+  ['#16301F', '#2A5A3C'],
+  ['#1B3828', '#27573A'],
+  ['#122718', '#1B3828'],
+  ['#1E4029', '#356744'],
+];
+
+function gradientFor(acronym: string): [string, string] {
+  let h = 0;
+  for (let i = 0; i < acronym.length; i++) h = (h * 31 + acronym.charCodeAt(i)) >>> 0;
+  return CARD_GRADIENTS[h % CARD_GRADIENTS.length];
+}
+
 function FilterPill({
   label, active, onClick,
 }: { label: string; active: boolean; onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      className="px-3 py-1.5 rounded-full text-xs font-bold tracking-widest transition-all focus:outline-none"
+      className="px-3 py-1.5 rounded-full text-[10px] font-bold transition-all focus:outline-none"
       style={{
-        backgroundColor: active ? '#1B3828' : 'transparent',
-        color: active ? '#EED98A' : '#1C1410',
-        border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
+        backgroundColor: active ? '#1B3828' : 'rgba(237,231,216,0.5)',
+        color: active ? '#EED98A' : '#6B5F52',
+        border: active ? '1px solid #1B3828' : '1px solid rgba(221,212,192,0.9)',
         fontFamily: "'Outfit', sans-serif",
-        letterSpacing: '0.07em',
+        letterSpacing: '0.08em',
+        whiteSpace: 'nowrap',
       }}
     >
       {label}
@@ -111,115 +129,179 @@ function ConferenceCard({
   const countryObj = getCountryByName(conf.country);
   const flagUrl = countryObj ? getFlagUrl(countryObj.code) : null;
   const initials = conf.acronym.slice(0, 3).toUpperCase();
+  const [g0, g1] = gradientFor(conf.acronym);
 
   return (
-    <div
+    <article
       onClick={onClick}
       onMouseEnter={onHover}
       onMouseLeave={onLeave}
       className="cursor-pointer overflow-hidden"
       style={{
         backgroundColor: '#FAF8F3',
-        border: hovered ? '1px solid #1B3828' : '1px solid #DDD4C0',
-        borderRadius: '16px',
-        transform: hovered ? 'translateY(-2px)' : 'translateY(0)',
-        boxShadow: hovered ? '0 8px 32px rgba(27,56,40,0.10)' : 'none',
-        transition: 'all 200ms ease',
+        border: hovered ? '1px solid rgba(27,56,40,0.55)' : '1px solid #DDD4C0',
+        borderRadius: '20px',
+        transform: hovered ? 'translateY(-4px)' : 'translateY(0)',
+        boxShadow: hovered
+          ? '0 20px 48px rgba(27,56,40,0.16), 0 2px 8px rgba(27,56,40,0.08)'
+          : '0 1px 3px rgba(27,56,40,0.05)',
+        transition: 'transform 260ms cubic-bezier(0.22,1,0.36,1), box-shadow 260ms ease, border-color 260ms ease',
       }}
     >
-      {/* Top accent strip */}
-      <div style={{ height: '6px', background: 'linear-gradient(to right, #1B3828, #3D7A52)' }} />
-
-      <div style={{ padding: '20px' }}>
-        {/* Row 1: logo + acronym */}
-        <div className="flex items-center justify-between mb-3">
-          {conf.logo_url ? (
+      {/* Banner band */}
+      <div className="relative" style={{ height: '104px', overflow: 'hidden' }}>
+        {conf.banner_url ? (
+          <>
             <img
-              src={conf.logo_url}
-              alt={conf.acronym}
-              style={{ width: '40px', height: '40px', borderRadius: '8px', objectFit: 'cover', border: '1px solid #DDD4C0' }}
-            />
-          ) : (
-            <div
+              src={conf.banner_url}
+              alt=""
               style={{
-                width: '40px', height: '40px', borderRadius: '8px',
-                backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover',
+                transform: hovered ? 'scale(1.05)' : 'scale(1)',
+                transition: 'transform 700ms cubic-bezier(0.22,1,0.36,1)',
+              }}
+            />
+            <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(20,36,27,0.55) 0%, rgba(20,36,27,0.08) 55%)' }} />
+          </>
+        ) : (
+          <>
+            <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(120deg, ${g0} 0%, ${g1} 100%)` }} />
+            <div style={{ position: 'absolute', inset: 0, backgroundImage: GRAIN, backgroundSize: '300px', mixBlendMode: 'overlay', opacity: 0.1 }} />
+            <span
+              aria-hidden
+              style={{
+                position: 'absolute', right: '14px', bottom: '-6px',
+                fontFamily: "'DM Mono', monospace", fontSize: '52px', lineHeight: 1,
+                color: 'rgba(238,217,138,0.13)', letterSpacing: '0.02em', userSelect: 'none',
               }}
             >
-              <span style={{ fontSize: '10px', fontFamily: "'DM Mono', monospace", color: '#1C1410', fontWeight: 700 }}>
-                {initials}
-              </span>
-            </div>
-          )}
-          <span style={{ fontSize: '11px', fontFamily: "'DM Mono', monospace", color: '#9A8A78' }}>
-            {conf.acronym}
-          </span>
-        </div>
+              {conf.acronym.slice(0, 6)}
+            </span>
+          </>
+        )}
+        {/* Format chip */}
+        <span
+          className="absolute top-3 right-3"
+          style={{
+            fontFamily: "'DM Mono', monospace", fontSize: '9px', letterSpacing: '0.12em',
+            color: '#FAF8F3', backgroundColor: 'rgba(20,36,27,0.45)',
+            backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
+            border: '1px solid rgba(250,248,243,0.18)',
+            padding: '3px 10px', borderRadius: '9999px',
+          }}
+        >
+          {conf.format.toUpperCase().replace('-', ' ')}
+        </span>
+      </div>
 
-        {/* Row 2: full name */}
-        <p
-          className="text-sm font-semibold leading-tight mb-2"
+      {/* Logo chip overlapping the band */}
+      <div className="px-5" style={{ marginTop: '-24px', position: 'relative' }}>
+        {conf.logo_url ? (
+          <img
+            src={conf.logo_url}
+            alt={conf.acronym}
+            style={{
+              width: '48px', height: '48px', borderRadius: '13px', objectFit: 'cover',
+              border: '3px solid #FAF8F3', boxShadow: '0 4px 12px rgba(27,56,40,0.15)',
+              backgroundColor: '#EDE7D8', display: 'block',
+            }}
+          />
+        ) : (
+          <div
+            style={{
+              width: '48px', height: '48px', borderRadius: '13px',
+              backgroundColor: '#EDE7D8', border: '3px solid #FAF8F3',
+              boxShadow: '0 4px 12px rgba(27,56,40,0.15)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            <span style={{ fontSize: '11px', fontFamily: "'DM Mono', monospace", color: '#1B3828', fontWeight: 700 }}>
+              {initials}
+            </span>
+          </div>
+        )}
+      </div>
+
+      <div className="px-5 pt-3 pb-5">
+        {/* Acronym eyebrow */}
+        <p style={{ fontFamily: "'DM Mono', monospace", fontSize: '10px', letterSpacing: '0.16em', color: '#B6871F', margin: '0 0 3px 0' }}>
+          {conf.acronym}
+        </p>
+
+        {/* Full name */}
+        <h3
+          className="text-[15px] font-bold leading-snug mb-2.5"
           style={{
             color: '#1C1410', fontFamily: "'Outfit', sans-serif",
             display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+            minHeight: '2.6em',
           }}
         >
           {conf.full_name}
-        </p>
+        </h3>
 
-        {/* Row 3: city + flag + country */}
+        {/* Location + dates */}
         <div className="flex items-center gap-1.5 mb-1">
           {flagUrl && (
             <img
               src={flagUrl}
               alt={conf.country}
-              style={{ width: '18px', height: '13px', borderRadius: '3px', objectFit: 'cover', flexShrink: 0 }}
+              style={{ width: '18px', height: '13px', borderRadius: '3px', objectFit: 'cover', flexShrink: 0, boxShadow: '0 1px 2px rgba(27,56,40,0.2)' }}
             />
           )}
-          <span className="text-xs" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+          <span className="text-xs" style={{ color: '#6B5F52', fontFamily: "'Outfit', sans-serif", fontWeight: 500 }}>
             {conf.city}, {conf.country}
           </span>
         </div>
-
-        {/* Row 4: dates */}
-        <p className="text-xs mb-3" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}>
-          {formatDateRange(conf.start_date, conf.end_date)}
-        </p>
-
-        {/* Row 5: pills */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <span
-            className="text-[10px] px-2 py-0.5 rounded-full"
-            style={{ backgroundColor: 'rgba(27,56,40,0.07)', color: '#1C1410', fontFamily: "'DM Mono', monospace" }}
-          >
-            {conf.expected_delegates} delegates
+        <div className="flex items-center gap-1.5 mb-4">
+          <CalendarDays size={12} style={{ color: '#9A8A78', flexShrink: 0 }} />
+          <span className="text-[11px]" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}>
+            {formatDateRange(conf.start_date, conf.end_date)}
           </span>
-          {conf.fee_amount === 0 ? (
-            <span
-              className="text-[10px] px-2 py-0.5 rounded-full font-bold"
-              style={{ backgroundColor: 'rgba(61,122,82,0.12)', color: '#1B3828', fontFamily: "'DM Mono', monospace" }}
-            >
-              FREE
-            </span>
-          ) : (
-            <span
-              className="text-[10px] px-2 py-0.5 rounded-full"
-              style={{ backgroundColor: 'rgba(27,56,40,0.07)', color: '#1C1410', fontFamily: "'DM Mono', monospace" }}
-            >
-              {conf.fee_currency} {conf.fee_amount.toFixed(0)}
-            </span>
-          )}
         </div>
 
-        {/* Bottom: Apply link */}
-        <div className="mt-3 pt-3 flex justify-end" style={{ borderTop: '1px solid #DDD4C0' }}>
-          <span className="text-xs font-bold tracking-widest" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.07em' }}>
-            APPLY NOW →
+        {/* Foot row */}
+        <div
+          className="flex items-center justify-between pt-3.5"
+          style={{ borderTop: '1px solid rgba(221,212,192,0.55)' }}
+        >
+          <div className="flex items-center gap-2">
+            <span
+              className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-full"
+              style={{ backgroundColor: 'rgba(27,56,40,0.06)', color: '#4A4238', fontFamily: "'DM Mono', monospace" }}
+            >
+              <Users size={10} style={{ color: '#9A8A78' }} />
+              {conf.expected_delegates.toLocaleString()}
+            </span>
+            {conf.fee_amount === 0 ? (
+              <span
+                className="text-[10px] px-2 py-1 rounded-full font-bold"
+                style={{ backgroundColor: 'rgba(61,122,82,0.14)', color: '#2A5A3C', fontFamily: "'DM Mono', monospace", letterSpacing: '0.06em' }}
+              >
+                FREE
+              </span>
+            ) : (
+              <span
+                className="text-[10px] px-2 py-1 rounded-full"
+                style={{ backgroundColor: 'rgba(182,135,31,0.1)', color: '#8A6614', fontFamily: "'DM Mono', monospace" }}
+              >
+                {conf.fee_currency} {conf.fee_amount.toFixed(0)}
+              </span>
+            )}
+          </div>
+          <span
+            className="flex items-center gap-1 text-[11px] font-bold"
+            style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em' }}
+          >
+            VIEW
+            <ArrowRight
+              size={13}
+              style={{ transform: hovered ? 'translateX(3px)' : 'translateX(0)', transition: 'transform 220ms cubic-bezier(0.22,1,0.36,1)' }}
+            />
           </span>
         </div>
       </div>
-    </div>
+    </article>
   );
 }
 
@@ -244,7 +326,7 @@ export default function ConferencesExploreClient() {
       setLoading(true);
       const { data } = await supabase
         .from('conferences')
-        .select('id, slug, full_name, acronym, country, city, start_date, end_date, expected_delegates, fee_amount, fee_currency, format, student_level, logo_url, is_public')
+        .select('id, slug, full_name, acronym, country, city, start_date, end_date, expected_delegates, fee_amount, fee_currency, format, student_level, logo_url, banner_url, is_public')
         .eq('is_public', true)
         .order('start_date', { ascending: true });
       setConferences((data as Conference[]) ?? []);
@@ -288,7 +370,7 @@ export default function ConferencesExploreClient() {
       <div
         className="pointer-events-none fixed inset-0 z-0"
         style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`,
+          backgroundImage: GRAIN,
           backgroundRepeat: 'repeat',
           backgroundSize: '300px 300px',
           mixBlendMode: 'multiply',
@@ -296,196 +378,257 @@ export default function ConferencesExploreClient() {
         }}
       />
 
-      <div className="relative z-10 flex flex-col min-h-screen">
-        {/* Back link */}
-        <div style={{ backgroundColor: '#1B3828' }}>
-          <div className="px-6 py-2">
-            <Link
-              href="/conferences"
-              className="text-xs transition-colors"
-              style={{ color: 'rgba(238,217,138,0.6)', fontFamily: "'DM Mono', monospace", textDecoration: 'none' }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#EED98A'; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'rgba(238,217,138,0.6)'; }}
-            >
-              ← Back to Conferences
-            </Link>
-          </div>
-        </div>
+      {/* Soft ambient washes behind the header */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute z-0"
+        style={{
+          top: '-140px', left: '8%', width: '620px', height: '420px',
+          background: 'radial-gradient(ellipse at center, rgba(238,217,138,0.22) 0%, transparent 65%)',
+          filter: 'blur(48px)',
+        }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute z-0"
+        style={{
+          top: '-80px', right: '4%', width: '520px', height: '380px',
+          background: 'radial-gradient(ellipse at center, rgba(42,90,60,0.13) 0%, transparent 65%)',
+          filter: 'blur(48px)',
+        }}
+      />
 
+      <div className="relative z-10 flex flex-col min-h-screen">
         <SiteNav />
 
-        {/* Hero bar */}
-        <div
-          className="px-6 md:px-14 py-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4"
-          style={{ backgroundColor: '#1B3828' }}
-        >
-          <div>
-            <p className="text-[10px] tracking-[0.2em] mb-1" style={{ color: '#EED98A', fontFamily: "'DM Mono', monospace" }}>
-              CONFERENCES
-            </p>
-            <h1 className="font-black text-3xl md:text-4xl text-white" style={{ fontFamily: "'Outfit', sans-serif" }}>
-              Explore Conferences
-            </h1>
-          </div>
-          <button
-            onClick={() => router.push('/conferences/new')}
-            className="self-start md:self-auto rounded-xl py-2.5 px-6 font-bold text-sm tracking-widest transition-colors focus:outline-none"
-            style={{ backgroundColor: '#EED98A', color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.07em' }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'white'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#EED98A'; }}
+        {/* ── Editorial header ─────────────────────────────────────── */}
+        <header className="px-6 md:px-14 pt-8 pb-8">
+          <Link
+            href="/conferences"
+            className="inline-flex items-center gap-1.5 text-[11px] mb-6 transition-colors"
+            style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace", textDecoration: 'none', letterSpacing: '0.06em' }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
           >
-            ORGANISE A CONFERENCE →
-          </button>
-        </div>
+            <ArrowLeft size={12} />
+            BACK TO CONFERENCES
+          </Link>
 
-        {/* Filter bar — sticky */}
-        <div
-          className="sticky z-10 px-6 md:px-14 py-3 flex flex-wrap items-center gap-3"
-          style={{ top: '72px', backgroundColor: '#FAF8F3', borderBottom: '1px solid #DDD4C0' }}
-        >
-          {/* Search + active continent tag */}
-          <div className="flex items-center gap-2 flex-1 md:flex-none" style={{ minWidth: 0 }}>
-            <div className="relative">
-              <Search
-                size={16}
-                className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
-                style={{ color: '#9A8A78' }}
-              />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search conferences..."
-                className="w-full md:w-[280px] rounded-xl py-2.5 pl-10 pr-4 text-sm focus:outline-none transition-colors"
+          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6">
+            <div>
+              <p
+                className="mb-2"
+                style={{ fontFamily: "'DM Mono', monospace", fontSize: '10px', letterSpacing: '0.28em', color: '#B6871F' }}
+              >
+                CONFERENCE DIRECTORY
+              </p>
+              <h1
                 style={{
-                  border: '1px solid #DDD4C0',
-                  backgroundColor: '#FAF8F3',
-                  color: '#1C1410',
-                  fontFamily: "'Outfit', sans-serif",
-                }}
-                onFocus={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
-                onBlur={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
-              />
-            </div>
-            {continentFilter && (
-              <span
-                className="flex items-center gap-1.5 flex-shrink-0"
-                style={{
-                  backgroundColor: 'rgba(27,56,40,0.08)',
-                  border: '1px solid rgba(27,56,40,0.2)',
-                  borderRadius: 9999,
-                  padding: '3px 10px',
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: '#1B3828',
-                  fontFamily: "'Outfit', sans-serif",
+                  fontFamily: "'Outfit', sans-serif", fontWeight: 900,
+                  fontSize: 'clamp(36px, 4.5vw, 60px)', lineHeight: 1.02, color: '#1C1410', margin: 0,
                 }}
               >
-                {CONTINENT_LABELS[continentFilter]}
-                <button
-                  className="focus:outline-none"
-                  onClick={() => setContinentFilter('')}
-                  style={{ lineHeight: 1, color: '#1B3828', opacity: 0.6 }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = '0.6'; }}
-                >
-                  ×
-                </button>
-              </span>
-            )}
-          </div>
-
-          {/* Continent quick-filter pills */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {CONTINENT_KEYS.map(key => (
-              <FilterPill
-                key={key}
-                label={CONTINENT_LABELS[key].toUpperCase()}
-                active={continentFilter === key}
-                onClick={() => setContinentFilter(f => f === key ? '' : key)}
-              />
-            ))}
-          </div>
-
-          <div className="ml-auto flex-shrink-0">
+                Explore{' '}
+                <span style={{ color: '#1B3828' }}>Conferences</span>
+                <span style={{ color: '#B6871F' }}>.</span>
+              </h1>
+              <p
+                className="mt-3"
+                style={{ fontFamily: "'Outfit', sans-serif", fontSize: '14px', color: '#8A7D6C', maxWidth: '440px', lineHeight: 1.6 }}
+              >
+                {loading
+                  ? 'Loading the directory…'
+                  : `${conferences.length} conference${conferences.length === 1 ? '' : 's'} across every continent — find where you debate next.`}
+              </p>
+            </div>
             <button
-              onClick={() => setFiltersOpen(v => !v)}
-              className="flex items-center gap-2 rounded-xl py-2.5 px-4 font-semibold text-sm transition-colors focus:outline-none"
+              onClick={() => router.push('/conferences/new')}
+              className="self-start md:self-auto flex-shrink-0 rounded-2xl py-3.5 px-7 font-bold text-[13px] transition-all focus:outline-none"
               style={{
-                backgroundColor: filtersOpen ? '#1B3828' : 'transparent',
-                color: filtersOpen ? '#EED98A' : '#1C1410',
-                border: filtersOpen ? '1px solid #1B3828' : '1px solid #DDD4C0',
-                fontFamily: "'Outfit', sans-serif",
+                backgroundColor: '#1B3828', color: '#EED98A',
+                fontFamily: "'Outfit', sans-serif", letterSpacing: '0.07em',
+                boxShadow: '0 8px 24px rgba(27,56,40,0.22)',
               }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; }}
             >
-              <SlidersHorizontal size={15} />
-              FILTERS
-              {hasActiveFilters && (
-                <span
-                  className="w-2 h-2 rounded-full flex-shrink-0"
-                  style={{ backgroundColor: filtersOpen ? '#EED98A' : '#1B3828' }}
-                />
-              )}
+              ORGANISE A CONFERENCE →
             </button>
           </div>
-        </div>
+        </header>
 
-        {/* Filter panel */}
-        {filtersOpen && (
+        {/* ── Floating glass filter bar ────────────────────────────── */}
+        <div className="sticky z-30 px-4 md:px-10" style={{ top: '12px' }}>
           <div
-            className="px-6 md:px-14 py-4 flex flex-wrap items-center gap-2"
-            style={{ backgroundColor: '#FAF8F3', borderBottom: '1px solid #DDD4C0' }}
+            style={{
+              backgroundColor: 'rgba(250,248,243,0.72)',
+              backdropFilter: 'blur(20px) saturate(1.5)',
+              WebkitBackdropFilter: 'blur(20px) saturate(1.5)',
+              border: '1px solid rgba(221,212,192,0.85)',
+              borderRadius: filtersOpen ? '24px' : '9999px',
+              boxShadow: '0 12px 40px rgba(27,56,40,0.12), 0 1px 0 rgba(255,255,255,0.6) inset',
+              transition: 'border-radius 260ms ease',
+            }}
           >
-            <span className="text-xs font-semibold mr-1" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Format:</span>
-            <FilterPill label="IN-PERSON"  active={formatFilter === 'in-person'}  onClick={() => setFormatFilter(f => f === 'in-person' ? '' : 'in-person')} />
-            <FilterPill label="ONLINE"     active={formatFilter === 'online'}     onClick={() => setFormatFilter(f => f === 'online' ? '' : 'online')} />
-            <FilterPill label="HYBRID"     active={formatFilter === 'hybrid'}     onClick={() => setFormatFilter(f => f === 'hybrid' ? '' : 'hybrid')} />
+            <div className="flex items-center gap-2 px-2 py-2 md:px-3 flex-wrap md:flex-nowrap">
+              {/* Search */}
+              <div className="relative flex items-center flex-1" style={{ minWidth: '180px' }}>
+                <Search size={15} className="absolute left-3 pointer-events-none" style={{ color: '#9A8A78' }} />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search name, city, country…"
+                  className="w-full py-2 pl-9 pr-3 text-sm focus:outline-none"
+                  style={{
+                    border: 'none',
+                    backgroundColor: 'transparent',
+                    color: '#1C1410',
+                    fontFamily: "'Outfit', sans-serif",
+                  }}
+                />
+              </div>
 
-            <div className="w-px h-5 mx-1" style={{ backgroundColor: '#DDD4C0' }} />
+              {/* Hairline divider */}
+              <div className="hidden md:block w-px h-6 flex-shrink-0" style={{ backgroundColor: 'rgba(221,212,192,0.9)' }} />
 
-            <span className="text-xs font-semibold mr-1" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Level:</span>
-            <FilterPill label="SCHOOL"     active={levelFilter === 'school'}     onClick={() => setLevelFilter(l => l === 'school' ? '' : 'school')} />
-            <FilterPill label="UNIVERSITY" active={levelFilter === 'university'} onClick={() => setLevelFilter(l => l === 'university' ? '' : 'university')} />
-            <FilterPill label="BOTH"       active={levelFilter === 'both'}       onClick={() => setLevelFilter(l => l === 'both' ? '' : 'both')} />
+              {/* Continent pills */}
+              <div className="hidden lg:flex items-center gap-1.5 flex-shrink-0">
+                {CONTINENT_KEYS.map(key => (
+                  <FilterPill
+                    key={key}
+                    label={CONTINENT_LABELS[key].toUpperCase()}
+                    active={continentFilter === key}
+                    onClick={() => setContinentFilter(f => f === key ? '' : key)}
+                  />
+                ))}
+              </div>
 
-            <div className="w-px h-5 mx-1" style={{ backgroundColor: '#DDD4C0' }} />
+              {/* Active continent chip (small screens, where the pill row is hidden) */}
+              {continentFilter && (
+                <span
+                  className="flex lg:hidden items-center gap-1.5 flex-shrink-0"
+                  style={{
+                    backgroundColor: 'rgba(27,56,40,0.08)',
+                    border: '1px solid rgba(27,56,40,0.2)',
+                    borderRadius: 9999,
+                    padding: '3px 10px',
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: '#1B3828',
+                    fontFamily: "'Outfit', sans-serif",
+                  }}
+                >
+                  {CONTINENT_LABELS[continentFilter]}
+                  <button
+                    className="focus:outline-none"
+                    onClick={() => setContinentFilter('')}
+                    style={{ lineHeight: 1, color: '#1B3828', opacity: 0.6 }}
+                  >
+                    ×
+                  </button>
+                </span>
+              )}
 
-            <FilterPill label="APPLICATIONS OPEN" active={applicationsOpen} onClick={() => setApplicationsOpen(v => !v)} />
-
-            <div className="w-px h-5 mx-1" style={{ backgroundColor: '#DDD4C0' }} />
-
-            <span className="text-xs font-semibold mr-1" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Continent:</span>
-            {CONTINENT_KEYS.map(key => (
-              <FilterPill
-                key={key}
-                label={CONTINENT_LABELS[key].toUpperCase()}
-                active={continentFilter === key}
-                onClick={() => setContinentFilter(f => f === key ? '' : key)}
-              />
-            ))}
-
-            {hasActiveFilters && (
+              {/* Filters toggle */}
               <button
-                onClick={clearFilters}
-                className="ml-auto text-xs underline focus:outline-none"
-                style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}
+                onClick={() => setFiltersOpen(v => !v)}
+                className="flex items-center gap-2 rounded-full py-2 px-4 font-bold text-[11px] transition-colors focus:outline-none flex-shrink-0 ml-auto"
+                style={{
+                  backgroundColor: filtersOpen ? '#1B3828' : 'rgba(237,231,216,0.5)',
+                  color: filtersOpen ? '#EED98A' : '#4A4238',
+                  border: filtersOpen ? '1px solid #1B3828' : '1px solid rgba(221,212,192,0.9)',
+                  fontFamily: "'Outfit', sans-serif",
+                  letterSpacing: '0.08em',
+                }}
               >
-                Clear all
+                <SlidersHorizontal size={13} />
+                FILTERS
+                {hasActiveFilters && (
+                  <span
+                    className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                    style={{ backgroundColor: filtersOpen ? '#EED98A' : '#B6871F' }}
+                  />
+                )}
               </button>
+            </div>
+
+            {/* Expanded filter panel — inside the glass container */}
+            {filtersOpen && (
+              <div
+                className="px-4 md:px-5 py-4 flex flex-wrap items-center gap-2"
+                style={{ borderTop: '1px solid rgba(221,212,192,0.7)' }}
+              >
+                <span className="text-[10px] font-bold mr-1" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace", letterSpacing: '0.14em' }}>FORMAT</span>
+                <FilterPill label="IN-PERSON"  active={formatFilter === 'in-person'}  onClick={() => setFormatFilter(f => f === 'in-person' ? '' : 'in-person')} />
+                <FilterPill label="ONLINE"     active={formatFilter === 'online'}     onClick={() => setFormatFilter(f => f === 'online' ? '' : 'online')} />
+                <FilterPill label="HYBRID"     active={formatFilter === 'hybrid'}     onClick={() => setFormatFilter(f => f === 'hybrid' ? '' : 'hybrid')} />
+
+                <div className="w-px h-5 mx-1" style={{ backgroundColor: 'rgba(221,212,192,0.9)' }} />
+
+                <span className="text-[10px] font-bold mr-1" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace", letterSpacing: '0.14em' }}>LEVEL</span>
+                <FilterPill label="SCHOOL"     active={levelFilter === 'school'}     onClick={() => setLevelFilter(l => l === 'school' ? '' : 'school')} />
+                <FilterPill label="UNIVERSITY" active={levelFilter === 'university'} onClick={() => setLevelFilter(l => l === 'university' ? '' : 'university')} />
+                <FilterPill label="BOTH"       active={levelFilter === 'both'}       onClick={() => setLevelFilter(l => l === 'both' ? '' : 'both')} />
+
+                <div className="w-px h-5 mx-1" style={{ backgroundColor: 'rgba(221,212,192,0.9)' }} />
+
+                <FilterPill label="APPLICATIONS OPEN" active={applicationsOpen} onClick={() => setApplicationsOpen(v => !v)} />
+
+                <div className="w-px h-5 mx-1" style={{ backgroundColor: 'rgba(221,212,192,0.9)' }} />
+
+                <span className="text-[10px] font-bold mr-1" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace", letterSpacing: '0.14em' }}>CONTINENT</span>
+                {CONTINENT_KEYS.map(key => (
+                  <FilterPill
+                    key={key}
+                    label={CONTINENT_LABELS[key].toUpperCase()}
+                    active={continentFilter === key}
+                    onClick={() => setContinentFilter(f => f === key ? '' : key)}
+                  />
+                ))}
+
+                {hasActiveFilters && (
+                  <button
+                    onClick={clearFilters}
+                    className="ml-auto text-[11px] underline focus:outline-none"
+                    style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}
+                  >
+                    Clear all
+                  </button>
+                )}
+              </div>
             )}
           </div>
-        )}
+        </div>
 
-        {/* Main content */}
-        <main className="flex-1 px-6 md:px-14 py-10">
+        {/* ── Main content ─────────────────────────────────────────── */}
+        <main className="flex-1 px-6 md:px-14 pt-10 pb-16">
+          {/* Results rule */}
+          {!loading && filtered.length > 0 && (
+            <div className="flex items-center gap-4 mb-6">
+              <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '10px', letterSpacing: '0.2em', color: '#9A8A78', whiteSpace: 'nowrap' }}>
+                SHOWING {filtered.length} {filtered.length === 1 ? 'CONFERENCE' : 'CONFERENCES'}
+              </span>
+              <div className="flex-1 h-px" style={{ backgroundColor: 'rgba(221,212,192,0.8)' }} />
+            </div>
+          )}
+
           {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {Array.from({ length: 6 }).map((_, i) => (
                 <div
                   key={i}
-                  className="rounded-2xl animate-pulse"
-                  style={{ height: '192px', backgroundColor: '#DDD4C0' }}
-                />
+                  className="rounded-[20px] overflow-hidden"
+                  style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}
+                >
+                  <div className="animate-pulse" style={{ height: '104px', backgroundColor: '#DDD4C0' }} />
+                  <div className="p-5">
+                    <div className="animate-pulse rounded-full mb-3" style={{ width: '56px', height: '10px', backgroundColor: '#E4DCCB' }} />
+                    <div className="animate-pulse rounded-lg mb-2" style={{ width: '80%', height: '16px', backgroundColor: '#E4DCCB' }} />
+                    <div className="animate-pulse rounded-lg mb-4" style={{ width: '55%', height: '12px', backgroundColor: '#EDE7D8' }} />
+                    <div className="animate-pulse rounded-full" style={{ width: '40%', height: '12px', backgroundColor: '#EDE7D8' }} />
+                  </div>
+                </div>
               ))}
             </div>
           ) : filtered.length === 0 ? (
@@ -508,7 +651,7 @@ export default function ConferencesExploreClient() {
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filtered.map(conf => (
                 <ConferenceCard
                   key={conf.id}
@@ -530,7 +673,7 @@ export default function ConferencesExploreClient() {
             backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='0.18'/%3E%3C/svg%3E")`,
             backgroundRepeat: 'repeat',
             backgroundSize: '300px 300px',
-            backgroundColor: '#F6F1E9',
+            backgroundColor: '#EDE7D8',
           }}
         >
           <div className="flex flex-col items-center gap-4 md:grid md:grid-cols-3 md:gap-0 md:items-center">

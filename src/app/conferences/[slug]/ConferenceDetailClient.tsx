@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Globe, MessageCircle, Music } from 'lucide-react';
+import { Globe, MessageCircle, Music, CalendarDays, MapPin, Users, GraduationCap, Monitor, Mail, FileText, Download } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -100,6 +100,13 @@ function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+const DIFFICULTY_STYLES: Record<string, { bg: string; color: string }> = {
+  beginner:     { bg: 'rgba(61,122,82,0.13)',   color: '#2A5A3C' },
+  intermediate: { bg: 'rgba(238,217,138,0.35)', color: '#8A6614' },
+  advanced:     { bg: 'rgba(184,132,74,0.16)',  color: '#B8844A' },
+  expert:       { bg: 'rgba(139,32,32,0.1)',    color: '#8B2020' },
+};
+
 // ── Sub-components ────────────────────────────────────────────────────────
 
 function ApplicationStatusBadge({ status }: { status: string }) {
@@ -117,6 +124,34 @@ function ApplicationStatusBadge({ status }: { status: string }) {
     >
       {status.toUpperCase()}
     </span>
+  );
+}
+
+function SectionCard({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div
+      className={`rounded-[20px] p-6 md:p-7 ${className}`}
+      style={{
+        backgroundColor: '#FAF8F3',
+        border: '1px solid #DDD4C0',
+        boxShadow: '0 1px 3px rgba(27,56,40,0.04)',
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function SectionHeading({ eyebrow, title }: { eyebrow: string; title: string }) {
+  return (
+    <div className="mb-4">
+      <p style={{ fontFamily: "'DM Mono', monospace", fontSize: '9px', letterSpacing: '0.24em', color: '#B6871F', margin: '0 0 4px 0' }}>
+        {eyebrow}
+      </p>
+      <h2 className="font-bold text-[17px]" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", margin: 0 }}>
+        {title}
+      </h2>
+    </div>
   );
 }
 
@@ -407,7 +442,7 @@ export default function ConferenceDetailClient() {
         {/* ── Hero ───────────────────────────────────────────────────── */}
         <div
           className="relative w-full overflow-hidden flex-shrink-0"
-          style={{ height: 'clamp(260px, 30vw, 340px)' }}
+          style={{ height: 'clamp(320px, 38vw, 440px)' }}
         >
           {conference.banner_url ? (
             <>
@@ -416,16 +451,23 @@ export default function ConferenceDetailClient() {
                 alt={conference.full_name}
                 style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
               />
+              {/* Layered scrim — deep at the base, airy on top */}
               <div
                 style={{
                   position: 'absolute', inset: 0,
-                  background: 'linear-gradient(to bottom, rgba(27,56,40,0.3) 0%, rgba(27,56,40,0.7) 100%)',
+                  background: 'linear-gradient(to top, rgba(16,28,21,0.88) 0%, rgba(20,36,27,0.45) 42%, rgba(20,36,27,0.18) 75%, rgba(20,36,27,0.3) 100%)',
+                }}
+              />
+              <div
+                style={{
+                  position: 'absolute', inset: 0,
+                  background: 'linear-gradient(100deg, rgba(16,28,21,0.55) 0%, transparent 55%)',
                 }}
               />
             </>
           ) : (
             <>
-              <div style={{ position: 'absolute', inset: 0, backgroundColor: '#1B3828' }} />
+              <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, #16301F 0%, #1B3828 55%, #234A31 100%)' }} />
               <div
                 style={{
                   position: 'absolute', inset: 0,
@@ -433,9 +475,19 @@ export default function ConferenceDetailClient() {
                   backgroundRepeat: 'repeat',
                   backgroundSize: '300px 300px',
                   mixBlendMode: 'overlay',
-                  opacity: 0.07,
+                  opacity: 0.08,
                 }}
               />
+              <span
+                aria-hidden
+                style={{
+                  position: 'absolute', right: '4%', bottom: '-24px',
+                  fontFamily: "'DM Mono', monospace", fontSize: 'clamp(120px, 18vw, 240px)', lineHeight: 1,
+                  color: 'rgba(238,217,138,0.07)', userSelect: 'none', pointerEvents: 'none',
+                }}
+              >
+                {conference.acronym.slice(0, 5)}
+              </span>
             </>
           )}
 
@@ -445,11 +497,13 @@ export default function ConferenceDetailClient() {
               style={{
                 fontFamily: "'DM Mono', monospace",
                 fontSize: '10px',
+                letterSpacing: '0.12em',
                 color: 'white',
-                backgroundColor: 'rgba(0,0,0,0.35)',
-                backdropFilter: 'blur(4px)',
-                border: '1px solid rgba(255,255,255,0.15)',
-                padding: '4px 12px',
+                backgroundColor: 'rgba(16,28,21,0.4)',
+                backdropFilter: 'blur(10px)',
+                WebkitBackdropFilter: 'blur(10px)',
+                border: '1px solid rgba(255,255,255,0.18)',
+                padding: '5px 14px',
                 borderRadius: '9999px',
               }}
             >
@@ -458,84 +512,153 @@ export default function ConferenceDetailClient() {
           </div>
 
           {/* Bottom-left content */}
-          <div className="absolute bottom-0 left-0 px-8 md:px-14 pb-8 z-10">
-            {conference.logo_url && (
-              <img
-                src={conference.logo_url}
-                alt={conference.acronym}
-                style={{
-                  width: '64px', height: '64px', borderRadius: '12px', objectFit: 'cover',
-                  border: '2px solid rgba(255,255,255,0.2)', marginBottom: '12px', display: 'block',
-                }}
-              />
-            )}
-            <p style={{ fontFamily: "'DM Mono', monospace", fontSize: '10px', color: 'rgba(238,217,138,0.7)', letterSpacing: '0.18em', marginBottom: '4px' }}>
-              {conference.acronym}
-            </p>
-            <h1 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, color: 'white', fontSize: 'clamp(24px, 3.5vw, 48px)', lineHeight: 1.1, marginBottom: '8px' }}>
-              {conference.full_name}
-            </h1>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-              {!isOnline && flagUrl && (
+          <div className="absolute bottom-0 left-0 right-0 px-6 md:px-14 z-10" style={{ paddingBottom: '68px' }}>
+            <div className="flex items-end gap-5">
+              {conference.logo_url && (
                 <img
-                  src={flagUrl}
-                  alt={conference.country}
-                  style={{ width: '20px', height: '14px', borderRadius: '3px', objectFit: 'cover', flexShrink: 0 }}
+                  src={conference.logo_url}
+                  alt={conference.acronym}
+                  className="hidden sm:block flex-shrink-0"
+                  style={{
+                    width: '76px', height: '76px', borderRadius: '18px', objectFit: 'cover',
+                    border: '1px solid rgba(255,255,255,0.25)',
+                    boxShadow: '0 12px 32px rgba(0,0,0,0.35)',
+                    backgroundColor: '#EDE7D8',
+                  }}
                 />
               )}
-              <span style={{ fontSize: '14px', color: 'rgba(237,231,216,0.8)', fontFamily: "'Outfit', sans-serif" }}>
-                {isOnline ? 'Online' : `${conference.city}, ${conference.country}`}
-              </span>
+              <div className="min-w-0">
+                <p style={{ fontFamily: "'DM Mono', monospace", fontSize: '11px', color: '#EED98A', letterSpacing: '0.24em', marginBottom: '6px' }}>
+                  {conference.acronym}
+                </p>
+                <h1 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, color: 'white', fontSize: 'clamp(26px, 4vw, 54px)', lineHeight: 1.05, marginBottom: '10px', textShadow: '0 2px 24px rgba(0,0,0,0.3)' }}>
+                  {conference.full_name}
+                </h1>
+                <div className="flex items-center flex-wrap gap-x-4 gap-y-1.5">
+                  <span className="flex items-center gap-2">
+                    {!isOnline && flagUrl && (
+                      <img
+                        src={flagUrl}
+                        alt={conference.country}
+                        style={{ width: '20px', height: '14px', borderRadius: '3px', objectFit: 'cover', flexShrink: 0, boxShadow: '0 1px 3px rgba(0,0,0,0.4)' }}
+                      />
+                    )}
+                    <span style={{ fontSize: '14px', color: 'rgba(237,231,216,0.92)', fontFamily: "'Outfit', sans-serif", fontWeight: 500 }}>
+                      {isOnline ? 'Online' : `${conference.city}, ${conference.country}`}
+                    </span>
+                  </span>
+                  <span aria-hidden style={{ color: 'rgba(238,217,138,0.5)', fontSize: '10px' }}>◆</span>
+                  <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '12px', color: 'rgba(237,231,216,0.78)' }}>
+                    {formatDateRange(conference.start_date, conference.end_date)}
+                  </span>
+                </div>
+              </div>
             </div>
-            <p style={{ fontFamily: "'DM Mono', monospace", fontSize: '11px', color: 'rgba(237,231,216,0.6)' }}>
-              {formatDateRange(conference.start_date, conference.end_date)}
-            </p>
+          </div>
+        </div>
+
+        {/* ── Glass stat strip — overlaps the hero ───────────────────── */}
+        <div className="relative z-20 px-6 md:px-14" style={{ marginTop: '-44px' }}>
+          <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+            <div
+              className="grid grid-cols-2 md:grid-cols-5"
+              style={{
+                backgroundColor: 'rgba(250,248,243,0.78)',
+                backdropFilter: 'blur(20px) saturate(1.5)',
+                WebkitBackdropFilter: 'blur(20px) saturate(1.5)',
+                border: '1px solid rgba(221,212,192,0.9)',
+                borderRadius: '20px',
+                boxShadow: '0 20px 48px rgba(16,28,21,0.18), 0 1px 0 rgba(255,255,255,0.65) inset',
+                overflow: 'hidden',
+              }}
+            >
+              {[
+                { icon: CalendarDays, label: 'DATES', value: formatDateRange(conference.start_date, conference.end_date) },
+                { icon: MapPin, label: 'LOCATION', value: isOnline ? 'Online' : `${conference.city}, ${conference.country}` },
+                { icon: Monitor, label: 'FORMAT', value: capitalize(conference.format.replace('-', ' ')) },
+                { icon: GraduationCap, label: 'LEVEL', value: capitalize(conference.student_level) },
+                { icon: Users, label: 'DELEGATES', value: conference.expected_delegates.toLocaleString() },
+              ].map((cell, i) => {
+                const Icon = cell.icon;
+                return (
+                  <div
+                    key={cell.label}
+                    className="px-5 py-4"
+                    style={{
+                      borderLeft: i > 0 ? '1px solid rgba(221,212,192,0.6)' : 'none',
+                    }}
+                  >
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <Icon size={11} style={{ color: '#B6871F', flexShrink: 0 }} />
+                      <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '9px', letterSpacing: '0.18em', color: '#9A8A78' }}>
+                        {cell.label}
+                      </span>
+                    </div>
+                    <p className="text-[13px] font-semibold truncate" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", margin: 0 }}>
+                      {cell.value}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
 
         {/* ── Main content ───────────────────────────────────────────── */}
-        <div style={{ maxWidth: '1200px', margin: '0 auto', width: '100%' }} className="px-6 md:px-14 py-10 flex-1">
+        <div style={{ maxWidth: '1200px', margin: '0 auto', width: '100%' }} className="px-6 md:px-14 pt-10 pb-14 flex-1">
           <div className="flex flex-col md:flex-row gap-8">
 
             {/* Left column */}
             <div className="flex-1 min-w-0">
 
-              {/* Tab bar */}
-              <div className="flex gap-2 mb-6">
-                {(['overview', 'documents'] as const).map(tab => (
-                  <button
-                    key={tab}
-                    onClick={() => setActiveTab(tab)}
-                    className="px-4 py-1.5 rounded-full text-sm font-semibold focus:outline-none"
-                    style={
-                      activeTab === tab
-                        ? { backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif" }
-                        : { backgroundColor: 'transparent', color: '#9A8A78', border: '1px solid #DDD4C0', fontFamily: "'Outfit', sans-serif" }
-                    }
-                  >
-                    {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                  </button>
-                ))}
+              {/* Floating glass tab pill */}
+              <div className="sticky z-30 mb-7" style={{ top: '12px' }}>
+                <div
+                  className="inline-flex items-center gap-1 p-1"
+                  style={{
+                    backgroundColor: 'rgba(250,248,243,0.72)',
+                    backdropFilter: 'blur(18px) saturate(1.5)',
+                    WebkitBackdropFilter: 'blur(18px) saturate(1.5)',
+                    border: '1px solid rgba(221,212,192,0.85)',
+                    borderRadius: '9999px',
+                    boxShadow: '0 8px 28px rgba(27,56,40,0.1)',
+                  }}
+                >
+                  {(['overview', 'documents'] as const).map(tab => (
+                    <button
+                      key={tab}
+                      onClick={() => setActiveTab(tab)}
+                      className="px-5 py-2 rounded-full text-[12px] font-bold transition-all focus:outline-none"
+                      style={
+                        activeTab === tab
+                          ? { backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', boxShadow: '0 2px 8px rgba(27,56,40,0.3)' }
+                          : { backgroundColor: 'transparent', color: '#8A7D6C', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em' }
+                      }
+                    >
+                      {tab.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* About */}
               {activeTab === 'overview' && conference.description && (
-                <div className="rounded-2xl p-6 mb-6" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
-                  <h2 className="font-semibold text-base mb-3" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>About</h2>
-                  <p className="text-sm leading-relaxed" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", whiteSpace: 'pre-wrap' }}>
+                <SectionCard className="mb-6">
+                  <SectionHeading eyebrow="ABOUT" title={`About ${conference.acronym}`} />
+                  <p className="text-sm" style={{ color: '#4A4238', fontFamily: "'Outfit', sans-serif", whiteSpace: 'pre-wrap', lineHeight: 1.85 }}>
                     {conference.description}
                   </p>
-                </div>
+                </SectionCard>
               )}
 
               {/* Committees */}
               {activeTab === 'overview' && (
-                <div className="rounded-2xl p-6 mb-6" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
-                  <div className="flex justify-between items-center mb-4">
-                    <h2 className="font-semibold text-base" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Committees</h2>
+                <SectionCard className="mb-6">
+                  <div className="flex justify-between items-start mb-5">
+                    <SectionHeading eyebrow="DEBATE" title="Committees" />
                     <span
-                      className="px-2 py-0.5 rounded-full"
-                      style={{ fontSize: '10px', fontFamily: "'DM Mono', monospace", backgroundColor: 'rgba(27,56,40,0.08)', color: '#1B3828' }}
+                      className="px-2.5 py-1 rounded-full mt-1"
+                      style={{ fontSize: '10px', fontFamily: "'DM Mono', monospace", backgroundColor: 'rgba(27,56,40,0.07)', color: '#1B3828' }}
                     >
                       {committees.length}
                     </span>
@@ -545,78 +668,124 @@ export default function ConferenceDetailClient() {
                       Committees will be announced soon.
                     </p>
                   ) : (
-                    <div style={{ borderTop: '1px solid #F0EDE6' }}>
+                    <div className="flex flex-col gap-2.5">
                       {committees.map(c => {
                         const diff = c.difficulty?.toLowerCase() ?? '';
-                        const diffStyle =
-                          diff === 'beginner'
-                            ? { backgroundColor: 'rgba(61,122,82,0.12)', color: '#1B3828' }
-                            : diff === 'intermediate'
-                            ? { backgroundColor: 'rgba(238,217,138,0.2)', color: '#B8844A' }
-                            : { backgroundColor: 'rgba(139,32,32,0.1)', color: '#8B2020' };
+                        const diffStyle = DIFFICULTY_STYLES[diff] ?? DIFFICULTY_STYLES.intermediate;
+                        const isCrisis = c.committee_type === 'crisis';
+                        const monogram = (c.abbreviation || c.name).replace(/[^A-Za-z0-9]/g, '').slice(0, 4).toUpperCase();
 
                         return (
-                          <div key={c.id} className="py-3 flex items-start gap-4" style={{ borderBottom: '1px solid #F0EDE6' }}>
-                            {c.difficulty && (
-                              <span
-                                className="flex-shrink-0 px-2 py-0.5 rounded-full mt-0.5"
-                                style={{ ...diffStyle, fontSize: '9px', fontFamily: "'DM Mono', monospace", letterSpacing: '0.05em' }}
-                              >
-                                {c.difficulty.toUpperCase()}
+                          <div
+                            key={c.id}
+                            className="flex items-start gap-4 rounded-2xl px-4 py-3.5 transition-colors"
+                            style={{ border: '1px solid rgba(221,212,192,0.7)', backgroundColor: 'rgba(237,231,216,0.25)' }}
+                          >
+                            {/* Monogram badge */}
+                            <div
+                              className="flex-shrink-0 flex items-center justify-center"
+                              style={{
+                                width: '46px', height: '46px', borderRadius: '13px',
+                                backgroundColor: isCrisis ? '#1B3828' : '#EDE7D8',
+                                border: isCrisis ? '1px solid #1B3828' : '1px solid #DDD4C0',
+                              }}
+                            >
+                              <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '10px', fontWeight: 700, color: isCrisis ? '#EED98A' : '#1B3828', letterSpacing: '0.02em' }}>
+                                {monogram}
                               </span>
-                            )}
+                            </div>
+
                             <div className="flex-1 min-w-0">
-                              <p className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>{c.name}</p>
-                              {c.abbreviation && (
-                                <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}>{c.abbreviation}</p>
-                              )}
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <p className="font-bold text-sm" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", margin: 0 }}>{c.name}</p>
+                                {isCrisis && (
+                                  <span
+                                    className="px-2 py-0.5 rounded-full"
+                                    style={{ fontSize: '8px', fontFamily: "'DM Mono', monospace", letterSpacing: '0.14em', backgroundColor: 'rgba(182,135,31,0.14)', color: '#8A6614', fontWeight: 700 }}
+                                  >
+                                    CRISIS
+                                  </span>
+                                )}
+                              </div>
                               {c.topics && c.topics.length > 0 && (
-                                <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                                  {c.topics.join(' · ')}
-                                </p>
+                                <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+                                  {c.topics.map(topic => (
+                                    <span
+                                      key={topic}
+                                      className="px-2 py-0.5 rounded-full text-[10px]"
+                                      style={{ backgroundColor: 'rgba(250,248,243,0.9)', border: '1px solid rgba(221,212,192,0.8)', color: '#6B5F52', fontFamily: "'Outfit', sans-serif" }}
+                                    >
+                                      {topic}
+                                    </span>
+                                  ))}
+                                </div>
                               )}
                             </div>
-                            {c.total_slots != null && (
-                              <span className="flex-shrink-0 text-xs" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}>
-                                {c.total_slots} slots
-                              </span>
-                            )}
+
+                            <div className="flex-shrink-0 flex flex-col items-end gap-1.5">
+                              {c.difficulty && (
+                                <span
+                                  className="px-2 py-0.5 rounded-full"
+                                  style={{ ...diffStyle, fontSize: '9px', fontFamily: "'DM Mono', monospace", letterSpacing: '0.08em', fontWeight: 700 }}
+                                >
+                                  {c.difficulty.toUpperCase()}
+                                </span>
+                              )}
+                              {c.total_slots != null && (
+                                <span className="text-[10px]" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}>
+                                  {c.total_slots} slots
+                                </span>
+                              )}
+                            </div>
                           </div>
                         );
                       })}
                     </div>
                   )}
-                </div>
+                </SectionCard>
               )}
 
               {/* Organiser */}
               {activeTab === 'overview' && (
-                <div className="rounded-2xl p-6 mb-6" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
-                  <h2 className="font-semibold text-base mb-3" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Organised by</h2>
-                  <p className="font-medium text-sm" style={{ color: '#1C1410', fontFamily: "'DM Mono', monospace" }}>{conference.acronym}</p>
-                  {conference.contact_email && (
-                    <a
-                      href={`mailto:${conference.contact_email}`}
-                      className="block text-xs mt-1 transition-all"
-                      style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", textDecoration: 'none' }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.textDecoration = 'underline'; }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.textDecoration = 'none'; }}
-                    >
-                      {conference.contact_email}
-                    </a>
-                  )}
+                <SectionCard className="mb-6">
+                  <SectionHeading eyebrow="SECRETARIAT" title="Organised by" />
+                  <div className="flex items-center gap-4">
+                    {conference.logo_url && (
+                      <img
+                        src={conference.logo_url}
+                        alt={conference.acronym}
+                        style={{ width: '44px', height: '44px', borderRadius: '12px', objectFit: 'cover', border: '1px solid #DDD4C0', flexShrink: 0 }}
+                      />
+                    )}
+                    <div className="min-w-0">
+                      <p className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: "'DM Mono', monospace", margin: 0 }}>{conference.acronym}</p>
+                      {conference.contact_email && (
+                        <a
+                          href={`mailto:${conference.contact_email}`}
+                          className="flex items-center gap-1.5 text-xs mt-1 transition-all"
+                          style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", textDecoration: 'none' }}
+                          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
+                          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
+                        >
+                          <Mail size={12} />
+                          {conference.contact_email}
+                        </a>
+                      )}
+                    </div>
+                  </div>
                   {(conference.instagram_url || conference.facebook_url || conference.tiktok_url || conference.whatsapp_url || conference.website_url) && (
-                    <div className="flex gap-3 mt-3">
+                    <div className="flex gap-2 mt-4 pt-4" style={{ borderTop: '1px solid rgba(221,212,192,0.6)' }}>
                       {conference.instagram_url && (
                         <a
                           href={conference.instagram_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          style={{ color: '#9A8A78', transition: 'color 0.15s' }}
-                          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
-                          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
+                          className="flex items-center justify-center rounded-full transition-colors"
+                          style={{ width: '34px', height: '34px', border: '1px solid #DDD4C0', color: '#9A8A78' }}
+                          onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#EED98A'; el.style.backgroundColor = '#1B3828'; el.style.borderColor = '#1B3828'; }}
+                          onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#9A8A78'; el.style.backgroundColor = 'transparent'; el.style.borderColor = '#DDD4C0'; }}
                         >
-                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
                             <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
                             <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/>
                             <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>
@@ -628,11 +797,12 @@ export default function ConferenceDetailClient() {
                           href={conference.facebook_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          style={{ color: '#9A8A78', transition: 'color 0.15s' }}
-                          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
-                          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
+                          className="flex items-center justify-center rounded-full transition-colors"
+                          style={{ width: '34px', height: '34px', border: '1px solid #DDD4C0', color: '#9A8A78' }}
+                          onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#EED98A'; el.style.backgroundColor = '#1B3828'; el.style.borderColor = '#1B3828'; }}
+                          onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#9A8A78'; el.style.backgroundColor = 'transparent'; el.style.borderColor = '#DDD4C0'; }}
                         >
-                          <Globe size={18} />
+                          <Globe size={15} />
                         </a>
                       )}
                       {conference.tiktok_url && (
@@ -640,11 +810,12 @@ export default function ConferenceDetailClient() {
                           href={conference.tiktok_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          style={{ color: '#9A8A78', transition: 'color 0.15s' }}
-                          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
-                          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
+                          className="flex items-center justify-center rounded-full transition-colors"
+                          style={{ width: '34px', height: '34px', border: '1px solid #DDD4C0', color: '#9A8A78' }}
+                          onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#EED98A'; el.style.backgroundColor = '#1B3828'; el.style.borderColor = '#1B3828'; }}
+                          onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#9A8A78'; el.style.backgroundColor = 'transparent'; el.style.borderColor = '#DDD4C0'; }}
                         >
-                          <Music size={18} />
+                          <Music size={15} />
                         </a>
                       )}
                       {conference.whatsapp_url && (
@@ -652,11 +823,12 @@ export default function ConferenceDetailClient() {
                           href={conference.whatsapp_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          style={{ color: '#9A8A78', transition: 'color 0.15s' }}
-                          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
-                          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
+                          className="flex items-center justify-center rounded-full transition-colors"
+                          style={{ width: '34px', height: '34px', border: '1px solid #DDD4C0', color: '#9A8A78' }}
+                          onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#EED98A'; el.style.backgroundColor = '#1B3828'; el.style.borderColor = '#1B3828'; }}
+                          onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#9A8A78'; el.style.backgroundColor = 'transparent'; el.style.borderColor = '#DDD4C0'; }}
                         >
-                          <MessageCircle size={18} />
+                          <MessageCircle size={15} />
                         </a>
                       )}
                       {conference.website_url && (
@@ -664,24 +836,25 @@ export default function ConferenceDetailClient() {
                           href={conference.website_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          style={{ color: '#9A8A78', transition: 'color 0.15s' }}
-                          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
-                          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
+                          className="flex items-center justify-center rounded-full transition-colors"
+                          style={{ width: '34px', height: '34px', border: '1px solid #DDD4C0', color: '#9A8A78' }}
+                          onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#EED98A'; el.style.backgroundColor = '#1B3828'; el.style.borderColor = '#1B3828'; }}
+                          onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#9A8A78'; el.style.backgroundColor = 'transparent'; el.style.borderColor = '#DDD4C0'; }}
                         >
-                          <Globe size={18} />
+                          <Globe size={15} />
                         </a>
                       )}
                     </div>
                   )}
-                </div>
+                </SectionCard>
               )}
 
               {/* Documents tab */}
               {activeTab === 'documents' && (
                 <div className="flex flex-col gap-6">
                   {/* Study Guides */}
-                  <div className="rounded-2xl p-6" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
-                    <h2 className="font-semibold text-base mb-4" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Study Guides</h2>
+                  <SectionCard>
+                    <SectionHeading eyebrow="PREPARATION" title="Study Guides" />
                     {studyGuidesLoading ? (
                       <div className="flex justify-center py-6">
                         <div className="w-5 h-5 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
@@ -695,30 +868,34 @@ export default function ConferenceDetailClient() {
                         No study guides have been published yet.
                       </p>
                     ) : (
-                      <div style={{ borderTop: '1px solid #F0EDE6' }}>
+                      <div className="flex flex-col gap-2">
                         {studyGuides.map(sg => (
                           <a
                             key={sg.id}
                             href={sg.file_url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="flex items-center gap-3 py-3"
-                            style={{ borderBottom: '1px solid #F0EDE6', textDecoration: 'none' }}
+                            className="flex items-center gap-3.5 rounded-2xl px-4 py-3 transition-colors"
+                            style={{ border: '1px solid rgba(221,212,192,0.7)', backgroundColor: 'rgba(237,231,216,0.25)', textDecoration: 'none' }}
+                            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
+                            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(237,231,216,0.25)'; }}
                           >
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-semibold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sg.title}</p>
-                              <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>{sg.file_name}</p>
+                            <div
+                              className="flex-shrink-0 flex items-center justify-center"
+                              style={{ width: '38px', height: '38px', borderRadius: '11px', backgroundColor: 'rgba(27,56,40,0.07)' }}
+                            >
+                              <FileText size={16} style={{ color: '#1B3828' }} />
                             </div>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#9A8A78', flexShrink: 0 }}>
-                              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                              <polyline points="7 10 12 15 17 10"/>
-                              <line x1="12" y1="15" x2="12" y2="3"/>
-                            </svg>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-semibold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', margin: 0 }}>{sg.title}</p>
+                              <p className="text-[11px] mt-0.5" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace", margin: 0 }}>{sg.file_name}</p>
+                            </div>
+                            <Download size={15} style={{ color: '#9A8A78', flexShrink: 0 }} />
                           </a>
                         ))}
                       </div>
                     )}
-                  </div>
+                  </SectionCard>
 
                   {/* Position Paper */}
                   {myAllocation && (() => {
@@ -737,11 +914,9 @@ export default function ConferenceDetailClient() {
                       return `${ppMonths[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
                     };
                     return (
-                      <div style={{ background: '#FAF8F3', border: '1px solid #DDD4C0', borderRadius: 16, padding: 24 }}>
-                        <h2 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 15, color: '#1C1410', marginBottom: 4 }}>
-                          Position Paper
-                        </h2>
-                        <p style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#9A8A78', marginBottom: 16 }}>
+                      <SectionCard>
+                        <SectionHeading eyebrow="SUBMISSION" title="Position Paper" />
+                        <p style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#9A8A78', marginTop: -8, marginBottom: 16 }}>
                           {myAllocation.conference_committees?.name} · {myAllocation.country_name}
                         </p>
 
@@ -760,15 +935,16 @@ export default function ConferenceDetailClient() {
                             {!ppFile ? (
                               <div
                                 onClick={() => ppFileInputRef.current?.click()}
-                                style={{ border: '2px dashed #DDD4C0', borderRadius: 12, padding: '24px 12px', textAlign: 'center', cursor: 'pointer', marginBottom: 12, transition: 'border-color 0.15s' }}
-                                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
-                                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
+                                style={{ border: '1.5px dashed rgba(154,138,120,0.6)', borderRadius: 14, padding: '28px 12px', textAlign: 'center', cursor: 'pointer', marginBottom: 12, transition: 'border-color 0.15s, background-color 0.15s', backgroundColor: 'rgba(237,231,216,0.25)' }}
+                                onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.borderColor = '#1B3828'; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
+                                onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.borderColor = 'rgba(154,138,120,0.6)'; el.style.backgroundColor = 'rgba(237,231,216,0.25)'; }}
                               >
-                                <p style={{ fontSize: 13, color: '#9A8A78', fontFamily: "'Outfit', sans-serif", marginBottom: 2 }}>Click to select PDF</p>
-                                <p style={{ fontSize: 11, color: '#C8BFB0', fontFamily: "'Outfit', sans-serif" }}>Max 5MB</p>
+                                <p style={{ fontSize: 13, color: '#4A4238', fontFamily: "'Outfit', sans-serif", marginBottom: 2, fontWeight: 600 }}>Click to select PDF</p>
+                                <p style={{ fontSize: 11, color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}>MAX 5MB</p>
                               </div>
                             ) : (
-                              <div style={{ border: '1px solid rgba(61,122,82,0.3)', borderRadius: 10, padding: '10px 14px', backgroundColor: 'rgba(61,122,82,0.04)', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                              <div style={{ border: '1px solid rgba(61,122,82,0.3)', borderRadius: 12, padding: '10px 14px', backgroundColor: 'rgba(61,122,82,0.05)', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                                <FileText size={15} style={{ color: '#2A5A3C', flexShrink: 0 }} />
                                 <div style={{ flex: 1, minWidth: 0 }}>
                                   <p style={{ fontSize: 13, color: '#1C1410', fontFamily: "'Outfit', sans-serif", fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ppFile.name}</p>
                                 </div>
@@ -794,7 +970,7 @@ export default function ConferenceDetailClient() {
                                 onClick={handlePPSubmit}
                                 disabled={!ppFile || ppUploading}
                                 className="focus:outline-none"
-                                style={{ flex: 1, border: 'none', borderRadius: 12, padding: '10px 0', fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 13, backgroundColor: !ppFile || ppUploading ? '#DDD4C0' : '#1B3828', color: !ppFile || ppUploading ? '#9A8A78' : '#EED98A', cursor: !ppFile || ppUploading ? 'default' : 'pointer' }}
+                                style={{ flex: 1, border: 'none', borderRadius: 12, padding: '10px 0', fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 13, letterSpacing: '0.06em', backgroundColor: !ppFile || ppUploading ? '#DDD4C0' : '#1B3828', color: !ppFile || ppUploading ? '#9A8A78' : '#EED98A', cursor: !ppFile || ppUploading ? 'default' : 'pointer' }}
                               >
                                 {ppUploading ? 'UPLOADING...' : 'SUBMIT POSITION PAPER'}
                               </button>
@@ -819,8 +995,8 @@ export default function ConferenceDetailClient() {
                               Submitted {fmtDate(myPositionPaper.submitted_at)}
                             </p>
                             {myPositionPaper.chair_feedback && (
-                              <div style={{ backgroundColor: 'rgba(27,56,40,0.04)', borderLeft: '3px solid #DDD4C0', padding: '8px 12px', borderRadius: '0 6px 6px 0', marginBottom: 12 }}>
-                                <p style={{ fontFamily: "'Outfit', sans-serif", fontSize: 12, color: '#1C1410', fontStyle: 'italic' }}>
+                              <div style={{ backgroundColor: 'rgba(27,56,40,0.04)', borderLeft: '3px solid #B6871F', padding: '10px 14px', borderRadius: '0 10px 10px 0', marginBottom: 12 }}>
+                                <p style={{ fontFamily: "'Outfit', sans-serif", fontSize: 12, color: '#1C1410', fontStyle: 'italic', lineHeight: 1.6 }}>
                                   {myPositionPaper.chair_feedback}
                                 </p>
                               </div>
@@ -828,7 +1004,7 @@ export default function ConferenceDetailClient() {
                             <button
                               onClick={() => setShowPPWarning(true)}
                               className="focus:outline-none"
-                              style={{ fontFamily: "'Outfit', sans-serif", fontSize: 11, color: '#9A8A78', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                              style={{ fontFamily: "'Outfit', sans-serif", fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', color: '#9A8A78', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
                               onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#1C1410'; }}
                               onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
                             >
@@ -836,7 +1012,7 @@ export default function ConferenceDetailClient() {
                             </button>
                           </>
                         )}
-                      </div>
+                      </SectionCard>
                     );
                   })()}
                 </div>
@@ -844,8 +1020,8 @@ export default function ConferenceDetailClient() {
 
               {/* Replace warning modal */}
               {showPPWarning && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center px-6" style={{ backgroundColor: 'rgba(28,20,16,0.5)' }}>
-                  <div className="rounded-2xl p-6 max-w-sm w-full" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
+                <div className="fixed inset-0 z-50 flex items-center justify-center px-6" style={{ backgroundColor: 'rgba(28,20,16,0.5)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}>
+                  <div className="rounded-[20px] p-6 max-w-sm w-full" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', boxShadow: '0 24px 64px rgba(16,28,21,0.35)' }}>
                     <h3 className="font-semibold text-base mb-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Replace Position Paper?</h3>
                     <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
                       Your current submission will be deleted and replaced. This action cannot be undone.
@@ -872,63 +1048,40 @@ export default function ConferenceDetailClient() {
 
             </div>
 
-            {/* Right column */}
-            <div className="w-full md:w-[340px] md:flex-shrink-0 flex flex-col gap-4">
-
-                {/* Key Info */}
-                <div className="rounded-2xl p-6" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
-                  <div>
-                    {[
-                      { label: 'Dates', value: formatDateRange(conference.start_date, conference.end_date) },
-                      {
-                        label: 'Location',
-                        value: isOnline ? 'Online' : `${conference.city}, ${conference.country}`,
-                      },
-                      { label: 'Format', value: capitalize(conference.format.replace('-', ' ')) },
-                      { label: 'Level', value: capitalize(conference.student_level) },
-                      { label: 'Expected Delegates', value: conference.expected_delegates.toLocaleString() },
-                    ].map((row, i) => (
-                      <div
-                        key={row.label}
-                        className="py-3 flex justify-between items-center text-sm"
-                        style={{
-                          borderTop: i === 0 ? 'none' : '1px solid #F0EDE6',
-                        }}
-                      >
-                        <span className="font-medium" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>{row.label}</span>
-                        <span className="font-semibold text-right ml-4" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>{row.value}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+            {/* Right column — sticky rail */}
+            <div className="w-full md:w-[340px] md:flex-shrink-0">
+              <div className="flex flex-col gap-4 md:sticky" style={{ top: '12px' }}>
 
                 {/* Fee */}
-                <div className="rounded-2xl p-6" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
+                <SectionCard>
                   {conference.fee_amount === 0 ? (
                     <>
-                      <p className="font-black text-2xl" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>FREE</p>
+                      <p className="mb-1" style={{ fontFamily: "'DM Mono', monospace", fontSize: '9px', letterSpacing: '0.24em', color: '#B6871F' }}>REGISTRATION FEE</p>
+                      <p className="font-black text-3xl" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>FREE</p>
                       <p className="text-xs mt-1" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
                         No registration fee for this conference.
                       </p>
                     </>
                   ) : (
                     <>
-                      <p className="text-xs tracking-wide mb-1" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}>REGISTRATION FEE</p>
-                      <p className="font-black text-2xl" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                      <p className="mb-1" style={{ fontFamily: "'DM Mono', monospace", fontSize: '9px', letterSpacing: '0.24em', color: '#B6871F' }}>REGISTRATION FEE</p>
+                      <p className="font-black" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", fontSize: '34px', lineHeight: 1.1 }}>
                         {currencySymbol(conference.fee_currency)}{conference.fee_amount.toFixed(0)}
+                        <span className="ml-2 font-semibold" style={{ fontSize: '12px', color: '#9A8A78' }}>per delegate</span>
                       </p>
-                      <div className="group relative inline-block mt-1">
-                        <span className="text-xs cursor-help" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                      <div className="group relative inline-block mt-1.5">
+                        <span className="text-xs cursor-help" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", borderBottom: '1px dotted #C8BFB0' }}>
                           + 5% Gavelling surcharge
                         </span>
                         <span
-                          className="absolute bottom-full left-0 mb-1.5 px-2 py-1 rounded text-xs whitespace-nowrap pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="absolute bottom-full left-0 mb-1.5 px-2.5 py-1.5 rounded-lg text-xs whitespace-nowrap pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity"
                           style={{
                             backgroundColor: '#1C1410',
                             color: 'white',
                             fontFamily: "'Outfit', sans-serif",
                             fontSize: '11px',
                             zIndex: 10,
+                            boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
                           }}
                         >
                           Waived with Gavelling Unlimited
@@ -950,17 +1103,17 @@ export default function ConferenceDetailClient() {
                       )}
                     </>
                   )}
-                </div>
+                </SectionCard>
 
                 {/* Application Windows */}
-                <div className="rounded-2xl p-6" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
-                  <h3 className="font-semibold text-base mb-4" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Applications</h3>
+                <SectionCard>
+                  <SectionHeading eyebrow="ROLES" title="Applications" />
                   {enabledRoles.length === 0 ? (
                     <p className="text-sm" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
                       Application details coming soon.
                     </p>
                   ) : (
-                    <div>
+                    <div className="flex flex-col">
                       {enabledRoles.map((r, i) => {
                         const windowStatus = getRoleWindowStatus(r);
                         const myApp = myApplications.find(a => a.role === r.role);
@@ -969,21 +1122,22 @@ export default function ConferenceDetailClient() {
                         const windowPill = (() => {
                           if (windowStatus === 'open' || windowStatus === 'open-always') {
                             return (
-                              <span className="text-[9px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(61,122,82,0.12)', color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>
+                              <span className="flex items-center gap-1.5 text-[9px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(61,122,82,0.12)', color: '#1B3828', fontFamily: "'DM Mono', monospace", letterSpacing: '0.06em' }}>
+                                <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: '#3D7A52' }} />
                                 OPEN
                               </span>
                             );
                           }
                           if (windowStatus === 'closed') {
                             return (
-                              <span className="text-[9px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(154,138,120,0.15)', color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}>
+                              <span className="text-[9px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(154,138,120,0.15)', color: '#9A8A78', fontFamily: "'DM Mono', monospace", letterSpacing: '0.06em' }}>
                                 CLOSED
                               </span>
                             );
                           }
                           return (
-                            <span className="text-[9px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(238,217,138,0.15)', color: '#B8844A', fontFamily: "'DM Mono', monospace" }}>
-                              OPENS {r.applications_open_at ? formatShortDate(r.applications_open_at) : ''}
+                            <span className="text-[9px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(238,217,138,0.15)', color: '#B8844A', fontFamily: "'DM Mono', monospace", letterSpacing: '0.06em' }}>
+                              OPENS {r.applications_open_at ? formatShortDate(r.applications_open_at).toUpperCase() : ''}
                             </span>
                           );
                         })();
@@ -991,7 +1145,8 @@ export default function ConferenceDetailClient() {
                         return (
                           <div
                             key={r.role}
-                            className={i < enabledRoles.length - 1 ? 'mb-3' : ''}
+                            className="py-2.5"
+                            style={{ borderTop: i === 0 ? 'none' : '1px solid rgba(221,212,192,0.5)' }}
                           >
                             <div className="flex items-center justify-between">
                               <span className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
@@ -1000,7 +1155,7 @@ export default function ConferenceDetailClient() {
                               {myApp ? <ApplicationStatusBadge status={myApp.status} /> : windowPill}
                             </div>
                             {r.fee_amount != null && r.fee_amount > 0 && (
-                              <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                              <p className="text-[11px] mt-0.5" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}>
                                 {currencySymbol(r.fee_currency ?? conference.fee_currency)}{r.fee_amount.toFixed(0)} registration fee
                               </p>
                             )}
@@ -1009,80 +1164,105 @@ export default function ConferenceDetailClient() {
                       })}
                     </div>
                   )}
-                </div>
+                </SectionCard>
 
                 {/* Apply CTA */}
-                <div className="rounded-2xl p-6" style={{ backgroundColor: '#1B3828' }}>
-                  {!user ? (
-                    <>
-                      <p className="font-semibold text-sm mb-1 text-white" style={{ fontFamily: "'Outfit', sans-serif" }}>Sign in to apply</p>
-                      <p className="text-xs mb-4" style={{ color: 'rgba(237,231,216,0.7)', fontFamily: "'Outfit', sans-serif" }}>
-                        Create a free account to apply for this conference.
-                      </p>
-                      <button
-                        onClick={() => router.push(`/auth/signin?next=/conferences/${slug}`)}
-                        className="w-full rounded-xl py-3 font-bold text-sm tracking-widest transition-colors focus:outline-none"
-                        style={{ backgroundColor: '#EED98A', color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em' }}
-                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'white'; }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#EED98A'; }}
-                      >
-                        SIGN IN TO APPLY →
-                      </button>
-                    </>
-                  ) : !hasOpenRoles ? (
-                    <>
-                      <p className="font-semibold text-sm text-white" style={{ fontFamily: "'Outfit', sans-serif" }}>No open applications</p>
-                      <p className="text-xs mt-1" style={{ color: 'rgba(237,231,216,0.7)', fontFamily: "'Outfit', sans-serif" }}>
-                        Check back when applications open.
-                      </p>
-                    </>
-                  ) : (
-                    <>
-                      <p className="font-semibold text-sm mb-1 text-white" style={{ fontFamily: "'Outfit', sans-serif" }}>Apply to this Conference</p>
-                      <p className="text-xs mb-4" style={{ color: 'rgba(237,231,216,0.7)', fontFamily: "'Outfit', sans-serif" }}>
-                        Select your role to begin your application.
-                      </p>
-                      {openRoles.map(r => {
-                        const myApp = myApplications.find(a => a.role === r.role);
-                        const hasApplied = !!myApp;
-                        const label = r.role.replace(/-/g, ' ').toUpperCase();
-                        return (
-                          <button
-                            key={r.role}
-                            disabled={hasApplied}
-                            onClick={() => {
-                              if (!hasApplied) router.push(`/conferences/${slug}/apply?role=${r.role}`);
-                            }}
-                            className="w-full mb-2 last:mb-0 rounded-xl py-2.5 px-4 text-sm font-bold tracking-wide transition-colors focus:outline-none"
-                            style={
-                              hasApplied
-                                ? {
-                                    backgroundColor: 'rgba(238,217,138,0.15)',
-                                    color: 'rgba(238,217,138,0.5)',
-                                    cursor: 'default',
-                                    fontFamily: "'Outfit', sans-serif",
-                                  }
-                                : {
-                                    backgroundColor: '#EED98A',
-                                    color: '#1B3828',
-                                    fontFamily: "'Outfit', sans-serif",
-                                  }
-                            }
-                            onMouseEnter={(e) => {
-                              if (!hasApplied) (e.currentTarget as HTMLElement).style.backgroundColor = 'white';
-                            }}
-                            onMouseLeave={(e) => {
-                              if (!hasApplied) (e.currentTarget as HTMLElement).style.backgroundColor = '#EED98A';
-                            }}
-                          >
-                            {hasApplied ? 'Applied ✓' : `APPLY AS ${label} →`}
-                          </button>
-                        );
-                      })}
-                    </>
-                  )}
+                <div
+                  className="relative rounded-[20px] p-6 overflow-hidden"
+                  style={{ backgroundColor: '#1B3828', boxShadow: '0 16px 40px rgba(27,56,40,0.28)' }}
+                >
+                  <div
+                    className="pointer-events-none absolute inset-0"
+                    style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px', mixBlendMode: 'overlay', opacity: 0.07 }}
+                  />
+                  <div
+                    aria-hidden
+                    className="pointer-events-none absolute"
+                    style={{
+                      top: '-60px', right: '-40px', width: '200px', height: '200px',
+                      background: 'radial-gradient(circle, rgba(238,217,138,0.14) 0%, transparent 65%)',
+                    }}
+                  />
+                  <div className="relative">
+                    {!user ? (
+                      <>
+                        <p className="mb-1" style={{ fontFamily: "'DM Mono', monospace", fontSize: '9px', letterSpacing: '0.24em', color: 'rgba(238,217,138,0.7)' }}>GET STARTED</p>
+                        <p className="font-bold text-base mb-1 text-white" style={{ fontFamily: "'Outfit', sans-serif" }}>Sign in to apply</p>
+                        <p className="text-xs mb-4" style={{ color: 'rgba(237,231,216,0.7)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.6 }}>
+                          Create a free account to apply for this conference.
+                        </p>
+                        <button
+                          onClick={() => router.push(`/auth/signin?next=/conferences/${slug}`)}
+                          className="w-full rounded-xl py-3 font-bold text-sm transition-all focus:outline-none"
+                          style={{ backgroundColor: '#EED98A', color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', boxShadow: '0 4px 16px rgba(0,0,0,0.2)' }}
+                          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'white'; }}
+                          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#EED98A'; }}
+                        >
+                          SIGN IN TO APPLY →
+                        </button>
+                      </>
+                    ) : !hasOpenRoles ? (
+                      <>
+                        <p className="mb-1" style={{ fontFamily: "'DM Mono', monospace", fontSize: '9px', letterSpacing: '0.24em', color: 'rgba(238,217,138,0.7)' }}>APPLICATIONS</p>
+                        <p className="font-bold text-base text-white" style={{ fontFamily: "'Outfit', sans-serif" }}>No open applications</p>
+                        <p className="text-xs mt-1" style={{ color: 'rgba(237,231,216,0.7)', fontFamily: "'Outfit', sans-serif" }}>
+                          Check back when applications open.
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="mb-1" style={{ fontFamily: "'DM Mono', monospace", fontSize: '9px', letterSpacing: '0.24em', color: 'rgba(238,217,138,0.7)' }}>GET STARTED</p>
+                        <p className="font-bold text-base mb-1 text-white" style={{ fontFamily: "'Outfit', sans-serif" }}>Apply to this Conference</p>
+                        <p className="text-xs mb-4" style={{ color: 'rgba(237,231,216,0.7)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.6 }}>
+                          Select your role to begin your application.
+                        </p>
+                        {openRoles.map(r => {
+                          const myApp = myApplications.find(a => a.role === r.role);
+                          const hasApplied = !!myApp;
+                          const label = r.role.replace(/-/g, ' ').toUpperCase();
+                          return (
+                            <button
+                              key={r.role}
+                              disabled={hasApplied}
+                              onClick={() => {
+                                if (!hasApplied) router.push(`/conferences/${slug}/apply?role=${r.role}`);
+                              }}
+                              className="w-full mb-2 last:mb-0 rounded-xl py-2.5 px-4 text-sm font-bold transition-all focus:outline-none"
+                              style={
+                                hasApplied
+                                  ? {
+                                      backgroundColor: 'rgba(238,217,138,0.12)',
+                                      color: 'rgba(238,217,138,0.5)',
+                                      cursor: 'default',
+                                      fontFamily: "'Outfit', sans-serif",
+                                      letterSpacing: '0.05em',
+                                      border: '1px solid rgba(238,217,138,0.15)',
+                                    }
+                                  : {
+                                      backgroundColor: '#EED98A',
+                                      color: '#1B3828',
+                                      fontFamily: "'Outfit', sans-serif",
+                                      letterSpacing: '0.05em',
+                                      boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
+                                    }
+                              }
+                              onMouseEnter={(e) => {
+                                if (!hasApplied) (e.currentTarget as HTMLElement).style.backgroundColor = 'white';
+                              }}
+                              onMouseLeave={(e) => {
+                                if (!hasApplied) (e.currentTarget as HTMLElement).style.backgroundColor = '#EED98A';
+                              }}
+                            >
+                              {hasApplied ? 'Applied ✓' : `APPLY AS ${label} →`}
+                            </button>
+                          );
+                        })}
+                      </>
+                    )}
+                  </div>
                 </div>
 
+              </div>
             </div>
           </div>
         </div>
@@ -1094,7 +1274,7 @@ export default function ConferenceDetailClient() {
             backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='0.18'/%3E%3C/svg%3E")`,
             backgroundRepeat: 'repeat',
             backgroundSize: '300px 300px',
-            backgroundColor: '#F6F1E9',
+            backgroundColor: '#EDE7D8',
           }}
         >
           <div className="flex flex-col items-center gap-4 md:grid md:grid-cols-3 md:gap-0 md:items-center">
