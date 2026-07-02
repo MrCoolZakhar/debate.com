@@ -46,7 +46,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   useEffect(() => {
+    // supabase-js acquires a navigator Web Lock for getSession(); a stale lock or a hung
+    // token refresh (aggravated by many GoTrueClient instances sharing the same storage
+    // key) can block it FOREVER, wedging every page behind an eternal authLoading spinner.
+    // Same failure class as the signOut hang below — bound it the same way: on timeout,
+    // render logged-out; if the SDK resolves later, onAuthStateChange still updates state.
+    let resolved = false;
+    const failsafe = setTimeout(() => {
+      if (!resolved) setLoading(false);
+    }, 2500);
+
     supabase.auth.getSession().then(({ data: { session } }) => {
+      resolved = true;
+      clearTimeout(failsafe);
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) fetchProfile(session.user.id);
@@ -54,19 +66,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
+      (_event, session) => {
+        resolved = true;
         setSession(session);
         setUser(session?.user ?? null);
+        // Never await the profile fetch here: a slow/hung profiles read must not keep
+        // the whole app gated behind authLoading.
+        setLoading(false);
         if (session?.user) {
-          await fetchProfile(session.user.id);
+          fetchProfile(session.user.id);
         } else {
           setProfile(null);
         }
-        setLoading(false);
       }
     );
 
-    return () => subscription.unsubscribe();
+    return () => { clearTimeout(failsafe); subscription.unsubscribe(); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
