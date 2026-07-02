@@ -76,7 +76,8 @@ function ExpandedDelegateCard({
   const isCurrentSpeaker = committee.currentSpeaker?.delegateId === delegate.id;
 
   const lastMotion = [...(committee.pendingMotions ?? [])].reverse().find(
-    (m) => m.proposedBy === delegate.country
+    (m) => m.proposedBy === delegate.country &&
+      (m.type as string) !== 'gsl-request' && (m.type as string) !== 'join-request'
   );
 
   const statusLabel =

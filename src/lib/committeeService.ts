@@ -149,7 +149,11 @@ export async function getCommitteeByCode(code: string): Promise<Committee | null
     supabase.from('speakers_list').select('*').eq('committee_id', committeeRow.id).eq('list_type', 'gsl').order('position', { ascending: true }),
     supabase.from('speakers_list').select('*').eq('committee_id', committeeRow.id).eq('list_type', 'caucus').order('position', { ascending: true }),
     supabase.from('current_speaker').select('*').eq('committee_id', committeeRow.id).maybeSingle(),
-    supabase.from('motions').select('*').eq('committee_id', committeeRow.id).eq('status', 'pending').not('type', 'in', '("gsl-request","join-request")').order('disruptiveness', { ascending: false }),
+    // Include ALL pending motions, incl. the gsl-request / join-request pseudo-motions: the
+    // chair's request panels and the delegate's pending-state UI read them from here. The main
+    // motions feed filters them out at the display layer — do NOT exclude them at the query
+    // level or request-to-speak and join requests silently break.
+    supabase.from('motions').select('*').eq('committee_id', committeeRow.id).eq('status', 'pending').order('disruptiveness', { ascending: false }),
     supabase.from('documents').select('*').eq('committee_id', committeeRow.id).order('created_at', { ascending: true }),
     supabase.from('messages').select('*').eq('committee_id', committeeRow.id).order('created_at', { ascending: true }),
   ]);
@@ -484,9 +488,11 @@ export async function getDocumentsList(committeeId: string): Promise<CommitteeDo
 }
 
 export async function getPendingMotionsList(committeeId: string): Promise<PendingMotion[]> {
+  // Include gsl-request / join-request pseudo-motions — the delegate view reads them from here
+  // to show "awaiting approval". The main feed filters them out at the display layer.
   const { data, error } = await supabase.from('motions')
     .select('*').eq('committee_id', committeeId).eq('status', 'pending')
-    .not('type', 'in', '("gsl-request","join-request")').order('disruptiveness', { ascending: false });
+    .order('disruptiveness', { ascending: false });
   if (error) { console.error('Error fetching motions:', error); return []; }
   return (data ?? []).map((m: DbRow) => ({
     id: m.id as string, type: m.type as PendingMotionType, proposedBy: m.proposed_by as string,
