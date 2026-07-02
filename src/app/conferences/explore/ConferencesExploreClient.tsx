@@ -194,28 +194,27 @@ function ConferenceCard({
         </span>
       </div>
 
-      {/* Logo chip overlapping the band */}
-      <div className="px-5" style={{ marginTop: '-24px', position: 'relative' }}>
+      {/* Logo overlapping the band — free-floating */}
+      <div className="px-5" style={{ marginTop: '-36px', position: 'relative' }}>
         {conf.logo_url ? (
           <img
             src={conf.logo_url}
             alt={conf.acronym}
             style={{
-              width: '48px', height: '48px', borderRadius: '13px', objectFit: 'contain', padding: '3px',
-              border: '3px solid #FAF8F3', boxShadow: '0 4px 12px rgba(27,56,40,0.15)',
-              backgroundColor: '#FFFFFF', display: 'block',
+              width: '72px', height: '72px', objectFit: 'contain', display: 'block',
+              filter: 'drop-shadow(0 8px 16px rgba(16,28,21,0.35))',
             }}
           />
         ) : (
           <div
             style={{
-              width: '48px', height: '48px', borderRadius: '13px',
+              width: '56px', height: '56px', borderRadius: '15px',
               backgroundColor: '#EDE7D8', border: '3px solid #FAF8F3',
               boxShadow: '0 4px 12px rgba(27,56,40,0.15)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}
           >
-            <span style={{ fontSize: '11px', fontFamily: "'DM Mono', monospace", color: '#1B3828', fontWeight: 700 }}>
+            <span style={{ fontSize: '12px', fontFamily: "'DM Mono', monospace", color: '#1B3828', fontWeight: 700 }}>
               {initials}
             </span>
           </div>

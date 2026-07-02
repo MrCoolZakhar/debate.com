@@ -93,12 +93,6 @@ function formatDateRange(start: string, end: string): string {
   return `${s.getDate()} ${months[s.getMonth()]} – ${e.getDate()} ${months[e.getMonth()]} ${e.getFullYear()}`;
 }
 
-function formatShortDate(iso: string): string {
-  const d = new Date(iso);
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  return `${d.getDate()} ${months[d.getMonth()]}`;
-}
-
 function currencySymbol(currency: string): string {
   const map: Record<string, string> = {
     GBP: '£', USD: '$', EUR: '€', CAD: 'CA$', AUD: 'A$',
@@ -120,24 +114,6 @@ const DIFFICULTY_STYLES: Record<string, { bg: string; color: string }> = {
 };
 
 // ── Sub-components ────────────────────────────────────────────────────────
-
-function ApplicationStatusBadge({ status }: { status: string }) {
-  const styles: Record<string, { bg: string; color: string }> = {
-    submitted: { bg: 'rgba(238,217,138,0.2)',  color: '#B8844A' },
-    accepted:  { bg: 'rgba(61,122,82,0.12)',   color: '#1B3828' },
-    assigned:  { bg: 'rgba(238,217,138,0.15)', color: '#B6871F' },
-    rejected:  { bg: 'rgba(139,32,32,0.1)',    color: '#8B2020' },
-  };
-  const s = styles[status.toLowerCase()] ?? styles.submitted;
-  return (
-    <span
-      className="text-[9px] font-bold px-2 py-0.5 rounded-full"
-      style={{ backgroundColor: s.bg, color: s.color, fontFamily: "'DM Mono', monospace", letterSpacing: '0.08em' }}
-    >
-      {status.toUpperCase()}
-    </span>
-  );
-}
 
 function SortButton({ label, dir, onClick }: { label: string; dir: 'asc' | 'desc' | null; onClick: () => void }) {
   const active = dir !== null;
@@ -591,7 +567,7 @@ export default function ConferenceDetailClient() {
                   alt={conference.acronym}
                   className="hidden sm:block flex-shrink-0"
                   style={{
-                    width: '124px', height: '124px', objectFit: 'contain',
+                    width: '150px', height: '150px', objectFit: 'contain',
                     filter: 'drop-shadow(0 14px 28px rgba(0,0,0,0.5))',
                   }}
                 />
@@ -737,446 +713,6 @@ export default function ConferenceDetailClient() {
                 </SectionCard>
               )}
 
-              {/* Committees — sortable horizontal slider */}
-              {activeTab === 'overview' && (() => {
-                const committeeStats = (c: Committee) => {
-                  const slots = committeeSlots[c.id] ?? [];
-                  const capacity = slots.length || c.total_slots || 0;
-                  const taken = new Set(committeeOccupied[c.id] ?? []).size;
-                  return { slots, capacity, taken, pct: capacity > 0 ? Math.min(100, Math.round((taken / capacity) * 100)) : 0 };
-                };
-                const DIFF_ORDER: Record<string, number> = { beginner: 0, intermediate: 1, advanced: 2, expert: 3 };
-                const sortedCommittees = [...committees];
-                if (sortKey) {
-                  sortedCommittees.sort((a, b) => {
-                    let va = 0, vb = 0;
-                    if (sortKey === 'difficulty') {
-                      va = DIFF_ORDER[(a.difficulty ?? '').toLowerCase()] ?? 99;
-                      vb = DIFF_ORDER[(b.difficulty ?? '').toLowerCase()] ?? 99;
-                    } else if (sortKey === 'availability') {
-                      va = committeeStats(a).pct;
-                      vb = committeeStats(b).pct;
-                    } else {
-                      va = a.committee_type === 'crisis' ? 1 : 0;
-                      vb = b.committee_type === 'crisis' ? 1 : 0;
-                    }
-                    return sortDir === 'asc' ? va - vb : vb - va;
-                  });
-                }
-                const cycleSort = (key: 'difficulty' | 'availability' | 'type') => {
-                  if (sortKey !== key) { setSortKey(key); setSortDir('asc'); }
-                  else if (sortDir === 'asc') { setSortDir('desc'); }
-                  else { setSortKey(''); setSortDir('asc'); }
-                };
-                const ROMAN = ['I', 'II', 'III'];
-                const rosterCommittee = expandedRoster ? committees.find(x => x.id === expandedRoster) : null;
-
-                return (
-                  <div className="mb-6">
-                    {/* Sort bar */}
-                    {committees.length > 1 && (
-                      <div
-                        className="inline-flex flex-wrap items-center gap-1.5 rounded-full px-2 py-1.5 mb-4"
-                        style={{
-                          backgroundColor: 'rgba(250,248,243,0.72)',
-                          backdropFilter: 'blur(16px) saturate(1.4)',
-                          WebkitBackdropFilter: 'blur(16px) saturate(1.4)',
-                          border: '1px solid rgba(221,212,192,0.85)',
-                          boxShadow: '0 6px 20px rgba(27,56,40,0.07)',
-                        }}
-                      >
-                        <SortButton
-                          label="DIFFICULTY"
-                          dir={sortKey === 'difficulty' ? sortDir : null}
-                          onClick={() => cycleSort('difficulty')}
-                        />
-                        <SortButton
-                          label="AVAILABILITY"
-                          dir={sortKey === 'availability' ? sortDir : null}
-                          onClick={() => cycleSort('availability')}
-                        />
-                        <SortButton
-                          label="GA / CRISIS"
-                          dir={sortKey === 'type' ? sortDir : null}
-                          onClick={() => cycleSort('type')}
-                        />
-                      </div>
-                    )}
-
-                    {committees.length === 0 ? (
-                      <SectionCard>
-                        <p className="text-sm" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                          Committees will be announced soon.
-                        </p>
-                      </SectionCard>
-                    ) : (
-                      <div className="relative">
-                        {/* Slider arrows */}
-                        {sortedCommittees.length > 2 && (
-                          <>
-                            <button
-                              aria-label="Scroll committees left"
-                              onClick={() => carouselRef.current?.scrollBy({ left: -324, behavior: 'smooth' })}
-                              className="hidden md:flex items-center justify-center absolute z-20 focus:outline-none"
-                              style={{
-                                left: '-16px', top: '50%', transform: 'translateY(-50%)',
-                                width: '38px', height: '38px', borderRadius: '9999px',
-                                backgroundColor: 'rgba(250,248,243,0.88)',
-                                backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
-                                border: '1px solid rgba(221,212,192,0.95)',
-                                boxShadow: '0 6px 18px rgba(27,56,40,0.16)',
-                                color: '#1B3828', cursor: 'pointer',
-                              }}
-                            >
-                              <ChevronLeft size={18} />
-                            </button>
-                            <button
-                              aria-label="Scroll committees right"
-                              onClick={() => carouselRef.current?.scrollBy({ left: 324, behavior: 'smooth' })}
-                              className="hidden md:flex items-center justify-center absolute z-20 focus:outline-none"
-                              style={{
-                                right: '-16px', top: '50%', transform: 'translateY(-50%)',
-                                width: '38px', height: '38px', borderRadius: '9999px',
-                                backgroundColor: 'rgba(250,248,243,0.88)',
-                                backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
-                                border: '1px solid rgba(221,212,192,0.95)',
-                                boxShadow: '0 6px 18px rgba(27,56,40,0.16)',
-                                color: '#1B3828', cursor: 'pointer',
-                              }}
-                            >
-                              <ChevronRight size={18} />
-                            </button>
-                          </>
-                        )}
-
-                        {/* Card slider */}
-                        <div
-                          ref={carouselRef}
-                          className="flex gap-4 overflow-x-auto"
-                          style={{
-                            scrollSnapType: 'x mandatory',
-                            scrollbarWidth: 'none',
-                            msOverflowStyle: 'none',
-                            padding: '4px 4px 12px 4px',
-                            margin: '-4px -4px 0 -4px',
-                          }}
-                        >
-                          {sortedCommittees.map(c => {
-                            const diff = c.difficulty?.toLowerCase() ?? '';
-                            const diffStyle = DIFFICULTY_STYLES[diff] ?? DIFFICULTY_STYLES.intermediate;
-                            const isCrisis = c.committee_type === 'crisis';
-                            const monogram = (c.abbreviation || c.name).replace(/[^A-Za-z0-9]/g, '').slice(0, 6).toUpperCase();
-                            const chairs = c.display_chairs ?? [];
-                            const { capacity, taken, pct } = committeeStats(c);
-                            const chairSeatOpen = chairs.length < 2 || !!chairJobs[c.id];
-
-                            return (
-                              <article
-                                key={c.id}
-                                className="flex-shrink-0 flex flex-col rounded-[24px]"
-                                style={{
-                                  width: '298px',
-                                  scrollSnapAlign: 'start',
-                                  backgroundColor: 'rgba(250,248,243,0.82)',
-                                  backdropFilter: 'blur(12px)',
-                                  WebkitBackdropFilter: 'blur(12px)',
-                                  border: '1px solid rgba(221,212,192,0.95)',
-                                  boxShadow: '0 10px 30px rgba(27,56,40,0.08)',
-                                }}
-                              >
-                                <div className="flex flex-col items-center px-5 pt-7 flex-1">
-                                  {/* Emblem — free-floating */}
-                                  {c.logo_url ? (
-                                    <img
-                                      src={c.logo_url}
-                                      alt={c.abbreviation ?? c.name}
-                                      style={{
-                                        width: '104px', height: '104px', objectFit: 'contain', flexShrink: 0,
-                                        filter: 'drop-shadow(0 10px 18px rgba(27,56,40,0.28))',
-                                      }}
-                                    />
-                                  ) : (
-                                    <div
-                                      className="relative flex items-center justify-center overflow-hidden flex-shrink-0"
-                                      style={{
-                                        width: '96px', height: '96px', borderRadius: '9999px',
-                                        background: isCrisis
-                                          ? 'linear-gradient(135deg, #3C1414 0%, #6E1E1E 100%)'
-                                          : 'linear-gradient(135deg, #16301F 0%, #2A5A3C 100%)',
-                                        boxShadow: '0 10px 24px rgba(27,56,40,0.26)',
-                                      }}
-                                    >
-                                      <div className="pointer-events-none absolute inset-0" style={{ backgroundImage: GRAIN, backgroundSize: '300px', mixBlendMode: 'overlay', opacity: 0.12 }} />
-                                      <span style={{ fontFamily: "'DM Mono', monospace", fontSize: monogram.length > 4 ? '13px' : '16px', fontWeight: 700, color: '#EED98A', letterSpacing: '0.04em' }}>
-                                        {monogram}
-                                      </span>
-                                    </div>
-                                  )}
-
-                                  {/* Name */}
-                                  <h3
-                                    className="text-center font-bold text-[15.5px] leading-snug"
-                                    style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", margin: '18px 0 0 0', minHeight: '2.6em' }}
-                                  >
-                                    {c.name}
-                                  </h3>
-
-                                  {/* Meta row */}
-                                  <div className="flex items-center gap-2 mt-1.5">
-                                    {c.difficulty && (
-                                      <span
-                                        className="px-2.5 py-0.5 rounded-full"
-                                        style={{ ...diffStyle, fontSize: '10px', fontFamily: "'DM Mono', monospace", letterSpacing: '0.06em', fontWeight: 700 }}
-                                      >
-                                        {capitalize(diff)}
-                                      </span>
-                                    )}
-                                    <span aria-hidden style={{ color: 'rgba(182,135,31,0.55)', fontSize: '7px' }}>◆</span>
-                                    <span className="text-[12px] font-semibold" style={{ color: '#6B5F52', fontFamily: "'Outfit', sans-serif" }}>
-                                      {capacity} {isCrisis ? 'roles' : 'seats'}
-                                    </span>
-                                    {isCrisis && (
-                                      <>
-                                        <span aria-hidden style={{ color: 'rgba(182,135,31,0.55)', fontSize: '7px' }}>◆</span>
-                                        <span className="text-[10px] font-bold" style={{ color: '#8B2020', fontFamily: "'DM Mono', monospace", letterSpacing: '0.12em' }}>
-                                          CRISIS
-                                        </span>
-                                      </>
-                                    )}
-                                  </div>
-
-                                  {/* Topics — roman numerals */}
-                                  {c.topics && c.topics.length > 0 && (
-                                    <div className="w-full mt-5 pt-4" style={{ borderTop: '1px solid rgba(221,212,192,0.55)' }}>
-                                      {c.topics.map((topic, ti) => (
-                                        <div key={topic} className="flex items-start gap-2.5 py-1">
-                                          <span
-                                            className="flex-shrink-0 text-right"
-                                            style={{ fontFamily: "'DM Mono', monospace", fontSize: '11px', color: '#B6871F', width: '18px', lineHeight: '19px' }}
-                                          >
-                                            {ROMAN[ti] ?? String(ti + 1)}.
-                                          </span>
-                                          <span className="text-[12.5px] font-medium" style={{ color: '#2E2820', fontFamily: "'Outfit', sans-serif", lineHeight: 1.55 }}>
-                                            {topic}
-                                          </span>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  )}
-
-                                  {/* Dais */}
-                                  <div className="w-full mt-4 pt-4" style={{ borderTop: '1px solid rgba(221,212,192,0.55)' }}>
-                                    <div className="flex items-start justify-center gap-6">
-                                      {chairs.map(ch => (
-                                        <div key={ch.name} className="flex flex-col items-center text-center" style={{ width: '96px' }}>
-                                          {ch.avatar_url ? (
-                                            <img
-                                              src={ch.avatar_url}
-                                              alt={ch.name}
-                                              style={{
-                                                width: '52px', height: '52px', borderRadius: '9999px', objectFit: 'cover',
-                                                boxShadow: '0 4px 12px rgba(27,56,40,0.22)',
-                                                backgroundColor: '#EDE7D8',
-                                              }}
-                                            />
-                                          ) : (
-                                            <span
-                                              className="flex items-center justify-center"
-                                              style={{
-                                                width: '52px', height: '52px', borderRadius: '9999px',
-                                                backgroundColor: '#1B3828', color: '#EED98A',
-                                                fontSize: '17px', fontWeight: 700, fontFamily: "'Outfit', sans-serif",
-                                              }}
-                                            >
-                                              {ch.name.charAt(0)}
-                                            </span>
-                                          )}
-                                          <span className="text-[11.5px] font-semibold mt-2 leading-tight" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-                                            {ch.name}
-                                          </span>
-                                        </div>
-                                      ))}
-                                      {chairSeatOpen && (
-                                        <Link
-                                          href="/conferences/roles"
-                                          className="flex flex-col items-center text-center group"
-                                          style={{ width: '96px', textDecoration: 'none' }}
-                                        >
-                                          <span
-                                            className="flex items-center justify-center transition-all"
-                                            style={{
-                                              width: '52px', height: '52px', borderRadius: '9999px',
-                                              border: '1.5px dashed rgba(27,56,40,0.4)',
-                                              color: '#1B3828',
-                                              backgroundColor: 'rgba(27,56,40,0.04)',
-                                            }}
-                                            onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = '#1B3828'; el.style.color = '#EED98A'; el.style.borderStyle = 'solid'; }}
-                                            onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; el.style.color = '#1B3828'; el.style.borderStyle = 'dashed'; }}
-                                          >
-                                            <Plus size={20} strokeWidth={2.2} />
-                                          </span>
-                                          <span className="text-[10px] font-bold mt-2" style={{ color: '#B6871F', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.12em' }}>
-                                            APPLY NOW
-                                          </span>
-                                        </Link>
-                                      )}
-                                    </div>
-                                  </div>
-
-                                  {/* Capacity */}
-                                  <div className="w-full mt-4">
-                                    <div className="flex items-center justify-between mb-1.5">
-                                      <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '9.5px', letterSpacing: '0.08em', color: '#6B5F52' }}>
-                                        {taken}/{capacity} FILLED
-                                      </span>
-                                      <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '9.5px', color: '#9A8A78' }}>
-                                        {pct}%
-                                      </span>
-                                    </div>
-                                    <div className="rounded-full overflow-hidden" style={{ height: '6px', backgroundColor: 'rgba(221,212,192,0.65)' }}>
-                                      <div
-                                        style={{
-                                          width: `${pct}%`, height: '100%', borderRadius: '9999px',
-                                          background: 'linear-gradient(to right, #2A5A3C, #3D7A52)',
-                                          transition: 'width 500ms cubic-bezier(0.22,1,0.36,1)',
-                                        }}
-                                      />
-                                    </div>
-                                  </div>
-                                </div>
-
-                                {/* View members */}
-                                <div className="px-5 pb-5 pt-4">
-                                  <button
-                                    onClick={() => setExpandedRoster(c.id)}
-                                    className="w-full rounded-xl py-2.5 text-[11px] font-bold transition-colors focus:outline-none"
-                                    style={{
-                                      backgroundColor: 'transparent',
-                                      color: '#1B3828',
-                                      border: '1.5px solid rgba(27,56,40,0.35)',
-                                      fontFamily: "'Outfit', sans-serif",
-                                      letterSpacing: '0.1em',
-                                      cursor: 'pointer',
-                                    }}
-                                    onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = '#1B3828'; el.style.color = '#EED98A'; }}
-                                    onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = 'transparent'; el.style.color = '#1B3828'; }}
-                                  >
-                                    VIEW {isCrisis ? 'ROLES' : 'MEMBERS'}
-                                  </button>
-                                </div>
-                              </article>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Roster modal — list format */}
-                    {rosterCommittee && (() => {
-                      const c = rosterCommittee;
-                      const isCrisis = c.committee_type === 'crisis';
-                      const { slots, capacity, taken, pct } = committeeStats(c);
-                      const occupied = new Set(committeeOccupied[c.id] ?? []);
-                      return (
-                        <div
-                          className="fixed inset-0 z-50 flex items-center justify-center px-6"
-                          style={{ backgroundColor: 'rgba(28,20,16,0.45)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)' }}
-                          onClick={() => setExpandedRoster(null)}
-                        >
-                          <div
-                            onClick={(e) => e.stopPropagation()}
-                            className="w-full max-w-md rounded-[24px] overflow-hidden"
-                            style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', boxShadow: '0 28px 72px rgba(16,28,21,0.35)' }}
-                          >
-                            <div className="px-6 pt-6 pb-4">
-                              <div className="flex items-start justify-between gap-4">
-                                <div className="min-w-0">
-                                  <p className="font-bold text-[16px] leading-snug" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", margin: 0 }}>
-                                    {c.name}
-                                  </p>
-                                  <p className="mt-1" style={{ fontFamily: "'DM Mono', monospace", fontSize: '10px', letterSpacing: '0.1em', color: '#9A8A78', margin: '4px 0 0 0' }}>
-                                    {taken}/{capacity} {isCrisis ? 'ROLES' : 'SEATS'} FILLED
-                                  </p>
-                                </div>
-                                <button
-                                  onClick={() => setExpandedRoster(null)}
-                                  aria-label="Close"
-                                  className="flex items-center justify-center flex-shrink-0 rounded-full focus:outline-none transition-colors"
-                                  style={{ width: '32px', height: '32px', border: '1px solid #DDD4C0', color: '#9A8A78', backgroundColor: 'transparent', cursor: 'pointer' }}
-                                  onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#1C1410'; el.style.borderColor = '#9A8A78'; }}
-                                  onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#9A8A78'; el.style.borderColor = '#DDD4C0'; }}
-                                >
-                                  <X size={15} />
-                                </button>
-                              </div>
-                              <div className="mt-3 rounded-full overflow-hidden" style={{ height: '6px', backgroundColor: 'rgba(221,212,192,0.65)' }}>
-                                <div style={{ width: `${pct}%`, height: '100%', borderRadius: '9999px', background: 'linear-gradient(to right, #2A5A3C, #3D7A52)' }} />
-                              </div>
-                            </div>
-                            <div className="px-3 pb-4 overflow-y-auto" style={{ maxHeight: '54vh' }}>
-                              {slots.length === 0 ? (
-                                <p className="text-sm px-3 py-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                                  The {isCrisis ? 'character' : 'country'} roster will be announced soon.
-                                </p>
-                              ) : (
-                                slots.map((s, i) => {
-                                  const isTaken = occupied.has(s.country_code);
-                                  const co = getCountryByName(s.country_name);
-                                  const flag = co ? getFlagUrl(co.code) : null;
-                                  return (
-                                    <div
-                                      key={s.country_code}
-                                      className="flex items-center gap-3 px-3 py-2.5"
-                                      style={{ borderTop: i === 0 ? 'none' : '1px solid rgba(221,212,192,0.45)' }}
-                                    >
-                                      {flag ? (
-                                        <img
-                                          src={flag}
-                                          alt=""
-                                          style={{ width: '22px', height: '15px', borderRadius: '3px', objectFit: 'cover', flexShrink: 0, boxShadow: '0 1px 3px rgba(27,56,40,0.25)' }}
-                                        />
-                                      ) : (
-                                        <span
-                                          className="flex items-center justify-center flex-shrink-0"
-                                          style={{ width: '22px', height: '22px', borderRadius: '9999px', backgroundColor: 'rgba(27,56,40,0.08)', fontFamily: "'DM Mono', monospace", fontSize: '8px', fontWeight: 700, color: '#1B3828' }}
-                                        >
-                                          {s.country_code.slice(0, 2)}
-                                        </span>
-                                      )}
-                                      <span
-                                        className="flex-1 text-[13px] font-medium truncate"
-                                        style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}
-                                      >
-                                        {s.country_name}
-                                      </span>
-                                      {isTaken ? (
-                                        <span
-                                          className="flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
-                                          style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'DM Mono', monospace", letterSpacing: '0.08em' }}
-                                        >
-                                          <Check size={10} strokeWidth={2.6} />
-                                          TAKEN
-                                        </span>
-                                      ) : (
-                                        <span
-                                          className="text-[9px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
-                                          style={{ backgroundColor: 'rgba(61,122,82,0.1)', color: '#2A5A3C', border: '1px solid rgba(61,122,82,0.25)', fontFamily: "'DM Mono', monospace", letterSpacing: '0.08em' }}
-                                        >
-                                          OPEN
-                                        </span>
-                                      )}
-                                    </div>
-                                  );
-                                })
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })()}
-                  </div>
-                );
-              })()}
 
               {/* Organiser */}
               {activeTab === 'overview' && (
@@ -1683,72 +1219,452 @@ export default function ConferenceDetailClient() {
                   </div>
                 </SectionCard>
 
-                {/* Application Windows */}
-                <SectionCard>
-                  <p className="mb-3" style={{ fontFamily: "'DM Mono', monospace", fontSize: '9px', letterSpacing: '0.26em', color: '#B6871F', margin: '0 0 12px 0' }}>
-                    APPLICATION WINDOWS
-                  </p>
-                  {enabledRoles.length === 0 ? (
-                    <p className="text-sm" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                      Application details coming soon.
-                    </p>
-                  ) : (
-                    <div className="flex flex-col">
-                      {enabledRoles.map((r, i) => {
-                        const windowStatus = getRoleWindowStatus(r);
-                        const myApp = myApplications.find(a => a.role === r.role);
-                        const roleName = r.role.replace(/-/g, ' ');
-
-                        const windowPill = (() => {
-                          if (windowStatus === 'open' || windowStatus === 'open-always') {
-                            return (
-                              <span className="flex items-center gap-1.5 text-[9px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(61,122,82,0.12)', color: '#1B3828', fontFamily: "'DM Mono', monospace", letterSpacing: '0.06em' }}>
-                                <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: '#3D7A52' }} />
-                                OPEN
-                              </span>
-                            );
-                          }
-                          if (windowStatus === 'closed') {
-                            return (
-                              <span className="text-[9px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(154,138,120,0.15)', color: '#9A8A78', fontFamily: "'DM Mono', monospace", letterSpacing: '0.06em' }}>
-                                CLOSED
-                              </span>
-                            );
-                          }
-                          return (
-                            <span className="text-[9px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(238,217,138,0.15)', color: '#B8844A', fontFamily: "'DM Mono', monospace", letterSpacing: '0.06em' }}>
-                              OPENS {r.applications_open_at ? formatShortDate(r.applications_open_at).toUpperCase() : ''}
-                            </span>
-                          );
-                        })();
-
-                        return (
-                          <div
-                            key={r.role}
-                            className="py-2.5"
-                            style={{ borderTop: i === 0 ? 'none' : '1px solid rgba(221,212,192,0.5)' }}
-                          >
-                            <div className="flex items-center justify-between">
-                              <span className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-                                {capitalize(roleName)}
-                              </span>
-                              {myApp ? <ApplicationStatusBadge status={myApp.status} /> : windowPill}
-                            </div>
-                            {r.fee_amount != null && r.fee_amount > 0 && (
-                              <p className="text-[11px] mt-0.5" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}>
-                                {currencySymbol(r.fee_currency ?? conference.fee_currency)}{r.fee_amount.toFixed(0)} registration fee
-                              </p>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </SectionCard>
-
               </div>
             </div>
           </div>
+
+              {/* Committees — sortable horizontal slider */}
+              {activeTab === 'overview' && (() => {
+                const committeeStats = (c: Committee) => {
+                  const slots = committeeSlots[c.id] ?? [];
+                  const capacity = slots.length || c.total_slots || 0;
+                  const taken = new Set(committeeOccupied[c.id] ?? []).size;
+                  return { slots, capacity, taken, pct: capacity > 0 ? Math.min(100, Math.round((taken / capacity) * 100)) : 0 };
+                };
+                const DIFF_ORDER: Record<string, number> = { beginner: 0, intermediate: 1, advanced: 2, expert: 3 };
+                const sortedCommittees = [...committees];
+                if (sortKey) {
+                  sortedCommittees.sort((a, b) => {
+                    let va = 0, vb = 0;
+                    if (sortKey === 'difficulty') {
+                      va = DIFF_ORDER[(a.difficulty ?? '').toLowerCase()] ?? 99;
+                      vb = DIFF_ORDER[(b.difficulty ?? '').toLowerCase()] ?? 99;
+                    } else if (sortKey === 'availability') {
+                      va = committeeStats(a).pct;
+                      vb = committeeStats(b).pct;
+                    } else {
+                      va = a.committee_type === 'crisis' ? 1 : 0;
+                      vb = b.committee_type === 'crisis' ? 1 : 0;
+                    }
+                    return sortDir === 'asc' ? va - vb : vb - va;
+                  });
+                }
+                const cycleSort = (key: 'difficulty' | 'availability' | 'type') => {
+                  if (sortKey !== key) { setSortKey(key); setSortDir('asc'); }
+                  else if (sortDir === 'asc') { setSortDir('desc'); }
+                  else { setSortKey(''); setSortDir('asc'); }
+                };
+                const ROMAN = ['I', 'II', 'III'];
+                const rosterCommittee = expandedRoster ? committees.find(x => x.id === expandedRoster) : null;
+
+                return (
+                  <div className="mb-6">
+                    {/* Sort bar */}
+                    {committees.length > 1 && (
+                      <div
+                        className="inline-flex flex-wrap items-center gap-1.5 rounded-full px-2 py-1.5 mb-4"
+                        style={{
+                          backgroundColor: 'rgba(250,248,243,0.72)',
+                          backdropFilter: 'blur(16px) saturate(1.4)',
+                          WebkitBackdropFilter: 'blur(16px) saturate(1.4)',
+                          border: '1px solid rgba(221,212,192,0.85)',
+                          boxShadow: '0 6px 20px rgba(27,56,40,0.07)',
+                        }}
+                      >
+                        <SortButton
+                          label="DIFFICULTY"
+                          dir={sortKey === 'difficulty' ? sortDir : null}
+                          onClick={() => cycleSort('difficulty')}
+                        />
+                        <SortButton
+                          label="AVAILABILITY"
+                          dir={sortKey === 'availability' ? sortDir : null}
+                          onClick={() => cycleSort('availability')}
+                        />
+                        <SortButton
+                          label="GA / CRISIS"
+                          dir={sortKey === 'type' ? sortDir : null}
+                          onClick={() => cycleSort('type')}
+                        />
+                      </div>
+                    )}
+
+                    {committees.length === 0 ? (
+                      <SectionCard>
+                        <p className="text-sm" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                          Committees will be announced soon.
+                        </p>
+                      </SectionCard>
+                    ) : (
+                      <div className="relative">
+                        {/* Slider arrows */}
+                        {sortedCommittees.length > 2 && (
+                          <>
+                            <button
+                              aria-label="Scroll committees left"
+                              onClick={() => carouselRef.current?.scrollBy({ left: -324, behavior: 'smooth' })}
+                              className="hidden md:flex items-center justify-center absolute z-20 focus:outline-none"
+                              style={{
+                                left: '-16px', top: '50%', transform: 'translateY(-50%)',
+                                width: '38px', height: '38px', borderRadius: '9999px',
+                                backgroundColor: 'rgba(250,248,243,0.88)',
+                                backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
+                                border: '1px solid rgba(221,212,192,0.95)',
+                                boxShadow: '0 6px 18px rgba(27,56,40,0.16)',
+                                color: '#1B3828', cursor: 'pointer',
+                              }}
+                            >
+                              <ChevronLeft size={18} />
+                            </button>
+                            <button
+                              aria-label="Scroll committees right"
+                              onClick={() => carouselRef.current?.scrollBy({ left: 324, behavior: 'smooth' })}
+                              className="hidden md:flex items-center justify-center absolute z-20 focus:outline-none"
+                              style={{
+                                right: '-16px', top: '50%', transform: 'translateY(-50%)',
+                                width: '38px', height: '38px', borderRadius: '9999px',
+                                backgroundColor: 'rgba(250,248,243,0.88)',
+                                backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
+                                border: '1px solid rgba(221,212,192,0.95)',
+                                boxShadow: '0 6px 18px rgba(27,56,40,0.16)',
+                                color: '#1B3828', cursor: 'pointer',
+                              }}
+                            >
+                              <ChevronRight size={18} />
+                            </button>
+                          </>
+                        )}
+
+                        {/* Card slider */}
+                        <div
+                          ref={carouselRef}
+                          className="flex gap-4 overflow-x-auto"
+                          style={{
+                            scrollSnapType: 'x mandatory',
+                            scrollbarWidth: 'none',
+                            msOverflowStyle: 'none',
+                            padding: '4px 4px 12px 4px',
+                            margin: '-4px -4px 0 -4px',
+                          }}
+                        >
+                          {sortedCommittees.map(c => {
+                            const diff = c.difficulty?.toLowerCase() ?? '';
+                            const diffStyle = DIFFICULTY_STYLES[diff] ?? DIFFICULTY_STYLES.intermediate;
+                            const isCrisis = c.committee_type === 'crisis';
+                            const monogram = (c.abbreviation || c.name).replace(/[^A-Za-z0-9]/g, '').slice(0, 6).toUpperCase();
+                            const chairs = c.display_chairs ?? [];
+                            const { capacity, taken, pct } = committeeStats(c);
+                            const chairSeatOpen = chairs.length < 2 || !!chairJobs[c.id];
+
+                            return (
+                              <article
+                                key={c.id}
+                                className="flex-shrink-0 flex flex-col rounded-[24px]"
+                                style={{
+                                  width: '298px',
+                                  scrollSnapAlign: 'start',
+                                  backgroundColor: 'rgba(250,248,243,0.82)',
+                                  backdropFilter: 'blur(12px)',
+                                  WebkitBackdropFilter: 'blur(12px)',
+                                  border: '1px solid rgba(221,212,192,0.95)',
+                                  boxShadow: '0 10px 30px rgba(27,56,40,0.08)',
+                                }}
+                              >
+                                <div className="flex flex-col items-center px-5 pt-7 flex-1">
+                                  {/* Emblem — free-floating */}
+                                  {c.logo_url ? (
+                                    <img
+                                      src={c.logo_url}
+                                      alt={c.abbreviation ?? c.name}
+                                      style={{
+                                        width: '104px', height: '104px', objectFit: 'contain', flexShrink: 0,
+                                        filter: 'drop-shadow(0 10px 18px rgba(27,56,40,0.28))',
+                                      }}
+                                    />
+                                  ) : (
+                                    <div
+                                      className="relative flex items-center justify-center overflow-hidden flex-shrink-0"
+                                      style={{
+                                        width: '96px', height: '96px', borderRadius: '9999px',
+                                        background: isCrisis
+                                          ? 'linear-gradient(135deg, #3C1414 0%, #6E1E1E 100%)'
+                                          : 'linear-gradient(135deg, #16301F 0%, #2A5A3C 100%)',
+                                        boxShadow: '0 10px 24px rgba(27,56,40,0.26)',
+                                      }}
+                                    >
+                                      <div className="pointer-events-none absolute inset-0" style={{ backgroundImage: GRAIN, backgroundSize: '300px', mixBlendMode: 'overlay', opacity: 0.12 }} />
+                                      <span style={{ fontFamily: "'DM Mono', monospace", fontSize: monogram.length > 4 ? '13px' : '16px', fontWeight: 700, color: '#EED98A', letterSpacing: '0.04em' }}>
+                                        {monogram}
+                                      </span>
+                                    </div>
+                                  )}
+
+                                  {/* Name */}
+                                  <h3
+                                    className="text-center font-bold text-[15.5px] leading-snug"
+                                    style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", margin: '18px 0 0 0', minHeight: '2.6em' }}
+                                  >
+                                    {c.name}
+                                  </h3>
+
+                                  {/* Meta row */}
+                                  <div className="flex items-center gap-2 mt-1.5">
+                                    {c.difficulty && (
+                                      <span
+                                        className="px-2.5 py-0.5 rounded-full"
+                                        style={{ ...diffStyle, fontSize: '10px', fontFamily: "'DM Mono', monospace", letterSpacing: '0.06em', fontWeight: 700 }}
+                                      >
+                                        {capitalize(diff)}
+                                      </span>
+                                    )}
+                                    <span aria-hidden style={{ color: 'rgba(182,135,31,0.55)', fontSize: '7px' }}>◆</span>
+                                    <span className="text-[12px] font-semibold" style={{ color: '#6B5F52', fontFamily: "'Outfit', sans-serif" }}>
+                                      {capacity} {isCrisis ? 'roles' : 'seats'}
+                                    </span>
+                                    {isCrisis && (
+                                      <>
+                                        <span aria-hidden style={{ color: 'rgba(182,135,31,0.55)', fontSize: '7px' }}>◆</span>
+                                        <span className="text-[10px] font-bold" style={{ color: '#8B2020', fontFamily: "'DM Mono', monospace", letterSpacing: '0.12em' }}>
+                                          CRISIS
+                                        </span>
+                                      </>
+                                    )}
+                                  </div>
+
+                                  {/* Topics — roman numerals */}
+                                  {c.topics && c.topics.length > 0 && (
+                                    <div className="w-full mt-5 pt-4" style={{ borderTop: '1px solid rgba(221,212,192,0.55)' }}>
+                                      {c.topics.map((topic, ti) => (
+                                        <div key={topic} className="flex items-start gap-2.5 py-1">
+                                          <span
+                                            className="flex-shrink-0 text-right"
+                                            style={{ fontFamily: "'DM Mono', monospace", fontSize: '11px', color: '#B6871F', width: '18px', lineHeight: '19px' }}
+                                          >
+                                            {ROMAN[ti] ?? String(ti + 1)}.
+                                          </span>
+                                          <span className="text-[12.5px] font-medium" style={{ color: '#2E2820', fontFamily: "'Outfit', sans-serif", lineHeight: 1.55 }}>
+                                            {topic}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+
+                                  {/* Dais + capacity — pinned to the card bottom */}
+                                  <div className="w-full mt-auto">
+                                  <div className="w-full mt-4 pt-4" style={{ borderTop: '1px solid rgba(221,212,192,0.55)' }}>
+                                    <div className="flex items-start justify-center gap-6">
+                                      {chairs.map(ch => (
+                                        <div key={ch.name} className="flex flex-col items-center text-center" style={{ width: '96px' }}>
+                                          {ch.avatar_url ? (
+                                            <img
+                                              src={ch.avatar_url}
+                                              alt={ch.name}
+                                              style={{
+                                                width: '52px', height: '52px', borderRadius: '9999px', objectFit: 'cover',
+                                                boxShadow: '0 4px 12px rgba(27,56,40,0.22)',
+                                                backgroundColor: '#EDE7D8',
+                                              }}
+                                            />
+                                          ) : (
+                                            <span
+                                              className="flex items-center justify-center"
+                                              style={{
+                                                width: '52px', height: '52px', borderRadius: '9999px',
+                                                backgroundColor: '#1B3828', color: '#EED98A',
+                                                fontSize: '17px', fontWeight: 700, fontFamily: "'Outfit', sans-serif",
+                                              }}
+                                            >
+                                              {ch.name.charAt(0)}
+                                            </span>
+                                          )}
+                                          <span className="text-[11.5px] font-semibold mt-2 leading-tight" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                                            {ch.name}
+                                          </span>
+                                        </div>
+                                      ))}
+                                      {chairSeatOpen && (
+                                        <Link
+                                          href="/conferences/roles"
+                                          className="flex flex-col items-center text-center group"
+                                          style={{ width: '96px', textDecoration: 'none' }}
+                                        >
+                                          <span
+                                            className="flex items-center justify-center transition-all"
+                                            style={{
+                                              width: '52px', height: '52px', borderRadius: '9999px',
+                                              border: '1.5px dashed rgba(27,56,40,0.4)',
+                                              color: '#1B3828',
+                                              backgroundColor: 'rgba(27,56,40,0.04)',
+                                            }}
+                                            onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = '#1B3828'; el.style.color = '#EED98A'; el.style.borderStyle = 'solid'; }}
+                                            onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; el.style.color = '#1B3828'; el.style.borderStyle = 'dashed'; }}
+                                          >
+                                            <Plus size={20} strokeWidth={2.2} />
+                                          </span>
+                                          <span className="text-[10px] font-bold mt-2" style={{ color: '#B6871F', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.12em' }}>
+                                            APPLY NOW
+                                          </span>
+                                        </Link>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Capacity */}
+                                  <div className="w-full mt-4">
+                                    <div className="flex items-center justify-between mb-1.5">
+                                      <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '9.5px', letterSpacing: '0.08em', color: '#6B5F52' }}>
+                                        {taken}/{capacity} FILLED
+                                      </span>
+                                      <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '9.5px', color: '#9A8A78' }}>
+                                        {pct}%
+                                      </span>
+                                    </div>
+                                    <div className="rounded-full overflow-hidden" style={{ height: '6px', backgroundColor: 'rgba(221,212,192,0.65)' }}>
+                                      <div
+                                        style={{
+                                          width: `${pct}%`, height: '100%', borderRadius: '9999px',
+                                          background: 'linear-gradient(to right, #2A5A3C, #3D7A52)',
+                                          transition: 'width 500ms cubic-bezier(0.22,1,0.36,1)',
+                                        }}
+                                      />
+                                    </div>
+                                  </div>
+                                  </div>
+                                </div>
+
+                                {/* View members */}
+                                <div className="px-5 pb-5 pt-4">
+                                  <button
+                                    onClick={() => setExpandedRoster(c.id)}
+                                    className="w-full rounded-xl py-2.5 text-[11px] font-bold transition-colors focus:outline-none"
+                                    style={{
+                                      backgroundColor: 'transparent',
+                                      color: '#1B3828',
+                                      border: '1.5px solid rgba(27,56,40,0.35)',
+                                      fontFamily: "'Outfit', sans-serif",
+                                      letterSpacing: '0.1em',
+                                      cursor: 'pointer',
+                                    }}
+                                    onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = '#1B3828'; el.style.color = '#EED98A'; }}
+                                    onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = 'transparent'; el.style.color = '#1B3828'; }}
+                                  >
+                                    VIEW {isCrisis ? 'ROLES' : 'MEMBERS'}
+                                  </button>
+                                </div>
+                              </article>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Roster modal — list format */}
+                    {rosterCommittee && (() => {
+                      const c = rosterCommittee;
+                      const isCrisis = c.committee_type === 'crisis';
+                      const { slots, capacity, taken, pct } = committeeStats(c);
+                      const occupied = new Set(committeeOccupied[c.id] ?? []);
+                      return (
+                        <div
+                          className="fixed inset-0 z-50 flex items-center justify-center px-6"
+                          style={{ backgroundColor: 'rgba(28,20,16,0.45)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)' }}
+                          onClick={() => setExpandedRoster(null)}
+                        >
+                          <div
+                            onClick={(e) => e.stopPropagation()}
+                            className="w-full max-w-md rounded-[24px] overflow-hidden"
+                            style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', boxShadow: '0 28px 72px rgba(16,28,21,0.35)' }}
+                          >
+                            <div className="px-6 pt-6 pb-4">
+                              <div className="flex items-start justify-between gap-4">
+                                <div className="min-w-0">
+                                  <p className="font-bold text-[16px] leading-snug" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", margin: 0 }}>
+                                    {c.name}
+                                  </p>
+                                  <p className="mt-1" style={{ fontFamily: "'DM Mono', monospace", fontSize: '10px', letterSpacing: '0.1em', color: '#9A8A78', margin: '4px 0 0 0' }}>
+                                    {taken}/{capacity} {isCrisis ? 'ROLES' : 'SEATS'} FILLED
+                                  </p>
+                                </div>
+                                <button
+                                  onClick={() => setExpandedRoster(null)}
+                                  aria-label="Close"
+                                  className="flex items-center justify-center flex-shrink-0 rounded-full focus:outline-none transition-colors"
+                                  style={{ width: '32px', height: '32px', border: '1px solid #DDD4C0', color: '#9A8A78', backgroundColor: 'transparent', cursor: 'pointer' }}
+                                  onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#1C1410'; el.style.borderColor = '#9A8A78'; }}
+                                  onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#9A8A78'; el.style.borderColor = '#DDD4C0'; }}
+                                >
+                                  <X size={15} />
+                                </button>
+                              </div>
+                              <div className="mt-3 rounded-full overflow-hidden" style={{ height: '6px', backgroundColor: 'rgba(221,212,192,0.65)' }}>
+                                <div style={{ width: `${pct}%`, height: '100%', borderRadius: '9999px', background: 'linear-gradient(to right, #2A5A3C, #3D7A52)' }} />
+                              </div>
+                            </div>
+                            <div className="px-3 pb-4 overflow-y-auto" style={{ maxHeight: '54vh' }}>
+                              {slots.length === 0 ? (
+                                <p className="text-sm px-3 py-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                                  The {isCrisis ? 'character' : 'country'} roster will be announced soon.
+                                </p>
+                              ) : (
+                                slots.map((s, i) => {
+                                  const isTaken = occupied.has(s.country_code);
+                                  const co = getCountryByName(s.country_name);
+                                  const flag = co ? getFlagUrl(co.code) : null;
+                                  return (
+                                    <div
+                                      key={s.country_code}
+                                      className="flex items-center gap-3 px-3 py-2.5"
+                                      style={{ borderTop: i === 0 ? 'none' : '1px solid rgba(221,212,192,0.45)' }}
+                                    >
+                                      {flag ? (
+                                        <img
+                                          src={flag}
+                                          alt=""
+                                          style={{ width: '22px', height: '15px', borderRadius: '3px', objectFit: 'cover', flexShrink: 0, boxShadow: '0 1px 3px rgba(27,56,40,0.25)' }}
+                                        />
+                                      ) : (
+                                        <span
+                                          className="flex items-center justify-center flex-shrink-0"
+                                          style={{ width: '22px', height: '22px', borderRadius: '9999px', backgroundColor: 'rgba(27,56,40,0.08)', fontFamily: "'DM Mono', monospace", fontSize: '8px', fontWeight: 700, color: '#1B3828' }}
+                                        >
+                                          {s.country_code.slice(0, 2)}
+                                        </span>
+                                      )}
+                                      <span
+                                        className="flex-1 text-[13px] font-medium truncate"
+                                        style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}
+                                      >
+                                        {s.country_name}
+                                      </span>
+                                      {isTaken ? (
+                                        <span
+                                          className="flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
+                                          style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'DM Mono', monospace", letterSpacing: '0.08em' }}
+                                        >
+                                          <Check size={10} strokeWidth={2.6} />
+                                          TAKEN
+                                        </span>
+                                      ) : (
+                                        <span
+                                          className="text-[9px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
+                                          style={{ backgroundColor: 'rgba(61,122,82,0.1)', color: '#2A5A3C', border: '1px solid rgba(61,122,82,0.25)', fontFamily: "'DM Mono', monospace", letterSpacing: '0.08em' }}
+                                        >
+                                          OPEN
+                                        </span>
+                                      )}
+                                    </div>
+                                  );
+                                })
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                );
+              })()}
         </div>
 
         {/* ── Footer ─────────────────────────────────────────────────── */}
