@@ -153,6 +153,7 @@ export interface Committee {
   expiresAt?: string | null;
   resumingChair?: string | null;
   dbChairJoinSuffix?: string | null;
+  dbHeadChair?: string | null;   // persisted head-chair name (claim-at-will); null → creator (chairNames[0]) is head
   dbSeparateChairCode?: boolean;
   dbSettings?: Record<string, unknown> | null;
   dbScoring?: ScoringConfig | null;

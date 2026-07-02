@@ -337,9 +337,11 @@ function SelectRow({ value, onChange, label, options, note }: {
   );
 }
 
-export function SettingsPanel({ committee, onClose }: {
+export function SettingsPanel({ committee, onClose, myChairName, onBecomeHeadChair }: {
   committee: Committee;
   onClose: () => void;
+  myChairName?: string;
+  onBecomeHeadChair?: () => void;
 }) {
   const t = useT();
   const { language, setLanguage } = useLanguage();
@@ -575,6 +577,30 @@ export function SettingsPanel({ committee, onClose }: {
                 <div className="text-xs mb-1.5" style={{ color: '#9A8A78' }}>{t('settings_chair_code_label')}</div>
                 <ChairPasswordDisplay password={s.chairJoinSuffix || '????'} />
               </div>
+              {onBecomeHeadChair && (() => {
+                const headChair = committee.dbHeadChair || committee.chairNames?.[0] || '';
+                const isHead = !myChairName || headChair === myChairName;
+                return (
+                  <div className="py-3" style={{ borderBottom: '1px solid #DDD4C0' }}>
+                    <div className="text-xs mb-1.5" style={{ color: '#9A8A78' }}>Head chair (holds the gavel)</div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold" style={{ color: '#1C1410' }}>
+                        {headChair || '—'}{isHead && myChairName ? ' (you)' : ''}
+                      </span>
+                      {!isHead && (
+                        <button onClick={onBecomeHeadChair}
+                          className="ms-auto text-xs font-black px-3 py-1.5 rounded-lg transition-colors"
+                          style={{ backgroundColor: '#1B3828', color: '#EED98A' }}>
+                          Take the gavel
+                        </button>
+                      )}
+                    </div>
+                    <div className="text-[11px] mt-1.5" style={{ color: '#9A8A78' }}>
+                      Any chair can take the gavel; the current head chair becomes view-only.
+                    </div>
+                  </div>
+                );
+              })()}
               <Toggle
                 label={t('settings_chair_approval_label')}
                 note={t('settings_chair_approval_note')}

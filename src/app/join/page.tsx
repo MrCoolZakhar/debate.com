@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useCommitteeStore } from '@/lib/store';
-import { getCommitteeByCode, addChairName } from '@/lib/committeeService';
+import { getCommitteeByCode, addChairName, updateCommitteeHeadChairInDB } from '@/lib/committeeService';
 import { Committee } from '@/lib/types';
 import { useSettingsStore } from '@/lib/settingsStore';
 import { Emoji } from '@/components/Emoji';
@@ -36,6 +36,9 @@ function JoinPageInner() {
   // Chair name selection — after committee found in chair mode
   const [chairName, setChairName] = useState('');
   const [chairNameMode, setChairNameMode] = useState<'select' | 'new'>('select');
+  // Head chair (gavel) vs co-chair (view-only). Defaults to co-chair so joining never
+  // steals the gavel by accident; unset head falls back to the creator (chairNames[0]).
+  const [chairRole, setChairRole] = useState<'head' | 'co'>('co');
   const [newChairName, setNewChairName] = useState('');
   const [chairPassword, setChairPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
@@ -138,7 +141,13 @@ function JoinPageInner() {
         return;
       }
       addChairName(foundCommittee.id, name);
-      router.push(`/chair/${foundCommittee.code}?chairName=${encodeURIComponent(name)}`);
+      const go = () => router.push(`/chair/${foundCommittee.code}?chairName=${encodeURIComponent(name)}`);
+      // Claim-at-will: joining as head chair takes the gavel; co-chair joins view-only.
+      if (chairRole === 'head') {
+        updateCommitteeHeadChairInDB(foundCommittee.id, name).finally(go);
+      } else {
+        go();
+      }
       return;
     }
     if (mode === 'advisor') {
@@ -341,6 +350,30 @@ function JoinPageInner() {
                   style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #DDD4C0', color: '#1C1410' }}
                 />
               )}
+            </div>
+          )}
+
+          {foundCommittee && mode === 'chair' && (
+            <div className="mb-4">
+              <label className="block text-sm font-semibold mb-2" style={{ color: '#1C1410' }}>Join as</label>
+              <div className="flex gap-2">
+                {(['head', 'co'] as const).map((r) => (
+                  <button key={r} type="button" onClick={() => setChairRole(r)}
+                    className="flex-1 px-3 py-2.5 rounded-xl border text-sm font-semibold transition-colors focus:outline-none"
+                    style={{
+                      backgroundColor: chairRole === r ? '#1B3828' : '#FAF8F3',
+                      borderColor: chairRole === r ? '#2A5A3C' : '#DDD4C0',
+                      color: chairRole === r ? 'white' : '#6A5A4A',
+                    }}>
+                    {r === 'head' ? 'Head chair' : 'Co-chair'}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] mt-1.5" style={{ color: '#9A8A78' }}>
+                {chairRole === 'head'
+                  ? 'You’ll take the gavel — any current head chair becomes view-only.'
+                  : 'You’ll join view-only; you can take the gavel later from Settings.'}
+              </p>
             </div>
           )}
 

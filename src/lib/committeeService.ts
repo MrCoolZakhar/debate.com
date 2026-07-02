@@ -73,6 +73,7 @@ function rowToCommittee(
     expiresAt: (row.expires_at as string | null) ?? null,
     resumingChair: (row.resuming_chair as string | null) ?? null,
     dbChairJoinSuffix: ((row.settings as Record<string, unknown>)?.chairJoinSuffix as string) ?? null,
+    dbHeadChair: ((row.settings as Record<string, unknown>)?.headChair as string) ?? null,
     dbSeparateChairCode: ((row.settings as Record<string, unknown>)?.separateChairCode as boolean) ?? false,
     dbSettings: (row.settings as Record<string, unknown>) ?? null,
     dbScoring: ((row.settings as Record<string, unknown>)?.scoring as Committee['dbScoring']) ?? null,
@@ -929,6 +930,26 @@ export async function updateCommitteeChairSuffixInDB(committeeId: string, chairJ
     .from('committees')
     .update({ settings: { ...currentSettings, chairJoinSuffix } })
     .eq('id', committeeId);
+}
+
+// ============================================================
+// HEAD CHAIR  (persisted in settings jsonb; claim-at-will)
+// ============================================================
+// Sets who holds the gavel. Any chair may claim it — from Settings or when joining as chair.
+// Stored in settings so every device derives view-only status from it instead of a
+// presence join-order race. null/unset → the committee creator (chair_names[0]) is head.
+export async function updateCommitteeHeadChairInDB(committeeId: string, headChair: string): Promise<void> {
+  const { data: existing } = await supabase
+    .from('committees')
+    .select('settings')
+    .eq('id', committeeId)
+    .single();
+  const currentSettings = (existing?.settings as Record<string, unknown>) ?? {};
+  const { error } = await supabase
+    .from('committees')
+    .update({ settings: { ...currentSettings, headChair } })
+    .eq('id', committeeId);
+  if (error) console.error('Error setting head chair:', error);
 }
 
 // Persist the scoring config into the committee settings jsonb so it reaches

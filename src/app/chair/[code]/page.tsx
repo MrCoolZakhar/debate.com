@@ -50,6 +50,7 @@ import {
   startResumeRollCall as startResumeRollCallInDB,
   removePendingMotion as removePendingMotionInDB,
   updateSpeakerTimeLimit,
+  updateCommitteeHeadChairInDB,
 } from '@/lib/committeeService';
 
 function formatTime(seconds: number) {
@@ -1376,24 +1377,24 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     const channel = supabase.channel(`chair-presence-${committee.id}`, {
       config: { presence: { key: myChairName } },
     });
-    const syncPresence = () => {
-      const state = channel.presenceState<{ joinedAt: number }>();
-      const seats = Object.entries(state)
-        .map(([name, payloads]) => ({ name, joinedAt: (payloads as { joinedAt: number }[])[0]?.joinedAt ?? Infinity }))
-        .sort((a, b) => a.joinedAt - b.joinedAt);
-      const head = seats[0]?.name ?? myChairName;
-      setHeadChairName(head);
-      setIsViewOnly(head !== myChairName);
-    };
-    channel
-      .on('presence', { event: 'sync' }, syncPresence)
-      .on('presence', { event: 'join' }, syncPresence)
-      .on('presence', { event: 'leave' }, syncPresence)
-      .subscribe(async (status) => {
-        if (status === 'SUBSCRIBED') await channel.track({ joinedAt: Date.now() });
-      });
+    // Presence is used ONLY so the join page can show which chairs are currently active.
+    // Head-chair status is NOT decided here anymore — it's a persisted, claim-at-will
+    // setting derived from committee.dbHeadChair (see the effect below).
+    channel.subscribe(async (status) => {
+      if (status === 'SUBSCRIBED') await channel.track({ joinedAt: Date.now() });
+    });
     return () => { supabase.removeChannel(channel); };
   }, [committee?.id, myChairName]);
+
+  // Head chair (the gavel) is a persisted, claim-at-will setting — derive view-only status
+  // from it, never from presence join-order. Unset → the committee creator (chairNames[0])
+  // holds it. Any chair can claim it (Settings or at join), flipping the previous head to
+  // view-only via the realtime committees refetch.
+  useEffect(() => {
+    const head = committee?.dbHeadChair || committee?.chairNames?.[0] || myChairName || null;
+    setHeadChairName(head);
+    setIsViewOnly(!!myChairName && !!head && head !== myChairName);
+  }, [committee?.dbHeadChair, committee?.chairNames, myChairName]);
 
   // Timer — isolated: only updates the speakerTimeRemaining atom, never the committee object.
   // This prevents whole-tree re-renders every second (S1).
@@ -2712,6 +2713,12 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       {showSettings && (
         <SettingsPanel
           committee={committee}
+          myChairName={myChairName}
+          onBecomeHeadChair={() => {
+            if (!myChairName) return;
+            updateLocal(setCommittee, (c) => ({ ...c, dbHeadChair: myChairName }));
+            updateCommitteeHeadChairInDB(committee.id, myChairName);
+          }}
           onClose={() => setShowSettings(false)}
         />
       )}
