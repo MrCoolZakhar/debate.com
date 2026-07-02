@@ -17,6 +17,19 @@ interface AppPreference {
   conference_committees: { name: string; abbreviation: string | null } | null;
 }
 
+interface CustomQuestion {
+  id: string;
+  label: string;
+  type: string;
+  required: boolean;
+}
+
+interface RoleConfigLite {
+  role: string;
+  must_pay_before_allocation: boolean;
+  custom_questions: CustomQuestion[];
+}
+
 interface Application {
   id: string;
   user_id: string;
@@ -28,6 +41,7 @@ interface Application {
   payment_status: string | null;
   submitted_at: string;
   organizer_note: string | null;
+  custom_answers: Record<string, string> | null;
   assigned_committee_id: string | null;
   assigned_country_code: string | null;
   assigned_country_name: string | null;
@@ -115,30 +129,39 @@ export default function ApplicationsPage() {
   const [paymentFilter, setPaymentFilter] = useState('all');
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectNote, setRejectNote] = useState('');
+  const [roleConfigs, setRoleConfigs] = useState<RoleConfigLite[]>([]);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const loadApplications = useCallback(async () => {
     if (!conference) return;
     if (!session) return;
     setLoading(true);
     const supabase = getAuthedClient(session.access_token);
-    const { data } = await supabase
-      .from('applications')
-      .select(`
-        id, user_id, role, status, is_independent, is_head_delegate, experience_level,
-        payment_status, submitted_at, organizer_note,
-        assigned_committee_id, assigned_country_code, assigned_country_name,
-        assigned_committee:conference_committees!assigned_committee_id (name, topics),
-        profiles (display_name, email, avatar_url, nationality),
-        societies (name),
-        application_preferences (
-          preference_order, conference_committee_id, country_code, country_name,
-          conference_committees (name, abbreviation)
-        )
-      `)
-      .eq('conference_id', conference.id)
-      .order('submitted_at', { ascending: false });
+    const [appRes, cfgRes] = await Promise.all([
+      supabase
+        .from('applications')
+        .select(`
+          id, user_id, role, status, is_independent, is_head_delegate, experience_level,
+          payment_status, submitted_at, organizer_note, custom_answers,
+          assigned_committee_id, assigned_country_code, assigned_country_name,
+          assigned_committee:conference_committees!assigned_committee_id (name, topics),
+          profiles (display_name, email, avatar_url, nationality),
+          societies (name),
+          application_preferences (
+            preference_order, conference_committee_id, country_code, country_name,
+            conference_committees (name, abbreviation)
+          )
+        `)
+        .eq('conference_id', conference.id)
+        .order('submitted_at', { ascending: false }),
+      supabase
+        .from('application_role_configs')
+        .select('role, must_pay_before_allocation, custom_questions')
+        .eq('conference_id', conference.id),
+    ]);
 
-    setApplications((data ?? []) as unknown as Application[]);
+    setApplications((appRes.data ?? []) as unknown as Application[]);
+    setRoleConfigs((cfgRes.data ?? []) as unknown as RoleConfigLite[]);
     setLoading(false);
   }, [conference, session?.access_token]);
 
@@ -320,6 +343,12 @@ export default function ApplicationsPage() {
             const sc = statusColors[app.status] ?? { bg: 'rgba(154,138,120,0.1)', color: '#9A8A78' };
 
             const paid = app.payment_status === 'paid';
+            const roleConfig = roleConfigs.find(rc => rc.role === app.role);
+            const isPaidOrWaived = app.payment_status === 'paid' || app.payment_status === 'waived';
+            const mustPayBlocked = !!roleConfig?.must_pay_before_allocation && !isPaidOrWaived;
+            const questions = roleConfig?.custom_questions ?? [];
+            const answers = app.custom_answers ?? {};
+            const isExpanded = expandedId === app.id;
 
             return (
               <div
@@ -392,6 +421,13 @@ export default function ApplicationsPage() {
 
                 {/* Row 4: actions */}
                 <div className="flex flex-wrap gap-2 mt-3 pt-3" style={{ borderTop: '1px solid #F0EDE6' }}>
+                  <button
+                    onClick={() => setExpandedId(isExpanded ? null : app.id)}
+                    className="rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
+                    style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: isExpanded ? 'rgba(27,56,40,0.06)' : 'transparent', fontFamily: "'Outfit', sans-serif" }}
+                  >
+                    {isExpanded ? 'HIDE REVIEW' : 'REVIEW'}
+                  </button>
                   {app.status === 'submitted' && (
                     <>
                       <button
@@ -440,7 +476,17 @@ export default function ApplicationsPage() {
 
                   {app.status === 'accepted' && (
                     <>
-                      {isDelegate && (
+                      {isDelegate && mustPayBlocked && (
+                        <span
+                          title="This role must pay before allocation. Assignment is blocked until payment is marked paid or waived."
+                          className="rounded-lg py-1.5 px-4 text-xs font-bold inline-flex items-center gap-1.5"
+                          style={{ backgroundColor: 'rgba(184,132,74,0.12)', color: '#B8844A', border: '1px solid rgba(184,132,74,0.3)', fontFamily: "'Outfit', sans-serif", cursor: 'not-allowed' }}
+                        >
+                          <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#B8844A', display: 'inline-block' }} />
+                          PENDING PAYMENT
+                        </span>
+                      )}
+                      {isDelegate && !mustPayBlocked && (
                         <Link
                           href={`/manage/${conference.slug}/assignment`}
                           className="rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none"
@@ -515,6 +561,37 @@ export default function ApplicationsPage() {
                     </>
                   )}
                 </div>
+
+                {/* Row 5: review panel */}
+                {isExpanded && (
+                  <div className="mt-3 pt-3" style={{ borderTop: '1px solid #F0EDE6' }}>
+                    {app.profiles?.nationality && (
+                      <p className="text-xs mb-3" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                        <span style={{ fontFamily: "'DM Mono', monospace", letterSpacing: '0.06em' }}>NATIONALITY</span>{'  '}
+                        <span style={{ color: '#1C1410' }}>{app.profiles.nationality}</span>
+                      </p>
+                    )}
+                    {questions.length === 0 ? (
+                      <p className="text-xs italic" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                        No custom questions configured for this role.
+                      </p>
+                    ) : (
+                      <div className="flex flex-col gap-3">
+                        {questions.map(q => {
+                          const ans = (answers[q.id] ?? '').trim();
+                          return (
+                            <div key={q.id}>
+                              <p className="text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>{q.label}</p>
+                              <p className="text-sm whitespace-pre-wrap" style={{ color: ans ? '#1C1410' : '#9A8A78', fontFamily: "'Outfit', sans-serif", fontStyle: ans ? 'normal' : 'italic' }}>
+                                {ans || 'No answer provided.'}
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })}

@@ -22,9 +22,21 @@ interface AcceptedApp {
   role: string;
   experience_level: string | null;
   is_head_delegate: boolean;
+  payment_status: string | null;
   profiles: { id: string; display_name: string; email: string; nationality: string | null } | null;
   societies: { name: string } | null;
   application_preferences: AppPref[];
+}
+
+interface RoleConfigLite {
+  role: string;
+  must_pay_before_allocation: boolean;
+}
+
+function isAllocationBlocked(app: AcceptedApp, roleConfigs: RoleConfigLite[]): boolean {
+  const cfg = roleConfigs.find(rc => rc.role === app.role);
+  if (!cfg?.must_pay_before_allocation) return false;
+  return app.payment_status !== 'paid' && app.payment_status !== 'waived';
 }
 
 interface AllocationRow {
@@ -94,13 +106,14 @@ function ModalOverlay({ children, onClose }: { children: React.ReactNode; onClos
 interface AssignModalProps {
   committee: CommitteeData;
   unassigned: AcceptedApp[];
+  roleConfigs: RoleConfigLite[];
   preSelectedSlot?: SlotRow;
   preSelectedApp?: AcceptedApp;
   onClose: () => void;
   onAssigned: () => void;
 }
 
-function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedApp, onClose, onAssigned }: AssignModalProps) {
+function AssignModal({ committee, unassigned, roleConfigs, preSelectedSlot, preSelectedApp, onClose, onAssigned }: AssignModalProps) {
   const { session } = useAuth();
   const { conference } = useManage();
   const [selectedApp, setSelectedApp] = useState<AcceptedApp | null>(preSelectedApp ?? null);
@@ -118,6 +131,10 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedApp, o
 
   async function handleAssign() {
     if (!selectedApp || !selectedSlot) { setError('Select an applicant and a country.'); return; }
+    if (isAllocationBlocked(selectedApp, roleConfigs)) {
+      setError('This delegate must pay before allocation. Mark them paid or waived first.');
+      return;
+    }
     const userId = selectedApp.profiles?.id;
     if (!userId) { setError('Applicant profile not found.'); return; }
     setSaving(true);
@@ -208,27 +225,36 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedApp, o
               ) : sortedApps.map((app, idx) => {
                 const score = calcFitScore(app, committee.id, committee.difficulty);
                 const selected = selectedApp?.id === app.id;
+                const blocked = isAllocationBlocked(app, roleConfigs);
                 return (
                   <div
                     key={app.id}
-                    className="flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors"
+                    className="flex items-center gap-3 px-3 py-2 transition-colors"
                     style={{
                       backgroundColor: selected ? 'rgba(27,56,40,0.08)' : 'transparent',
                       borderBottom: '1px solid #F0EDE6',
+                      cursor: blocked ? 'not-allowed' : 'pointer',
+                      opacity: blocked ? 0.55 : 1,
                     }}
-                    onClick={() => setSelectedApp(app)}
-                    onMouseEnter={e => { if (!selected) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
-                    onMouseLeave={e => { if (!selected) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                    onClick={() => { if (!blocked) setSelectedApp(app); }}
+                    onMouseEnter={e => { if (!selected && !blocked) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
+                    onMouseLeave={e => { if (!selected && !blocked) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                   >
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold truncate" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>{app.profiles?.display_name}</p>
                       <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>{app.role} · {app.experience_level ?? 'n/a'}</p>
                     </div>
                     <div className="flex items-center gap-1 flex-shrink-0">
-                      {idx < 3 && score >= 2 && (
-                        <span style={{ fontSize: 9, color: '#B6871F', fontFamily: "'DM Mono', monospace" }}>★ BEST</span>
+                      {blocked ? (
+                        <span style={{ fontSize: 9, color: '#B8844A', fontFamily: "'DM Mono', monospace", fontWeight: 700 }}>PENDING PAYMENT</span>
+                      ) : (
+                        <>
+                          {idx < 3 && score >= 2 && (
+                            <span style={{ fontSize: 9, color: '#B6871F', fontFamily: "'DM Mono', monospace" }}>★ BEST</span>
+                          )}
+                          <span style={{ fontSize: 10, fontWeight: 700, color: fitColor(score), fontFamily: "'DM Mono', monospace" }}>{score}</span>
+                        </>
                       )}
-                      <span style={{ fontSize: 10, fontWeight: 700, color: fitColor(score), fontFamily: "'DM Mono', monospace" }}>{score}</span>
                     </div>
                   </div>
                 );
@@ -335,6 +361,7 @@ export default function AssignmentPage() {
   const { session } = useAuth();
   const [accepted, setAccepted] = useState<AcceptedApp[]>([]);
   const [committees, setCommittees] = useState<CommitteeData[]>([]);
+  const [roleConfigs, setRoleConfigs] = useState<RoleConfigLite[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCommitteeId, setSelectedCommitteeId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
@@ -350,11 +377,11 @@ export default function AssignmentPage() {
     setLoading(true);
     const supabase = getAuthedClient(session.access_token);
 
-    const [appRes, commRes] = await Promise.all([
+    const [appRes, commRes, cfgRes] = await Promise.all([
       supabase
         .from('applications')
         .select(`
-          id, role, experience_level, is_head_delegate,
+          id, role, experience_level, is_head_delegate, payment_status,
           profiles (id, display_name, email, nationality),
           societies (name),
           application_preferences (
@@ -374,6 +401,10 @@ export default function AssignmentPage() {
         `)
         .eq('conference_id', conference.id)
         .order('name', { ascending: true }),
+      supabase
+        .from('application_role_configs')
+        .select('role, must_pay_before_allocation')
+        .eq('conference_id', conference.id),
     ]);
 
     const apps = (appRes.data ?? []) as unknown as AcceptedApp[];
@@ -381,6 +412,7 @@ export default function AssignmentPage() {
 
     setAccepted(apps);
     setCommittees(comms);
+    setRoleConfigs((cfgRes.data ?? []) as unknown as RoleConfigLite[]);
     if (comms.length > 0 && !selectedCommitteeId) {
       setSelectedCommitteeId(comms[0].id);
     }
@@ -544,13 +576,14 @@ export default function AssignmentPage() {
                       const prefs = [...(app.application_preferences ?? [])].sort((a, b) => a.preference_order - b.preference_order);
                       const commPrefs = prefs.filter(p => p.conference_committee_id === selectedCommittee.id);
                       const isBest = top3Ids.has(app.id);
+                      const blocked = isAllocationBlocked(app, roleConfigs);
                       return (
                         <div
                           key={app.id}
                           className="rounded-xl p-3 transition-colors"
-                          style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', cursor: 'pointer' }}
-                          onClick={() => setAssignModal({ preApp: app })}
-                          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
+                          style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', cursor: blocked ? 'not-allowed' : 'pointer', opacity: blocked ? 0.6 : 1 }}
+                          onClick={() => { if (!blocked) setAssignModal({ preApp: app }); }}
+                          onMouseEnter={e => { if (!blocked) (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
                           onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
                         >
                           <div className="flex items-start justify-between gap-2">
@@ -563,12 +596,18 @@ export default function AssignmentPage() {
                               </p>
                             </div>
                             <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                              {isBest && (
-                                <span style={{ fontSize: 9, color: '#B6871F', fontFamily: "'DM Mono', monospace", fontWeight: 700 }}>★ BEST FIT</span>
+                              {blocked ? (
+                                <span style={{ fontSize: 9, color: '#B8844A', fontFamily: "'DM Mono', monospace", fontWeight: 700 }}>PENDING PAYMENT</span>
+                              ) : (
+                                <>
+                                  {isBest && (
+                                    <span style={{ fontSize: 9, color: '#B6871F', fontFamily: "'DM Mono', monospace", fontWeight: 700 }}>★ BEST FIT</span>
+                                  )}
+                                  <span style={{ fontSize: 11, fontWeight: 700, color: fitColor(score), fontFamily: "'DM Mono', monospace" }}>
+                                    {score}/4
+                                  </span>
+                                </>
                               )}
-                              <span style={{ fontSize: 11, fontWeight: 700, color: fitColor(score), fontFamily: "'DM Mono', monospace" }}>
-                                {score}/4
-                              </span>
                             </div>
                           </div>
 
@@ -667,6 +706,7 @@ export default function AssignmentPage() {
         <AssignModal
           committee={selectedCommittee}
           unassigned={accepted}
+          roleConfigs={roleConfigs}
           preSelectedSlot={assignModal.preSlot}
           preSelectedApp={assignModal.preApp}
           onClose={() => setAssignModal(null)}
