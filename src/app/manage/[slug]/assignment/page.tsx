@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { X, Check, Sparkles, ChevronDown, ChevronUp, Award, Globe2, ArrowRight } from 'lucide-react';
+import { X, Check, Sparkles, ChevronDown, ChevronUp, Award, Globe2, ArrowRight, GripVertical, MousePointerClick } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
@@ -22,6 +22,7 @@ interface AcceptedApp {
   role: string;
   experience_level: string | null;
   is_head_delegate: boolean;
+  is_independent: boolean;
   payment_status: string | null;
   profiles: {
     id: string;
@@ -60,6 +61,8 @@ interface AllocationRow {
 // yellow/amber = MEDIUM, red = LOW. 'standard' = unrated (neutral).
 type ImportanceTier = 'standard' | 'high' | 'medium' | 'low';
 const TIER_CYCLE: ImportanceTier[] = ['standard', 'high', 'medium', 'low'];
+// Urgency order for the drop popup: high > medium > low > standard
+const TIER_RANK: Record<ImportanceTier, number> = { high: 0, medium: 1, low: 2, standard: 3 };
 const TIER_META: Record<ImportanceTier, { label: string; color: string; bg: string }> = {
   high:     { label: 'HIGH', color: '#3D7A52', bg: 'rgba(61,122,82,0.12)' },
   medium:   { label: 'MED',  color: '#B8844A', bg: 'rgba(184,132,74,0.14)' },
@@ -81,6 +84,7 @@ interface CommitteeData {
   abbreviation: string | null;
   difficulty: string;
   total_slots: number;
+  logo_url: string | null;
   chair_user_ids: string[] | null;
   committee_country_slots: SlotRow[];
   conference_allocations: AllocationRow[];
@@ -166,6 +170,50 @@ interface Suggestion {
 const OUTFIT = "'Outfit', sans-serif";
 const MONO = "'DM Mono', monospace";
 
+// Single write path for every allocation on this page: insert into
+// conference_allocations (incl. conference_id), friendly duplicate errors,
+// then round-trip the application status to 'assigned'.
+// Returns an error message, or null on success.
+async function insertAllocation(
+  supabase: ReturnType<typeof getAuthedClient>,
+  conferenceId: string,
+  committee: CommitteeData,
+  app: AcceptedApp,
+  slot: SlotRow,
+): Promise<string | null> {
+  const userId = app.profiles?.id;
+  if (!userId) return 'Applicant profile not found.';
+
+  const { error: insertErr } = await supabase.from('conference_allocations').insert({
+    conference_id: conferenceId,
+    conference_committee_id: committee.id,
+    user_id: userId,
+    country_code: slot.country_code,
+    country_name: slot.country_name,
+    application_id: app.id,
+    allocation_sent: false,
+  });
+  if (insertErr) {
+    if (insertErr.code === '23505') {
+      return insertErr.message.includes('user_id')
+        ? 'This delegate already has an allocation in this committee.'
+        : insertErr.message.includes('country_code')
+        ? 'This country is already allocated to another delegate.'
+        : 'This allocation already exists.';
+    }
+    return insertErr.message;
+  }
+
+  await supabase.from('applications').update({
+    status: 'assigned',
+    assigned_committee_id: committee.id,
+    assigned_country_code: slot.country_code,
+    assigned_country_name: slot.country_name,
+  }).eq('id', app.id);
+
+  return null;
+}
+
 function TierBadge({ tier, onCycle }: { tier: ImportanceTier; onCycle?: () => void }) {
   const meta = TIER_META[tier];
   return (
@@ -186,6 +234,28 @@ function TierBadge({ tier, onCycle }: { tier: ImportanceTier; onCycle?: () => vo
         {meta.label}
       </span>
     </button>
+  );
+}
+
+function DelegationChip({ app }: { app: AcceptedApp }) {
+  const label = app.is_independent ? 'Independent' : app.societies?.name ?? null;
+  if (!label) return null;
+  const indep = app.is_independent;
+  return (
+    <span
+      className="px-2 py-0.5 rounded-full truncate inline-block"
+      style={{
+        fontSize: 9,
+        fontFamily: MONO,
+        letterSpacing: '0.04em',
+        maxWidth: 150,
+        backgroundColor: indep ? 'rgba(154,138,120,0.14)' : 'rgba(27,56,40,0.08)',
+        color: indep ? '#9A8A78' : '#1B3828',
+        border: `1px solid ${indep ? 'rgba(154,138,120,0.3)' : 'rgba(27,56,40,0.18)'}`,
+      }}
+    >
+      {label}
+    </span>
   );
 }
 
@@ -275,7 +345,148 @@ function DelegateDetail({ app, history }: { app: AcceptedApp; history: UserHisto
   );
 }
 
+// ── DropAllocateModal ─────────────────────────────────────────────────────────
+// Opens when an applicant is dropped on (or click-targeted at) a committee.
+// Lists that committee's OPEN slots, most urgent first: importance tier order
+// high > medium > low > standard, then suggestion score for this applicant.
+
+interface DropAllocateModalProps {
+  committee: CommitteeData;
+  app: AcceptedApp;
+  roleConfigs: RoleConfigLite[];
+  onClose: () => void;
+  onAssigned: (msg: string) => void;
+}
+
+function DropAllocateModal({ committee, app, roleConfigs, onClose, onAssigned }: DropAllocateModalProps) {
+  const { session } = useAuth();
+  const { conference } = useManage();
+  const [busySlotId, setBusySlotId] = useState<string | null>(null);
+  const [error, setError] = useState('');
+
+  const allocatedCodes = new Set(committee.conference_allocations.map(a => a.country_code));
+  const filled = committee.conference_allocations.length;
+  const rows = committee.committee_country_slots
+    .filter(s => !allocatedCodes.has(s.country_code))
+    .map(slot => ({ slot, ...scoreSlot(app, committee, slot, filled, committee.total_slots) }))
+    .sort((a, b) =>
+      TIER_RANK[a.slot.importance] - TIER_RANK[b.slot.importance] || b.score - a.score
+    );
+
+  async function handleAllocate(slot: SlotRow) {
+    if (!session) return;
+    if (!conference) { setError('Conference not loaded. Please refresh.'); return; }
+    if (isAllocationBlocked(app, roleConfigs)) {
+      setError('This delegate must pay before allocation. Mark them paid or waived first.');
+      return;
+    }
+    setBusySlotId(slot.id);
+    setError('');
+    const supabase = getAuthedClient(session.access_token);
+    const err = await insertAllocation(supabase, conference.id, committee, app, slot);
+    setBusySlotId(null);
+    if (err) { setError(err); return; }
+    onAssigned(`${app.profiles?.display_name} allocated to ${slot.country_name} in ${committee.abbreviation ?? committee.name}.`);
+    onClose();
+  }
+
+  return (
+    <ModalOverlay onClose={onClose}>
+      <div
+        className="rounded-2xl p-6"
+        style={{
+          width: 'min(92vw, 560px)',
+          backgroundColor: 'rgba(250,248,243,0.94)',
+          backdropFilter: 'blur(16px)',
+          border: '1px solid #DDD4C0',
+          maxHeight: '86vh',
+          overflowY: 'auto',
+          boxShadow: '0 20px 50px rgba(27,56,40,0.25)',
+        }}
+      >
+        <div className="flex items-start justify-between mb-1">
+          <div className="min-w-0">
+            <p style={{ fontSize: 9, color: '#B6871F', fontFamily: MONO, letterSpacing: '0.14em', fontWeight: 500, marginBottom: 4 }}>
+              ALLOCATE
+            </p>
+            <h2 className="font-black text-base flex items-center gap-2 flex-wrap" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+              <span>{app.profiles?.display_name}</span>
+              <ArrowRight size={14} style={{ color: '#9A8A78' }} />
+              <span>{committee.abbreviation ?? committee.name}</span>
+            </h2>
+          </div>
+          <button onClick={onClose} className="focus:outline-none flex-shrink-0 mt-1" style={{ color: '#9A8A78' }}><X size={18} /></button>
+        </div>
+        <p className="text-xs mb-4" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+          Open slots, most urgent first — importance tier, then fit for this delegate.
+        </p>
+
+        {error && (
+          <p className="text-xs mb-3 rounded-lg px-3 py-2" style={{ color: '#8B2020', fontFamily: OUTFIT, backgroundColor: 'rgba(139,32,32,0.07)', border: '1px solid rgba(139,32,32,0.25)' }}>
+            {error}
+          </p>
+        )}
+
+        {rows.length === 0 ? (
+          <p className="text-sm py-6 text-center" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+            All slots in this committee are filled.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-1.5">
+            {rows.map(({ slot, score, reasons }) => {
+              const busy = busySlotId === slot.id;
+              return (
+                <div
+                  key={slot.id}
+                  className="flex items-center gap-3 rounded-xl px-3 py-2.5"
+                  style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}
+                >
+                  <img src={getFlagUrl(slot.country_code)} style={{ width: 24, height: 17, borderRadius: 3, objectFit: 'cover', flexShrink: 0, boxShadow: '0 1px 3px rgba(27,56,40,0.18)' }} alt={slot.country_name} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{slot.country_name}</p>
+                      <TierBadge tier={slot.importance} />
+                    </div>
+                    {reasons.length > 0 && (
+                      <div className="flex gap-1 mt-1 flex-wrap">
+                        {reasons.slice(0, 3).map(r => (
+                          <span key={r} className="px-1.5 py-0.5 rounded-full" style={{ fontSize: 8, backgroundColor: 'rgba(61,122,82,0.10)', color: '#3D7A52', fontFamily: MONO, letterSpacing: '0.04em' }}>
+                            {r}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: fitColor(score), fontFamily: MONO, flexShrink: 0 }}>{score}</span>
+                  <button
+                    onClick={() => handleAllocate(slot)}
+                    disabled={busySlotId !== null}
+                    className="rounded-lg py-1.5 px-3 text-xs font-bold focus:outline-none transition-colors flex-shrink-0"
+                    style={{
+                      backgroundColor: busySlotId !== null ? '#DDD4C0' : '#1B3828',
+                      color: busySlotId !== null ? '#9A8A78' : '#EED98A',
+                      border: 'none',
+                      fontFamily: OUTFIT,
+                      letterSpacing: '0.04em',
+                    }}
+                    onMouseEnter={e => { if (busySlotId === null) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+                    onMouseLeave={e => { if (busySlotId === null) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+                  >
+                    {busy ? '...' : 'ALLOCATE'}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </ModalOverlay>
+  );
+}
+
 // ── AssignModal ───────────────────────────────────────────────────────────────
+// Kept for the slot-first path: pick a specific open country, then choose the
+// applicant (with fit scores). Reached from a panel's expanded slot list.
 
 interface AssignModalProps {
   committee: CommitteeData;
@@ -324,37 +535,12 @@ function AssignModal({ committee, unassigned, roleConfigs, preSelectedSlot, preS
     if (!conference) { setError('Conference not loaded. Please refresh.'); setSaving(false); return; }
     const supabase = getAuthedClient(session.access_token);
 
-    const { error: insertErr } = await supabase.from('conference_allocations').insert({
-      conference_id: conference.id,
-      conference_committee_id: committee.id,
-      user_id: userId,
-      country_code: selectedSlot.country_code,
-      country_name: selectedSlot.country_name,
-      application_id: selectedApp.id,
-      allocation_sent: false,
-    });
+    const insertErr = await insertAllocation(supabase, conference.id, committee, selectedApp, selectedSlot);
     if (insertErr) {
-      if (insertErr.code === '23505') {
-        setError(
-          insertErr.message.includes('user_id')
-            ? 'This delegate already has an allocation in this committee.'
-            : insertErr.message.includes('country_code')
-            ? 'This country is already allocated to another delegate.'
-            : 'This allocation already exists.'
-        );
-      } else {
-        setError(insertErr.message);
-      }
+      setError(insertErr);
       setSaving(false);
       return;
     }
-
-    await supabase.from('applications').update({
-      status: 'assigned',
-      assigned_committee_id: committee.id,
-      assigned_country_code: selectedSlot.country_code,
-      assigned_country_name: selectedSlot.country_name,
-    }).eq('id', selectedApp.id);
 
     if (sendEmail) {
       await supabase
@@ -537,6 +723,191 @@ function AssignModal({ committee, unassigned, roleConfigs, preSelectedSlot, preS
   );
 }
 
+// ── CommitteeBoardPanel ───────────────────────────────────────────────────────
+// One compact panel per committee — all committees visible at once. Acts as a
+// drag-and-drop target for applicant cards and a click target when an
+// applicant is selected.
+
+interface CommitteeBoardPanelProps {
+  committee: CommitteeData;
+  dragging: boolean;
+  isDropTarget: boolean;
+  selectable: boolean;
+  onDragOverPanel: () => void;
+  onDragLeavePanel: () => void;
+  onDropPanel: (appId: string) => void;
+  onClickPanel: () => void;
+  onRemoveAllocation: (a: AllocationRow) => void;
+  onCycleTier: (slot: SlotRow) => void;
+  onAssignSlot: (slot: SlotRow) => void;
+}
+
+function CommitteeBoardPanel({
+  committee, dragging, isDropTarget, selectable,
+  onDragOverPanel, onDragLeavePanel, onDropPanel, onClickPanel,
+  onRemoveAllocation, onCycleTier, onAssignSlot,
+}: CommitteeBoardPanelProps) {
+  const [showSlots, setShowSlots] = useState(false);
+
+  const filled = committee.conference_allocations.length;
+  const total = committee.total_slots;
+  const pct = total > 0 ? Math.min(100, Math.round((filled / total) * 100)) : 0;
+  const allocatedCodes = new Set(committee.conference_allocations.map(a => a.country_code));
+  const openSlots = committee.committee_country_slots.filter(s => !allocatedCodes.has(s.country_code));
+  const openTierCounts: Record<ImportanceTier, number> = { high: 0, medium: 0, low: 0, standard: 0 };
+  for (const s of openSlots) openTierCounts[s.importance] += 1;
+
+  return (
+    <div
+      onDragOver={e => {
+        if (!dragging) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        onDragOverPanel();
+      }}
+      onDragLeave={e => {
+        if (dragging && !e.currentTarget.contains(e.relatedTarget as Node | null)) onDragLeavePanel();
+      }}
+      onDrop={e => {
+        e.preventDefault();
+        onDropPanel(e.dataTransfer.getData('text/plain'));
+      }}
+      onClick={() => { if (selectable) onClickPanel(); }}
+      className="rounded-2xl p-4 flex flex-col transition-all"
+      style={{
+        backgroundColor: isDropTarget ? 'rgba(61,122,82,0.08)' : 'rgba(250,248,243,0.84)',
+        backdropFilter: 'blur(10px)',
+        border: isDropTarget
+          ? '1.5px solid #1B3828'
+          : dragging || selectable
+          ? '1.5px dashed rgba(184,132,74,0.7)'
+          : '1px solid #DDD4C0',
+        boxShadow: isDropTarget ? '0 8px 28px rgba(27,56,40,0.18)' : '0 4px 18px rgba(27,56,40,0.06)',
+        cursor: selectable ? 'pointer' : 'default',
+      }}
+    >
+      {/* Header: emblem + name + fill count */}
+      <div className="flex items-center gap-2.5">
+        {committee.logo_url ? (
+          <img src={committee.logo_url} alt="" style={{ width: 30, height: 30, borderRadius: 8, objectFit: 'cover', border: '1px solid #DDD4C0', flexShrink: 0 }} />
+        ) : (
+          <div
+            className="flex items-center justify-center flex-shrink-0"
+            style={{ width: 30, height: 30, borderRadius: 8, backgroundColor: 'rgba(27,56,40,0.08)', color: '#1B3828', fontFamily: MONO, fontSize: 11, fontWeight: 700 }}
+          >
+            {(committee.abbreviation ?? committee.name).slice(0, 2).toUpperCase()}
+          </div>
+        )}
+        <div className="min-w-0 flex-1">
+          <p style={{ fontSize: 14, fontWeight: 700, color: '#1B3828', fontFamily: MONO, letterSpacing: '0.02em' }}>
+            {committee.abbreviation ?? committee.name}
+          </p>
+          <p className="truncate" style={{ fontSize: 10, color: '#9A8A78', fontFamily: OUTFIT }}>{committee.name}</p>
+        </div>
+        <p style={{ fontSize: 12, fontWeight: 700, color: '#1C1410', fontFamily: MONO, flexShrink: 0 }}>
+          {filled}<span style={{ color: '#9A8A78', fontWeight: 500 }}>/{total}</span>
+        </p>
+      </div>
+
+      {/* Fill bar */}
+      <div className="mt-2.5 rounded-full overflow-hidden" style={{ height: 4, backgroundColor: '#DDD4C0' }}>
+        <div style={{ width: `${pct}%`, height: '100%', backgroundColor: pct >= 100 ? '#3D7A52' : '#1B3828', transition: 'width 0.3s' }} />
+      </div>
+
+      {/* Tier-colored open-slot summary */}
+      <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
+        {openSlots.length === 0 ? (
+          <span style={{ fontSize: 9, fontWeight: 700, color: '#3D7A52', fontFamily: MONO, letterSpacing: '0.08em' }}>FULLY ALLOCATED</span>
+        ) : (
+          (['high', 'medium', 'low', 'standard'] as ImportanceTier[]).map(t => {
+            const n = openTierCounts[t];
+            if (n === 0) return null;
+            const meta = TIER_META[t];
+            return (
+              <span
+                key={t}
+                className="flex items-center gap-1 px-1.5 py-0.5 rounded-full"
+                style={{ backgroundColor: meta.bg, border: `1px solid ${meta.color}30` }}
+              >
+                <span style={{ width: 5, height: 5, borderRadius: 999, backgroundColor: meta.color, display: 'inline-block' }} />
+                <span style={{ fontSize: 8.5, fontFamily: MONO, fontWeight: 700, color: meta.color, letterSpacing: '0.05em' }}>
+                  {n} {meta.label} OPEN
+                </span>
+              </span>
+            );
+          })
+        )}
+      </div>
+
+      {/* Allocated delegates */}
+      {committee.conference_allocations.length > 0 && (
+        <div className="mt-3">
+          <p style={{ fontSize: 8, color: '#B6871F', fontFamily: MONO, letterSpacing: '0.14em', fontWeight: 500, marginBottom: 4 }}>ALLOCATED</p>
+          <div style={{ maxHeight: 136, overflowY: 'auto' }} className="flex flex-col gap-1 pr-0.5">
+            {committee.conference_allocations.map(a => (
+              <div key={a.id} className="flex items-center gap-2 rounded-lg px-2 py-1" style={{ backgroundColor: 'rgba(27,56,40,0.04)' }}>
+                <img src={getFlagUrl(a.country_code)} style={{ width: 16, height: 11, borderRadius: 2, objectFit: 'cover', flexShrink: 0 }} alt={a.country_name} />
+                <span className="truncate" style={{ fontSize: 11, color: '#1C1410', fontFamily: OUTFIT, fontWeight: 600 }}>
+                  {a.country_name}
+                </span>
+                <span className="truncate" style={{ fontSize: 10, color: '#9A8A78', fontFamily: OUTFIT, marginLeft: 'auto' }}>
+                  {a.profiles?.display_name ?? 'Assigned'}
+                </span>
+                <button
+                  onClick={e => { e.stopPropagation(); onRemoveAllocation(a); }}
+                  title="Remove allocation"
+                  className="focus:outline-none flex-shrink-0"
+                  style={{ color: '#9A8A78', lineHeight: 0 }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#8B2020'; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Open slots toggle */}
+      {openSlots.length > 0 && (
+        <button
+          onClick={e => { e.stopPropagation(); setShowSlots(v => !v); }}
+          className="mt-3 flex items-center gap-1 focus:outline-none self-start"
+          style={{ fontSize: 9, fontWeight: 700, color: '#9A8A78', fontFamily: MONO, letterSpacing: '0.1em', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
+        >
+          {showSlots ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+          OPEN SLOTS ({openSlots.length})
+        </button>
+      )}
+      {showSlots && openSlots.length > 0 && (
+        <div className="mt-2 flex flex-col gap-1" style={{ maxHeight: 190, overflowY: 'auto' }}>
+          {[...openSlots]
+            .sort((a, b) => TIER_RANK[a.importance] - TIER_RANK[b.importance] || a.country_name.localeCompare(b.country_name))
+            .map(slot => (
+              <div key={slot.id} className="flex items-center gap-2 rounded-lg px-2 py-1" style={{ border: '1px solid #F0EDE6' }}>
+                <img src={getFlagUrl(slot.country_code)} style={{ width: 16, height: 11, borderRadius: 2, objectFit: 'cover', flexShrink: 0 }} alt={slot.country_name} />
+                <span className="truncate flex-1" style={{ fontSize: 11, color: '#1C1410', fontFamily: OUTFIT }}>{slot.country_name}</span>
+                <TierBadge tier={slot.importance} onCycle={() => onCycleTier(slot)} />
+                <button
+                  onClick={e => { e.stopPropagation(); onAssignSlot(slot); }}
+                  className="rounded-md py-0.5 px-2 focus:outline-none transition-colors flex-shrink-0"
+                  style={{ fontSize: 9, fontWeight: 700, backgroundColor: 'rgba(27,56,40,0.07)', color: '#1B3828', border: 'none', fontFamily: OUTFIT, letterSpacing: '0.04em', cursor: 'pointer' }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.14)'; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.07)'; }}
+                >
+                  ASSIGN
+                </button>
+              </div>
+            ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── AssignmentPage ────────────────────────────────────────────────────────────
 
 export default function AssignmentPage() {
@@ -549,13 +920,15 @@ export default function AssignmentPage() {
   const [history, setHistory] = useState<Record<string, UserHistory>>({});
   const [mode, setMode] = useState<'delegates' | 'chairs'>('delegates');
   const [loading, setLoading] = useState(true);
-  const [selectedCommitteeId, setSelectedCommitteeId] = useState<string | null>(null);
+  const [selectedCommitteeId, setSelectedCommitteeId] = useState<string | null>(null); // chairs mode tabs
   const [search, setSearch] = useState('');
   const [expandedAppId, setExpandedAppId] = useState<string | null>(null);
-  const [assignModal, setAssignModal] = useState<{
-    preSlot?: SlotRow;
-    preApp?: AcceptedApp;
-  } | null>(null);
+  // Board interactions
+  const [selectedAppId, setSelectedAppId] = useState<string | null>(null);
+  const [dragAppId, setDragAppId] = useState<string | null>(null);
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+  const [dropModal, setDropModal] = useState<{ committeeId: string; appId: string } | null>(null);
+  const [assignModal, setAssignModal] = useState<{ committeeId: string; preSlot?: SlotRow } | null>(null);
   const [sendingAll, setSendingAll] = useState(false);
   const [quickAssigning, setQuickAssigning] = useState<string | null>(null); // suggestion key in flight
   const [flash, setFlash] = useState<{ kind: 'ok' | 'err'; msg: string } | null>(null);
@@ -575,7 +948,7 @@ export default function AssignmentPage() {
       supabase
         .from('applications')
         .select(`
-          id, role, experience_level, is_head_delegate, payment_status,
+          id, role, experience_level, is_head_delegate, is_independent, payment_status,
           profiles (id, display_name, email, nationality, mun_experience_level, avatar_url),
           societies (name),
           application_preferences (
@@ -589,7 +962,7 @@ export default function AssignmentPage() {
       supabase
         .from('conference_committees')
         .select(`
-          id, name, abbreviation, difficulty, total_slots, chair_user_ids,
+          id, name, abbreviation, difficulty, total_slots, logo_url, chair_user_ids,
           committee_country_slots (id, country_code, country_name, delegation_size, importance),
           conference_allocations (id, user_id, country_code, country_name, allocation_sent, application_id, profiles (display_name))
         `)
@@ -683,44 +1056,18 @@ export default function AssignmentPage() {
       showFlash('err', 'This delegate must pay before allocation.');
       return;
     }
-    const userId = sug.app.profiles?.id;
-    if (!userId) { showFlash('err', 'Applicant profile not found.'); return; }
     const key = `${sug.app.id}-${sug.slot.id}`;
     setQuickAssigning(key);
     const supabase = getAuthedClient(session.access_token);
 
-    const { error: insertErr } = await supabase.from('conference_allocations').insert({
-      conference_id: conference.id,
-      conference_committee_id: sug.committee.id,
-      user_id: userId,
-      country_code: sug.slot.country_code,
-      country_name: sug.slot.country_name,
-      application_id: sug.app.id,
-      allocation_sent: false,
-    });
-    if (insertErr) {
-      setQuickAssigning(null);
-      if (insertErr.code === '23505') {
-        showFlash('err', insertErr.message.includes('user_id')
-          ? 'This delegate already has an allocation in this committee.'
-          : insertErr.message.includes('country_code')
-          ? 'This country is already allocated to another delegate.'
-          : 'This allocation already exists.');
-      } else {
-        showFlash('err', insertErr.message);
-      }
+    const err = await insertAllocation(supabase, conference.id, sug.committee, sug.app, sug.slot);
+    setQuickAssigning(null);
+    if (err) {
+      showFlash('err', err);
       await loadData();
       return;
     }
 
-    await supabase.from('applications').update({
-      status: 'assigned',
-      assigned_committee_id: sug.committee.id,
-      assigned_country_code: sug.slot.country_code,
-      assigned_country_name: sug.slot.country_name,
-    }).eq('id', sug.app.id);
-
-    setQuickAssigning(null);
     showFlash('ok', `${sug.app.profiles?.display_name} assigned to ${sug.slot.country_name} in ${sug.committee.abbreviation ?? sug.committee.name}.`);
     await loadData();
   }
@@ -811,29 +1158,42 @@ export default function AssignmentPage() {
 
   if (!conference) return null;
 
+  const selectedApp = accepted.find(a => a.id === selectedAppId) ?? null;
+  const dropModalCommittee = dropModal ? committees.find(c => c.id === dropModal.committeeId) ?? null : null;
+  const dropModalApp = dropModal ? accepted.find(a => a.id === dropModal.appId) ?? null : null;
+  const assignModalCommittee = assignModal ? committees.find(c => c.id === assignModal.committeeId) ?? null : null;
+
+  // Board: open the drop popup for a committee + applicant (drag or click path)
+  function openDropModal(committeeId: string, appId: string) {
+    const app = accepted.find(a => a.id === appId);
+    if (!app) return;
+    if (isAllocationBlocked(app, roleConfigs)) {
+      showFlash('err', 'This delegate must pay before allocation. Mark them paid or waived first.');
+      return;
+    }
+    setDropModal({ committeeId, appId });
+  }
+
+  function handleDropOnCommittee(committeeId: string, droppedAppId: string) {
+    const appId = droppedAppId || dragAppId;
+    setDragAppId(null);
+    setDropTargetId(null);
+    if (!appId) return;
+    openDropModal(committeeId, appId);
+  }
+
+  // Left rail: search + blocked-last, alphabetical
+  const filteredApps = [...accepted]
+    .filter(app => (app.profiles?.display_name ?? '').toLowerCase().includes(search.toLowerCase()))
+    .sort((a, b) => {
+      const ab = isAllocationBlocked(a, roleConfigs) ? 1 : 0;
+      const bb = isAllocationBlocked(b, roleConfigs) ? 1 : 0;
+      if (ab !== bb) return ab - bb;
+      return (a.profiles?.display_name ?? '').localeCompare(b.profiles?.display_name ?? '');
+    });
+
+  // Chairs mode
   const selectedCommittee = committees.find(c => c.id === selectedCommitteeId) ?? null;
-
-  const unassignedForCommittee = accepted.filter(app => {
-    const name = app.profiles?.display_name ?? '';
-    return name.toLowerCase().includes(search.toLowerCase());
-  });
-
-  // Committee-level fit scores for the left panel
-  const withScores = unassignedForCommittee.map(app => ({
-    app,
-    score: selectedCommittee ? scorePrefAndExp(app, selectedCommittee, null).score : 0,
-  }));
-  withScores.sort((a, b) => b.score - a.score);
-  const bestIds = new Set(withScores.slice(0, 3).filter(x => x.score >= 20).map(x => x.app.id));
-
-  // Per-slot SUGGESTED badges within the selected committee
-  const slotSuggestions = new Map<string, Suggestion>(
-    suggestions.filter(s => s.committee.id === selectedCommitteeId).map(s => [s.slot.id, s])
-  );
-
-  const filledCount = selectedCommittee?.conference_allocations.length ?? 0;
-  const totalSlots = selectedCommittee?.total_slots ?? 0;
-
   const chairAppByUser = new Map(chairApps.map(ca => [ca.user_id, ca]));
   const currentChairIds = selectedCommittee?.chair_user_ids ?? [];
   const currentChairs = currentChairIds.map(uid => ({
@@ -993,39 +1353,31 @@ export default function AssignmentPage() {
             </div>
           )}
 
-          {/* Committee tabs */}
-          <div className="flex gap-2 overflow-x-auto pb-1 mb-6" style={{ scrollbarWidth: 'none' }}>
-            {committees.map(c => {
-              const filled = c.conference_allocations.length;
-              const active = c.id === selectedCommitteeId;
-              return (
-                <button
-                  key={c.id}
-                  onClick={() => setSelectedCommitteeId(c.id)}
-                  className="flex-shrink-0 focus:outline-none transition-colors"
-                  style={{
-                    padding: '6px 16px',
-                    borderRadius: 999,
-                    fontSize: 11,
-                    fontFamily: MONO,
-                    fontWeight: 700,
-                    letterSpacing: '0.06em',
-                    border: active ? 'none' : '1px solid #DDD4C0',
-                    backgroundColor: active ? '#1B3828' : 'transparent',
-                    color: active ? '#EED98A' : '#9A8A78',
-                    cursor: 'pointer',
-                  }}
-                >
-                  {c.abbreviation ?? c.name} <span style={{ opacity: 0.7 }}>{filled}/{c.total_slots}</span>
-                </button>
-              );
-            })}
-          </div>
+          {/* Selected-applicant banner (click path) */}
+          {mode === 'delegates' && selectedApp && (
+            <div
+              className="flex items-center gap-2.5 rounded-xl px-4 py-2.5 mb-5"
+              style={{ backgroundColor: 'rgba(61,122,82,0.08)', border: '1px solid rgba(61,122,82,0.35)' }}
+            >
+              <MousePointerClick size={14} style={{ color: '#3D7A52', flexShrink: 0 }} />
+              <p className="text-sm min-w-0 truncate" style={{ color: '#1B3828', fontFamily: OUTFIT }}>
+                <span style={{ fontWeight: 700 }}>{selectedApp.profiles?.display_name}</span> selected — click a committee panel to pick their country, or drag their card.
+              </p>
+              <button
+                onClick={() => setSelectedAppId(null)}
+                className="focus:outline-none flex-shrink-0"
+                style={{ color: '#3D7A52', marginLeft: 'auto', lineHeight: 0 }}
+                title="Clear selection"
+              >
+                <X size={15} />
+              </button>
+            </div>
+          )}
 
-          {mode === 'delegates' && selectedCommittee && (
-            <div className="flex gap-6" style={{ minHeight: 500 }}>
-              {/* Left panel — unassigned applicants */}
-              <div style={{ width: 340, flexShrink: 0 }}>
+          {mode === 'delegates' && (
+            <div className="flex flex-col xl:flex-row gap-6 items-start">
+              {/* Left rail — unassigned applicants */}
+              <div className="w-full xl:w-[320px] flex-shrink-0">
                 <div className="flex items-center gap-2 mb-3">
                   <p style={{ fontSize: 10, color: '#B6871F', fontFamily: MONO, letterSpacing: '0.16em', fontWeight: 500 }}>
                     UNASSIGNED
@@ -1034,7 +1386,10 @@ export default function AssignmentPage() {
                     className="px-2 py-0.5 rounded-full text-xs font-bold"
                     style={{ backgroundColor: 'rgba(27,56,40,0.1)', color: '#1B3828', fontFamily: MONO, fontSize: 10 }}
                   >
-                    {unassignedForCommittee.length}
+                    {filteredApps.length}
+                  </span>
+                  <span style={{ fontSize: 9, color: '#9A8A78', fontFamily: MONO, marginLeft: 'auto', letterSpacing: '0.06em' }}>
+                    DRAG ONTO A COMMITTEE
                   </span>
                 </div>
 
@@ -1049,93 +1404,92 @@ export default function AssignmentPage() {
                   />
                 </div>
 
-                {unassignedForCommittee.length === 0 ? (
+                {filteredApps.length === 0 ? (
                   <p className="text-sm py-6 text-center" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
                     {accepted.length === 0 ? 'No accepted applicants yet.' : 'No applicants match your search.'}
                   </p>
                 ) : (
                   <div className="flex flex-col gap-2">
-                    {withScores.map(({ app, score }) => {
-                      const prefs = [...(app.application_preferences ?? [])].sort((a, b) => a.preference_order - b.preference_order);
-                      const commPrefs = prefs.filter(p => p.conference_committee_id === selectedCommittee.id);
-                      const isBest = bestIds.has(app.id);
+                    {filteredApps.map(app => {
                       const blocked = isAllocationBlocked(app, roleConfigs);
                       const expanded = expandedAppId === app.id;
+                      const selected = selectedAppId === app.id;
+                      const beingDragged = dragAppId === app.id;
                       const userHistory = app.profiles ? history[app.profiles.id] : undefined;
+                      const nationality = app.profiles?.nationality ?? null;
+                      const natCountry = nationality ? getCountryByName(nationality) : undefined;
+                      const firstPref = [...(app.application_preferences ?? [])]
+                        .sort((a, b) => a.preference_order - b.preference_order)[0];
                       return (
                         <div
                           key={app.id}
+                          draggable={!blocked}
+                          onDragStart={e => {
+                            e.dataTransfer.setData('text/plain', app.id);
+                            e.dataTransfer.effectAllowed = 'move';
+                            setDragAppId(app.id);
+                          }}
+                          onDragEnd={() => { setDragAppId(null); setDropTargetId(null); }}
+                          onClick={() => { if (!blocked) setSelectedAppId(prev => (prev === app.id ? null : app.id)); }}
                           className="rounded-xl p-3 transition-colors"
                           style={{
-                            backgroundColor: '#FAF8F3',
-                            border: `1px solid ${expanded ? '#1B3828' : '#DDD4C0'}`,
-                            opacity: blocked ? 0.65 : 1,
-                            cursor: 'pointer',
+                            backgroundColor: selected ? 'rgba(27,56,40,0.06)' : '#FAF8F3',
+                            border: `1.5px solid ${selected ? '#1B3828' : expanded ? 'rgba(27,56,40,0.45)' : '#DDD4C0'}`,
+                            opacity: blocked ? 0.6 : beingDragged ? 0.45 : 1,
+                            cursor: blocked ? 'not-allowed' : 'grab',
                           }}
-                          onClick={() => setExpandedAppId(expanded ? null : app.id)}
-                          onMouseEnter={e => { if (!expanded) (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
-                          onMouseLeave={e => { if (!expanded) (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
+                          onMouseEnter={e => { if (!selected && !expanded && !blocked) (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
+                          onMouseLeave={e => { if (!selected && !expanded) (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
                         >
-                          <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-start gap-2">
+                            {!blocked && <GripVertical size={13} style={{ color: '#DDD4C0', flexShrink: 0, marginTop: 3 }} />}
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-1.5">
+                                {natCountry && (
+                                  <img
+                                    src={getFlagUrl(natCountry.code)}
+                                    style={{ width: 18, height: 12.5, borderRadius: 2, objectFit: 'cover', flexShrink: 0, boxShadow: '0 1px 2px rgba(27,56,40,0.2)' }}
+                                    alt={nationality ?? ''}
+                                    title={nationality ?? ''}
+                                  />
+                                )}
                                 <p className="font-semibold text-sm truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
                                   {app.profiles?.display_name ?? 'Unknown'}
                                 </p>
-                                {expanded
-                                  ? <ChevronUp size={12} style={{ color: '#9A8A78', flexShrink: 0 }} />
-                                  : <ChevronDown size={12} style={{ color: '#9A8A78', flexShrink: 0 }} />}
+                                {selected && <Check size={12} style={{ color: '#3D7A52', flexShrink: 0 }} />}
                               </div>
                               <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
                                 {app.role} · {app.experience_level ?? 'n/a'}
                               </p>
                             </div>
-                            <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                              {blocked ? (
-                                <span style={{ fontSize: 9, color: '#B8844A', fontFamily: MONO, fontWeight: 700 }}>PENDING PAYMENT</span>
-                              ) : (
-                                <>
-                                  {isBest && (
-                                    <span style={{ fontSize: 9, color: '#B6871F', fontFamily: MONO, fontWeight: 700 }}>BEST FIT</span>
-                                  )}
-                                  <span style={{ fontSize: 11, fontWeight: 700, color: fitColor(score), fontFamily: MONO }}>
-                                    {score}
-                                  </span>
-                                </>
-                              )}
-                            </div>
+                            <button
+                              onClick={e => { e.stopPropagation(); setExpandedAppId(expanded ? null : app.id); }}
+                              title={expanded ? 'Hide details' : 'Show details'}
+                              className="focus:outline-none flex-shrink-0"
+                              style={{ color: '#9A8A78', lineHeight: 0, marginTop: 3 }}
+                            >
+                              {expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                            </button>
                           </div>
 
-                          {commPrefs.length > 0 && (
-                            <div className="flex flex-wrap gap-1 mt-2">
-                              {commPrefs.map(p => (
-                                <span
-                                  key={p.preference_order}
-                                  className="px-2 py-0.5 rounded-full"
-                                  style={{ fontSize: 9, backgroundColor: 'rgba(27,56,40,0.1)', color: '#1B3828', fontFamily: MONO }}
-                                >
-                                  #{p.preference_order} {p.country_name}
-                                </span>
-                              ))}
+                          <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                            <DelegationChip app={app} />
+                            {blocked && (
+                              <span style={{ fontSize: 9, color: '#B8844A', fontFamily: MONO, fontWeight: 700, marginLeft: 'auto' }}>PENDING PAYMENT</span>
+                            )}
+                          </div>
+
+                          {firstPref && (
+                            <div className="flex items-center gap-1.5 mt-1.5">
+                              <span style={{ fontSize: 8.5, fontWeight: 700, color: '#B6871F', fontFamily: MONO, letterSpacing: '0.08em', flexShrink: 0 }}>1ST PREF</span>
+                              <img src={getFlagUrl(firstPref.country_code)} style={{ width: 14, height: 10, borderRadius: 2, objectFit: 'cover', flexShrink: 0 }} alt={firstPref.country_name} />
+                              <span className="truncate" style={{ fontSize: 10, color: '#9A8A78', fontFamily: OUTFIT }}>
+                                {firstPref.conference_committees?.name ?? 'Unknown'} · {firstPref.country_name}
+                              </span>
                             </div>
                           )}
 
-                          {expanded && (
-                            <>
-                              <DelegateDetail app={app} history={userHistory} />
-                              {!blocked && (
-                                <button
-                                  onClick={e => { e.stopPropagation(); setAssignModal({ preApp: app }); }}
-                                  className="mt-3 w-full rounded-lg py-2 text-xs font-bold focus:outline-none transition-colors"
-                                  style={{ backgroundColor: '#1B3828', color: '#EED98A', border: 'none', fontFamily: OUTFIT, letterSpacing: '0.05em' }}
-                                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-                                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-                                >
-                                  ASSIGN TO {selectedCommittee.abbreviation ?? 'COMMITTEE'}
-                                </button>
-                              )}
-                            </>
-                          )}
+                          {expanded && <DelegateDetail app={app} history={userHistory} />}
                         </div>
                       );
                     })}
@@ -1143,192 +1497,154 @@ export default function AssignmentPage() {
                 )}
               </div>
 
-              {/* Right panel — country slots */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between mb-1">
-                  <p className="font-semibold text-base" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                    {selectedCommittee.name}
-                  </p>
-                  <p className="text-xs" style={{ color: '#9A8A78', fontFamily: MONO }}>
-                    {totalSlots} slots · {filledCount} filled
-                  </p>
+              {/* Board — every committee visible at once */}
+              <div className="flex-1 min-w-0 w-full">
+                <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4">
+                  {committees.map(c => (
+                    <CommitteeBoardPanel
+                      key={c.id}
+                      committee={c}
+                      dragging={dragAppId !== null}
+                      isDropTarget={dropTargetId === c.id}
+                      selectable={selectedAppId !== null}
+                      onDragOverPanel={() => setDropTargetId(c.id)}
+                      onDragLeavePanel={() => setDropTargetId(prev => (prev === c.id ? null : prev))}
+                      onDropPanel={appId => handleDropOnCommittee(c.id, appId)}
+                      onClickPanel={() => { if (selectedAppId) openDropModal(c.id, selectedAppId); }}
+                      onRemoveAllocation={handleRemoveAllocation}
+                      onCycleTier={handleCycleTier}
+                      onAssignSlot={slot => setAssignModal({ committeeId: c.id, preSlot: slot })}
+                    />
+                  ))}
                 </div>
-                <p className="text-xs mb-3" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-                  Click a slot&apos;s tier chip to cycle its importance: <span style={{ color: TIER_META.high.color, fontWeight: 700 }}>green = high</span>, <span style={{ color: TIER_META.medium.color, fontWeight: 700 }}>amber = medium</span>, <span style={{ color: TIER_META.low.color, fontWeight: 700 }}>red = low</span>.
-                </p>
-
-                {selectedCommittee.committee_country_slots.length === 0 ? (
-                  <div className="text-center py-12">
-                    <p className="text-sm" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>No country slots configured for this committee.</p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                    {selectedCommittee.committee_country_slots.map(slot => {
-                      const allocation = selectedCommittee.conference_allocations.find(a => a.country_code === slot.country_code);
-                      const filled = !!allocation;
-                      const tier = TIER_META[slot.importance];
-                      const slotSug = !filled ? slotSuggestions.get(slot.id) : undefined;
-                      const sugKey = slotSug ? `${slotSug.app.id}-${slotSug.slot.id}` : null;
-                      const sugBusy = sugKey !== null && quickAssigning === sugKey;
-                      return (
-                        <div
-                          key={slot.id}
-                          className="rounded-xl flex flex-col relative overflow-hidden"
-                          style={{
-                            backgroundColor: '#FAF8F3',
-                            border: `1px solid ${filled ? 'rgba(27,56,40,0.2)' : '#DDD4C0'}`,
-                            padding: '12px 12px 12px 15px',
-                          }}
-                        >
-                          {/* Importance left bar */}
-                          <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, backgroundColor: slot.importance === 'standard' ? '#DDD4C0' : tier.color, opacity: slot.importance === 'standard' ? 0.6 : 0.9 }} />
-
-                          <div className="flex items-start justify-between gap-1">
-                            <img
-                              src={getFlagUrl(slot.country_code)}
-                              style={{ width: 28, height: 20, borderRadius: 3, objectFit: 'cover', boxShadow: '0 1px 3px rgba(27,56,40,0.18)' }}
-                              alt={slot.country_name}
-                            />
-                            <TierBadge tier={slot.importance} onCycle={() => handleCycleTier(slot)} />
-                          </div>
-                          <p className="font-medium text-sm mt-1" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                            {slot.country_name}
-                          </p>
-                          {filled && allocation ? (
-                            <>
-                              <p className="text-xs font-semibold mt-0.5" style={{ color: '#3D7A52', fontFamily: OUTFIT }}>
-                                {allocation.profiles?.display_name ?? 'Assigned'}
-                              </p>
-                              <button
-                                onClick={() => handleRemoveAllocation(allocation)}
-                                className="mt-2 rounded-lg py-1 px-3 text-xs font-semibold focus:outline-none transition-colors self-start"
-                                style={{ border: '1px solid rgba(139,32,32,0.2)', color: '#8B2020', backgroundColor: 'transparent', fontFamily: OUTFIT }}
-                                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.06)'; }}
-                                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                              >
-                                REMOVE
-                              </button>
-                            </>
-                          ) : (
-                            <>
-                              {slotSug && (
-                                <div className="flex items-center gap-1 mt-1">
-                                  <Sparkles size={10} style={{ color: '#B6871F', flexShrink: 0 }} />
-                                  <span className="truncate" style={{ fontSize: 10, color: '#B6871F', fontFamily: MONO, fontWeight: 500 }}>
-                                    {slotSug.app.profiles?.display_name}
-                                  </span>
-                                </div>
-                              )}
-                              <div className="flex gap-1.5 mt-2">
-                                {slotSug && (
-                                  <button
-                                    onClick={() => quickAssign(slotSug)}
-                                    disabled={sugBusy}
-                                    className="rounded-lg py-1 px-2.5 text-xs font-bold focus:outline-none transition-colors"
-                                    style={{ backgroundColor: sugBusy ? '#DDD4C0' : '#1B3828', color: sugBusy ? '#9A8A78' : '#EED98A', border: 'none', fontFamily: OUTFIT }}
-                                    onMouseEnter={e => { if (!sugBusy) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-                                    onMouseLeave={e => { if (!sugBusy) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-                                  >
-                                    {sugBusy ? '...' : 'ACCEPT'}
-                                  </button>
-                                )}
-                                <button
-                                  onClick={() => setAssignModal({ preSlot: slot })}
-                                  className="rounded-lg py-1 px-2.5 text-xs font-semibold focus:outline-none transition-colors"
-                                  style={{ backgroundColor: 'rgba(27,56,40,0.07)', color: '#1B3828', border: 'none', fontFamily: OUTFIT }}
-                                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.12)'; }}
-                                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.07)'; }}
-                                >
-                                  ASSIGN
-                                </button>
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
               </div>
             </div>
           )}
 
-          {mode === 'chairs' && selectedCommittee && (
-            <div style={{ maxWidth: 560 }}>
-              <p style={{ fontSize: 10, color: '#B6871F', fontFamily: MONO, letterSpacing: '0.16em', fontWeight: 500, marginBottom: 12 }}>
-                CURRENT CHAIRS
-              </p>
-              {currentChairs.length === 0 ? (
-                <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-                  No chairs assigned to {selectedCommittee.name} yet.
-                </p>
-              ) : (
-                <div className="flex flex-col gap-2 mb-6">
-                  {currentChairs.map(ch => (
-                    <div key={ch.userId} className="flex items-center justify-between rounded-xl p-3" style={{ backgroundColor: '#FAF8F3', border: '1px solid rgba(27,56,40,0.2)' }}>
-                      <div className="min-w-0">
-                        <p className="font-semibold text-sm truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{ch.name}</p>
-                        {ch.email && <p className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>{ch.email}</p>}
-                      </div>
-                      <button
-                        onClick={() => handleRemoveChair(ch.userId, selectedCommittee)}
-                        className="rounded-lg py-1 px-3 text-xs font-semibold focus:outline-none transition-colors flex-shrink-0"
-                        style={{ border: '1px solid rgba(139,32,32,0.2)', color: '#8B2020', backgroundColor: 'transparent', fontFamily: OUTFIT }}
-                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.06)'; }}
-                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                      >
-                        REMOVE
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <div className="flex items-center gap-2 mb-3">
-                <p style={{ fontSize: 10, color: '#B6871F', fontFamily: MONO, letterSpacing: '0.16em', fontWeight: 500 }}>
-                  CHAIR APPLICANTS
-                </p>
-                <span className="px-2 py-0.5 rounded-full text-xs font-bold" style={{ backgroundColor: 'rgba(27,56,40,0.1)', color: '#1B3828', fontFamily: MONO, fontSize: 10 }}>
-                  {assignableChairs.length}
-                </span>
+          {/* Chairs mode keeps the one-committee-at-a-time tab layout */}
+          {mode === 'chairs' && (
+            <>
+              <div className="flex gap-2 overflow-x-auto pb-1 mb-6" style={{ scrollbarWidth: 'none' }}>
+                {committees.map(c => {
+                  const filled = c.conference_allocations.length;
+                  const active = c.id === selectedCommitteeId;
+                  return (
+                    <button
+                      key={c.id}
+                      onClick={() => setSelectedCommitteeId(c.id)}
+                      className="flex-shrink-0 focus:outline-none transition-colors"
+                      style={{
+                        padding: '6px 16px',
+                        borderRadius: 999,
+                        fontSize: 11,
+                        fontFamily: MONO,
+                        fontWeight: 700,
+                        letterSpacing: '0.06em',
+                        border: active ? 'none' : '1px solid #DDD4C0',
+                        backgroundColor: active ? '#1B3828' : 'transparent',
+                        color: active ? '#EED98A' : '#9A8A78',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {c.abbreviation ?? c.name} <span style={{ opacity: 0.7 }}>{filled}/{c.total_slots}</span>
+                    </button>
+                  );
+                })}
               </div>
-              {assignableChairs.length === 0 ? (
-                <p className="text-sm" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-                  No unassigned chair applicants. Accept a chair application first, or invite a chair directly (coming soon).
-                </p>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  {assignableChairs.map(ca => (
-                    <div key={ca.id} className="flex items-center justify-between rounded-xl p-3" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
-                      <div className="min-w-0">
-                        <p className="font-semibold text-sm truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{ca.profiles?.display_name ?? 'Unknown'}</p>
-                        <p className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>chair · {ca.experience_level ?? 'n/a'}</p>
-                      </div>
-                      <button
-                        onClick={() => handleAssignChair(ca, selectedCommittee)}
-                        className="rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors flex-shrink-0"
-                        style={{ backgroundColor: '#1B3828', color: '#EED98A', border: 'none', fontFamily: OUTFIT }}
-                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-                      >
-                        ASSIGN AS CHAIR
-                      </button>
+
+              {selectedCommittee && (
+                <div style={{ maxWidth: 560 }}>
+                  <p style={{ fontSize: 10, color: '#B6871F', fontFamily: MONO, letterSpacing: '0.16em', fontWeight: 500, marginBottom: 12 }}>
+                    CURRENT CHAIRS
+                  </p>
+                  {currentChairs.length === 0 ? (
+                    <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+                      No chairs assigned to {selectedCommittee.name} yet.
+                    </p>
+                  ) : (
+                    <div className="flex flex-col gap-2 mb-6">
+                      {currentChairs.map(ch => (
+                        <div key={ch.userId} className="flex items-center justify-between rounded-xl p-3" style={{ backgroundColor: '#FAF8F3', border: '1px solid rgba(27,56,40,0.2)' }}>
+                          <div className="min-w-0">
+                            <p className="font-semibold text-sm truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{ch.name}</p>
+                            {ch.email && <p className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>{ch.email}</p>}
+                          </div>
+                          <button
+                            onClick={() => handleRemoveChair(ch.userId, selectedCommittee)}
+                            className="rounded-lg py-1 px-3 text-xs font-semibold focus:outline-none transition-colors flex-shrink-0"
+                            style={{ border: '1px solid rgba(139,32,32,0.2)', color: '#8B2020', backgroundColor: 'transparent', fontFamily: OUTFIT }}
+                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.06)'; }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                          >
+                            REMOVE
+                          </button>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  )}
+
+                  <div className="flex items-center gap-2 mb-3">
+                    <p style={{ fontSize: 10, color: '#B6871F', fontFamily: MONO, letterSpacing: '0.16em', fontWeight: 500 }}>
+                      CHAIR APPLICANTS
+                    </p>
+                    <span className="px-2 py-0.5 rounded-full text-xs font-bold" style={{ backgroundColor: 'rgba(27,56,40,0.1)', color: '#1B3828', fontFamily: MONO, fontSize: 10 }}>
+                      {assignableChairs.length}
+                    </span>
+                  </div>
+                  {assignableChairs.length === 0 ? (
+                    <p className="text-sm" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+                      No unassigned chair applicants. Accept a chair application first, or invite a chair directly (coming soon).
+                    </p>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      {assignableChairs.map(ca => (
+                        <div key={ca.id} className="flex items-center justify-between rounded-xl p-3" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
+                          <div className="min-w-0">
+                            <p className="font-semibold text-sm truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{ca.profiles?.display_name ?? 'Unknown'}</p>
+                            <p className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>chair · {ca.experience_level ?? 'n/a'}</p>
+                          </div>
+                          <button
+                            onClick={() => handleAssignChair(ca, selectedCommittee)}
+                            className="rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors flex-shrink-0"
+                            style={{ backgroundColor: '#1B3828', color: '#EED98A', border: 'none', fontFamily: OUTFIT }}
+                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+                          >
+                            ASSIGN AS CHAIR
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
-            </div>
+            </>
           )}
         </>
       )}
 
-      {assignModal && selectedCommittee && (
+      {/* Drop popup — open slots for the target committee, most urgent first */}
+      {dropModal && dropModalCommittee && dropModalApp && (
+        <DropAllocateModal
+          committee={dropModalCommittee}
+          app={dropModalApp}
+          roleConfigs={roleConfigs}
+          onClose={() => setDropModal(null)}
+          onAssigned={msg => {
+            showFlash('ok', msg);
+            setSelectedAppId(null);
+            loadData();
+          }}
+        />
+      )}
+
+      {/* Slot-first assign modal (from a panel's expanded slot list) */}
+      {assignModal && assignModalCommittee && (
         <AssignModal
-          committee={selectedCommittee}
+          committee={assignModalCommittee}
           unassigned={accepted}
           roleConfigs={roleConfigs}
           preSelectedSlot={assignModal.preSlot}
-          preSelectedApp={assignModal.preApp}
           onClose={() => setAssignModal(null)}
           onAssigned={loadData}
         />
