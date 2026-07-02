@@ -62,8 +62,18 @@ interface CommitteeData {
   abbreviation: string | null;
   difficulty: string;
   total_slots: number;
+  chair_user_ids: string[] | null;
   committee_country_slots: SlotRow[];
   conference_allocations: AllocationRow[];
+}
+
+interface ChairApp {
+  id: string;
+  user_id: string;
+  status: string;
+  assigned_committee_id: string | null;
+  experience_level: string | null;
+  profiles: { id: string; display_name: string; email: string } | null;
 }
 
 // ── Fit score ─────────────────────────────────────────────────────────────────
@@ -362,6 +372,8 @@ export default function AssignmentPage() {
   const [accepted, setAccepted] = useState<AcceptedApp[]>([]);
   const [committees, setCommittees] = useState<CommitteeData[]>([]);
   const [roleConfigs, setRoleConfigs] = useState<RoleConfigLite[]>([]);
+  const [chairApps, setChairApps] = useState<ChairApp[]>([]);
+  const [mode, setMode] = useState<'delegates' | 'chairs'>('delegates');
   const [loading, setLoading] = useState(true);
   const [selectedCommitteeId, setSelectedCommitteeId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
@@ -377,7 +389,7 @@ export default function AssignmentPage() {
     setLoading(true);
     const supabase = getAuthedClient(session.access_token);
 
-    const [appRes, commRes, cfgRes] = await Promise.all([
+    const [appRes, commRes, cfgRes, chairRes] = await Promise.all([
       supabase
         .from('applications')
         .select(`
@@ -395,7 +407,7 @@ export default function AssignmentPage() {
       supabase
         .from('conference_committees')
         .select(`
-          id, name, abbreviation, difficulty, total_slots,
+          id, name, abbreviation, difficulty, total_slots, chair_user_ids,
           committee_country_slots (id, country_code, country_name, delegation_size),
           conference_allocations (id, user_id, country_code, country_name, allocation_sent, application_id, profiles (display_name))
         `)
@@ -405,6 +417,15 @@ export default function AssignmentPage() {
         .from('application_role_configs')
         .select('role, must_pay_before_allocation')
         .eq('conference_id', conference.id),
+      supabase
+        .from('applications')
+        .select(`
+          id, user_id, status, assigned_committee_id, experience_level,
+          profiles (id, display_name, email)
+        `)
+        .eq('conference_id', conference.id)
+        .eq('role', 'chair')
+        .in('status', ['accepted', 'assigned']),
     ]);
 
     const apps = (appRes.data ?? []) as unknown as AcceptedApp[];
@@ -413,6 +434,7 @@ export default function AssignmentPage() {
     setAccepted(apps);
     setCommittees(comms);
     setRoleConfigs((cfgRes.data ?? []) as unknown as RoleConfigLite[]);
+    setChairApps((chairRes.data ?? []) as unknown as ChairApp[]);
     if (comms.length > 0 && !selectedCommitteeId) {
       setSelectedCommitteeId(comms[0].id);
     }
@@ -451,6 +473,28 @@ export default function AssignmentPage() {
     await loadData();
   }
 
+  async function handleAssignChair(chairApp: ChairApp, committee: CommitteeData) {
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
+    const nextIds = Array.from(new Set([...(committee.chair_user_ids ?? []), chairApp.user_id]));
+    await supabase.from('conference_committees').update({ chair_user_ids: nextIds }).eq('id', committee.id);
+    await supabase.from('applications').update({ status: 'assigned', assigned_committee_id: committee.id }).eq('id', chairApp.id);
+    await loadData();
+  }
+
+  async function handleRemoveChair(userId: string, committee: CommitteeData) {
+    if (!session || !conference) return;
+    const supabase = getAuthedClient(session.access_token);
+    const nextIds = (committee.chair_user_ids ?? []).filter(id => id !== userId);
+    await supabase.from('conference_committees').update({ chair_user_ids: nextIds }).eq('id', committee.id);
+    await supabase.from('applications')
+      .update({ status: 'accepted', assigned_committee_id: null })
+      .eq('conference_id', conference.id)
+      .eq('user_id', userId)
+      .eq('role', 'chair');
+    await loadData();
+  }
+
   if (!conference) return null;
 
   const selectedCommittee = committees.find(c => c.id === selectedCommitteeId) ?? null;
@@ -473,6 +517,15 @@ export default function AssignmentPage() {
   const filledCount = selectedCommittee?.conference_allocations.length ?? 0;
   const totalSlots = selectedCommittee?.total_slots ?? 0;
 
+  const chairAppByUser = new Map(chairApps.map(ca => [ca.user_id, ca]));
+  const currentChairIds = selectedCommittee?.chair_user_ids ?? [];
+  const currentChairs = currentChairIds.map(uid => ({
+    userId: uid,
+    name: chairAppByUser.get(uid)?.profiles?.display_name ?? 'Chair',
+    email: chairAppByUser.get(uid)?.profiles?.email ?? '',
+  }));
+  const assignableChairs = chairApps.filter(ca => ca.status === 'accepted' && !currentChairIds.includes(ca.user_id));
+
   return (
     <div className="px-6 md:px-10 py-8">
       {/* Header */}
@@ -483,16 +536,43 @@ export default function AssignmentPage() {
           </p>
           <h1 className="font-black text-2xl" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Assignment</h1>
         </div>
-        <button
-          onClick={handleSendAllAllocations}
-          disabled={sendingAll}
-          className="rounded-xl py-2.5 px-5 font-bold text-sm focus:outline-none transition-colors"
-          style={{ backgroundColor: sendingAll ? '#DDD4C0' : '#1B3828', color: sendingAll ? '#9A8A78' : '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}
-          onMouseEnter={e => { if (!sendingAll) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-          onMouseLeave={e => { if (!sendingAll) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-        >
-          {sendingAll ? 'SENDING...' : 'SEND ALL ALLOCATIONS'}
-        </button>
+        {mode === 'delegates' && (
+          <button
+            onClick={handleSendAllAllocations}
+            disabled={sendingAll}
+            className="rounded-xl py-2.5 px-5 font-bold text-sm focus:outline-none transition-colors"
+            style={{ backgroundColor: sendingAll ? '#DDD4C0' : '#1B3828', color: sendingAll ? '#9A8A78' : '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}
+            onMouseEnter={e => { if (!sendingAll) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+            onMouseLeave={e => { if (!sendingAll) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+          >
+            {sendingAll ? 'SENDING...' : 'SEND ALL ALLOCATIONS'}
+          </button>
+        )}
+      </div>
+
+      {/* Mode toggle: Delegates | Chairs (Phase 2 #2b) */}
+      <div className="inline-flex rounded-xl p-1 mb-6" style={{ border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3' }}>
+        {(['delegates', 'chairs'] as const).map(m => (
+          <button
+            key={m}
+            onClick={() => setMode(m)}
+            className="focus:outline-none transition-colors"
+            style={{
+              padding: '6px 18px',
+              borderRadius: 8,
+              fontSize: 11,
+              fontFamily: "'DM Mono', monospace",
+              fontWeight: 700,
+              letterSpacing: '0.06em',
+              border: 'none',
+              backgroundColor: mode === m ? '#1B3828' : 'transparent',
+              color: mode === m ? '#EED98A' : '#9A8A78',
+              cursor: 'pointer',
+            }}
+          >
+            {m === 'delegates' ? 'DELEGATES' : 'CHAIRS'}
+          </button>
+        ))}
       </div>
 
       {loading && (
@@ -539,7 +619,7 @@ export default function AssignmentPage() {
             })}
           </div>
 
-          {selectedCommittee && (
+          {mode === 'delegates' && selectedCommittee && (
             <div className="flex gap-6" style={{ minHeight: 500 }}>
               {/* Left panel — unassigned applicants */}
               <div style={{ width: 320, flexShrink: 0 }}>
@@ -697,6 +777,73 @@ export default function AssignmentPage() {
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {mode === 'chairs' && selectedCommittee && (
+            <div style={{ maxWidth: 560 }}>
+              <p className="text-xs font-semibold tracking-widest mb-3" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}>
+                CURRENT CHAIRS
+              </p>
+              {currentChairs.length === 0 ? (
+                <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                  No chairs assigned to {selectedCommittee.name} yet.
+                </p>
+              ) : (
+                <div className="flex flex-col gap-2 mb-6">
+                  {currentChairs.map(ch => (
+                    <div key={ch.userId} className="flex items-center justify-between rounded-xl p-3" style={{ backgroundColor: '#FAF8F3', border: '1px solid rgba(27,56,40,0.2)' }}>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-sm truncate" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>{ch.name}</p>
+                        {ch.email && <p className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>{ch.email}</p>}
+                      </div>
+                      <button
+                        onClick={() => handleRemoveChair(ch.userId, selectedCommittee)}
+                        className="rounded-lg py-1 px-3 text-xs font-semibold focus:outline-none transition-colors flex-shrink-0"
+                        style={{ border: '1px solid rgba(139,32,32,0.2)', color: '#8B2020', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.06)'; }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                      >
+                        REMOVE
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 mb-3">
+                <p className="text-xs font-semibold tracking-widest" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}>
+                  CHAIR APPLICANTS
+                </p>
+                <span className="px-2 py-0.5 rounded-full text-xs font-bold" style={{ backgroundColor: 'rgba(27,56,40,0.1)', color: '#1B3828', fontFamily: "'DM Mono', monospace", fontSize: 10 }}>
+                  {assignableChairs.length}
+                </span>
+              </div>
+              {assignableChairs.length === 0 ? (
+                <p className="text-sm" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                  No unassigned chair applicants. Accept a chair application first, or invite a chair directly (coming soon).
+                </p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {assignableChairs.map(ca => (
+                    <div key={ca.id} className="flex items-center justify-between rounded-xl p-3" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-sm truncate" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>{ca.profiles?.display_name ?? 'Unknown'}</p>
+                        <p className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>chair · {ca.experience_level ?? 'n/a'}</p>
+                      </div>
+                      <button
+                        onClick={() => handleAssignChair(ca, selectedCommittee)}
+                        className="rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors flex-shrink-0"
+                        style={{ backgroundColor: '#1B3828', color: '#EED98A', border: 'none', fontFamily: "'Outfit', sans-serif" }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+                      >
+                        ASSIGN AS CHAIR
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </>
