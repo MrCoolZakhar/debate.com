@@ -59,6 +59,7 @@ export interface CommitteeSettings {
   motionOrder: ('moderated' | 'unmoderated' | 'consultation' | 'tour')[];
   wpSubmissionLimit: number | null;  // null = unlimited
   drSubmissionLimit: number | null;
+  requireDocApproval: boolean;       // default false — chair must approve WP/DR before it can be introduced
   // GSL behaviour
   gslRequireNextSpeaker: boolean;
   // Scoring & ranking
@@ -98,6 +99,7 @@ export const DEFAULT_SETTINGS: CommitteeSettings = {
   motionOrder: ['consultation', 'tour', 'unmoderated', 'moderated'],
   wpSubmissionLimit: null,
   drSubmissionLimit: null,
+  requireDocApproval: false,
   chairJoinSuffix: '',
   requireChairApproval: false,
   gslRequireNextSpeaker: false,

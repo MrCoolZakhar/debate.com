@@ -265,9 +265,14 @@ function InlinePdfViewer({ fileUrl, fileName }: { fileUrl: string; fileName: str
 // ── Delegate Doc Card (with inline PDF viewer) ────────────────────────────────
 function DelegateDocCard({ doc }: { doc: CommitteeDocument }) {
   const t = useT();
-  const statusColor = doc.status === 'passed' ? '#1B3828' : doc.status === 'failed' ? '#8B2020' : doc.status === 'introduced' ? '#B8844A' : doc.status === 'on-floor' ? '#B8844A' : '#9A8A78';
-  const statusBg = doc.status === 'passed' ? 'rgba(27,56,40,0.1)' : doc.status === 'failed' ? 'rgba(139,32,32,0.1)' : 'transparent';
-  const statusLabel = doc.status === 'introduced' ? t('documents_status_introduced') : doc.status === 'on-floor' ? t('documents_status_on_floor') : doc.status === 'passed' ? t('documents_status_passed') : doc.status === 'failed' ? t('documents_status_failed') : t('documents_status_submitted');
+  // Chair approval surfaces as the badge while the doc is still awaiting introduction — this is the
+  // delegate's "notification" that their WP/DR was accepted or rejected. Once it advances to
+  // introduced/passed/failed, the real lifecycle status takes over again.
+  const showApproved = doc.approval === 'approved' && (doc.status === 'submitted' || doc.status === 'on-floor');
+  const showRejected = doc.approval === 'rejected';
+  const statusColor = showApproved ? '#1B3828' : showRejected ? '#8B2020' : doc.status === 'passed' ? '#1B3828' : doc.status === 'failed' ? '#8B2020' : doc.status === 'introduced' ? '#B8844A' : doc.status === 'on-floor' ? '#B8844A' : '#9A8A78';
+  const statusBg = showApproved ? 'rgba(27,56,40,0.1)' : showRejected ? 'rgba(139,32,32,0.1)' : doc.status === 'passed' ? 'rgba(27,56,40,0.1)' : doc.status === 'failed' ? 'rgba(139,32,32,0.1)' : 'transparent';
+  const statusLabel = showApproved ? t('documents_status_approved') : showRejected ? t('documents_status_rejected') : doc.status === 'introduced' ? t('documents_status_introduced') : doc.status === 'on-floor' ? t('documents_status_on_floor') : doc.status === 'passed' ? t('documents_status_passed') : doc.status === 'failed' ? t('documents_status_failed') : t('documents_status_submitted');
   return (
     <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl p-3 space-y-2">
       <div className="flex items-center justify-between">

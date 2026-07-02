@@ -202,6 +202,7 @@ export async function getCommitteeByCode(code: string): Promise<Committee | null
     presentationMinutes: d.presentation_minutes as number | undefined,
     qaMinutes: d.qa_minutes as number | undefined,
     readingMinutes: d.reading_minutes as number | undefined,
+    approval: (d.approval as 'approved' | 'rejected') ?? undefined,
   }));
 
   const messages: Committee['messages'] = (messageRows ?? []).map((m: DbRow) => ({
@@ -484,6 +485,7 @@ export async function getDocumentsList(committeeId: string): Promise<CommitteeDo
     presentationMinutes: d.presentation_minutes as number | undefined,
     qaMinutes: d.qa_minutes as number | undefined,
     readingMinutes: d.reading_minutes as number | undefined,
+    approval: (d.approval as 'approved' | 'rejected') ?? undefined,
   }));
 }
 
@@ -571,12 +573,19 @@ export async function addDocument(
     presentationMinutes: data.presentation_minutes as number | undefined,
     qaMinutes: data.qa_minutes as number | undefined,
     readingMinutes: data.reading_minutes as number | undefined,
+    approval: (data.approval as 'approved' | 'rejected') ?? undefined,
   };
 }
 
 export async function updateDocumentStatus(docId: string, status: DocumentStatus): Promise<void> {
   const { error } = await supabase.from('documents').update({ status }).eq('id', docId);
   if (error) console.error('Error updating document status:', error);
+}
+
+// Chair approval gate — set/clear a document's approval. null clears the decision (back to undecided).
+export async function updateDocumentApproval(docId: string, approval: 'approved' | 'rejected' | null): Promise<void> {
+  const { error } = await supabase.from('documents').update({ approval }).eq('id', docId);
+  if (error) console.error('Error updating document approval:', error);
 }
 
 export async function updateDocumentTimings(

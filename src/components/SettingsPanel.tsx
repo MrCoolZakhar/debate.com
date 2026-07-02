@@ -281,6 +281,14 @@ function MotionsTab({ s, upd }: {
           </div>
         ))}
       </div>
+
+      <SectionLabel>{t('settings_documents_heading')}</SectionLabel>
+      <Toggle
+        label={t('settings_require_doc_approval')}
+        note={t('settings_require_doc_approval_note')}
+        value={s.requireDocApproval}
+        onChange={(v) => upd('requireDocApproval', v)}
+      />
     </div>
   );
 }

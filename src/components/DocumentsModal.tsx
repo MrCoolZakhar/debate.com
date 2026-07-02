@@ -16,6 +16,7 @@ import {
   updateDocumentStatus as updateDocumentStatusInDB,
   updateDocumentTimings as updateDocumentTimingsInDB,
   removeDocument as removeDocumentInDB,
+  updateDocumentApproval as updateDocumentApprovalInDB,
   suspendDebate as suspendDebateInDB,
 } from '@/lib/committeeService';
 
@@ -671,11 +672,13 @@ function TimingSetup({ doc, onStart, onSkip }: {
 }
 
 // ── Doc Card ──────────────────────────────────────────────────────────────────
-function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation }: {
+function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation, requireApproval, onApprovalChange }: {
   doc: CommitteeDocument; committee: Committee;
   onStatusChange: (docId: string, status: DocumentStatus) => void;
   onRemove: (docId: string) => void;
   onStartPresentation: (doc: CommitteeDocument) => void;
+  requireApproval: boolean;
+  onApprovalChange: (docId: string, approval: 'approved' | 'rejected') => void;
 }) {
   const t = useT();
   const { language } = useLanguage();
@@ -683,6 +686,11 @@ function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation
   const [showPdf, setShowPdf] = useState(false);
   const nextStatus = STATUS_NEXT[doc.status];
   const needsPresentation = nextStatus === 'introduced';
+  // Approval gate: while the setting is on and this doc isn't approved yet, offer Approve/Reject
+  // (also lets a chair reverse a rejection) and hold back Introduce until approved. Once the doc has
+  // been introduced/passed/failed the gate is moot.
+  const canDecide = requireApproval && doc.approval !== 'approved' && (doc.status === 'submitted' || doc.status === 'on-floor');
+  const approvalBlocksIntroduce = requireApproval && doc.approval !== 'approved';
 
   const handleAdvance = () => {
     if (!nextStatus) return;
@@ -730,6 +738,12 @@ function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation
               <p className="text-base font-black text-[#1C1410] leading-snug">{doc.title}</p>
               <div className="flex items-center gap-2 mt-1 flex-wrap">
                 <StatusBadge status={doc.status} />
+                {doc.approval === 'approved' && (
+                  <span className="text-xs px-2 py-0.5 rounded-full border font-medium bg-[#1B3828]/15 text-[#1B3828] border-[#1B3828]/40">{t('documents_status_approved')}</span>
+                )}
+                {doc.approval === 'rejected' && (
+                  <span className="text-xs px-2 py-0.5 rounded-full border font-medium bg-[#8B2020]/10 text-[#8B2020] border-[#8B2020]/40">{t('documents_status_rejected')}</span>
+                )}
               </div>
             </div>
             <button onClick={() => onRemove(doc.id)}
@@ -790,8 +804,25 @@ function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation
             </div>
           )}
 
-          {/* Introduce / advance button */}
-          {nextStatus && doc.status !== 'passed' && doc.status !== 'failed' && doc.status !== 'introduced' && (
+          {/* Chair approval gate — approve/reject before the doc can be introduced */}
+          {canDecide && (
+            <div className="flex gap-2">
+              <button onClick={() => onApprovalChange(doc.id, 'approved')}
+                className="flex-1 bg-[#1B3828] hover:bg-[#2A5A3C] text-white py-2 rounded-lg font-bold text-sm transition-colors focus:outline-none">
+                {t('documents_approve')}
+              </button>
+              <button onClick={() => onApprovalChange(doc.id, 'rejected')}
+                className="flex-1 py-2 rounded-lg font-bold text-sm transition-colors focus:outline-none"
+                style={{ backgroundColor: '#8B2020', color: '#EDE7D8' }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#7A1C1C'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#8B2020'; }}>
+                {t('documents_reject')}
+              </button>
+            </div>
+          )}
+
+          {/* Introduce / advance button — withheld until approved when approval is required */}
+          {nextStatus && doc.status !== 'passed' && doc.status !== 'failed' && doc.status !== 'introduced' && !approvalBlocksIntroduce && (
             <button onClick={handleAdvance}
               className="w-full bg-[#1B3828] hover:bg-[#2A5A3C] text-white py-2 rounded-lg font-bold text-sm transition-colors focus:outline-none">
               {needsPresentation ? `${t('documents_introduce')} →` : `${t('documents_advance')}${getStatusLabel(nextStatus, t)}`}
@@ -812,6 +843,8 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
 }) {
   const t = useT();
   const router = useRouter();
+  const { getSettings } = useSettingsStore();
+  const requireDocApproval = getSettings(committee.code).requireDocApproval;
   const [tab, setTab] = useState<DocTab>('working-paper');
   const hasWPs = (committee.documents ?? []).filter((d) => d.type === 'working-paper').length > 0;
   const [showForm, setShowForm] = useState(false);
@@ -832,6 +865,11 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
   const handleStatusChange = (docId: string, status: DocumentStatus) => {
     update((c) => ({ ...c, documents: (c.documents ?? []).map((d) => d.id === docId ? { ...d, status } : d) }));
     updateDocumentStatusInDB(docId, status);
+  };
+
+  const handleApprovalChange = (docId: string, approval: 'approved' | 'rejected') => {
+    update((c) => ({ ...c, documents: (c.documents ?? []).map((d) => d.id === docId ? { ...d, approval } : d) }));
+    updateDocumentApprovalInDB(docId, approval);
   };
 
   const handleRemove = (docId: string) => {
@@ -1008,7 +1046,8 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
                 docs.map((doc) => (
                   <DocCard key={doc.id} doc={doc} committee={committee}
                     onStatusChange={handleStatusChange} onRemove={handleRemove}
-                    onStartPresentation={handleStartPresentation} />
+                    onStartPresentation={handleStartPresentation}
+                    requireApproval={requireDocApproval} onApprovalChange={handleApprovalChange} />
                 ))
               )}
               {!isViewOnly && (

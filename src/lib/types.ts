@@ -88,6 +88,7 @@ export interface CommitteeDocument {
   presentationMinutes?: number;
   qaMinutes?: number;
   signatories?: string[];
+  approval?: 'approved' | 'rejected'; // chair approval gate (undefined = undecided)
 }
 
 export interface CaucusState {
