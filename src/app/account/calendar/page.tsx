@@ -6,6 +6,7 @@ import { AlertTriangle } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { getCountryByName, getFlagUrl } from '@/lib/countries';
+import { Eyebrow, GlassCard, OUTFIT, MONO } from '../accountUi';
 
 interface CalendarConference {
   id: string;
@@ -41,11 +42,12 @@ function datesOverlap(startA: string, endA: string, startB: string, endB: string
 function StatusBadge({ status }: { status: string }) {
   const label = status === 'assigned' ? 'ASSIGNED' : 'ACCEPTED';
   const color = status === 'assigned' ? '#1B3828' : '#3D7A52';
-  const bg    = status === 'assigned' ? 'rgba(27,56,40,0.1)' : 'rgba(61,122,82,0.1)';
+  const bg    = status === 'assigned' ? 'rgba(27,56,40,0.09)' : 'rgba(61,122,82,0.1)';
+  const bd    = status === 'assigned' ? 'rgba(27,56,40,0.28)' : 'rgba(61,122,82,0.3)';
   return (
     <span
       className="rounded-full px-2 py-0.5"
-      style={{ backgroundColor: bg, color, fontFamily: "'DM Mono', monospace", fontSize: '9px' }}
+      style={{ backgroundColor: bg, border: `1px solid ${bd}`, color, fontFamily: MONO, fontSize: '8.5px', letterSpacing: '0.08em' }}
     >
       {label}
     </span>
@@ -62,9 +64,11 @@ function FormatPill({ format }: { format: string }) {
       className="rounded-full px-2 py-0.5 mt-1"
       style={{
         backgroundColor: 'rgba(154,138,120,0.1)',
+        border: '1px solid rgba(154,138,120,0.25)',
         color: '#9A8A78',
-        fontFamily: "'DM Mono', monospace",
-        fontSize: '9px',
+        fontFamily: MONO,
+        fontSize: '8.5px',
+        letterSpacing: '0.06em',
         display: 'inline-block',
       }}
     >
@@ -84,63 +88,68 @@ function ConferenceCard({ app }: { app: CalendarApplication }) {
   const countryData = getCountryByName(conf.country);
   const flagUrl     = countryData ? getFlagUrl(countryData.code) : null;
   const committeeName = (app.conference_committees as { name: string } | null)?.name;
+  const allocCountry = app.assigned_country_name ? getCountryByName(app.assigned_country_name) : null;
+  const allocFlag = allocCountry ? getFlagUrl(allocCountry.code) : null;
 
   return (
     <Link
       href={`/conferences/${conf.slug}`}
-      className="block rounded-2xl p-5 mb-3 transition-colors"
+      className="block rounded-[20px] p-5 mb-3 transition-all"
       style={{
-        backgroundColor: '#FAF8F3',
-        border: '1px solid #DDD4C0',
+        backgroundColor: 'rgba(250,248,243,0.82)',
+        backdropFilter: 'blur(14px) saturate(1.4)',
+        WebkitBackdropFilter: 'blur(14px) saturate(1.4)',
+        border: '1px solid rgba(221,212,192,0.9)',
+        boxShadow: '0 1px 3px rgba(27,56,40,0.05), 0 12px 32px rgba(27,56,40,0.06)',
         textDecoration: 'none',
         cursor: 'pointer',
       }}
-      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
-      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
+      onMouseEnter={(e) => {
+        (e.currentTarget as HTMLElement).style.borderColor = 'rgba(27,56,40,0.45)';
+        (e.currentTarget as HTMLElement).style.boxShadow = '0 2px 6px rgba(27,56,40,0.08), 0 16px 40px rgba(27,56,40,0.1)';
+      }}
+      onMouseLeave={(e) => {
+        (e.currentTarget as HTMLElement).style.borderColor = 'rgba(221,212,192,0.9)';
+        (e.currentTarget as HTMLElement).style.boxShadow = '0 1px 3px rgba(27,56,40,0.05), 0 12px 32px rgba(27,56,40,0.06)';
+      }}
     >
       <div className="flex gap-4">
         {/* Date block */}
-        <div
-          className="flex-shrink-0 text-center"
-          style={{ width: '56px' }}
-        >
+        <div className="flex-shrink-0 text-center" style={{ width: '56px' }}>
           <p
             className="font-black text-2xl leading-none"
-            style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}
+            style={{ color: '#1C1410', fontFamily: OUTFIT, margin: 0 }}
           >
             {day}
           </p>
-          <p
-            className="text-xs mt-0.5"
-            style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}
-          >
+          <p className="text-xs mt-1" style={{ color: '#B6871F', fontFamily: MONO, letterSpacing: '0.14em', margin: '4px 0 0 0' }}>
             {month}
           </p>
+          {conf.logo_url && (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={conf.logo_url}
+              alt=""
+              className="mx-auto mt-2"
+              style={{ width: '32px', height: '32px', objectFit: 'contain' }}
+            />
+          )}
         </div>
 
         {/* Divider */}
-        <div style={{ width: '1px', backgroundColor: '#DDD4C0', flexShrink: 0 }} />
+        <div style={{ width: '1px', backgroundColor: 'rgba(221,212,192,0.8)', flexShrink: 0 }} />
 
         {/* Main info */}
         <div className="flex-1 min-w-0">
-          <p
-            className="font-semibold text-sm"
-            style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}
-          >
+          <p className="font-bold text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT, margin: 0 }}>
             {conf.full_name}
           </p>
-          <p
-            className="text-xs mt-0.5"
-            style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}
-          >
+          <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: MONO, margin: '2px 0 0 0' }}>
             {conf.acronym}
           </p>
 
           {(app.role || committeeName) && (
-            <p
-              className="text-xs mt-1"
-              style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}
-            >
+            <p className="text-xs mt-1.5" style={{ color: '#9A8A78', fontFamily: OUTFIT, margin: '6px 0 0 0' }}>
               {app.role
                 ? app.role.charAt(0).toUpperCase() + app.role.slice(1)
                 : ''}
@@ -149,27 +158,30 @@ function ConferenceCard({ app }: { app: CalendarApplication }) {
           )}
 
           {app.assigned_country_name && (
-            <p
-              className="text-xs font-semibold mt-0.5"
-              style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}
-            >
+            <p className="text-xs font-semibold mt-1 flex items-center gap-1.5" style={{ color: '#1B3828', fontFamily: OUTFIT, margin: '4px 0 0 0' }}>
+              {allocFlag && (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={allocFlag}
+                  alt=""
+                  style={{ width: '16px', height: '11px', objectFit: 'cover', borderRadius: '2px' }}
+                />
+              )}
               {app.assigned_country_name}
             </p>
           )}
 
           {(conf.city || conf.country) && (
-            <div className="flex items-center gap-1 mt-1">
+            <div className="flex items-center gap-1.5 mt-1.5">
               {flagUrl && (
+                /* eslint-disable-next-line @next/next/no-img-element */
                 <img
                   src={flagUrl}
                   alt={conf.country}
-                  style={{ width: '16px', height: '11px', objectFit: 'cover', borderRadius: '1px' }}
+                  style={{ width: '16px', height: '11px', objectFit: 'cover', borderRadius: '2px' }}
                 />
               )}
-              <p
-                className="text-xs"
-                style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}
-              >
+              <p className="text-xs" style={{ color: '#9A8A78', fontFamily: OUTFIT, margin: 0 }}>
                 {[conf.city, conf.country].filter(Boolean).join(', ')}
               </p>
             </div>
@@ -261,58 +273,45 @@ export default function CalendarPage() {
 
   return (
     <div>
+      <Eyebrow className="mb-2">Where You&apos;re Headed</Eyebrow>
       <h1
-        className="font-black text-2xl mb-1"
-        style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}
+        className="font-black text-[26px] mb-1"
+        style={{ color: '#1C1410', fontFamily: OUTFIT, letterSpacing: '-0.01em' }}
       >
         Conference Calendar
       </h1>
-      <p
-        className="text-sm mb-8"
-        style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}
-      >
+      <p className="text-sm mb-8" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
         Your upcoming and past conferences.
       </p>
 
       {applications.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <p
-            className="text-lg font-semibold mb-2"
-            style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}
-          >
+        <GlassCard className="text-center !py-14">
+          <p className="text-lg font-bold mb-2" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
             No conferences yet
           </p>
-          <p
-            className="text-sm mb-6"
-            style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}
-          >
+          <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
             Apply to conferences to see them here.
           </p>
           <Link
             href="/conferences/explore"
-            className="rounded-xl py-2.5 px-6 font-bold text-sm focus:outline-none transition-colors"
+            className="inline-block rounded-xl py-2.5 px-6 font-bold text-[13px] focus:outline-none transition-colors"
             style={{
               backgroundColor: '#1B3828',
               color: '#EED98A',
               textDecoration: 'none',
-              fontFamily: "'Outfit', sans-serif",
-              letterSpacing: '0.06em',
+              fontFamily: OUTFIT,
+              letterSpacing: '0.08em',
             }}
           >
             EXPLORE CONFERENCES →
           </Link>
-        </div>
+        </GlassCard>
       ) : (
         <>
           {/* Upcoming */}
           {upcoming.length > 0 && (
-            <section className="mb-8">
-              <p
-                className="text-xs tracking-widest mb-3"
-                style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}
-              >
-                UPCOMING
-              </p>
+            <section className="mb-10">
+              <Eyebrow className="mb-4">Upcoming</Eyebrow>
 
               {/* Overlap warning */}
               {overlapPair && (
@@ -324,10 +323,7 @@ export default function CalendarPage() {
                   }}
                 >
                   <AlertTriangle size={16} style={{ color: '#B8844A', flexShrink: 0, marginTop: '1px' }} />
-                  <p
-                    className="text-sm"
-                    style={{ color: '#7A5A20', fontFamily: "'Outfit', sans-serif" }}
-                  >
+                  <p className="text-sm" style={{ color: '#7A5A20', fontFamily: OUTFIT, margin: 0 }}>
                     You have overlapping conferences.{' '}
                     <strong>{overlapPair[0]}</strong> and{' '}
                     <strong>{overlapPair[1]}</strong> overlap — you may not be able to attend both.
@@ -344,12 +340,7 @@ export default function CalendarPage() {
           {/* Past */}
           {past.length > 0 && (
             <section>
-              <p
-                className="text-xs tracking-widest mb-3"
-                style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}
-              >
-                PAST
-              </p>
+              <Eyebrow className="mb-4" color="#9A8A78">Past</Eyebrow>
               {past.map((app) => (
                 <ConferenceCard key={app.id} app={app} />
               ))}

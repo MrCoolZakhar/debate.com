@@ -100,8 +100,15 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
             {/* Sidebar */}
             <div style={{ width: '220px', flexShrink: 0 }}>
               <div
-                className="rounded-2xl p-5 sticky"
-                style={{ top: '88px', backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}
+                className="rounded-[20px] p-5 sticky"
+                style={{
+                  top: '88px',
+                  backgroundColor: 'rgba(250,248,243,0.82)',
+                  backdropFilter: 'blur(14px) saturate(1.4)',
+                  WebkitBackdropFilter: 'blur(14px) saturate(1.4)',
+                  border: '1px solid rgba(221,212,192,0.9)',
+                  boxShadow: '0 1px 3px rgba(27,56,40,0.05), 0 12px 32px rgba(27,56,40,0.06)',
+                }}
               >
                 {/* Avatar */}
                 <div className="flex justify-center">
@@ -148,10 +155,12 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
                     <span
                       className="rounded-full px-2 py-0.5"
                       style={{
-                        backgroundColor: 'rgba(238,217,138,0.2)',
+                        backgroundColor: 'rgba(238,217,138,0.22)',
+                        border: '1px solid rgba(182,135,31,0.4)',
                         color: '#B6871F',
                         fontFamily: "'DM Mono', monospace",
                         fontSize: '9px',
+                        letterSpacing: '0.08em',
                       }}
                     >
                       ✦ UNLIMITED
@@ -159,7 +168,14 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
                   </div>
                 )}
 
-                <div className="mt-4 mb-2" style={{ borderTop: '1px solid #DDD4C0' }} />
+                <div className="mt-4 mb-3" style={{ borderTop: '1px solid rgba(221,212,192,0.7)' }} />
+
+                <p
+                  className="px-3 mb-1.5"
+                  style={{ fontFamily: "'DM Mono', monospace", fontSize: '8.5px', letterSpacing: '0.24em', color: '#B6871F' }}
+                >
+                  ACCOUNT
+                </p>
 
                 <nav className="flex flex-col gap-0.5">
                   {NAV_LINKS.map((link) => {
@@ -196,7 +212,7 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
                   })}
                 </nav>
 
-                <div className="mt-2 mb-2" style={{ borderTop: '1px solid #DDD4C0' }} />
+                <div className="mt-2 mb-2" style={{ borderTop: '1px solid rgba(221,212,192,0.7)' }} />
 
                 <button
                   onClick={handleSignOut}
