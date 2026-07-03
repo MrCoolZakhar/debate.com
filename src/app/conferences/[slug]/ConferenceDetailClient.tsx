@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Globe, MessageCircle, Music, CalendarDays, MapPin, Users, GraduationCap, Monitor, Mail, FileText, Download, Landmark, Lock, ChevronDown, ChevronLeft, ChevronRight, Check, X, Plus, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
+import { Globe, MessageCircle, Music, CalendarDays, MapPin, Users, GraduationCap, Monitor, Mail, FileText, Download, Landmark, Lock, ChevronDown, ChevronLeft, ChevronRight, Check, X, Plus, ArrowUp, ArrowDown, ArrowUpDown, Star, Settings, LayoutDashboard, ArrowRight } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -81,6 +81,15 @@ interface MyApplication {
   payment_status: string;
 }
 
+interface ConferenceReview {
+  id: string;
+  user_id: string;
+  rating: number;
+  review_text: string | null;
+  display_name: string | null;
+  created_at: string;
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 function formatDateRange(start: string, end: string): string {
@@ -113,7 +122,84 @@ const DIFFICULTY_STYLES: Record<string, { bg: string; color: string }> = {
   expert:       { bg: 'rgba(139,32,32,0.1)',    color: '#8B2020' },
 };
 
+const ROLE_LABELS: Record<string, string> = {
+  delegate: 'Delegate',
+  chair: 'Chair',
+  'head-delegate': 'Head Delegate',
+  'faculty-advisor': 'Faculty Advisor',
+  observer: 'Observer',
+  crisis: 'Crisis Staff',
+  press: 'Press',
+  staff: 'Staff',
+};
+
+function roleLabel(role: string): string {
+  return ROLE_LABELS[role] ?? capitalize(role.replace(/-/g, ' '));
+}
+
+function fmtReviewDate(iso: string): string {
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const d = new Date(iso);
+  return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+}
+
 // ── Sub-components ────────────────────────────────────────────────────────
+
+function StarRow({ rating, size = 13 }: { rating: number; size?: number }) {
+  return (
+    <span className="inline-flex items-center gap-0.5" aria-label={`${rating} out of 5 stars`}>
+      {[1, 2, 3, 4, 5].map(i => (
+        <Star
+          key={i}
+          size={size}
+          strokeWidth={1.8}
+          style={{
+            color: i <= rating ? '#B6871F' : 'rgba(154,138,120,0.4)',
+            fill: i <= rating ? '#B6871F' : 'none',
+          }}
+        />
+      ))}
+    </span>
+  );
+}
+
+function ReviewCard({ review }: { review: ConferenceReview }) {
+  return (
+    <div
+      className="rounded-2xl px-5 py-4"
+      style={{ border: '1px solid rgba(221,212,192,0.7)', backgroundColor: 'rgba(237,231,216,0.25)' }}
+    >
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <span
+            className="flex items-center justify-center flex-shrink-0"
+            style={{
+              width: '30px', height: '30px', borderRadius: '9999px',
+              backgroundColor: '#1B3828', color: '#EED98A',
+              fontSize: '12px', fontWeight: 700, fontFamily: "'Outfit', sans-serif",
+            }}
+          >
+            {(review.display_name ?? 'V').charAt(0).toUpperCase()}
+          </span>
+          <span className="text-[13.5px] font-semibold truncate" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+            {review.display_name ?? 'Verified delegate'}
+          </span>
+        </div>
+        <div className="flex items-center gap-3 flex-shrink-0">
+          <StarRow rating={review.rating} />
+          <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '10px', color: '#9A8A78', letterSpacing: '0.06em' }}>
+            {fmtReviewDate(review.created_at)}
+          </span>
+        </div>
+      </div>
+      {review.review_text && (
+        <p className="text-[13.5px] mt-3" style={{ color: '#3B342C', fontFamily: "'Outfit', sans-serif", lineHeight: 1.75, margin: '12px 0 0 0' }}>
+          {review.review_text}
+        </p>
+      )}
+    </div>
+  );
+}
 
 function SortButton({ label, dir, onClick }: { label: string; dir: 'asc' | 'desc' | null; onClick: () => void }) {
   const active = dir !== null;
@@ -179,7 +265,7 @@ export default function ConferenceDetailClient() {
   const [ppError, setPPError] = useState('');
   const [ppNotify, setPPNotify] = useState(false);
   const [isReplacing, setIsReplacing] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'documents'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'documents' | 'reviews'>('overview');
   const [studyGuides, setStudyGuides] = useState<{ id: string; title: string; file_url: string; file_name: string; is_published: boolean }[]>([]);
   const [studyGuidesLoading, setStudyGuidesLoading] = useState(false);
   const [ppEnabled, setPpEnabled] = useState(false);
@@ -195,6 +281,19 @@ export default function ConferenceDetailClient() {
   const carouselRef = useRef<HTMLDivElement>(null);
   const [sortKey, setSortKey] = useState<'' | 'difficulty' | 'availability' | 'type'>('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  // Role-aware sidebar: organizer detection + one-button apply role picker
+  const [organizerRole, setOrganizerRole] = useState<string | null>(null);
+  const [rolePickerOpen, setRolePickerOpen] = useState(false);
+  // Reviews
+  const [reviews, setReviews] = useState<ConferenceReview[]>([]);
+  const [predReviews, setPredReviews] = useState<ConferenceReview[]>([]);
+  const [predAcronym, setPredAcronym] = useState<string | null>(null);
+  const [reviewPromptDismissed, setReviewPromptDismissed] = useState(true);
+  const [reviewRating, setReviewRating] = useState(0);
+  const [reviewHover, setReviewHover] = useState(0);
+  const [reviewText, setReviewText] = useState('');
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [reviewError, setReviewError] = useState('');
 
   useEffect(() => {
     if (authLoading) return;
@@ -273,6 +372,49 @@ export default function ConferenceDetailClient() {
     setCommittees((committeesRes.data as Committee[]) ?? []);
     setRoleConfigs((roleConfigsRes.data as RoleConfig[]) ?? []);
 
+    // Reviews — public content, anon client
+    const { data: reviewsData } = await supabase
+      .from('conference_reviews')
+      .select('id, user_id, rating, review_text, display_name, created_at')
+      .eq('conference_id', conf.id)
+      .order('created_at', { ascending: false });
+    setReviews((reviewsData as ConferenceReview[]) ?? []);
+
+    // Previous edition — defensive: the predecessor columns may not exist yet.
+    // Separate select so a missing-column error never breaks the page.
+    setPredReviews([]);
+    setPredAcronym(null);
+    try {
+      const { data: predRow, error: predError } = await supabase
+        .from('conferences')
+        .select('predecessor_conference_id, predecessor_approved')
+        .eq('id', conf.id)
+        .maybeSingle();
+      const predId = !predError ? (predRow as { predecessor_conference_id?: string | null; predecessor_approved?: boolean | null } | null)?.predecessor_conference_id : null;
+      const predApproved = !predError ? (predRow as { predecessor_approved?: boolean | null } | null)?.predecessor_approved : false;
+      if (predId && predApproved) {
+        const [predConfRes, predReviewsRes] = await Promise.all([
+          supabase.from('conferences').select('acronym').eq('id', predId).maybeSingle(),
+          supabase
+            .from('conference_reviews')
+            .select('id, user_id, rating, review_text, display_name, created_at')
+            .eq('conference_id', predId)
+            .order('created_at', { ascending: false }),
+        ]);
+        setPredAcronym((predConfRes.data as { acronym?: string } | null)?.acronym ?? null);
+        setPredReviews((predReviewsRes.data as ConferenceReview[]) ?? []);
+      }
+    } catch {
+      // Columns not deployed yet — ignore.
+    }
+
+    // Review prompt dismissal persists per conference
+    try {
+      setReviewPromptDismissed(localStorage.getItem(`review-prompt-${conf.id}`) === 'dismissed');
+    } catch {
+      setReviewPromptDismissed(false);
+    }
+
     // Public committee extras: full rosters, live occupancy, open chair postings
     const ccIds = ((committeesRes.data as Committee[]) ?? []).map(c => c.id);
     if (ccIds.length > 0) {
@@ -309,6 +451,19 @@ export default function ConferenceDetailClient() {
 
     if (user && session) {
       const authedSupabase = getAuthedClient(session.access_token);
+
+      // Organizer/secretariat detection — RLS only exposes rows to organizers themselves,
+      // so this returns the viewer's own row or nothing.
+      const { data: orgRow } = await authedSupabase
+        .from('conference_organizers')
+        .select('role')
+        .eq('conference_id', conf.id)
+        .eq('user_id', user.id)
+        .maybeSingle();
+      setOrganizerRole(
+        (orgRow as { role: string } | null)?.role ?? (user.id === conf.organizer_id ? 'owner' : null)
+      );
+
       const { data: appsData } = await authedSupabase
         .from('applications')
         .select('id, role, status, payment_status')
@@ -335,9 +490,52 @@ export default function ConferenceDetailClient() {
           setMyPositionPaper(ppData ?? null);
         }
       }
+    } else {
+      setOrganizerRole(null);
+      setMyApplications([]);
+      setMyAllocation(null);
     }
 
     setLoading(false);
+  }
+
+  async function refreshReviews(conferenceId: string) {
+    const { data } = await anonSupabase
+      .from('conference_reviews')
+      .select('id, user_id, rating, review_text, display_name, created_at')
+      .eq('conference_id', conferenceId)
+      .order('created_at', { ascending: false });
+    setReviews((data as ConferenceReview[]) ?? []);
+  }
+
+  async function handleSubmitReview() {
+    if (!user || !session || !conference || reviewRating < 1 || reviewSubmitting) return;
+    setReviewSubmitting(true);
+    setReviewError('');
+    const authed = getAuthedClient(session.access_token);
+    const { error } = await authed.from('conference_reviews').insert({
+      conference_id: conference.id,
+      user_id: user.id,
+      rating: reviewRating,
+      review_text: reviewText.trim() || null,
+      display_name: profile?.display_name ?? null,
+    });
+    if (error) {
+      setReviewError('Your review could not be saved. Only attendees can leave a review.');
+      setReviewSubmitting(false);
+      return;
+    }
+    await refreshReviews(conference.id);
+    setReviewRating(0);
+    setReviewText('');
+    setReviewSubmitting(false);
+  }
+
+  function dismissReviewPrompt() {
+    setReviewPromptDismissed(true);
+    if (conference) {
+      try { localStorage.setItem(`review-prompt-${conference.id}`, 'dismissed'); } catch { /* ignore */ }
+    }
   }
 
   const loadDocumentsData = useCallback(async () => {
@@ -468,6 +666,25 @@ export default function ConferenceDetailClient() {
   const hasOpenRoles = openRoles.length > 0;
 
   const isOnline = conference.format === 'online';
+
+  // Role-aware sidebar state
+  const isOrganizerViewer = !!organizerRole || isOrganizer;
+  const myApp = myApplications[0] ?? null;
+  const attended = myApplications.some(a => a.status === 'assigned' || a.status === 'checked-in') || !!myAllocation;
+  const myReview = user ? reviews.find(r => r.user_id === user.id) : undefined;
+  const canReview = !!user && attended && !myReview;
+  const showReviewPrompt = canReview && !reviewPromptDismissed;
+
+  // Reviews aggregates — current edition + approved predecessor edition
+  const allReviews = [...reviews, ...predReviews];
+  const reviewCount = allReviews.length;
+  const avgRating = reviewCount > 0 ? allReviews.reduce((sum, r) => sum + r.rating, 0) / reviewCount : 0;
+
+  const fmtWindowDate = (iso: string) => {
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const d = new Date(iso);
+    return `${d.getDate()} ${months[d.getMonth()]}`;
+  };
 
   return (
     <div className="min-h-screen flex flex-col relative" style={{ backgroundColor: '#EDE7D8' }}>
@@ -658,6 +875,54 @@ export default function ConferenceDetailClient() {
             {/* Left column */}
             <div className="flex-1 min-w-0">
 
+              {/* Review prompt — attendees who haven't reviewed yet */}
+              {showReviewPrompt && (
+                <div
+                  className="relative flex items-center gap-4 rounded-[18px] px-5 py-4 mb-5"
+                  style={{
+                    backgroundColor: 'rgba(250,248,243,0.88)',
+                    backdropFilter: 'blur(14px)',
+                    WebkitBackdropFilter: 'blur(14px)',
+                    border: '1px solid rgba(182,135,31,0.35)',
+                    boxShadow: '0 8px 24px rgba(27,56,40,0.08)',
+                  }}
+                >
+                  <span
+                    className="flex items-center justify-center flex-shrink-0"
+                    style={{ width: '38px', height: '38px', borderRadius: '12px', backgroundColor: 'rgba(182,135,31,0.12)' }}
+                  >
+                    <Star size={17} strokeWidth={2} style={{ color: '#B6871F', fill: '#B6871F' }} />
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[14px] font-bold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", margin: 0 }}>
+                      How was {conference.acronym}?
+                    </p>
+                    <p className="text-[12px]" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", margin: '1px 0 0 0' }}>
+                      Leave a review to help future delegates.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setActiveTab('reviews')}
+                    className="flex-shrink-0 rounded-xl py-2 px-4 text-[11px] font-bold focus:outline-none transition-colors"
+                    style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', border: 'none', cursor: 'pointer' }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+                  >
+                    LEAVE A REVIEW
+                  </button>
+                  <button
+                    onClick={dismissReviewPrompt}
+                    aria-label="Dismiss review prompt"
+                    className="flex items-center justify-center flex-shrink-0 rounded-full focus:outline-none transition-colors"
+                    style={{ width: '26px', height: '26px', border: 'none', backgroundColor: 'transparent', color: '#9A8A78', cursor: 'pointer' }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#1C1410'; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              )}
+
               {/* Floating glass tab pill */}
               <div className="sticky z-30 mb-7" style={{ top: '12px' }}>
                 <div
@@ -674,6 +939,7 @@ export default function ConferenceDetailClient() {
                   {([
                     { key: 'overview' as const, label: 'Overview', icon: Landmark },
                     { key: 'documents' as const, label: 'Documents', icon: FileText },
+                    { key: 'reviews' as const, label: 'Reviews', icon: Star },
                   ]).map(({ key, label, icon: TabIcon }) => (
                     <button
                       key={key}
@@ -1014,6 +1280,127 @@ export default function ConferenceDetailClient() {
                 </div>
               )}
 
+              {/* Reviews tab */}
+              {activeTab === 'reviews' && (
+                <div className="flex flex-col gap-6">
+                  <SectionCard>
+                    <p style={{ fontFamily: "'DM Mono', monospace", fontSize: '9px', letterSpacing: '0.26em', color: '#B6871F', margin: '0 0 14px 0' }}>
+                      DELEGATE REVIEWS
+                    </p>
+                    {reviewCount === 0 ? (
+                      <div className="flex flex-col items-center text-center py-8">
+                        <div
+                          className="flex items-center justify-center mb-4"
+                          style={{ width: '56px', height: '56px', borderRadius: '9999px', backgroundColor: 'rgba(182,135,31,0.1)', border: '1px solid rgba(182,135,31,0.25)' }}
+                        >
+                          <Star size={22} strokeWidth={1.8} style={{ color: '#B6871F' }} />
+                        </div>
+                        <p className="text-[14px] font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                          No reviews yet
+                        </p>
+                        <p className="text-[13px] max-w-[360px]" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", lineHeight: 1.7 }}>
+                          Reviews appear once delegates attend an edition of this conference.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-5">
+                        <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: '44px', color: '#1C1410', lineHeight: 1 }}>
+                          {avgRating.toFixed(1)}
+                        </span>
+                        <div className="flex flex-col gap-1">
+                          <StarRow rating={Math.round(avgRating)} size={16} />
+                          <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '10.5px', letterSpacing: '0.1em', color: '#9A8A78' }}>
+                            {reviewCount} {reviewCount === 1 ? 'REVIEW' : 'REVIEWS'}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </SectionCard>
+
+                  {/* Write a review — attendees only */}
+                  {canReview && (
+                    <SectionCard>
+                      <p style={{ fontFamily: "'DM Mono', monospace", fontSize: '9px', letterSpacing: '0.26em', color: '#B6871F', margin: '0 0 12px 0' }}>
+                        YOUR REVIEW
+                      </p>
+                      <div className="flex items-center gap-1.5 mb-4" onMouseLeave={() => setReviewHover(0)}>
+                        {[1, 2, 3, 4, 5].map(i => (
+                          <button
+                            key={i}
+                            onClick={() => setReviewRating(i)}
+                            onMouseEnter={() => setReviewHover(i)}
+                            aria-label={`Rate ${i} out of 5`}
+                            className="focus:outline-none"
+                            style={{ background: 'none', border: 'none', padding: '2px', cursor: 'pointer' }}
+                          >
+                            <Star
+                              size={26}
+                              strokeWidth={1.6}
+                              style={{
+                                color: i <= (reviewHover || reviewRating) ? '#B6871F' : 'rgba(154,138,120,0.45)',
+                                fill: i <= (reviewHover || reviewRating) ? '#B6871F' : 'none',
+                                transition: 'color 120ms ease',
+                              }}
+                            />
+                          </button>
+                        ))}
+                      </div>
+                      <textarea
+                        value={reviewText}
+                        onChange={(e) => setReviewText(e.target.value)}
+                        rows={4}
+                        placeholder="What should future delegates know about this conference?"
+                        className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none resize-none"
+                        style={{ border: '1px solid #DDD4C0', backgroundColor: 'rgba(237,231,216,0.25)', color: '#1C1410', fontFamily: "'Outfit', sans-serif", lineHeight: 1.7 }}
+                        onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
+                        onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
+                      />
+                      {reviewError && (
+                        <p className="text-[12px] mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif", margin: '8px 0 0 0' }}>
+                          {reviewError}
+                        </p>
+                      )}
+                      <button
+                        onClick={handleSubmitReview}
+                        disabled={reviewRating < 1 || reviewSubmitting}
+                        className="mt-4 rounded-xl py-2.5 px-6 font-bold text-[13px] focus:outline-none transition-colors"
+                        style={{
+                          backgroundColor: reviewRating < 1 || reviewSubmitting ? '#DDD4C0' : '#1B3828',
+                          color: reviewRating < 1 || reviewSubmitting ? '#9A8A78' : '#EED98A',
+                          fontFamily: "'Outfit', sans-serif",
+                          letterSpacing: '0.06em',
+                          border: 'none',
+                          cursor: reviewRating < 1 || reviewSubmitting ? 'default' : 'pointer',
+                        }}
+                      >
+                        {reviewSubmitting ? 'SAVING...' : 'SUBMIT REVIEW'}
+                      </button>
+                    </SectionCard>
+                  )}
+
+                  {/* Current edition reviews */}
+                  {reviews.length > 0 && (
+                    <div className="flex flex-col gap-3">
+                      {reviews.map(r => <ReviewCard key={r.id} review={r} />)}
+                    </div>
+                  )}
+
+                  {/* Previous edition reviews */}
+                  {predReviews.length > 0 && (
+                    <div className="flex flex-col gap-3">
+                      <div className="flex items-center gap-3 mt-1">
+                        <span className="flex-1" style={{ height: '1px', backgroundColor: 'rgba(221,212,192,0.9)' }} />
+                        <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '9px', letterSpacing: '0.26em', color: '#9A8A78', whiteSpace: 'nowrap' }}>
+                          FROM PREVIOUS EDITION{predAcronym ? ` · ${predAcronym.toUpperCase()}` : ''}
+                        </span>
+                        <span className="flex-1" style={{ height: '1px', backgroundColor: 'rgba(221,212,192,0.9)' }} />
+                      </div>
+                      {predReviews.map(r => <ReviewCard key={r.id} review={r} />)}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Replace warning modal */}
               {showPPWarning && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center px-6" style={{ backgroundColor: 'rgba(28,20,16,0.5)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}>
@@ -1066,23 +1453,133 @@ export default function ConferenceDetailClient() {
                     }}
                   />
                   <div className="relative">
-                    {!user ? (
+                    {isOrganizerViewer ? (
+                      /* 1 — Organizer/secretariat: manage affordances, never apply buttons */
                       <>
-                        <p className="font-bold text-base mb-1 text-white" style={{ fontFamily: "'Outfit', sans-serif" }}>Sign in to apply</p>
+                        <p style={{ fontFamily: "'DM Mono', monospace", fontSize: '9px', letterSpacing: '0.26em', color: '#EED98A', margin: '0 0 8px 0' }}>
+                          {(organizerRole ?? 'owner').toUpperCase()}
+                        </p>
+                        <p className="font-bold text-base mb-1 text-white" style={{ fontFamily: "'Outfit', sans-serif" }}>
+                          You run this conference
+                        </p>
                         <p className="text-xs mb-4" style={{ color: 'rgba(237,231,216,0.7)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.6 }}>
-                          Create a free account to apply for this conference.
+                          Manage applications, committees, and your public page.
+                        </p>
+                        {myApp && (
+                          <div
+                            className="flex items-center justify-between rounded-xl px-3.5 py-2.5 mb-3"
+                            style={{ backgroundColor: 'rgba(238,217,138,0.08)', border: '1px solid rgba(238,217,138,0.18)' }}
+                          >
+                            <span className="text-[12px] font-semibold" style={{ color: 'rgba(237,231,216,0.9)', fontFamily: "'Outfit', sans-serif" }}>
+                              Also applied as {roleLabel(myApp.role)}
+                            </span>
+                            <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '9px', letterSpacing: '0.1em', color: '#EED98A' }}>
+                              {myApp.status.toUpperCase()}
+                            </span>
+                          </div>
+                        )}
+                        <Link
+                          href={`/manage/${slug}`}
+                          className="flex items-center justify-center gap-2 w-full rounded-xl py-3 font-bold text-sm transition-all focus:outline-none mb-2"
+                          style={{ backgroundColor: '#EED98A', color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', boxShadow: '0 4px 16px rgba(0,0,0,0.2)', textDecoration: 'none' }}
+                          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'white'; }}
+                          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#EED98A'; }}
+                        >
+                          <LayoutDashboard size={15} strokeWidth={2.2} />
+                          MANAGE CONFERENCE
+                        </Link>
+                        <Link
+                          href={`/manage/${slug}/settings`}
+                          className="flex items-center justify-center gap-2 w-full rounded-xl py-3 font-bold text-sm transition-all focus:outline-none"
+                          style={{ backgroundColor: 'transparent', color: '#EED98A', border: '1px solid rgba(238,217,138,0.4)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', textDecoration: 'none' }}
+                          onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = 'rgba(238,217,138,0.1)'; el.style.borderColor = 'rgba(238,217,138,0.7)'; }}
+                          onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = 'transparent'; el.style.borderColor = 'rgba(238,217,138,0.4)'; }}
+                        >
+                          <Settings size={15} strokeWidth={2.2} />
+                          EDIT PAGE
+                        </Link>
+                      </>
+                    ) : myApp ? (
+                      /* 2 — Existing applicant/participant: status card, no apply buttons */
+                      (() => {
+                        const STATUS_META: Record<string, { label: string; bg: string; color: string; hint: string }> = {
+                          submitted:    { label: 'SUBMITTED',    bg: 'rgba(238,217,138,0.15)', color: '#EED98A',              hint: 'Your application is under review.' },
+                          accepted:     { label: 'ACCEPTED',     bg: 'rgba(61,122,82,0.35)',   color: '#A8D5B8',              hint: 'You are in. Your allocation will follow.' },
+                          assigned:     { label: 'ASSIGNED',     bg: 'rgba(61,122,82,0.35)',   color: '#A8D5B8',              hint: '' },
+                          'checked-in': { label: 'CHECKED IN',   bg: 'rgba(61,122,82,0.35)',   color: '#A8D5B8',              hint: '' },
+                          waitlisted:   { label: 'WAITLISTED',   bg: 'rgba(237,231,216,0.12)', color: 'rgba(237,231,216,0.8)', hint: 'You are on the waitlist. We will notify you if a spot opens.' },
+                          rejected:     { label: 'NOT ACCEPTED', bg: 'rgba(139,32,32,0.35)',   color: '#E8A9A9',              hint: 'Your application was not accepted this time.' },
+                        };
+                        const meta = STATUS_META[myApp.status] ?? { label: myApp.status.toUpperCase(), bg: 'rgba(237,231,216,0.12)', color: 'rgba(237,231,216,0.8)', hint: '' };
+                        const allocCountry = myAllocation ? getCountryByName(myAllocation.country_name) : null;
+                        const allocFlag = allocCountry ? getFlagUrl(allocCountry.code) : null;
+                        return (
+                          <>
+                            <p style={{ fontFamily: "'DM Mono', monospace", fontSize: '9px', letterSpacing: '0.26em', color: '#EED98A', margin: '0 0 8px 0' }}>
+                              YOUR APPLICATION
+                            </p>
+                            <div className="flex items-center justify-between gap-3 mb-1">
+                              <p className="font-bold text-base text-white" style={{ fontFamily: "'Outfit', sans-serif", margin: 0 }}>
+                                {roleLabel(myApp.role)}
+                              </p>
+                              <span
+                                className="flex-shrink-0"
+                                style={{ backgroundColor: meta.bg, color: meta.color, fontFamily: "'DM Mono', monospace", fontSize: '9px', fontWeight: 700, padding: '4px 10px', borderRadius: '9999px', letterSpacing: '0.1em' }}
+                              >
+                                {meta.label}
+                              </span>
+                            </div>
+                            {meta.hint && (
+                              <p className="text-xs" style={{ color: 'rgba(237,231,216,0.7)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.6, margin: '4px 0 0 0' }}>
+                                {meta.hint}
+                              </p>
+                            )}
+                            {myAllocation && (
+                              <div
+                                className="mt-4 rounded-xl px-4 py-3.5"
+                                style={{ backgroundColor: 'rgba(238,217,138,0.08)', border: '1px solid rgba(238,217,138,0.18)' }}
+                              >
+                                <p style={{ fontFamily: "'DM Mono', monospace", fontSize: '8.5px', letterSpacing: '0.22em', color: 'rgba(238,217,138,0.75)', margin: '0 0 6px 0' }}>
+                                  YOUR ALLOCATION
+                                </p>
+                                <p className="text-[13.5px] font-bold text-white" style={{ fontFamily: "'Outfit', sans-serif", margin: 0 }}>
+                                  {myAllocation.conference_committees?.name ?? 'Committee'}
+                                </p>
+                                <div className="flex items-center gap-2 mt-1.5">
+                                  {allocFlag && (
+                                    <img
+                                      src={allocFlag}
+                                      alt=""
+                                      style={{ width: '18px', height: '12px', borderRadius: '2px', objectFit: 'cover', flexShrink: 0, boxShadow: '0 1px 3px rgba(0,0,0,0.4)' }}
+                                    />
+                                  )}
+                                  <span className="text-[12.5px] font-semibold" style={{ color: '#EED98A', fontFamily: "'Outfit', sans-serif" }}>
+                                    {myAllocation.country_name}
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()
+                    ) : !user ? (
+                      /* 4 — Signed out: one elegant APPLY NOW routing through sign-in */
+                      <>
+                        <p className="font-bold text-base mb-1 text-white" style={{ fontFamily: "'Outfit', sans-serif" }}>Ready to take the floor?</p>
+                        <p className="text-xs mb-4" style={{ color: 'rgba(237,231,216,0.7)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.6 }}>
+                          Sign in with a free account to start your application.
                         </p>
                         <button
                           onClick={() => router.push(`/auth/signin?next=/conferences/${slug}`)}
                           className="w-full rounded-xl py-3 font-bold text-sm transition-all focus:outline-none"
-                          style={{ backgroundColor: '#EED98A', color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', boxShadow: '0 4px 16px rgba(0,0,0,0.2)' }}
+                          style={{ backgroundColor: '#EED98A', color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', boxShadow: '0 4px 16px rgba(0,0,0,0.2)', border: 'none', cursor: 'pointer' }}
                           onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'white'; }}
                           onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#EED98A'; }}
                         >
-                          SIGN IN TO APPLY →
+                          APPLY NOW →
                         </button>
                       </>
-                    ) : !hasOpenRoles ? (
+                    ) : enabledRoles.length === 0 ? (
                       <>
                         <p className="font-bold text-base text-white" style={{ fontFamily: "'Outfit', sans-serif" }}>No open applications</p>
                         <p className="text-xs mt-1" style={{ color: 'rgba(237,231,216,0.7)', fontFamily: "'Outfit', sans-serif" }}>
@@ -1090,52 +1587,75 @@ export default function ConferenceDetailClient() {
                         </p>
                       </>
                     ) : (
+                      /* 3 — Signed in, no involvement: one APPLY NOW revealing a role picker */
                       <>
                         <p className="font-bold text-base mb-1 text-white" style={{ fontFamily: "'Outfit', sans-serif" }}>Apply to this Conference</p>
                         <p className="text-xs mb-4" style={{ color: 'rgba(237,231,216,0.7)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.6 }}>
-                          Select your role to begin your application.
+                          {hasOpenRoles ? 'Applications are open.' : 'Applications are currently closed.'}
                         </p>
-                        {openRoles.map(r => {
-                          const myApp = myApplications.find(a => a.role === r.role);
-                          const hasApplied = !!myApp;
-                          const label = r.role.replace(/-/g, ' ').toUpperCase();
-                          return (
-                            <button
-                              key={r.role}
-                              disabled={hasApplied}
-                              onClick={() => {
-                                if (!hasApplied) router.push(`/conferences/${slug}/apply?role=${r.role}`);
-                              }}
-                              className="w-full mb-2 last:mb-0 rounded-xl py-2.5 px-4 text-sm font-bold transition-all focus:outline-none"
-                              style={
-                                hasApplied
-                                  ? {
-                                      backgroundColor: 'rgba(238,217,138,0.12)',
-                                      color: 'rgba(238,217,138,0.5)',
-                                      cursor: 'default',
-                                      fontFamily: "'Outfit', sans-serif",
-                                      letterSpacing: '0.05em',
-                                      border: '1px solid rgba(238,217,138,0.15)',
-                                    }
-                                  : {
-                                      backgroundColor: '#EED98A',
-                                      color: '#1B3828',
-                                      fontFamily: "'Outfit', sans-serif",
-                                      letterSpacing: '0.05em',
-                                      boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
-                                    }
-                              }
-                              onMouseEnter={(e) => {
-                                if (!hasApplied) (e.currentTarget as HTMLElement).style.backgroundColor = 'white';
-                              }}
-                              onMouseLeave={(e) => {
-                                if (!hasApplied) (e.currentTarget as HTMLElement).style.backgroundColor = '#EED98A';
-                              }}
-                            >
-                              {hasApplied ? 'Applied ✓' : `APPLY AS ${label} →`}
-                            </button>
-                          );
-                        })}
+                        <button
+                          onClick={() => setRolePickerOpen(v => !v)}
+                          aria-expanded={rolePickerOpen}
+                          className="w-full flex items-center justify-center gap-2 rounded-xl py-3 font-bold text-sm transition-all focus:outline-none"
+                          style={{ backgroundColor: '#EED98A', color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', boxShadow: '0 4px 16px rgba(0,0,0,0.2)', border: 'none', cursor: 'pointer' }}
+                          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'white'; }}
+                          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#EED98A'; }}
+                        >
+                          APPLY NOW
+                          <ChevronDown
+                            size={15}
+                            strokeWidth={2.4}
+                            style={{ transform: rolePickerOpen ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform 240ms ease' }}
+                          />
+                        </button>
+                        {rolePickerOpen && (
+                          <div className="mt-3 flex flex-col gap-1.5">
+                            <p style={{ fontFamily: "'DM Mono', monospace", fontSize: '8.5px', letterSpacing: '0.22em', color: 'rgba(238,217,138,0.75)', margin: '4px 0 2px 0' }}>
+                              CHOOSE YOUR ROLE
+                            </p>
+                            {enabledRoles.map(r => {
+                              const windowStatus = getRoleWindowStatus(r);
+                              const open = windowStatus === 'open' || windowStatus === 'open-always';
+                              const fee = r.fee_amount != null && r.fee_amount > 0
+                                ? `${currencySymbol(r.fee_currency ?? conference.fee_currency)}${r.fee_amount.toFixed(0)}`
+                                : 'Free';
+                              const reason = windowStatus === 'closed'
+                                ? 'Applications closed'
+                                : windowStatus === 'opens-soon' && r.applications_open_at
+                                  ? `Opens ${fmtWindowDate(r.applications_open_at)}`
+                                  : 'Not yet open';
+                              return (
+                                <button
+                                  key={r.role}
+                                  disabled={!open}
+                                  onClick={() => { if (open) router.push(`/conferences/${slug}/apply?role=${r.role}`); }}
+                                  className="w-full flex items-center justify-between gap-3 rounded-xl px-3.5 py-3 text-left transition-all focus:outline-none"
+                                  style={{
+                                    backgroundColor: open ? 'rgba(238,217,138,0.08)' : 'rgba(237,231,216,0.04)',
+                                    border: open ? '1px solid rgba(238,217,138,0.22)' : '1px solid rgba(237,231,216,0.08)',
+                                    cursor: open ? 'pointer' : 'default',
+                                    opacity: open ? 1 : 0.55,
+                                  }}
+                                  onMouseEnter={(e) => { if (open) { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = 'rgba(238,217,138,0.16)'; el.style.borderColor = 'rgba(238,217,138,0.45)'; } }}
+                                  onMouseLeave={(e) => { if (open) { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = 'rgba(238,217,138,0.08)'; el.style.borderColor = 'rgba(238,217,138,0.22)'; } }}
+                                >
+                                  <span className="min-w-0">
+                                    <span className="block text-[13px] font-bold text-white truncate" style={{ fontFamily: "'Outfit', sans-serif" }}>
+                                      {roleLabel(r.role)}
+                                    </span>
+                                    <span
+                                      className="block mt-0.5"
+                                      style={{ fontFamily: "'DM Mono', monospace", fontSize: '10px', letterSpacing: '0.08em', color: open ? '#EED98A' : 'rgba(237,231,216,0.55)' }}
+                                    >
+                                      {open ? fee : reason}
+                                    </span>
+                                  </span>
+                                  {open && <ArrowRight size={15} strokeWidth={2.2} style={{ color: '#EED98A', flexShrink: 0 }} />}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
                       </>
                     )}
                   </div>
