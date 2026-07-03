@@ -13,7 +13,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 export type ExperienceLevel = 'beginner' | 'intermediate' | 'advanced' | 'expert';
 
-interface Band {
+export interface Band {
   level: ExperienceLevel;
   label: string;
   min: number; // first conference count in this band
@@ -25,6 +25,9 @@ const BANDS: Band[] = [
   { level: 'advanced',     label: 'Advanced',     min: 5 },
   { level: 'expert',       label: 'Expert',       min: 9 },
 ];
+
+/** Ordered experience bands (beginner→expert). Single source of thresholds. */
+export const EXPERIENCE_BANDS: readonly Band[] = BANDS;
 
 export function deriveExperienceLevel(count: number): ExperienceLevel {
   if (count >= 9) return 'expert';
