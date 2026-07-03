@@ -932,6 +932,8 @@ export default function AssignmentPage() {
   const [sendingAll, setSendingAll] = useState(false);
   const [quickAssigning, setQuickAssigning] = useState<string | null>(null); // suggestion key in flight
   const [flash, setFlash] = useState<{ kind: 'ok' | 'err'; msg: string } | null>(null);
+  const [chairInviteEmail, setChairInviteEmail] = useState('');
+  const [chairInviting, setChairInviting] = useState(false);
 
   function showFlash(kind: 'ok' | 'err', msg: string) {
     setFlash({ kind, msg });
@@ -1121,6 +1123,31 @@ export default function AssignmentPage() {
       .eq('conference_id', conference.id)
       .eq('user_id', userId)
       .eq('role', 'chair');
+    await loadData();
+  }
+
+  async function handleInviteChair(committee: CommitteeData) {
+    if (!session || !conference) return;
+    const email = chairInviteEmail.trim();
+    if (!email) return;
+    setChairInviting(true);
+    const supabase = getAuthedClient(session.access_token);
+    const { data, error } = await supabase.rpc('invite_chair_by_email', {
+      p_conference_id: conference.id,
+      p_committee_id: committee.id,
+      p_email: email,
+    });
+    setChairInviting(false);
+    if (error) {
+      const msg = /no gavelling account/i.test(error.message)
+        ? `No Gavelling account found for ${email}. They need to sign up first.`
+        : (error.message || 'Could not invite that chair.');
+      showFlash('err', msg);
+      return;
+    }
+    const name = (data as { display_name?: string } | null)?.display_name ?? email;
+    setChairInviteEmail('');
+    showFlash('ok', `${name} added as a chair of ${committee.name}.`);
     await loadData();
   }
 
@@ -1593,7 +1620,7 @@ export default function AssignmentPage() {
                   </div>
                   {assignableChairs.length === 0 ? (
                     <p className="text-sm" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-                      No unassigned chair applicants. Accept a chair application first, or invite a chair directly (coming soon).
+                      No unassigned chair applicants. Accept a chair application first, or invite a chair directly below.
                     </p>
                   ) : (
                     <div className="flex flex-col gap-2">
@@ -1616,6 +1643,37 @@ export default function AssignmentPage() {
                       ))}
                     </div>
                   )}
+
+                  {/* Direct invite — Phase 2 #2b-ii */}
+                  <div className="mt-6 pt-6" style={{ borderTop: '1px solid #F0EDE6' }}>
+                    <p style={{ fontSize: 10, color: '#B6871F', fontFamily: MONO, letterSpacing: '0.16em', fontWeight: 500, marginBottom: 12 }}>
+                      DIRECT INVITE
+                    </p>
+                    <p className="text-xs mb-3" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+                      Add a registered Gavelling user as a chair of {selectedCommittee.name} by email. They&apos;re assigned immediately, no application required.
+                    </p>
+                    <div className="flex gap-2">
+                      <input
+                        type="email"
+                        value={chairInviteEmail}
+                        onChange={e => setChairInviteEmail(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter' && !chairInviting) handleInviteChair(selectedCommittee); }}
+                        placeholder="chair@university.edu"
+                        className="flex-1 rounded-xl px-3 py-2 text-sm focus:outline-none"
+                        style={{ border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3', color: '#1C1410', fontFamily: OUTFIT }}
+                      />
+                      <button
+                        onClick={() => handleInviteChair(selectedCommittee)}
+                        disabled={chairInviting || !chairInviteEmail.trim()}
+                        className="rounded-xl py-2 px-4 text-xs font-bold focus:outline-none transition-colors flex-shrink-0"
+                        style={{ backgroundColor: (chairInviting || !chairInviteEmail.trim()) ? '#DDD4C0' : '#1B3828', color: (chairInviting || !chairInviteEmail.trim()) ? '#9A8A78' : '#EED98A', border: 'none', fontFamily: OUTFIT }}
+                        onMouseEnter={e => { if (!chairInviting && chairInviteEmail.trim()) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+                        onMouseLeave={e => { if (!chairInviting && chairInviteEmail.trim()) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+                      >
+                        {chairInviting ? 'INVITING…' : 'INVITE'}
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
             </>
