@@ -1,13 +1,31 @@
 'use client';
 
-import { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { Users, FileText, CreditCard, Zap, type LucideIcon } from 'lucide-react';
 
-// ── Shared constants / types / helpers for the landing lab ──────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Landing lab · shared primitives
+//
+// Three variants, three theses (see docs/design/landing-research.md §4):
+//   V1 "Stagefront"   — Dice/RA poster-first browse          (delegates)
+//   V2 "The Record"   — Eventbrite search × Stripe precision (delegates/advisors)
+//   V3 "First Gavel"  — Luma supply-side minimalism          (organisers)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const INK = '#1C1410';
+export const FOREST = '#1B3828';
+export const IVORY = '#EDE7D8';
+export const CREAM = '#FAF8F3';
+export const GOLD = '#B6871F';
+export const PALE_GOLD = '#EED98A';
+export const TAUPE = '#9A8A78';
+export const HAIRLINE = '#DDD4C0';
+
+export const MONO = "'DM Mono', monospace";
+export const SANS = "'Outfit', sans-serif";
 
 export const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
+
+// ── Data types ───────────────────────────────────────────────────────────────
 
 export interface LabConference {
   id: string;
@@ -25,27 +43,62 @@ export interface LabConference {
   banner_url: string | null;
 }
 
+export interface LabReview {
+  conference_id: string;
+  rating: number;
+  review_text: string;
+  display_name: string;
+}
+
+export interface RatingSummary {
+  avg: number;
+  count: number;
+}
+
+/** Per-conference average rating from the public conference_reviews rows. */
+export function ratingMap(reviews: LabReview[]): Record<string, RatingSummary> {
+  const acc: Record<string, { sum: number; count: number }> = {};
+  for (const r of reviews) {
+    const slot = (acc[r.conference_id] ??= { sum: 0, count: 0 });
+    slot.sum += r.rating;
+    slot.count += 1;
+  }
+  const out: Record<string, RatingSummary> = {};
+  for (const [id, { sum, count }] of Object.entries(acc)) {
+    out[id] = { avg: Math.round((sum / count) * 10) / 10, count };
+  }
+  return out;
+}
+
+// ── Date / fee helpers ───────────────────────────────────────────────────────
+
+const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const MONTHS_LONG = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
 export function formatDateRange(start: string, end: string): string {
   const s = new Date(start + 'T00:00:00');
   const e = new Date(end + 'T00:00:00');
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   if (s.getMonth() === e.getMonth() && s.getFullYear() === e.getFullYear()) {
-    return `${s.getDate()}–${e.getDate()} ${months[s.getMonth()]} ${s.getFullYear()}`;
+    return `${s.getDate()}–${e.getDate()} ${MONTHS_SHORT[s.getMonth()]} ${s.getFullYear()}`;
   }
-  return `${s.getDate()} ${months[s.getMonth()]} – ${e.getDate()} ${months[e.getMonth()]} ${e.getFullYear()}`;
+  return `${s.getDate()} ${MONTHS_SHORT[s.getMonth()]} – ${e.getDate()} ${MONTHS_SHORT[e.getMonth()]} ${e.getFullYear()}`;
 }
 
-export function shortDate(d: string): string {
-  const s = new Date(d + 'T00:00:00');
-  const months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
-  return `${String(s.getDate()).padStart(2, '0')} ${months[s.getMonth()]}`;
+/** "12–14 JUN" — compact ledger form. */
+export function compactRange(start: string, end: string): string {
+  const s = new Date(start + 'T00:00:00');
+  const e = new Date(end + 'T00:00:00');
+  if (s.getMonth() === e.getMonth()) {
+    return `${s.getDate()}–${e.getDate()} ${MONTHS_SHORT[s.getMonth()].toUpperCase()}`;
+  }
+  return `${s.getDate()} ${MONTHS_SHORT[s.getMonth()].toUpperCase()} – ${e.getDate()} ${MONTHS_SHORT[e.getMonth()].toUpperCase()}`;
 }
 
-export function feeLabel(c: LabConference): string {
-  return c.fee_amount === 0 ? 'FREE' : `${c.fee_currency} ${c.fee_amount.toFixed(0)}`;
+/** "February 2027" — month bucket label for season grouping. */
+export function monthLabel(dateStr: string): string {
+  const d = new Date(dateStr + 'T00:00:00');
+  return `${MONTHS_LONG[d.getMonth()]} ${d.getFullYear()}`;
 }
-
-// ── Urgency / social-proof helpers (conversion mechanics) ────────────────────
 
 export function daysUntil(dateStr: string): number {
   const now = new Date();
@@ -54,32 +107,28 @@ export function daysUntil(dateStr: string): number {
   return Math.round((d.getTime() - now.getTime()) / 86400000);
 }
 
-export type TimingTone = 'now' | 'soon' | 'future' | 'past';
-export interface ConfTiming { label: string; tone: TimingTone }
+export function isConcluded(c: LabConference): boolean {
+  return daysUntil(c.end_date) < 0;
+}
 
-export function confTiming(c: LabConference): ConfTiming {
+export function feeLabel(c: LabConference): string {
+  return c.fee_amount === 0 ? 'Free' : `${c.fee_currency} ${c.fee_amount.toFixed(0)}`;
+}
+
+/** "In 231 days" / "Happening now" / "Concluded" — honest urgency (RA/Meetup register). */
+export function timingLabel(c: LabConference): string {
   const start = daysUntil(c.start_date);
   const end = daysUntil(c.end_date);
-  if (end < 0) return { label: 'CONCLUDED', tone: 'past' };
-  if (start <= 0) return { label: 'HAPPENING NOW', tone: 'now' };
-  if (start === 1) return { label: 'STARTS TOMORROW', tone: 'soon' };
-  if (start <= 45) return { label: `STARTS IN ${start} DAYS`, tone: 'soon' };
-  return { label: `IN ${start} DAYS`, tone: 'future' };
+  if (end < 0) return 'Concluded';
+  if (start <= 0) return 'Happening now';
+  if (start === 1) return 'Starts tomorrow';
+  return `In ${start} days`;
 }
 
-export function timingColors(tone: TimingTone): { bg: string; fg: string } {
-  switch (tone) {
-    case 'now': return { bg: '#B6871F', fg: '#FAF8F3' };
-    case 'soon': return { bg: '#1B3828', fg: '#EED98A' };
-    case 'future': return { bg: 'rgba(27,56,40,0.08)', fg: '#1B3828' };
-    case 'past': return { bg: 'rgba(154,138,120,0.16)', fg: '#9A8A78' };
-  }
-}
-
-/** Upcoming conferences first; falls back to everything if nothing is upcoming. */
-export function upcomingFirst(conferences: LabConference[]): LabConference[] {
-  const upcoming = conferences.filter(c => daysUntil(c.end_date) >= 0);
-  return upcoming.length > 0 ? upcoming : conferences;
+/** The headliner: first upcoming conference that has real imagery, else first upcoming. */
+export function pickHeadliner(conferences: LabConference[]): LabConference | null {
+  const upcoming = conferences.filter(c => !isConcluded(c));
+  return upcoming.find(c => c.banner_url) ?? upcoming[0] ?? conferences.find(c => c.banner_url) ?? conferences[0] ?? null;
 }
 
 export function circuitStats(conferences: LabConference[]) {
@@ -88,162 +137,20 @@ export function circuitStats(conferences: LabConference[]) {
   return { listed: conferences.length, seats, countries };
 }
 
-// ── Production copy (voice preserved from ConferencesClient.tsx) ─────────────
+// ── Star row (used by V1 headliner + V3 proof caption) ───────────────────────
 
-export const COPY = {
-  heroLine1: 'Find Your Next',
-  heroLine2: 'Conference.',
-  searchPlaceholder: 'Search conferences...',
-  organiserTitle1: 'Run your conference.',
-  organiserTitle2: 'Fee-free.',
-  organiserBody:
-    'Zero platform fees for organisers. Gavelling handles registration, allocations, document management, session integration, and automated communications.',
-  organiserCta: 'START A CONFERENCE →',
-  rolesTitle1: 'Looking to chair?',
-  rolesTitle2: 'Find your next role.',
-  rolesBody:
-    'Conferences post open positions for chairs, secretariat, and staff. Apply directly through your Gavelling profile — your MUN CV travels with you.',
-  rolesCta: 'FIND YOUR NEXT OPPORTUNITY →',
-  globeTitle1: 'MUN Across',
-  globeTitle2: 'the Globe.',
-  globeBody:
-    'From The Hague to Singapore, Tokyo to New York. Explore conferences on every continent and find your next destination.',
-  globeCta: 'EXPLORE CONFERENCES WORLDWIDE →',
-} as const;
-
-export const ORGANISER_CARDS: { icon: LucideIcon; title: string; desc: string }[] = [
-  { icon: Users, title: 'Smart Assignment', desc: 'Preferences + experience scores. One-click auto-assign.' },
-  { icon: FileText, title: 'Document Portal', desc: 'Study guides, position papers, feedback — all in one place.' },
-  { icon: CreditCard, title: 'Transparent Fees', desc: '5% delegate surcharge, waived with Gavelling Unlimited. You keep 100%.' },
-  { icon: Zap, title: 'Automated Comms', desc: 'Acceptance emails, allocation codes, reminders — sent automatically.' },
-];
-
-export const ROLES_PILLS = ['CHAIRS', 'SECRETARIAT', 'STAFF'] as const;
-
-// ── Shared search box (filters the fetched public conferences locally) ──────
-
-export function LabSearch({
-  conferences,
-  appearance,
-}: {
-  conferences: LabConference[];
-  appearance: 'field' | 'underline' | 'glass';
-}) {
-  const router = useRouter();
-  const [query, setQuery] = useState('');
-  const [focused, setFocused] = useState(false);
-
-  const q = query.trim().toLowerCase();
-  const results = q
-    ? conferences.filter(c =>
-        c.full_name.toLowerCase().includes(q) ||
-        c.acronym.toLowerCase().includes(q) ||
-        c.city.toLowerCase().includes(q) ||
-        c.country.toLowerCase().includes(q)
-      ).slice(0, 5)
-    : [];
-
-  const baseInput: React.CSSProperties = {
-    width: '100%',
-    fontFamily: "'Outfit', sans-serif",
-    fontSize: '14px',
-    color: '#1C1410',
-    outline: 'none',
-    boxSizing: 'border-box',
-  };
-
-  const inputStyle: React.CSSProperties =
-    appearance === 'underline'
-      ? {
-          ...baseInput,
-          padding: '12px 2px',
-          border: 'none',
-          borderBottom: `1.5px solid ${focused ? '#1B3828' : '#DDD4C0'}`,
-          borderRadius: 0,
-          backgroundColor: 'transparent',
-          fontSize: '16px',
-          transition: 'border-color 200ms ease',
-        }
-      : appearance === 'glass'
-      ? {
-          ...baseInput,
-          padding: '14px 20px',
-          borderRadius: '14px',
-          border: `1.5px solid ${focused ? '#1B3828' : 'rgba(221,212,192,0.9)'}`,
-          backgroundColor: 'rgba(250,248,243,0.88)',
-          backdropFilter: 'blur(14px)',
-          WebkitBackdropFilter: 'blur(14px)',
-          boxShadow: '0 10px 32px rgba(27,56,40,0.18)',
-        }
-      : {
-          ...baseInput,
-          padding: '14px 20px',
-          borderRadius: '14px',
-          border: `1.5px solid ${focused ? '#1B3828' : '#DDD4C0'}`,
-          backgroundColor: 'rgba(250,248,243,0.92)',
-          boxShadow: '0 2px 12px rgba(27,56,40,0.06)',
-        };
-
+export function Stars({ avg, size = 13, color = GOLD }: { avg: number; size?: number; color?: string }) {
+  const filled = Math.round(avg);
   return (
-    <div style={{ position: 'relative', flex: 1 }}>
-      <input
-        type="text"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        onKeyDown={(e) => { if (e.key === 'Enter') router.push('/conferences/explore'); }}
-        placeholder={COPY.searchPlaceholder}
-        style={inputStyle}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
-      />
-      {q.length > 0 && (
-        <div
-          style={{
-            position: 'absolute',
-            top: 'calc(100% + 8px)',
-            left: 0,
-            right: 0,
-            zIndex: 50,
-            backgroundColor: '#FAF8F3',
-            border: '1px solid #DDD4C0',
-            borderRadius: '12px',
-            boxShadow: '0 12px 32px rgba(27,56,40,0.14)',
-            overflow: 'hidden',
-          }}
-        >
-          {results.map(result => (
-            <div
-              key={result.id}
-              onMouseDown={() => router.push(`/conferences/${result.slug}`)}
-              style={{ padding: '10px 16px', cursor: 'pointer', borderBottom: '1px solid rgba(221,212,192,0.5)' }}
-              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
-            >
-              <p style={{ fontFamily: "'Outfit', sans-serif", fontSize: '13px', fontWeight: 700, color: '#1C1410', margin: 0 }}>
-                {result.full_name}
-              </p>
-              <p style={{ fontFamily: "'DM Mono', monospace", fontSize: '10px', color: '#9A8A78', margin: '2px 0 0 0' }}>
-                {result.city}, {result.country} · {formatDateRange(result.start_date, result.end_date)}
-              </p>
-            </div>
-          ))}
-          <div
-            onMouseDown={() => router.push('/conferences/explore')}
-            style={{ padding: '10px 16px', cursor: 'pointer' }}
-            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
-          >
-            <p style={{ fontFamily: "'DM Mono', monospace", fontSize: '10.5px', letterSpacing: '0.12em', color: '#1B3828', margin: 0 }}>
-              SEARCH THE FULL DIRECTORY →
-            </p>
-          </div>
-        </div>
-      )}
-    </div>
+    <span aria-label={`${avg} out of 5 stars`} style={{ letterSpacing: '0.1em', fontSize: `${size}px`, lineHeight: 1 }}>
+      {[1, 2, 3, 4, 5].map(i => (
+        <span key={i} style={{ color: i <= filled ? color : 'rgba(154,138,120,0.4)' }}>★</span>
+      ))}
+    </span>
   );
 }
 
-// ── Fixed glass variant switcher pill ────────────────────────────────────────
+// ── Fixed glass variant switcher pill (lab mechanic — do not remove) ─────────
 
 export function VariantSwitcher({ current }: { current: 1 | 2 | 3 }) {
   return (
@@ -263,7 +170,7 @@ export function VariantSwitcher({ current }: { current: 1 | 2 | 3 }) {
     >
       <span
         className="pl-3 pr-2"
-        style={{ fontFamily: "'DM Mono', monospace", fontSize: '9px', letterSpacing: '0.18em', color: '#9A8A78' }}
+        style={{ fontFamily: MONO, fontSize: '9px', letterSpacing: '0.18em', color: TAUPE }}
       >
         LAB
       </span>
@@ -272,15 +179,15 @@ export function VariantSwitcher({ current }: { current: 1 | 2 | 3 }) {
           key={v}
           href={`/conferences/landing-lab?v=${v}`}
           style={{
-            fontFamily: "'DM Mono', monospace",
+            fontFamily: MONO,
             fontSize: '11px',
             fontWeight: 700,
             letterSpacing: '0.06em',
             padding: '6px 12px',
             borderRadius: '9999px',
             textDecoration: 'none',
-            color: current === v ? '#EED98A' : '#1B3828',
-            backgroundColor: current === v ? '#1B3828' : 'transparent',
+            color: current === v ? PALE_GOLD : FOREST,
+            backgroundColor: current === v ? FOREST : 'transparent',
             transition: 'background-color 180ms ease, color 180ms ease',
           }}
           onMouseEnter={(e) => {
@@ -297,18 +204,18 @@ export function VariantSwitcher({ current }: { current: 1 | 2 | 3 }) {
   );
 }
 
-// ── Shared ivory footer (design rule: footer bg is always #EDE7D8) ──────────
+// ── Shared ivory footer (design rule: footer bg is always #EDE7D8) ───────────
 
 export function LabFooter() {
   return (
     <footer
       className="relative z-10 border-t px-6 py-8"
       style={{
-        borderColor: '#DDD4C0',
+        borderColor: HAIRLINE,
         backgroundImage: GRAIN,
         backgroundRepeat: 'repeat',
         backgroundSize: '300px 300px',
-        backgroundColor: '#EDE7D8',
+        backgroundColor: IVORY,
       }}
     >
       <div className="flex flex-col items-center gap-4 md:grid md:grid-cols-3 md:gap-0 md:items-center">
@@ -325,9 +232,9 @@ export function LabFooter() {
             target="_blank"
             rel="noopener noreferrer"
             aria-label="Instagram"
-            style={{ color: '#9A8A78', transition: 'color 0.15s' }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#1B3828'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#9A8A78'; }}
+            style={{ color: TAUPE, transition: 'color 0.15s' }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = FOREST; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = TAUPE; }}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
               <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>
@@ -339,7 +246,7 @@ export function LabFooter() {
             </svg>
           </span>
         </div>
-        <p className="text-xs font-semibold md:text-right" style={{ color: '#1B3828' }}>
+        <p className="text-xs font-semibold md:text-right" style={{ color: FOREST, fontFamily: SANS }}>
           © {new Date().getFullYear()} Gavelling. Built for the MUN community.
         </p>
       </div>
