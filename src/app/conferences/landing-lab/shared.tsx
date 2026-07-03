@@ -45,6 +45,49 @@ export function feeLabel(c: LabConference): string {
   return c.fee_amount === 0 ? 'FREE' : `${c.fee_currency} ${c.fee_amount.toFixed(0)}`;
 }
 
+// ── Urgency / social-proof helpers (conversion mechanics) ────────────────────
+
+export function daysUntil(dateStr: string): number {
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  const d = new Date(dateStr + 'T00:00:00');
+  return Math.round((d.getTime() - now.getTime()) / 86400000);
+}
+
+export type TimingTone = 'now' | 'soon' | 'future' | 'past';
+export interface ConfTiming { label: string; tone: TimingTone }
+
+export function confTiming(c: LabConference): ConfTiming {
+  const start = daysUntil(c.start_date);
+  const end = daysUntil(c.end_date);
+  if (end < 0) return { label: 'CONCLUDED', tone: 'past' };
+  if (start <= 0) return { label: 'HAPPENING NOW', tone: 'now' };
+  if (start === 1) return { label: 'STARTS TOMORROW', tone: 'soon' };
+  if (start <= 45) return { label: `STARTS IN ${start} DAYS`, tone: 'soon' };
+  return { label: `IN ${start} DAYS`, tone: 'future' };
+}
+
+export function timingColors(tone: TimingTone): { bg: string; fg: string } {
+  switch (tone) {
+    case 'now': return { bg: '#B6871F', fg: '#FAF8F3' };
+    case 'soon': return { bg: '#1B3828', fg: '#EED98A' };
+    case 'future': return { bg: 'rgba(27,56,40,0.08)', fg: '#1B3828' };
+    case 'past': return { bg: 'rgba(154,138,120,0.16)', fg: '#9A8A78' };
+  }
+}
+
+/** Upcoming conferences first; falls back to everything if nothing is upcoming. */
+export function upcomingFirst(conferences: LabConference[]): LabConference[] {
+  const upcoming = conferences.filter(c => daysUntil(c.end_date) >= 0);
+  return upcoming.length > 0 ? upcoming : conferences;
+}
+
+export function circuitStats(conferences: LabConference[]) {
+  const seats = conferences.reduce((s, c) => s + (c.expected_delegates || 0), 0);
+  const countries = new Set(conferences.map(c => c.country)).size;
+  return { listed: conferences.length, seats, countries };
+}
+
 // ── Production copy (voice preserved from ConferencesClient.tsx) ─────────────
 
 export const COPY = {
