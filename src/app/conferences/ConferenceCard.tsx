@@ -9,6 +9,10 @@
 // 72px contain + drop-shadow) · acronym eyebrow · 2-line name · flag + city ·
 // calendar + dates · foot row (delegates chip · fee/FREE chip · VIEW arrow).
 // Hover lifts the card and deepens the shadow so it reads as a floating object.
+//
+// `compact` (default false — the explore directory is untouched) shrinks the
+// same anatomy for narrow rails (~340–380px): 72px banner band, smaller logo
+// overlap and tighter padding. One definition, two densities — never fork it.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { ArrowRight, Users, CalendarDays } from 'lucide-react';
@@ -59,18 +63,21 @@ function formatDateRange(start: string, end: string): string {
 }
 
 export function ConferenceCard({
-  conf, hovered, onHover, onLeave, onClick,
+  conf, hovered, onHover, onLeave, onClick, compact = false,
 }: {
   conf: CardConference;
   hovered: boolean;
   onHover: () => void;
   onLeave: () => void;
   onClick: () => void;
+  /** Denser variant for narrow vertical rails. Default false — explore unchanged. */
+  compact?: boolean;
 }) {
   const countryObj = getCountryByName(conf.country);
   const flagUrl = countryObj ? getFlagUrl(countryObj.code) : null;
   const initials = conf.acronym.slice(0, 3).toUpperCase();
   const [g0, g1] = gradientFor(conf.acronym);
+  const padX = compact ? 'px-4' : 'px-5';
 
   return (
     <article
@@ -90,7 +97,7 @@ export function ConferenceCard({
       }}
     >
       {/* Banner band */}
-      <div className="relative" style={{ height: '104px', overflow: 'hidden' }}>
+      <div className="relative" style={{ height: compact ? '72px' : '104px', overflow: 'hidden' }}>
         {conf.banner_url ? (
           <>
             <img
@@ -112,7 +119,7 @@ export function ConferenceCard({
               aria-hidden
               style={{
                 position: 'absolute', right: '14px', bottom: '-6px',
-                fontFamily: "'DM Mono', monospace", fontSize: '52px', lineHeight: 1,
+                fontFamily: "'DM Mono', monospace", fontSize: compact ? '38px' : '52px', lineHeight: 1,
                 color: 'rgba(238,217,138,0.13)', letterSpacing: '0.02em', userSelect: 'none',
               }}
             >
@@ -138,45 +145,45 @@ export function ConferenceCard({
       </div>
 
       {/* Logo overlapping the band — free-floating */}
-      <div className="px-5" style={{ marginTop: '-36px', position: 'relative' }}>
+      <div className={padX} style={{ marginTop: compact ? '-24px' : '-36px', position: 'relative' }}>
         {conf.logo_url ? (
           <img
             src={conf.logo_url}
             alt={conf.acronym}
             style={{
-              width: '72px', height: '72px', objectFit: 'contain', display: 'block',
+              width: compact ? '52px' : '72px', height: compact ? '52px' : '72px', objectFit: 'contain', display: 'block',
               filter: 'drop-shadow(0 8px 16px rgba(16,28,21,0.35))',
             }}
           />
         ) : (
           <div
             style={{
-              width: '56px', height: '56px', borderRadius: '15px',
+              width: compact ? '44px' : '56px', height: compact ? '44px' : '56px', borderRadius: compact ? '12px' : '15px',
               backgroundColor: '#EDE7D8', border: '3px solid #FAF8F3',
               boxShadow: '0 4px 12px rgba(27,56,40,0.15)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}
           >
-            <span style={{ fontSize: '12px', fontFamily: "'DM Mono', monospace", color: '#1B3828', fontWeight: 700 }}>
+            <span style={{ fontSize: compact ? '10px' : '12px', fontFamily: "'DM Mono', monospace", color: '#1B3828', fontWeight: 700 }}>
               {initials}
             </span>
           </div>
         )}
       </div>
 
-      <div className="px-5 pt-3 pb-5">
+      <div className={`${padX} ${compact ? 'pt-2 pb-4' : 'pt-3 pb-5'}`}>
         {/* Acronym eyebrow */}
-        <p style={{ fontFamily: "'DM Mono', monospace", fontSize: '10px', letterSpacing: '0.16em', color: '#B6871F', margin: '0 0 3px 0' }}>
+        <p style={{ fontFamily: "'DM Mono', monospace", fontSize: compact ? '9px' : '10px', letterSpacing: '0.16em', color: '#B6871F', margin: '0 0 3px 0' }}>
           {conf.acronym}
         </p>
 
         {/* Full name */}
         <h3
-          className="text-[15px] font-bold leading-snug mb-2.5"
+          className={compact ? 'text-[14px] font-bold leading-snug mb-2' : 'text-[15px] font-bold leading-snug mb-2.5'}
           style={{
             color: '#1C1410', fontFamily: "'Outfit', sans-serif",
-            display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
-            minHeight: '2.6em',
+            display: '-webkit-box', WebkitLineClamp: compact ? 1 : 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+            minHeight: compact ? undefined : '2.6em',
           }}
         >
           {conf.full_name}
@@ -195,7 +202,7 @@ export function ConferenceCard({
             {conf.city}, {conf.country}
           </span>
         </div>
-        <div className="flex items-center gap-1.5 mb-4">
+        <div className={`flex items-center gap-1.5 ${compact ? 'mb-3' : 'mb-4'}`}>
           <CalendarDays size={12} style={{ color: '#9A8A78', flexShrink: 0 }} />
           <span className="text-[11px]" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}>
             {formatDateRange(conf.start_date, conf.end_date)}
@@ -204,7 +211,7 @@ export function ConferenceCard({
 
         {/* Foot row */}
         <div
-          className="flex items-center justify-between pt-3.5"
+          className={`flex items-center justify-between ${compact ? 'pt-2.5' : 'pt-3.5'}`}
           style={{ borderTop: '1px solid rgba(221,212,192,0.55)' }}
         >
           <div className="flex items-center gap-2">
