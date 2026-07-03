@@ -96,9 +96,9 @@ Rebuilt across the two days; current state:
 5. **Swallowed-error pattern** (`.insert().select().single()` + `useAuth().session` timing) persists in manage writes outside creation — can silently no-op writes after the auth failsafe renders logged-out.
 6. `CONFERENCES_EXPERIENCE.md` (repo root) = the full verified findings register + gap analysis with July-12/15 criticality; treat as the QA source of truth alongside the PRD.
 
-## 10. IN FLIGHT RIGHT NOW
+## 10. FINAL STAGEFRONT ITERATION (landed, commit `af931c5`)
 
-A worktree agent is iterating Stagefront again (commit will land on the branch shortly): three featured cards become a vertical stack on the RIGHT of the hero (compact variant of the shared ConferenceCard; the standalone section below is deleted), 3 tiny opportunity pop-up chips on the job-board CTA, bigger explainer images, organiser-tools section compressed to the opportunities section's height (2×2 kept, icons bigger), season ledger deleted entirely.
+Hero is now a split: headline/CTAs left, the three soonest conferences stacked vertically on the RIGHT inside the hero (new `compact` prop on the shared `ConferenceCard` — default false, explore unchanged); the standalone featured section below was deleted. The job-board CTA gained 3 tiny fanned pop-up chips of the newest real open roles (logo + role + category tint, staggered float-in, reduced-motion safe, all linking to /conferences/roles). Explainer photos upscaled to clamp(280px,24vw,320px) using the real 1400px photos. Organiser tools compressed to the job-board section's footprint (2×2 kept, icons 48px). Season ledger deleted entirely (its helpers too; shared.tsx exports untouched).
 
 ## 11. GOTCHAS FOR PROMPTS (new since your handoff)
 
