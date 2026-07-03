@@ -3,23 +3,22 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // V1 · "Stagefront" — the full composition (owner-approved evolution, restructured).
 //
-// The LIMUN theatre banner opens the show as a hero backdrop, but it is now
-// CONSTRAINED to the hero zone: everything below the featured-three sits on
-// clean cream / ivory slabs so each section reads as its own distinct band.
+// The LIMUN theatre banner opens the show as a hero backdrop, constrained to
+// the hero zone: everything below sits on clean cream / ivory slabs so each
+// section reads as its own distinct band.
 //
 // Composition, top to bottom:
-//   1. Hero (poster-first, nav floats over)                     — DARK (theatre photo)
-//   2. Featured three upcoming conferences (shared card)        — DARK (hero zone)
-//   3. "Opportunities beyond delegating" job board              — CREAM (no panel)
-//   4. "Happening near you" regional auto-scroll rail (IP geo)  — IVORY
-//   5. mymun-inspired "What is MUN / Why Gavelling" pair         — CREAM
-//   6. Organiser tools — photo backdrop, 2×2 grid + gold CTA    — PHOTO
-//   7. The rest of the season — RA-style month-grouped ledger   — IVORY
-//   8. The production globe section, verbatim                   — FOREST
-//   9. Ivory footer (design rule)
+//   1. Hero — headline left, "up next" card rail right          — DARK (theatre photo)
+//   2. "Opportunities beyond delegating" job board              — CREAM (no panel)
+//   3. "Happening near you" regional auto-scroll rail (IP geo)  — IVORY
+//   4. mymun-inspired "What is MUN / Why Gavelling" pair         — CREAM
+//   5. Organiser tools — photo backdrop, 2×2 grid + gold CTA    — PHOTO
+//   6. The production globe section, verbatim                   — FOREST
+//   7. Ivory footer (design rule)
 //
-// The three featured cards + the regional rail reuse the SHARED ConferenceCard
-// (../ConferenceCard) — the same definition the explore directory renders.
+// The hero rail + the regional rail reuse the SHARED ConferenceCard
+// (../ConferenceCard) — the same definition the explore directory renders;
+// the hero stack uses its `compact` density so three fit gracefully.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -32,9 +31,9 @@ import { UN_COUNTRIES } from '@/lib/countries';
 import { ConferenceCard } from '../ConferenceCard';
 import {
   LabConference, RatingSummary,
-  CREAM, FOREST, GOLD, IVORY, MONO, PALE_GOLD, SANS, TAUPE, HAIRLINE, GRAIN,
-  compactRange, feeLabel, isConcluded, monthLabel, pickHeadliner,
-  Stars, LabFooter,
+  CREAM, FOREST, GOLD, IVORY, MONO, PALE_GOLD, SANS, HAIRLINE, GRAIN,
+  isConcluded, pickHeadliner,
+  LabFooter,
 } from './shared';
 
 // Light-on-dark tokens for the hero zone.
@@ -52,6 +51,31 @@ interface JobStats {
   chairing: number;
 }
 
+// The three most recent open postings, rendered as tiny "notification" chips
+// fanned above the SEE OPEN ROLES CTA.
+interface RoleChip {
+  id: string;
+  role: string;
+  acronym: string;
+  logoUrl: string | null;
+  category: string; // normalised: 'chairs' | 'secretariat' | 'staff' | …
+}
+
+// Category tints — same palette logic as /conferences/roles
+// (chairs = gold, secretariat = slate-blue, staff = forest-green).
+const CHIP_TINTS: Record<string, { color: string; border: string }> = {
+  chairs: { color: '#8A6614', border: 'rgba(182,135,31,0.38)' },
+  secretariat: { color: '#46617A', border: 'rgba(70,97,122,0.30)' },
+  staff: { color: '#2A5A3C', border: 'rgba(42,90,60,0.30)' },
+};
+
+// Fan layout for the three chips: playful offsets + slight rotations.
+const CHIP_FAN = [
+  { left: '0px', bottom: '2px', rot: '-5deg', delay: '80ms', z: 3 },
+  { left: '96px', bottom: '46px', rot: '3.5deg', delay: '260ms', z: 2 },
+  { left: '176px', bottom: '0px', rot: '-2deg', delay: '440ms', z: 1 },
+] as const;
+
 // Resolve a Vercel ISO-3166 alpha-2 code (e.g. "GB") to a full country name
 // so it can be matched against conference.country ("United Kingdom").
 function countryNameFromCode(code: string | null | undefined): string | null {
@@ -67,16 +91,15 @@ interface GeoResult {
 
 export default function VariantStagefront({
   conferences,
-  ratings,
 }: {
   conferences: LabConference[];
-  ratings: Record<string, RatingSummary>;
+  ratings: Record<string, RatingSummary>; // accepted for caller compatibility (season ledger removed)
 }) {
   const router = useRouter();
   const headliner = useMemo(() => pickHeadliner(conferences), [conferences]);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
-  // The three soonest upcoming conferences take the featured row.
+  // The three soonest upcoming conferences take the hero's "up next" rail.
   const upcomingTrio = useMemo(
     () =>
       conferences
@@ -85,24 +108,6 @@ export default function VariantStagefront({
         .slice(0, 3),
     [conferences],
   );
-
-  // Month buckets for the RA-style season listing, upcoming first.
-  const season = useMemo(() => {
-    const sorted = [...conferences].sort((a, b) => {
-      const ac = isConcluded(a) ? 1 : 0;
-      const bc = isConcluded(b) ? 1 : 0;
-      if (ac !== bc) return ac - bc;
-      return a.start_date.localeCompare(b.start_date);
-    });
-    const buckets: { label: string; items: LabConference[] }[] = [];
-    for (const c of sorted) {
-      const label = monthLabel(c.start_date);
-      const last = buckets[buckets.length - 1];
-      if (last && last.label === label) last.items.push(c);
-      else buckets.push({ label, items: [c] });
-    }
-    return buckets;
-  }, [conferences]);
 
   // ── Geolocation ────────────────────────────────────────────────────────────
   // Fetch /api/geo (Vercel edge headers). If it yields nothing (local dev, or a
@@ -163,19 +168,35 @@ export default function VariantStagefront({
       ? `None in ${geo.country} yet — here's what's coming up across the circuit.`
       : `Finding your region… here's what's coming up across the circuit.`;
 
-  // Live job-board stats — fetched dynamically (seed data changes under us).
+  // Live job-board stats + the three most recent open roles (for the CTA
+  // pop-up chips) — one query, fetched dynamically (seed data changes under us).
   const [jobStats, setJobStats] = useState<JobStats | null>(null);
+  const [roleChips, setRoleChips] = useState<RoleChip[]>([]);
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const { data } = await supabase
         .from('job_postings')
-        .select('category, conference_id')
-        .eq('is_open', true);
+        .select('id, category, role_name, conference_id, created_at, conferences (acronym, logo_url)')
+        .eq('is_open', true)
+        .order('created_at', { ascending: false });
       if (cancelled || !data) return;
       const hiring = new Set(data.map(r => r.conference_id)).size;
       const chairing = data.filter(r => String(r.category ?? '').toLowerCase().includes('chair')).length;
       setJobStats({ open: data.length, hiring, chairing });
+      setRoleChips(
+        data.slice(0, 3).map(r => {
+          // Supabase types to-one joins loosely — normalise object-or-array.
+          const conf = Array.isArray(r.conferences) ? r.conferences[0] : r.conferences;
+          return {
+            id: String(r.id),
+            role: String(r.role_name ?? 'Open role'),
+            acronym: String(conf?.acronym ?? 'MUN'),
+            logoUrl: (conf?.logo_url as string | null) ?? null,
+            category: String(r.category ?? 'staff').trim().toLowerCase().replace(/[\s_]+/g, '-'),
+          };
+        }),
+      );
     })();
     return () => { cancelled = true; };
   }, []);
@@ -191,51 +212,53 @@ export default function VariantStagefront({
         }
         .sf-rail-track { animation: sfRailScroll 46s linear infinite; }
         .sf-rail:hover .sf-rail-track { animation-play-state: paused; }
+        @keyframes sfChipIn {
+          from { opacity: 0; transform: translateY(14px) scale(0.9) rotate(var(--sf-rot, 0deg)); }
+          to { opacity: 1; transform: translateY(0) scale(1) rotate(var(--sf-rot, 0deg)); }
+        }
+        .sf-chip { animation: sfChipIn 640ms cubic-bezier(0.22,1,0.36,1) both; }
         @media (prefers-reduced-motion: reduce) {
           .sf-rail { overflow-x: auto; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; }
           .sf-rail-track { animation: none !important; transform: none !important; }
           .sf-rail-track > * { scroll-snap-align: start; }
           .sf-rail-dupe { display: none !important; }
+          .sf-chip { animation: none !important; }
         }
       `}</style>
 
-      {/* ── Hero backdrop — constrained to the hero zone only ──────────────── */}
-      <div
-        className="absolute inset-x-0 top-0 z-0"
-        aria-hidden="true"
-        style={{ height: 'min(160vh, 1500px)', overflow: 'hidden' }}
-      >
-        {headliner?.banner_url ? (
-          <img src={headliner.banner_url} alt="" className="w-full h-full object-cover" />
-        ) : (
-          <div
-            className="w-full h-full"
-            style={{ background: `linear-gradient(160deg, #12241B 0%, ${FOREST} 55%, #2A5A3C 130%)` }}
-          />
-        )}
-        {/* Darkening + a hard fade to cream at the bottom of the hero zone */}
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              'linear-gradient(to bottom, rgba(8,18,13,0.5) 0%, rgba(8,18,13,0.34) 26%, rgba(8,18,13,0.7) 58%, rgba(10,22,16,0.94) 82%, #FAF8F3 100%)',
-          }}
-        />
-        <div
-          className="absolute inset-0"
-          style={{
-            background: 'radial-gradient(ellipse 120% 80% at 50% 28%, transparent 40%, rgba(6,14,10,0.5) 76%, rgba(6,14,10,0.72) 100%)',
-          }}
-        />
-      </div>
-
       <div className="relative z-10">
-        {/* ── Hero ────────────────────────────────────────────────────────── */}
-        <section className="relative" style={{ minHeight: 'min(92vh, 860px)', display: 'flex', flexDirection: 'column' }}>
+        {/* ── Hero — headline left, "up next" rail right ─────────────────── */}
+        <section className="relative" style={{ minHeight: 'min(92vh, 880px)', display: 'flex', flexDirection: 'column' }}>
+          {/* Backdrop — sized to the hero zone exactly */}
+          <div className="absolute inset-0 z-0" aria-hidden="true" style={{ overflow: 'hidden' }}>
+            {headliner?.banner_url ? (
+              <img src={headliner.banner_url} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <div
+                className="w-full h-full"
+                style={{ background: `linear-gradient(160deg, #12241B 0%, ${FOREST} 55%, #2A5A3C 130%)` }}
+              />
+            )}
+            {/* Darkening + a short fade to cream at the very bottom of the hero */}
+            <div
+              className="absolute inset-0"
+              style={{
+                background:
+                  'linear-gradient(to bottom, rgba(8,18,13,0.52) 0%, rgba(8,18,13,0.4) 30%, rgba(8,18,13,0.62) 62%, rgba(10,22,16,0.9) 92%, #FAF8F3 100%)',
+              }}
+            />
+            <div
+              className="absolute inset-0"
+              style={{
+                background: 'radial-gradient(ellipse 120% 80% at 50% 28%, transparent 40%, rgba(6,14,10,0.5) 76%, rgba(6,14,10,0.72) 100%)',
+              }}
+            />
+          </div>
+
           <SiteNav overlay />
 
-          <div className="relative flex-1 flex flex-col justify-end px-6 md:px-14 pb-12 md:pb-16 pt-40">
-            <div style={{ maxWidth: '760px' }}>
+          <div className="relative z-10 flex-1 flex flex-col lg:flex-row lg:items-end gap-12 lg:gap-14 px-6 md:px-14 pb-12 md:pb-16 pt-36 md:pt-40">
+            <div className="flex-1 flex flex-col justify-end" style={{ maxWidth: '760px' }}>
               <p style={{ fontFamily: MONO, fontSize: '11px', letterSpacing: '0.22em', color: PALE_GOLD, margin: '0 0 18px 0' }}>
                 {conferences.length > 0 ? `${conferences.length} CONFERENCE${conferences.length === 1 ? '' : 'S'} ON THE BOARD` : 'THE MUN CIRCUIT'}
               </p>
@@ -295,43 +318,31 @@ export default function VariantStagefront({
                 </div>
               </div>
             </div>
+
+            {/* Curated "up next" rail — three compact shared cards floating over the hero */}
+            {upcomingTrio.length > 0 && (
+              <aside className="w-full lg:w-[360px] flex-shrink-0 flex flex-col justify-end">
+                <p style={{ fontFamily: MONO, fontSize: '10.5px', letterSpacing: '0.24em', color: PALE_GOLD, margin: '0 0 12px 0', textShadow: '0 1px 8px rgba(0,0,0,0.45)' }}>
+                  TAKING THE FLOOR NEXT
+                </p>
+                <div className="flex flex-col gap-4">
+                  {upcomingTrio.map(c => (
+                    <div key={c.id} style={{ filter: 'drop-shadow(0 18px 38px rgba(0,0,0,0.42))' }}>
+                      <ConferenceCard
+                        conf={c}
+                        compact
+                        hovered={hoveredId === c.id}
+                        onHover={() => setHoveredId(c.id)}
+                        onLeave={() => setHoveredId(null)}
+                        onClick={() => goTo(c.slug)}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </aside>
+            )}
           </div>
         </section>
-
-        {/* ── Featured three — shared ConferenceCard, still in the hero zone ── */}
-        {upcomingTrio.length > 0 && (
-          <section className="px-6 md:px-14" style={{ paddingTop: '20px', paddingBottom: '64px' }}>
-            <p style={{ fontFamily: MONO, fontSize: '11px', letterSpacing: '0.24em', color: PALE_GOLD, margin: '0 0 8px 0' }}>
-              TAKING THE FLOOR NEXT
-            </p>
-            <h2
-              style={{
-                fontFamily: SANS,
-                fontWeight: 900,
-                fontSize: 'clamp(26px, 3vw, 38px)',
-                letterSpacing: '-0.015em',
-                color: CREAM,
-                margin: '0 0 30px 0',
-                textShadow: '0 2px 18px rgba(0,0,0,0.4)',
-              }}
-            >
-              The next three gavels to fall.
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8">
-              {upcomingTrio.map(c => (
-                <div key={c.id} style={{ filter: 'drop-shadow(0 22px 44px rgba(0,0,0,0.4))' }}>
-                  <ConferenceCard
-                    conf={c}
-                    hovered={hoveredId === c.id}
-                    onHover={() => setHoveredId(c.id)}
-                    onLeave={() => setHoveredId(null)}
-                    onClick={() => goTo(c.slug)}
-                  />
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
 
         {/* ── Opportunities beyond delegating — job board, cream, no panel ──── */}
         <section
@@ -361,11 +372,21 @@ export default function VariantStagefront({
                 Gavelling hire chairs, secretariat and staff every season — and your MUN CV
                 is the application.
               </p>
+              {/* Three tiny "notification" previews of the freshest open roles,
+                  fanned playfully above the CTA. Real data, all roads lead to /roles. */}
+              {roleChips.length > 0 && (
+                <div style={{ position: 'relative', height: '96px', marginTop: '24px', maxWidth: '360px' }}>
+                  {roleChips.map((chip, i) => {
+                    const fan = CHIP_FAN[i] ?? CHIP_FAN[0];
+                    return <RolePopChip key={chip.id} chip={chip} fan={fan} />;
+                  })}
+                </div>
+              )}
               <Link
                 href="/conferences/roles"
                 className="inline-flex items-center gap-2.5"
                 style={{
-                  marginTop: '28px',
+                  marginTop: roleChips.length > 0 ? '10px' : '28px',
                   fontFamily: SANS,
                   fontSize: '14px',
                   fontWeight: 800,
@@ -512,7 +533,7 @@ export default function VariantStagefront({
             Start here.
           </h2>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
-            <ExplainerCard photo="/landing-right.jpg" photoAlt="Two delegates working through a draft resolution together">
+            <ExplainerCard photo="/landing/podium-speaker.jpg" photoAlt="A full committee room mid-debate, chair at the podium">
               <p style={{ fontFamily: MONO, fontSize: '10.5px', letterSpacing: '0.24em', color: GOLD, margin: 0 }}>
                 THE GAME
               </p>
@@ -534,7 +555,7 @@ export default function VariantStagefront({
               </p>
             </ExplainerCard>
 
-            <ExplainerCard photo="/landing-left.jpg" photoAlt="A delegate rising to speak in committee">
+            <ExplainerCard photo="/landing/organiser-desk.jpg" photoAlt="A delegation working together on Gavelling at a laptop" photoPosition="center 42%">
               <p style={{ fontFamily: MONO, fontSize: '10.5px', letterSpacing: '0.24em', color: GOLD, margin: 0 }}>
                 WHY GAVELLING
               </p>
@@ -581,7 +602,7 @@ export default function VariantStagefront({
         </section>
 
         {/* ── Organiser tools — photographic backdrop, 2×2 grid + gold CTA ──── */}
-        <section className="relative overflow-hidden" style={{ paddingTop: '80px', paddingBottom: '88px' }}>
+        <section className="relative overflow-hidden" style={{ paddingTop: '56px', paddingBottom: '64px' }}>
           {/*
             Backdrop photo: Marvin Meyer via Unsplash (license-safe, free to use)
             https://unsplash.com/photos/SYTO3xs06fU
@@ -618,15 +639,15 @@ export default function VariantStagefront({
             >
               Built for the people running the show.
             </h2>
-            <p style={{ fontFamily: SANS, fontSize: '15px', lineHeight: 1.6, color: IVORY_70, margin: '14px 0 40px 0', maxWidth: '520px' }}>
+            <p style={{ fontFamily: SANS, fontSize: '15px', lineHeight: 1.6, color: IVORY_70, margin: '12px 0 26px 0', maxWidth: '520px' }}>
               Registration, allocation, documents and live committee sessions — one platform,
               zero fees for organisers.
             </p>
 
-            {/* 2×2 square block of highlight tiles */}
+            {/* 2×2 square block of highlight tiles — dense: big icons, tight copy */}
             <div
-              className="grid grid-cols-2 gap-4 md:gap-5"
-              style={{ maxWidth: '620px', margin: '0 auto' }}
+              className="grid grid-cols-2 gap-3 md:gap-4"
+              style={{ maxWidth: '500px', margin: '0 auto' }}
             >
               {[
                 { icon: Users, title: 'Smart Assignment', desc: 'Preferences + experience scores. One-click auto-assign.' },
@@ -645,16 +666,16 @@ export default function VariantStagefront({
                       WebkitBackdropFilter: 'blur(14px) saturate(1.15)',
                       border: '1px solid rgba(237,231,216,0.16)',
                       aspectRatio: '1 / 1',
-                      padding: '22px 18px',
+                      padding: '16px 14px',
                       justifyContent: 'center',
                       gap: '2px',
                     }}
                   >
-                    <Icon size={40} color={PALE_GOLD} strokeWidth={1.75} />
-                    <h3 style={{ fontFamily: SANS, fontWeight: 700, fontSize: '15px', color: CREAM, margin: '14px 0 0 0' }}>
+                    <Icon size={48} color={PALE_GOLD} strokeWidth={1.6} />
+                    <h3 style={{ fontFamily: SANS, fontWeight: 700, fontSize: '13.5px', color: CREAM, margin: '12px 0 0 0' }}>
                       {card.title}
                     </h3>
-                    <p style={{ fontFamily: SANS, fontSize: '12px', lineHeight: 1.5, color: IVORY_70, margin: '6px 0 0 0' }}>
+                    <p style={{ fontFamily: SANS, fontSize: '10.5px', lineHeight: 1.45, color: IVORY_70, margin: '5px 0 0 0' }}>
                       {card.desc}
                     </p>
                   </div>
@@ -663,7 +684,7 @@ export default function VariantStagefront({
             </div>
 
             {/* Standalone gold CTA below the 2×2 block */}
-            <div className="flex justify-center" style={{ marginTop: '36px' }}>
+            <div className="flex justify-center" style={{ marginTop: '26px' }}>
               <Link
                 href="/conferences/new"
                 className="inline-flex items-center gap-3"
@@ -686,55 +707,6 @@ export default function VariantStagefront({
                 List your conference <ArrowRight size={18} strokeWidth={2.5} />
               </Link>
             </div>
-          </div>
-        </section>
-
-        {/* ── The rest of the season — RA-style month-grouped ledger, ivory ─── */}
-        <section
-          className="px-6 md:px-14"
-          style={{ backgroundColor: IVORY, paddingTop: '64px', paddingBottom: '72px' }}
-        >
-          <p style={{ fontFamily: MONO, fontSize: '11px', letterSpacing: '0.24em', color: GOLD, margin: '0 0 8px 0' }}>
-            THE SEASON
-          </p>
-          <h2
-            style={{
-              fontFamily: SANS,
-              fontWeight: 900,
-              fontSize: 'clamp(26px, 3vw, 38px)',
-              letterSpacing: '-0.015em',
-              color: INK,
-              margin: '0 0 24px 0',
-            }}
-          >
-            Every gavel on the calendar.
-          </h2>
-          {season.map(bucket => (
-            <div key={bucket.label} style={{ marginTop: '24px' }}>
-              <p style={{ fontFamily: MONO, fontSize: '11px', letterSpacing: '0.24em', color: INK_55, margin: '0 0 2px 0' }}>
-                {bucket.label.toUpperCase()}
-              </p>
-              {bucket.items.map(c => (
-                <SeasonRow key={c.id} conference={c} rating={ratings[c.id]} />
-              ))}
-            </div>
-          ))}
-          <div style={{ marginTop: '40px' }}>
-            <Link
-              href="/conferences/explore"
-              className="inline-flex items-center gap-2"
-              style={{
-                fontFamily: MONO,
-                fontSize: '12px',
-                letterSpacing: '0.16em',
-                color: GOLD,
-                textDecoration: 'none',
-                borderBottom: `1px solid ${GOLD}`,
-                paddingBottom: '4px',
-              }}
-            >
-              SEE THE FULL DIRECTORY <ArrowRight size={14} strokeWidth={2.25} />
-            </Link>
           </div>
         </section>
 
@@ -968,11 +940,13 @@ function RegionalRail({
   );
 }
 
-/** mymun-style rounded card: large photo on top, editorial text below — cream. */
+/** mymun-style rounded card: large photo on top (bottom-fading into the card),
+ *  editorial text below — cream. Photos are the real 1400px shots in
+ *  /public/landing/, cover-cropped so they never stretch blurry. */
 function ExplainerCard({
-  photo, photoAlt, children,
+  photo, photoAlt, photoPosition = 'center 30%', children,
 }: {
-  photo: string; photoAlt: string; children: React.ReactNode;
+  photo: string; photoAlt: string; photoPosition?: string; children: React.ReactNode;
 }) {
   return (
     <div
@@ -987,63 +961,85 @@ function ExplainerCard({
         <img
           src={photo}
           alt={photoAlt}
-          className="w-full object-cover"
-          style={{ display: 'block', height: '240px', objectPosition: 'center 30%' }}
+          className="w-full"
+          style={{ display: 'block', height: 'clamp(280px, 24vw, 320px)', objectFit: 'cover', objectPosition: photoPosition }}
+        />
+        {/* Bottom fade into the card body */}
+        <div
+          aria-hidden="true"
+          className="absolute inset-x-0 bottom-0"
+          style={{ height: '96px', background: `linear-gradient(to bottom, rgba(250,248,243,0) 0%, ${CREAM} 100%)` }}
         />
       </div>
-      <div style={{ padding: '26px 28px 30px' }}>
+      <div style={{ padding: '10px 28px 30px' }}>
         {children}
       </div>
     </div>
   );
 }
 
-function SeasonRow({ conference: c, rating }: { conference: LabConference; rating?: RatingSummary }) {
-  const [hover, setHover] = useState(false);
-  const concluded = isConcluded(c);
+/**
+ * A tiny "notification pop-up" preview of one open role: conference logo (or
+ * monogram), role name, category-tinted meta line. Fanned above the job-board
+ * CTA; clicking goes to /conferences/roles like the button itself.
+ */
+function RolePopChip({
+  chip, fan,
+}: {
+  chip: RoleChip;
+  fan: { left: string; bottom: string; rot: string; delay: string; z: number };
+}) {
+  const tint = CHIP_TINTS[chip.category] ?? CHIP_TINTS.staff;
   return (
     <Link
-      href={`/conferences/${c.slug}`}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      className="flex items-baseline md:items-center gap-4 md:gap-8 flex-wrap md:flex-nowrap"
+      href="/conferences/roles"
+      className="sf-chip inline-flex items-center gap-2"
+      aria-label={`Open role: ${chip.role} at ${chip.acronym}`}
       style={{
-        padding: '20px 4px',
-        borderTop: `1px solid ${HAIRLINE}`,
+        position: 'absolute',
+        left: fan.left,
+        bottom: fan.bottom,
+        zIndex: fan.z,
+        ['--sf-rot' as string]: fan.rot,
+        transform: `rotate(${fan.rot})`,
+        animationDelay: fan.delay,
+        backgroundColor: CREAM,
+        border: `1px solid ${tint.border}`,
+        borderLeft: `3px solid ${tint.color}`,
+        borderRadius: '12px',
+        padding: '7px 13px 7px 9px',
+        boxShadow: '0 10px 26px rgba(27,56,40,0.18), 0 2px 6px rgba(27,56,40,0.08)',
         textDecoration: 'none',
-        backgroundColor: hover ? 'rgba(27,56,40,0.04)' : 'transparent',
-        transition: 'background-color 160ms ease',
-        opacity: concluded ? 0.55 : 1,
+        whiteSpace: 'nowrap',
       }}
     >
-      <span style={{ fontFamily: MONO, fontSize: '12px', letterSpacing: '0.08em', color: GOLD, width: '96px', flexShrink: 0 }}>
-        {compactRange(c.start_date, c.end_date)}
-      </span>
-      <span style={{ flex: 1, minWidth: '200px' }}>
-        <span style={{ fontFamily: SANS, fontSize: '18px', fontWeight: 700, color: INK }}>
-          {c.full_name}
+      {chip.logoUrl ? (
+        <img
+          src={chip.logoUrl}
+          alt=""
+          style={{ width: '24px', height: '24px', objectFit: 'contain', flexShrink: 0 }}
+        />
+      ) : (
+        <span
+          aria-hidden="true"
+          style={{
+            width: '24px', height: '24px', borderRadius: '7px', flexShrink: 0,
+            backgroundColor: FOREST, color: PALE_GOLD,
+            fontFamily: MONO, fontSize: '8.5px', fontWeight: 700,
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          {chip.acronym.slice(0, 2).toUpperCase()}
         </span>
-        <span style={{ fontFamily: SANS, fontSize: '13.5px', fontWeight: 500, color: INK_55, marginLeft: '12px' }}>
-          {c.city}, {c.country}
+      )}
+      <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        <span style={{ fontFamily: SANS, fontSize: '12px', fontWeight: 700, color: INK, lineHeight: 1.2, maxWidth: '170px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {chip.role}
+        </span>
+        <span style={{ fontFamily: MONO, fontSize: '8.5px', letterSpacing: '0.14em', color: tint.color, marginTop: '2px' }}>
+          {chip.acronym.toUpperCase()} · {chip.category.replace(/-/g, ' ').toUpperCase()}
         </span>
       </span>
-      <span className="hidden sm:inline" style={{ fontFamily: MONO, fontSize: '12px', color: rating ? GOLD : TAUPE, flexShrink: 0 }}>
-        {rating ? (
-          <span className="inline-flex items-center gap-1.5">
-            <Stars avg={rating.avg} size={12} color={GOLD} />
-            {rating.avg.toFixed(1)}
-          </span>
-        ) : concluded ? 'CONCLUDED' : `${c.expected_delegates.toLocaleString()} delegates`}
-      </span>
-      <span style={{ fontFamily: MONO, fontSize: '12px', color: INK_70, width: '76px', textAlign: 'right', flexShrink: 0 }}>
-        {feeLabel(c)}
-      </span>
-      <ArrowUpRight
-        size={16}
-        strokeWidth={2}
-        className="hidden md:block"
-        style={{ color: GOLD, opacity: hover ? 1 : 0.35, transition: 'opacity 160ms ease', flexShrink: 0 }}
-      />
     </Link>
   );
 }
