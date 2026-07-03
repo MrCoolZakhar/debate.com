@@ -6,6 +6,7 @@ import Link from 'next/link';
 import {
   Search, Briefcase, X, Gavel, Users, ClipboardList,
   Banknote, Plane, HeartHandshake, Clock, MapPin, Check, ArrowRight,
+  CalendarDays, ChevronDown, CheckCircle2,
 } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -27,19 +28,35 @@ const MUTED = '#9A8A78';
 const CARD_BG = '#FAF8F3';
 const BORDER = '#DDD4C0';
 const DANGER = '#8B2020';
+const SLATE_BLUE = '#46617A';
 
 // Category metadata — canonical lowercase keys matching the DB values.
-const CATEGORY_META: Record<string, { label: string; icon: typeof Gavel; color: string; bg: string }> = {
-  chairs:      { label: 'CHAIRS',      icon: Gavel,         color: FOREST,    bg: 'rgba(27,56,40,0.10)' },
-  secretariat: { label: 'SECRETARIAT', icon: ClipboardList, color: GOLD_DEEP, bg: 'rgba(182,135,31,0.12)' },
-  staff:       { label: 'STAFF',       icon: Users,         color: '#6B5D4B', bg: 'rgba(154,138,120,0.16)' },
+// Chip colours: chairs = gold, secretariat = slate-blue, staff = forest-green.
+const CATEGORY_META: Record<string, {
+  label: string; single: string; icon: typeof Gavel;
+  color: string; bg: string; border: string;
+}> = {
+  chairs: {
+    label: 'CHAIRS', single: 'CHAIRING', icon: Gavel,
+    color: '#8A6614', bg: 'rgba(238,217,138,0.32)', border: 'rgba(182,135,31,0.38)',
+  },
+  secretariat: {
+    label: 'SECRETARIAT', single: 'SECRETARIAT', icon: ClipboardList,
+    color: SLATE_BLUE, bg: 'rgba(70,97,122,0.12)', border: 'rgba(70,97,122,0.30)',
+  },
+  staff: {
+    label: 'STAFF', single: 'STAFF', icon: Users,
+    color: FOREST_MID, bg: 'rgba(42,90,60,0.12)', border: 'rgba(42,90,60,0.30)',
+  },
 };
+
+const CATEGORY_ORDER = ['chairs', 'secretariat', 'staff'] as const;
 
 // Compensation metadata — canonical lowercase-hyphenated keys matching the DB.
 const COMP_META: Record<string, { label: string; icon: typeof Banknote; gold: boolean }> = {
-  'paid':           { label: 'PAID POSITION',  icon: Banknote,       gold: true },
+  'paid':           { label: 'PAID',           icon: Banknote,       gold: true },
   'travel-covered': { label: 'TRAVEL COVERED', icon: Plane,          gold: true },
-  'unpaid':         { label: 'VOLUNTEER ROLE', icon: HeartHandshake, gold: false },
+  'unpaid':         { label: 'VOLUNTEER',      icon: HeartHandshake, gold: false },
 };
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -84,10 +101,7 @@ interface MyApplication {
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 /** Normalise a category/compensation value from the DB to a canonical
- *  lowercase-hyphenated key ('Travel Covered' → 'travel-covered'). The old
- *  filter logic compared raw DB values ('chairs') against uppercase pill
- *  labels ('CHAIRS'), so no filter ever matched — normalising both sides
- *  to the same canonical key fixes that. */
+ *  lowercase-hyphenated key ('Travel Covered' → 'travel-covered'). */
 function normalizeKey(value: string | null | undefined): string {
   return (value ?? '').trim().toLowerCase().replace(/[\s_]+/g, '-');
 }
@@ -114,18 +128,28 @@ function daysUntil(iso: string): number {
 }
 
 function fmtDeadline(iso: string) {
-  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 }
 
-/** Split a free-text requirements field into short skill chips. */
-function requirementChips(requirements: string): string[] {
+/** "Posted today" / "Posted 3d ago" / "Posted 2w ago" */
+function postedAgo(iso: string): string {
+  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
+  if (days <= 0) return 'Posted today';
+  if (days === 1) return 'Posted 1d ago';
+  if (days < 14) return `Posted ${days}d ago`;
+  if (days < 60) return `Posted ${Math.floor(days / 7)}w ago`;
+  return `Posted ${Math.floor(days / 30)}mo ago`;
+}
+
+/** Split a free-text requirements field into short checklist items. */
+function requirementItems(requirements: string): string[] {
   let parts = requirements.split(/[;\n•]+/);
   if (parts.length === 1) parts = requirements.split(/,\s*/);
   return parts
     .map(p => p.trim().replace(/\.+$/, '').replace(/^and\s+/i, ''))
     .filter(Boolean)
     .map(p => p.charAt(0).toUpperCase() + p.slice(1))
-    .slice(0, 4);
+    .slice(0, 6);
 }
 
 // ── Filter pill ────────────────────────────────────────────────────────────
@@ -141,7 +165,7 @@ function FilterPill({
         backgroundColor: active ? FOREST : 'transparent',
         color: active ? GOLD : '#4A4238',
         border: active ? `1px solid ${FOREST}` : '1px solid rgba(221,212,192,0.9)',
-        fontFamily: "'DM Mono', monospace",
+        fontFamily: "'Outfit', sans-serif",
         letterSpacing: '0.08em',
       }}
       onMouseEnter={(e) => {
@@ -161,17 +185,21 @@ function FilterPill({
 
 function PostingCard({
   posting,
+  rolesAtConference,
   myApp,
   onApply,
   onSignIn,
   isSignedIn,
 }: {
   posting: JobPosting;
+  rolesAtConference: number;
   myApp: MyApplication | undefined;
   onApply: (posting: JobPosting) => void;
   onSignIn: () => void;
   isSignedIn: boolean;
 }) {
+  const [expanded, setExpanded] = useState(false);
+
   const conf = posting.conferences;
   const dateRange = formatDateRange(conf?.start_date ?? null, conf?.end_date ?? null);
 
@@ -184,11 +212,13 @@ function PostingCard({
   const CompIcon = comp.icon;
 
   const countryObj = conf?.country ? getCountryByName(conf.country) : null;
-  const chips = posting.requirements ? requirementChips(posting.requirements) : [];
+  const checklist = posting.requirements ? requirementItems(posting.requirements) : [];
+  const hasDetail = !!posting.description || checklist.length > 0 || !!posting.compensation_note;
 
   const deadlineDays = posting.deadline ? daysUntil(posting.deadline) : null;
-  const deadlineUrgent = deadlineDays !== null && deadlineDays > 0 && deadlineDays <= 7;
-  const deadlineCritical = deadlineDays !== null && deadlineDays > 0 && deadlineDays <= 2;
+  const deadlineUrgent = deadlineDays !== null && deadlineDays > 0 && deadlineDays <= 14;
+  const deadlineCritical = deadlineDays !== null && deadlineDays > 0 && deadlineDays <= 5;
+  const deadlineColor = deadlineCritical ? DANGER : deadlineUrgent ? AMBER : MUTED;
 
   let applyBtn: React.ReactNode;
   if (myApp) {
@@ -251,7 +281,7 @@ function PostingCard({
         onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = FOREST_MID; }}
         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = FOREST; }}
       >
-        APPLY FOR THIS ROLE
+        APPLY
         <ArrowRight size={13} strokeWidth={2.5} className="transition-transform group-hover/btn:translate-x-0.5" />
       </button>
     );
@@ -259,18 +289,17 @@ function PostingCard({
 
   return (
     <article
-      className="rounded-2xl flex flex-col transition-all"
+      className="rounded-2xl transition-all"
       style={{
         backgroundColor: CARD_BG,
         border: `1px solid ${BORDER}`,
         boxShadow: '0 2px 10px rgba(27,56,40,0.05)',
-        overflow: 'visible',
       }}
       onMouseEnter={(e) => {
         const el = e.currentTarget as HTMLElement;
-        el.style.borderColor = 'rgba(27,56,40,0.45)';
-        el.style.boxShadow = '0 16px 40px rgba(27,56,40,0.14)';
-        el.style.transform = 'translateY(-3px)';
+        el.style.borderColor = 'rgba(27,56,40,0.40)';
+        el.style.boxShadow = '0 14px 36px rgba(27,56,40,0.13)';
+        el.style.transform = 'translateY(-2px)';
       }}
       onMouseLeave={(e) => {
         const el = e.currentTarget as HTMLElement;
@@ -279,246 +308,275 @@ function PostingCard({
         el.style.transform = 'translateY(0)';
       }}
     >
-      {/* ── Banner + free-floating logo ── */}
-      <div
-        className="relative"
-        style={{ height: '92px', borderRadius: '15px 15px 0 0', overflow: 'hidden' }}
-      >
-        {conf?.banner_url ? (
-          <>
-            <img
-              src={conf.banner_url}
-              alt=""
-              className="absolute inset-0 w-full h-full object-cover"
-              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-            />
-            <div
-              className="absolute inset-0"
-              style={{ background: 'linear-gradient(180deg, rgba(27,56,40,0.10) 0%, rgba(27,56,40,0.55) 100%)' }}
-            />
-          </>
-        ) : (
-          <div
-            className="absolute inset-0"
-            style={{ background: `linear-gradient(135deg, ${FOREST} 0%, ${FOREST_MID} 100%)` }}
-          />
-        )}
-        <div
-          className="absolute inset-0 pointer-events-none"
-          style={{ backgroundImage: GRAIN, backgroundSize: '300px', mixBlendMode: 'overlay', opacity: 0.12 }}
-        />
-
-        {/* Category chip — glass, on the banner */}
-        <span
-          className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-bold"
-          style={{
-            backgroundColor: 'rgba(250,248,243,0.88)',
-            backdropFilter: 'blur(12px)',
-            WebkitBackdropFilter: 'blur(12px)',
-            border: '1px solid rgba(221,212,192,0.85)',
-            color: cat.color,
-            fontFamily: "'DM Mono', monospace",
-            letterSpacing: '0.1em',
-          }}
-        >
-          <CatIcon size={10} strokeWidth={2.5} />
-          {cat.label}
-        </span>
-      </div>
-
-      {/* Free-floating logo — overlaps the banner edge, no chip behind it */}
-      {conf?.logo_url && (
-        <div className="relative" style={{ height: 0 }}>
-          <img
-            src={conf.logo_url}
-            alt={conf.acronym}
+      <div className="p-4">
+        {/* ── Logo tile + title block ── */}
+        <div className="flex items-start gap-3">
+          <Link
+            href={conf ? `/conferences/${conf.slug}` : '#'}
+            className="flex-shrink-0 flex items-center justify-center focus:outline-none"
             style={{
-              position: 'absolute',
-              left: '20px',
-              top: '-34px',
-              height: '58px',
-              width: 'auto',
-              maxWidth: '96px',
-              objectFit: 'contain',
-              filter: 'drop-shadow(0 6px 14px rgba(27,56,40,0.38))',
+              width: '56px', height: '56px',
+              borderRadius: '14px',
+              backgroundColor: '#FFFFFF',
+              border: `1px solid ${BORDER}`,
+              boxShadow: '0 2px 8px rgba(27,56,40,0.08)',
+              overflow: 'hidden',
             }}
-            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-          />
-        </div>
-      )}
+            aria-label={conf?.full_name ?? 'Conference'}
+          >
+            {conf?.logo_url ? (
+              <img
+                src={conf.logo_url}
+                alt={conf.acronym}
+                style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '5px' }}
+                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+              />
+            ) : (
+              <span
+                className="font-bold text-[13px]"
+                style={{ color: FOREST, fontFamily: "'Outfit', sans-serif" }}
+              >
+                {(conf?.acronym ?? '?').slice(0, 4)}
+              </span>
+            )}
+          </Link>
 
-      {/* ── Body ── */}
-      <div className="px-5 pb-5 flex flex-col flex-1" style={{ paddingTop: conf?.logo_url ? '32px' : '18px' }}>
-        {/* Role name */}
-        <h3
-          className="font-bold leading-snug"
-          style={{ color: INK, fontFamily: "'Outfit', sans-serif", fontSize: '18px', margin: 0 }}
-        >
-          {posting.role_name}
-        </h3>
-
-        {/* Conference + committee eyebrow line */}
-        {conf && (
-          <p className="mt-1 text-xs flex items-center gap-1.5 flex-wrap" style={{ fontFamily: "'Outfit', sans-serif" }}>
-            <Link
-              href={`/conferences/${conf.slug}`}
-              className="font-semibold transition-colors"
-              style={{ color: '#6B5D4B', textDecoration: 'none' }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = FOREST; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#6B5D4B'; }}
+          <div className="min-w-0 flex-1">
+            <h3
+              className="font-bold leading-snug"
+              style={{ color: INK, fontFamily: "'Outfit', sans-serif", fontSize: '16px', margin: 0 }}
             >
-              {conf.full_name}
-            </Link>
+              {posting.role_name}
+            </h3>
+            {conf && (
+              <p className="mt-0.5 text-[12px] leading-snug" style={{ fontFamily: "'Outfit', sans-serif", margin: 0, marginTop: '3px' }}>
+                <Link
+                  href={`/conferences/${conf.slug}`}
+                  className="font-bold transition-colors focus:outline-none"
+                  style={{ color: FOREST, textDecoration: 'none' }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = GOLD_DEEP; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = FOREST; }}
+                >
+                  {conf.acronym}
+                </Link>
+                <span style={{ color: MUTED }}> · {conf.full_name}</span>
+              </p>
+            )}
             {posting.conference_committees?.name && (
-              <>
-                <span style={{ color: GOLD_DEEP, fontSize: '7px' }}>◆</span>
-                <span style={{ color: MUTED }}>{posting.conference_committees.name}</span>
-              </>
-            )}
-          </p>
-        )}
-
-        {/* Location + dates — prominent */}
-        {(conf?.country || dateRange) && (
-          <div className="mt-3 flex items-center gap-2 flex-wrap">
-            {conf?.country && (
-              <span className="flex items-center gap-1.5">
-                {countryObj ? (
-                  <img
-                    src={getFlagUrl(countryObj.code)}
-                    alt={conf.country}
-                    style={{ width: '19px', height: '13px', objectFit: 'cover', borderRadius: '2.5px', flexShrink: 0, boxShadow: '0 1px 3px rgba(28,20,16,0.25)' }}
-                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-                  />
-                ) : (
-                  <MapPin size={13} style={{ color: MUTED }} />
-                )}
-                <span className="text-[13px] font-semibold" style={{ color: INK, fontFamily: "'Outfit', sans-serif" }}>
-                  {[conf.city, conf.country].filter(Boolean).join(', ')}
-                </span>
-              </span>
-            )}
-            {conf?.country && dateRange && <span style={{ color: GOLD_DEEP, fontSize: '7px' }}>◆</span>}
-            {dateRange && (
-              <span className="text-[11px]" style={{ color: MUTED, fontFamily: "'DM Mono', monospace" }}>
-                {dateRange}
-              </span>
-            )}
-          </div>
-        )}
-
-        {/* Reward — gold treatment */}
-        <div
-          className="mt-3 flex items-start gap-2.5 rounded-xl px-3 py-2.5"
-          style={comp.gold
-            ? { backgroundColor: 'rgba(238,217,138,0.20)', border: '1px solid rgba(182,135,31,0.30)' }
-            : { backgroundColor: 'rgba(154,138,120,0.08)', border: '1px solid rgba(221,212,192,0.7)' }}
-        >
-          <CompIcon
-            size={15}
-            strokeWidth={2.25}
-            style={{ color: comp.gold ? GOLD_DEEP : MUTED, marginTop: '1px', flexShrink: 0 }}
-          />
-          <div className="min-w-0">
-            <p
-              className="text-[10px] font-bold"
-              style={{ color: comp.gold ? GOLD_DEEP : '#6B5D4B', fontFamily: "'DM Mono', monospace", letterSpacing: '0.12em', margin: 0 }}
-            >
-              {comp.label}
-            </p>
-            {posting.compensation_note && (
-              <p className="text-[11px] leading-snug mt-0.5" style={{ color: comp.gold ? '#7A5B18' : MUTED, fontFamily: "'Outfit', sans-serif", margin: 0 }}>
-                {posting.compensation_note}
+              <p className="text-[11px]" style={{ color: MUTED, fontFamily: "'Outfit', sans-serif", margin: 0, marginTop: '2px' }}>
+                {posting.conference_committees.name}
               </p>
             )}
           </div>
         </div>
 
-        {/* What they're looking for — skill chips */}
-        {chips.length > 0 && (
-          <div className="mt-3">
-            <p
-              className="text-[9px] font-bold mb-1.5"
-              style={{ color: GOLD_DEEP, fontFamily: "'DM Mono', monospace", letterSpacing: '0.18em', margin: 0, marginBottom: '6px' }}
-            >
-              LOOKING FOR
-            </p>
-            <div className="flex flex-wrap gap-1.5">
-              {chips.map((chip, i) => (
-                <span
-                  key={i}
-                  className="text-[10.5px] px-2 py-1 rounded-full"
-                  style={{
-                    backgroundColor: 'rgba(27,56,40,0.06)',
-                    border: '1px solid rgba(27,56,40,0.12)',
-                    color: '#3A4A3E',
-                    fontFamily: "'Outfit', sans-serif",
-                    fontWeight: 500,
-                    lineHeight: 1.3,
-                  }}
-                >
-                  {chip}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Description */}
-        {posting.description && (
-          <p
-            className="mt-3 text-xs leading-relaxed"
+        {/* ── Chips: category + compensation ── */}
+        <div className="mt-3 flex items-center gap-1.5 flex-wrap">
+          <span
+            className="flex items-center gap-1 px-2 py-[3px] rounded-full text-[9.5px] font-bold"
             style={{
-              color: '#5A4F42',
+              backgroundColor: cat.bg,
+              border: `1px solid ${cat.border}`,
+              color: cat.color,
               fontFamily: "'Outfit', sans-serif",
-              display: '-webkit-box',
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: 'vertical',
-              overflow: 'hidden',
-              margin: 0,
-              marginTop: '12px',
+              letterSpacing: '0.09em',
             }}
           >
-            {posting.description}
-          </p>
+            <CatIcon size={10} strokeWidth={2.5} />
+            {cat.single}
+          </span>
+          <span
+            className="flex items-center gap-1 px-2 py-[3px] rounded-full text-[9.5px] font-bold"
+            style={comp.gold
+              ? {
+                  backgroundColor: 'rgba(238,217,138,0.26)',
+                  border: '1px solid rgba(182,135,31,0.34)',
+                  color: GOLD_DEEP,
+                  fontFamily: "'Outfit', sans-serif",
+                  letterSpacing: '0.09em',
+                }
+              : {
+                  backgroundColor: 'rgba(154,138,120,0.12)',
+                  border: '1px solid rgba(154,138,120,0.30)',
+                  color: '#6B5D4B',
+                  fontFamily: "'Outfit', sans-serif",
+                  letterSpacing: '0.09em',
+                }}
+          >
+            <CompIcon size={10} strokeWidth={2.5} />
+            {comp.label}
+          </span>
+        </div>
+
+        {/* ── Icon meta rows ── */}
+        <div className="mt-3 flex flex-col gap-[7px]">
+          {(conf?.city || conf?.country) && (
+            <div className="flex items-center gap-2">
+              <MapPin size={13} strokeWidth={2} style={{ color: MUTED, flexShrink: 0 }} />
+              <span className="flex items-center gap-1.5 min-w-0">
+                <span className="text-[12px] font-semibold truncate" style={{ color: '#4A4238', fontFamily: "'Outfit', sans-serif" }}>
+                  {[conf?.city, conf?.country].filter(Boolean).join(', ')}
+                </span>
+                {countryObj && (
+                  <img
+                    src={getFlagUrl(countryObj.code)}
+                    alt={conf?.country ?? ''}
+                    style={{ width: '17px', height: '12px', objectFit: 'cover', borderRadius: '2px', flexShrink: 0, boxShadow: '0 1px 3px rgba(28,20,16,0.25)' }}
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                  />
+                )}
+              </span>
+            </div>
+          )}
+          {dateRange && (
+            <div className="flex items-center gap-2">
+              <CalendarDays size={13} strokeWidth={2} style={{ color: MUTED, flexShrink: 0 }} />
+              <span className="text-[12px]" style={{ color: '#6B5D4B', fontFamily: "'Outfit', sans-serif" }}>
+                {dateRange}
+              </span>
+            </div>
+          )}
+          {rolesAtConference > 1 && (
+            <div className="flex items-center gap-2">
+              <Users size={13} strokeWidth={2} style={{ color: MUTED, flexShrink: 0 }} />
+              <span className="text-[12px]" style={{ color: '#6B5D4B', fontFamily: "'Outfit', sans-serif" }}>
+                {rolesAtConference} open roles at this conference
+              </span>
+            </div>
+          )}
+          {/* Recency + deadline line, urgency-tinted */}
+          <div className="flex items-center gap-2">
+            <Clock size={13} strokeWidth={2} style={{ color: deadlineColor, flexShrink: 0 }} />
+            <span className="text-[12px]" style={{ color: '#6B5D4B', fontFamily: "'Outfit', sans-serif" }}>
+              {postedAgo(posting.created_at)}
+              {posting.deadline ? (
+                <>
+                  <span style={{ color: MUTED }}> · </span>
+                  <span className="font-semibold" style={{ color: deadlineColor }}>
+                    {deadlineCritical && deadlineDays !== null
+                      ? `closes in ${deadlineDays === 1 ? '1 day' : `${deadlineDays} days`}`
+                      : `closes ${fmtDeadline(posting.deadline)}`}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span style={{ color: MUTED }}> · </span>
+                  <span style={{ color: MUTED }}>rolling applications</span>
+                </>
+              )}
+            </span>
+          </div>
+        </div>
+
+        {/* ── Expandable detail ── */}
+        {hasDetail && (
+          <>
+            <button
+              onClick={() => setExpanded(v => !v)}
+              className="mt-3 flex items-center gap-1 text-[11px] font-bold focus:outline-none transition-colors"
+              style={{ color: expanded ? FOREST : '#8A7D6C', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.06em' }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = FOREST; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = expanded ? FOREST : '#8A7D6C'; }}
+              aria-expanded={expanded}
+            >
+              ROLE DETAILS
+              <ChevronDown
+                size={13}
+                strokeWidth={2.5}
+                style={{ transition: 'transform 0.18s ease', transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)' }}
+              />
+            </button>
+
+            {expanded && (
+              <div className="mt-2.5 rounded-xl px-3.5 py-3" style={{ backgroundColor: 'rgba(27,56,40,0.035)', border: '1px solid rgba(27,56,40,0.08)' }}>
+                {posting.description && (
+                  <p className="text-[12px] leading-relaxed" style={{ color: '#5A4F42', fontFamily: "'Outfit', sans-serif", margin: 0 }}>
+                    {posting.description}
+                  </p>
+                )}
+                {checklist.length > 0 && (
+                  <div style={{ marginTop: posting.description ? '12px' : 0 }}>
+                    <p
+                      className="text-[9px] font-bold"
+                      style={{ color: GOLD_DEEP, fontFamily: "'DM Mono', monospace", letterSpacing: '0.18em', margin: 0, marginBottom: '7px' }}
+                    >
+                      LOOKING FOR
+                    </p>
+                    <ul className="flex flex-col gap-1.5" style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+                      {checklist.map((item, i) => (
+                        <li key={i} className="flex items-start gap-2">
+                          <CheckCircle2 size={14} strokeWidth={2.25} style={{ color: FOREST_MID, flexShrink: 0, marginTop: '1.5px' }} />
+                          <span className="text-[12px] leading-snug" style={{ color: '#4A4238', fontFamily: "'Outfit', sans-serif" }}>
+                            {item}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {posting.compensation_note && (
+                  <p
+                    className="text-[11.5px] leading-snug flex items-start gap-1.5"
+                    style={{
+                      color: comp.gold ? '#7A5B18' : '#6B5D4B',
+                      fontFamily: "'Outfit', sans-serif",
+                      margin: 0,
+                      marginTop: (posting.description || checklist.length > 0) ? '12px' : 0,
+                    }}
+                  >
+                    <CompIcon size={13} strokeWidth={2.25} style={{ color: comp.gold ? GOLD_DEEP : MUTED, flexShrink: 0, marginTop: '2px' }} />
+                    <span>{posting.compensation_note}</span>
+                  </p>
+                )}
+              </div>
+            )}
+          </>
         )}
 
-        <div className="flex-1" />
-
-        {/* Deadline + apply */}
-        <div className="mt-4 pt-3.5" style={{ borderTop: '1px solid #F0EDE6' }}>
-          <div className="flex items-center gap-1.5 mb-3">
-            <Clock
-              size={12}
-              strokeWidth={2.25}
-              style={{ color: deadlineCritical ? DANGER : deadlineUrgent ? AMBER : MUTED }}
-            />
-            {posting.deadline ? (
-              <p
-                className="text-[11px] font-semibold"
-                style={{
-                  color: deadlineCritical ? DANGER : deadlineUrgent ? AMBER : MUTED,
-                  fontFamily: "'DM Mono', monospace",
-                  letterSpacing: '0.04em',
-                  margin: 0,
-                }}
-              >
-                {deadlineCritical && deadlineDays !== null
-                  ? `CLOSES IN ${deadlineDays * 24 <= 24 ? '24H' : '48H'}`
-                  : deadlineUrgent && deadlineDays !== null
-                  ? `${deadlineDays} DAYS LEFT — CLOSES ${fmtDeadline(posting.deadline).toUpperCase()}`
-                  : `CLOSES ${fmtDeadline(posting.deadline).toUpperCase()}`}
-              </p>
-            ) : (
-              <p className="text-[11px] font-semibold" style={{ color: MUTED, fontFamily: "'DM Mono', monospace", letterSpacing: '0.04em', margin: 0 }}>
-                ROLLING APPLICATIONS
-              </p>
-            )}
-          </div>
+        {/* ── Dominant action ── */}
+        <div className="mt-3.5">
           {applyBtn}
         </div>
       </div>
     </article>
+  );
+}
+
+// ── Column / section header ────────────────────────────────────────────────
+
+function GroupHeader({ catKey, count }: { catKey: string; count: number }) {
+  const cat = CATEGORY_META[catKey] ?? CATEGORY_META.staff;
+  const CatIcon = cat.icon;
+  return (
+    <div className="flex items-center gap-2.5 mb-4">
+      <span
+        className="flex items-center justify-center flex-shrink-0"
+        style={{
+          width: '28px', height: '28px', borderRadius: '9px',
+          backgroundColor: cat.bg, border: `1px solid ${cat.border}`,
+        }}
+      >
+        <CatIcon size={14} strokeWidth={2.25} style={{ color: cat.color }} />
+      </span>
+      <h2
+        className="font-extrabold text-[13px]"
+        style={{ color: INK, fontFamily: "'Outfit', sans-serif", letterSpacing: '0.14em', margin: 0 }}
+      >
+        {cat.label}
+      </h2>
+      <span
+        className="flex items-center justify-center px-2 py-[1px] rounded-full text-[10px] font-bold"
+        style={{
+          backgroundColor: 'rgba(27,56,40,0.07)',
+          border: '1px solid rgba(27,56,40,0.12)',
+          color: FOREST,
+          fontFamily: "'DM Mono', monospace",
+        }}
+      >
+        {count}
+      </span>
+      <div className="flex-1 h-px" style={{ backgroundColor: 'rgba(221,212,192,0.8)' }} />
+    </div>
   );
 }
 
@@ -714,7 +772,6 @@ function Footer() {
 
 // ── Main component ─────────────────────────────────────────────────────────
 
-const CATEGORY_FILTERS = ['chairs', 'secretariat', 'staff'] as const;
 const COMP_FILTERS = [
   { key: 'paid', label: 'PAID' },
   { key: 'travel-covered', label: 'TRAVEL COVERED' },
@@ -782,9 +839,8 @@ export default function ConferencesRolesClient() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading, user?.id, session?.access_token]);
 
-  // FIX: filters previously compared raw DB values ('chairs', 'travel-covered')
-  // against uppercase display labels ('CHAIRS', 'TRAVEL COVERED') so nothing
-  // ever matched. Both sides are now normalised to canonical lowercase keys.
+  // Both sides of every filter comparison are normalised to canonical
+  // lowercase keys ('chairs', 'travel-covered').
   const filtered = postings.filter(p => {
     const q = searchQuery.toLowerCase();
     const matchSearch = !q ||
@@ -805,6 +861,24 @@ export default function ConferencesRolesClient() {
     const k = normalizeKey(p.compensation);
     return k === 'paid' || k === 'travel-covered';
   }).length;
+
+  // Open-role count per conference (from the full board, not the filtered view)
+  const rolesByConference: Record<string, number> = {};
+  for (const p of postings) {
+    const cid = p.conferences?.id;
+    if (cid) rolesByConference[cid] = (rolesByConference[cid] ?? 0) + 1;
+  }
+
+  // Group the filtered postings by category. Unknown categories fall back
+  // into the staff group so nothing is ever silently dropped.
+  const grouped = CATEGORY_ORDER.map(key => ({
+    key,
+    items: filtered.filter(p => {
+      const k = normalizeKey(p.category);
+      return k === key || (key === 'staff' && !CATEGORY_ORDER.includes(k as typeof CATEGORY_ORDER[number]));
+    }),
+  }));
+  const visibleGroups = grouped.filter(g => g.items.length > 0);
 
   const hasActiveFilters = !!searchQuery || !!categoryFilter || !!compensationFilter;
 
@@ -829,6 +903,18 @@ export default function ConferencesRolesClient() {
   );
 
   const pad = (n: number) => String(n).padStart(2, '0');
+
+  const renderCard = (posting: JobPosting) => (
+    <PostingCard
+      key={posting.id}
+      posting={posting}
+      rolesAtConference={posting.conferences?.id ? (rolesByConference[posting.conferences.id] ?? 1) : 1}
+      myApp={appsByPostingId[posting.id]}
+      onApply={(p) => setSelectedPosting(p)}
+      onSignIn={() => router.push('/auth/signin?next=/conferences/roles')}
+      isSignedIn={!!user}
+    />
+  );
 
   return (
     <div className="min-h-screen flex flex-col relative" style={{ backgroundColor: '#EDE7D8' }}>
@@ -941,7 +1027,7 @@ export default function ConferencesRolesClient() {
               <div className="hidden md:block w-px h-6 flex-shrink-0" style={{ backgroundColor: 'rgba(221,212,192,0.9)' }} />
 
               {/* Category pills — toggle on/off */}
-              {CATEGORY_FILTERS.map(key => (
+              {CATEGORY_ORDER.map(key => (
                 <FilterPill
                   key={key}
                   label={CATEGORY_META[key].label}
@@ -991,18 +1077,32 @@ export default function ConferencesRolesClient() {
         {/* ── Main content ─────────────────────────────────────────── */}
         <main className="flex-1 px-6 md:px-14 pt-10 pb-14">
           {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="rounded-2xl overflow-hidden"
-                  style={{ backgroundColor: CARD_BG, border: `1px solid ${BORDER}` }}
-                >
-                  <div className="animate-pulse" style={{ height: '92px', backgroundColor: '#E4DCCB' }} />
-                  <div className="p-5">
-                    <div className="animate-pulse rounded-lg mb-3" style={{ width: '60%', height: '16px', backgroundColor: '#EDE7D8' }} />
-                    <div className="animate-pulse rounded-full mb-4" style={{ width: '45%', height: '11px', backgroundColor: '#EDE7D8' }} />
-                    <div className="animate-pulse rounded-xl" style={{ width: '100%', height: '44px', backgroundColor: '#F0EBDD' }} />
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+              {Array.from({ length: 3 }).map((_, col) => (
+                <div key={col}>
+                  <div className="flex items-center gap-2.5 mb-4">
+                    <div className="animate-pulse rounded-lg" style={{ width: '28px', height: '28px', backgroundColor: '#E4DCCB' }} />
+                    <div className="animate-pulse rounded-full" style={{ width: '110px', height: '12px', backgroundColor: '#E4DCCB' }} />
+                  </div>
+                  <div className="flex flex-col gap-4">
+                    {Array.from({ length: 2 }).map((_, i) => (
+                      <div
+                        key={i}
+                        className="rounded-2xl p-4"
+                        style={{ backgroundColor: CARD_BG, border: `1px solid ${BORDER}` }}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="animate-pulse rounded-xl flex-shrink-0" style={{ width: '56px', height: '56px', backgroundColor: '#EDE7D8' }} />
+                          <div className="flex-1">
+                            <div className="animate-pulse rounded-lg mb-2" style={{ width: '75%', height: '15px', backgroundColor: '#EDE7D8' }} />
+                            <div className="animate-pulse rounded-full" style={{ width: '55%', height: '11px', backgroundColor: '#EDE7D8' }} />
+                          </div>
+                        </div>
+                        <div className="animate-pulse rounded-full mt-4" style={{ width: '65%', height: '10px', backgroundColor: '#F0EBDD' }} />
+                        <div className="animate-pulse rounded-full mt-2" style={{ width: '50%', height: '10px', backgroundColor: '#F0EBDD' }} />
+                        <div className="animate-pulse rounded-xl mt-4" style={{ width: '100%', height: '40px', backgroundColor: '#F0EBDD' }} />
+                      </div>
+                    ))}
                   </div>
                 </div>
               ))}
@@ -1062,17 +1162,26 @@ export default function ConferencesRolesClient() {
                 </>
               )}
             </div>
+          ) : visibleGroups.length === 1 ? (
+            /* Single visible group (e.g. a category filter is active):
+               use the full width with a responsive card grid. */
+            <section>
+              <GroupHeader catKey={visibleGroups[0].key} count={visibleGroups[0].items.length} />
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 items-start">
+                {visibleGroups[0].items.map(renderCard)}
+              </div>
+            </section>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 items-stretch">
-              {filtered.map(posting => (
-                <PostingCard
-                  key={posting.id}
-                  posting={posting}
-                  myApp={appsByPostingId[posting.id]}
-                  onApply={(p) => setSelectedPosting(p)}
-                  onSignIn={() => router.push('/auth/signin?next=/conferences/roles')}
-                  isSignedIn={!!user}
-                />
+            /* Status-grouped board: labelled category columns on desktop,
+               stacked sections on mobile. */
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+              {visibleGroups.map(group => (
+                <section key={group.key}>
+                  <GroupHeader catKey={group.key} count={group.items.length} />
+                  <div className="flex flex-col gap-4">
+                    {group.items.map(renderCard)}
+                  </div>
+                </section>
               ))}
             </div>
           )}
