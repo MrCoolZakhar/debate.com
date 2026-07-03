@@ -220,10 +220,10 @@ export function LabFooter() {
     >
       <div className="flex flex-col items-center gap-4 md:grid md:grid-cols-3 md:gap-0 md:items-center">
         <img
-          src="/GavellingLogo.png"
-          alt="Gavelling"
+          src="/Conferences.png"
+          alt="Gavelling Conferences"
           className="h-7 w-auto"
-          style={{ filter: 'brightness(0) saturate(100%) invert(18%) sepia(25%) saturate(800%) hue-rotate(100deg) brightness(85%)' }}
+          style={{ filter: 'drop-shadow(0 1px 2px rgba(27,56,40,0.18))' }}
           onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
         />
         <div className="flex items-center justify-center gap-4">
