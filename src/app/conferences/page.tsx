@@ -1,14 +1,14 @@
 import type { Metadata } from 'next';
-import ConferencesClient from './ConferencesClient';
+import StagefrontClient from './StagefrontClient';
 
 export const metadata: Metadata = {
   title: 'MUN Conferences',
   description:
-    'Browse and manage Model UN conferences on Gavelling. Connect your sessions to a full conference platform — coming 2026.',
+    'Find your next Model UN conference on Gavelling — real conferences, real committee rooms, from London to San Salvador. Organisers list free.',
   alternates: { canonical: 'https://gavelling.com/conferences' },
   openGraph: { url: 'https://gavelling.com/conferences' },
 };
 
 export default function ConferencesPage() {
-  return <ConferencesClient />;
+  return <StagefrontClient />;
 }
