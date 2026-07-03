@@ -2,13 +2,13 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import Link from 'next/link';
-import { Star, X, Megaphone, ClipboardCheck, FileText, BellRing, TrendingUp } from 'lucide-react';
+import { Star, X, Megaphone, ClipboardCheck, FileText, BellRing, TrendingUp, Stamp, ArrowRight } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { UN_COUNTRIES, getCountryByName, getFlagUrl } from '@/lib/countries';
 import { deriveExperienceLevel, experienceProgress } from '@/lib/munExperience';
 import { ageAt } from '@/lib/age';
-import { Eyebrow, GlassCard, PillToggle, OUTFIT, MONO } from '../accountUi';
+import { Eyebrow, GlassCard, PillToggle, Pill, OUTFIT, MONO } from '../accountUi';
 
 interface ReviewableConference {
   id: string;
@@ -60,6 +60,12 @@ export default function ProfilePage() {
   const [natOpen, setNatOpen] = useState(false);
   const natWrapRef = useRef<HTMLDivElement | null>(null);
 
+  // "Countries I've conferenced in" collector
+  const [confCountries, setConfCountries] = useState<string[]>([]);
+  const [confQuery, setConfQuery]         = useState('');
+  const [confOpen, setConfOpen]           = useState(false);
+  const confWrapRef = useRef<HTMLDivElement | null>(null);
+
   // Review prompts — conferences the user attended but hasn't reviewed
   const [reviewable, setReviewable]         = useState<ReviewableConference[]>([]);
   const [reviewFormFor, setReviewFormFor]   = useState<string | null>(null);
@@ -76,7 +82,7 @@ export default function ProfilePage() {
 
     supabase
       .from('profiles')
-      .select('display_name, nationality, date_of_birth, mun_experience_level, notify_email_marketing, notify_email_applications, notify_email_documents, notify_email_reminders')
+      .select('display_name, nationality, date_of_birth, conference_countries, mun_experience_level, notify_email_marketing, notify_email_applications, notify_email_documents, notify_email_reminders')
       .eq('id', user.id)
       .single()
       .then(({ data }) => {
@@ -84,6 +90,7 @@ export default function ProfilePage() {
           setDisplayName(data.display_name ?? '');
           setNationality(data.nationality ?? '');
           setDateOfBirth(data.date_of_birth ?? '');
+          setConfCountries(Array.isArray(data.conference_countries) ? data.conference_countries : []);
           setNotifications({
             notify_email_marketing:    data.notify_email_marketing    ?? true,
             notify_email_applications: data.notify_email_applications ?? true,
@@ -113,16 +120,40 @@ export default function ProfilePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading, user?.id, session?.access_token]);
 
-  // Close nationality dropdown on outside click
+  // Close autocomplete dropdowns on outside click
   useEffect(() => {
     function onDocClick(e: MouseEvent) {
       if (natWrapRef.current && !natWrapRef.current.contains(e.target as Node)) {
         setNatOpen(false);
       }
+      if (confWrapRef.current && !confWrapRef.current.contains(e.target as Node)) {
+        setConfOpen(false);
+      }
     }
     document.addEventListener('mousedown', onDocClick);
     return () => document.removeEventListener('mousedown', onDocClick);
   }, []);
+
+  function persistConfCountries(next: string[]) {
+    setConfCountries(next);
+    if (!session || !user) return;
+    getAuthedClient(session.access_token)
+      .from('profiles')
+      .update({ conference_countries: next })
+      .eq('id', user.id)
+      .then(() => {});
+  }
+
+  function addConfCountry(name: string) {
+    if (confCountries.includes(name)) { setConfQuery(''); setConfOpen(false); return; }
+    persistConfCountries([...confCountries, name]);
+    setConfQuery('');
+    setConfOpen(false);
+  }
+
+  function removeConfCountry(name: string) {
+    persistConfCountries(confCountries.filter((c) => c !== name));
+  }
 
   async function loadReviewable(supabase: ReturnType<typeof getAuthedClient>) {
     if (!user) return;
@@ -239,6 +270,13 @@ export default function ProfilePage() {
     return UN_COUNTRIES.filter((c) => c.name.toLowerCase().includes(q));
   }, [nationality]);
 
+  const confMatches = useMemo(() => {
+    const q = confQuery.trim().toLowerCase();
+    const pool = UN_COUNTRIES.filter((c) => !confCountries.includes(c.name));
+    if (!q) return pool;
+    return pool.filter((c) => c.name.toLowerCase().includes(q));
+  }, [confQuery, confCountries]);
+
   const exp = experienceProgress(cvCount ?? 0);
 
   if (dataLoading) {
@@ -253,17 +291,93 @@ export default function ProfilePage() {
   }
 
   return (
-    <div>
-      <Eyebrow className="mb-2">My Profile</Eyebrow>
-      <h1
-        className="font-black text-[26px] mb-1"
-        style={{ color: '#1C1410', fontFamily: OUTFIT, letterSpacing: '-0.01em' }}
+    <div
+      className="rounded-[24px] p-5 md:p-8"
+      style={{
+        background: 'linear-gradient(158deg, rgba(255,253,248,0.92) 0%, rgba(250,248,243,0.86) 42%, rgba(237,231,216,0.72) 100%)',
+        border: '1px solid #DDD4C0',
+        boxShadow: '0 1px 2px rgba(27,56,40,0.05), 0 18px 46px rgba(27,56,40,0.09)',
+      }}
+    >
+      <div className="pb-5 mb-7" style={{ borderBottom: '2px solid rgba(182,135,31,0.35)' }}>
+        <Eyebrow className="mb-2">My Profile</Eyebrow>
+        <h1
+          className="font-black text-[26px] mb-1"
+          style={{ color: '#1C1410', fontFamily: OUTFIT, letterSpacing: '-0.01em' }}
+        >
+          {displayName || 'Your Profile'}
+        </h1>
+        <p className="text-sm" style={{ color: '#9A8A78', fontFamily: OUTFIT, margin: 0 }}>
+          Manage your Gavelling account details.
+        </p>
+      </div>
+
+      {/* Big level banner — the visual centrepiece */}
+      <Link
+        href="/account/cv"
+        className="block mb-7 rounded-[20px] focus:outline-none"
+        style={{ textDecoration: 'none' }}
       >
-        {displayName || 'Your Profile'}
-      </h1>
-      <p className="text-sm mb-8" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-        Manage your Gavelling account details.
-      </p>
+        <div
+          className="relative overflow-hidden rounded-[20px] px-6 py-6 md:px-8 md:py-7 transition-transform"
+          style={{
+            background: 'linear-gradient(135deg, #1B3828 0%, #24492F 55%, #2A5A3C 100%)',
+            border: '1px solid rgba(238,217,138,0.28)',
+            boxShadow: '0 14px 40px rgba(27,56,40,0.28)',
+          }}
+        >
+          {/* soft gold glow */}
+          <div
+            className="pointer-events-none absolute"
+            style={{ top: '-60px', right: '-40px', width: '220px', height: '220px', borderRadius: '9999px', background: 'radial-gradient(circle, rgba(238,217,138,0.30), transparent 70%)' }}
+          />
+          <div className="relative flex items-center justify-between gap-4 flex-wrap">
+            <div>
+              <p style={{ fontFamily: MONO, fontSize: '9px', letterSpacing: '0.26em', color: '#EED98A', margin: 0, textTransform: 'uppercase' }}>
+                Your MUN Rank
+              </p>
+              <p
+                className="font-black"
+                style={{ fontFamily: OUTFIT, fontSize: '38px', lineHeight: 1.05, color: '#FAF8F3', letterSpacing: '-0.02em', margin: '4px 0 0 0' }}
+              >
+                {exp.label}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <TrendingUp size={16} strokeWidth={2.4} style={{ color: '#EED98A' }} />
+              <span style={{ fontFamily: MONO, fontSize: '11px', color: 'rgba(250,248,243,0.85)' }}>
+                {cvCount ?? 0} conference{(cvCount ?? 0) === 1 ? '' : 's'}
+              </span>
+            </div>
+          </div>
+
+          {/* Progress bar */}
+          <div className="relative mt-5">
+            <div className="w-full rounded-full overflow-hidden" style={{ height: '9px', backgroundColor: 'rgba(250,248,243,0.16)' }}>
+              <div
+                className="h-full rounded-full"
+                style={{ width: `${Math.round(exp.progress * 100)}%`, background: 'linear-gradient(90deg, #EED98A, #B6871F)', transition: 'width 500ms ease' }}
+              />
+            </div>
+            <div className="flex items-center justify-between mt-3 gap-3 flex-wrap">
+              <span style={{ fontFamily: OUTFIT, fontSize: '13px', fontWeight: 600, color: 'rgba(250,248,243,0.92)' }}>
+                {exp.nextLabel
+                  ? `Attend more conferences to increase your rank`
+                  : `Top tier reached — you're an Expert delegate`}
+              </span>
+              <span
+                className="inline-flex items-center gap-1.5"
+                style={{ fontFamily: OUTFIT, fontSize: '12.5px', fontWeight: 700, color: '#EED98A' }}
+              >
+                {exp.nextLabel
+                  ? `Add conferences to your MUN CV to rank up`
+                  : `View your MUN CV`}
+                <ArrowRight size={14} strokeWidth={2.4} />
+              </span>
+            </div>
+          </div>
+        </div>
+      </Link>
 
       {/* Review prompts — conferences attended but not yet reviewed */}
       {reviewable.length > 0 && (
@@ -434,117 +548,109 @@ export default function ProfilePage() {
             </p>
           </div>
 
-          {/* Date of birth + derived age */}
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
+          {/* Nationality + Date of Birth — one row, two columns */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            {/* Nationality — autocomplete with flag */}
+            <div ref={natWrapRef} className="relative">
               <label
-                className="block text-[13px] font-semibold"
+                className="block text-[13px] font-semibold mb-1.5"
                 style={{ color: '#1C1410', fontFamily: OUTFIT }}
               >
-                Date of Birth
+                Nationality
               </label>
-              {(() => {
-                const age = ageAt(dateOfBirth);
-                return age !== null && age >= 0 && age <= 120 ? (
-                  <span
-                    className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-bold"
-                    style={{
-                      backgroundColor: 'rgba(182,135,31,0.12)',
-                      border: '1px solid rgba(182,135,31,0.35)',
-                      color: '#B6871F',
-                      fontFamily: OUTFIT,
-                      letterSpacing: '0.04em',
-                    }}
-                  >
-                    AGE {age}
-                  </span>
-                ) : null;
-              })()}
-            </div>
-            <input
-              type="date"
-              value={dateOfBirth}
-              max={new Date().toISOString().slice(0, 10)}
-              onChange={(e) => { setDateOfBirth(e.target.value); setDobError(''); }}
-              className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none"
-              style={inputStyle}
-              onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
-              onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
-            />
-            {dobError ? (
-              <p className="text-xs mt-1" style={{ color: '#8B2020', fontFamily: OUTFIT }}>
-                {dobError}
-              </p>
-            ) : (
-              <p className="text-xs mt-1" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-                Your age is calculated automatically — some conferences set a minimum age for applicants.
-              </p>
-            )}
-          </div>
-
-          {/* Nationality — autocomplete with flag */}
-          <div ref={natWrapRef} className="relative">
-            <label
-              className="block text-[13px] font-semibold mb-1.5"
-              style={{ color: '#1C1410', fontFamily: OUTFIT }}
-            >
-              Nationality
-            </label>
-            <div className="relative">
-              {natFlag && (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img
-                  src={natFlag}
-                  alt={nationality}
-                  className="absolute pointer-events-none"
-                  style={{ left: '14px', top: '50%', transform: 'translateY(-50%)', width: '22px', height: '15px', objectFit: 'cover', borderRadius: '2.5px', boxShadow: '0 1px 3px rgba(27,56,40,0.25)' }}
+              <div className="relative">
+                {natFlag && (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    src={natFlag}
+                    alt={nationality}
+                    className="absolute pointer-events-none"
+                    style={{ left: '14px', top: '50%', transform: 'translateY(-50%)', width: '22px', height: '15px', objectFit: 'cover', borderRadius: '2.5px', boxShadow: '0 1px 3px rgba(27,56,40,0.25)' }}
+                  />
+                )}
+                <input
+                  type="text"
+                  value={nationality}
+                  placeholder="Start typing a country..."
+                  onChange={(e) => { setNationality(e.target.value); setNatOpen(true); }}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; setNatOpen(true); }}
+                  onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
+                  className="w-full rounded-xl py-3 text-sm focus:outline-none"
+                  style={{ ...inputStyle, paddingLeft: natFlag ? '46px' : '16px', paddingRight: '16px' }}
                 />
-              )}
-              <input
-                type="text"
-                value={nationality}
-                placeholder="Start typing a country..."
-                onChange={(e) => { setNationality(e.target.value); setNatOpen(true); }}
-                onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; setNatOpen(true); }}
-                onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
-                className="w-full rounded-xl py-3 text-sm focus:outline-none"
-                style={{ ...inputStyle, paddingLeft: natFlag ? '46px' : '16px', paddingRight: '16px' }}
-              />
-            </div>
-            {natOpen && natMatches.length > 0 && (
-              <div
-                className="absolute z-30 left-0 right-0 mt-1.5 rounded-xl overflow-y-auto"
-                style={{
-                  maxHeight: '224px',
-                  backgroundColor: 'rgba(250,248,243,0.97)',
-                  backdropFilter: 'blur(16px)',
-                  WebkitBackdropFilter: 'blur(16px)',
-                  border: '1px solid #DDD4C0',
-                  boxShadow: '0 16px 40px rgba(27,56,40,0.14)',
-                }}
-              >
-                {natMatches.slice(0, 40).map((c) => (
-                  <button
-                    key={c.code}
-                    type="button"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => { setNationality(c.name); setNatOpen(false); }}
-                    className="w-full flex items-center gap-2.5 px-4 py-2 text-left text-sm focus:outline-none"
-                    style={{ background: 'none', border: 'none', color: '#1C1410', fontFamily: OUTFIT, cursor: 'pointer' }}
-                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
-                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={getFlagUrl(c.code)}
-                      alt=""
-                      style={{ width: '20px', height: '14px', objectFit: 'cover', borderRadius: '2px', flexShrink: 0 }}
-                    />
-                    {c.name}
-                  </button>
-                ))}
               </div>
-            )}
+              {natOpen && natMatches.length > 0 && (
+                <div
+                  className="absolute z-30 left-0 right-0 mt-1.5 rounded-xl overflow-y-auto"
+                  style={{
+                    maxHeight: '224px',
+                    backgroundColor: 'rgba(250,248,243,0.97)',
+                    backdropFilter: 'blur(16px)',
+                    WebkitBackdropFilter: 'blur(16px)',
+                    border: '1px solid #DDD4C0',
+                    boxShadow: '0 16px 40px rgba(27,56,40,0.14)',
+                  }}
+                >
+                  {natMatches.slice(0, 40).map((c) => (
+                    <button
+                      key={c.code}
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => { setNationality(c.name); setNatOpen(false); }}
+                      className="w-full flex items-center gap-2.5 px-4 py-2 text-left text-sm focus:outline-none"
+                      style={{ background: 'none', border: 'none', color: '#1C1410', fontFamily: OUTFIT, cursor: 'pointer' }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={getFlagUrl(c.code)}
+                        alt=""
+                        style={{ width: '20px', height: '14px', objectFit: 'cover', borderRadius: '2px', flexShrink: 0 }}
+                      />
+                      {c.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Date of birth + derived age */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label
+                  className="block text-[13px] font-semibold"
+                  style={{ color: '#1C1410', fontFamily: OUTFIT }}
+                >
+                  Date of Birth
+                </label>
+                {(() => {
+                  const age = ageAt(dateOfBirth);
+                  return age !== null && age >= 0 && age <= 120 ? (
+                    <Pill tone="gold" dot size="sm">Age {age}</Pill>
+                  ) : null;
+                })()}
+              </div>
+              <input
+                type="date"
+                value={dateOfBirth}
+                max={new Date().toISOString().slice(0, 10)}
+                onChange={(e) => { setDateOfBirth(e.target.value); setDobError(''); }}
+                className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none"
+                style={inputStyle}
+                onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
+              />
+              {dobError ? (
+                <p className="text-xs mt-1" style={{ color: '#8B2020', fontFamily: OUTFIT }}>
+                  {dobError}
+                </p>
+              ) : (
+                <p className="text-xs mt-1" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+                  Your age is calculated automatically.
+                </p>
+              )}
+            </div>
           </div>
         </div>
 
@@ -574,62 +680,111 @@ export default function ProfilePage() {
         </div>
       </GlassCard>
 
-      {/* Card 2 — MUN Experience (derived, read-only) */}
+      {/* Card 2 — Countries I've conferenced in (passport collector) */}
       <GlassCard className="mb-6">
-        <Eyebrow className="mb-4">MUN Experience</Eyebrow>
+        <div className="flex items-center justify-between gap-3 mb-1.5 flex-wrap">
+          <Eyebrow>Countries I&apos;ve Conferenced In</Eyebrow>
+          <span
+            className="inline-flex items-center gap-1.5"
+            style={{ fontFamily: MONO, fontSize: '10px', letterSpacing: '0.1em', color: '#B6871F' }}
+          >
+            <Stamp size={12} strokeWidth={2} />
+            {confCountries.length} {confCountries.length === 1 ? 'COUNTRY' : 'COUNTRIES'} STAMPED
+          </span>
+        </div>
+        <p className="text-[13px] mb-4" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+          Your Model UN passport — stamp every country you&apos;ve travelled to for a conference.
+        </p>
 
-        <div className="flex items-center justify-between gap-4 flex-wrap">
-          <div className="flex items-center gap-3">
-            <span
-              className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5"
+        {/* The wall of flags */}
+        {confCountries.length > 0 ? (
+          <div className="flex flex-wrap gap-2.5 mb-4">
+            {confCountries.map((name) => {
+              const c = getCountryByName(name);
+              const flag = c ? getFlagUrl(c.code) : null;
+              return (
+                <button
+                  key={name}
+                  type="button"
+                  onClick={() => removeConfCountry(name)}
+                  title={`Remove ${name}`}
+                  className="group inline-flex items-center gap-2 rounded-xl pl-2 pr-2.5 py-1.5 focus:outline-none transition-all"
+                  style={{
+                    backgroundColor: 'rgba(250,248,243,0.9)',
+                    border: '1px solid rgba(221,212,192,0.95)',
+                    boxShadow: '0 2px 8px rgba(27,56,40,0.06)',
+                    cursor: 'pointer',
+                  }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(139,32,32,0.4)'; (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.04)'; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(221,212,192,0.95)'; (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(250,248,243,0.9)'; }}
+                >
+                  {flag ? (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img src={flag} alt="" style={{ width: '30px', height: '20px', objectFit: 'cover', borderRadius: '3px', boxShadow: '0 1px 3px rgba(27,56,40,0.25)', flexShrink: 0 }} />
+                  ) : (
+                    <span style={{ width: '30px', height: '20px', borderRadius: '3px', backgroundColor: 'rgba(27,56,40,0.1)', flexShrink: 0 }} />
+                  )}
+                  <span style={{ fontFamily: OUTFIT, fontSize: '13px', fontWeight: 600, color: '#1C1410' }}>{name}</span>
+                  <X size={12} strokeWidth={2.4} className="opacity-40 group-hover:opacity-100 transition-opacity" style={{ color: '#8B2020' }} />
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <div
+            className="rounded-2xl px-5 py-6 text-center mb-4"
+            style={{ border: '1.5px dashed #DDD4C0', backgroundColor: 'rgba(250,248,243,0.5)' }}
+          >
+            <Stamp size={22} strokeWidth={1.6} style={{ color: '#B6871F', margin: '0 auto 6px' }} />
+            <p className="text-[13px]" style={{ color: '#9A8A78', fontFamily: OUTFIT, margin: 0 }}>
+              No stamps yet. Add the first country you&apos;ve conferenced in below.
+            </p>
+          </div>
+        )}
+
+        {/* Add via autocomplete */}
+        <div ref={confWrapRef} className="relative" style={{ maxWidth: '340px' }}>
+          <input
+            type="text"
+            value={confQuery}
+            placeholder="Add a country you've attended a conference in..."
+            onChange={(e) => { setConfQuery(e.target.value); setConfOpen(true); }}
+            onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; setConfOpen(true); }}
+            onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
+            className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none"
+            style={inputStyle}
+          />
+          {confOpen && confMatches.length > 0 && (
+            <div
+              className="absolute z-30 left-0 right-0 mt-1.5 rounded-xl overflow-y-auto"
               style={{
-                backgroundColor: 'rgba(27,56,40,0.09)',
-                border: '1px solid rgba(27,56,40,0.28)',
-                color: '#1B3828',
-                fontFamily: OUTFIT,
-                fontSize: '13px',
-                fontWeight: 700,
-                letterSpacing: '0.05em',
+                maxHeight: '224px',
+                backgroundColor: 'rgba(250,248,243,0.97)',
+                backdropFilter: 'blur(16px)',
+                WebkitBackdropFilter: 'blur(16px)',
+                border: '1px solid #DDD4C0',
+                boxShadow: '0 16px 40px rgba(27,56,40,0.14)',
               }}
             >
-              <TrendingUp size={13} strokeWidth={2.4} />
-              {exp.label.toUpperCase()}
-            </span>
-            <span style={{ fontFamily: MONO, fontSize: '11px', color: '#9A8A78' }}>
-              {cvCount ?? 0} conference{(cvCount ?? 0) === 1 ? '' : 's'} on your CV
-            </span>
-          </div>
-          {exp.nextLabel && (
-            <span style={{ fontFamily: MONO, fontSize: '10px', letterSpacing: '0.08em', color: '#B6871F' }}>
-              {exp.remaining} MORE TO {exp.nextLabel.toUpperCase()}
-            </span>
+              {confMatches.slice(0, 40).map((c) => (
+                <button
+                  key={c.code}
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => addConfCountry(c.name)}
+                  className="w-full flex items-center gap-2.5 px-4 py-2 text-left text-sm focus:outline-none"
+                  style={{ background: 'none', border: 'none', color: '#1C1410', fontFamily: OUTFIT, cursor: 'pointer' }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={getFlagUrl(c.code)} alt="" style={{ width: '20px', height: '14px', objectFit: 'cover', borderRadius: '2px', flexShrink: 0 }} />
+                  {c.name}
+                </button>
+              ))}
+            </div>
           )}
         </div>
-
-        {/* Progress toward next level */}
-        <div className="mt-4">
-          <div
-            className="w-full rounded-full overflow-hidden"
-            style={{ height: '6px', backgroundColor: 'rgba(221,212,192,0.55)' }}
-          >
-            <div
-              className="h-full rounded-full"
-              style={{
-                width: `${Math.round(exp.progress * 100)}%`,
-                background: 'linear-gradient(90deg, #1B3828, #2A5A3C)',
-                transition: 'width 400ms ease',
-              }}
-            />
-          </div>
-        </div>
-
-        <p className="text-xs mt-3" style={{ color: '#9A8A78', fontFamily: OUTFIT, lineHeight: 1.7 }}>
-          Your experience level is calculated automatically from your{' '}
-          <Link href="/account/cv" style={{ color: '#1B3828', fontWeight: 600, textDecoration: 'none' }}>
-            MUN CV
-          </Link>
-          {' '}— add more conferences to raise it. Conference organisers see this level on your applications.
-        </p>
       </GlassCard>
 
       {/* Card 3 — Notification Preferences */}

@@ -1,15 +1,14 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import Link from 'next/link';
-import { BadgeCheck, ImagePlus, Pencil, Trash2, X, Check } from 'lucide-react';
+import { BadgeCheck, ImagePlus, Pencil, Trash2, X, Check, Plus, TrendingUp, Award } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { supabase as anonClient } from '@/lib/supabase';
 import { getCountryByName, getFlagUrl } from '@/lib/countries';
-import { experienceProgress, syncExperienceLevel } from '@/lib/munExperience';
+import { experienceProgress, syncExperienceLevel, EXPERIENCE_BANDS } from '@/lib/munExperience';
 import {
-  Eyebrow, GlassCard, AwardChip, AwardArtwork, AWARD_LIST,
+  Eyebrow, GlassCard, Pill, LEVEL_TONE, AwardChip, AwardArtwork, AWARD_LIST,
   getCommitteeLogo, monogramFor, OUTFIT, MONO,
 } from '../accountUi';
 
@@ -24,6 +23,7 @@ interface CVEntry {
   photos: string[];
   logo_url: string | null;
   conference_id: string | null;
+  event_date: string | null;
   source: 'gavelling_verified' | 'manual';
   created_at: string;
 }
@@ -34,6 +34,8 @@ interface ConferenceSuggestion {
   acronym: string | null;
   logoUrl: string | null;
   conferenceId: string | null;
+  city: string | null;
+  country: string | null;
 }
 
 const EXPERTISE_LEVELS_MODAL = ['beginner', 'intermediate', 'advanced', 'expert'];
@@ -47,11 +49,12 @@ const inputStyle: React.CSSProperties = {
   fontFamily: OUTFIT,
 };
 
-// ── Logo tile ──────────────────────────────────────────────────────────────
+// ── Logo tiles ─────────────────────────────────────────────────────────────
 
-function LogoTile({ entry, size = 52 }: { entry: Pick<CVEntry, 'logo_url' | 'committee' | 'conference_name'>; size?: number }) {
+/** Large PRIMARY tile — the conference's own logo (logo_url), monogram fallback. */
+function ConferenceLogo({ entry, size = 64 }: { entry: Pick<CVEntry, 'logo_url' | 'conference_name'>; size?: number }) {
   const [failed, setFailed] = useState(false);
-  const src = entry.logo_url || getCommitteeLogo(entry.committee);
+  const src = entry.logo_url;
 
   if (src && !failed) {
     return (
@@ -60,11 +63,11 @@ function LogoTile({ entry, size = 52 }: { entry: Pick<CVEntry, 'logo_url' | 'com
         style={{
           width: `${size}px`,
           height: `${size}px`,
-          borderRadius: '14px',
+          borderRadius: '16px',
           backgroundColor: 'rgba(250,248,243,0.9)',
           border: '1px solid rgba(221,212,192,0.9)',
-          boxShadow: '0 2px 8px rgba(27,56,40,0.06)',
-          padding: '7px',
+          boxShadow: '0 3px 12px rgba(27,56,40,0.08)',
+          padding: '8px',
         }}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -84,15 +87,34 @@ function LogoTile({ entry, size = 52 }: { entry: Pick<CVEntry, 'logo_url' | 'com
       style={{
         width: `${size}px`,
         height: `${size}px`,
-        borderRadius: '14px',
-        backgroundColor: '#1B3828',
-        boxShadow: '0 2px 8px rgba(27,56,40,0.18)',
+        borderRadius: '16px',
+        background: 'linear-gradient(135deg, #1B3828, #2A5A3C)',
+        boxShadow: '0 3px 12px rgba(27,56,40,0.2)',
       }}
     >
       <span style={{ color: '#EED98A', fontFamily: OUTFIT, fontWeight: 800, fontSize: `${Math.round(size * 0.3)}px`, letterSpacing: '0.04em' }}>
         {monogramFor(entry.conference_name)}
       </span>
     </div>
+  );
+}
+
+/** Small SECONDARY committee logo shown inline beside the committee name. */
+function CommitteeLogo({ committee, size = 18 }: { committee: string; size?: number }) {
+  const [failed, setFailed] = useState(false);
+  const src = getCommitteeLogo(committee);
+  if (!src || failed) return null;
+  return (
+    <span
+      className="inline-flex items-center justify-center flex-shrink-0"
+      style={{
+        width: `${size}px`, height: `${size}px`, borderRadius: '5px',
+        backgroundColor: 'rgba(250,248,243,0.95)', border: '1px solid rgba(221,212,192,0.9)', padding: '2px',
+      }}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={src} alt="" onError={() => setFailed(true)} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+    </span>
   );
 }
 
@@ -116,6 +138,7 @@ function CVEntryModal({
   const [committee, setCommittee]           = useState(existing?.committee ?? '');
   const [allocation, setAllocation]         = useState(existing?.allocation ?? '');
   const [expertiseLevel, setExpertiseLevel] = useState(existing?.expertise_level ?? '');
+  const [eventDate, setEventDate]           = useState(existing?.event_date ?? '');
   const [awards, setAwards]                 = useState<string[]>(existing?.awards ?? []);
   const [photos, setPhotos]                 = useState<string[]>(existing?.photos ?? []);
   const [logoUrl, setLogoUrl]               = useState<string | null>(existing?.logo_url ?? null);
@@ -142,7 +165,7 @@ function CVEntryModal({
         const [confRes, cvRes] = await Promise.all([
           anonClient
             .from('conferences')
-            .select('id, full_name, acronym, logo_url')
+            .select('id, full_name, acronym, logo_url, city, country')
             .or(`full_name.ilike.${like},acronym.ilike.${like}`)
             .limit(5),
           anonClient
@@ -156,17 +179,17 @@ function CVEntryModal({
         const results: ConferenceSuggestion[] = [];
         const seen = new Set<string>();
 
-        for (const c of (confRes.data ?? []) as { id: string; full_name: string; acronym: string | null; logo_url: string | null }[]) {
+        for (const c of (confRes.data ?? []) as { id: string; full_name: string; acronym: string | null; logo_url: string | null; city: string | null; country: string | null }[]) {
           const key = c.full_name.toLowerCase();
           if (seen.has(key)) continue;
           seen.add(key);
-          results.push({ kind: 'gavelling', name: c.full_name, acronym: c.acronym, logoUrl: c.logo_url, conferenceId: c.id });
+          results.push({ kind: 'gavelling', name: c.full_name, acronym: c.acronym, logoUrl: c.logo_url, conferenceId: c.id, city: c.city, country: c.country });
         }
         for (const r of (cvRes.data ?? []) as { conference_name: string; logo_url: string | null }[]) {
           const key = r.conference_name.toLowerCase();
           if (seen.has(key)) continue;
           seen.add(key);
-          results.push({ kind: 'community', name: r.conference_name, acronym: null, logoUrl: r.logo_url, conferenceId: null });
+          results.push({ kind: 'community', name: r.conference_name, acronym: null, logoUrl: r.logo_url, conferenceId: null, city: null, country: null });
           if (results.length >= 8) break;
         }
         setSuggestions(results);
@@ -182,10 +205,55 @@ function CVEntryModal({
   function pickSuggestion(s: ConferenceSuggestion) {
     suppressSuggest.current = true;
     setConferenceName(s.name);
+    // Import the matched conference's logo as THIS entry's conference image.
     setLogoUrl(s.logoUrl);
     setConferenceId(s.conferenceId);
     setSuggestions([]);
     setSuggestOpen(false);
+  }
+
+  /**
+   * When the user typed a name (and optionally a location in the committee /
+   * allocation fields) that matches an existing Gavelling conference or a
+   * community CV entry, resolve and import that conference's logo automatically.
+   * Any conference matching the same name gets the same logo as the current
+   * edition. Only fills in a logo when one is not already set.
+   */
+  async function resolveConferenceLogo(): Promise<string | null> {
+    if (logoUrl || isVerified) return logoUrl;
+    const name = conferenceName.trim();
+    if (name.length < 2) return null;
+    try {
+      const like = `%${name.replace(/[%_,()]/g, '')}%`;
+      const { data: confs } = await anonClient
+        .from('conferences')
+        .select('full_name, acronym, logo_url, city, country')
+        .or(`full_name.ilike.${like},acronym.ilike.${like}`)
+        .not('logo_url', 'is', null)
+        .limit(10);
+      const loc = `${committee} ${allocation}`.toLowerCase();
+      const rows = (confs ?? []) as { full_name: string; acronym: string | null; logo_url: string | null; city: string | null; country: string | null }[];
+      // Prefer a row whose city/country also appears in what the user typed.
+      const located = rows.find((c) =>
+        (c.city && loc.includes(c.city.toLowerCase())) ||
+        (c.country && loc.includes(c.country.toLowerCase())),
+      );
+      const exact = rows.find((c) => c.full_name.toLowerCase() === name.toLowerCase());
+      const pick = located ?? exact ?? rows[0];
+      if (pick?.logo_url) return pick.logo_url;
+      // Fall back to a matching community CV entry's logo.
+      const { data: cv } = await anonClient
+        .from('mun_cv_entries')
+        .select('logo_url')
+        .ilike('conference_name', like)
+        .not('logo_url', 'is', null)
+        .neq('user_id', userId)
+        .limit(1);
+      const cvRow = (cv ?? [])[0] as { logo_url: string | null } | undefined;
+      return cvRow?.logo_url ?? null;
+    } catch {
+      return null;
+    }
   }
 
   function toggleAward(name: string) {
@@ -256,15 +324,20 @@ function CVEntryModal({
     setError('');
     const supabase = getAuthedClient(session.access_token);
 
+    // Auto-import a matching conference logo if the user typed a name without
+    // picking a suggestion.
+    const resolvedLogo = await resolveConferenceLogo();
+
     const payload = {
       conference_name: conferenceName,
       committee,
       allocation,
       expertise_level: expertiseLevel || null,
+      event_date:      eventDate || null,
       awards,
       award:           awards[0] ?? 'None', // keep legacy column in sync for compat
       photos,
-      logo_url:        logoUrl,
+      logo_url:        resolvedLogo,
       conference_id:   conferenceId,
     };
 
@@ -387,18 +460,10 @@ function CVEntryModal({
                         <span style={{ color: '#9A8A78', fontFamily: MONO, fontSize: '10px', marginLeft: '8px' }}>{s.acronym}</span>
                       )}
                     </span>
-                    <span
-                      className="flex-shrink-0 rounded-full px-2 py-0.5"
-                      style={{
-                        backgroundColor: s.kind === 'gavelling' ? 'rgba(27,56,40,0.1)' : 'rgba(154,138,120,0.12)',
-                        border: `1px solid ${s.kind === 'gavelling' ? 'rgba(27,56,40,0.25)' : 'rgba(154,138,120,0.25)'}`,
-                        color: s.kind === 'gavelling' ? '#1B3828' : '#9A8A78',
-                        fontFamily: MONO,
-                        fontSize: '8.5px',
-                        letterSpacing: '0.08em',
-                      }}
-                    >
-                      {s.kind === 'gavelling' ? 'ON GAVELLING' : 'COMMUNITY'}
+                    <span className="flex-shrink-0">
+                      <Pill tone={s.kind === 'gavelling' ? 'forest' : 'neutral'} dot size="sm">
+                        {s.kind === 'gavelling' ? 'On Gavelling' : 'Community'}
+                      </Pill>
                     </span>
                   </button>
                 ))}
@@ -455,30 +520,50 @@ function CVEntryModal({
             </div>
           </div>
 
+          {/* When was it? */}
+          <div>
+            <label className="block text-[13px] font-semibold mb-1.5" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+              When was it?
+              <span className="ml-2 font-normal" style={{ color: '#9A8A78', fontSize: '11px' }}>optional</span>
+            </label>
+            <input
+              type="month"
+              value={eventDate ? eventDate.slice(0, 7) : ''}
+              max={new Date().toISOString().slice(0, 7)}
+              onChange={(e) => setEventDate(e.target.value ? `${e.target.value}-01` : '')}
+              className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none"
+              style={inputStyle}
+              onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
+              onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
+            />
+            <p className="text-xs mt-1" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+              Used to order your CV timeline, most recent first.
+            </p>
+          </div>
+
           {/* Expertise level */}
           <div>
             <label className="block text-[13px] font-semibold mb-2" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
               Expertise Level
             </label>
             <div className="flex gap-2 flex-wrap">
-              {EXPERTISE_LEVELS_MODAL.map((lvl) => (
-                <button
-                  key={lvl}
-                  type="button"
-                  onClick={() => setExpertiseLevel(expertiseLevel === lvl ? '' : lvl)}
-                  className="rounded-full px-3.5 py-1.5 text-[11px] font-bold focus:outline-none transition-all"
-                  style={{
-                    border: expertiseLevel === lvl ? '1px solid rgba(27,56,40,0.4)' : '1px solid #DDD4C0',
-                    backgroundColor: expertiseLevel === lvl ? 'rgba(27,56,40,0.09)' : 'transparent',
-                    color: expertiseLevel === lvl ? '#1B3828' : '#9A8A78',
-                    fontFamily: OUTFIT,
-                    letterSpacing: '0.06em',
-                    cursor: 'pointer',
-                  }}
-                >
-                  {lvl.toUpperCase()}
-                </button>
-              ))}
+              {EXPERTISE_LEVELS_MODAL.map((lvl) => {
+                const active = expertiseLevel === lvl;
+                const tone = LEVEL_TONE[lvl] ?? 'forest';
+                return (
+                  <button
+                    key={lvl}
+                    type="button"
+                    onClick={() => setExpertiseLevel(active ? '' : lvl)}
+                    className="focus:outline-none transition-all"
+                    style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', opacity: active ? 1 : 0.6 }}
+                  >
+                    <Pill tone={active ? tone : 'neutral'} dot size="sm">
+                      <span style={{ textTransform: 'capitalize' }}>{lvl}</span>
+                    </Pill>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -608,20 +693,22 @@ function CVEntryModal({
 
 // ── Entry card ─────────────────────────────────────────────────────────────
 
-function EntryCard({
+function TimelineEntry({
   entry,
   onEdit,
   onDelete,
   deleting,
+  isLast,
 }: {
   entry: CVEntry;
   onEdit: () => void;
   onDelete: () => void;
   deleting: boolean;
+  isLast: boolean;
 }) {
   const isVerified = entry.source === 'gavelling_verified';
-  const date = new Date(entry.created_at);
-  const dateStr = date.toLocaleDateString('en', { month: 'short', year: 'numeric' });
+  const dateStr = new Date(entry.event_date ? `${entry.event_date}T00:00:00` : entry.created_at)
+    .toLocaleDateString('en', { month: 'long', year: 'numeric' });
 
   const allocCountry = entry.allocation ? getCountryByName(entry.allocation) : null;
   const allocFlag = allocCountry ? getFlagUrl(allocCountry.code) : null;
@@ -631,54 +718,78 @@ function EntryCard({
     : (entry.award && entry.award !== 'None' ? [entry.award] : []);
 
   return (
-    <GlassCard className="!p-5 md:!p-6">
-      <div className="flex gap-4">
-        <LogoTile entry={entry} />
+    <div className="relative flex gap-4 md:gap-5">
+      {/* Timeline rail: big conference logo + connecting line */}
+      <div className="relative flex flex-col items-center flex-shrink-0" style={{ width: '64px' }}>
+        <ConferenceLogo entry={entry} size={64} />
+        {!isLast && (
+          <div
+            aria-hidden
+            className="flex-1 mt-2"
+            style={{ width: '2px', minHeight: '24px', background: 'linear-gradient(180deg, rgba(221,212,192,0.9), rgba(221,212,192,0.35))', borderRadius: '9999px' }}
+          />
+        )}
+      </div>
 
-        <div className="flex-1 min-w-0">
-          {/* Name row */}
-          <div className="flex items-start justify-between gap-3">
-            <p className="font-bold text-[15px] leading-snug" style={{ color: '#1C1410', fontFamily: OUTFIT, margin: 0 }}>
-              {entry.conference_name}
-            </p>
-            <span
-              className="flex-shrink-0 inline-flex items-center gap-1 rounded-full px-2 py-0.5"
-              style={
-                isVerified
-                  ? { backgroundColor: 'rgba(27,56,40,0.09)', border: '1px solid rgba(27,56,40,0.28)', color: '#1B3828', fontFamily: MONO, fontSize: '8.5px', letterSpacing: '0.08em' }
-                  : { backgroundColor: 'rgba(154,138,120,0.1)', border: '1px solid rgba(154,138,120,0.25)', color: '#9A8A78', fontFamily: MONO, fontSize: '8.5px', letterSpacing: '0.08em' }
-              }
-            >
-              {isVerified && <BadgeCheck size={10} strokeWidth={2.4} />}
-              {isVerified ? 'VERIFIED' : 'SELF-REPORTED'}
+      {/* Content card */}
+      <div className="flex-1 min-w-0 pb-6">
+        <GlassCard className="!p-5 md:!p-6">
+          {/* Month + year */}
+          <div className="flex items-center justify-between gap-3 mb-1">
+            <span style={{ fontFamily: MONO, fontSize: '10px', letterSpacing: '0.14em', color: '#B6871F', textTransform: 'uppercase' }}>
+              {dateStr}
+            </span>
+            <span className="flex-shrink-0">
+              <Pill
+                tone={isVerified ? 'forest' : 'neutral'}
+                dot={!isVerified}
+                icon={isVerified ? <BadgeCheck size={12} strokeWidth={2.4} /> : undefined}
+                size="sm"
+              >
+                {isVerified ? 'Verified' : 'Self-reported'}
+              </Pill>
             </span>
           </div>
 
-          {/* Committee · allocation */}
-          <p className="text-[13px] mt-1 flex items-center gap-1.5 flex-wrap" style={{ color: '#9A8A78', fontFamily: OUTFIT, margin: '4px 0 0 0' }}>
-            {entry.committee}
-            {entry.allocation && (
-              <>
-                <span style={{ color: '#DDD4C0' }}>·</span>
-                <span className="inline-flex items-center gap-1.5" style={{ color: '#1C1410', fontWeight: 600 }}>
-                  {allocFlag && (
-                    /* eslint-disable-next-line @next/next/no-img-element */
-                    <img
-                      src={allocFlag}
-                      alt=""
-                      style={{ width: '18px', height: '12px', objectFit: 'cover', borderRadius: '2px', boxShadow: '0 1px 2px rgba(27,56,40,0.2)' }}
-                    />
-                  )}
-                  {entry.allocation}
-                </span>
-              </>
-            )}
-          </p>
+          {/* Conference name — colored heading */}
+          <h3
+            className="font-black leading-tight"
+            style={{ color: '#1B3828', fontFamily: OUTFIT, fontSize: '18px', letterSpacing: '-0.01em', margin: 0 }}
+          >
+            {entry.conference_name}
+          </h3>
 
-          {/* Awards */}
-          {displayAwards.length > 0 && (
-            <div className="flex gap-1.5 flex-wrap mt-2.5">
+          {/* Role / allocation with a small icon */}
+          <div className="flex items-center gap-1.5 flex-wrap mt-2" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+            <Award size={14} strokeWidth={2} style={{ color: '#B6871F', flexShrink: 0 }} />
+            <span className="inline-flex items-center gap-1.5 text-[14px]" style={{ fontWeight: 600 }}>
+              {allocFlag && (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={allocFlag}
+                  alt=""
+                  style={{ width: '20px', height: '13px', objectFit: 'cover', borderRadius: '2.5px', boxShadow: '0 1px 2px rgba(27,56,40,0.2)' }}
+                />
+              )}
+              {entry.allocation}
+            </span>
+          </div>
+
+          {/* Committee with SMALL committee logo inline */}
+          <div className="flex items-center gap-1.5 mt-1.5 text-[13px]" style={{ color: '#6E5F4E', fontFamily: OUTFIT }}>
+            <CommitteeLogo committee={entry.committee} size={18} />
+            <span>{entry.committee}</span>
+          </div>
+
+          {/* Awards + expertise */}
+          {(displayAwards.length > 0 || entry.expertise_level) && (
+            <div className="flex gap-1.5 flex-wrap mt-3 items-center">
               {displayAwards.map((a) => <AwardChip key={a} name={a} />)}
+              {entry.expertise_level && (
+                <Pill tone={LEVEL_TONE[entry.expertise_level] ?? 'neutral'} dot size="sm">
+                  <span style={{ textTransform: 'capitalize' }}>{entry.expertise_level}</span>
+                </Pill>
+              )}
             </div>
           )}
 
@@ -698,50 +809,35 @@ function EntryCard({
             </div>
           )}
 
-          {/* Footer: date, expertise, actions */}
-          <div className="flex items-center justify-between mt-3 pt-3" style={{ borderTop: '1px solid rgba(221,212,192,0.5)' }}>
-            <div className="flex items-center gap-2.5">
-              <span className="text-xs" style={{ color: '#9A8A78', fontFamily: MONO }}>
-                {dateStr}
-              </span>
-              {entry.expertise_level && (
-                <span
-                  className="rounded-full px-2 py-0.5"
-                  style={{ backgroundColor: 'rgba(27,56,40,0.06)', border: '1px solid rgba(27,56,40,0.16)', color: '#1B3828', fontFamily: MONO, fontSize: '8.5px', letterSpacing: '0.08em', textTransform: 'uppercase' }}
-                >
-                  {entry.expertise_level}
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-1">
+          {/* Actions */}
+          <div className="flex items-center justify-end gap-1 mt-3 pt-3" style={{ borderTop: '1px solid rgba(221,212,192,0.5)' }}>
+            <button
+              onClick={onEdit}
+              aria-label="Edit entry"
+              className="flex items-center justify-center rounded-lg focus:outline-none transition-colors"
+              style={{ width: '28px', height: '28px', background: 'none', border: 'none', color: '#9A8A78', cursor: 'pointer' }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#1B3828'; (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.07)'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+            >
+              <Pencil size={13} strokeWidth={1.9} />
+            </button>
+            {!isVerified && (
               <button
-                onClick={onEdit}
-                aria-label="Edit entry"
+                onClick={onDelete}
+                disabled={deleting}
+                aria-label="Delete entry"
                 className="flex items-center justify-center rounded-lg focus:outline-none transition-colors"
-                style={{ width: '28px', height: '28px', background: 'none', border: 'none', color: '#9A8A78', cursor: 'pointer' }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#1B3828'; (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.07)'; }}
+                style={{ width: '28px', height: '28px', background: 'none', border: 'none', color: deleting ? '#DDD4C0' : '#9A8A78', cursor: 'pointer' }}
+                onMouseEnter={(e) => { if (!deleting) { (e.currentTarget as HTMLElement).style.color = '#8B2020'; (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.07)'; } }}
                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
               >
-                <Pencil size={13} strokeWidth={1.9} />
+                <Trash2 size={13} strokeWidth={1.9} />
               </button>
-              {!isVerified && (
-                <button
-                  onClick={onDelete}
-                  disabled={deleting}
-                  aria-label="Delete entry"
-                  className="flex items-center justify-center rounded-lg focus:outline-none transition-colors"
-                  style={{ width: '28px', height: '28px', background: 'none', border: 'none', color: deleting ? '#DDD4C0' : '#9A8A78', cursor: 'pointer' }}
-                  onMouseEnter={(e) => { if (!deleting) { (e.currentTarget as HTMLElement).style.color = '#8B2020'; (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.07)'; } }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                >
-                  <Trash2 size={13} strokeWidth={1.9} />
-                </button>
-              )}
-            </div>
+            )}
           </div>
-        </div>
+        </GlassCard>
       </div>
-    </GlassCard>
+    </div>
   );
 }
 
@@ -760,14 +856,20 @@ export default function CVPage() {
     const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase
       .from('mun_cv_entries')
-      .select('id, conference_name, committee, allocation, expertise_level, award, awards, photos, logo_url, conference_id, source, created_at')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false });
+      .select('id, conference_name, committee, allocation, expertise_level, award, awards, photos, logo_url, conference_id, event_date, source, created_at')
+      .eq('user_id', user.id);
     const rows = ((data as CVEntry[]) ?? []).map((r) => ({
       ...r,
       awards: r.awards ?? [],
       photos: r.photos ?? [],
     }));
+    // Timeline order: most recent first. Prefer event_date; fall back to
+    // created_at so undated entries still sort sensibly (near the bottom).
+    rows.sort((a, b) => {
+      const da = new Date(a.event_date ? `${a.event_date}T00:00:00` : a.created_at).getTime();
+      const db = new Date(b.event_date ? `${b.event_date}T00:00:00` : b.created_at).getTime();
+      return db - da;
+    });
     setEntries(rows);
     setLoading(false);
     // Keep profiles.mun_experience_level in sync with the CV count.
@@ -827,37 +929,46 @@ export default function CVPage() {
         </div>
         <button
           onClick={() => { setModalEntry(null); setModalOpen(true); }}
-          className="flex-shrink-0 rounded-xl py-2.5 px-5 font-bold text-[12px] focus:outline-none transition-colors"
+          aria-label="Add a conference to your CV"
+          title="Add conference"
+          className="flex items-center justify-center flex-shrink-0 rounded-full focus:outline-none transition-all"
           style={{
-            backgroundColor: '#1B3828',
+            width: '58px',
+            height: '58px',
+            background: 'radial-gradient(120% 120% at 30% 25%, #2A5A3C 0%, #1B3828 70%)',
             color: '#EED98A',
-            fontFamily: OUTFIT,
-            letterSpacing: '0.08em',
-            border: 'none',
+            border: '1px solid rgba(238,217,138,0.4)',
+            boxShadow: '0 8px 22px rgba(27,56,40,0.28), inset 0 1px 0 rgba(238,217,138,0.25)',
             cursor: 'pointer',
           }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(1.07)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 12px 30px rgba(27,56,40,0.34), inset 0 1px 0 rgba(238,217,138,0.3)'; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(1)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 8px 22px rgba(27,56,40,0.28), inset 0 1px 0 rgba(238,217,138,0.25)'; }}
         >
-          ADD ENTRY
+          <Plus size={26} strokeWidth={2.6} />
         </button>
       </div>
 
       {/* Stats row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
         {[
-          { label: 'CONFERENCES', value: String(totalConferences) },
-          { label: 'AWARDS', value: String(totalAwards) },
-          { label: 'VERIFIED', value: String(totalVerified) },
-          { label: 'EXPERIENCE', value: exp.label },
+          { label: 'CONFERENCES', value: String(totalConferences), isExp: false },
+          { label: 'AWARDS', value: String(totalAwards), isExp: false },
+          { label: 'VERIFIED', value: String(totalVerified), isExp: false },
+          { label: 'EXPERIENCE', value: exp.label, isExp: true },
         ].map((stat) => (
           <GlassCard key={stat.label} className="!p-4 text-center">
-            <p
-              className="font-black"
-              style={{ color: '#1C1410', fontFamily: stat.label === 'EXPERIENCE' ? OUTFIT : MONO, fontSize: stat.label === 'EXPERIENCE' ? '17px' : '24px', lineHeight: 1.3, margin: 0 }}
-            >
-              {stat.value}
-            </p>
+            {stat.isExp ? (
+              <div className="flex items-center justify-center" style={{ minHeight: '31px' }}>
+                <Pill tone={LEVEL_TONE[exp.level] ?? 'forest'} dot>{stat.value}</Pill>
+              </div>
+            ) : (
+              <p
+                className="font-black"
+                style={{ color: '#1C1410', fontFamily: MONO, fontSize: '24px', lineHeight: 1.3, margin: 0 }}
+              >
+                {stat.value}
+              </p>
+            )}
             <p className="mt-1" style={{ color: '#B6871F', fontFamily: MONO, fontSize: '8.5px', letterSpacing: '0.22em', margin: '4px 0 0 0' }}>
               {stat.label}
             </p>
@@ -865,33 +976,49 @@ export default function CVPage() {
         ))}
       </div>
 
-      {/* Experience progress hint */}
+      {/* Rank-up info panel — thresholds pulled from munExperience.ts */}
       <div
-        className="rounded-2xl px-5 py-3.5 mb-8 flex items-center gap-4"
-        style={{
-          backgroundColor: 'rgba(238,217,138,0.14)',
-          border: '1px solid rgba(182,135,31,0.28)',
-        }}
+        className="rounded-2xl px-5 py-4 mb-8"
+        style={{ backgroundColor: 'rgba(238,217,138,0.14)', border: '1px solid rgba(182,135,31,0.28)' }}
       >
-        <div className="flex-1 min-w-0">
-          <div
-            className="w-full rounded-full overflow-hidden"
-            style={{ height: '5px', backgroundColor: 'rgba(221,212,192,0.6)' }}
-          >
-            <div
-              className="h-full rounded-full"
-              style={{ width: `${Math.round(exp.progress * 100)}%`, background: 'linear-gradient(90deg, #B6871F, #EED98A)', transition: 'width 400ms ease' }}
-            />
-          </div>
+        <div className="flex items-center gap-2 mb-3">
+          <TrendingUp size={15} strokeWidth={2.4} style={{ color: '#B6871F' }} />
+          <p className="font-bold text-[13px]" style={{ color: '#7A5A20', fontFamily: OUTFIT, margin: 0 }}>
+            How experience levels work
+          </p>
         </div>
-        <p className="flex-shrink-0" style={{ fontFamily: MONO, fontSize: '9.5px', letterSpacing: '0.1em', color: '#7A5A20', margin: 0 }}>
+
+        {/* Progress toward next rank */}
+        <div className="w-full rounded-full overflow-hidden mb-1.5" style={{ height: '6px', backgroundColor: 'rgba(221,212,192,0.6)' }}>
+          <div
+            className="h-full rounded-full"
+            style={{ width: `${Math.round(exp.progress * 100)}%`, background: 'linear-gradient(90deg, #B6871F, #EED98A)', transition: 'width 400ms ease' }}
+          />
+        </div>
+        <p className="text-[12px] mb-3" style={{ color: '#7A5A20', fontFamily: OUTFIT, margin: '0 0 12px 0' }}>
           {exp.nextLabel
-            ? `${exp.remaining} MORE CONFERENCE${exp.remaining === 1 ? '' : 'S'} TO ${exp.nextLabel.toUpperCase()}`
-            : 'EXPERT — TOP TIER REACHED'}
+            ? `You're ${exp.label} — add ${exp.remaining} more verified conference${exp.remaining === 1 ? '' : 's'} to reach ${exp.nextLabel}.`
+            : `You've reached Expert — the top tier. Keep adding conferences to grow your record.`}
         </p>
+
+        {/* Threshold ladder */}
+        <div className="flex flex-wrap gap-2">
+          {EXPERIENCE_BANDS.map((band, i) => {
+            const next = EXPERIENCE_BANDS[i + 1];
+            const range = next ? `${band.min === 0 ? '0–1' : `${band.min}–${next.min - 1}`}` : `${band.min}+`;
+            const current = band.level === exp.level;
+            return (
+              <span key={band.level} style={current ? undefined : { opacity: 0.75 }}>
+                <Pill tone={LEVEL_TONE[band.level] ?? 'neutral'} dot size="sm">
+                  {band.label} · {range}
+                </Pill>
+              </span>
+            );
+          })}
+        </div>
       </div>
 
-      {/* Entries */}
+      {/* Entries — vertical timeline */}
       {entries.length === 0 ? (
         <GlassCard className="text-center !py-14">
           <p className="text-lg font-bold mb-2" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
@@ -902,27 +1029,33 @@ export default function CVPage() {
           </p>
           <button
             onClick={() => { setModalEntry(null); setModalOpen(true); }}
-            className="rounded-xl py-2.5 px-6 font-bold text-[13px] focus:outline-none transition-colors"
+            aria-label="Add your first conference"
+            className="flex items-center justify-center rounded-full focus:outline-none transition-all mx-auto"
             style={{
-              backgroundColor: '#1B3828',
+              width: '58px',
+              height: '58px',
+              background: 'radial-gradient(120% 120% at 30% 25%, #2A5A3C 0%, #1B3828 70%)',
               color: '#EED98A',
-              fontFamily: OUTFIT,
-              letterSpacing: '0.08em',
-              border: 'none',
+              border: '1px solid rgba(238,217,138,0.4)',
+              boxShadow: '0 8px 22px rgba(27,56,40,0.28), inset 0 1px 0 rgba(238,217,138,0.25)',
               cursor: 'pointer',
             }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(1.07)'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(1)'; }}
           >
-            ADD YOUR FIRST ENTRY →
+            <Plus size={26} strokeWidth={2.6} />
           </button>
+          <p className="text-[12px] mt-3" style={{ color: '#B6871F', fontFamily: MONO, letterSpacing: '0.1em', margin: '12px 0 0 0' }}>
+            ADD YOUR FIRST ENTRY
+          </p>
         </GlassCard>
       ) : (
-        <div className="flex flex-col gap-3.5">
-          {entries.map((entry) => (
-            <EntryCard
+        <div className="flex flex-col">
+          {entries.map((entry, i) => (
+            <TimelineEntry
               key={entry.id}
               entry={entry}
+              isLast={i === entries.length - 1}
               deleting={deletingId === entry.id}
               onEdit={() => { setModalEntry(entry); setModalOpen(true); }}
               onDelete={() => handleDelete(entry.id)}

@@ -10,6 +10,96 @@ import { Medal } from 'lucide-react';
 export const OUTFIT = "'Outfit', sans-serif";
 export const MONO = "'DM Mono', monospace";
 
+// ── Pill / Tag ───────────────────────────────────────────────────────────────
+// The crafted replacement for the old DM-Mono / UPPERCASE / letter-spaced grey
+// pill. This one uses Outfit in normal case, a warm tint tied to meaning, a soft
+// border and a small leading dot. Use this everywhere a small status/level chip
+// is needed in the account area.
+
+export type PillTone = 'neutral' | 'forest' | 'gold' | 'amber' | 'sky' | 'rose' | 'plum';
+
+const PILL_TONES: Record<PillTone, { bg: string; border: string; text: string; dot: string }> = {
+  // Warm parchment default — no more cold grey.
+  neutral: { bg: 'rgba(221,212,192,0.30)', border: 'rgba(154,138,120,0.42)', text: '#6E5F4E', dot: '#9A8A78' },
+  forest:  { bg: 'rgba(27,56,40,0.10)',    border: 'rgba(27,56,40,0.30)',    text: '#1B3828', dot: '#2A5A3C' },
+  gold:    { bg: 'rgba(238,217,138,0.30)',  border: 'rgba(182,135,31,0.45)',  text: '#7A5A20', dot: '#B6871F' },
+  amber:   { bg: 'rgba(184,132,74,0.16)',   border: 'rgba(184,132,74,0.42)',  text: '#8A5A2C', dot: '#B8844A' },
+  sky:     { bg: 'rgba(74,120,150,0.14)',   border: 'rgba(74,120,150,0.40)',  text: '#365A72', dot: '#4A7896' },
+  rose:    { bg: 'rgba(139,32,32,0.10)',    border: 'rgba(139,32,32,0.32)',   text: '#8B2020', dot: '#A83A3A' },
+  plum:    { bg: 'rgba(108,74,120,0.14)',   border: 'rgba(108,74,120,0.40)',  text: '#57406A', dot: '#8A6BA0' },
+};
+
+/** Difficulty / experience levels map to a warm tint ramp (beginner→expert). */
+export const LEVEL_TONE: Record<string, PillTone> = {
+  beginner:     'sky',
+  intermediate: 'forest',
+  advanced:     'amber',
+  expert:       'gold',
+};
+
+/**
+ * A small, human-feeling tag. Outfit, normal case, soft warm fill, optional
+ * leading dot or icon. Deliberately NOT monospace/uppercase/letter-spaced —
+ * that generic pill is the thing we are replacing.
+ */
+export function Pill({
+  children,
+  tone = 'neutral',
+  dot = true,
+  icon,
+  size = 'md',
+  title,
+  className = '',
+  style = {},
+}: {
+  children: React.ReactNode;
+  tone?: PillTone;
+  dot?: boolean;
+  icon?: React.ReactNode;
+  size?: 'sm' | 'md';
+  title?: string;
+  className?: string;
+  style?: React.CSSProperties;
+}) {
+  const t = PILL_TONES[tone] ?? PILL_TONES.neutral;
+  const pad = size === 'sm' ? '2px 9px 2px 8px' : '3px 11px 3px 10px';
+  const fs = size === 'sm' ? '11px' : '12px';
+  return (
+    <span
+      title={title}
+      className={`inline-flex items-center gap-1.5 rounded-full ${className}`}
+      style={{
+        padding: pad,
+        backgroundColor: t.bg,
+        border: `1px solid ${t.border}`,
+        color: t.text,
+        fontFamily: OUTFIT,
+        fontSize: fs,
+        fontWeight: 600,
+        lineHeight: 1.25,
+        letterSpacing: '0.005em',
+        ...style,
+      }}
+    >
+      {icon
+        ? <span className="inline-flex items-center" style={{ marginLeft: '-1px' }}>{icon}</span>
+        : (dot && (
+            <span
+              aria-hidden
+              style={{
+                width: size === 'sm' ? '5px' : '6px',
+                height: size === 'sm' ? '5px' : '6px',
+                borderRadius: '9999px',
+                backgroundColor: t.dot,
+                flexShrink: 0,
+              }}
+            />
+          ))}
+      <span style={{ display: 'inline-block' }}>{children}</span>
+    </span>
+  );
+}
+
 // ── Eyebrow ────────────────────────────────────────────────────────────────
 
 export function Eyebrow({ children, color = '#B6871F', className = '' }: {
@@ -139,15 +229,23 @@ export const AWARD_LIST = [
   'Honourable Mention',
   'Best Position Paper',
   'Verbal Commendation',
-  'Diplomacy',
+  'Diplomacy Award',
 ] as const;
 
 export function awardSlug(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 }
 
+// Some award labels changed over time but their artwork asset did not. Older CV
+// rows may still store the previous label — map both to the same file so the
+// artwork keeps resolving. The owner ships /awards/diplomacy.png for both.
+const AWARD_ARTWORK_SLUG_ALIASES: Record<string, string> = {
+  'diplomacy-award': 'diplomacy',
+};
+
 export function awardArtworkPath(name: string): string {
-  return `/awards/${awardSlug(name)}.png`;
+  const slug = awardSlug(name);
+  return `/awards/${AWARD_ARTWORK_SLUG_ALIASES[slug] ?? slug}.png`;
 }
 
 /**
