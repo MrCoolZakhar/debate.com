@@ -276,7 +276,7 @@ function ConferenceApplyInner() {
           conference_id: conference!.id,
           user_id: user!.id,
           role,
-          status: 'submitted',
+          status: roleConfig?.auto_accept ? 'accepted' : 'submitted',
           is_independent: isIndependent,
           society_id: societyId,
           is_head_delegate: isHeadDelegate && !isIndependent,
