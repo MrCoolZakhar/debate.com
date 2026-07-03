@@ -7,6 +7,7 @@ import SiteNav from '@/components/SiteNav';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { getFlagUrl } from '@/lib/countries';
+import { ageAt } from '@/lib/age';
 
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
 
@@ -19,6 +20,8 @@ interface Conference {
   acronym: string;
   fee_amount: number;
   fee_currency: string;
+  start_date: string;
+  min_age: number | null;
 }
 
 interface RoleConfig {
@@ -89,6 +92,12 @@ function ConferenceApplyInner() {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
+  // ── Age gate (conference.min_age) — DOB comes from the user's profile
+  const [myDob, setMyDob] = useState<string | null>(null);
+  const [dobInput, setDobInput] = useState('');
+  const [dobSaving, setDobSaving] = useState(false);
+  const [dobError, setDobError] = useState('');
+
   // ── Step
   const [step, setStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
@@ -112,6 +121,12 @@ function ConferenceApplyInner() {
   // ── Step 4 — Experience & Questions
   const [experienceLevel, setExperienceLevel] = useState('');
   const [customAnswers, setCustomAnswers] = useState<Record<string, string>>({});
+
+  // ── Age gate derivations — age is computed at the conference START DATE
+  const minAgeLimit = conference?.min_age ?? null;
+  const ageAtStart = minAgeLimit != null && myDob && conference ? ageAt(myDob, conference.start_date) : null;
+  const underAge = minAgeLimit != null && ageAtStart !== null && ageAtStart < minAgeLimit;
+  const needsDob = minAgeLimit != null && !myDob;
 
   const isPreferenceRole = role === 'delegate' || role === 'head-delegate';
   const isObserver = role === 'observer';
@@ -138,7 +153,7 @@ function ConferenceApplyInner() {
 
     const { data: confData } = await supabase
       .from('conferences')
-      .select('id, slug, full_name, acronym, fee_amount, fee_currency')
+      .select('id, slug, full_name, acronym, fee_amount, fee_currency, start_date, min_age')
       .eq('slug', slug)
       .single();
 
@@ -150,7 +165,7 @@ function ConferenceApplyInner() {
 
     setConference(confData as Conference);
 
-    const [roleRes, committeesRes, societiesRes, appRes] = await Promise.all([
+    const [roleRes, committeesRes, societiesRes, appRes, profileRes] = await Promise.all([
       supabase
         .from('application_role_configs')
         .select('*')
@@ -174,12 +189,18 @@ function ConferenceApplyInner() {
         .eq('user_id', user!.id)
         .eq('role', role)
         .maybeSingle(),
+      supabase
+        .from('profiles')
+        .select('date_of_birth')
+        .eq('id', user!.id)
+        .maybeSingle(),
     ]);
 
     setRoleConfig((roleRes.data as RoleConfig) ?? null);
     setCommittees((committeesRes.data as CommitteeOption[]) ?? []);
     setSocieties((societiesRes.data as Society[]) ?? []);
     setExistingApp((appRes.data as { id: string; status: string }) ?? null);
+    setMyDob((profileRes.data as { date_of_birth: string | null } | null)?.date_of_birth ?? null);
     setLoading(false);
   }
 
@@ -210,6 +231,25 @@ function ConferenceApplyInner() {
     setLoadingSlots(false);
   }
 
+  async function handleSaveDob() {
+    if (!session || !user) return;
+    setDobError('');
+    const age = ageAt(dobInput);
+    if (age === null || age < 0 || age > 120) {
+      setDobError('That date of birth doesn’t look right — please double-check it.');
+      return;
+    }
+    setDobSaving(true);
+    const supabase = getAuthedClient(session.access_token);
+    const { error } = await supabase.from('profiles').update({ date_of_birth: dobInput }).eq('id', user.id);
+    setDobSaving(false);
+    if (error) {
+      setDobError('Your date of birth could not be saved. Please try again.');
+      return;
+    }
+    setMyDob(dobInput);
+  }
+
   function handleContinue() {
     if (step === 2) {
       if (!isObserver && !isIndependent && !societyInput.trim()) {
@@ -238,6 +278,14 @@ function ConferenceApplyInner() {
   }
 
   async function handleSubmit() {
+    if (needsDob || underAge) {
+      setSubmitError(
+        minAgeLimit != null
+          ? `This conference requires delegates to be at least ${minAgeLimit} years old.`
+          : 'This conference has an age requirement you do not meet.'
+      );
+      return;
+    }
     setSubmitting(true);
     setSubmitError('');
     if (!session) { setSubmitError('Session expired. Please sign in again.'); setSubmitting(false); return; }
@@ -853,6 +901,122 @@ function ConferenceApplyInner() {
             >
               ← Back
             </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Age gate screens ──────────────────────────────────────────────────────
+
+  if (underAge) {
+    return (
+      <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#EDE7D8' }}>
+        <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
+        <SiteNav />
+        <div className="relative z-10 flex-1 flex items-center justify-center px-6 py-20">
+          <div className="rounded-2xl p-10 text-center max-w-md w-full" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
+            <span
+              className="inline-flex items-center rounded-full px-3 py-1 mb-4 text-[11px] font-bold"
+              style={{ backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.25)', color: '#8B2020', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em' }}
+            >
+              AGE REQUIREMENT
+            </span>
+            <h2 className="font-semibold text-lg mb-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+              This conference requires delegates to be at least {minAgeLimit} years old
+            </h2>
+            <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", lineHeight: 1.7 }}>
+              Based on your date of birth, you will be {ageAtStart} when {conference.acronym} starts, so you can&apos;t apply this time. If your date of birth is wrong, you can update it in your profile.
+            </p>
+            <div className="flex items-center justify-center gap-4">
+              <Link
+                href="/account/profile"
+                className="text-sm font-semibold"
+                style={{ color: '#1B3828', textDecoration: 'none', fontFamily: "'Outfit', sans-serif" }}
+              >
+                Edit profile
+              </Link>
+              <Link
+                href={`/conferences/${slug}`}
+                className="text-sm font-semibold"
+                style={{ color: '#9A8A78', textDecoration: 'none', fontFamily: "'Outfit', sans-serif" }}
+              >
+                ← Back to {conference.acronym}
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (needsDob) {
+    return (
+      <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#EDE7D8' }}>
+        <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
+        <SiteNav />
+        <div className="relative z-10 flex-1 flex items-center justify-center px-6 py-20">
+          <div className="rounded-2xl p-10 max-w-md w-full" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
+            <span
+              className="inline-flex items-center rounded-full px-3 py-1 mb-4 text-[11px] font-bold"
+              style={{ backgroundColor: 'rgba(182,135,31,0.12)', border: '1px solid rgba(182,135,31,0.35)', color: '#B6871F', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em' }}
+            >
+              {minAgeLimit}+ CONFERENCE
+            </span>
+            <h2 className="font-semibold text-lg mb-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+              Add your date of birth to continue
+            </h2>
+            <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", lineHeight: 1.7 }}>
+              This conference requires delegates to be at least {minAgeLimit} years old, and your profile doesn&apos;t have a date of birth yet. It will be saved to your profile.
+            </p>
+            <label className="block font-semibold text-sm mb-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+              Date of birth
+            </label>
+            <input
+              type="date"
+              value={dobInput}
+              max={new Date().toISOString().slice(0, 10)}
+              onChange={(e) => { setDobInput(e.target.value); setDobError(''); }}
+              className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none"
+              style={{
+                border: dobError ? '1.5px solid #8B2020' : '1.5px solid #DDD4C0',
+                backgroundColor: '#FAF8F3',
+                color: '#1C1410',
+                fontFamily: "'Outfit', sans-serif",
+              }}
+              onFocus={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
+              onBlur={(e) => { (e.currentTarget as HTMLElement).style.borderColor = dobError ? '#8B2020' : '#DDD4C0'; }}
+            />
+            {dobError && (
+              <p className="mt-1.5 text-xs" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>
+                {dobError}
+              </p>
+            )}
+            <button
+              onClick={handleSaveDob}
+              disabled={dobSaving || !dobInput}
+              className="w-full mt-4 rounded-xl py-3 font-bold text-sm focus:outline-none transition-colors"
+              style={{
+                backgroundColor: (dobSaving || !dobInput) ? '#DDD4C0' : '#1B3828',
+                color: (dobSaving || !dobInput) ? '#9A8A78' : '#EED98A',
+                fontFamily: "'Outfit', sans-serif",
+                letterSpacing: '0.08em',
+                cursor: (dobSaving || !dobInput) ? 'default' : 'pointer',
+              }}
+              onMouseEnter={(e) => { if (!dobSaving && dobInput) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+              onMouseLeave={(e) => { if (!dobSaving && dobInput) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+            >
+              {dobSaving ? 'SAVING...' : 'SAVE & CONTINUE'}
+            </button>
+            <div className="text-center mt-4">
+              <Link
+                href={`/conferences/${slug}`}
+                className="text-sm font-semibold"
+                style={{ color: '#9A8A78', textDecoration: 'none', fontFamily: "'Outfit', sans-serif" }}
+              >
+                ← Back to {conference.acronym}
+              </Link>
+            </div>
           </div>
         </div>
       </div>

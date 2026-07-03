@@ -40,6 +40,7 @@ interface Conference {
   website_url: string | null;
   contact_email: string | null;
   organizer_id: string;
+  min_age: number | null;
 }
 
 interface DisplayChair {
@@ -144,6 +145,28 @@ function fmtReviewDate(iso: string): string {
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────
+
+/** Small age-limit chip shown near the apply CTA on the dark green card. */
+function MinAgeChip({ minAge }: { minAge: number }) {
+  return (
+    <span
+      title={`This conference requires delegates to be at least ${minAge} years old at its start date`}
+      className="flex-shrink-0 inline-flex items-center rounded-full"
+      style={{
+        padding: '3px 9px',
+        backgroundColor: 'rgba(238,217,138,0.14)',
+        border: '1px solid rgba(238,217,138,0.4)',
+        color: '#EED98A',
+        fontFamily: "'Outfit', sans-serif",
+        fontSize: '11px',
+        fontWeight: 800,
+        letterSpacing: '0.06em',
+      }}
+    >
+      {minAge}+
+    </span>
+  );
+}
 
 function StarRow({ rating, size = 13 }: { rating: number; size?: number }) {
   return (
@@ -312,7 +335,7 @@ export default function ConferenceDetailClient() {
         start_date, end_date, fee_amount, fee_currency, expected_delegates,
         description, logo_url, banner_url, is_public, status,
         instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url,
-        contact_email, organizer_id
+        contact_email, organizer_id, min_age
       `)
       .eq('slug', slug)
       .single();
@@ -328,7 +351,7 @@ export default function ConferenceDetailClient() {
             start_date, end_date, fee_amount, fee_currency, expected_delegates,
             description, logo_url, banner_url, is_public, status,
             instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url,
-            contact_email, organizer_id
+            contact_email, organizer_id, min_age
           `)
           .eq('slug', slug)
           .single();
@@ -1565,7 +1588,10 @@ export default function ConferenceDetailClient() {
                     ) : !user ? (
                       /* 4 — Signed out: one elegant APPLY NOW routing through sign-in */
                       <>
-                        <p className="font-bold text-base mb-1 text-white" style={{ fontFamily: "'Outfit', sans-serif" }}>Ready to take the floor?</p>
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                          <p className="font-bold text-base text-white" style={{ fontFamily: "'Outfit', sans-serif", margin: 0 }}>Ready to take the floor?</p>
+                          {conference.min_age != null && <MinAgeChip minAge={conference.min_age} />}
+                        </div>
                         <p className="text-xs mb-4" style={{ color: 'rgba(237,231,216,0.7)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.6 }}>
                           Sign in with a free account to start your application.
                         </p>
@@ -1589,7 +1615,10 @@ export default function ConferenceDetailClient() {
                     ) : (
                       /* 3 — Signed in, no involvement: one APPLY NOW revealing a role picker */
                       <>
-                        <p className="font-bold text-base mb-1 text-white" style={{ fontFamily: "'Outfit', sans-serif" }}>Apply to this Conference</p>
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                          <p className="font-bold text-base text-white" style={{ fontFamily: "'Outfit', sans-serif", margin: 0 }}>Apply to this Conference</p>
+                          {conference.min_age != null && <MinAgeChip minAge={conference.min_age} />}
+                        </div>
                         <p className="text-xs mb-4" style={{ color: 'rgba(237,231,216,0.7)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.6 }}>
                           {hasOpenRoles ? 'Applications are open.' : 'Applications are currently closed.'}
                         </p>

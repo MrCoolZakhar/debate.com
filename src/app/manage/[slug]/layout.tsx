@@ -5,7 +5,7 @@ import { useRouter, usePathname, useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   LayoutDashboard, Globe, Building2, Users, MapPin, FileText,
-  Mail, CreditCard, Settings, Briefcase, Menu, X, CalendarDays,
+  Mail, CreditCard, Settings, Briefcase, Menu, X,
 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -40,6 +40,7 @@ export interface Conference {
   stripe_account_id: string | null;
   predecessor_conference_id: string | null;
   predecessor_approved: boolean;
+  min_age: number | null;
 }
 
 // ── Context ────────────────────────────────────────────────────────────────
@@ -108,18 +109,11 @@ const STATUS_STYLES: Record<string, { bg: string; color: string; border: string;
   archived: { bg: 'rgba(28,20,16,0.08)',   color: '#6A5A4A', border: 'rgba(28,20,16,0.22)',   dot: '#9A8A78' },
 };
 
-function formatDatesShort(start: string, end: string): string {
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const s = new Date(start + 'T00:00:00');
-  const e = new Date(end + 'T00:00:00');
-  if (s.getMonth() === e.getMonth()) return `${s.getDate()}–${e.getDate()} ${months[s.getMonth()]} ${s.getFullYear()}`;
-  return `${s.getDate()} ${months[s.getMonth()]} – ${e.getDate()} ${months[e.getMonth()]} ${e.getFullYear()}`;
-}
-
 // ── Desktop floating rail ──────────────────────────────────────────────────
-// Collapsed: a slim glass pill of floating icons. Expands on hover to reveal
-// the conference identity block (logo, acronym, edition year, dates), section
-// headers and labels — content keeps the reclaimed horizontal space.
+// Collapsed: a slim glass pill of floating icons, each perfectly centred on
+// the pill's vertical axis. Expands on hover to reveal the conference
+// identity ("ACRONYM YEAR"), section headers and labels — content keeps the
+// reclaimed horizontal space.
 
 function SideRail({
   slug,
@@ -156,12 +150,13 @@ function SideRail({
     >
       {/* Conference identity */}
       <div
-        className="flex-shrink-0 flex items-start"
+        className="flex-shrink-0 flex items-center"
         style={{
-          gap: '12px',
-          padding: expanded ? '16px 16px 14px' : '14px 13px',
+          gap: expanded ? '12px' : '0px',
+          padding: expanded ? '16px 16px 14px' : '14px 0',
+          justifyContent: expanded ? 'flex-start' : 'center',
           borderBottom: '1px solid rgba(221,212,192,0.65)',
-          transition: 'padding 280ms cubic-bezier(0.22,1,0.36,1)',
+          transition: 'padding 280ms cubic-bezier(0.22,1,0.36,1), gap 280ms cubic-bezier(0.22,1,0.36,1)',
         }}
       >
         {conference?.logo_url ? (
@@ -192,32 +187,9 @@ function SideRail({
             whiteSpace: 'nowrap',
           }}
         >
-          <div className="flex items-center gap-1.5">
-            <span className="text-[15px] font-extrabold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-              {conference?.acronym ?? '…'}
-            </span>
-            {year && (
-              <span
-                className="text-[9.5px] font-bold px-1.5 rounded-full"
-                style={{
-                  color: '#2A5A3C', backgroundColor: 'rgba(61,122,82,0.14)',
-                  border: '1px solid rgba(61,122,82,0.35)',
-                  fontFamily: "'Outfit', sans-serif", lineHeight: '15px',
-                }}
-              >
-                {year}
-              </span>
-            )}
-          </div>
-          <p className="text-[11px] truncate" style={{ color: '#8A7D6C', fontFamily: "'Outfit', sans-serif", margin: '1px 0 0 0', maxWidth: '168px' }}>
-            {conference?.full_name ?? ''}
-          </p>
-          {conference && (
-            <p className="flex items-center gap-1 text-[10.5px] font-semibold" style={{ color: '#9A6B2F', fontFamily: "'Outfit', sans-serif", margin: '3px 0 0 0' }}>
-              <CalendarDays size={10.5} strokeWidth={2.2} style={{ flexShrink: 0 }} />
-              {formatDatesShort(conference.start_date, conference.end_date)}
-            </p>
-          )}
+          <span className="text-[15px] font-extrabold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+            {conference?.acronym ?? '…'}{year ? ` ${year}` : ''}
+          </span>
         </div>
       </div>
 
@@ -258,7 +230,7 @@ function SideRail({
                   title={expanded ? undefined : item.label}
                   className="flex items-center rounded-xl transition-colors"
                   style={{
-                    gap: '11px',
+                    gap: expanded ? '11px' : '0px',
                     padding: '9px 10px',
                     margin: '2px 0',
                     justifyContent: expanded ? 'flex-start' : 'center',
@@ -313,8 +285,9 @@ function SideRail({
           }}
         >
           <span
-            className="flex items-center gap-1.5 rounded-full"
+            className="flex items-center justify-center rounded-full"
             style={{
+              gap: expanded ? '6px' : '0px',
               backgroundColor: statusStyle.bg,
               border: `1px solid ${statusStyle.border}`,
               color: statusStyle.color,
@@ -483,7 +456,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
         'contact_email', 'student_level', 'description',
         'instagram_url', 'facebook_url', 'tiktok_url', 'whatsapp_url', 'website_url',
         'stripe_account_id', 'organizer_id',
-        'predecessor_conference_id', 'predecessor_approved',
+        'predecessor_conference_id', 'predecessor_approved', 'min_age',
       ].join(', '))
       .eq('slug', slug)
       .single();

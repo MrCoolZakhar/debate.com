@@ -270,6 +270,12 @@ export default function SettingsPage() {
   const [feeSaving, setFeeSaving] = useState(false);
   const [feeSaved, setFeeSaved] = useState(false);
 
+  // Minimum age (Applications tab)
+  const [minAge, setMinAge] = useState('');
+  const [minAgeSaving, setMinAgeSaving] = useState(false);
+  const [minAgeSaved, setMinAgeSaved] = useState(false);
+  const [minAgeError, setMinAgeError] = useState('');
+
   const [roleConfigs, setRoleConfigs] = useState<RoleConfig[]>([]);
   const [configVersion, setConfigVersion] = useState(0);
   const [organizers, setOrganizers] = useState<Organizer[]>([]);
@@ -374,6 +380,7 @@ export default function SettingsPage() {
     setWebsiteUrl(conference.website_url ?? '');
     setFeeAmount(conference.fee_amount != null ? String(conference.fee_amount) : '');
     setFeeCurrency(conference.fee_currency ?? 'GBP');
+    setMinAge(conference.min_age != null ? String(conference.min_age) : '');
   }, [conference?.id, loadRoleConfigs, loadOrganizers, loadLineage]);
 
   useEffect(() => {
@@ -562,6 +569,33 @@ export default function SettingsPage() {
     setFeeSaving(false);
     setFeeSaved(true);
     setTimeout(() => setFeeSaved(false), 2500);
+  }
+
+  async function handleSaveMinAge() {
+    if (!session || !conference) return;
+    setMinAgeError('');
+    const trimmed = minAge.trim();
+    let value: number | null = null;
+    if (trimmed !== '') {
+      const parsed = parseInt(trimmed, 10);
+      if (isNaN(parsed) || parsed < 10 || parsed > 99) {
+        setMinAgeError('Minimum age must be between 10 and 99, or left empty for no limit.');
+        return;
+      }
+      value = parsed;
+    }
+    setMinAgeSaving(true);
+    const supabase = getAuthedClient(session.access_token);
+    const { error } = await supabase.from('conferences').update({ min_age: value }).eq('id', conference.id);
+    if (error) {
+      setMinAgeError('Could not save the minimum age. Please try again.');
+      setMinAgeSaving(false);
+      return;
+    }
+    await refreshConference();
+    setMinAgeSaving(false);
+    setMinAgeSaved(true);
+    setTimeout(() => setMinAgeSaved(false), 2500);
   }
 
   async function handleSaveVisual() {
@@ -982,6 +1016,58 @@ export default function SettingsPage() {
           </div>
         </div>
       )}
+
+      {/* ── Minimum age card ── */}
+      {activeTab === 'applications' && <div style={cardStyle}>
+        <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+          Minimum Age
+        </p>
+        <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+          Applicants below this age cannot apply. Leave empty for no limit. Age is checked against the applicant&apos;s date of birth on the conference start date.
+        </p>
+        <div className="flex items-end gap-3">
+          <div style={{ width: '140px' }}>
+            <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+              Minimum age
+            </label>
+            <input
+              type="number"
+              min={10}
+              max={99}
+              step={1}
+              value={minAge}
+              onChange={(e) => { setMinAge(e.target.value); setMinAgeError(''); }}
+              placeholder="No limit"
+              style={inputStyle}
+              onFocus={fgInput}
+              onBlur={bgInput}
+            />
+          </div>
+          <button
+            onClick={handleSaveMinAge}
+            disabled={minAgeSaving}
+            className="rounded-xl py-2.5 px-5 font-bold text-xs tracking-widest transition-colors focus:outline-none flex-shrink-0"
+            style={{
+              backgroundColor: minAgeSaved ? '#3D7A52' : minAgeSaving ? '#DDD4C0' : '#1B3828',
+              color: minAgeSaving ? '#9A8A78' : '#EED98A',
+              fontFamily: "'Outfit', sans-serif",
+              letterSpacing: '0.07em',
+            }}
+            onMouseEnter={(e) => { if (!minAgeSaving && !minAgeSaved) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+            onMouseLeave={(e) => { if (!minAgeSaving && !minAgeSaved) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+          >
+            {minAgeSaved ? 'SAVED ✓' : minAgeSaving ? 'SAVING...' : 'SAVE'}
+          </button>
+        </div>
+        {minAgeError && (
+          <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{minAgeError}</p>
+        )}
+        {conference.min_age != null && !minAgeError && (
+          <p className="text-xs mt-3" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>
+            Delegates must be at least {conference.min_age} years old at the start of your conference to apply.
+          </p>
+        )}
+      </div>}
 
       {activeTab === 'applications' && <div style={cardStyle}>
         <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>

@@ -3,10 +3,12 @@
 import { useState, Suspense } from 'react';
 import Link from 'next/link';
 import { createAuthClient } from '@/lib/supabase-auth';
+import { ageAt } from '@/lib/age';
 
 function SignUpInner() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [dateOfBirth, setDateOfBirth] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
@@ -31,12 +33,25 @@ function SignUpInner() {
       setError('Password must be at least 8 characters.');
       return;
     }
+    const age = ageAt(dateOfBirth);
+    if (age === null) {
+      setError('Please enter your date of birth.');
+      return;
+    }
+    if (age < 0 || age > 120) {
+      setError('That date of birth doesn’t look right — please double-check it.');
+      return;
+    }
+    if (age < 13) {
+      setError('You need to be at least 13 years old to create a Gavelling account.');
+      return;
+    }
     setLoading(true);
     const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: { full_name: name },
+        data: { full_name: name, date_of_birth: dateOfBirth },
         emailRedirectTo: `${window.location.origin}/auth/callback?next=/`,
       },
     });
@@ -219,6 +234,34 @@ function SignUpInner() {
                   onBlur={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
                   placeholder="you@example.com"
                 />
+              </div>
+
+              <div>
+                <label
+                  className="block text-sm font-semibold mb-1.5"
+                  style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}
+                >
+                  Date of birth
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={dateOfBirth}
+                  max={new Date().toISOString().slice(0, 10)}
+                  onChange={(e) => setDateOfBirth(e.target.value)}
+                  className="w-full rounded-xl px-4 py-3 text-sm transition-colors focus:outline-none"
+                  style={{
+                    backgroundColor: '#FAF8F3',
+                    border: '1.5px solid #DDD4C0',
+                    color: '#1C1410',
+                    fontFamily: "'Outfit', sans-serif",
+                  }}
+                  onFocus={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
+                  onBlur={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
+                />
+                <p className="text-xs mt-1" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                  You must be at least 13. Some conferences use this to check age requirements.
+                </p>
               </div>
 
               <div>

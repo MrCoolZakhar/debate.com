@@ -7,6 +7,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { UN_COUNTRIES, getCountryByName, getFlagUrl } from '@/lib/countries';
 import { deriveExperienceLevel, experienceProgress } from '@/lib/munExperience';
+import { ageAt } from '@/lib/age';
 import { Eyebrow, GlassCard, PillToggle, OUTFIT, MONO } from '../accountUi';
 
 interface ReviewableConference {
@@ -42,6 +43,8 @@ export default function ProfilePage() {
 
   const [displayName, setDisplayName] = useState('');
   const [nationality, setNationality] = useState('');
+  const [dateOfBirth, setDateOfBirth] = useState('');
+  const [dobError, setDobError] = useState('');
   const [notifications, setNotifications] = useState<NotifFields>({
     notify_email_marketing:    true,
     notify_email_applications: true,
@@ -73,13 +76,14 @@ export default function ProfilePage() {
 
     supabase
       .from('profiles')
-      .select('display_name, nationality, mun_experience_level, notify_email_marketing, notify_email_applications, notify_email_documents, notify_email_reminders')
+      .select('display_name, nationality, date_of_birth, mun_experience_level, notify_email_marketing, notify_email_applications, notify_email_documents, notify_email_reminders')
       .eq('id', user.id)
       .single()
       .then(({ data }) => {
         if (data) {
           setDisplayName(data.display_name ?? '');
           setNationality(data.nationality ?? '');
+          setDateOfBirth(data.date_of_birth ?? '');
           setNotifications({
             notify_email_marketing:    data.notify_email_marketing    ?? true,
             notify_email_applications: data.notify_email_applications ?? true,
@@ -187,6 +191,18 @@ export default function ProfilePage() {
 
   async function handleSave() {
     if (!user) return;
+    setDobError('');
+    if (dateOfBirth) {
+      const age = ageAt(dateOfBirth);
+      if (age === null || age < 0 || age > 120) {
+        setDobError('That date of birth doesn’t look right — please double-check it.');
+        return;
+      }
+      if (age < 13) {
+        setDobError('Gavelling accounts require you to be at least 13 years old.');
+        return;
+      }
+    }
     setSaving(true);
     if (!session) return;
     const supabase = getAuthedClient(session.access_token);
@@ -195,6 +211,7 @@ export default function ProfilePage() {
       .update({
         display_name: displayName,
         nationality:  nationality || null,
+        date_of_birth: dateOfBirth || null,
       })
       .eq('id', user.id);
     setSaving(false);
@@ -415,6 +432,54 @@ export default function ProfilePage() {
             <p className="text-xs mt-1" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
               Email cannot be changed here.
             </p>
+          </div>
+
+          {/* Date of birth + derived age */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label
+                className="block text-[13px] font-semibold"
+                style={{ color: '#1C1410', fontFamily: OUTFIT }}
+              >
+                Date of Birth
+              </label>
+              {(() => {
+                const age = ageAt(dateOfBirth);
+                return age !== null && age >= 0 && age <= 120 ? (
+                  <span
+                    className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-bold"
+                    style={{
+                      backgroundColor: 'rgba(182,135,31,0.12)',
+                      border: '1px solid rgba(182,135,31,0.35)',
+                      color: '#B6871F',
+                      fontFamily: OUTFIT,
+                      letterSpacing: '0.04em',
+                    }}
+                  >
+                    AGE {age}
+                  </span>
+                ) : null;
+              })()}
+            </div>
+            <input
+              type="date"
+              value={dateOfBirth}
+              max={new Date().toISOString().slice(0, 10)}
+              onChange={(e) => { setDateOfBirth(e.target.value); setDobError(''); }}
+              className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none"
+              style={inputStyle}
+              onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
+              onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
+            />
+            {dobError ? (
+              <p className="text-xs mt-1" style={{ color: '#8B2020', fontFamily: OUTFIT }}>
+                {dobError}
+              </p>
+            ) : (
+              <p className="text-xs mt-1" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+                Your age is calculated automatically — some conferences set a minimum age for applicants.
+              </p>
+            )}
           </div>
 
           {/* Nationality — autocomplete with flag */}
