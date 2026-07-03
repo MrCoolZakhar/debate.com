@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { AlertTriangle, Camera, Globe, Music, MessageCircle } from 'lucide-react';
+import { AlertTriangle, Camera, Globe, Music, MessageCircle, Search, X } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import { useAuth } from '@/components/AuthProvider';
 import { createClient } from '@supabase/supabase-js';
@@ -159,6 +159,18 @@ function StepIndicator({ step }: { step: 1 | 2 }) {
   );
 }
 
+// ── Predecessor (previous edition) types ─────────────────────────────────
+
+interface PredecessorOption {
+  id: string;
+  full_name: string;
+  acronym: string;
+  slug: string;
+  start_date: string;
+  city: string;
+  country: string;
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────
 
 export default function NewConferencePage() {
@@ -209,6 +221,39 @@ export default function NewConferencePage() {
   const [bannerUrl, setBannerUrl] = useState<string | null>(null);
   const [bannerUploading, setBannerUploading] = useState(false);
   const [isPublic, setIsPublic] = useState(false);
+
+  // Previous editions (lineage claim)
+  const [hasPredecessor, setHasPredecessor] = useState<'yes' | 'no'>('no');
+  const [predecessorQuery, setPredecessorQuery] = useState('');
+  const [predecessorResults, setPredecessorResults] = useState<PredecessorOption[]>([]);
+  const [predecessorSearching, setPredecessorSearching] = useState(false);
+  const [predecessor, setPredecessor] = useState<PredecessorOption | null>(null);
+
+  // Debounced predecessor search: own organized conferences AND public ones
+  // (RLS limits results to exactly that set for an authed client).
+  useEffect(() => {
+    if (loading || hasPredecessor !== 'yes' || !session) return;
+    const q = predecessorQuery.trim();
+    if (q.length < 2) { setPredecessorResults([]); setPredecessorSearching(false); return; }
+    let cancelled = false;
+    setPredecessorSearching(true);
+    const t = setTimeout(async () => {
+      const supabase = getAuthedClient();
+      const safe = q.replace(/[%,()]/g, '');
+      const { data } = await supabase
+        .from('conferences')
+        .select('id, full_name, acronym, slug, start_date, city, country')
+        .or(`full_name.ilike.%${safe}%,acronym.ilike.%${safe}%`)
+        .order('start_date', { ascending: false })
+        .limit(8);
+      if (!cancelled) {
+        setPredecessorResults((data as PredecessorOption[] | null) ?? []);
+        setPredecessorSearching(false);
+      }
+    }, 300);
+    return () => { cancelled = true; clearTimeout(t); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [predecessorQuery, hasPredecessor, loading, session?.access_token]);
 
   // Pre-fill email from profile
   useEffect(() => {
@@ -275,7 +320,10 @@ export default function NewConferencePage() {
       const baseSlug = generateSlug(fullName);
       const slug = baseSlug + '-' + Math.random().toString(36).substring(2, 7);
 
-      const { data, error: dbError } = await supabase
+      // No .select() after insert: the new row is only SELECT-visible once the
+      // ownership trigger has run, so RETURNING fails RLS for private conferences.
+      // We already know the slug — we generated it.
+      const { error: dbError } = await supabase
         .from('conferences')
         .insert({
           slug,
@@ -300,10 +348,9 @@ export default function NewConferencePage() {
           website_url: websiteUrl || null,
           banner_url: bannerUrl,
           is_public: isPublic,
-          status: 'draft',
-        })
-        .select('slug')
-        .single();
+          status: isPublic ? 'public' : 'private',
+          predecessor_conference_id: hasPredecessor === 'yes' && predecessor ? predecessor.id : null,
+        });
 
       setSubmitting(false);
 
@@ -312,7 +359,7 @@ export default function NewConferencePage() {
         return;
       }
 
-      router.push('/manage/' + data.slug);
+      router.push('/manage/' + slug);
     } catch (err) {
       setSubmitting(false);
       setError('Unexpected error: ' + (err instanceof Error ? err.message : String(err)));
@@ -431,6 +478,14 @@ export default function NewConferencePage() {
                   onBannerUpload={handleBannerUpload}
                   isPublic={isPublic}
                   setIsPublic={setIsPublic}
+                  hasPredecessor={hasPredecessor}
+                  setHasPredecessor={setHasPredecessor}
+                  predecessorQuery={predecessorQuery}
+                  setPredecessorQuery={setPredecessorQuery}
+                  predecessorResults={predecessorResults}
+                  predecessorSearching={predecessorSearching}
+                  predecessor={predecessor}
+                  setPredecessor={setPredecessor}
                   error={error}
                   submitting={submitting}
                   onBack={() => { setStep(1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
@@ -709,6 +764,10 @@ function Step2({
   bannerUploading,
   onBannerUpload,
   isPublic, setIsPublic,
+  hasPredecessor, setHasPredecessor,
+  predecessorQuery, setPredecessorQuery,
+  predecessorResults, predecessorSearching,
+  predecessor, setPredecessor,
   error,
   submitting,
   onBack,
@@ -724,6 +783,10 @@ function Step2({
   bannerUploading: boolean;
   onBannerUpload: (file: File) => void;
   isPublic: boolean; setIsPublic: (v: boolean) => void;
+  hasPredecessor: 'yes' | 'no'; setHasPredecessor: (v: 'yes' | 'no') => void;
+  predecessorQuery: string; setPredecessorQuery: (v: string) => void;
+  predecessorResults: PredecessorOption[]; predecessorSearching: boolean;
+  predecessor: PredecessorOption | null; setPredecessor: (v: PredecessorOption | null) => void;
   error: string;
   submitting: boolean;
   onBack: () => void;
@@ -850,6 +913,117 @@ function Step2({
               onChange={setWebsiteUrl}
             />
           </div>
+        </Field>
+
+        <Field label="Previous Editions">
+          <p className="text-sm mb-3" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+            Have you organised previous editions of this conference on Gavelling?
+          </p>
+          <ToggleGroup
+            options={[
+              { value: 'no', label: 'NO' },
+              { value: 'yes', label: 'YES' },
+            ]}
+            value={hasPredecessor}
+            onChange={(v) => {
+              setHasPredecessor(v);
+              if (v === 'no') { setPredecessor(null); setPredecessorQuery(''); }
+            }}
+          />
+
+          {hasPredecessor === 'yes' && (
+            <div className="mt-3">
+              {predecessor ? (
+                <div
+                  className="flex items-start gap-3 px-4 py-3 rounded-xl"
+                  style={{ border: '1.5px solid #1B3828', backgroundColor: 'rgba(27,56,40,0.04)' }}
+                >
+                  <div className="flex-1 min-w-0">
+                    <p style={{ fontSize: 10, color: '#B6871F', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2 }}>
+                      {predecessor.acronym}
+                      {predecessor.start_date ? ' · ' + new Date(predecessor.start_date + 'T00:00:00').getFullYear() : ''}
+                    </p>
+                    <p className="font-semibold text-sm truncate" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                      {predecessor.full_name}
+                    </p>
+                    <p className="text-xs mt-1.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", lineHeight: 1.5 }}>
+                      The Main Organiser of this conference will be asked to confirm the link after you create yours. Nothing is shown publicly until they approve.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { setPredecessor(null); setPredecessorQuery(''); }}
+                    className="flex-shrink-0 focus:outline-none"
+                    style={{ color: '#9A8A78', marginTop: 2 }}
+                    aria-label="Remove selected previous edition"
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#8B2020'; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              ) : (
+                <div className="relative">
+                  <span className="absolute left-3 top-[22px] -translate-y-1/2 pointer-events-none" style={{ color: '#9A8A78' }}>
+                    <Search size={16} />
+                  </span>
+                  <input
+                    type="text"
+                    value={predecessorQuery}
+                    onChange={(e) => setPredecessorQuery(e.target.value)}
+                    placeholder="Search by conference name or acronym..."
+                    style={{ ...inputStyle, paddingLeft: '38px' }}
+                    onFocus={focusGreen}
+                    onBlur={blurGray}
+                  />
+                  <p className="text-xs mt-1.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                    A past edition may belong to a different account — its Main Organiser approves the link.
+                  </p>
+                  {(predecessorSearching || predecessorResults.length > 0 || predecessorQuery.trim().length >= 2) && (
+                    <div
+                      className="mt-2 rounded-xl overflow-hidden"
+                      style={{ border: '1.5px solid #DDD4C0', backgroundColor: '#FAF8F3' }}
+                    >
+                      {predecessorSearching ? (
+                        <p className="px-4 py-3 text-sm" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                          Searching...
+                        </p>
+                      ) : predecessorResults.length === 0 ? (
+                        <p className="px-4 py-3 text-sm" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                          No conferences found. Try the full name or acronym.
+                        </p>
+                      ) : (
+                        predecessorResults.map((opt, idx) => (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() => setPredecessor(opt)}
+                            className="w-full text-left px-4 py-2.5 focus:outline-none transition-colors"
+                            style={{
+                              backgroundColor: 'transparent',
+                              borderTop: idx > 0 ? '1px solid #F0EDE6' : 'none',
+                              cursor: 'pointer',
+                            }}
+                            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
+                            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                          >
+                            <p style={{ fontSize: 10, color: '#B6871F', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                              {opt.acronym}
+                              {opt.start_date ? ' · ' + new Date(opt.start_date + 'T00:00:00').getFullYear() : ''}
+                              {opt.city ? ' · ' + opt.city : ''}
+                            </p>
+                            <p className="font-semibold text-sm truncate" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                              {opt.full_name}
+                            </p>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </Field>
 
         <Field label="Conference Visibility">

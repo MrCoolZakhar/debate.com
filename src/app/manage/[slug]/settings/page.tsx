@@ -39,6 +39,22 @@ interface Organizer {
   profiles: { display_name: string; email: string; avatar_url: string | null } | null;
 }
 
+interface IncomingClaim {
+  id: string;
+  full_name: string;
+  acronym: string;
+  slug: string;
+  start_date: string;
+  end_date: string;
+  predecessor_approved: boolean;
+}
+
+interface PredecessorSummary {
+  id: string;
+  full_name: string;
+  acronym: string;
+}
+
 type BooleanRoleKey = 'auto_accept' | 'pay_at_application' | 'must_pay_before_allocation';
 
 // ── Constants & helpers ────────────────────────────────────────────────────
@@ -235,7 +251,7 @@ function QuestionModal({ existing, onSave, onClose }: {
 export default function SettingsPage() {
   const router = useRouter();
   const { conference, refreshConference } = useManage();
-  const { session } = useAuth();
+  const { user, session } = useAuth();
   const [activeTab, setActiveTab] = useState<'applications' | 'visual' | 'organizers' | 'privacy'>('applications');
 
   // Visual tab state
@@ -263,6 +279,12 @@ export default function SettingsPage() {
   const [inviteError, setInviteError] = useState('');
   const [inviting, setInviting] = useState(false);
 
+  // Lineage (previous editions)
+  const [incomingClaims, setIncomingClaims] = useState<IncomingClaim[]>([]);
+  const [predecessorInfo, setPredecessorInfo] = useState<PredecessorSummary | null>(null);
+  const [lineageBusy, setLineageBusy] = useState<string | null>(null);
+  const [lineageError, setLineageError] = useState('');
+
   // ── Data loaders ────────────────────────────────────────────────────────
 
   const loadRoleConfigs = useCallback(async () => {
@@ -289,6 +311,30 @@ export default function SettingsPage() {
       .eq('conference_id', conference.id);
     if (data) setOrganizers(data as unknown as Organizer[]);
   }, [conference]);
+
+  const loadLineage = useCallback(async () => {
+    if (!conference || !session) return;
+    const supabase = getAuthedClient(session.access_token);
+
+    // Incoming claims: other conferences claiming this one as their previous edition.
+    // Goes through a SECURITY DEFINER RPC because the successor may be private.
+    const { data: claims } = await supabase.rpc('list_incoming_predecessor_claims', {
+      p_conference_id: conference.id,
+    });
+    setIncomingClaims((claims as IncomingClaim[] | null) ?? []);
+
+    // Outgoing claim: this conference's own predecessor, if any.
+    if (conference.predecessor_conference_id) {
+      const { data: pred } = await supabase
+        .from('conferences')
+        .select('id, full_name, acronym')
+        .eq('id', conference.predecessor_conference_id)
+        .maybeSingle();
+      setPredecessorInfo((pred as PredecessorSummary | null) ?? null);
+    } else {
+      setPredecessorInfo(null);
+    }
+  }, [conference, session]);
 
   const ensureRoleConfigs = useCallback(async () => {
     if (!conference) return;
@@ -319,6 +365,7 @@ export default function SettingsPage() {
     if (!conference) return;
     loadRoleConfigs();
     loadOrganizers();
+    loadLineage();
     setDescription(conference.description ?? '');
     setInstagramUrl(conference.instagram_url ?? '');
     setFacebookUrl(conference.facebook_url ?? '');
@@ -327,7 +374,7 @@ export default function SettingsPage() {
     setWebsiteUrl(conference.website_url ?? '');
     setFeeAmount(conference.fee_amount != null ? String(conference.fee_amount) : '');
     setFeeCurrency(conference.fee_currency ?? 'GBP');
-  }, [conference?.id, loadRoleConfigs, loadOrganizers]);
+  }, [conference?.id, loadRoleConfigs, loadOrganizers, loadLineage]);
 
   useEffect(() => {
     if (!conference || roleConfigs.length > 0) return;
@@ -417,6 +464,42 @@ export default function SettingsPage() {
     }).eq('id', conference.id);
     await refreshConference();
     router.push('/conferences/organise');
+  }
+
+  // ── Lineage actions ─────────────────────────────────────────────────────
+
+  const isOwner = organizers.some(o => o.user_id === user?.id && o.role === 'owner');
+
+  async function handleClaimDecision(successorId: string, approve: boolean) {
+    if (!session) return;
+    setLineageBusy(successorId);
+    setLineageError('');
+    const supabase = getAuthedClient(session.access_token);
+    const { error } = await supabase.rpc('approve_predecessor_link', {
+      p_successor_id: successorId,
+      p_approve: approve,
+    });
+    if (error) setLineageError(error.message);
+    await loadLineage();
+    setLineageBusy(null);
+  }
+
+  async function handleWithdrawClaim() {
+    if (!conference || !session) return;
+    if (!window.confirm('Withdraw the previous-edition claim? The link (and any approval) will be removed.')) return;
+    setLineageBusy('withdraw');
+    setLineageError('');
+    const supabase = getAuthedClient(session.access_token);
+    // Only clear the id — predecessor_approved is reset by the DB trigger.
+    const { error } = await supabase
+      .from('conferences')
+      .update({ predecessor_conference_id: null })
+      .eq('id', conference.id);
+    if (error) setLineageError(error.message);
+    // refreshConference replaces the conference object; the settings effect
+    // re-runs loadLineage with the fresh predecessor_conference_id.
+    await refreshConference();
+    setLineageBusy(null);
   }
 
   // ── Custom questions ────────────────────────────────────────────────────
@@ -1110,7 +1193,7 @@ export default function SettingsPage() {
         </div>
       </div>}
 
-      {activeTab === 'privacy' && <div style={cardStyle}>
+      {activeTab === 'privacy' && <><div style={cardStyle}>
         <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
           Privacy & Publishing
         </p>
@@ -1153,7 +1236,176 @@ export default function SettingsPage() {
             ARCHIVE CONFERENCE
           </button>
         </div>
-      </div>}
+      </div>
+
+      {/* ── Lineage card ── */}
+      <div style={cardStyle}>
+        <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+          Lineage
+        </p>
+        <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+          Link editions of the same conference across years. Links only count once the previous edition&apos;s owner approves them.
+        </p>
+
+        {/* Outgoing claim: this conference's predecessor */}
+        <p
+          className="text-[10px] mb-2"
+          style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace", letterSpacing: '0.16em', textTransform: 'uppercase' }}
+        >
+          Previous edition
+        </p>
+        {conference.predecessor_conference_id ? (
+          <div
+            className="flex items-center gap-3 px-4 py-3 rounded-xl mb-6"
+            style={{ backgroundColor: 'rgba(27,56,40,0.03)', border: '1px solid rgba(27,56,40,0.08)' }}
+          >
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-sm truncate" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                {predecessorInfo?.full_name ?? 'A private conference'}
+              </p>
+              <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                {conference.predecessor_approved
+                  ? 'Confirmed as the previous edition of this conference.'
+                  : 'Waiting for its Main Organiser to confirm the link.'}
+              </p>
+            </div>
+            <span
+              className="text-[9px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
+              style={{
+                fontFamily: "'DM Mono', monospace",
+                textTransform: 'uppercase',
+                letterSpacing: '0.08em',
+                ...(conference.predecessor_approved
+                  ? { backgroundColor: 'rgba(61,122,82,0.15)', color: '#3D7A52' }
+                  : { backgroundColor: 'rgba(238,217,138,0.25)', color: '#B6871F' }),
+              }}
+            >
+              {conference.predecessor_approved ? 'APPROVED' : 'PENDING APPROVAL'}
+            </span>
+            <button
+              onClick={handleWithdrawClaim}
+              disabled={lineageBusy === 'withdraw'}
+              className="text-xs font-semibold focus:outline-none hover:underline flex-shrink-0"
+              style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}
+            >
+              {lineageBusy === 'withdraw' ? 'WITHDRAWING...' : 'WITHDRAW'}
+            </button>
+          </div>
+        ) : (
+          <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+            No previous edition linked. You can link one when creating your next edition on Gavelling.
+          </p>
+        )}
+
+        {/* Incoming claims: conferences claiming this one as their predecessor */}
+        <p
+          className="text-[10px] mb-2"
+          style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace", letterSpacing: '0.16em', textTransform: 'uppercase' }}
+        >
+          Incoming claims
+        </p>
+        {incomingClaims.length === 0 ? (
+          <p className="text-sm" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+            No conferences currently claim {conference.acronym} as their previous edition.
+          </p>
+        ) : (
+          <div className="flex flex-col">
+            {incomingClaims.map((claim, idx) => {
+              const isLast = idx === incomingClaims.length - 1;
+              const year = claim.start_date ? new Date(claim.start_date + 'T00:00:00').getFullYear() : null;
+              return (
+                <div
+                  key={claim.id}
+                  className="flex items-center gap-3 py-3"
+                  style={{ borderBottom: isLast ? 'none' : '1px solid #F0EDE6' }}
+                >
+                  <div className="flex-1 min-w-0">
+                    <p style={{ fontSize: 10, color: '#B6871F', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                      {claim.acronym}{year ? ' · ' + year : ''}
+                    </p>
+                    <p className="font-semibold text-sm truncate" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                      {claim.full_name}
+                    </p>
+                    <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                      claims to be the next edition of {conference.acronym}
+                    </p>
+                  </div>
+
+                  {claim.predecessor_approved ? (
+                    <span
+                      className="text-[9px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
+                      style={{
+                        fontFamily: "'DM Mono', monospace",
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.08em',
+                        backgroundColor: 'rgba(61,122,82,0.15)',
+                        color: '#3D7A52',
+                      }}
+                    >
+                      APPROVED
+                    </span>
+                  ) : isOwner ? (
+                    <div className="flex gap-2 flex-shrink-0">
+                      <button
+                        onClick={() => handleClaimDecision(claim.id, true)}
+                        disabled={lineageBusy === claim.id}
+                        className="rounded-lg py-1.5 px-3 font-bold text-[11px] focus:outline-none transition-colors"
+                        style={{
+                          backgroundColor: lineageBusy === claim.id ? '#DDD4C0' : '#1B3828',
+                          color: lineageBusy === claim.id ? '#9A8A78' : '#EED98A',
+                          fontFamily: "'Outfit', sans-serif",
+                          letterSpacing: '0.06em',
+                        }}
+                        onMouseEnter={(e) => { if (lineageBusy !== claim.id) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+                        onMouseLeave={(e) => { if (lineageBusy !== claim.id) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+                      >
+                        APPROVE
+                      </button>
+                      <button
+                        onClick={() => handleClaimDecision(claim.id, false)}
+                        disabled={lineageBusy === claim.id}
+                        className="rounded-lg py-1.5 px-3 font-bold text-[11px] focus:outline-none transition-colors"
+                        style={{
+                          backgroundColor: 'transparent',
+                          color: '#8B2020',
+                          border: '1px solid rgba(139,32,32,0.3)',
+                          fontFamily: "'Outfit', sans-serif",
+                          letterSpacing: '0.06em',
+                        }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.05)'; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                      >
+                        REJECT
+                      </button>
+                    </div>
+                  ) : (
+                    <span
+                      className="text-[9px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
+                      style={{
+                        fontFamily: "'DM Mono', monospace",
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.08em',
+                        backgroundColor: 'rgba(154,138,120,0.15)',
+                        color: '#9A8A78',
+                      }}
+                      title="Only the conference owner can approve or reject lineage claims."
+                    >
+                      OWNER DECIDES
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {lineageError && (
+          <p className="text-xs mt-3" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>
+            {lineageError}
+          </p>
+        )}
+      </div>
+      </>}
 
       {/* Question modal */}
       {questionModal.open && (

@@ -38,6 +38,8 @@ export interface Conference {
   whatsapp_url: string | null;
   website_url: string | null;
   stripe_account_id: string | null;
+  predecessor_conference_id: string | null;
+  predecessor_approved: boolean;
 }
 
 // ── Context ────────────────────────────────────────────────────────────────
@@ -240,6 +242,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
         'contact_email', 'student_level', 'description',
         'instagram_url', 'facebook_url', 'tiktok_url', 'whatsapp_url', 'website_url',
         'stripe_account_id', 'organizer_id',
+        'predecessor_conference_id', 'predecessor_approved',
       ].join(', '))
       .eq('slug', slug)
       .single();
