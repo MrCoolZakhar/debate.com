@@ -52,6 +52,16 @@ export default function SiteNav({ logoOverride, overlay = false }: SiteNavProps 
     return () => document.removeEventListener('mousedown', handleMouseDown);
   }, []);
 
+  // Conferences-area pages get the "GAVELLING CONFERENCES" wordmark by default.
+  // The two-tone (green + gold) artwork would be flattened to a single-colour
+  // silhouette by the overlay gold filter, so it opts out of the recolour and
+  // relies on a drop-shadow for legibility over dark heroes instead.
+  const inConferencesArea =
+    !logoOverride && (pathname?.startsWith('/conferences') || pathname?.startsWith('/manage'));
+  const logoSrc = logoOverride?.src ?? (inConferencesArea ? '/Conferences.png' : '/GavellingLogo.png');
+  const logoAlt = logoOverride?.alt ?? (inConferencesArea ? 'Gavelling Conferences' : 'Gavelling');
+  const skipOverlayRecolor = logoSrc === '/Conferences.png';
+
   const avatarInitial = profile?.display_name
     ? profile.display_name[0].toUpperCase()
     : user?.email
@@ -138,10 +148,16 @@ export default function SiteNav({ logoOverride, overlay = false }: SiteNavProps 
         {/* Logo */}
         <Link href="/" onClick={() => setMenuOpen(false)}>
           <img
-            src={logoOverride?.src ?? '/GavellingLogo.png'}
-            alt={logoOverride?.alt ?? 'Gavelling'}
+            src={logoSrc}
+            alt={logoAlt}
             className="h-8 md:h-10 w-auto object-contain"
-            style={overlay ? { filter: 'brightness(0) saturate(100%) invert(85%) sepia(30%) saturate(500%) hue-rotate(5deg) brightness(105%) drop-shadow(0 2px 6px rgba(0,0,0,0.35))' } : undefined}
+            style={
+              overlay
+                ? skipOverlayRecolor
+                  ? { filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.6)) drop-shadow(0 1px 3px rgba(0,0,0,0.5))' }
+                  : { filter: 'brightness(0) saturate(100%) invert(85%) sepia(30%) saturate(500%) hue-rotate(5deg) brightness(105%) drop-shadow(0 2px 6px rgba(0,0,0,0.35))' }
+                : undefined
+            }
             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
           />
         </Link>
