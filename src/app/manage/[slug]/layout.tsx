@@ -5,7 +5,7 @@ import { useRouter, usePathname, useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   LayoutDashboard, Globe, Building2, Users, MapPin, FileText,
-  Mail, CreditCard, Settings, Briefcase, Menu, X,
+  Mail, CreditCard, Settings, Briefcase, Menu, X, CalendarDays,
 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -98,6 +98,251 @@ const NAV_SECTIONS = (slug: string) => [
   },
 ];
 
+// ── Status pill styles (shared by rail + mobile drawer) ───────────────────
+// More vibrant than the old muted greys: saturated tints on translucent bases
+// with matching borders, so state reads at a glance.
+
+const STATUS_STYLES: Record<string, { bg: string; color: string; border: string; dot: string }> = {
+  private:  { bg: 'rgba(184,132,74,0.14)', color: '#9A6B2F', border: 'rgba(184,132,74,0.4)',  dot: '#B8844A' },
+  public:   { bg: 'rgba(61,122,82,0.16)',  color: '#2A5A3C', border: 'rgba(61,122,82,0.42)',  dot: '#3D7A52' },
+  archived: { bg: 'rgba(28,20,16,0.08)',   color: '#6A5A4A', border: 'rgba(28,20,16,0.22)',   dot: '#9A8A78' },
+};
+
+function formatDatesShort(start: string, end: string): string {
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const s = new Date(start + 'T00:00:00');
+  const e = new Date(end + 'T00:00:00');
+  if (s.getMonth() === e.getMonth()) return `${s.getDate()}–${e.getDate()} ${months[s.getMonth()]} ${s.getFullYear()}`;
+  return `${s.getDate()} ${months[s.getMonth()]} – ${e.getDate()} ${months[e.getMonth()]} ${e.getFullYear()}`;
+}
+
+// ── Desktop floating rail ──────────────────────────────────────────────────
+// Collapsed: a slim glass pill of floating icons. Expands on hover to reveal
+// the conference identity block (logo, acronym, edition year, dates), section
+// headers and labels — content keeps the reclaimed horizontal space.
+
+function SideRail({
+  slug,
+  conference,
+  pathname,
+}: {
+  slug: string;
+  conference: Conference | null;
+  pathname: string;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const sections = NAV_SECTIONS(slug);
+  const statusStyle = STATUS_STYLES[conference?.status ?? 'private'] ?? STATUS_STYLES.private;
+  const year = conference ? new Date(conference.start_date + 'T00:00:00').getFullYear() : null;
+
+  return (
+    <aside
+      className="hidden md:flex flex-col fixed"
+      onMouseEnter={() => setExpanded(true)}
+      onMouseLeave={() => setExpanded(false)}
+      style={{
+        left: '14px', top: '70px', bottom: '14px',
+        width: expanded ? '256px' : '68px',
+        zIndex: 25,
+        backgroundColor: 'rgba(250,248,243,0.82)',
+        backdropFilter: 'blur(18px) saturate(1.3)',
+        WebkitBackdropFilter: 'blur(18px) saturate(1.3)',
+        border: '1px solid rgba(221,212,192,0.9)',
+        borderRadius: '26px',
+        boxShadow: '0 12px 40px rgba(27,56,40,0.13), 0 2px 8px rgba(27,56,40,0.06)',
+        transition: 'width 280ms cubic-bezier(0.22,1,0.36,1)',
+        overflow: 'hidden',
+      }}
+    >
+      {/* Conference identity */}
+      <div
+        className="flex-shrink-0 flex items-start"
+        style={{
+          gap: '12px',
+          padding: expanded ? '16px 16px 14px' : '14px 13px',
+          borderBottom: '1px solid rgba(221,212,192,0.65)',
+          transition: 'padding 280ms cubic-bezier(0.22,1,0.36,1)',
+        }}
+      >
+        {conference?.logo_url ? (
+          <img
+            src={conference.logo_url}
+            alt={conference.acronym}
+            style={{ width: '40px', height: '40px', objectFit: 'contain', flexShrink: 0, filter: 'drop-shadow(0 3px 8px rgba(27,56,40,0.25))' }}
+          />
+        ) : (
+          <span
+            className="flex items-center justify-center flex-shrink-0"
+            style={{
+              width: '40px', height: '40px', borderRadius: '13px',
+              background: 'linear-gradient(135deg, #16301F, #2A5A3C)',
+              color: '#EED98A', fontSize: '13px', fontWeight: 800, fontFamily: "'Outfit', sans-serif",
+            }}
+          >
+            {(conference?.acronym ?? '?').slice(0, 2)}
+          </span>
+        )}
+        <div
+          className="min-w-0"
+          style={{
+            maxWidth: expanded ? '170px' : '0px',
+            opacity: expanded ? 1 : 0,
+            overflow: 'hidden',
+            transition: 'max-width 280ms cubic-bezier(0.22,1,0.36,1), opacity 200ms ease 60ms',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          <div className="flex items-center gap-1.5">
+            <span className="text-[15px] font-extrabold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+              {conference?.acronym ?? '…'}
+            </span>
+            {year && (
+              <span
+                className="text-[9.5px] font-bold px-1.5 rounded-full"
+                style={{
+                  color: '#2A5A3C', backgroundColor: 'rgba(61,122,82,0.14)',
+                  border: '1px solid rgba(61,122,82,0.35)',
+                  fontFamily: "'Outfit', sans-serif", lineHeight: '15px',
+                }}
+              >
+                {year}
+              </span>
+            )}
+          </div>
+          <p className="text-[11px] truncate" style={{ color: '#8A7D6C', fontFamily: "'Outfit', sans-serif", margin: '1px 0 0 0', maxWidth: '168px' }}>
+            {conference?.full_name ?? ''}
+          </p>
+          {conference && (
+            <p className="flex items-center gap-1 text-[10.5px] font-semibold" style={{ color: '#9A6B2F', fontFamily: "'Outfit', sans-serif", margin: '3px 0 0 0' }}>
+              <CalendarDays size={10.5} strokeWidth={2.2} style={{ flexShrink: 0 }} />
+              {formatDatesShort(conference.start_date, conference.end_date)}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Nav */}
+      <div className="flex-1 overflow-y-auto overflow-x-hidden" style={{ padding: '8px 12px', scrollbarWidth: 'none' }}>
+        {sections.map((section, si) => (
+          <div
+            key={si}
+            style={si > 0 ? { borderTop: '1px solid rgba(221,212,192,0.55)', marginTop: '7px', paddingTop: '5px' } : undefined}
+          >
+            {section.header && (
+              <p
+                style={{
+                  fontFamily: "'Outfit', sans-serif",
+                  fontSize: '9px', fontWeight: 800, letterSpacing: '0.16em',
+                  color: '#B6871F',
+                  padding: '4px 10px 3px',
+                  margin: 0,
+                  maxHeight: expanded ? '20px' : '0px',
+                  opacity: expanded ? 1 : 0,
+                  overflow: 'hidden',
+                  transition: 'max-height 280ms cubic-bezier(0.22,1,0.36,1), opacity 200ms ease 60ms',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {section.header}
+              </p>
+            )}
+            {section.items.map(item => {
+              const active = pathname === item.href;
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  target={item.external ? '_blank' : undefined}
+                  rel={item.external ? 'noopener noreferrer' : undefined}
+                  title={expanded ? undefined : item.label}
+                  className="flex items-center rounded-xl transition-colors"
+                  style={{
+                    gap: '11px',
+                    padding: '9px 10px',
+                    margin: '2px 0',
+                    justifyContent: expanded ? 'flex-start' : 'center',
+                    backgroundColor: active ? '#1B3828' : 'transparent',
+                    color: active ? '#EED98A' : '#7A6E5E',
+                    textDecoration: 'none',
+                    boxShadow: active ? '0 4px 14px rgba(27,56,40,0.28)' : 'none',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!active) {
+                      (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.07)';
+                      (e.currentTarget as HTMLElement).style.color = '#1C1410';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!active) {
+                      (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
+                      (e.currentTarget as HTMLElement).style.color = '#7A6E5E';
+                    }
+                  }}
+                >
+                  <Icon size={17} strokeWidth={2} style={{ flexShrink: 0 }} />
+                  <span
+                    style={{
+                      fontFamily: "'Outfit', sans-serif",
+                      fontSize: '13px', fontWeight: 600,
+                      whiteSpace: 'nowrap',
+                      maxWidth: expanded ? '150px' : '0px',
+                      opacity: expanded ? 1 : 0,
+                      overflow: 'hidden',
+                      transition: 'max-width 280ms cubic-bezier(0.22,1,0.36,1), opacity 200ms ease 60ms',
+                    }}
+                  >
+                    {item.label}
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+
+      {/* Footer: status */}
+      {conference && (
+        <div
+          className="flex-shrink-0 flex items-center"
+          style={{
+            padding: expanded ? '12px 16px' : '12px 0',
+            justifyContent: expanded ? 'flex-start' : 'center',
+            borderTop: '1px solid rgba(221,212,192,0.65)',
+            transition: 'padding 280ms cubic-bezier(0.22,1,0.36,1)',
+          }}
+        >
+          <span
+            className="flex items-center gap-1.5 rounded-full"
+            style={{
+              backgroundColor: statusStyle.bg,
+              border: `1px solid ${statusStyle.border}`,
+              color: statusStyle.color,
+              padding: expanded ? '3px 10px' : '5px',
+              fontFamily: "'Outfit', sans-serif",
+              fontSize: '9.5px', fontWeight: 800,
+              textTransform: 'uppercase', letterSpacing: '0.1em',
+            }}
+          >
+            <span style={{ width: '6px', height: '6px', borderRadius: '9999px', backgroundColor: statusStyle.dot, flexShrink: 0 }} />
+            <span
+              style={{
+                maxWidth: expanded ? '90px' : '0px',
+                opacity: expanded ? 1 : 0,
+                overflow: 'hidden',
+                whiteSpace: 'nowrap',
+                transition: 'max-width 280ms cubic-bezier(0.22,1,0.36,1), opacity 200ms ease 60ms',
+              }}
+            >
+              {conference.status}
+            </span>
+          </span>
+        </div>
+      )}
+    </aside>
+  );
+}
+
 // ── Sidebar content ────────────────────────────────────────────────────────
 
 function SidebarContent({
@@ -113,12 +358,7 @@ function SidebarContent({
 }) {
   const sections = NAV_SECTIONS(slug);
 
-  const statusStyles: Record<string, { bg: string; color: string }> = {
-    private:  { bg: 'rgba(154,138,120,0.15)', color: '#9A8A78' },
-    public:   { bg: 'rgba(61,122,82,0.15)',   color: '#3D7A52' },
-    archived: { bg: 'rgba(28,20,16,0.1)',     color: '#6A5A4A' },
-  };
-  const statusStyle = statusStyles[conference?.status ?? 'private'] ?? statusStyles.private;
+  const statusStyle = STATUS_STYLES[conference?.status ?? 'private'] ?? STATUS_STYLES.private;
 
   return (
     <div className="flex flex-col h-full">
@@ -127,8 +367,8 @@ function SidebarContent({
           <div key={si}>
             {section.header && (
               <p
-                className="px-4 pt-4 pb-1 text-[10px] tracking-[0.16em] font-medium"
-                style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}
+                className="px-4 pt-4 pb-1 text-[10px] tracking-[0.16em] font-extrabold"
+                style={{ color: '#B6871F', fontFamily: "'Outfit', sans-serif" }}
               >
                 {section.header}
               </p>
@@ -183,11 +423,12 @@ function SidebarContent({
             {conference.full_name}
           </p>
           <span
-            className="text-[9px] font-bold px-2 py-0.5 rounded-full"
+            className="text-[9px] font-extrabold px-2 py-0.5 rounded-full"
             style={{
               backgroundColor: statusStyle.bg,
               color: statusStyle.color,
-              fontFamily: "'DM Mono', monospace",
+              border: `1px solid ${statusStyle.border}`,
+              fontFamily: "'Outfit', sans-serif",
               textTransform: 'uppercase',
               letterSpacing: '0.08em',
             }}
@@ -312,8 +553,8 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
           </Link>
           <span style={{ color: 'rgba(238,217,138,0.3)', fontSize: '16px' }}>/</span>
           <span
-            className="text-sm font-medium"
-            style={{ color: '#EED98A', fontFamily: "'DM Mono', monospace" }}
+            className="text-sm font-bold"
+            style={{ color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.03em' }}
           >
             {conference?.acronym ?? '...'}
           </span>
@@ -364,19 +605,8 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
         </div>
       </header>
 
-      {/* Desktop sidebar */}
-      <aside
-        className="hidden md:flex flex-col fixed left-0 bottom-0 overflow-hidden"
-        style={{
-          top: '56px',
-          width: '220px',
-          backgroundColor: '#FAF8F3',
-          borderRight: '1px solid #DDD4C0',
-          zIndex: 20,
-        }}
-      >
-        <SidebarContent slug={slug} conference={conference} pathname={pathname} />
-      </aside>
+      {/* Desktop floating rail — icons only, expands on hover */}
+      <SideRail slug={slug} conference={conference} pathname={pathname} />
 
       {/* Mobile drawer overlay */}
       {mobileMenuOpen && (
@@ -405,9 +635,9 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
         </div>
       )}
 
-      {/* Main content */}
+      {/* Main content — rail is 68px + 14px inset, so content reclaims the old sidebar width */}
       <div
-        className="relative z-10 md:ml-[220px]"
+        className="relative z-10 md:ml-[96px]"
         style={{ marginTop: '56px', minHeight: 'calc(100vh - 56px)', backgroundColor: '#EDE7D8' }}
       >
         {children}

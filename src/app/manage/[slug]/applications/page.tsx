@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Building2, Download } from 'lucide-react';
+import { Building2, Download, User } from 'lucide-react';
 import Link from 'next/link';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -65,10 +65,6 @@ function roleLabel(role: string) {
   return map[role] ?? role;
 }
 
-function initials(name: string) {
-  return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
-}
-
 const STATUS_FILTERS = [
   { label: 'ALL', value: 'all' },
   { label: 'SUBMITTED', value: 'submitted' },
@@ -103,12 +99,12 @@ function FilterPill({ label, active, onClick }: { label: string; active: boolean
         padding: '6px 12px',
         borderRadius: 999,
         fontSize: 10,
-        fontFamily: "'DM Mono', monospace",
-        fontWeight: 700,
-        letterSpacing: '0.06em',
-        border: active ? 'none' : '1px solid #DDD4C0',
-        backgroundColor: active ? '#1B3828' : 'transparent',
-        color: active ? '#EED98A' : '#1C1410',
+        fontFamily: "'Outfit', sans-serif",
+        fontWeight: 800,
+        letterSpacing: '0.08em',
+        border: active ? '1px solid #1B3828' : '1px solid rgba(221,212,192,0.9)',
+        backgroundColor: active ? '#1B3828' : 'rgba(250,248,243,0.6)',
+        color: active ? '#EED98A' : '#6B5F52',
         cursor: 'pointer',
       }}
     >
@@ -315,32 +311,30 @@ export default function ApplicationsPage() {
             const prefs = [...(app.application_preferences ?? [])].sort((a, b) => a.preference_order - b.preference_order);
             const isRejecting = rejectingId === app.id;
 
+            const roleTone = app.role === 'delegate' || app.role === 'head-delegate'
+              ? { bg: 'rgba(42,90,60,0.14)',   color: '#2A5A3C', border: 'rgba(42,90,60,0.38)' }
+              : app.role === 'chair'
+              ? { bg: 'rgba(182,135,31,0.16)', color: '#8A6614', border: 'rgba(182,135,31,0.42)' }
+              : { bg: 'rgba(90,110,160,0.13)', color: '#4A5A85', border: 'rgba(90,110,160,0.35)' };
             const roleBadgeStyle: React.CSSProperties = {
               fontSize: 9,
-              fontFamily: "'DM Mono', monospace",
-              fontWeight: 700,
-              letterSpacing: '0.06em',
-              padding: '3px 8px',
+              fontFamily: "'Outfit', sans-serif",
+              fontWeight: 800,
+              letterSpacing: '0.08em',
+              padding: '3px 9px',
               borderRadius: 999,
-              backgroundColor: app.role === 'delegate' || app.role === 'head-delegate'
-                ? 'rgba(27,56,40,0.1)'
-                : app.role === 'chair'
-                ? 'rgba(182,135,31,0.12)'
-                : 'rgba(154,138,120,0.12)',
-              color: app.role === 'delegate' || app.role === 'head-delegate'
-                ? '#1B3828'
-                : app.role === 'chair'
-                ? '#B6871F'
-                : '#9A8A78',
+              backgroundColor: roleTone.bg,
+              color: roleTone.color,
+              border: `1px solid ${roleTone.border}`,
             };
 
-            const statusColors: Record<string, { bg: string; color: string }> = {
-              submitted: { bg: 'rgba(182,135,31,0.12)', color: '#B6871F' },
-              accepted:  { bg: 'rgba(61,122,82,0.12)',  color: '#3D7A52' },
-              assigned:  { bg: 'rgba(182,135,31,0.12)', color: '#8B6914' },
-              rejected:  { bg: 'rgba(139,32,32,0.1)',   color: '#8B2020' },
+            const statusColors: Record<string, { bg: string; color: string; border: string }> = {
+              submitted: { bg: 'rgba(184,132,74,0.16)', color: '#9A6B2F', border: 'rgba(184,132,74,0.42)' },
+              accepted:  { bg: 'rgba(61,122,82,0.17)',  color: '#2A5A3C', border: 'rgba(61,122,82,0.45)' },
+              assigned:  { bg: 'rgba(238,217,138,0.35)', color: '#7A5A10', border: 'rgba(182,135,31,0.45)' },
+              rejected:  { bg: 'rgba(139,32,32,0.12)',  color: '#8B2020', border: 'rgba(139,32,32,0.35)' },
             };
-            const sc = statusColors[app.status] ?? { bg: 'rgba(154,138,120,0.1)', color: '#9A8A78' };
+            const sc = statusColors[app.status] ?? { bg: 'rgba(154,138,120,0.12)', color: '#9A8A78', border: 'rgba(154,138,120,0.35)' };
 
             const paid = app.payment_status === 'paid';
             const roleConfig = roleConfigs.find(rc => rc.role === app.role);
@@ -363,8 +357,8 @@ export default function ApplicationsPage() {
                   {app.profiles?.avatar_url ? (
                     <img src={app.profiles.avatar_url} alt={name} className="rounded-full object-cover flex-shrink-0" style={{ width: 36, height: 36 }} />
                   ) : (
-                    <div className="flex-shrink-0 flex items-center justify-center rounded-full font-bold text-sm" style={{ width: 36, height: 36, backgroundColor: 'rgba(27,56,40,0.1)', color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-                      {initials(name)}
+                    <div className="flex-shrink-0 flex items-center justify-center rounded-full" style={{ width: 36, height: 36, backgroundColor: 'rgba(154,138,120,0.16)', border: '1px solid rgba(221,212,192,0.9)' }}>
+                      <User size={17} strokeWidth={2} style={{ color: '#9A8A78' }} />
                     </div>
                   )}
                   <div className="flex-1 min-w-0">
@@ -373,10 +367,10 @@ export default function ApplicationsPage() {
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <span style={roleBadgeStyle}>{roleLabel(app.role).toUpperCase()}</span>
-                    <span style={{ ...roleBadgeStyle, backgroundColor: sc.bg, color: sc.color }}>
+                    <span style={{ ...roleBadgeStyle, backgroundColor: sc.bg, color: sc.color, border: `1px solid ${sc.border}` }}>
                       {app.status.toUpperCase()}
                     </span>
-                    <span className="flex items-center gap-1" style={{ fontSize: 10, fontFamily: "'DM Mono', monospace", color: paid ? '#3D7A52' : '#B6871F' }}>
+                    <span className="flex items-center gap-1 font-bold" style={{ fontSize: 10, fontFamily: "'Outfit', sans-serif", letterSpacing: '0.06em', color: paid ? '#2A5A3C' : '#9A6B2F' }}>
                       <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: paid ? '#3D7A52' : '#B6871F', display: 'inline-block' }} />
                       {paid ? 'PAID' : 'UNPAID'}
                     </span>
