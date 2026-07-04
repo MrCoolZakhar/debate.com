@@ -425,6 +425,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
   const { user, session, profile, signOut, loading: authLoading } = useAuth();
   const [conference, setConference] = useState<Conference | null>(null);
   const [loadingConf, setLoadingConf] = useState(true);
+  const [accessDenied, setAccessDenied] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Auth gate
@@ -476,7 +477,8 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
         .eq('conference_id', (confData as any).id)
         .maybeSingle();
       if (!orgRow) {
-        router.replace('/conferences');
+        setAccessDenied(true);
+        setLoadingConf(false);
         return;
       }
     }
@@ -508,6 +510,33 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
   }
 
   if (!user) return null;
+
+  if (accessDenied) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-6" style={{ backgroundColor: '#EDE7D8' }}>
+        <div className="max-w-md w-full text-center rounded-2xl p-8" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
+          <p style={{ fontSize: 10, color: '#B8844A', fontFamily: "'DM Mono', monospace", letterSpacing: '0.16em', fontWeight: 600, marginBottom: 12 }}>
+            ACCESS DENIED
+          </p>
+          <h1 className="text-xl font-bold mb-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+            You don&apos;t have access to manage this conference
+          </h1>
+          <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+            You&apos;re not listed as an organizer of this conference. If you think this is a mistake, contact the conference&apos;s owner.
+          </p>
+          <button
+            onClick={() => router.push('/conferences')}
+            className="rounded-xl py-2.5 px-6 font-bold text-sm focus:outline-none transition-colors"
+            style={{ backgroundColor: '#1B3828', color: '#EED98A', border: 'none', fontFamily: "'Outfit', sans-serif" }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+          >
+            ← BACK TO HOME
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <ManageContext.Provider value={{ conference, refreshConference }}>
