@@ -8,7 +8,7 @@ import { supabase as anonClient } from '@/lib/supabase';
 import { getCountryByName, getFlagUrl } from '@/lib/countries';
 import { experienceProgress, syncExperienceLevel, EXPERIENCE_BANDS } from '@/lib/munExperience';
 import {
-  Eyebrow, GlassCard, Pill, LEVEL_TONE, AwardChip, AwardArtwork, AWARD_LIST,
+  Eyebrow, GlassCard, Pill, LevelBadge, LEVEL_TONE, AwardChip, AwardArtwork, AWARD_LIST,
   getCommitteeLogo, monogramFor, OUTFIT, MONO,
 } from '../accountUi';
 
@@ -223,29 +223,41 @@ function CVEntryModal({
     if (logoUrl || isVerified) return logoUrl;
     const name = conferenceName.trim();
     if (name.length < 2) return null;
+    // Strip a trailing edition year / ordinal so "LIMUN 2023" resolves against
+    // the LIMUN series and inherits whatever edition currently has a logo on
+    // Gavelling (e.g. LIMUN 2027). The base is what identifies the conference
+    // across editions; the year only picks an instance.
+    const base = name
+      .replace(/\b(19|20)\d{2}\b/g, '')
+      .replace(/\b(x+|\d+(st|nd|rd|th))\b/gi, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim() || name;
+    const clean = (s: string) => s.replace(/[%_,()]/g, '');
     try {
-      const like = `%${name.replace(/[%_,()]/g, '')}%`;
+      const like = `%${clean(base)}%`;
       const { data: confs } = await anonClient
         .from('conferences')
-        .select('full_name, acronym, logo_url, city, country')
+        .select('full_name, acronym, logo_url, city, country, start_date')
         .or(`full_name.ilike.${like},acronym.ilike.${like}`)
         .not('logo_url', 'is', null)
-        .limit(10);
+        .order('start_date', { ascending: false }) // newest edition's logo first
+        .limit(12);
       const loc = `${committee} ${allocation}`.toLowerCase();
+      const baseLc = base.toLowerCase();
       const rows = (confs ?? []) as { full_name: string; acronym: string | null; logo_url: string | null; city: string | null; country: string | null }[];
-      // Prefer a row whose city/country also appears in what the user typed.
+      // Prefer: same acronym → row located by city/country → newest match.
+      const acronymMatch = rows.find((c) => c.acronym && baseLc.includes(c.acronym.toLowerCase()));
       const located = rows.find((c) =>
         (c.city && loc.includes(c.city.toLowerCase())) ||
         (c.country && loc.includes(c.country.toLowerCase())),
       );
-      const exact = rows.find((c) => c.full_name.toLowerCase() === name.toLowerCase());
-      const pick = located ?? exact ?? rows[0];
+      const pick = acronymMatch ?? located ?? rows[0];
       if (pick?.logo_url) return pick.logo_url;
       // Fall back to a matching community CV entry's logo.
       const { data: cv } = await anonClient
         .from('mun_cv_entries')
         .select('logo_url')
-        .ilike('conference_name', like)
+        .ilike('conference_name', `%${clean(base)}%`)
         .not('logo_url', 'is', null)
         .neq('user_id', userId)
         .limit(1);
@@ -461,7 +473,7 @@ function CVEntryModal({
                       )}
                     </span>
                     <span className="flex-shrink-0">
-                      <Pill tone={s.kind === 'gavelling' ? 'forest' : 'neutral'} dot size="sm">
+                      <Pill tone={s.kind === 'gavelling' ? 'forest' : 'neutral'} size="sm">
                         {s.kind === 'gavelling' ? 'On Gavelling' : 'Community'}
                       </Pill>
                     </span>
@@ -558,7 +570,7 @@ function CVEntryModal({
                     className="focus:outline-none transition-all"
                     style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', opacity: active ? 1 : 0.6 }}
                   >
-                    <Pill tone={active ? tone : 'neutral'} dot size="sm">
+                    <Pill tone={active ? tone : 'neutral'} size="sm">
                       <span style={{ textTransform: 'capitalize' }}>{lvl}</span>
                     </Pill>
                   </button>
@@ -785,11 +797,7 @@ function TimelineEntry({
           {(displayAwards.length > 0 || entry.expertise_level) && (
             <div className="flex gap-1.5 flex-wrap mt-3 items-center">
               {displayAwards.map((a) => <AwardChip key={a} name={a} />)}
-              {entry.expertise_level && (
-                <Pill tone={LEVEL_TONE[entry.expertise_level] ?? 'neutral'} dot size="sm">
-                  <span style={{ textTransform: 'capitalize' }}>{entry.expertise_level}</span>
-                </Pill>
-              )}
+              {entry.expertise_level && <LevelBadge level={entry.expertise_level} size="sm" />}
             </div>
           )}
 
@@ -959,7 +967,7 @@ export default function CVPage() {
           <GlassCard key={stat.label} className="!p-4 text-center">
             {stat.isExp ? (
               <div className="flex items-center justify-center" style={{ minHeight: '31px' }}>
-                <Pill tone={LEVEL_TONE[exp.level] ?? 'forest'} dot>{stat.value}</Pill>
+                <LevelBadge level={exp.level} size="sm" />
               </div>
             ) : (
               <p
@@ -1009,7 +1017,7 @@ export default function CVPage() {
             const current = band.level === exp.level;
             return (
               <span key={band.level} style={current ? undefined : { opacity: 0.75 }}>
-                <Pill tone={LEVEL_TONE[band.level] ?? 'neutral'} dot size="sm">
+                <Pill tone={LEVEL_TONE[band.level] ?? 'neutral'} size="sm">
                   {band.label} · {range}
                 </Pill>
               </span>
