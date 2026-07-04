@@ -94,21 +94,16 @@ function JoinPageInner() {
       // "associated users read their committee" policy), not just public ones.
       const access = await verifyConferenceAccess(code.trim().toUpperCase(), session!.access_token, user!.id);
 
+      // Conference sessions: role is authoritative (allocation / chair record) and the
+      // manual role selector is hidden, so derive mode from the verified access.
       if (access.kind === 'delegate') {
-        if (mode === 'delegate') {
-          setAllocatedCountry({ code: access.country.code, name: access.country.name });
-        } else {
-          setAllocatedCountry(null);
-          setAllocationError('__wrong_role__');
-        }
+        if (mode !== 'delegate') setMode('delegate');
+        setAllocatedCountry({ code: access.country.code, name: access.country.name });
+        setAllocationError('');
       } else if (access.kind === 'chair') {
-        if (mode === 'chair') {
-          setAllocatedCountry(null);
-          setAllocationError('');
-        } else {
-          setAllocatedCountry(null);
-          setAllocationError('__wrong_role__');
-        }
+        if (mode !== 'chair') setMode('chair');
+        setAllocatedCountry(null);
+        setAllocationError('');
       } else {
         // organizer / denied / not associated for a delegate or chair join
         setAllocatedCountry(null);
