@@ -35,7 +35,7 @@ function JoinPageInner() {
   const searchParams = useSearchParams();
   const { committees } = useCommitteeStore();
   const { getSettings } = useSettingsStore();
-  const { user, session, loading: authLoading } = useAuth();
+  const { user, session, profile, loading: authLoading } = useAuth();
   const t = useT();
   const { language } = useLanguage();
   const initialMode = (searchParams.get('mode') as JoinMode) ?? 'delegate';
@@ -229,6 +229,12 @@ function JoinPageInner() {
         return;
       }
       if (allocationLoading) return;
+      // Conference chair: no country allocation — route to the chair view using their profile name.
+      if (mode === 'chair') {
+        const chairDisplayName = (profile?.display_name ?? user.email ?? 'Chair').trim();
+        router.push(`/chair/${foundCommittee!.code}?chairName=${encodeURIComponent(chairDisplayName)}`);
+        return;
+      }
       if (!allocatedCountry) {
         setError(allocationError || 'Your account is not linked to this committee.');
         return;
@@ -510,8 +516,16 @@ function JoinPageInner() {
             );
           })()}
 
-          {/* Chair name selection */}
-          {foundCommittee && mode === 'chair' && (
+          {/* Conference chair: use their profile name (no manual entry). */}
+          {foundCommittee && mode === 'chair' && isConferenceSession && (
+            <div className="mb-4 px-4 py-3 rounded-xl" style={{ backgroundColor: 'rgba(27,56,40,0.05)', border: '1px solid rgba(27,56,40,0.15)' }}>
+              <p className="text-sm" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>
+                Joining as <span style={{ fontWeight: 700 }}>{profile?.display_name ?? user?.email ?? 'you'}</span>, chair of this committee.
+              </p>
+            </div>
+          )}
+          {/* Chair name selection (standalone sessions only) */}
+          {foundCommittee && mode === 'chair' && !isConferenceSession && (
             <div className="mb-4">
               <label className="block text-sm font-semibold mb-2" style={{ color: '#1C1410' }}>{t('join_chair_label')}</label>
               {foundCommittee.chairNames.length > 0 && (
@@ -562,7 +576,8 @@ function JoinPageInner() {
             onClick={handleJoin}
             disabled={
               isConferenceSession
-                ? (!foundCommittee || !user || allocationLoading || !allocatedCountry)
+                ? (!foundCommittee || !user || allocationLoading || allocationError !== '' ||
+                   (mode !== 'chair' && !allocatedCountry))
                 : (
                   mode === 'delegate'
                     ? (!foundCommittee || (getSettings(foundCommittee?.code ?? '').requireDelegationName && !country))
