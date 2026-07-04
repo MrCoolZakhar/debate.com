@@ -13,9 +13,15 @@
 // `compact` (default false — the explore directory is untouched) shrinks the
 // same anatomy for narrow rails (~340–380px): 72px banner band, smaller logo
 // overlap and tighter padding. One definition, two densities — never fork it.
+//
+// `heroCompact` is a still-denser tier layered ON TOP of `compact`, used ONLY by
+// the Stagefront hero "up next" rail so three cards fit inside one viewport:
+// 56px banner band, tighter vertical rhythm, foot row hairline pulled in.
+// `goldGlow` adds a premium golden outer glow + an overlapping gavel disc that
+// straddles the card's top-right corner — hero-only, never on explore/near-you.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { ArrowRight, Users, CalendarDays } from 'lucide-react';
+import { ArrowRight, Users, CalendarDays, Gavel } from 'lucide-react';
 import { getFlagUrl, getCountryByName } from '@/lib/countries';
 
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
@@ -63,7 +69,7 @@ function formatDateRange(start: string, end: string): string {
 }
 
 export function ConferenceCard({
-  conf, hovered, onHover, onLeave, onClick, compact = false,
+  conf, hovered, onHover, onLeave, onClick, compact = false, heroCompact = false, goldGlow = false,
 }: {
   conf: CardConference;
   hovered: boolean;
@@ -72,12 +78,23 @@ export function ConferenceCard({
   onClick: () => void;
   /** Denser variant for narrow vertical rails. Default false — explore unchanged. */
   compact?: boolean;
+  /** Still-denser tier for the Stagefront hero rail (implies compact spacing). Default false. */
+  heroCompact?: boolean;
+  /** Premium gold outer glow + overlapping gavel disc. Hero-only. Default false. */
+  goldGlow?: boolean;
 }) {
   const countryObj = getCountryByName(conf.country);
   const flagUrl = countryObj ? getFlagUrl(countryObj.code) : null;
   const initials = conf.acronym.slice(0, 3).toUpperCase();
   const [g0, g1] = gradientFor(conf.acronym);
-  const padX = compact ? 'px-4' : 'px-5';
+  // heroCompact reuses compact's tighter horizontal padding.
+  const dense = compact || heroCompact;
+  const padX = dense ? 'px-4' : 'px-5';
+
+  // Layered golden glow — soft, static, tasteful (deepens slightly on hover).
+  const glowShadow = hovered
+    ? '0 0 0 1px rgba(238,217,138,0.55), 0 6px 20px rgba(182,135,31,0.30), 0 18px 46px rgba(238,217,138,0.24), 0 2px 8px rgba(27,56,40,0.10)'
+    : '0 0 0 1px rgba(238,217,138,0.40), 0 4px 16px rgba(182,135,31,0.22), 0 12px 34px rgba(238,217,138,0.18)';
 
   return (
     <article
@@ -86,18 +103,46 @@ export function ConferenceCard({
       onMouseLeave={onLeave}
       className="cursor-pointer overflow-hidden"
       style={{
+        position: 'relative',
         backgroundColor: '#FAF8F3',
-        border: hovered ? '1px solid rgba(27,56,40,0.55)' : '1px solid #DDD4C0',
+        border: goldGlow
+          ? '1px solid rgba(238,217,138,0.7)'
+          : hovered ? '1px solid rgba(27,56,40,0.55)' : '1px solid #DDD4C0',
         borderRadius: '20px',
         transform: hovered ? 'translateY(-4px)' : 'translateY(0)',
-        boxShadow: hovered
-          ? '0 20px 48px rgba(27,56,40,0.16), 0 2px 8px rgba(27,56,40,0.08)'
-          : '0 1px 3px rgba(27,56,40,0.05)',
+        boxShadow: goldGlow
+          ? glowShadow
+          : hovered
+            ? '0 20px 48px rgba(27,56,40,0.16), 0 2px 8px rgba(27,56,40,0.08)'
+            : '0 1px 3px rgba(27,56,40,0.05)',
         transition: 'transform 260ms cubic-bezier(0.22,1,0.36,1), box-shadow 260ms ease, border-color 260ms ease',
       }}
     >
+      {/* Gold gavel disc — straddles the top-right corner, hero-only. */}
+      {goldGlow && (
+        <span
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            top: '-11px',
+            right: '-11px',
+            zIndex: 3,
+            width: '34px',
+            height: '34px',
+            borderRadius: '9999px',
+            background: 'linear-gradient(145deg, #F3E3A1 0%, #EED98A 45%, #C99A2A 100%)',
+            border: '2px solid #FAF8F3',
+            boxShadow: '0 4px 12px rgba(182,135,31,0.45), 0 0 0 1px rgba(182,135,31,0.25)',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Gavel size={16} strokeWidth={2.25} color="#4A3410" />
+        </span>
+      )}
       {/* Banner band */}
-      <div className="relative" style={{ height: compact ? '72px' : '104px', overflow: 'hidden' }}>
+      <div className="relative" style={{ height: heroCompact ? '42px' : compact ? '72px' : '104px', overflow: 'hidden' }}>
         {conf.banner_url ? (
           <>
             <img
@@ -119,7 +164,7 @@ export function ConferenceCard({
               aria-hidden
               style={{
                 position: 'absolute', right: '14px', bottom: '-6px',
-                fontFamily: "'DM Mono', monospace", fontSize: compact ? '38px' : '52px', lineHeight: 1,
+                fontFamily: "'DM Mono', monospace", fontSize: heroCompact ? '30px' : compact ? '38px' : '52px', lineHeight: 1,
                 color: 'rgba(238,217,138,0.13)', letterSpacing: '0.02em', userSelect: 'none',
               }}
             >
@@ -145,45 +190,45 @@ export function ConferenceCard({
       </div>
 
       {/* Logo overlapping the band — free-floating */}
-      <div className={padX} style={{ marginTop: compact ? '-24px' : '-36px', position: 'relative' }}>
+      <div className={padX} style={{ marginTop: heroCompact ? '-22px' : compact ? '-24px' : '-36px', position: 'relative' }}>
         {conf.logo_url ? (
           <img
             src={conf.logo_url}
             alt={conf.acronym}
             style={{
-              width: compact ? '52px' : '72px', height: compact ? '52px' : '72px', objectFit: 'contain', display: 'block',
+              width: heroCompact ? '44px' : compact ? '52px' : '72px', height: heroCompact ? '44px' : compact ? '52px' : '72px', objectFit: 'contain', display: 'block',
               filter: 'drop-shadow(0 8px 16px rgba(16,28,21,0.35))',
             }}
           />
         ) : (
           <div
             style={{
-              width: compact ? '44px' : '56px', height: compact ? '44px' : '56px', borderRadius: compact ? '12px' : '15px',
+              width: heroCompact ? '40px' : compact ? '44px' : '56px', height: heroCompact ? '40px' : compact ? '44px' : '56px', borderRadius: dense ? '12px' : '15px',
               backgroundColor: '#EDE7D8', border: '3px solid #FAF8F3',
               boxShadow: '0 4px 12px rgba(27,56,40,0.15)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}
           >
-            <span style={{ fontSize: compact ? '10px' : '12px', fontFamily: "'DM Mono', monospace", color: '#1B3828', fontWeight: 700 }}>
+            <span style={{ fontSize: dense ? '10px' : '12px', fontFamily: "'DM Mono', monospace", color: '#1B3828', fontWeight: 700 }}>
               {initials}
             </span>
           </div>
         )}
       </div>
 
-      <div className={`${padX} ${compact ? 'pt-2 pb-4' : 'pt-3 pb-5'}`}>
+      <div className={`${padX} ${heroCompact ? 'pt-1 pb-2.5' : compact ? 'pt-2 pb-4' : 'pt-3 pb-5'}`}>
         {/* Acronym eyebrow */}
-        <p style={{ fontFamily: "'DM Mono', monospace", fontSize: compact ? '9px' : '10px', letterSpacing: '0.16em', color: '#B6871F', margin: '0 0 3px 0' }}>
+        <p style={{ fontFamily: "'DM Mono', monospace", fontSize: dense ? '9px' : '10px', letterSpacing: '0.16em', color: '#B6871F', margin: heroCompact ? '0 0 2px 0' : '0 0 3px 0' }}>
           {conf.acronym}
         </p>
 
         {/* Full name */}
         <h3
-          className={compact ? 'text-[14px] font-bold leading-snug mb-2' : 'text-[15px] font-bold leading-snug mb-2.5'}
+          className={heroCompact ? 'text-[13.5px] font-bold leading-snug mb-1.5' : compact ? 'text-[14px] font-bold leading-snug mb-2' : 'text-[15px] font-bold leading-snug mb-2.5'}
           style={{
             color: '#1C1410', fontFamily: "'Outfit', sans-serif",
-            display: '-webkit-box', WebkitLineClamp: compact ? 1 : 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
-            minHeight: compact ? undefined : '2.6em',
+            display: '-webkit-box', WebkitLineClamp: dense ? 1 : 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+            minHeight: dense ? undefined : '2.6em',
           }}
         >
           {conf.full_name}
@@ -202,7 +247,7 @@ export function ConferenceCard({
             {conf.city}, {conf.country}
           </span>
         </div>
-        <div className={`flex items-center gap-1.5 ${compact ? 'mb-3' : 'mb-4'}`}>
+        <div className={`flex items-center gap-1.5 ${heroCompact ? 'mb-1.5' : compact ? 'mb-3' : 'mb-4'}`}>
           <CalendarDays size={12} style={{ color: '#9A8A78', flexShrink: 0 }} />
           <span className="text-[11px]" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}>
             {formatDateRange(conf.start_date, conf.end_date)}
@@ -211,7 +256,7 @@ export function ConferenceCard({
 
         {/* Foot row */}
         <div
-          className={`flex items-center justify-between ${compact ? 'pt-2.5' : 'pt-3.5'}`}
+          className={`flex items-center justify-between ${heroCompact ? 'pt-1.5' : compact ? 'pt-2.5' : 'pt-3.5'}`}
           style={{ borderTop: '1px solid rgba(221,212,192,0.55)' }}
         >
           <div className="flex items-center gap-2">

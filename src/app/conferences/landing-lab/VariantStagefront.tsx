@@ -217,6 +217,10 @@ export default function VariantStagefront({
           to { opacity: 1; transform: translateY(0) scale(1) rotate(var(--sf-rot, 0deg)); }
         }
         .sf-chip { animation: sfChipIn 640ms cubic-bezier(0.22,1,0.36,1) both; }
+        /* Hero "up next" rail: horizontal snap on narrow screens, vertical stack ≥lg. */
+        .sf-hero-rail { scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+        .sf-hero-rail::-webkit-scrollbar { display: none; }
+        @media (min-width: 1024px) { .sf-hero-rail { scroll-snap-type: none; } }
         @media (prefers-reduced-motion: reduce) {
           .sf-rail { overflow-x: auto; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; }
           .sf-rail-track { animation: none !important; transform: none !important; }
@@ -227,8 +231,22 @@ export default function VariantStagefront({
       `}</style>
 
       <div className="relative z-10">
-        {/* ── Hero — headline left, "up next" rail right ─────────────────── */}
-        <section className="relative" style={{ minHeight: 'min(92vh, 880px)', display: 'flex', flexDirection: 'column' }}>
+        {/* ── Hero — headline left, "up next" rail right ─────────────────────
+            Sized to EXACTLY one viewport. 100svh keeps the whole hero inside the
+            small (chrome-visible) viewport on mobile so nothing is clipped; the
+            backdrop covers the full screen and the fade-to-cream lands on the
+            hero's bottom edge, where the cream job board begins. Everything —
+            headline, subcopy, CTAs and the three cards — fits with no scroll. */}
+        <section
+          className="relative"
+          style={{
+            height: '100svh',
+            minHeight: '620px',
+            maxHeight: '1080px',
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
           {/* Backdrop — sized to the hero zone exactly */}
           <div className="absolute inset-0 z-0" aria-hidden="true" style={{ overflow: 'hidden' }}>
             {headliner?.banner_url ? (
@@ -257,8 +275,8 @@ export default function VariantStagefront({
 
           <SiteNav overlay />
 
-          <div className="relative z-10 flex-1 flex flex-col lg:flex-row lg:items-end gap-12 lg:gap-14 px-6 md:px-14 pb-12 md:pb-16 pt-36 md:pt-40">
-            <div className="flex-1 flex flex-col justify-end" style={{ maxWidth: '760px' }}>
+          <div className="relative z-10 flex-1 min-h-0 flex flex-col lg:flex-row lg:items-center gap-6 lg:gap-14 px-6 md:px-14 pb-8 md:pb-9 pt-20 md:pt-24">
+            <div className="flex-1 flex flex-col justify-center" style={{ maxWidth: '760px' }}>
               <p style={{ fontFamily: MONO, fontSize: '11px', letterSpacing: '0.22em', color: PALE_GOLD, margin: '0 0 18px 0' }}>
                 {conferences.length > 0 ? `${conferences.length} CONFERENCE${conferences.length === 1 ? '' : 'S'} ON THE BOARD` : 'THE MUN CIRCUIT'}
               </p>
@@ -319,18 +337,28 @@ export default function VariantStagefront({
               </div>
             </div>
 
-            {/* Curated "up next" rail — three compact shared cards floating over the hero */}
+            {/* Curated "up next" rail — three hero-compact shared cards floating
+                over the photo, each with the gold glow + gavel-disc treatment.
+                On lg the trio stacks vertically beside the headline; on narrow
+                screens it becomes a single-row snap rail so all three fit inside
+                one viewport height (they cost one card tall, not three). */}
             {upcomingTrio.length > 0 && (
-              <aside className="w-full lg:w-[360px] flex-shrink-0 flex flex-col justify-end">
-                <p style={{ fontFamily: MONO, fontSize: '10.5px', letterSpacing: '0.24em', color: PALE_GOLD, margin: '0 0 12px 0', textShadow: '0 1px 8px rgba(0,0,0,0.45)' }}>
+              <aside className="w-full lg:w-[344px] flex-shrink-0 flex flex-col justify-center">
+                <p style={{ fontFamily: MONO, fontSize: '10.5px', letterSpacing: '0.24em', color: PALE_GOLD, margin: '0 0 10px 0', textShadow: '0 1px 8px rgba(0,0,0,0.45)' }}>
                   TAKING THE FLOOR NEXT
                 </p>
-                <div className="flex flex-col gap-4">
+                <div className="sf-hero-rail flex flex-row lg:flex-col gap-3 lg:gap-2.5 overflow-x-auto lg:overflow-visible -mx-6 px-6 lg:mx-0 lg:px-0 pb-2 lg:pb-0">
                   {upcomingTrio.map(c => (
-                    <div key={c.id} style={{ filter: 'drop-shadow(0 18px 38px rgba(0,0,0,0.42))' }}>
+                    <div
+                      key={c.id}
+                      className="w-[280px] lg:w-auto flex-shrink-0 lg:flex-shrink"
+                      style={{ filter: 'drop-shadow(0 14px 30px rgba(0,0,0,0.40))', scrollSnapAlign: 'start' }}
+                    >
                       <ConferenceCard
                         conf={c}
                         compact
+                        heroCompact
+                        goldGlow
                         hovered={hoveredId === c.id}
                         onHover={() => setHoveredId(c.id)}
                         onLeave={() => setHoveredId(null)}
