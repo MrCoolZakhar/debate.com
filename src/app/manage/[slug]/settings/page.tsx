@@ -61,6 +61,15 @@ type BooleanRoleKey = 'auto_accept' | 'pay_at_application' | 'must_pay_before_al
 
 const ROLES = ['delegate', 'chair', 'head-delegate', 'faculty-advisor', 'observer'] as const;
 
+// License-safe banner presets shipped in /public/banners (see its README.md).
+const BANNER_PRESETS = [
+  '/banners/preset-1.jpg',
+  '/banners/preset-2.jpg',
+  '/banners/preset-3.jpg',
+  '/banners/preset-4.jpg',
+  '/banners/preset-5.jpg',
+];
+
 function roleLabel(role: string): string {
   return role.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
@@ -542,6 +551,19 @@ export default function SettingsPage() {
     setBannerUploading(false);
   }
 
+  // Preset banner selection — same authed-client update path as the upload,
+  // just pointing banner_url at a bundled /banners/preset-N.jpg instead.
+  async function handleBannerPreset(path: string) {
+    if (!session || !conference || bannerUploading) return;
+    if (conference.banner_url === path) return;
+    setBannerUploading(true);
+    const supabase = getAuthedClient(session.access_token);
+    const { error } = await supabase.from('conferences').update({ banner_url: path }).eq('id', conference.id);
+    if (error) { alert('Could not set preset: ' + error.message); setBannerUploading(false); return; }
+    await refreshConference();
+    setBannerUploading(false);
+  }
+
   async function handleLogoUpload(file: File) {
     if (!session || !conference) return;
     if (file.size > 5 * 1024 * 1024) { alert('Logo must be under 5MB.'); return; }
@@ -861,6 +883,40 @@ export default function SettingsPage() {
                 style={{ display: 'none' }}
                 onChange={(e) => { const f = e.target.files?.[0]; if (f) handleBannerUpload(f); e.target.value = ''; }}
               />
+            </div>
+
+            {/* Preset picker — one click sets banner_url to a bundled photo */}
+            <div style={{ marginTop: 14 }}>
+              <p style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: '0.16em', color: '#9A8A78', margin: '0 0 8px 0' }}>
+                OR PICK A PRESET
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {BANNER_PRESETS.map(p => {
+                  const selected = conference.banner_url === p;
+                  return (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => handleBannerPreset(p)}
+                      disabled={bannerUploading}
+                      aria-label={'Use preset banner ' + p}
+                      style={{
+                        width: 84, height: 48, padding: 0, borderRadius: 10, overflow: 'hidden',
+                        cursor: bannerUploading ? 'wait' : 'pointer',
+                        border: selected ? '2px solid #B6871F' : '1.5px solid #DDD4C0',
+                        boxShadow: selected ? '0 0 0 3px rgba(238,217,138,0.55)' : 'none',
+                        opacity: bannerUploading && !selected ? 0.6 : 1,
+                        transition: 'border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease',
+                        backgroundColor: '#EDE7D8',
+                      }}
+                      onMouseEnter={(e) => { if (!selected) (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; }}
+                    >
+                      <img src={p} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
 

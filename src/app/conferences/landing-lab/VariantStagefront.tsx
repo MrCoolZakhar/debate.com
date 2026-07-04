@@ -338,15 +338,15 @@ export default function VariantStagefront({
             </div>
 
             {/* Curated "up next" rail — three hero-compact shared cards floating
-                over the photo, each with the gold glow + gavel-disc treatment.
-                On lg the trio stacks vertically beside the headline; on narrow
-                screens it becomes a single-row snap rail so all three fit inside
-                one viewport height (they cost one card tall, not three). */}
+                over the photo, each with the gold glow + gavel-disc treatment
+                and the gold APPLY pill in the foot row. On lg the trio aligns
+                to the TOP of the hero body (self-start pulls it up toward the
+                nav band) and sits pulled in from the right edge (lg:mr-10 /
+                xl:mr-20) so it reads center-right, nearer the headline column.
+                On narrow screens it becomes a single-row snap rail so all
+                three fit inside one viewport height. */}
             {upcomingTrio.length > 0 && (
-              <aside className="w-full lg:w-[344px] flex-shrink-0 flex flex-col justify-center">
-                <p style={{ fontFamily: MONO, fontSize: '10.5px', letterSpacing: '0.24em', color: PALE_GOLD, margin: '0 0 10px 0', textShadow: '0 1px 8px rgba(0,0,0,0.45)' }}>
-                  TAKING THE FLOOR NEXT
-                </p>
+              <aside className="w-full lg:w-[344px] flex-shrink-0 flex flex-col justify-center lg:justify-start lg:self-start lg:pt-3 lg:mr-10 xl:mr-20">
                 <div className="sf-hero-rail flex flex-row lg:flex-col gap-3 lg:gap-2.5 overflow-x-auto lg:overflow-visible -mx-6 px-6 lg:mx-0 lg:px-0 pb-2 lg:pb-0">
                   {upcomingTrio.map(c => (
                     <div
@@ -359,6 +359,7 @@ export default function VariantStagefront({
                         compact
                         heroCompact
                         goldGlow
+                        action="apply"
                         hovered={hoveredId === c.id}
                         onHover={() => setHoveredId(c.id)}
                         onLeave={() => setHoveredId(null)}
@@ -651,89 +652,95 @@ export default function VariantStagefront({
             />
           </div>
 
+          {/* Slim horizontal split: 2×2 highlight tiles LEFT, heading + copy +
+              gold CTA RIGHT (vertically centered) — total height ≈ the job
+              board band. On mobile the text+CTA column stacks ABOVE the grid
+              (flex-col-reverse keeps the pitch before the feature detail). */}
           <div className="relative z-10 px-6 md:px-14">
-            <p style={{ fontFamily: MONO, fontSize: '11px', letterSpacing: '0.24em', color: PALE_GOLD, margin: '0 0 8px 0' }}>
-              ORGANISER TOOLS
-            </p>
-            <h2
-              style={{
-                fontFamily: SANS,
-                fontWeight: 900,
-                fontSize: 'clamp(26px, 3vw, 38px)',
-                letterSpacing: '-0.015em',
-                color: CREAM,
-                margin: 0,
-              }}
-            >
-              Built for the people running the show.
-            </h2>
-            <p style={{ fontFamily: SANS, fontSize: '15px', lineHeight: 1.6, color: IVORY_70, margin: '12px 0 26px 0', maxWidth: '520px' }}>
-              Registration, allocation, documents and live committee sessions — one platform,
-              zero fees for organisers.
-            </p>
-
-            {/* 2×2 square block of highlight tiles — dense: big icons, tight copy */}
-            <div
-              className="grid grid-cols-2 gap-3 md:gap-4"
-              style={{ maxWidth: '500px', margin: '0 auto' }}
-            >
-              {[
-                { icon: Users, title: 'Smart Assignment', desc: 'Preferences + experience scores. One-click auto-assign.' },
-                { icon: FileText, title: 'Document Portal', desc: 'Study guides, position papers, feedback — all in one place.' },
-                { icon: CreditCard, title: 'Transparent Fees', desc: '5% delegate surcharge, waived with Gavelling Unlimited. You keep 100%.' },
-                { icon: Zap, title: 'Automated Comms', desc: 'Acceptance emails, allocation codes, reminders — sent automatically.' },
-              ].map(card => {
-                const Icon = card.icon;
-                return (
-                  <div
-                    key={card.title}
-                    className="rounded-2xl flex flex-col items-center text-center"
-                    style={{
-                      backgroundColor: 'rgba(12,26,19,0.55)',
-                      backdropFilter: 'blur(14px) saturate(1.15)',
-                      WebkitBackdropFilter: 'blur(14px) saturate(1.15)',
-                      border: '1px solid rgba(237,231,216,0.16)',
-                      aspectRatio: '1 / 1',
-                      padding: '16px 14px',
-                      justifyContent: 'center',
-                      gap: '2px',
-                    }}
-                  >
-                    <Icon size={48} color={PALE_GOLD} strokeWidth={1.6} />
-                    <h3 style={{ fontFamily: SANS, fontWeight: 700, fontSize: '13.5px', color: CREAM, margin: '12px 0 0 0' }}>
-                      {card.title}
-                    </h3>
-                    <p style={{ fontFamily: SANS, fontSize: '10.5px', lineHeight: 1.45, color: IVORY_70, margin: '5px 0 0 0' }}>
-                      {card.desc}
-                    </p>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Standalone gold CTA below the 2×2 block */}
-            <div className="flex justify-center" style={{ marginTop: '26px' }}>
-              <Link
-                href="/conferences/new"
-                className="inline-flex items-center gap-3"
-                style={{
-                  fontFamily: SANS,
-                  fontSize: '15px',
-                  fontWeight: 800,
-                  letterSpacing: '0.04em',
-                  color: FOREST,
-                  backgroundColor: PALE_GOLD,
-                  padding: '16px 32px',
-                  borderRadius: '9999px',
-                  textDecoration: 'none',
-                  boxShadow: '0 18px 40px rgba(0,0,0,0.4)',
-                  transition: 'transform 180ms ease, background-color 180ms ease',
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.backgroundColor = '#F3E3A1'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.backgroundColor = PALE_GOLD; }}
+            <div className="flex flex-col-reverse lg:flex-row lg:items-center gap-9 lg:gap-16">
+              {/* LEFT — 2×2 square tiles */}
+              <div
+                className="grid grid-cols-2 gap-3 md:gap-4 w-full max-w-[440px] mx-auto lg:mx-0 lg:w-[440px] flex-shrink-0"
               >
-                List your conference <ArrowRight size={18} strokeWidth={2.5} />
-              </Link>
+                {[
+                  { icon: Users, title: 'Smart Assignment', desc: 'Preferences + experience scores. One-click auto-assign.' },
+                  { icon: FileText, title: 'Document Portal', desc: 'Study guides, position papers, feedback — all in one place.' },
+                  { icon: CreditCard, title: 'Transparent Fees', desc: '5% delegate surcharge, waived with Gavelling Unlimited. You keep 100%.' },
+                  { icon: Zap, title: 'Automated Comms', desc: 'Acceptance emails, allocation codes, reminders — sent automatically.' },
+                ].map(card => {
+                  const Icon = card.icon;
+                  return (
+                    <div
+                      key={card.title}
+                      className="rounded-2xl flex flex-col items-center text-center"
+                      style={{
+                        backgroundColor: 'rgba(12,26,19,0.55)',
+                        backdropFilter: 'blur(14px) saturate(1.15)',
+                        WebkitBackdropFilter: 'blur(14px) saturate(1.15)',
+                        border: '1px solid rgba(237,231,216,0.16)',
+                        aspectRatio: '1 / 1',
+                        padding: '16px 14px',
+                        justifyContent: 'center',
+                        gap: '2px',
+                      }}
+                    >
+                      <Icon size={46} color={PALE_GOLD} strokeWidth={1.6} />
+                      <h3 style={{ fontFamily: SANS, fontWeight: 700, fontSize: '13.5px', color: CREAM, margin: '12px 0 0 0' }}>
+                        {card.title}
+                      </h3>
+                      <p style={{ fontFamily: SANS, fontSize: '10.5px', lineHeight: 1.45, color: IVORY_70, margin: '5px 0 0 0' }}>
+                        {card.desc}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* RIGHT — heading, copy, gold CTA — vertically centered */}
+              <div className="flex-1 flex flex-col justify-center">
+                <p style={{ fontFamily: MONO, fontSize: '11px', letterSpacing: '0.24em', color: PALE_GOLD, margin: '0 0 8px 0' }}>
+                  ORGANISER TOOLS
+                </p>
+                <h2
+                  style={{
+                    fontFamily: SANS,
+                    fontWeight: 900,
+                    fontSize: 'clamp(26px, 3vw, 38px)',
+                    letterSpacing: '-0.015em',
+                    color: CREAM,
+                    margin: 0,
+                  }}
+                >
+                  Built for the people running the show.
+                </h2>
+                <p style={{ fontFamily: SANS, fontSize: '15px', lineHeight: 1.6, color: IVORY_70, margin: '12px 0 0 0', maxWidth: '520px' }}>
+                  Registration, allocation, documents and live committee sessions — one platform,
+                  zero fees for organisers.
+                </p>
+                <Link
+                  href="/conferences/new"
+                  className="inline-flex items-center gap-3"
+                  style={{
+                    marginTop: '28px',
+                    alignSelf: 'flex-start',
+                    fontFamily: SANS,
+                    fontSize: '15px',
+                    fontWeight: 800,
+                    letterSpacing: '0.04em',
+                    color: FOREST,
+                    backgroundColor: PALE_GOLD,
+                    padding: '16px 32px',
+                    borderRadius: '9999px',
+                    textDecoration: 'none',
+                    boxShadow: '0 18px 40px rgba(0,0,0,0.4)',
+                    transition: 'transform 180ms ease, background-color 180ms ease',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.backgroundColor = '#F3E3A1'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.backgroundColor = PALE_GOLD; }}
+                >
+                  List your conference <ArrowRight size={18} strokeWidth={2.5} />
+                </Link>
+              </div>
             </div>
           </div>
         </section>

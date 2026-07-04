@@ -19,8 +19,16 @@
 // 56px banner band, tighter vertical rhythm, foot row hairline pulled in.
 // `goldGlow` adds a premium golden outer glow + an overlapping gavel disc that
 // straddles the card's top-right corner — hero-only, never on explore/near-you.
+// The disc renders in a positioned WRAPPER around the card (not inside the
+// article) so the article's `overflow-hidden` — required for the banner band's
+// rounded corners — can never clip it. The hover lift moves to the wrapper in
+// this branch so disc and card travel together.
+// `action` picks the foot-row affordance: 'view' (default — the plain VIEW →
+// text used by explore/near-you/calendar) or 'apply' (a gold pill APPLY button,
+// hero-only). Non-hero consumers stay byte-identical.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { useState } from 'react';
 import { ArrowRight, Users, CalendarDays, Gavel } from 'lucide-react';
 import { getFlagUrl, getCountryByName } from '@/lib/countries';
 
@@ -69,7 +77,7 @@ function formatDateRange(start: string, end: string): string {
 }
 
 export function ConferenceCard({
-  conf, hovered, onHover, onLeave, onClick, compact = false, heroCompact = false, goldGlow = false,
+  conf, hovered, onHover, onLeave, onClick, compact = false, heroCompact = false, goldGlow = false, action = 'view',
 }: {
   conf: CardConference;
   hovered: boolean;
@@ -82,6 +90,8 @@ export function ConferenceCard({
   heroCompact?: boolean;
   /** Premium gold outer glow + overlapping gavel disc. Hero-only. Default false. */
   goldGlow?: boolean;
+  /** Foot-row affordance: 'view' (plain VIEW → text, default) or 'apply' (gold pill button, hero-only). */
+  action?: 'view' | 'apply';
 }) {
   const countryObj = getCountryByName(conf.country);
   const flagUrl = countryObj ? getFlagUrl(countryObj.code) : null;
@@ -96,7 +106,7 @@ export function ConferenceCard({
     ? '0 0 0 1px rgba(238,217,138,0.55), 0 6px 20px rgba(182,135,31,0.30), 0 18px 46px rgba(238,217,138,0.24), 0 2px 8px rgba(27,56,40,0.10)'
     : '0 0 0 1px rgba(238,217,138,0.40), 0 4px 16px rgba(182,135,31,0.22), 0 12px 34px rgba(238,217,138,0.18)';
 
-  return (
+  const card = (
     <article
       onClick={onClick}
       onMouseEnter={onHover}
@@ -109,7 +119,9 @@ export function ConferenceCard({
           ? '1px solid rgba(238,217,138,0.7)'
           : hovered ? '1px solid rgba(27,56,40,0.55)' : '1px solid #DDD4C0',
         borderRadius: '20px',
-        transform: hovered ? 'translateY(-4px)' : 'translateY(0)',
+        // When goldGlow, the hover lift lives on the outer wrapper so the
+        // overlapping gavel disc travels with the card.
+        transform: goldGlow ? undefined : hovered ? 'translateY(-4px)' : 'translateY(0)',
         boxShadow: goldGlow
           ? glowShadow
           : hovered
@@ -118,29 +130,6 @@ export function ConferenceCard({
         transition: 'transform 260ms cubic-bezier(0.22,1,0.36,1), box-shadow 260ms ease, border-color 260ms ease',
       }}
     >
-      {/* Gold gavel disc — straddles the top-right corner, hero-only. */}
-      {goldGlow && (
-        <span
-          aria-hidden="true"
-          style={{
-            position: 'absolute',
-            top: '-11px',
-            right: '-11px',
-            zIndex: 3,
-            width: '34px',
-            height: '34px',
-            borderRadius: '9999px',
-            background: 'linear-gradient(145deg, #F3E3A1 0%, #EED98A 45%, #C99A2A 100%)',
-            border: '2px solid #FAF8F3',
-            boxShadow: '0 4px 12px rgba(182,135,31,0.45), 0 0 0 1px rgba(182,135,31,0.25)',
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Gavel size={16} strokeWidth={2.25} color="#4A3410" />
-        </span>
-      )}
       {/* Banner band */}
       <div className="relative" style={{ height: heroCompact ? '42px' : compact ? '72px' : '104px', overflow: 'hidden' }}>
         {conf.banner_url ? (
@@ -283,18 +272,95 @@ export function ConferenceCard({
               </span>
             )}
           </div>
-          <span
-            className="flex items-center gap-1 text-[11px] font-bold"
-            style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em' }}
-          >
-            VIEW
-            <ArrowRight
-              size={13}
-              style={{ transform: hovered ? 'translateX(3px)' : 'translateX(0)', transition: 'transform 220ms cubic-bezier(0.22,1,0.36,1)' }}
-            />
-          </span>
+          {action === 'apply' ? (
+            <ApplyButton />
+          ) : (
+            <span
+              className="flex items-center gap-1 text-[11px] font-bold"
+              style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em' }}
+            >
+              VIEW
+              <ArrowRight
+                size={13}
+                style={{ transform: hovered ? 'translateX(3px)' : 'translateX(0)', transition: 'transform 220ms cubic-bezier(0.22,1,0.36,1)' }}
+              />
+            </span>
+          )}
         </div>
       </div>
     </article>
+  );
+
+  if (!goldGlow) return card;
+
+  // goldGlow: positioned wrapper carries the hover lift and hosts the gavel
+  // disc as a SIBLING of the article, above it in z-order — the article keeps
+  // its own overflow-hidden (for the banner band's rounded corners) but can no
+  // longer slice the disc.
+  return (
+    <div
+      style={{
+        position: 'relative',
+        transform: hovered ? 'translateY(-4px)' : 'translateY(0)',
+        transition: 'transform 260ms cubic-bezier(0.22,1,0.36,1)',
+      }}
+    >
+      {card}
+      {/* Gold gavel disc — straddles the top-right corner, fully visible. */}
+      <span
+        aria-hidden="true"
+        style={{
+          position: 'absolute',
+          top: '-11px',
+          right: '-11px',
+          zIndex: 3,
+          width: '34px',
+          height: '34px',
+          borderRadius: '9999px',
+          background: 'linear-gradient(145deg, #F3E3A1 0%, #EED98A 45%, #C99A2A 100%)',
+          border: '2px solid #FAF8F3',
+          boxShadow: '0 4px 12px rgba(182,135,31,0.45), 0 0 0 1px rgba(182,135,31,0.25)',
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          pointerEvents: 'none',
+        }}
+      >
+        <Gavel size={16} strokeWidth={2.25} color="#4A3410" />
+      </span>
+    </div>
+  );
+}
+
+/** Gold pill APPLY button for the hero cards' foot row. The whole card is the
+ *  click target (routing to /conferences/[slug]); this button just bubbles. */
+function ApplyButton() {
+  const [hover, setHover] = useState(false);
+  return (
+    <button
+      type="button"
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      className="inline-flex items-center gap-1.5 cursor-pointer"
+      style={{
+        fontFamily: "'Outfit', sans-serif",
+        fontWeight: 800,
+        fontSize: '11px',
+        letterSpacing: '0.08em',
+        color: '#1B3828',
+        backgroundColor: hover ? '#F3E3A1' : '#EED98A',
+        border: 'none',
+        padding: '6px 14px',
+        borderRadius: '9999px',
+        transform: hover ? 'translateY(-1.5px)' : 'translateY(0)',
+        boxShadow: hover
+          ? '0 6px 14px rgba(182,135,31,0.4), 0 0 0 1px rgba(182,135,31,0.3)'
+          : '0 3px 8px rgba(182,135,31,0.28), 0 0 0 1px rgba(182,135,31,0.22)',
+        transition: 'background-color 180ms ease, transform 180ms ease, box-shadow 180ms ease',
+      }}
+    >
+      APPLY
+      <ArrowRight size={12} strokeWidth={2.75} />
+    </button>
   );
 }

@@ -8,6 +8,15 @@ import { useAuth } from '@/components/AuthProvider';
 import { createClient } from '@supabase/supabase-js';
 import { generateSlug } from '@/lib/utils';
 
+// License-safe banner presets shipped in /public/banners (see its README.md).
+const BANNER_PRESETS = [
+  '/banners/preset-1.jpg',
+  '/banners/preset-2.jpg',
+  '/banners/preset-3.jpg',
+  '/banners/preset-4.jpg',
+  '/banners/preset-5.jpg',
+];
+
 // ── Input / label helpers ──────────────────────────────────────────────────
 
 const inputStyle: React.CSSProperties = {
@@ -861,6 +870,39 @@ function Step2({
               style={{ display: 'none' }}
               onChange={(e) => { const f = e.target.files?.[0]; if (f) onBannerUpload(f); }}
             />
+          </div>
+
+          {/* Preset picker — sets the local bannerUrl; saved with the conference on create */}
+          <div style={{ marginTop: 12 }}>
+            <p style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: '0.16em', color: '#9A8A78', margin: '0 0 8px 0' }}>
+              OR PICK A PRESET
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {BANNER_PRESETS.map(p => {
+                const selected = bannerUrl === p;
+                return (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => setBannerUrl(p)}
+                    disabled={bannerUploading}
+                    aria-label={'Use preset banner ' + p}
+                    style={{
+                      width: 84, height: 48, padding: 0, borderRadius: 10, overflow: 'hidden',
+                      cursor: bannerUploading ? 'wait' : 'pointer',
+                      border: selected ? '2px solid #B6871F' : '1.5px solid #DDD4C0',
+                      boxShadow: selected ? '0 0 0 3px rgba(238,217,138,0.55)' : 'none',
+                      transition: 'border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease',
+                      backgroundColor: '#EDE7D8',
+                    }}
+                    onMouseEnter={(e) => { if (!selected) (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; }}
+                  >
+                    <img src={p} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </Field>
 
