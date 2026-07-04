@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import Link from 'next/link';
-import { Star, X, Megaphone, ClipboardCheck, FileText, BellRing, TrendingUp, Stamp, ArrowRight } from 'lucide-react';
+import { Star, X, Megaphone, ClipboardCheck, FileText, BellRing, TrendingUp, Stamp, ArrowRight, Camera } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { UN_COUNTRIES, getCountryByName, getFlagUrl } from '@/lib/countries';
@@ -55,6 +55,12 @@ export default function ProfilePage() {
   const [dataLoading, setDataLoading] = useState(true);
   const [saving, setSaving]           = useState(false);
   const [saved, setSaved]             = useState(false);
+
+  // Avatar
+  const [avatarUrl, setAvatarUrl]         = useState<string | null>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarError, setAvatarError]     = useState('');
+  const avatarInputRef = useRef<HTMLInputElement | null>(null);
 
   // Nationality autocomplete
   const [natOpen, setNatOpen] = useState(false);
@@ -250,6 +256,33 @@ export default function ProfilePage() {
     setTimeout(() => setSaved(false), 2000);
   }
 
+  async function handleAvatarUpload(file: File) {
+    if (!user || !session) return;
+    setAvatarError('');
+    if (!file.type.startsWith('image/')) { setAvatarError('Please choose an image file.'); return; }
+    if (file.size > 5 * 1024 * 1024) { setAvatarError('Image must be under 5MB.'); return; }
+    setAvatarUploading(true);
+    try {
+      const supabase = getAuthedClient(session.access_token);
+      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+      const path = `avatars/${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from('conference-assets')
+        .upload(path, file, { contentType: file.type, upsert: true });
+      if (upErr) { setAvatarError('Upload failed. Please try again.'); setAvatarUploading(false); return; }
+      const { data: urlData } = supabase.storage.from('conference-assets').getPublicUrl(path);
+      const publicUrl = urlData.publicUrl;
+      await supabase.from('profiles').update({ avatar_url: publicUrl }).eq('id', user.id);
+      setAvatarUrl(publicUrl);
+      setAvatarUploading(false);
+      // Reload so the sidebar avatar (driven by AuthProvider's profile) syncs.
+      setTimeout(() => window.location.reload(), 400);
+    } catch {
+      setAvatarError('Upload failed. Please try again.');
+      setAvatarUploading(false);
+    }
+  }
+
   function handleToggle(field: keyof NotifFields, value: boolean) {
     setNotifications((prev) => ({ ...prev, [field]: value }));
     if (!session) return;
@@ -289,6 +322,8 @@ export default function ProfilePage() {
       </div>
     );
   }
+
+  const displayAvatar = avatarUrl ?? profile?.avatar_url ?? null;
 
   return (
     <div
@@ -502,6 +537,54 @@ export default function ProfilePage() {
       <GlassCard className="mb-6">
         <Eyebrow className="mb-5">Basic Information</Eyebrow>
 
+        {/* Avatar */}
+        <div className="flex items-center gap-4 mb-6">
+          <div className="relative flex-shrink-0">
+            {displayAvatar ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={displayAvatar}
+                alt="Profile"
+                className="rounded-full object-cover"
+                style={{ width: '72px', height: '72px', border: '2px solid #D8CDB6' }}
+              />
+            ) : (
+              <div
+                className="rounded-full flex items-center justify-center font-black text-2xl"
+                style={{ width: '72px', height: '72px', backgroundColor: 'rgba(27,56,40,0.1)', border: '2px solid #D8CDB6', color: '#1B3828', fontFamily: OUTFIT }}
+              >
+                {(displayName?.[0] ?? user?.email?.[0] ?? '?').toUpperCase()}
+              </div>
+            )}
+            {avatarUploading && (
+              <div className="absolute inset-0 rounded-full flex items-center justify-center" style={{ backgroundColor: 'rgba(27,56,40,0.45)' }}>
+                <div className="w-5 h-5 rounded-full border-2 animate-spin" style={{ borderColor: '#EED98A', borderTopColor: 'transparent' }} />
+              </div>
+            )}
+          </div>
+          <div>
+            <button
+              onClick={() => avatarInputRef.current?.click()}
+              disabled={avatarUploading}
+              className="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-[13px] font-bold focus:outline-none"
+              style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, border: 'none', cursor: avatarUploading ? 'default' : 'pointer' }}
+            >
+              <Camera size={14} strokeWidth={2.2} />
+              {displayAvatar ? 'Change photo' : 'Upload photo'}
+            </button>
+            <p className="text-[11px] mt-1.5" style={{ color: avatarError ? '#8B2020' : '#9A8A78', fontFamily: OUTFIT }}>
+              {avatarError || 'JPG or PNG, up to 5MB.'}
+            </p>
+            <input
+              ref={avatarInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleAvatarUpload(f); e.currentTarget.value = ''; }}
+            />
+          </div>
+        </div>
+
         <div className="space-y-5">
           {/* Display Name */}
           <div>
@@ -627,7 +710,7 @@ export default function ProfilePage() {
                 {(() => {
                   const age = ageAt(dateOfBirth);
                   return age !== null && age >= 0 && age <= 120 ? (
-                    <Pill tone="gold" dot size="sm">Age {age}</Pill>
+                    <Pill tone="gold" size="sm">Age {age}</Pill>
                   ) : null;
                 })()}
               </div>

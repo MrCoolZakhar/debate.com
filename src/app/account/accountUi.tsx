@@ -5,7 +5,7 @@
 // DM Mono eyebrows, Outfit for UI text, lucide icons only.
 
 import { useState } from 'react';
-import { Medal } from 'lucide-react';
+import { Medal, Award } from 'lucide-react';
 
 export const OUTFIT = "'Outfit', sans-serif";
 export const MONO = "'DM Mono', monospace";
@@ -38,14 +38,15 @@ export const LEVEL_TONE: Record<string, PillTone> = {
 };
 
 /**
- * A small, human-feeling tag. Outfit, normal case, soft warm fill, optional
- * leading dot or icon. Deliberately NOT monospace/uppercase/letter-spaced —
- * that generic pill is the thing we are replacing.
+ * A small, human-feeling tag. Editorial, not a generic status pill: Outfit,
+ * normal case, a quiet warm fill, thin border, gentle rounded-corners (not a
+ * full "candy" capsule) and NO default coloured dot — that dot + capsule combo
+ * is the AI-dashboard tell we are moving away from. Pass an `icon` for meaning.
  */
 export function Pill({
   children,
   tone = 'neutral',
-  dot = true,
+  dot = false,
   icon,
   size = 'md',
   title,
@@ -62,40 +63,83 @@ export function Pill({
   style?: React.CSSProperties;
 }) {
   const t = PILL_TONES[tone] ?? PILL_TONES.neutral;
-  const pad = size === 'sm' ? '2px 9px 2px 8px' : '3px 11px 3px 10px';
+  const pad = size === 'sm' ? '2px 9px' : '3px 11px';
   const fs = size === 'sm' ? '11px' : '12px';
   return (
     <span
       title={title}
-      className={`inline-flex items-center gap-1.5 rounded-full ${className}`}
+      className={`inline-flex items-center gap-1.5 ${className}`}
       style={{
         padding: pad,
+        borderRadius: '7px',
         backgroundColor: t.bg,
         border: `1px solid ${t.border}`,
         color: t.text,
         fontFamily: OUTFIT,
         fontSize: fs,
         fontWeight: 600,
-        lineHeight: 1.25,
+        lineHeight: 1.3,
         letterSpacing: '0.005em',
         ...style,
       }}
     >
-      {icon
-        ? <span className="inline-flex items-center" style={{ marginLeft: '-1px' }}>{icon}</span>
-        : (dot && (
-            <span
-              aria-hidden
-              style={{
-                width: size === 'sm' ? '5px' : '6px',
-                height: size === 'sm' ? '5px' : '6px',
-                borderRadius: '9999px',
-                backgroundColor: t.dot,
-                flexShrink: 0,
-              }}
-            />
-          ))}
+      {icon && <span className="inline-flex items-center" style={{ marginLeft: '-1px' }}>{icon}</span>}
+      {!icon && dot && (
+        <span aria-hidden style={{ width: '5px', height: '5px', borderRadius: '9999px', backgroundColor: t.dot, flexShrink: 0 }} />
+      )}
       <span style={{ display: 'inline-block' }}>{children}</span>
+    </span>
+  );
+}
+
+// ── LevelBadge ───────────────────────────────────────────────────────────────
+// A crafted rank marker for the MUN experience level — replaces the generic
+// coloured "• Beginner" pill. Shows a small four-bar rank meter that fills to
+// match the tier (beginner=1 … expert=4), so it reads as an insignia, not a
+// status chip.
+
+const LEVEL_RANK: Record<string, number> = { beginner: 1, intermediate: 2, advanced: 3, expert: 4 };
+const LEVEL_ACCENT: Record<string, string> = {
+  beginner:     '#4A7896',
+  intermediate: '#2A5A3C',
+  advanced:     '#B8844A',
+  expert:       '#B6871F',
+};
+
+export function LevelBadge({ level, size = 'md' }: { level: string; size?: 'sm' | 'md' }) {
+  const key = (level ?? '').toLowerCase();
+  const rank = LEVEL_RANK[key] ?? 1;
+  const accent = LEVEL_ACCENT[key] ?? '#9A8A78';
+  const label = key ? key.charAt(0).toUpperCase() + key.slice(1) : 'Unranked';
+  const barH = size === 'sm' ? [7, 9, 11, 13] : [8, 11, 14, 17];
+  const fs = size === 'sm' ? '12px' : '13.5px';
+  return (
+    <span
+      className="inline-flex items-center gap-2"
+      style={{
+        padding: size === 'sm' ? '3px 10px 3px 9px' : '4px 12px 4px 10px',
+        borderRadius: '9px',
+        backgroundColor: '#FAF8F3',
+        border: '1px solid rgba(221,212,192,0.95)',
+        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.6)',
+      }}
+    >
+      <span className="inline-flex items-end" style={{ gap: '2px', height: `${barH[3]}px` }} aria-hidden>
+        {barH.map((h, i) => (
+          <span
+            key={i}
+            style={{
+              width: size === 'sm' ? '3px' : '3.5px',
+              height: `${h}px`,
+              borderRadius: '1.5px',
+              backgroundColor: i < rank ? accent : 'rgba(154,138,120,0.3)',
+            }}
+          />
+        ))}
+      </span>
+      <span style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: fs, color: '#1C1410', letterSpacing: '0.01em' }}>
+        {label}
+      </span>
     </span>
   );
 }
@@ -236,6 +280,26 @@ export function awardSlug(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 }
 
+// ── Award tiers ──────────────────────────────────────────────────────────────
+// Gold   → Best Delegate, Diplomacy Award (the top honours)
+// Silver → Outstanding / Most Outstanding Delegate, Honourable Mention
+// Bronze → Verbal Commendation, Best Position Paper, and anything else.
+
+export type AwardTier = 'gold' | 'silver' | 'bronze';
+
+const AWARD_TIER_STYLE: Record<AwardTier, { bg: string; border: string; text: string; from: string; to: string; medal: string }> = {
+  gold:   { bg: 'rgba(238,217,138,0.24)', border: 'rgba(182,135,31,0.45)',  text: '#7A5A20', from: 'rgba(238,217,138,0.7)',  to: 'rgba(182,135,31,0.4)',  medal: '#7A5A20' },
+  silver: { bg: 'rgba(176,184,196,0.24)', border: 'rgba(120,132,150,0.5)',  text: '#4C5563', from: 'rgba(214,220,228,0.85)', to: 'rgba(140,152,168,0.5)', medal: '#4C5563' },
+  bronze: { bg: 'rgba(190,140,100,0.22)', border: 'rgba(150,96,56,0.5)',    text: '#7A4B2B', from: 'rgba(206,150,104,0.8)',  to: 'rgba(150,96,56,0.45)',  medal: '#7A4B2B' },
+};
+
+export function awardTier(name: string): AwardTier {
+  const n = name.toLowerCase();
+  if (/best delegate|diplomacy/.test(n)) return 'gold';
+  if (/outstanding|honou?rable mention/.test(n)) return 'silver';
+  return 'bronze'; // verbal commendation, best position paper, anything else
+}
+
 // Some award labels changed over time but their artwork asset did not. Older CV
 // rows may still store the previous label — map both to the same file so the
 // artwork keeps resolving. The owner ships /awards/diplomacy.png for both.
@@ -254,6 +318,7 @@ export function awardArtworkPath(name: string): string {
  */
 export function AwardArtwork({ name, size = 20 }: { name: string; size?: number }) {
   const [failed, setFailed] = useState(false);
+  const tier = AWARD_TIER_STYLE[awardTier(name)];
 
   if (failed) {
     return (
@@ -262,11 +327,13 @@ export function AwardArtwork({ name, size = 20 }: { name: string; size?: number 
         style={{
           width: `${size}px`,
           height: `${size}px`,
-          background: 'linear-gradient(135deg, rgba(238,217,138,0.65), rgba(182,135,31,0.35))',
-          border: '1px solid rgba(182,135,31,0.45)',
+          background: `linear-gradient(135deg, ${tier.from}, ${tier.to})`,
+          border: `1px solid ${tier.border}`,
         }}
       >
-        <Medal size={Math.round(size * 0.55)} strokeWidth={2.2} style={{ color: '#7A5A20' }} />
+        {awardTier(name) === 'bronze' && /position paper/i.test(name)
+          ? <Award size={Math.round(size * 0.55)} strokeWidth={2.2} style={{ color: tier.medal }} />
+          : <Medal size={Math.round(size * 0.55)} strokeWidth={2.2} style={{ color: tier.medal }} />}
       </span>
     );
   }
@@ -283,15 +350,16 @@ export function AwardArtwork({ name, size = 20 }: { name: string; size?: number 
   );
 }
 
-/** Vibrant translucent award chip with 1px border and artwork thumbnail. */
+/** Award chip, tier-themed (gold / silver / bronze) with artwork thumbnail. */
 export function AwardChip({ name }: { name: string }) {
+  const tier = AWARD_TIER_STYLE[awardTier(name)];
   return (
     <span
       className="inline-flex items-center gap-1.5 rounded-full pl-1 pr-2.5 py-[3px]"
       style={{
-        backgroundColor: 'rgba(238,217,138,0.22)',
-        border: '1px solid rgba(182,135,31,0.4)',
-        color: '#7A5A20',
+        backgroundColor: tier.bg,
+        border: `1px solid ${tier.border}`,
+        color: tier.text,
         fontFamily: OUTFIT,
         fontSize: '11px',
         fontWeight: 600,

@@ -100,14 +100,14 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
             {/* Sidebar */}
             <div style={{ width: '220px', flexShrink: 0 }}>
               <div
-                className="rounded-[20px] p-5 sticky"
+                className="rounded-[22px] p-5 sticky"
                 style={{
                   top: '88px',
-                  backgroundColor: 'rgba(250,248,243,0.82)',
-                  backdropFilter: 'blur(14px) saturate(1.4)',
-                  WebkitBackdropFilter: 'blur(14px) saturate(1.4)',
-                  border: '1px solid rgba(221,212,192,0.9)',
-                  boxShadow: '0 1px 3px rgba(27,56,40,0.05), 0 12px 32px rgba(27,56,40,0.06)',
+                  background: 'linear-gradient(180deg, rgba(252,250,246,0.95) 0%, rgba(245,241,232,0.9) 100%)',
+                  backdropFilter: 'blur(16px) saturate(1.5)',
+                  WebkitBackdropFilter: 'blur(16px) saturate(1.5)',
+                  border: '1px solid #D8CDB6',
+                  boxShadow: '0 2px 4px rgba(27,56,40,0.05), 0 18px 44px rgba(27,56,40,0.11), inset 0 1px 0 rgba(255,255,255,0.7)',
                 }}
               >
                 {/* Avatar */}
