@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { Dialog as RadixDialog } from 'radix-ui';
 import { Dialog, DialogPortal, DialogOverlay, DialogTitle } from '@/components/ui/dialog';
@@ -27,7 +27,6 @@ export default function PreRegisterModal({ open, onClose }: { open: boolean; onC
   const [invalid, setInvalid]     = useState(false);
   const [apiError, setApiError]   = useState<string | null>(null);
   const [spotsClaimed, setSpotsClaimed] = useState(123);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchCount = async () => {
     try {
@@ -40,9 +39,9 @@ export default function PreRegisterModal({ open, onClose }: { open: boolean; onC
   };
 
   useEffect(() => {
+    // Fetch the spots count once when the modal opens. (Previously polled every 15s, which
+    // multiplied across every open modal and helped overwhelm the Supabase REST origin.)
     fetchCount();
-    pollRef.current = setInterval(fetchCount, 15000);
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
