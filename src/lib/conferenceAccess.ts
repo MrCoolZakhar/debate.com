@@ -17,6 +17,7 @@ export type ConferenceAccess =
   | { kind: 'denied'; committee: ConferenceCommitteeInfo | null }
   | { kind: 'delegate'; country: { code: string; name: string }; committee: ConferenceCommitteeInfo }
   | { kind: 'chair'; committee: ConferenceCommitteeInfo }
+  | { kind: 'advisor'; committee: ConferenceCommitteeInfo }
   | { kind: 'organizer'; committee: ConferenceCommitteeInfo };
 
 // Privacy-agnostic detection: committees.session_origin is anon-readable, so this works
@@ -88,6 +89,21 @@ export async function verifyConferenceAccess(
       .maybeSingle();
     if (org) {
       return { kind: 'organizer', committee };
+    }
+  }
+
+  // Accepted faculty-advisors / observers get conference-wide advisor-view access.
+  if (committee) {
+    const { data: adv } = await sb
+      .from('applications')
+      .select('role')
+      .eq('conference_id', committee.conference_id)
+      .eq('user_id', userId)
+      .in('role', ['faculty-advisor', 'observer'])
+      .in('status', ['accepted', 'assigned'])
+      .maybeSingle();
+    if (adv) {
+      return { kind: 'advisor', committee };
     }
   }
 

@@ -104,8 +104,12 @@ function JoinPageInner() {
         if (mode !== 'chair') setMode('chair');
         setAllocatedCountry(null);
         setAllocationError('');
+      } else if (access.kind === 'advisor' || access.kind === 'organizer') {
+        if (mode !== 'advisor') setMode('advisor');
+        setAllocatedCountry(null);
+        setAllocationError('');
       } else {
-        // organizer / denied / not associated for a delegate or chair join
+        // denied / not associated
         setAllocatedCountry(null);
         setAllocationError('__not_associated__');
       }
@@ -233,6 +237,11 @@ function JoinPageInner() {
       if (mode === 'chair') {
         const chairDisplayName = (profile?.display_name ?? user.email ?? 'Chair').trim();
         router.push(`/chair/${foundCommittee!.code}?chairName=${encodeURIComponent(chairDisplayName)}`);
+        return;
+      }
+      // Conference advisor / observer / organizer: conference-wide advisor view.
+      if (mode === 'advisor') {
+        router.push(`/advisor/${foundCommittee!.code}`);
         return;
       }
       if (!allocatedCountry) {
@@ -577,7 +586,7 @@ function JoinPageInner() {
             disabled={
               isConferenceSession
                 ? (!foundCommittee || !user || allocationLoading || allocationError !== '' ||
-                   (mode !== 'chair' && !allocatedCountry))
+                   (mode === 'delegate' && !allocatedCountry))
                 : (
                   mode === 'delegate'
                     ? (!foundCommittee || (getSettings(foundCommittee?.code ?? '').requireDelegationName && !country))

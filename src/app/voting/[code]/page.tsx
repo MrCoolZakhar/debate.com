@@ -8,6 +8,8 @@ import { getCountryByName, getFlagUrl } from '@/lib/countries';
 import { Emoji } from '@/components/Emoji';
 import { getCommitteeByCode, setPhase as setPhaseInDB, setDelegateStatus as setDelegateStatusInDB, updateDocumentStatus as updateDocumentStatusInDB } from '@/lib/committeeService';
 import { useSettingsStore } from '@/lib/settingsStore';
+import { useAuth } from '@/components/AuthProvider';
+import { detectConferenceSession, verifyConferenceAccess } from '@/lib/conferenceAccess';
 import { SettingsPanel } from '@/components/SettingsPanel';
 
 function abbreviateCommitteeName(name: string): string {
@@ -153,9 +155,30 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
 
   // ── ALL hooks must be called before any early returns ──────────────────────
   const getSettings = useSettingsStore((s) => s.getSettings);
+  const { user, session, loading: authLoading } = useAuth();
+  const [accessState, setAccessState] = useState<'checking' | 'allowed' | 'denied' | 'signin'>('checking');
   const [committee, setCommittee] = useState<Committee | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
+
+  // Conference-session access guard (#8). Standalone sessions stay anonymous; a conference
+  // session requires a signed-in verified member of THIS committee's conference.
+  useEffect(() => {
+    let cancelled = false;
+    async function guard() {
+      if (authLoading) return;
+      const isConf = await detectConferenceSession(code);
+      if (cancelled) return;
+      if (!isConf) { setAccessState('allowed'); return; }
+      if (!session || !user) { setAccessState('signin'); return; }
+      const access = await verifyConferenceAccess(code, session.access_token, user.id);
+      if (cancelled) return;
+      setAccessState(access.kind === 'denied' ? 'denied' : 'allowed');
+    }
+    setAccessState('checking');
+    guard();
+    return () => { cancelled = true; };
+  }, [code, authLoading, session?.access_token, user?.id]);
   const [votes, setVotes] = useState<DelegateVote[]>([]);
   const [phase, setPhase] = useState<VotingPhase>('voting');
   const [currentVoterIndex, setCurrentVoterIndex] = useState(0);
@@ -213,10 +236,34 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     setRightsRunning(false);
   }, [rightsIndex, rightsTimerLimit]);
 
-  if (loading) {
+  if (loading || authLoading || accessState === 'checking') {
     return (
       <div className="min-h-screen bg-[#F6F1E9] flex items-center justify-center">
         <img src="/loading.gif" alt="Loading..." className="w-24 h-24 object-contain" />
+      </div>
+    );
+  }
+
+  if (accessState === 'signin') {
+    return (
+      <div className="min-h-screen bg-[#EDE7D8] flex items-center justify-center px-6">
+        <div className="text-center max-w-sm">
+          <h1 className="text-2xl font-black mb-2" style={{ color: '#1B3828' }}>Sign in to view this session</h1>
+          <p className="mb-6" style={{ color: '#6A5A4A' }}>This is a conference session. Sign in to verify your access.</p>
+          <Link href={'/auth/signin?next=' + encodeURIComponent('/join?code=' + code)} className="inline-block font-black text-white px-6 py-3 rounded-xl transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828' }}>SIGN IN</Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (accessState === 'denied') {
+    return (
+      <div className="min-h-screen bg-[#EDE7D8] flex items-center justify-center px-6">
+        <div className="text-center max-w-sm">
+          <h1 className="text-2xl font-black mb-2" style={{ color: '#1B3828' }}>Not associated with your account</h1>
+          <p className="mb-6" style={{ color: '#6A5A4A' }}>This session is not linked to your account. Please try again, or contact your conference organisers.</p>
+          <Link href="/" className="inline-block font-black text-white px-6 py-3 rounded-xl transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828' }}>BACK TO HOME</Link>
+        </div>
       </div>
     );
   }
