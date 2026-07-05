@@ -173,7 +173,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       if (!session || !user) { setAccessState('signin'); return; }
       const access = await verifyConferenceAccess(code, session.access_token, user.id);
       if (cancelled) return;
-      setAccessState(access.kind === 'denied' ? 'denied' : 'allowed');
+      setAccessState(access.kind === 'chair' ? 'allowed' : 'denied');
     }
     setAccessState('checking');
     guard();
@@ -260,8 +260,8 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     return (
       <div className="min-h-screen bg-[#EDE7D8] flex items-center justify-center px-6">
         <div className="text-center max-w-sm">
-          <h1 className="text-2xl font-black mb-2" style={{ color: '#1B3828' }}>Not associated with your account</h1>
-          <p className="mb-6" style={{ color: '#6A5A4A' }}>This session is not linked to your account. Please try again, or contact your conference organisers.</p>
+          <h1 className="text-2xl font-black mb-2" style={{ color: '#1B3828' }}>You don&apos;t chair this committee</h1>
+          <p className="mb-6" style={{ color: '#6A5A4A' }}>The voting screen is part of the chair session. Only the committee&apos;s chair can open it.</p>
           <Link href="/" className="inline-block font-black text-white px-6 py-3 rounded-xl transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828' }}>BACK TO HOME</Link>
         </div>
       </div>
