@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { BadgeCheck, ImagePlus, Pencil, Trash2, X, Check, Plus, TrendingUp, Award, Gavel, Briefcase, Sparkles, MessageSquareText } from 'lucide-react';
+import { BadgeCheck, ImagePlus, Pencil, Trash2, X, Check, Plus, TrendingUp, User, Gavel, Briefcase, Sparkles, MessageSquareText } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { supabase as anonClient } from '@/lib/supabase';
@@ -34,22 +34,26 @@ interface CVEntry {
 }
 
 // ── Entry-type config ────────────────────────────────────────────────────────
-// Each experience type has its own accent, corner-badge glyph and card border,
-// so the timeline reads by role at a glance (delegate=parchment, chair=gold,
-// secretariat=plum/slate, other=muted).
+// Each experience type has its own accent, corner-badge glyph, card border and
+// role chip, so the timeline reads by role at a glance (delegate=forest,
+// chair=gold, secretariat=plum, other=muted parchment).
 
 const ENTRY_TYPES: {
   key: EntryType;
   label: string;
   Icon: typeof Gavel;
-  accent: string;   // badge / icon colour
-  border: string;   // card left/full border tint
-  badgeBg: string;  // corner disc background
+  accent: string;     // icon / accent colour
+  border: string;     // card border tint
+  discBg: string;     // corner disc — fully opaque tier fill (like landing gavel discs)
+  discGlyph: string;  // glyph colour on the disc
+  chipBg: string;     // solid role chip fill
+  chipText: string;   // role chip text colour
+  chipBorder: string; // role chip border
 }[] = [
-  { key: 'delegate',    label: 'Delegate',    Icon: Award,             accent: '#B6871F', border: 'rgba(221,212,192,0.95)', badgeBg: 'rgba(250,248,243,0.96)' },
-  { key: 'chair',       label: 'Chair',       Icon: Gavel,             accent: '#B6871F', border: 'rgba(182,135,31,0.55)',  badgeBg: 'rgba(238,217,138,0.28)' },
-  { key: 'secretariat', label: 'Secretariat', Icon: Briefcase,         accent: '#8A6BA0', border: 'rgba(108,74,120,0.5)',   badgeBg: 'rgba(108,74,120,0.14)' },
-  { key: 'other',       label: 'Other',       Icon: Sparkles,          accent: '#6E5F4E', border: 'rgba(154,138,120,0.5)',  badgeBg: 'rgba(154,138,120,0.16)' },
+  { key: 'delegate',    label: 'Delegate',    Icon: User,      accent: '#2A5A3C', border: '#C8BEA8',               discBg: 'linear-gradient(145deg, #2F6242 0%, #1B3828 100%)',              discGlyph: '#EED98A', chipBg: '#1B3828', chipText: '#EED98A', chipBorder: 'rgba(238,217,138,0.4)' },
+  { key: 'chair',       label: 'Chair',       Icon: Gavel,     accent: '#B6871F', border: 'rgba(182,135,31,0.6)',  discBg: 'linear-gradient(145deg, #F3E3A1 0%, #EED98A 45%, #C99A2A 100%)', discGlyph: '#4A3410', chipBg: '#EED98A', chipText: '#5A4210', chipBorder: 'rgba(182,135,31,0.55)' },
+  { key: 'secretariat', label: 'Secretariat', Icon: Briefcase, accent: '#8A6BA0', border: 'rgba(108,74,120,0.55)', discBg: 'linear-gradient(145deg, #9E7FB4 0%, #6C4A78 100%)',              discGlyph: '#FAF8F3', chipBg: '#8A6BA0', chipText: '#FAF8F3', chipBorder: 'rgba(108,74,120,0.55)' },
+  { key: 'other',       label: 'Other',       Icon: Sparkles,  accent: '#6E5F4E', border: 'rgba(154,138,120,0.55)', discBg: 'linear-gradient(145deg, #A89880 0%, #7C6C58 100%)',             discGlyph: '#FAF8F3', chipBg: '#DDD4C0', chipText: '#5C5140', chipBorder: 'rgba(154,138,120,0.5)' },
 ];
 
 const ENTRY_TYPE_MAP: Record<EntryType, typeof ENTRY_TYPES[number]> =
@@ -1030,8 +1034,11 @@ function TimelineEntry({
 }) {
   const isVerified = entry.source === 'gavelling_verified';
   const type = ENTRY_TYPE_MAP[entry.entry_type] ?? ENTRY_TYPE_MAP.delegate;
-  const dateStr = new Date(entry.event_date ? `${entry.event_date}T00:00:00` : entry.created_at)
-    .toLocaleDateString('en', { month: 'long', year: 'numeric' });
+  // Date lives on the timeline rail (under the logo), not inside the card.
+  // Undated entries show an em-dash rather than leaking created_at.
+  const railDate = entry.event_date
+    ? new Date(`${entry.event_date}T00:00:00`).toLocaleDateString('en', { month: 'short', year: 'numeric' }).toUpperCase()
+    : '—';
 
   const allocCountry = entry.allocation ? getCountryByName(entry.allocation) : null;
   const allocFlag = allocCountry ? getFlagUrl(allocCountry.code) : null;
@@ -1043,44 +1050,60 @@ function TimelineEntry({
 
   return (
     <div className="relative flex gap-4 md:gap-5">
-      {/* Timeline rail: big conference logo + connecting line */}
+      {/* Timeline rail: big conference logo + date + connecting line */}
       <div className="relative flex flex-col items-center flex-shrink-0" style={{ width: '64px' }}>
         <ConferenceLogo entry={entry} size={64} />
+        <span
+          className="mt-1.5 text-center whitespace-nowrap"
+          style={{ fontFamily: MONO, fontSize: '9.5px', letterSpacing: '0.06em', color: '#8A7A66', lineHeight: 1.3 }}
+        >
+          {railDate}
+        </span>
         {!isLast && (
           <div
             aria-hidden
             className="flex-1 mt-2"
-            style={{ width: '2px', minHeight: '24px', background: 'linear-gradient(180deg, rgba(221,212,192,0.9), rgba(221,212,192,0.35))', borderRadius: '9999px' }}
+            style={{ width: '2px', minHeight: '24px', background: 'linear-gradient(180deg, rgba(200,190,168,0.95), rgba(200,190,168,0.35))', borderRadius: '9999px' }}
           />
         )}
       </div>
 
       {/* Content card */}
       <div className="flex-1 min-w-0 pb-6">
-        <GlassCard className="!p-5 md:!p-6 relative" style={{ border: `1px solid ${type.border}` }}>
-          {/* Corner type badge (top-right disc, like a featured/sponsored badge) */}
+        <GlassCard className="!p-5 md:!p-6 relative" style={{ border: `1.5px solid ${type.border}` }}>
+          {/* Corner type badge — fully opaque tier disc, like the landing's gavel discs */}
           <span
             className="absolute flex items-center justify-center"
             title={type.label}
             style={{
-              top: '-11px', right: '14px', width: '30px', height: '30px', borderRadius: '9999px',
-              backgroundColor: type.badgeBg,
-              border: `1.5px solid ${type.accent}`,
-              boxShadow: '0 3px 10px rgba(27,56,40,0.14)',
+              top: '-12px', right: '14px', width: '32px', height: '32px', borderRadius: '9999px',
+              background: type.discBg,
+              border: '2px solid #FAF8F3',
+              boxShadow: `0 4px 12px ${type.accent}55, 0 0 0 1px ${type.accent}40`,
             }}
           >
-            <type.Icon size={15} strokeWidth={2.1} style={{ color: type.accent }} />
+            <type.Icon size={15} strokeWidth={2.2} style={{ color: type.discGlyph }} />
           </span>
 
-          {/* Month + year + role-type label */}
-          <div className="flex items-center justify-between gap-3 mb-1 pr-8">
-            <span className="inline-flex items-center gap-2">
-              <span style={{ fontFamily: MONO, fontSize: '10px', letterSpacing: '0.14em', color: '#B6871F', textTransform: 'uppercase' }}>
-                {dateStr}
-              </span>
-              <span style={{ fontFamily: MONO, fontSize: '9px', letterSpacing: '0.16em', color: type.accent, textTransform: 'uppercase' }}>
-                · {type.label}
-              </span>
+          {/* Role chip + verification */}
+          <div className="flex items-center justify-between gap-3 mb-2 pr-9">
+            <span
+              className="inline-flex items-center gap-1.5 flex-shrink-0"
+              style={{
+                padding: '3px 10px',
+                borderRadius: '7px',
+                backgroundColor: type.chipBg,
+                border: `1px solid ${type.chipBorder}`,
+                color: type.chipText,
+                fontFamily: OUTFIT,
+                fontSize: '10.5px',
+                fontWeight: 800,
+                letterSpacing: '0.09em',
+                textTransform: 'uppercase',
+              }}
+            >
+              <type.Icon size={11} strokeWidth={2.4} />
+              {type.label}
             </span>
             <span className="flex-shrink-0">
               <Pill
@@ -1106,7 +1129,7 @@ function TimelineEntry({
           {entry.entry_type === 'delegate' && (
             <>
               <div className="flex items-center gap-1.5 flex-wrap mt-2" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                <Award size={14} strokeWidth={2} style={{ color: '#B6871F', flexShrink: 0 }} />
+                <User size={14} strokeWidth={2.2} style={{ color: type.accent, flexShrink: 0 }} />
                 <span className="inline-flex items-center gap-1.5 text-[14px]" style={{ fontWeight: 600 }}>
                   {allocFlag && (
                     /* eslint-disable-next-line @next/next/no-img-element */
@@ -1345,7 +1368,7 @@ export default function CVPage() {
       {/* Rank-up info panel — thresholds live behind the 'i' (ExperienceInfo). */}
       <div
         className="rounded-2xl px-5 py-4 mb-8"
-        style={{ backgroundColor: 'rgba(238,217,138,0.14)', border: '1px solid rgba(182,135,31,0.28)' }}
+        style={{ backgroundColor: 'rgba(238,217,138,0.14)', border: '1.5px solid rgba(182,135,31,0.35)' }}
       >
         <div className="flex items-center justify-between gap-2 mb-3">
           <div className="flex items-center gap-2">
@@ -1354,7 +1377,7 @@ export default function CVPage() {
               Your experience level
             </p>
           </div>
-          <ExperienceInfo tone="light" align="right" />
+          <ExperienceInfo tone="light" align="right" currentLevel={exp.level} />
         </div>
 
         {/* Progress toward next rank */}

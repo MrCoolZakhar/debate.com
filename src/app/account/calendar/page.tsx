@@ -132,8 +132,8 @@ function ConferenceCard({ entry }: { entry: CalendarEntry }) {
         backgroundColor: 'rgba(250,248,243,0.86)',
         backdropFilter: 'blur(14px) saturate(1.4)',
         WebkitBackdropFilter: 'blur(14px) saturate(1.4)',
-        border: '1px solid rgba(221,212,192,0.9)',
-        boxShadow: '0 1px 3px rgba(27,56,40,0.05), 0 12px 32px rgba(27,56,40,0.06)',
+        border: '1.5px solid #D8CDB6',
+        boxShadow: '0 1px 3px rgba(27,56,40,0.07), 0 12px 32px rgba(27,56,40,0.08)',
       }}
       onMouseEnter={(e) => {
         e.currentTarget.style.borderColor = 'rgba(27,56,40,0.34)';
@@ -141,8 +141,8 @@ function ConferenceCard({ entry }: { entry: CalendarEntry }) {
         e.currentTarget.style.transform = 'translateY(-2px)';
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.borderColor = 'rgba(221,212,192,0.9)';
-        e.currentTarget.style.boxShadow = '0 1px 3px rgba(27,56,40,0.05), 0 12px 32px rgba(27,56,40,0.06)';
+        e.currentTarget.style.borderColor = '#D8CDB6';
+        e.currentTarget.style.boxShadow = '0 1px 3px rgba(27,56,40,0.07), 0 12px 32px rgba(27,56,40,0.08)';
         e.currentTarget.style.transform = 'translateY(0)';
       }}
     >
@@ -315,7 +315,7 @@ function SkeletonCard() {
   return (
     <div
       className="rounded-[22px] overflow-hidden"
-      style={{ backgroundColor: 'rgba(250,248,243,0.7)', border: '1px solid rgba(221,212,192,0.7)' }}
+      style={{ backgroundColor: 'rgba(250,248,243,0.7)', border: '1.5px solid rgba(216,205,182,0.8)' }}
     >
       <div style={{ height: '76px', background: 'linear-gradient(135deg, rgba(27,56,40,0.14), rgba(42,90,60,0.1))' }} />
       <div className="px-5 pb-5" style={{ marginTop: '-30px' }}>
@@ -541,7 +541,7 @@ export default function CalendarPage() {
             backgroundColor: 'rgba(250,248,243,0.82)',
             backdropFilter: 'blur(14px) saturate(1.4)',
             WebkitBackdropFilter: 'blur(14px) saturate(1.4)',
-            border: '1.5px dashed rgba(221,212,192,1)',
+            border: '1.5px dashed #C8BEA8',
           }}
         >
           <span

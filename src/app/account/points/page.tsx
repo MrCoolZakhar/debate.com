@@ -82,7 +82,7 @@ export default function PointsPage() {
       {/* Balance hero card */}
       <div
         className="relative rounded-[20px] p-8 mb-6 text-center overflow-hidden"
-        style={{ backgroundColor: '#1B3828', boxShadow: '0 16px 44px rgba(27,56,40,0.28)' }}
+        style={{ backgroundColor: '#1B3828', border: '1.5px solid rgba(238,217,138,0.4)', boxShadow: '0 16px 44px rgba(27,56,40,0.3)' }}
       >
         {/* Grain overlay */}
         <div
