@@ -378,16 +378,6 @@ export default function CommitteesPage() {
 
   useEffect(() => { loadCommittees(); }, [loadCommittees]);
 
-  async function togglePPSubmissions(committeeId: string, current: boolean) {
-    if (!session) return;
-    const supabase = getAuthedClient(session.access_token);
-    await supabase
-      .from('conference_committees')
-      .update({ pp_submissions_enabled: !current })
-      .eq('id', committeeId);
-    await loadCommittees();
-  }
-
   async function generateSessionCode(committee: CommitteeRow) {
     if (!session) return;
     if (committee.session_id) return; // already linked to a real session
@@ -524,29 +514,6 @@ export default function CommitteesPage() {
                         PP due {new Date(c.position_paper_deadline).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                       </span>
                     )}
-                  </div>
-
-                  {/* PP Submissions toggle */}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, paddingTop: 10, borderTop: '1px solid #EDE7D8' }}>
-                    <div>
-                      <p style={{ fontSize: 12, fontWeight: 700, color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Position Paper Submissions</p>
-                      <p style={{ fontSize: 11, color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Allow delegates to submit position papers</p>
-                    </div>
-                    <button
-                      onClick={() => togglePPSubmissions(c.id, c.pp_submissions_enabled)}
-                      className="focus:outline-none flex-shrink-0"
-                      style={{
-                        width: 40, height: 22, borderRadius: 9999, border: 'none', cursor: 'pointer',
-                        backgroundColor: c.pp_submissions_enabled ? '#1B3828' : '#DDD4C0',
-                        position: 'relative', transition: 'background-color 0.2s', marginLeft: 12,
-                      }}
-                    >
-                      <span style={{
-                        position: 'absolute', top: 3, left: c.pp_submissions_enabled ? 21 : 3,
-                        width: 16, height: 16, borderRadius: '50%', backgroundColor: '#FAF8F3',
-                        transition: 'left 0.2s',
-                      }} />
-                    </button>
                   </div>
 
                   {/* Actions */}
