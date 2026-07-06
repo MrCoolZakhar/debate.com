@@ -6,6 +6,7 @@ import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
 import { getFlagUrl, getCountryByName } from '@/lib/countries';
+import { LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -314,7 +315,21 @@ function DelegateDetail({ app, history }: { app: AcceptedApp; history: UserHisto
 
       {/* Stats */}
       <div className="flex gap-2 mb-2.5">
-        {stat('EXPERIENCE', exp ? exp.toUpperCase() : 'N/A')}
+        {stat('EXPERIENCE', exp ? (
+          <span className="inline-flex items-center gap-1.5">
+            <span
+              className="inline-flex items-center justify-center flex-shrink-0"
+              style={{
+                width: 18, height: 18, borderRadius: 9999,
+                background: `linear-gradient(150deg, ${LEVEL_ACCENT[exp.toLowerCase()] ?? '#9A8A78'}22, ${LEVEL_ACCENT[exp.toLowerCase()] ?? '#9A8A78'}12)`,
+                border: `1px solid ${LEVEL_ACCENT[exp.toLowerCase()] ?? '#9A8A78'}55`,
+              }}
+            >
+              <LevelInsignia level={exp} size={12} />
+            </span>
+            {exp.toUpperCase()}
+          </span>
+        ) : 'N/A')}
         {stat('CONFERENCES', history?.conferences ?? 0)}
         {stat('AWARDS', history?.awards ?? 0)}
       </div>
