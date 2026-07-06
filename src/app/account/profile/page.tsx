@@ -8,7 +8,7 @@ import { getAuthedClient } from '@/lib/supabase-auth';
 import { UN_COUNTRIES, getCountryByName, getFlagUrl } from '@/lib/countries';
 import { deriveExperienceLevel, experienceProgress } from '@/lib/munExperience';
 import { ageAt } from '@/lib/age';
-import { Eyebrow, GlassCard, PillToggle, Pill, OUTFIT, MONO } from '../accountUi';
+import { Eyebrow, GlassCard, PillToggle, Pill, ExperienceInfo, OUTFIT, MONO } from '../accountUi';
 
 interface ReviewableConference {
   id: string;
@@ -368,9 +368,15 @@ export default function ProfilePage() {
           />
           <div className="relative flex items-center justify-between gap-4 flex-wrap">
             <div>
-              <p style={{ fontFamily: MONO, fontSize: '9px', letterSpacing: '0.26em', color: '#EED98A', margin: 0, textTransform: 'uppercase' }}>
-                Your MUN Rank
-              </p>
+              <span
+                className="inline-flex items-center gap-2"
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+              >
+                <p style={{ fontFamily: MONO, fontSize: '9px', letterSpacing: '0.26em', color: '#EED98A', margin: 0, textTransform: 'uppercase' }}>
+                  Your MUN Rank
+                </p>
+                <ExperienceInfo tone="gold" align="left" />
+              </span>
               <p
                 className="font-black"
                 style={{ fontFamily: OUTFIT, fontSize: '38px', lineHeight: 1.05, color: '#FAF8F3', letterSpacing: '-0.02em', margin: '4px 0 0 0' }}

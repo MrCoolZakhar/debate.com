@@ -4,8 +4,9 @@
 // Design language: ivory bg, glass cream cards, parchment borders, tiny gold
 // DM Mono eyebrows, Outfit for UI text, lucide icons only.
 
-import { useState } from 'react';
-import { Medal, Award } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { Medal, Award, Info, X } from 'lucide-react';
+import { EXPERIENCE_BANDS } from '@/lib/munExperience';
 
 export const OUTFIT = "'Outfit', sans-serif";
 export const MONO = "'DM Mono', monospace";
@@ -93,53 +94,226 @@ export function Pill({
 }
 
 // ── LevelBadge ───────────────────────────────────────────────────────────────
-// A crafted rank marker for the MUN experience level — replaces the generic
-// coloured "• Beginner" pill. Shows a small four-bar rank meter that fills to
-// match the tier (beginner=1 … expert=4), so it reads as an insignia, not a
-// status chip.
+// A crafted rank marker for the MUN experience level. Each tier carries its own
+// hand-drawn insignia that escalates in prestige (beginner = a single humble
+// sprout/chevron; expert = a crowned star), so the level reads at a glance and
+// not as a generic coloured dot. Baked into this shared badge so every consumer
+// (CV stat tile + entry, profile rank banner, assignment panel) inherits it.
 
-const LEVEL_RANK: Record<string, number> = { beginner: 1, intermediate: 2, advanced: 3, expert: 4 };
-const LEVEL_ACCENT: Record<string, string> = {
+export const LEVEL_RANK: Record<string, number> = { beginner: 1, intermediate: 2, advanced: 3, expert: 4 };
+export const LEVEL_ACCENT: Record<string, string> = {
   beginner:     '#4A7896',
   intermediate: '#2A5A3C',
   advanced:     '#B8844A',
   expert:       '#B6871F',
 };
 
+/**
+ * The insignia glyph for a tier, drawn on a 24×24 canvas. Escalating shapes:
+ *   beginner     → a single chevron (one stripe — the recruit)
+ *   intermediate → double chevron   (a corporal's rank)
+ *   advanced     → a laurel wreath  (earned distinction)
+ *   expert       → a crowned star   (the top honour)
+ * `accent` colours the stroke/fill; the glyph is meant to sit on a light disc.
+ */
+export function LevelInsignia({ level, size = 16 }: { level: string; size?: number }) {
+  const key = (level ?? '').toLowerCase();
+  const accent = LEVEL_ACCENT[key] ?? '#9A8A78';
+  const common = { width: size, height: size, viewBox: '0 0 24 24', 'aria-hidden': true } as const;
+
+  if (key === 'expert') {
+    // Crowned star — the prestige tier.
+    return (
+      <svg {...common}>
+        <path d="M12 3.2l2.35 4.76 5.25.76-3.8 3.7.9 5.23L12 15.94l-4.7 2.47.9-5.23-3.8-3.7 5.25-.76z"
+          fill={accent} stroke={accent} strokeWidth="0.8" strokeLinejoin="round" />
+        <path d="M6.6 20.4h10.8" stroke={accent} strokeWidth="1.7" strokeLinecap="round" />
+        <circle cx="12" cy="11.4" r="1.7" fill="#FAF8F3" />
+      </svg>
+    );
+  }
+  if (key === 'advanced') {
+    // Laurel wreath around a pip — earned distinction.
+    return (
+      <svg {...common}>
+        <path d="M8.5 5c-3 2.4-3.6 8.2-1 12.4" fill="none" stroke={accent} strokeWidth="1.6" strokeLinecap="round" />
+        <path d="M15.5 5c3 2.4 3.6 8.2 1 12.4" fill="none" stroke={accent} strokeWidth="1.6" strokeLinecap="round" />
+        <path d="M7.8 8.4l-1.9-.4M7.4 11.6l-2 .1M7.8 14.7l-1.8.6" stroke={accent} strokeWidth="1.4" strokeLinecap="round" />
+        <path d="M16.2 8.4l1.9-.4M16.6 11.6l2 .1M16.2 14.7l1.8.6" stroke={accent} strokeWidth="1.4" strokeLinecap="round" />
+        <path d="M9.6 18.6c1.5 1 3.3 1 4.8 0" fill="none" stroke={accent} strokeWidth="1.6" strokeLinecap="round" />
+        <circle cx="12" cy="11" r="2.4" fill={accent} />
+      </svg>
+    );
+  }
+  if (key === 'intermediate') {
+    // Double chevron — a corporal's stripes.
+    return (
+      <svg {...common}>
+        <path d="M5 12l7-6 7 6" fill="none" stroke={accent} strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M5 17l7-6 7 6" fill="none" stroke={accent} strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+  // beginner — a single chevron / sprout.
+  return (
+    <svg {...common}>
+      <path d="M5 15l7-7 7 7" fill="none" stroke={accent} strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 export function LevelBadge({ level, size = 'md' }: { level: string; size?: 'sm' | 'md' }) {
   const key = (level ?? '').toLowerCase();
-  const rank = LEVEL_RANK[key] ?? 1;
   const accent = LEVEL_ACCENT[key] ?? '#9A8A78';
   const label = key ? key.charAt(0).toUpperCase() + key.slice(1) : 'Unranked';
-  const barH = size === 'sm' ? [7, 9, 11, 13] : [8, 11, 14, 17];
+  const disc = size === 'sm' ? 20 : 24;
+  const glyph = size === 'sm' ? 14 : 17;
   const fs = size === 'sm' ? '12px' : '13.5px';
   return (
     <span
-      className="inline-flex items-center gap-2"
+      className="inline-flex items-center"
       style={{
-        padding: size === 'sm' ? '3px 10px 3px 9px' : '4px 12px 4px 10px',
+        gap: size === 'sm' ? '6px' : '7px',
+        padding: size === 'sm' ? '3px 11px 3px 4px' : '4px 13px 4px 5px',
         borderRadius: '9px',
         backgroundColor: '#FAF8F3',
         border: '1px solid rgba(221,212,192,0.95)',
         boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.6)',
       }}
     >
-      <span className="inline-flex items-end" style={{ gap: '2px', height: `${barH[3]}px` }} aria-hidden>
-        {barH.map((h, i) => (
-          <span
-            key={i}
-            style={{
-              width: size === 'sm' ? '3px' : '3.5px',
-              height: `${h}px`,
-              borderRadius: '1.5px',
-              backgroundColor: i < rank ? accent : 'rgba(154,138,120,0.3)',
-            }}
-          />
-        ))}
+      <span
+        className="inline-flex items-center justify-center flex-shrink-0"
+        style={{
+          width: `${disc}px`,
+          height: `${disc}px`,
+          borderRadius: '9999px',
+          background: `linear-gradient(150deg, ${accent}22, ${accent}12)`,
+          border: `1px solid ${accent}55`,
+        }}
+      >
+        <LevelInsignia level={level} size={glyph} />
       </span>
       <span style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: fs, color: '#1C1410', letterSpacing: '0.01em' }}>
         {label}
       </span>
+    </span>
+  );
+}
+
+// ── ExperienceInfo ('i' explainer) ─────────────────────────────────────────
+// A small circular info button that reveals how the MUN experience bands work.
+// Bands + thresholds are pulled straight from munExperience.ts (single source),
+// so the copy never drifts. Used on the profile rank area and the CV page.
+
+/** Human range string for a band, e.g. "1", "2–4", "9+". */
+function bandRange(i: number): string {
+  const band = EXPERIENCE_BANDS[i];
+  const next = EXPERIENCE_BANDS[i + 1];
+  if (!next) return `${band.min}+`;
+  const lo = Math.max(1, band.min); // "0-1" reads better as the first conference count
+  const hi = next.min - 1;
+  return lo === hi ? `${lo}` : `${lo}–${hi}`;
+}
+
+export function ExperienceInfo({
+  tone = 'gold',
+  align = 'right',
+}: {
+  tone?: 'gold' | 'light';
+  align?: 'left' | 'right';
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLSpanElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDoc(e: MouseEvent) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') setOpen(false); }
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onDoc); document.removeEventListener('keydown', onKey); };
+  }, [open]);
+
+  const onGold = tone === 'gold';
+  const btnColor = onGold ? '#EED98A' : '#B6871F';
+  const btnBorder = onGold ? 'rgba(238,217,138,0.5)' : 'rgba(182,135,31,0.4)';
+  const btnBg = onGold ? 'rgba(238,217,138,0.14)' : 'rgba(182,135,31,0.1)';
+
+  return (
+    <span ref={wrapRef} className="relative inline-flex">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-label="How experience levels work"
+        aria-expanded={open}
+        className="inline-flex items-center justify-center flex-shrink-0 focus:outline-none transition-colors"
+        style={{
+          width: '20px', height: '20px', borderRadius: '9999px',
+          border: `1px solid ${btnBorder}`, backgroundColor: btnBg,
+          color: btnColor, cursor: 'pointer',
+        }}
+      >
+        <Info size={12} strokeWidth={2.4} />
+      </button>
+
+      {open && (
+        <div
+          role="dialog"
+          className="absolute z-40 mt-2 rounded-2xl p-4"
+          style={{
+            top: '100%',
+            [align]: 0,
+            width: '272px',
+            backgroundColor: 'rgba(250,248,243,0.98)',
+            backdropFilter: 'blur(14px)',
+            WebkitBackdropFilter: 'blur(14px)',
+            border: '1px solid #DDD4C0',
+            boxShadow: '0 18px 46px rgba(27,56,40,0.18)',
+          }}
+        >
+          <div className="flex items-start justify-between gap-2 mb-2.5">
+            <p className="font-bold text-[13px]" style={{ color: '#1C1410', fontFamily: OUTFIT, margin: 0 }}>
+              How experience levels work
+            </p>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              aria-label="Close"
+              className="flex items-center justify-center flex-shrink-0 focus:outline-none"
+              style={{ width: '20px', height: '20px', borderRadius: '9999px', border: 'none', background: 'none', color: '#9A8A78', cursor: 'pointer' }}
+            >
+              <X size={13} strokeWidth={2.4} />
+            </button>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            {EXPERIENCE_BANDS.map((band, i) => (
+              <div key={band.level} className="flex items-center gap-2.5">
+                <span
+                  className="inline-flex items-center justify-center flex-shrink-0"
+                  style={{
+                    width: '22px', height: '22px', borderRadius: '9999px',
+                    background: `linear-gradient(150deg, ${LEVEL_ACCENT[band.level]}22, ${LEVEL_ACCENT[band.level]}12)`,
+                    border: `1px solid ${LEVEL_ACCENT[band.level]}55`,
+                  }}
+                >
+                  <LevelInsignia level={band.level} size={14} />
+                </span>
+                <span className="flex-1" style={{ fontFamily: OUTFIT, fontSize: '13px', fontWeight: 600, color: '#1C1410' }}>
+                  {band.label}
+                </span>
+                <span style={{ fontFamily: MONO, fontSize: '11px', color: '#B6871F', letterSpacing: '0.04em' }}>
+                  {bandRange(i)}
+                </span>
+              </div>
+            ))}
+          </div>
+          <p className="text-[11.5px] mt-3 pt-2.5" style={{ color: '#9A8A78', fontFamily: OUTFIT, margin: 0, borderTop: '1px solid rgba(221,212,192,0.6)', lineHeight: 1.55 }}>
+            Your level is derived from the number of conferences on your MUN CV.
+          </p>
+        </div>
+      )}
     </span>
   );
 }

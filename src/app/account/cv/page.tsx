@@ -1,19 +1,23 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { BadgeCheck, ImagePlus, Pencil, Trash2, X, Check, Plus, TrendingUp, Award } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { BadgeCheck, ImagePlus, Pencil, Trash2, X, Check, Plus, TrendingUp, Award, Gavel, Briefcase, Sparkles, MessageSquareText } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { supabase as anonClient } from '@/lib/supabase';
-import { getCountryByName, getFlagUrl } from '@/lib/countries';
-import { experienceProgress, syncExperienceLevel, EXPERIENCE_BANDS } from '@/lib/munExperience';
+import { UN_COUNTRIES, getCountryByName, getFlagUrl } from '@/lib/countries';
+import { experienceProgress, syncExperienceLevel } from '@/lib/munExperience';
+import { COMMITTEE_PRESETS } from '@/components/CommitteeNameInput';
 import {
   Eyebrow, GlassCard, Pill, LevelBadge, LEVEL_TONE, AwardChip, AwardArtwork, AWARD_LIST,
-  getCommitteeLogo, monogramFor, OUTFIT, MONO,
+  ExperienceInfo, getCommitteeLogo, monogramFor, OUTFIT, MONO,
 } from '../accountUi';
+
+type EntryType = 'delegate' | 'chair' | 'secretariat' | 'other';
 
 interface CVEntry {
   id: string;
+  entry_type: EntryType;
   conference_name: string;
   committee: string;
   allocation: string;
@@ -21,12 +25,38 @@ interface CVEntry {
   award: string;
   awards: string[];
   photos: string[];
+  description: string | null;
   logo_url: string | null;
   conference_id: string | null;
   event_date: string | null;
   source: 'gavelling_verified' | 'manual';
   created_at: string;
 }
+
+// ── Entry-type config ────────────────────────────────────────────────────────
+// Each experience type has its own accent, corner-badge glyph and card border,
+// so the timeline reads by role at a glance (delegate=parchment, chair=gold,
+// secretariat=plum/slate, other=muted).
+
+const ENTRY_TYPES: {
+  key: EntryType;
+  label: string;
+  Icon: typeof Gavel;
+  accent: string;   // badge / icon colour
+  border: string;   // card left/full border tint
+  badgeBg: string;  // corner disc background
+}[] = [
+  { key: 'delegate',    label: 'Delegate',    Icon: Award,             accent: '#B6871F', border: 'rgba(221,212,192,0.95)', badgeBg: 'rgba(250,248,243,0.96)' },
+  { key: 'chair',       label: 'Chair',       Icon: Gavel,             accent: '#B6871F', border: 'rgba(182,135,31,0.55)',  badgeBg: 'rgba(238,217,138,0.28)' },
+  { key: 'secretariat', label: 'Secretariat', Icon: Briefcase,         accent: '#8A6BA0', border: 'rgba(108,74,120,0.5)',   badgeBg: 'rgba(108,74,120,0.14)' },
+  { key: 'other',       label: 'Other',       Icon: Sparkles,          accent: '#6E5F4E', border: 'rgba(154,138,120,0.5)',  badgeBg: 'rgba(154,138,120,0.16)' },
+];
+
+const ENTRY_TYPE_MAP: Record<EntryType, typeof ENTRY_TYPES[number]> =
+  Object.fromEntries(ENTRY_TYPES.map((t) => [t.key, t])) as Record<EntryType, typeof ENTRY_TYPES[number]>;
+
+// Committee suggestions shared with the conference setup flow.
+const COMMITTEE_SUGGESTIONS = COMMITTEE_PRESETS.map((p) => ({ name: p.name, acronym: p.acronym, logoPath: p.logoPath }));
 
 interface ConferenceSuggestion {
   kind: 'gavelling' | 'community';
@@ -118,6 +148,227 @@ function CommitteeLogo({ committee, size = 18 }: { committee: string; size?: num
   );
 }
 
+// ── Labelled field wrapper ───────────────────────────────────────────────────
+
+function Field({ label, optional, children }: { label: string; optional?: boolean; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="block text-[13px] font-semibold mb-1.5" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+        {label}
+        {optional && <span className="ml-2 font-normal" style={{ color: '#9A8A78', fontSize: '11px' }}>optional</span>}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+// ── Committee autocomplete (shares COMMITTEE_PRESETS with setup) ──────────────
+
+function CommitteeAutocomplete({
+  value, onChange, disabled, placeholder = 'e.g. UN Security Council',
+}: { value: string; onChange: (v: string) => void; disabled?: boolean; placeholder?: string }) {
+  const [open, setOpen] = useState(false);
+  const matches = useMemo(() => {
+    const q = value.trim().toLowerCase();
+    if (!q) return [];
+    return COMMITTEE_SUGGESTIONS.filter((p) => p.name.toLowerCase().includes(q) || p.acronym.toLowerCase().includes(q)).slice(0, 6);
+  }, [value]);
+
+  return (
+    <div className="relative">
+      <input
+        type="text"
+        required
+        disabled={disabled}
+        value={value}
+        onChange={(e) => { onChange(e.target.value); setOpen(true); }}
+        placeholder={placeholder}
+        className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none"
+        style={{ ...inputStyle, opacity: disabled ? 0.55 : 1, cursor: disabled ? 'not-allowed' : 'text' }}
+        onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; setOpen(true); }}
+        onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; setTimeout(() => setOpen(false), 150); }}
+      />
+      {open && matches.length > 0 && (
+        <div
+          className="absolute z-30 left-0 right-0 mt-1.5 rounded-xl overflow-hidden"
+          style={{ backgroundColor: 'rgba(250,248,243,0.98)', border: '1px solid #DDD4C0', boxShadow: '0 16px 40px rgba(27,56,40,0.16)' }}
+        >
+          {matches.map((p) => (
+            <button
+              key={p.name}
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => { onChange(p.name); setOpen(false); }}
+              className="w-full flex items-center gap-3 px-3.5 py-2.5 text-left focus:outline-none"
+              style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={p.logoPath} alt="" width={20} height={20} className="rounded-sm shrink-0 object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden'; }} />
+              <span className="flex-1 min-w-0 truncate text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT, fontWeight: 500 }}>{p.name}</span>
+              <span style={{ color: '#1B3828', fontFamily: MONO, fontSize: '10px', fontWeight: 700 }}>{p.acronym}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Country / allocation autocomplete (UN_COUNTRIES) ──────────────────────────
+
+function AllocationAutocomplete({
+  value, onChange, disabled,
+}: { value: string; onChange: (v: string) => void; disabled?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const allocCountry = getCountryByName(value);
+  const allocFlag = allocCountry ? getFlagUrl(allocCountry.code) : null;
+  const matches = useMemo(() => {
+    const q = value.trim().toLowerCase();
+    if (!q) return [];
+    return UN_COUNTRIES.filter((c) => c.name.toLowerCase().includes(q)).slice(0, 8);
+  }, [value]);
+
+  return (
+    <div className="relative">
+      {allocFlag && (
+        /* eslint-disable-next-line @next/next/no-img-element */
+        <img
+          src={allocFlag}
+          alt={value}
+          className="absolute pointer-events-none z-10"
+          style={{ left: '14px', top: '22px', transform: 'translateY(-50%)', width: '22px', height: '15px', objectFit: 'cover', borderRadius: '2.5px', boxShadow: '0 1px 3px rgba(27,56,40,0.25)' }}
+        />
+      )}
+      <input
+        type="text"
+        required
+        disabled={disabled}
+        value={value}
+        onChange={(e) => { onChange(e.target.value); setOpen(true); }}
+        placeholder="e.g. China, EU Observer"
+        className="w-full rounded-xl py-3 text-sm focus:outline-none"
+        style={{ ...inputStyle, paddingLeft: allocFlag ? '46px' : '16px', paddingRight: '16px', opacity: disabled ? 0.55 : 1, cursor: disabled ? 'not-allowed' : 'text' }}
+        onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; setOpen(true); }}
+        onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; setTimeout(() => setOpen(false), 150); }}
+      />
+      {open && matches.length > 0 && (
+        <div
+          className="absolute z-30 left-0 right-0 mt-1.5 rounded-xl overflow-y-auto"
+          style={{ maxHeight: '224px', backgroundColor: 'rgba(250,248,243,0.98)', border: '1px solid #DDD4C0', boxShadow: '0 16px 40px rgba(27,56,40,0.16)' }}
+        >
+          {matches.map((c) => (
+            <button
+              key={c.code}
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => { onChange(c.name); setOpen(false); }}
+              className="w-full flex items-center gap-2.5 px-4 py-2 text-left text-sm focus:outline-none"
+              style={{ background: 'none', border: 'none', color: '#1C1410', fontFamily: OUTFIT, cursor: 'pointer' }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={getFlagUrl(c.code)} alt="" style={{ width: '20px', height: '14px', objectFit: 'cover', borderRadius: '2px', flexShrink: 0 }} />
+              {c.name}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Month + Year picker (replaces the native date input) ──────────────────────
+
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+function MonthYearPicker({ value, onChange }: { value: string; onChange: (isoDate: string) => void }) {
+  // value is an ISO date string (YYYY-MM-DD) or ''. We edit month + year.
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const selMonth = value ? Number(value.slice(5, 7)) - 1 : -1; // 0-based
+  const selYear = value ? Number(value.slice(0, 4)) : -1;
+  const years: number[] = [];
+  for (let y = currentYear; y >= currentYear - 30; y--) years.push(y);
+
+  function emit(monthIdx: number, year: number) {
+    if (monthIdx < 0 || year < 0) { onChange(''); return; }
+    const mm = String(monthIdx + 1).padStart(2, '0');
+    onChange(`${year}-${mm}-01`); // store the 1st of the chosen month
+  }
+
+  const selectStyle: React.CSSProperties = {
+    ...inputStyle,
+    appearance: 'none',
+    WebkitAppearance: 'none',
+    MozAppearance: 'none',
+    backgroundImage: 'url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'12\' height=\'12\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%239A8A78\' stroke-width=\'2.4\' stroke-linecap=\'round\' stroke-linejoin=\'round\'><polyline points=\'6 9 12 15 18 9\'/></svg>")',
+    backgroundRepeat: 'no-repeat',
+    backgroundPosition: 'right 14px center',
+    cursor: 'pointer',
+  };
+
+  return (
+    <div className="grid grid-cols-2 gap-2.5">
+      <select
+        value={selMonth}
+        onChange={(e) => emit(Number(e.target.value), selYear >= 0 ? selYear : currentYear)}
+        className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none"
+        style={selectStyle}
+        onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
+        onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
+      >
+        <option value={-1}>Month</option>
+        {MONTHS.map((m, i) => <option key={m} value={i}>{m}</option>)}
+      </select>
+      <select
+        value={selYear}
+        onChange={(e) => emit(selMonth >= 0 ? selMonth : 0, Number(e.target.value))}
+        className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none"
+        style={selectStyle}
+        onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
+        onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
+      >
+        <option value={-1}>Year</option>
+        {years.map((y) => <option key={y} value={y}>{y}</option>)}
+      </select>
+    </div>
+  );
+}
+
+// ── Description textarea (LinkedIn-style short blurb) ──────────────────────────
+
+const DESCRIPTION_MAX = 400;
+
+function DescriptionField({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) {
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1.5">
+        <label className="flex items-center gap-1.5 text-[13px] font-semibold" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+          <MessageSquareText size={13} strokeWidth={2} style={{ color: '#B6871F' }} />
+          Description
+          <span className="font-normal" style={{ color: '#9A8A78', fontSize: '11px' }}>optional</span>
+        </label>
+        <span style={{ fontFamily: MONO, fontSize: '10px', color: value.length > DESCRIPTION_MAX ? '#8B2020' : '#9A8A78' }}>
+          {value.length}/{DESCRIPTION_MAX}
+        </span>
+      </div>
+      <textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value.slice(0, DESCRIPTION_MAX))}
+        rows={3}
+        placeholder={placeholder}
+        className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none resize-none"
+        style={{ ...inputStyle, lineHeight: 1.65 }}
+        onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
+        onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
+      />
+    </div>
+  );
+}
+
 // ── Add / Edit modal ───────────────────────────────────────────────────────
 
 function CVEntryModal({
@@ -134,18 +385,31 @@ function CVEntryModal({
   const { session } = useAuth();
   const isVerified = existing?.source === 'gavelling_verified';
 
+  const [entryType, setEntryType]           = useState<EntryType>(existing?.entry_type ?? 'delegate');
   const [conferenceName, setConferenceName] = useState(existing?.conference_name ?? '');
   const [committee, setCommittee]           = useState(existing?.committee ?? '');
   const [allocation, setAllocation]         = useState(existing?.allocation ?? '');
+  const [roleTitle, setRoleTitle]           = useState(
+    // Secretariat/other store their free-text title in the `allocation` column
+    // (delegate=country, chair=n/a). Seed from allocation for those types.
+    (existing && (existing.entry_type === 'secretariat' || existing.entry_type === 'other')) ? existing.allocation : '',
+  );
   const [expertiseLevel, setExpertiseLevel] = useState(existing?.expertise_level ?? '');
   const [eventDate, setEventDate]           = useState(existing?.event_date ?? '');
   const [awards, setAwards]                 = useState<string[]>(existing?.awards ?? []);
   const [photos, setPhotos]                 = useState<string[]>(existing?.photos ?? []);
+  const [description, setDescription]       = useState(existing?.description ?? '');
   const [logoUrl, setLogoUrl]               = useState<string | null>(existing?.logo_url ?? null);
   const [conferenceId, setConferenceId]     = useState<string | null>(existing?.conference_id ?? null);
   const [submitting, setSubmitting]         = useState(false);
   const [uploading, setUploading]           = useState(false);
   const [error, setError]                   = useState('');
+
+  const showCommittee  = entryType === 'delegate' || entryType === 'chair';
+  const showAllocation = entryType === 'delegate';
+  const showAwards     = entryType === 'delegate';
+  const showExpertise  = entryType === 'delegate';
+  const showRoleTitle  = entryType === 'secretariat' || entryType === 'other';
 
   // Conference suggestions
   const [suggestions, setSuggestions]       = useState<ConferenceSuggestion[]>([]);
@@ -327,8 +591,23 @@ function CVEntryModal({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!conferenceName || !committee || !allocation) {
-      setError('Please fill in all required fields.');
+    // Required fields vary by type. `committee` / `allocation` are NOT NULL in
+    // the DB, so we always send at least an empty string for types that omit
+    // them (the free-text role title reuses the `allocation` column).
+    if (!conferenceName.trim()) {
+      setError('Please add the conference name.');
+      return;
+    }
+    if (showCommittee && !committee.trim()) {
+      setError(entryType === 'chair' ? 'Please add the committee you chaired.' : 'Please add the committee.');
+      return;
+    }
+    if (showAllocation && !allocation.trim()) {
+      setError('Please add your country / allocation.');
+      return;
+    }
+    if (showRoleTitle && !roleTitle.trim()) {
+      setError(entryType === 'secretariat' ? 'Please add your Secretariat position.' : 'Please add your role title.');
       return;
     }
     if (!session) return;
@@ -340,15 +619,22 @@ function CVEntryModal({
     // picking a suggestion.
     const resolvedLogo = await resolveConferenceLogo();
 
+    // Map per-type fields onto the shared columns.
+    const committeeVal  = showCommittee ? committee : '';
+    const allocationVal = showAllocation ? allocation : (showRoleTitle ? roleTitle : '');
+    const awardsVal     = showAwards ? awards : [];
+
     const payload = {
+      entry_type:      entryType,
       conference_name: conferenceName,
-      committee,
-      allocation,
-      expertise_level: expertiseLevel || null,
+      committee:       committeeVal,
+      allocation:      allocationVal,
+      expertise_level: showExpertise ? (expertiseLevel || null) : null,
       event_date:      eventDate || null,
-      awards,
-      award:           awards[0] ?? 'None', // keep legacy column in sync for compat
+      awards:          awardsVal,
+      award:           awardsVal[0] ?? 'None', // keep legacy column in sync for compat
       photos,
+      description:     description.trim() || null,
       logo_url:        resolvedLogo,
       conference_id:   conferenceId,
     };
@@ -367,9 +653,6 @@ function CVEntryModal({
     onSaved();
     onClose();
   }
-
-  const allocCountry = getCountryByName(allocation);
-  const allocFlag = allocCountry ? getFlagUrl(allocCountry.code) : null;
 
   return (
     <div
@@ -403,6 +686,38 @@ function CVEntryModal({
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Experience type selector */}
+          <div>
+            <label className="block text-[13px] font-semibold mb-2" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+              Experience Type
+            </label>
+            <div className="grid grid-cols-4 gap-2">
+              {ENTRY_TYPES.map((t) => {
+                const active = entryType === t.key;
+                return (
+                  <button
+                    key={t.key}
+                    type="button"
+                    disabled={isVerified}
+                    onClick={() => setEntryType(t.key)}
+                    className="flex flex-col items-center justify-center gap-1.5 rounded-xl py-2.5 focus:outline-none transition-all"
+                    style={{
+                      border: active ? `1.5px solid ${t.accent}` : '1px solid #DDD4C0',
+                      backgroundColor: active ? `${t.accent}14` : 'transparent',
+                      cursor: isVerified ? 'not-allowed' : 'pointer',
+                      opacity: isVerified && !active ? 0.5 : 1,
+                    }}
+                  >
+                    <t.Icon size={17} strokeWidth={2} style={{ color: active ? t.accent : '#9A8A78' }} />
+                    <span style={{ fontFamily: OUTFIT, fontSize: '11.5px', fontWeight: 700, color: active ? '#1C1410' : '#9A8A78' }}>
+                      {t.label}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           {/* Conference name + suggestions */}
           <div className="relative">
             <label className="block text-[13px] font-semibold mb-1.5" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
@@ -483,133 +798,128 @@ function CVEntryModal({
             )}
           </div>
 
-          {/* Committee */}
-          <div>
-            <label className="block text-[13px] font-semibold mb-1.5" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-              Committee
-            </label>
-            <input
-              type="text"
-              required
-              disabled={isVerified}
-              value={committee}
-              onChange={(e) => setCommittee(e.target.value)}
-              placeholder="e.g. UN Security Council"
-              className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none"
-              style={{ ...inputStyle, opacity: isVerified ? 0.55 : 1, cursor: isVerified ? 'not-allowed' : 'text' }}
-              onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
-              onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
-            />
-          </div>
+          {/* Committee — delegate + chair */}
+          {showCommittee && (
+            <Field label={entryType === 'chair' ? 'Committee Chaired' : 'Committee'}>
+              <CommitteeAutocomplete
+                value={committee}
+                onChange={setCommittee}
+                disabled={isVerified}
+                placeholder={entryType === 'chair' ? 'e.g. UN Security Council' : 'e.g. UN Security Council'}
+              />
+            </Field>
+          )}
 
-          {/* Allocation */}
-          <div>
-            <label className="block text-[13px] font-semibold mb-1.5" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-              Country / Portfolio / Allocation
-            </label>
-            <div className="relative">
-              {allocFlag && (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img
-                  src={allocFlag}
-                  alt={allocation}
-                  className="absolute pointer-events-none"
-                  style={{ left: '14px', top: '50%', transform: 'translateY(-50%)', width: '22px', height: '15px', objectFit: 'cover', borderRadius: '2.5px', boxShadow: '0 1px 3px rgba(27,56,40,0.25)' }}
-                />
-              )}
+          {/* Allocation — delegate only */}
+          {showAllocation && (
+            <Field label="Country / Portfolio / Allocation">
+              <AllocationAutocomplete value={allocation} onChange={setAllocation} disabled={isVerified} />
+            </Field>
+          )}
+
+          {/* Role title — secretariat + other */}
+          {showRoleTitle && (
+            <Field label={entryType === 'secretariat' ? 'Position / Title' : 'Role Title'}>
               <input
                 type="text"
                 required
                 disabled={isVerified}
-                value={allocation}
-                onChange={(e) => setAllocation(e.target.value)}
-                placeholder="e.g. China, EU Observer"
-                className="w-full rounded-xl py-3 text-sm focus:outline-none"
-                style={{ ...inputStyle, paddingLeft: allocFlag ? '46px' : '16px', paddingRight: '16px', opacity: isVerified ? 0.55 : 1, cursor: isVerified ? 'not-allowed' : 'text' }}
+                value={roleTitle}
+                onChange={(e) => setRoleTitle(e.target.value)}
+                placeholder={entryType === 'secretariat' ? 'e.g. Under-Secretary-General for Committees' : 'e.g. Press Corps, Tech Team, Volunteer'}
+                className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none"
+                style={{ ...inputStyle, opacity: isVerified ? 0.55 : 1, cursor: isVerified ? 'not-allowed' : 'text' }}
                 onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
                 onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
               />
-            </div>
-          </div>
+            </Field>
+          )}
 
-          {/* When was it? */}
+          {/* When was it? — Month + Year */}
           <div>
             <label className="block text-[13px] font-semibold mb-1.5" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
               When was it?
               <span className="ml-2 font-normal" style={{ color: '#9A8A78', fontSize: '11px' }}>optional</span>
             </label>
-            <input
-              type="month"
-              value={eventDate ? eventDate.slice(0, 7) : ''}
-              max={new Date().toISOString().slice(0, 7)}
-              onChange={(e) => setEventDate(e.target.value ? `${e.target.value}-01` : '')}
-              className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none"
-              style={inputStyle}
-              onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
-              onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
-            />
-            <p className="text-xs mt-1" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+            <MonthYearPicker value={eventDate} onChange={setEventDate} />
+            <p className="text-xs mt-1.5" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
               Used to order your CV timeline, most recent first.
             </p>
           </div>
 
-          {/* Expertise level */}
-          <div>
-            <label className="block text-[13px] font-semibold mb-2" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-              Expertise Level
-            </label>
-            <div className="flex gap-2 flex-wrap">
-              {EXPERTISE_LEVELS_MODAL.map((lvl) => {
-                const active = expertiseLevel === lvl;
-                const tone = LEVEL_TONE[lvl] ?? 'forest';
-                return (
-                  <button
-                    key={lvl}
-                    type="button"
-                    onClick={() => setExpertiseLevel(active ? '' : lvl)}
-                    className="focus:outline-none transition-all"
-                    style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', opacity: active ? 1 : 0.6 }}
-                  >
-                    <Pill tone={active ? tone : 'neutral'} size="sm">
-                      <span style={{ textTransform: 'capitalize' }}>{lvl}</span>
-                    </Pill>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          {/* Description — every type */}
+          <DescriptionField
+            value={description}
+            onChange={setDescription}
+            placeholder={
+              entryType === 'chair'   ? 'What did your committee debate? Any standout moments?' :
+              entryType === 'secretariat' ? 'What did you organise or oversee?' :
+              entryType === 'other'   ? 'Describe what you did in this role.' :
+              'Describe your role, the topic, and how you did.'
+            }
+          />
 
-          {/* Awards multi-select */}
-          <div>
-            <label className="block text-[13px] font-semibold mb-2" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-              Awards
-              <span className="ml-2 font-normal" style={{ color: '#9A8A78', fontSize: '11px' }}>select all that apply</span>
-            </label>
-            <div className="flex gap-2 flex-wrap">
-              {AWARD_LIST.map((name) => {
-                const active = awards.includes(name);
-                return (
-                  <button
-                    key={name}
-                    type="button"
-                    onClick={() => toggleAward(name)}
-                    className="inline-flex items-center gap-1.5 rounded-full pl-1 pr-3 py-1 text-[11px] font-semibold focus:outline-none transition-all"
-                    style={{
-                      border: active ? '1px solid rgba(182,135,31,0.55)' : '1px solid #DDD4C0',
-                      backgroundColor: active ? 'rgba(238,217,138,0.28)' : 'transparent',
-                      color: active ? '#7A5A20' : '#9A8A78',
-                      fontFamily: OUTFIT,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <AwardArtwork name={name} size={20} />
-                    {name}
-                    {active && <Check size={11} strokeWidth={3} style={{ color: '#B6871F' }} />}
-                  </button>
-                );
-              })}
+          {/* Expertise level — delegate only */}
+          {showExpertise && (
+            <div>
+              <label className="block text-[13px] font-semibold mb-2" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                Expertise Level
+              </label>
+              <div className="flex gap-2 flex-wrap">
+                {EXPERTISE_LEVELS_MODAL.map((lvl) => {
+                  const active = expertiseLevel === lvl;
+                  const tone = LEVEL_TONE[lvl] ?? 'forest';
+                  return (
+                    <button
+                      key={lvl}
+                      type="button"
+                      onClick={() => setExpertiseLevel(active ? '' : lvl)}
+                      className="focus:outline-none transition-all"
+                      style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', opacity: active ? 1 : 0.6 }}
+                    >
+                      <Pill tone={active ? tone : 'neutral'} size="sm">
+                        <span style={{ textTransform: 'capitalize' }}>{lvl}</span>
+                      </Pill>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* Awards multi-select — delegate only (chairs award, not awarded) */}
+          {showAwards && (
+            <div>
+              <label className="block text-[13px] font-semibold mb-2" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                Awards
+                <span className="ml-2 font-normal" style={{ color: '#9A8A78', fontSize: '11px' }}>select all that apply</span>
+              </label>
+              <div className="flex gap-2 flex-wrap">
+                {AWARD_LIST.map((name) => {
+                  const active = awards.includes(name);
+                  return (
+                    <button
+                      key={name}
+                      type="button"
+                      onClick={() => toggleAward(name)}
+                      className="inline-flex items-center gap-1.5 rounded-full pl-1 pr-3 py-1 text-[11px] font-semibold focus:outline-none transition-all"
+                      style={{
+                        border: active ? '1px solid rgba(182,135,31,0.55)' : '1px solid #DDD4C0',
+                        backgroundColor: active ? 'rgba(238,217,138,0.28)' : 'transparent',
+                        color: active ? '#7A5A20' : '#9A8A78',
+                        fontFamily: OUTFIT,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <AwardArtwork name={name} size={20} />
+                      {name}
+                      {active && <Check size={11} strokeWidth={3} style={{ color: '#B6871F' }} />}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Photos */}
           <div>
@@ -719,15 +1029,17 @@ function TimelineEntry({
   isLast: boolean;
 }) {
   const isVerified = entry.source === 'gavelling_verified';
+  const type = ENTRY_TYPE_MAP[entry.entry_type] ?? ENTRY_TYPE_MAP.delegate;
   const dateStr = new Date(entry.event_date ? `${entry.event_date}T00:00:00` : entry.created_at)
     .toLocaleDateString('en', { month: 'long', year: 'numeric' });
 
   const allocCountry = entry.allocation ? getCountryByName(entry.allocation) : null;
   const allocFlag = allocCountry ? getFlagUrl(allocCountry.code) : null;
 
-  const displayAwards = entry.awards.length > 0
-    ? entry.awards
-    : (entry.award && entry.award !== 'None' ? [entry.award] : []);
+  // Awards only ever surface for delegate entries.
+  const displayAwards = entry.entry_type === 'delegate'
+    ? (entry.awards.length > 0 ? entry.awards : (entry.award && entry.award !== 'None' ? [entry.award] : []))
+    : [];
 
   return (
     <div className="relative flex gap-4 md:gap-5">
@@ -745,11 +1057,30 @@ function TimelineEntry({
 
       {/* Content card */}
       <div className="flex-1 min-w-0 pb-6">
-        <GlassCard className="!p-5 md:!p-6">
-          {/* Month + year */}
-          <div className="flex items-center justify-between gap-3 mb-1">
-            <span style={{ fontFamily: MONO, fontSize: '10px', letterSpacing: '0.14em', color: '#B6871F', textTransform: 'uppercase' }}>
-              {dateStr}
+        <GlassCard className="!p-5 md:!p-6 relative" style={{ border: `1px solid ${type.border}` }}>
+          {/* Corner type badge (top-right disc, like a featured/sponsored badge) */}
+          <span
+            className="absolute flex items-center justify-center"
+            title={type.label}
+            style={{
+              top: '-11px', right: '14px', width: '30px', height: '30px', borderRadius: '9999px',
+              backgroundColor: type.badgeBg,
+              border: `1.5px solid ${type.accent}`,
+              boxShadow: '0 3px 10px rgba(27,56,40,0.14)',
+            }}
+          >
+            <type.Icon size={15} strokeWidth={2.1} style={{ color: type.accent }} />
+          </span>
+
+          {/* Month + year + role-type label */}
+          <div className="flex items-center justify-between gap-3 mb-1 pr-8">
+            <span className="inline-flex items-center gap-2">
+              <span style={{ fontFamily: MONO, fontSize: '10px', letterSpacing: '0.14em', color: '#B6871F', textTransform: 'uppercase' }}>
+                {dateStr}
+              </span>
+              <span style={{ fontFamily: MONO, fontSize: '9px', letterSpacing: '0.16em', color: type.accent, textTransform: 'uppercase' }}>
+                · {type.label}
+              </span>
             </span>
             <span className="flex-shrink-0">
               <Pill
@@ -771,33 +1102,59 @@ function TimelineEntry({
             {entry.conference_name}
           </h3>
 
-          {/* Role / allocation with a small icon */}
-          <div className="flex items-center gap-1.5 flex-wrap mt-2" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-            <Award size={14} strokeWidth={2} style={{ color: '#B6871F', flexShrink: 0 }} />
-            <span className="inline-flex items-center gap-1.5 text-[14px]" style={{ fontWeight: 600 }}>
-              {allocFlag && (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img
-                  src={allocFlag}
-                  alt=""
-                  style={{ width: '20px', height: '13px', objectFit: 'cover', borderRadius: '2.5px', boxShadow: '0 1px 2px rgba(27,56,40,0.2)' }}
-                />
+          {/* Role line — varies by type */}
+          {entry.entry_type === 'delegate' && (
+            <>
+              <div className="flex items-center gap-1.5 flex-wrap mt-2" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                <Award size={14} strokeWidth={2} style={{ color: '#B6871F', flexShrink: 0 }} />
+                <span className="inline-flex items-center gap-1.5 text-[14px]" style={{ fontWeight: 600 }}>
+                  {allocFlag && (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img
+                      src={allocFlag}
+                      alt=""
+                      style={{ width: '20px', height: '13px', objectFit: 'cover', borderRadius: '2.5px', boxShadow: '0 1px 2px rgba(27,56,40,0.2)' }}
+                    />
+                  )}
+                  {entry.allocation}
+                </span>
+              </div>
+              {entry.committee && (
+                <div className="flex items-center gap-1.5 mt-1.5 text-[13px]" style={{ color: '#6E5F4E', fontFamily: OUTFIT }}>
+                  <CommitteeLogo committee={entry.committee} size={18} />
+                  <span>{entry.committee}</span>
+                </div>
               )}
-              {entry.allocation}
-            </span>
-          </div>
+            </>
+          )}
 
-          {/* Committee with SMALL committee logo inline */}
-          <div className="flex items-center gap-1.5 mt-1.5 text-[13px]" style={{ color: '#6E5F4E', fontFamily: OUTFIT }}>
-            <CommitteeLogo committee={entry.committee} size={18} />
-            <span>{entry.committee}</span>
-          </div>
+          {entry.entry_type === 'chair' && entry.committee && (
+            <div className="flex items-center gap-1.5 flex-wrap mt-2 text-[14px]" style={{ color: '#1C1410', fontFamily: OUTFIT, fontWeight: 600 }}>
+              <Gavel size={14} strokeWidth={2} style={{ color: type.accent, flexShrink: 0 }} />
+              <CommitteeLogo committee={entry.committee} size={18} />
+              <span>Chaired {entry.committee}</span>
+            </div>
+          )}
 
-          {/* Awards + expertise */}
-          {(displayAwards.length > 0 || entry.expertise_level) && (
+          {(entry.entry_type === 'secretariat' || entry.entry_type === 'other') && entry.allocation && (
+            <div className="flex items-center gap-1.5 flex-wrap mt-2 text-[14px]" style={{ color: '#1C1410', fontFamily: OUTFIT, fontWeight: 600 }}>
+              <type.Icon size={14} strokeWidth={2} style={{ color: type.accent, flexShrink: 0 }} />
+              <span>{entry.allocation}</span>
+            </div>
+          )}
+
+          {/* Description — LinkedIn-style blurb */}
+          {entry.description && (
+            <p className="text-[13px] mt-2.5" style={{ color: '#4A4038', fontFamily: OUTFIT, lineHeight: 1.6, margin: '10px 0 0 0' }}>
+              {entry.description}
+            </p>
+          )}
+
+          {/* Awards + expertise (delegate only) */}
+          {(displayAwards.length > 0 || (entry.entry_type === 'delegate' && entry.expertise_level)) && (
             <div className="flex gap-1.5 flex-wrap mt-3 items-center">
               {displayAwards.map((a) => <AwardChip key={a} name={a} />)}
-              {entry.expertise_level && <LevelBadge level={entry.expertise_level} size="sm" />}
+              {entry.entry_type === 'delegate' && entry.expertise_level && <LevelBadge level={entry.expertise_level} size="sm" />}
             </div>
           )}
 
@@ -864,10 +1221,11 @@ export default function CVPage() {
     const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase
       .from('mun_cv_entries')
-      .select('id, conference_name, committee, allocation, expertise_level, award, awards, photos, logo_url, conference_id, event_date, source, created_at')
+      .select('id, entry_type, conference_name, committee, allocation, expertise_level, award, awards, photos, description, logo_url, conference_id, event_date, source, created_at')
       .eq('user_id', user.id);
     const rows = ((data as CVEntry[]) ?? []).map((r) => ({
       ...r,
+      entry_type: r.entry_type ?? 'delegate',
       awards: r.awards ?? [],
       photos: r.photos ?? [],
     }));
@@ -984,16 +1342,19 @@ export default function CVPage() {
         ))}
       </div>
 
-      {/* Rank-up info panel — thresholds pulled from munExperience.ts */}
+      {/* Rank-up info panel — thresholds live behind the 'i' (ExperienceInfo). */}
       <div
         className="rounded-2xl px-5 py-4 mb-8"
         style={{ backgroundColor: 'rgba(238,217,138,0.14)', border: '1px solid rgba(182,135,31,0.28)' }}
       >
-        <div className="flex items-center gap-2 mb-3">
-          <TrendingUp size={15} strokeWidth={2.4} style={{ color: '#B6871F' }} />
-          <p className="font-bold text-[13px]" style={{ color: '#7A5A20', fontFamily: OUTFIT, margin: 0 }}>
-            How experience levels work
-          </p>
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <div className="flex items-center gap-2">
+            <TrendingUp size={15} strokeWidth={2.4} style={{ color: '#B6871F' }} />
+            <p className="font-bold text-[13px]" style={{ color: '#7A5A20', fontFamily: OUTFIT, margin: 0 }}>
+              Your experience level
+            </p>
+          </div>
+          <ExperienceInfo tone="light" align="right" />
         </div>
 
         {/* Progress toward next rank */}
@@ -1003,27 +1364,11 @@ export default function CVPage() {
             style={{ width: `${Math.round(exp.progress * 100)}%`, background: 'linear-gradient(90deg, #B6871F, #EED98A)', transition: 'width 400ms ease' }}
           />
         </div>
-        <p className="text-[12px] mb-3" style={{ color: '#7A5A20', fontFamily: OUTFIT, margin: '0 0 12px 0' }}>
+        <p className="text-[12px]" style={{ color: '#7A5A20', fontFamily: OUTFIT, margin: 0 }}>
           {exp.nextLabel
-            ? `You're ${exp.label} — add ${exp.remaining} more verified conference${exp.remaining === 1 ? '' : 's'} to reach ${exp.nextLabel}.`
+            ? `You're ${exp.label} — add ${exp.remaining} more conference${exp.remaining === 1 ? '' : 's'} to reach ${exp.nextLabel}.`
             : `You've reached Expert — the top tier. Keep adding conferences to grow your record.`}
         </p>
-
-        {/* Threshold ladder */}
-        <div className="flex flex-wrap gap-2">
-          {EXPERIENCE_BANDS.map((band, i) => {
-            const next = EXPERIENCE_BANDS[i + 1];
-            const range = next ? `${band.min === 0 ? '0–1' : `${band.min}–${next.min - 1}`}` : `${band.min}+`;
-            const current = band.level === exp.level;
-            return (
-              <span key={band.level} style={current ? undefined : { opacity: 0.75 }}>
-                <Pill tone={LEVEL_TONE[band.level] ?? 'neutral'} size="sm">
-                  {band.label} · {range}
-                </Pill>
-              </span>
-            );
-          })}
-        </div>
       </div>
 
       {/* Entries — vertical timeline */}
