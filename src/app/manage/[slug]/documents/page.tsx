@@ -15,6 +15,8 @@ interface CommitteeTab {
   name: string;
   abbreviation: string | null;
   position_paper_deadline: string | null;
+  position_paper_label: string | null;
+  pp_submissions_enabled: boolean;
   notification_email: string | null;
 }
 
@@ -225,22 +227,30 @@ function UploadStudyGuideModal({
 // ── SetDeadlineModal ───────────────────────────────────────────────────────────
 
 function SetDeadlineModal({
-  selectedCommitteeId, currentDeadline, onClose, onSaved,
+  selectedCommitteeId, currentDeadline, currentLabel, currentEnabled, onClose, onSaved,
 }: {
   selectedCommitteeId: string;
   currentDeadline: string | null;
+  currentLabel: string | null;
+  currentEnabled: boolean;
   onClose: () => void;
   onSaved: () => void;
 }) {
   const { session } = useAuth();
   const [value, setValue] = useState(currentDeadline ? currentDeadline.slice(0, 16) : '');
+  const [label, setLabel] = useState(currentLabel ?? 'Position Paper');
+  const [enabled, setEnabled] = useState(currentEnabled);
   const [saving, setSaving] = useState(false);
 
   async function handleSave() {
-    setSaving(true);
     if (!session) return;
+    setSaving(true);
     const supabase = getAuthedClient(session.access_token);
-    await supabase.from('conference_committees').update({ position_paper_deadline: value || null }).eq('id', selectedCommitteeId);
+    await supabase.from('conference_committees').update({
+      position_paper_label: label.trim() || 'Position Paper',
+      pp_submissions_enabled: enabled,
+      position_paper_deadline: enabled ? (value || null) : null,
+    }).eq('id', selectedCommitteeId);
     setSaving(false);
     onSaved();
     onClose();
@@ -250,18 +260,45 @@ function SetDeadlineModal({
     <ModalOverlay onClose={onClose}>
       <div style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', borderRadius: 16, padding: 24, maxWidth: 380, width: '100%' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-          <h2 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 16, color: '#1C1410' }}>Set Submission Deadline</h2>
+          <h2 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 16, color: '#1C1410' }}>Position Paper Settings</h2>
           <button onClick={onClose} className="focus:outline-none" style={{ color: '#9A8A78' }}><X size={18} /></button>
         </div>
         <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#9A8A78', fontFamily: "'DM Mono', monospace", textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
-          Deadline
+          Name of Document
         </label>
         <input
-          type="datetime-local"
-          value={value}
-          onChange={e => setValue(e.target.value)}
+          type="text"
+          value={label}
+          onChange={e => setLabel(e.target.value)}
+          placeholder="Position Paper"
           style={{ width: '100%', border: '1px solid #DDD4C0', borderRadius: 8, padding: '8px 12px', fontSize: 14, color: '#1C1410', backgroundColor: '#FAF8F3', outline: 'none', fontFamily: "'Outfit', sans-serif", marginBottom: 16, boxSizing: 'border-box' }}
         />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+          <div>
+            <p style={{ fontSize: 13, fontWeight: 700, color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Allow {label.trim() || 'position paper'} submissions</p>
+            <p style={{ fontSize: 11, color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Let delegates submit through their portal</p>
+          </div>
+          <button
+            onClick={() => setEnabled(v => !v)}
+            className="focus:outline-none flex-shrink-0"
+            style={{ width: 40, height: 22, borderRadius: 9999, border: 'none', cursor: 'pointer', backgroundColor: enabled ? '#1B3828' : '#DDD4C0', position: 'relative', transition: 'background-color 0.2s', marginLeft: 12 }}
+          >
+            <span style={{ position: 'absolute', top: 3, left: enabled ? 21 : 3, width: 16, height: 16, borderRadius: '50%', backgroundColor: '#FAF8F3', transition: 'left 0.2s' }} />
+          </button>
+        </div>
+        {enabled && (
+          <>
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#9A8A78', fontFamily: "'DM Mono', monospace", textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+              Submission Deadline (optional)
+            </label>
+            <input
+              type="datetime-local"
+              value={value}
+              onChange={e => setValue(e.target.value)}
+              style={{ width: '100%', border: '1px solid #DDD4C0', borderRadius: 8, padding: '8px 12px', fontSize: 14, color: '#1C1410', backgroundColor: '#FAF8F3', outline: 'none', fontFamily: "'Outfit', sans-serif", marginBottom: 16, boxSizing: 'border-box' }}
+            />
+          </>
+        )}
         <div style={{ display: 'flex', gap: 10 }}>
           <button onClick={onClose} className="focus:outline-none" style={{ flex: 1, border: '1.5px solid #DDD4C0', borderRadius: 12, padding: '10px 0', fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 13, color: '#1C1410', backgroundColor: 'transparent', cursor: 'pointer' }}>
             CANCEL
@@ -301,7 +338,7 @@ export default function DocumentsPage() {
     const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase
       .from('conference_committees')
-      .select('id, name, abbreviation, position_paper_deadline, notification_email')
+      .select('id, name, abbreviation, position_paper_deadline, position_paper_label, pp_submissions_enabled, notification_email')
       .eq('conference_id', conference.id)
       .order('name', { ascending: true });
     const rows = (data ?? []) as CommitteeTab[];
@@ -585,7 +622,7 @@ export default function DocumentsPage() {
                   onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
                   onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                 >
-                  SET DEADLINE
+                  SETTINGS
                 </button>
               </div>
             </div>
@@ -762,6 +799,8 @@ export default function DocumentsPage() {
         <SetDeadlineModal
           selectedCommitteeId={selectedCommitteeId}
           currentDeadline={selectedCommittee.position_paper_deadline}
+          currentLabel={selectedCommittee.position_paper_label}
+          currentEnabled={selectedCommittee.pp_submissions_enabled}
           onClose={() => setShowDeadlineModal(false)}
           onSaved={loadCommittees}
         />
