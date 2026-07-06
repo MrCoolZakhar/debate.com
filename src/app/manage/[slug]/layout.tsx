@@ -426,6 +426,8 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
   const [conference, setConference] = useState<Conference | null>(null);
   const [loadingConf, setLoadingConf] = useState(true);
   const [accessDenied, setAccessDenied] = useState(false);
+  const [isOwner, setIsOwner] = useState(false);
+  const [permissions, setPermissions] = useState<Record<string, boolean>>({});
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Auth gate
@@ -468,11 +470,12 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
     }
 
     // Ownership check: organizer_id on the conference OR conference_organizers table
-    const isOwner = (confData as any).organizer_id === user!.id;
-    if (!isOwner) {
+    const owner = (confData as any).organizer_id === user!.id;
+    setIsOwner(owner);
+    if (!owner) {
       const { data: orgRow } = await supabase
         .from('conference_organizers')
-        .select('user_id')
+        .select('user_id, permissions')
         .eq('user_id', user!.id)
         .eq('conference_id', (confData as any).id)
         .maybeSingle();
@@ -481,6 +484,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
         setLoadingConf(false);
         return;
       }
+      setPermissions(((orgRow as any).permissions ?? {}) as Record<string, boolean>);
     }
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -532,6 +536,42 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
           >
             ← BACK TO HOME
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const SECTION_PERMS: Record<string, string> = {
+    committees: 'committees', applications: 'applications', assignment: 'assignment',
+    documents: 'documents', communications: 'email_builder', financials: 'financials',
+    settings: 'settings', jobs: 'job_board',
+  };
+  const currentSegment = pathname.split('/')[3] ?? '';
+  const sectionKey = SECTION_PERMS[currentSegment];
+  const sectionBlocked = !!conference && !isOwner && !!sectionKey && permissions[sectionKey] !== true;
+
+  if (sectionBlocked) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-6" style={{ backgroundColor: '#EDE7D8' }}>
+        <div className="max-w-md w-full text-center rounded-2xl p-8" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
+          <p style={{ fontSize: 10, color: '#B8844A', fontFamily: "'DM Mono', monospace", letterSpacing: '0.16em', fontWeight: 600, marginBottom: 12 }}>
+            SECTION RESTRICTED
+          </p>
+          <h1 className="text-xl font-bold mb-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+            You don&apos;t have access to this section
+          </h1>
+          <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+            Your organizer role for this conference doesn&apos;t include this section. Ask the conference owner to grant it.
+          </p>
+          <button
+            onClick={() => router.push(`/manage/${slug}`)}
+            className="rounded-xl py-2.5 px-6 font-bold text-sm focus:outline-none transition-colors"
+            style={{ backgroundColor: '#1B3828', color: '#EED98A', border: 'none', fontFamily: "'Outfit', sans-serif" }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+          >
+            ← BACK TO DASHBOARD
           </button>
         </div>
       </div>
