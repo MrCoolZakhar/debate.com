@@ -112,7 +112,7 @@ export const LEVEL_ACCENT: Record<string, string> = {
  * The insignia glyph for a tier, drawn on a 24×24 canvas. Escalating shapes:
  *   beginner     → a single chevron (one stripe — the recruit)
  *   intermediate → double chevron   (a corporal's rank)
- *   advanced     → a laurel wreath  (earned distinction)
+ *   advanced     → triple chevron   (a sergeant's stripes — senior rank)
  *   expert       → a crowned star   (the top honour)
  * `accent` colours the stroke/fill; the glyph is meant to sit on a light disc.
  */
@@ -133,15 +133,13 @@ export function LevelInsignia({ level, size = 16 }: { level: string; size?: numb
     );
   }
   if (key === 'advanced') {
-    // Laurel wreath around a pip — earned distinction.
+    // Triple chevron — a sergeant's stripes. Continues the single → double
+    // ladder unambiguously, one step below the crowned star.
     return (
       <svg {...common}>
-        <path d="M8.5 5c-3 2.4-3.6 8.2-1 12.4" fill="none" stroke={accent} strokeWidth="1.6" strokeLinecap="round" />
-        <path d="M15.5 5c3 2.4 3.6 8.2 1 12.4" fill="none" stroke={accent} strokeWidth="1.6" strokeLinecap="round" />
-        <path d="M7.8 8.4l-1.9-.4M7.4 11.6l-2 .1M7.8 14.7l-1.8.6" stroke={accent} strokeWidth="1.4" strokeLinecap="round" />
-        <path d="M16.2 8.4l1.9-.4M16.6 11.6l2 .1M16.2 14.7l1.8.6" stroke={accent} strokeWidth="1.4" strokeLinecap="round" />
-        <path d="M9.6 18.6c1.5 1 3.3 1 4.8 0" fill="none" stroke={accent} strokeWidth="1.6" strokeLinecap="round" />
-        <circle cx="12" cy="11" r="2.4" fill={accent} />
+        <path d="M5 9.5l7-6 7 6" fill="none" stroke={accent} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M5 14.5l7-6 7 6" fill="none" stroke={accent} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M5 19.5l7-6 7 6" fill="none" stroke={accent} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     );
   }
@@ -218,9 +216,12 @@ function bandRange(i: number): string {
 export function ExperienceInfo({
   tone = 'gold',
   align = 'right',
+  currentLevel,
 }: {
   tone?: 'gold' | 'light';
   align?: 'left' | 'right';
+  /** The user's current tier — its row in the ladder is highlighted. */
+  currentLevel?: string;
 }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLSpanElement | null>(null);
@@ -265,7 +266,7 @@ export function ExperienceInfo({
           style={{
             top: '100%',
             [align]: 0,
-            width: '272px',
+            width: '288px',
             backgroundColor: 'rgba(250,248,243,0.98)',
             backdropFilter: 'blur(14px)',
             WebkitBackdropFilter: 'blur(14px)',
@@ -287,27 +288,42 @@ export function ExperienceInfo({
               <X size={13} strokeWidth={2.4} />
             </button>
           </div>
-          <div className="flex flex-col gap-1.5">
-            {EXPERIENCE_BANDS.map((band, i) => (
-              <div key={band.level} className="flex items-center gap-2.5">
-                <span
-                  className="inline-flex items-center justify-center flex-shrink-0"
+          <div className="flex flex-col gap-1">
+            {EXPERIENCE_BANDS.map((band, i) => {
+              const accent = LEVEL_ACCENT[band.level];
+              const isCurrent = (currentLevel ?? '').toLowerCase() === band.level;
+              return (
+                <div
+                  key={band.level}
+                  className="flex items-center gap-2.5"
                   style={{
-                    width: '22px', height: '22px', borderRadius: '9999px',
-                    background: `linear-gradient(150deg, ${LEVEL_ACCENT[band.level]}22, ${LEVEL_ACCENT[band.level]}12)`,
-                    border: `1px solid ${LEVEL_ACCENT[band.level]}55`,
+                    // Very faint tier-tinted wash so the ladder reads as an
+                    // escalation; the user's current tier is a touch stronger.
+                    padding: '5px 8px',
+                    borderRadius: '10px',
+                    backgroundColor: isCurrent ? `${accent}24` : `${accent}12`, // ~0.14 / ~0.07
+                    border: isCurrent ? `1px solid ${accent}55` : '1px solid transparent',
                   }}
                 >
-                  <LevelInsignia level={band.level} size={14} />
-                </span>
-                <span className="flex-1" style={{ fontFamily: OUTFIT, fontSize: '13px', fontWeight: 600, color: '#1C1410' }}>
-                  {band.label}
-                </span>
-                <span style={{ fontFamily: MONO, fontSize: '11px', color: '#B6871F', letterSpacing: '0.04em' }}>
-                  {bandRange(i)}
-                </span>
-              </div>
-            ))}
+                  <span
+                    className="inline-flex items-center justify-center flex-shrink-0"
+                    style={{
+                      width: '22px', height: '22px', borderRadius: '9999px',
+                      background: `linear-gradient(150deg, ${accent}22, ${accent}12)`,
+                      border: `1px solid ${accent}55`,
+                    }}
+                  >
+                    <LevelInsignia level={band.level} size={14} />
+                  </span>
+                  <span className="flex-1" style={{ fontFamily: OUTFIT, fontSize: '13px', fontWeight: isCurrent ? 700 : 600, color: '#1C1410' }}>
+                    {band.label}
+                  </span>
+                  <span style={{ fontFamily: MONO, fontSize: '11px', color: '#B6871F', letterSpacing: '0.04em' }}>
+                    {bandRange(i)}
+                  </span>
+                </div>
+              );
+            })}
           </div>
           <p className="text-[11.5px] mt-3 pt-2.5" style={{ color: '#9A8A78', fontFamily: OUTFIT, margin: 0, borderTop: '1px solid rgba(221,212,192,0.6)', lineHeight: 1.55 }}>
             Your level is derived from the number of conferences on your MUN CV.
@@ -356,8 +372,8 @@ export function GlassCard({ children, className = '', style = {} }: {
         backgroundColor: 'rgba(250,248,243,0.82)',
         backdropFilter: 'blur(14px) saturate(1.4)',
         WebkitBackdropFilter: 'blur(14px) saturate(1.4)',
-        border: '1px solid rgba(221,212,192,0.9)',
-        boxShadow: '0 1px 3px rgba(27,56,40,0.05), 0 12px 32px rgba(27,56,40,0.06)',
+        border: '1.5px solid #D8CDB6',
+        boxShadow: '0 1px 3px rgba(27,56,40,0.07), 0 12px 32px rgba(27,56,40,0.08)',
         ...style,
       }}
     >

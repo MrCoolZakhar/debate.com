@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import Link from 'next/link';
-import { Star, X, Megaphone, ClipboardCheck, FileText, BellRing, TrendingUp, Stamp, ArrowRight, Camera } from 'lucide-react';
+import { Star, X, Megaphone, ClipboardCheck, FileText, BellRing, TrendingUp, ArrowRight, Camera } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { UN_COUNTRIES, getCountryByName, getFlagUrl } from '@/lib/countries';
@@ -66,12 +66,6 @@ export default function ProfilePage() {
   const [natOpen, setNatOpen] = useState(false);
   const natWrapRef = useRef<HTMLDivElement | null>(null);
 
-  // "Countries I've conferenced in" collector
-  const [confCountries, setConfCountries] = useState<string[]>([]);
-  const [confQuery, setConfQuery]         = useState('');
-  const [confOpen, setConfOpen]           = useState(false);
-  const confWrapRef = useRef<HTMLDivElement | null>(null);
-
   // Review prompts — conferences the user attended but hasn't reviewed
   const [reviewable, setReviewable]         = useState<ReviewableConference[]>([]);
   const [reviewFormFor, setReviewFormFor]   = useState<string | null>(null);
@@ -88,7 +82,7 @@ export default function ProfilePage() {
 
     supabase
       .from('profiles')
-      .select('display_name, nationality, date_of_birth, conference_countries, mun_experience_level, notify_email_marketing, notify_email_applications, notify_email_documents, notify_email_reminders')
+      .select('display_name, nationality, date_of_birth, mun_experience_level, notify_email_marketing, notify_email_applications, notify_email_documents, notify_email_reminders')
       .eq('id', user.id)
       .single()
       .then(({ data }) => {
@@ -96,7 +90,6 @@ export default function ProfilePage() {
           setDisplayName(data.display_name ?? '');
           setNationality(data.nationality ?? '');
           setDateOfBirth(data.date_of_birth ?? '');
-          setConfCountries(Array.isArray(data.conference_countries) ? data.conference_countries : []);
           setNotifications({
             notify_email_marketing:    data.notify_email_marketing    ?? true,
             notify_email_applications: data.notify_email_applications ?? true,
@@ -126,40 +119,16 @@ export default function ProfilePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading, user?.id, session?.access_token]);
 
-  // Close autocomplete dropdowns on outside click
+  // Close the nationality autocomplete on outside click
   useEffect(() => {
     function onDocClick(e: MouseEvent) {
       if (natWrapRef.current && !natWrapRef.current.contains(e.target as Node)) {
         setNatOpen(false);
       }
-      if (confWrapRef.current && !confWrapRef.current.contains(e.target as Node)) {
-        setConfOpen(false);
-      }
     }
     document.addEventListener('mousedown', onDocClick);
     return () => document.removeEventListener('mousedown', onDocClick);
   }, []);
-
-  function persistConfCountries(next: string[]) {
-    setConfCountries(next);
-    if (!session || !user) return;
-    getAuthedClient(session.access_token)
-      .from('profiles')
-      .update({ conference_countries: next })
-      .eq('id', user.id)
-      .then(() => {});
-  }
-
-  function addConfCountry(name: string) {
-    if (confCountries.includes(name)) { setConfQuery(''); setConfOpen(false); return; }
-    persistConfCountries([...confCountries, name]);
-    setConfQuery('');
-    setConfOpen(false);
-  }
-
-  function removeConfCountry(name: string) {
-    persistConfCountries(confCountries.filter((c) => c !== name));
-  }
 
   async function loadReviewable(supabase: ReturnType<typeof getAuthedClient>) {
     if (!user) return;
@@ -303,13 +272,6 @@ export default function ProfilePage() {
     return UN_COUNTRIES.filter((c) => c.name.toLowerCase().includes(q));
   }, [nationality]);
 
-  const confMatches = useMemo(() => {
-    const q = confQuery.trim().toLowerCase();
-    const pool = UN_COUNTRIES.filter((c) => !confCountries.includes(c.name));
-    if (!q) return pool;
-    return pool.filter((c) => c.name.toLowerCase().includes(q));
-  }, [confQuery, confCountries]);
-
   const exp = experienceProgress(cvCount ?? 0);
 
   if (dataLoading) {
@@ -330,8 +292,8 @@ export default function ProfilePage() {
       className="rounded-[24px] p-5 md:p-8"
       style={{
         background: 'linear-gradient(158deg, rgba(255,253,248,0.92) 0%, rgba(250,248,243,0.86) 42%, rgba(237,231,216,0.72) 100%)',
-        border: '1px solid #DDD4C0',
-        boxShadow: '0 1px 2px rgba(27,56,40,0.05), 0 18px 46px rgba(27,56,40,0.09)',
+        border: '1.5px solid #C8BEA8',
+        boxShadow: '0 1px 2px rgba(27,56,40,0.06), 0 18px 46px rgba(27,56,40,0.1)',
       }}
     >
       <div className="pb-5 mb-7" style={{ borderBottom: '2px solid rgba(182,135,31,0.35)' }}>
@@ -357,8 +319,8 @@ export default function ProfilePage() {
           className="relative overflow-hidden rounded-[20px] px-6 py-6 md:px-8 md:py-7 transition-transform"
           style={{
             background: 'linear-gradient(135deg, #1B3828 0%, #24492F 55%, #2A5A3C 100%)',
-            border: '1px solid rgba(238,217,138,0.28)',
-            boxShadow: '0 14px 40px rgba(27,56,40,0.28)',
+            border: '1.5px solid rgba(238,217,138,0.45)',
+            boxShadow: '0 14px 40px rgba(27,56,40,0.3)',
           }}
         >
           {/* soft gold glow */}
@@ -375,7 +337,7 @@ export default function ProfilePage() {
                 <p style={{ fontFamily: MONO, fontSize: '9px', letterSpacing: '0.26em', color: '#EED98A', margin: 0, textTransform: 'uppercase' }}>
                   Your MUN Rank
                 </p>
-                <ExperienceInfo tone="gold" align="left" />
+                <ExperienceInfo tone="gold" align="left" currentLevel={exp.level} />
               </span>
               <p
                 className="font-black"
@@ -433,8 +395,8 @@ export default function ProfilePage() {
                   backgroundColor: 'rgba(250,248,243,0.86)',
                   backdropFilter: 'blur(12px)',
                   WebkitBackdropFilter: 'blur(12px)',
-                  border: '1px solid rgba(182,135,31,0.35)',
-                  boxShadow: '0 8px 24px rgba(27,56,40,0.06)',
+                  border: '1.5px solid rgba(182,135,31,0.4)',
+                  boxShadow: '0 8px 24px rgba(27,56,40,0.07)',
                 }}
               >
                 <div className="flex items-center gap-4">
@@ -769,114 +731,7 @@ export default function ProfilePage() {
         </div>
       </GlassCard>
 
-      {/* Card 2 — Countries I've conferenced in (passport collector) */}
-      <GlassCard className="mb-6">
-        <div className="flex items-center justify-between gap-3 mb-1.5 flex-wrap">
-          <Eyebrow>Countries I&apos;ve Conferenced In</Eyebrow>
-          <span
-            className="inline-flex items-center gap-1.5"
-            style={{ fontFamily: MONO, fontSize: '10px', letterSpacing: '0.1em', color: '#B6871F' }}
-          >
-            <Stamp size={12} strokeWidth={2} />
-            {confCountries.length} {confCountries.length === 1 ? 'COUNTRY' : 'COUNTRIES'} STAMPED
-          </span>
-        </div>
-        <p className="text-[13px] mb-4" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-          Your Model UN passport — stamp every country you&apos;ve travelled to for a conference.
-        </p>
-
-        {/* The wall of flags */}
-        {confCountries.length > 0 ? (
-          <div className="flex flex-wrap gap-2.5 mb-4">
-            {confCountries.map((name) => {
-              const c = getCountryByName(name);
-              const flag = c ? getFlagUrl(c.code) : null;
-              return (
-                <button
-                  key={name}
-                  type="button"
-                  onClick={() => removeConfCountry(name)}
-                  title={`Remove ${name}`}
-                  className="group inline-flex items-center gap-2 rounded-xl pl-2 pr-2.5 py-1.5 focus:outline-none transition-all"
-                  style={{
-                    backgroundColor: 'rgba(250,248,243,0.9)',
-                    border: '1px solid rgba(221,212,192,0.95)',
-                    boxShadow: '0 2px 8px rgba(27,56,40,0.06)',
-                    cursor: 'pointer',
-                  }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(139,32,32,0.4)'; (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.04)'; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(221,212,192,0.95)'; (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(250,248,243,0.9)'; }}
-                >
-                  {flag ? (
-                    /* eslint-disable-next-line @next/next/no-img-element */
-                    <img src={flag} alt="" style={{ width: '30px', height: '20px', objectFit: 'cover', borderRadius: '3px', boxShadow: '0 1px 3px rgba(27,56,40,0.25)', flexShrink: 0 }} />
-                  ) : (
-                    <span style={{ width: '30px', height: '20px', borderRadius: '3px', backgroundColor: 'rgba(27,56,40,0.1)', flexShrink: 0 }} />
-                  )}
-                  <span style={{ fontFamily: OUTFIT, fontSize: '13px', fontWeight: 600, color: '#1C1410' }}>{name}</span>
-                  <X size={12} strokeWidth={2.4} className="opacity-40 group-hover:opacity-100 transition-opacity" style={{ color: '#8B2020' }} />
-                </button>
-              );
-            })}
-          </div>
-        ) : (
-          <div
-            className="rounded-2xl px-5 py-6 text-center mb-4"
-            style={{ border: '1.5px dashed #DDD4C0', backgroundColor: 'rgba(250,248,243,0.5)' }}
-          >
-            <Stamp size={22} strokeWidth={1.6} style={{ color: '#B6871F', margin: '0 auto 6px' }} />
-            <p className="text-[13px]" style={{ color: '#9A8A78', fontFamily: OUTFIT, margin: 0 }}>
-              No stamps yet. Add the first country you&apos;ve conferenced in below.
-            </p>
-          </div>
-        )}
-
-        {/* Add via autocomplete */}
-        <div ref={confWrapRef} className="relative" style={{ maxWidth: '340px' }}>
-          <input
-            type="text"
-            value={confQuery}
-            placeholder="Add a country you've attended a conference in..."
-            onChange={(e) => { setConfQuery(e.target.value); setConfOpen(true); }}
-            onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; setConfOpen(true); }}
-            onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
-            className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none"
-            style={inputStyle}
-          />
-          {confOpen && confMatches.length > 0 && (
-            <div
-              className="absolute z-30 left-0 right-0 mt-1.5 rounded-xl overflow-y-auto"
-              style={{
-                maxHeight: '224px',
-                backgroundColor: 'rgba(250,248,243,0.97)',
-                backdropFilter: 'blur(16px)',
-                WebkitBackdropFilter: 'blur(16px)',
-                border: '1px solid #DDD4C0',
-                boxShadow: '0 16px 40px rgba(27,56,40,0.14)',
-              }}
-            >
-              {confMatches.slice(0, 40).map((c) => (
-                <button
-                  key={c.code}
-                  type="button"
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => addConfCountry(c.name)}
-                  className="w-full flex items-center gap-2.5 px-4 py-2 text-left text-sm focus:outline-none"
-                  style={{ background: 'none', border: 'none', color: '#1C1410', fontFamily: OUTFIT, cursor: 'pointer' }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={getFlagUrl(c.code)} alt="" style={{ width: '20px', height: '14px', objectFit: 'cover', borderRadius: '2px', flexShrink: 0 }} />
-                  {c.name}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      </GlassCard>
-
-      {/* Card 3 — Notification Preferences */}
+      {/* Card 2 — Notification Preferences */}
       <GlassCard className="mb-6">
         <Eyebrow className="mb-1.5">Notification Preferences</Eyebrow>
         <p className="text-[13px] mb-4" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
@@ -924,8 +779,8 @@ export default function ProfilePage() {
         </div>
       </GlassCard>
 
-      {/* Card 4 — Account */}
-      <GlassCard style={{ border: '1px solid rgba(139,32,32,0.22)' }}>
+      {/* Card 3 — Account */}
+      <GlassCard style={{ border: '1.5px solid rgba(139,32,32,0.3)' }}>
         <Eyebrow className="mb-4" color="#8B2020">Account</Eyebrow>
         <button
           onClick={handleSignOut}
