@@ -277,6 +277,7 @@ function PostingCard({
           backgroundColor: FOREST,
           color: GOLD,
           letterSpacing: '0.06em',
+          boxShadow: '0 4px 14px rgba(27,56,40,0.20)',
         }}
         onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = FOREST_MID; }}
         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = FOREST; }}

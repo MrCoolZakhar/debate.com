@@ -811,6 +811,7 @@ function ConferenceApplyInner() {
               fontFamily: "'Outfit', sans-serif",
               letterSpacing: '0.08em',
               cursor: submitting ? 'not-allowed' : 'pointer',
+              boxShadow: submitting ? 'none' : '0 6px 18px rgba(27,56,40,0.22)',
             }}
             onMouseEnter={(e) => { if (!submitting) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
             onMouseLeave={(e) => { if (!submitting) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
@@ -1079,7 +1080,7 @@ function ConferenceApplyInner() {
         </div>
 
         {/* Form card */}
-        <div className="rounded-2xl p-6 md:p-8" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
+        <div className="rounded-2xl p-6 md:p-8" style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #C8BEA8', boxShadow: '0 2px 6px rgba(27,56,40,0.05), 0 16px 40px rgba(27,56,40,0.08)' }}>
           {step === 1 && renderStep1()}
           {step === 2 && renderStep2()}
           {step === 3 && isPreferenceRole && renderStep3Preferences()}

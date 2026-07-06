@@ -231,7 +231,11 @@ export default function DashboardPage() {
       {!conference.is_public && (
         <div
           className="mb-6 p-6 rounded-2xl"
-          style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}
+          style={{
+            backgroundColor: '#FAF8F3',
+            border: '1.5px solid #C8BEA8',
+            boxShadow: '0 2px 6px rgba(27,56,40,0.06), 0 16px 40px rgba(27,56,40,0.09)',
+          }}
         >
           <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
             Complete Your Setup
