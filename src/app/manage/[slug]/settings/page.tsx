@@ -36,6 +36,7 @@ interface Organizer {
   id: string;
   role: string;
   user_id: string;
+  permissions?: Record<string, boolean>;
   profiles: { display_name: string; email: string; avatar_url: string | null } | null;
 }
 
@@ -325,7 +326,7 @@ export default function SettingsPage() {
     const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase
       .from('conference_organizers')
-      .select('id, role, user_id, profiles(display_name, email, avatar_url)')
+      .select('id, role, user_id, permissions, profiles(display_name, email, avatar_url)')
       .eq('conference_id', conference.id);
     if (data) setOrganizers(data as unknown as Organizer[]);
   }, [conference]);
@@ -450,6 +451,25 @@ export default function SettingsPage() {
     setInviteEmail('');
     await loadOrganizers();
     setInviting(false);
+  }
+
+  const SECTION_KEYS: { key: string; label: string }[] = [
+    { key: 'committees', label: 'Committees' },
+    { key: 'applications', label: 'Applications' },
+    { key: 'assignment', label: 'Assignment' },
+    { key: 'documents', label: 'Documents' },
+    { key: 'email_builder', label: 'Email' },
+    { key: 'financials', label: 'Financials' },
+    { key: 'job_board', label: 'Jobs' },
+    { key: 'settings', label: 'Settings' },
+  ];
+
+  async function toggleOrgPermission(orgId: string, current: Record<string, boolean> | undefined, key: string) {
+    if (!session) return;
+    const next = { ...(current ?? {}), [key]: !(current?.[key]) };
+    const supabase = getAuthedClient(session.access_token);
+    await supabase.from('conference_organizers').update({ permissions: next }).eq('id', orgId);
+    setOrganizers(prev => prev.map(o => o.id === orgId ? { ...o, permissions: next } : o));
   }
 
   async function handleRemoveOrganizer(organizerId: string) {
@@ -1242,14 +1262,15 @@ export default function SettingsPage() {
               const isLast = idx === organizers.length - 1;
               const name = org.profiles?.display_name ?? 'Unknown';
               const initials = name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
-              const isOwner = org.role === 'owner';
+              const orgIsOwner = org.role === 'owner';
 
               return (
                 <div
                   key={org.id}
-                  className="flex items-center gap-3 py-3"
+                  className="py-3"
                   style={{ borderBottom: isLast ? 'none' : '1px solid #F0EDE6' }}
                 >
+                <div className="flex items-center gap-3">
                   {org.profiles?.avatar_url ? (
                     <img
                       src={org.profiles.avatar_url}
@@ -1277,15 +1298,15 @@ export default function SettingsPage() {
                       fontFamily: "'DM Mono', monospace",
                       textTransform: 'uppercase',
                       letterSpacing: '0.08em',
-                      ...(isOwner
+                      ...(orgIsOwner
                         ? { backgroundColor: 'rgba(238,217,138,0.2)', color: '#B6871F' }
                         : { backgroundColor: 'rgba(27,56,40,0.08)', color: '#1B3828' }),
                     }}
                   >
-                    {isOwner ? 'OWNER' : 'ORGANIZER'}
+                    {orgIsOwner ? 'OWNER' : 'ORGANIZER'}
                   </span>
 
-                  {!isOwner && (
+                  {!orgIsOwner && (
                     <button
                       onClick={() => handleRemoveOrganizer(org.id)}
                       className="text-xs font-semibold focus:outline-none hover:underline flex-shrink-0"
@@ -1294,6 +1315,24 @@ export default function SettingsPage() {
                       REMOVE
                     </button>
                   )}
+                </div>
+                {isOwner && !orgIsOwner && (
+                  <div className="flex flex-wrap gap-1.5 mt-2" style={{ marginLeft: 48 }}>
+                    {SECTION_KEYS.map(s => {
+                      const on = org.permissions?.[s.key] === true;
+                      return (
+                        <button
+                          key={s.key}
+                          onClick={() => toggleOrgPermission(org.id, org.permissions, s.key)}
+                          className="text-[10px] font-semibold px-2 py-1 rounded-full focus:outline-none transition-colors"
+                          style={{ fontFamily: "'DM Mono', monospace", letterSpacing: '0.04em', textTransform: 'uppercase', border: on ? '1px solid rgba(27,56,40,0.3)' : '1px solid #DDD4C0', backgroundColor: on ? 'rgba(27,56,40,0.1)' : 'transparent', color: on ? '#1B3828' : '#9A8A78' }}
+                        >
+                          {s.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
                 </div>
               );
             })
