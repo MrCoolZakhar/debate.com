@@ -23,6 +23,7 @@ interface CommitteeRow {
   session_id: string | null;
   pp_submissions_enabled: boolean;
   position_paper_deadline: string | null;
+  position_paper_label: string | null;
   notification_email: string | null;
 }
 
@@ -147,6 +148,7 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialCountri
   const [topics, setTopics] = useState<string[]>(existing?.topics ?? []);
   const [topicInput, setTopicInput] = useState('');
   const [difficulty, setDifficulty] = useState(existing?.difficulty ?? 'intermediate');
+  const [positionPaperLabel, setPositionPaperLabel] = useState(existing?.position_paper_label ?? '');
   const [countries, setCountries] = useState<string[]>(initialCountries ?? []);
   const [baselineCountries] = useState<string[]>(initialCountries ?? []);
   const [pendingRemovalCount, setPendingRemovalCount] = useState<number | null>(null);
@@ -167,6 +169,7 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialCountri
       abbreviation: abbreviation.trim() || null,
       topics,
       difficulty,
+      position_paper_label: positionPaperLabel.trim() || null,
       committee_type: committeeType,
       total_slots: countries.length,
       notification_email: null,
@@ -228,6 +231,7 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialCountri
       abbreviation: abbreviation.trim() || null,
       topics,
       difficulty,
+      position_paper_label: positionPaperLabel.trim() || null,
       total_slots: countries.length,
     }).eq('id', ex.id);
     if (ex.session_id) {
@@ -285,6 +289,10 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialCountri
               <option value="advanced">Advanced</option>
               <option value="expert">Expert</option>
             </select>
+          </div>
+          <div>
+            <label style={labelStyle}>Position paper label (optional)</label>
+            <input value={positionPaperLabel} onChange={e => setPositionPaperLabel(e.target.value)} placeholder="e.g. Position Paper, Policy Statement, Opening Speech" style={inputStyle} />
           </div>
           <div>
             <label style={labelStyle}>Topics * (at least one, up to 3)</label>

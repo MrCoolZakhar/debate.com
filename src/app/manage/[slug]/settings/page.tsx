@@ -262,6 +262,8 @@ export default function SettingsPage() {
   const { conference, refreshConference } = useManage();
   const { user, session } = useAuth();
   const [activeTab, setActiveTab] = useState<'applications' | 'visual' | 'organizers' | 'privacy'>('applications');
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // Visual tab state
   const [bannerUploading, setBannerUploading] = useState(false);
@@ -1377,6 +1379,49 @@ export default function SettingsPage() {
           >
             ARCHIVE CONFERENCE
           </button>
+
+          {!confirmingDelete ? (
+            <button
+              onClick={() => setConfirmingDelete(true)}
+              className="w-full rounded-xl py-2.5 mt-3 font-semibold text-sm focus:outline-none transition-colors"
+              style={{ border: '1px solid rgba(139,32,32,0.3)', color: '#8B2020', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.05)'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+            >
+              DELETE CONFERENCE
+            </button>
+          ) : (
+            <div className="mt-3 p-4 rounded-xl" style={{ border: '1px solid rgba(139,32,32,0.3)', backgroundColor: 'rgba(139,32,32,0.04)' }}>
+              <p className="text-sm mb-4" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>
+                Are you sure you want to delete this conference? This action is irreversible, all data relating to this conference will be lost.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={async () => {
+                    if (!session || deleting) return;
+                    setDeleting(true);
+                    const supabase = getAuthedClient(session.access_token);
+                    const { error } = await supabase.rpc('delete_conference', { p_conference_id: conference.id });
+                    if (error) { alert(error.message || 'Could not delete conference.'); setDeleting(false); return; }
+                    window.location.href = '/conferences';
+                  }}
+                  disabled={deleting}
+                  className="flex-1 rounded-xl py-2.5 font-bold text-sm text-white focus:outline-none transition-colors"
+                  style={{ backgroundColor: deleting ? '#DDD4C0' : '#8B2020', fontFamily: "'Outfit', sans-serif" }}
+                >
+                  {deleting ? 'DELETING…' : 'YES, DELETE'}
+                </button>
+                <button
+                  onClick={() => setConfirmingDelete(false)}
+                  disabled={deleting}
+                  className="flex-1 rounded-xl py-2.5 font-semibold text-sm focus:outline-none transition-colors"
+                  style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}
+                >
+                  CANCEL
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
