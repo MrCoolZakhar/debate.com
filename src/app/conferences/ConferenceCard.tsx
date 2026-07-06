@@ -14,9 +14,16 @@
 // same anatomy for narrow rails (~340–380px): 72px banner band, smaller logo
 // overlap and tighter padding. One definition, two densities — never fork it.
 //
-// `heroCompact` is a still-denser tier layered ON TOP of `compact`, used ONLY by
-// the Stagefront hero "up next" rail so three cards fit inside one viewport:
-// 56px banner band, tighter vertical rhythm, foot row hairline pulled in.
+// `heroCompact` is the PHOTO-FORWARD hero tier, used ONLY by the Stagefront
+// hero "up next" rail: the banner photo fills the entire 188px card (cover)
+// under a forest-tinted scrim that darkens toward the bottom; the logo floats
+// top-left over the photo; the name is overlaid in bold white Outfit; the four
+// key facts (location+flag · dates · fee · attendees) sit in a 2×2 micro-grid
+// in the photo's lower zone with the APPLY pill bottom-right. Cards without a
+// banner fall back to the forest gradient + watermark acronym. This tier
+// completely replaces the banner-band anatomy — the classic layout below is
+// never reached when heroCompact is set, so explore/near-you/calendar are
+// untouched.
 // `goldGlow` adds a premium golden outer glow + an overlapping gavel disc that
 // straddles the card's top-right corner — hero-only, never on explore/near-you.
 // The disc renders in a positioned WRAPPER around the card (not inside the
@@ -29,10 +36,18 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState } from 'react';
-import { ArrowRight, Users, CalendarDays, Gavel } from 'lucide-react';
+import { ArrowRight, Users, CalendarDays, Gavel, MapPin } from 'lucide-react';
 import { getFlagUrl, getCountryByName } from '@/lib/countries';
 
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
+
+// Photo-forward hero cards: kill the Ken Burns zoom + hover lift for users who
+// asked the OS for less motion. Scoped to the hero tier's own class names.
+const PHOTO_REDUCED_MOTION_CSS = `
+@media (prefers-reduced-motion: reduce) {
+  .gv-photo-card, .gv-photo-card img, .gv-photo-lift { transition: none !important; }
+  .gv-photo-card img, .gv-photo-lift { transform: none !important; }
+}`;
 
 // The minimal conference shape the card renders. Both the explore `Conference`
 // type and the landing `LabConference` type are structurally compatible.
@@ -106,7 +121,191 @@ export function ConferenceCard({
     ? '0 0 0 1px rgba(238,217,138,0.55), 0 6px 20px rgba(182,135,31,0.30), 0 18px 46px rgba(238,217,138,0.24), 0 2px 8px rgba(27,56,40,0.10)'
     : '0 0 0 1px rgba(238,217,138,0.40), 0 4px 16px rgba(182,135,31,0.22), 0 12px 34px rgba(238,217,138,0.18)';
 
-  const card = (
+  // ── Photo-forward hero tier ───────────────────────────────────────────────
+  // The banner photo IS the card: full-bleed cover, forest-tinted scrim heavier
+  // at the bottom, logo floating top-left, name + 2×2 fact micro-grid + APPLY
+  // pill overlaid on the photo's lower zone. Fixed 188px so three stack inside
+  // the one-viewport hero at 1366×768.
+  const card = heroCompact ? (
+    <article
+      onClick={onClick}
+      onMouseEnter={onHover}
+      onMouseLeave={onLeave}
+      className="gv-photo-card cursor-pointer overflow-hidden"
+      style={{
+        position: 'relative',
+        height: '188px',
+        backgroundColor: '#14241B',
+        // Solid, defined edge over the glow — stronger card definition.
+        border: goldGlow ? '1px solid rgba(238,217,138,0.75)' : '1px solid rgba(221,212,192,0.9)',
+        borderRadius: '20px',
+        transform: goldGlow ? undefined : hovered ? 'translateY(-4px)' : 'translateY(0)',
+        boxShadow: goldGlow
+          ? glowShadow
+          : hovered
+            ? '0 20px 48px rgba(27,56,40,0.16), 0 2px 8px rgba(27,56,40,0.08)'
+            : '0 1px 3px rgba(27,56,40,0.05)',
+        transition: 'transform 260ms cubic-bezier(0.22,1,0.36,1), box-shadow 260ms ease, border-color 260ms ease',
+      }}
+    >
+      <style>{PHOTO_REDUCED_MOTION_CSS}</style>
+
+      {/* Full-bleed banner photo — or forest gradient + watermark fallback */}
+      {conf.banner_url ? (
+        <img
+          src={conf.banner_url}
+          alt=""
+          style={{
+            position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover',
+            transform: hovered ? 'scale(1.045)' : 'scale(1)',
+            transition: 'transform 700ms cubic-bezier(0.22,1,0.36,1)',
+          }}
+        />
+      ) : (
+        <>
+          <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(135deg, ${g0} 0%, ${g1} 100%)` }} />
+          <div style={{ position: 'absolute', inset: 0, backgroundImage: GRAIN, backgroundSize: '300px', mixBlendMode: 'overlay', opacity: 0.1 }} />
+          <span
+            aria-hidden
+            style={{
+              position: 'absolute', right: '16px', top: '16px',
+              fontFamily: "'DM Mono', monospace", fontSize: '46px', lineHeight: 1,
+              color: 'rgba(238,217,138,0.13)', letterSpacing: '0.02em', userSelect: 'none',
+            }}
+          >
+            {conf.acronym.slice(0, 6)}
+          </span>
+        </>
+      )}
+
+      {/* Warm forest-tinted scrim — heavier at the bottom for text legibility,
+          a whisper at the top so the floating logo still reads on bright shots */}
+      <div
+        style={{
+          position: 'absolute', inset: 0,
+          background: 'linear-gradient(to top, rgba(10,22,16,0.93) 0%, rgba(12,26,19,0.66) 34%, rgba(18,36,27,0.18) 64%, rgba(12,26,19,0.38) 100%)',
+        }}
+      />
+
+      {/* Free-floating logo — top-left over the photo */}
+      <div style={{ position: 'absolute', top: '12px', left: '14px' }}>
+        {conf.logo_url ? (
+          <img
+            src={conf.logo_url}
+            alt={conf.acronym}
+            style={{
+              width: '40px', height: '40px', objectFit: 'contain', display: 'block',
+              filter: 'drop-shadow(0 6px 14px rgba(6,14,10,0.6))',
+            }}
+          />
+        ) : (
+          <div
+            style={{
+              width: '34px', height: '34px', borderRadius: '10px',
+              backgroundColor: 'rgba(237,231,216,0.92)', border: '1px solid rgba(238,217,138,0.5)',
+              boxShadow: '0 4px 12px rgba(6,14,10,0.45)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            <span style={{ fontSize: '9px', fontFamily: "'DM Mono', monospace", color: '#1B3828', fontWeight: 700 }}>
+              {initials}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Lower zone: acronym eyebrow · overlaid name · 2×2 facts + APPLY */}
+      <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '0 14px 12px' }}>
+        <p style={{ fontFamily: "'DM Mono', monospace", fontSize: '8.5px', letterSpacing: '0.18em', color: '#EED98A', margin: '0 0 3px 0' }}>
+          {conf.acronym}
+        </p>
+        <h3
+          style={{
+            fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '15.5px', lineHeight: 1.18,
+            color: '#FAF8F3', margin: 0, textShadow: '0 1px 12px rgba(0,0,0,0.5)',
+            display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+          }}
+        >
+          {conf.full_name}
+        </h3>
+        <div className="flex items-end justify-between gap-3" style={{ marginTop: '8px' }}>
+          {/* 2×2 fact micro-grid: location+flag | dates · fee | attendees */}
+          <div
+            style={{
+              display: 'grid', gridTemplateColumns: 'minmax(0, auto) auto',
+              columnGap: '14px', rowGap: '5px', justifyContent: 'start', alignItems: 'center', minWidth: 0,
+            }}
+          >
+            <span className="flex items-center gap-1" style={{ minWidth: 0 }}>
+              <MapPin size={11} style={{ color: '#EED98A', flexShrink: 0 }} />
+              {flagUrl && (
+                <img
+                  src={flagUrl}
+                  alt={conf.country}
+                  style={{ width: '15px', height: '11px', borderRadius: '2px', objectFit: 'cover', flexShrink: 0, boxShadow: '0 1px 2px rgba(0,0,0,0.4)' }}
+                />
+              )}
+              <span
+                style={{
+                  fontFamily: "'Outfit', sans-serif", fontWeight: 500, fontSize: '10.5px',
+                  color: 'rgba(237,231,216,0.92)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                }}
+              >
+                {conf.city}
+              </span>
+            </span>
+            <span className="flex items-center gap-1">
+              <CalendarDays size={11} style={{ color: 'rgba(237,231,216,0.66)', flexShrink: 0 }} />
+              <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '9.5px', color: 'rgba(237,231,216,0.8)', whiteSpace: 'nowrap' }}>
+                {formatDateRange(conf.start_date, conf.end_date)}
+              </span>
+            </span>
+            {conf.fee_amount === 0 ? (
+              <span
+                style={{
+                  justifySelf: 'start', fontFamily: "'DM Mono', monospace", fontSize: '9px', fontWeight: 700,
+                  letterSpacing: '0.08em', color: '#BFEBD1', backgroundColor: 'rgba(42,90,60,0.55)',
+                  border: '1px solid rgba(127,214,160,0.35)', padding: '1.5px 8px', borderRadius: '9999px',
+                }}
+              >
+                FREE
+              </span>
+            ) : (
+              <span
+                style={{
+                  justifySelf: 'start', fontFamily: "'DM Mono', monospace", fontSize: '9px',
+                  color: '#EED98A', backgroundColor: 'rgba(238,217,138,0.14)',
+                  border: '1px solid rgba(238,217,138,0.32)', padding: '1.5px 8px', borderRadius: '9999px', whiteSpace: 'nowrap',
+                }}
+              >
+                {conf.fee_currency} {conf.fee_amount.toFixed(0)}
+              </span>
+            )}
+            <span className="flex items-center gap-1">
+              <Users size={11} style={{ color: 'rgba(237,231,216,0.66)', flexShrink: 0 }} />
+              <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '9.5px', color: 'rgba(237,231,216,0.8)' }}>
+                {conf.expected_delegates.toLocaleString()}
+              </span>
+            </span>
+          </div>
+          {action === 'apply' ? (
+            <div className="flex-shrink-0"><ApplyButton /></div>
+          ) : (
+            <span
+              className="flex items-center gap-1 text-[11px] font-bold flex-shrink-0"
+              style={{ color: '#EDE7D8', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em' }}
+            >
+              VIEW
+              <ArrowRight
+                size={13}
+                style={{ transform: hovered ? 'translateX(3px)' : 'translateX(0)', transition: 'transform 220ms cubic-bezier(0.22,1,0.36,1)' }}
+              />
+            </span>
+          )}
+        </div>
+      </div>
+    </article>
+  ) : (
     <article
       onClick={onClick}
       onMouseEnter={onHover}
@@ -299,6 +498,7 @@ export function ConferenceCard({
   // longer slice the disc.
   return (
     <div
+      className={heroCompact ? 'gv-photo-lift' : undefined}
       style={{
         position: 'relative',
         transform: hovered ? 'translateY(-4px)' : 'translateY(0)',

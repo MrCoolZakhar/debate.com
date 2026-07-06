@@ -18,7 +18,8 @@
 //
 // The hero rail + the regional rail reuse the SHARED ConferenceCard
 // (../ConferenceCard) — the same definition the explore directory renders;
-// the hero stack uses its `compact` density so three fit gracefully.
+// the hero stack uses its photo-forward `heroCompact` tier (banner photo
+// fills the card) so three fit gracefully, pinned to the right screen edge.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -337,16 +338,19 @@ export default function VariantStagefront({
               </div>
             </div>
 
-            {/* Curated "up next" rail — three hero-compact shared cards floating
-                over the photo, each with the gold glow + gavel-disc treatment
-                and the gold APPLY pill in the foot row. On lg the trio aligns
-                to the TOP of the hero body (self-start pulls it up toward the
-                nav band) and sits pulled in from the right edge (lg:mr-10 /
-                xl:mr-20) so it reads center-right, nearer the headline column.
-                On narrow screens it becomes a single-row snap rail so all
-                three fit inside one viewport height. */}
+            {/* Curated "up next" rail — three photo-forward shared cards
+                (heroCompact tier: the banner photo fills the card, name + four
+                facts overlaid on a forest scrim), each with the gold glow +
+                gavel-disc treatment and the gold APPLY pill. On lg the trio
+                aligns to the TOP of the hero body (self-start pulls it up
+                toward the nav band) and is pinned to the VERY RIGHT of the
+                screen: negative right margins eat most of the section's
+                md:px-14 padding, leaving ~20px (lg) / ~16px (xl) of breathing
+                room from the viewport edge. On narrow screens it becomes a
+                single-row snap rail so all three fit inside one viewport
+                height. */}
             {upcomingTrio.length > 0 && (
-              <aside className="w-full lg:w-[344px] flex-shrink-0 flex flex-col justify-center lg:justify-start lg:self-start lg:pt-3 lg:mr-10 xl:mr-20">
+              <aside className="w-full lg:w-[356px] flex-shrink-0 flex flex-col justify-center lg:justify-start lg:self-start lg:pt-3 lg:-mr-9 xl:-mr-10">
                 <div className="sf-hero-rail flex flex-row lg:flex-col gap-3 lg:gap-2.5 overflow-x-auto lg:overflow-visible -mx-6 px-6 lg:mx-0 lg:px-0 pb-2 lg:pb-0">
                   {upcomingTrio.map(c => (
                     <div
@@ -356,7 +360,6 @@ export default function VariantStagefront({
                     >
                       <ConferenceCard
                         conf={c}
-                        compact
                         heroCompact
                         goldGlow
                         action="apply"
