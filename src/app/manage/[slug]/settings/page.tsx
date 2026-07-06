@@ -264,6 +264,7 @@ export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<'applications' | 'visual' | 'organizers' | 'privacy'>('applications');
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   // Visual tab state
   const [bannerUploading, setBannerUploading] = useState(false);
@@ -1380,45 +1381,51 @@ export default function SettingsPage() {
             ARCHIVE CONFERENCE
           </button>
 
-          {!confirmingDelete ? (
-            <button
-              onClick={() => setConfirmingDelete(true)}
-              className="w-full rounded-xl py-2.5 mt-3 font-semibold text-sm focus:outline-none transition-colors"
-              style={{ border: '1px solid rgba(139,32,32,0.3)', color: '#8B2020', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.05)'; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-            >
-              DELETE CONFERENCE
-            </button>
-          ) : (
-            <div className="mt-3 p-4 rounded-xl" style={{ border: '1px solid rgba(139,32,32,0.3)', backgroundColor: 'rgba(139,32,32,0.04)' }}>
-              <p className="text-sm mb-4" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>
-                Are you sure you want to delete this conference? This action is irreversible, all data relating to this conference will be lost.
-              </p>
-              <div className="flex gap-2">
-                <button
-                  onClick={async () => {
-                    if (!session || deleting) return;
-                    setDeleting(true);
-                    const supabase = getAuthedClient(session.access_token);
-                    const { error } = await supabase.rpc('delete_conference', { p_conference_id: conference.id });
-                    if (error) { alert(error.message || 'Could not delete conference.'); setDeleting(false); return; }
-                    window.location.href = '/conferences';
-                  }}
-                  disabled={deleting}
-                  className="flex-1 rounded-xl py-2.5 font-bold text-sm text-white focus:outline-none transition-colors"
-                  style={{ backgroundColor: deleting ? '#DDD4C0' : '#8B2020', fontFamily: "'Outfit', sans-serif" }}
-                >
-                  {deleting ? 'DELETING…' : 'YES, DELETE'}
-                </button>
-                <button
-                  onClick={() => setConfirmingDelete(false)}
-                  disabled={deleting}
-                  className="flex-1 rounded-xl py-2.5 font-semibold text-sm focus:outline-none transition-colors"
-                  style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}
-                >
-                  CANCEL
-                </button>
+          <button
+            onClick={() => { if (!isOwner) { setDeleteError('Only the conference owner can delete this conference.'); return; } setDeleteError(''); setConfirmingDelete(true); }}
+            className="w-full rounded-xl py-2.5 mt-3 font-semibold text-sm focus:outline-none transition-colors"
+            style={{ border: '1px solid rgba(139,32,32,0.3)', color: '#8B2020', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.05)'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+          >
+            DELETE CONFERENCE
+          </button>
+          {deleteError && (
+            <p className="text-sm mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{deleteError}</p>
+          )}
+
+          {confirmingDelete && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center px-6" style={{ backgroundColor: 'rgba(28,20,16,0.55)' }} onClick={() => { if (!deleting) setConfirmingDelete(false); }}>
+              <div className="max-w-md w-full rounded-2xl p-6" style={{ backgroundColor: '#FAF8F3' }} onClick={e => e.stopPropagation()}>
+                <p className="font-bold text-lg mb-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Delete this conference?</p>
+                <p className="text-sm mb-6" style={{ color: '#6A5A4A', fontFamily: "'Outfit', sans-serif" }}>
+                  Are you sure you want to delete this conference? This action is irreversible, all data relating to this conference will be lost.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={async () => {
+                      if (!session || deleting) return;
+                      setDeleting(true);
+                      const supabase = getAuthedClient(session.access_token);
+                      const { error } = await supabase.rpc('delete_conference', { p_conference_id: conference.id });
+                      if (error) { setDeleteError(error.message || 'Could not delete conference.'); setConfirmingDelete(false); setDeleting(false); return; }
+                      window.location.href = '/conferences';
+                    }}
+                    disabled={deleting}
+                    className="flex-1 rounded-xl py-2.5 font-bold text-sm text-white focus:outline-none transition-colors"
+                    style={{ backgroundColor: deleting ? '#DDD4C0' : '#8B2020', fontFamily: "'Outfit', sans-serif" }}
+                  >
+                    {deleting ? 'DELETING…' : 'YES, DELETE'}
+                  </button>
+                  <button
+                    onClick={() => setConfirmingDelete(false)}
+                    disabled={deleting}
+                    className="flex-1 rounded-xl py-2.5 font-semibold text-sm focus:outline-none transition-colors"
+                    style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}
+                  >
+                    CANCEL
+                  </button>
+                </div>
               </div>
             </div>
           )}
