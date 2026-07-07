@@ -3,8 +3,10 @@
 import { useState, useRef, useEffect } from 'react';
 import type { CSSProperties } from 'react';
 import Link from 'next/link';
+import { MapPin } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import { supabase } from '@/lib/supabase';
+import { getFlagUrl, getCountryByName } from '@/lib/countries';
 
 type ContinentKey =
   | 'north-america'
@@ -120,6 +122,21 @@ function polygonCentroid(points: string): { x: number; y: number } {
   return { x: sumX / pairs.length, y: sumY / pairs.length };
 }
 
+interface HighlightConf {
+  slug: string;
+  full_name: string;
+  acronym: string | null;
+  country: string;
+  logo_url: string | null;
+  start_date: string | null;
+}
+
+interface ContinentData {
+  activeCount: number;
+  highlighted: HighlightConf | null;
+  flagCountries: string[]; // distinct countries with live listings, for the flag cluster
+}
+
 async function fetchActiveConferences(countries: string[]): Promise<number> {
   const today = new Date().toISOString().split('T')[0];
   const { count } = await supabase
@@ -133,15 +150,22 @@ async function fetchActiveConferences(countries: string[]): Promise<number> {
   return count ?? 0;
 }
 
-async function fetchHighlightedConference(countries: string[]): Promise<string | null> {
+async function fetchContinentDetail(countries: string[]): Promise<{ highlighted: HighlightConf | null; flagCountries: string[] }> {
   const { data: confs } = await supabase
     .from('conferences')
-    .select('id, full_name')
+    .select('id, slug, full_name, acronym, country, logo_url, start_date')
     .eq('is_public', true)
     .eq('status', 'published')
     .in('country', countries);
 
-  if (!confs || confs.length === 0) return null;
+  if (!confs || confs.length === 0) return { highlighted: null, flagCountries: [] };
+
+  // Distinct countries (in listing order) for the flag cluster, capped at 4.
+  const flagCountries: string[] = [];
+  for (const c of confs) {
+    if (c.country && !flagCountries.includes(c.country)) flagCountries.push(c.country);
+    if (flagCountries.length >= 4) break;
+  }
 
   const confIds = confs.map((c) => c.id);
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -152,21 +176,41 @@ async function fetchHighlightedConference(countries: string[]): Promise<string |
     .in('conference_id', confIds)
     .gte('submitted_at', sevenDaysAgo);
 
-  if (!apps || apps.length === 0) return null;
+  const toHighlight = (id: string | null): HighlightConf | null => {
+    if (!id) return null;
+    const c = confs.find((x) => x.id === id);
+    return c
+      ? { slug: c.slug, full_name: c.full_name, acronym: c.acronym, country: c.country, logo_url: c.logo_url, start_date: c.start_date }
+      : null;
+  };
 
-  const counts: Record<string, number> = {};
-  for (const app of apps) {
-    counts[app.conference_id] = (counts[app.conference_id] ?? 0) + 1;
+  if (apps && apps.length > 0) {
+    const counts: Record<string, number> = {};
+    for (const app of apps) counts[app.conference_id] = (counts[app.conference_id] ?? 0) + 1;
+    let topId: string | null = null;
+    let topCount = 0;
+    for (const [id, cnt] of Object.entries(counts)) {
+      if (cnt > topCount) { topCount = cnt; topId = id; }
+    }
+    const hl = toHighlight(topId);
+    if (hl) return { highlighted: hl, flagCountries };
   }
 
-  let topId: string | null = null;
-  let topCount = 0;
-  for (const [id, cnt] of Object.entries(counts)) {
-    if (cnt > topCount) { topCount = cnt; topId = id; }
-  }
+  // No recent applications — fall back to the soonest upcoming listing so the
+  // card always spotlights a real conference instead of an empty dash.
+  const today = new Date().toISOString().split('T')[0];
+  const upcoming = confs
+    .filter((c) => c.start_date && c.start_date >= today)
+    .sort((a, b) => (a.start_date ?? '').localeCompare(b.start_date ?? ''));
+  const fallback = upcoming[0] ?? confs[0];
+  return { highlighted: toHighlight(fallback?.id ?? null), flagCountries };
+}
 
-  if (!topId) return null;
-  return confs.find((c) => c.id === topId)?.full_name ?? null;
+function formatMonthYear(iso: string | null): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return null;
+  return d.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
 }
 
 const GRAIN_SVG = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
@@ -192,7 +236,7 @@ export default function ConferencesMapPage() {
   const [selected, setSelected] = useState<ContinentKey | null>(null);
   const [phase, setPhase] = useState<'world' | 'clouds' | 'continent'>('world');
   const [activeCount, setActiveCount] = useState(0);
-  const [highlighted, setHighlighted] = useState<string | null>(null);
+  const [detail, setDetail] = useState<ContinentData | null>(null);
   const [cardLoading, setCardLoading] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const hoveredRef = useRef<ContinentKey | null>(null);
@@ -266,10 +310,10 @@ export default function ConferencesMapPage() {
 
         Promise.all([
           fetchActiveConferences(continent.countries),
-          fetchHighlightedConference(continent.countries),
-        ]).then(([cnt, hl]) => {
+          fetchContinentDetail(continent.countries),
+        ]).then(([cnt, det]) => {
           setActiveCount(cnt);
-          setHighlighted(hl);
+          setDetail({ activeCount: cnt, highlighted: det.highlighted, flagCountries: det.flagCountries });
           setCardLoading(false);
         });
       }, 1700);
@@ -295,7 +339,7 @@ export default function ConferencesMapPage() {
         setSelected(null);
         setHovered(null);
         setActiveCount(0);
-        setHighlighted(null);
+        setDetail(null);
         recheckHover();
       }, 1700);
     };
@@ -579,16 +623,20 @@ export default function ConferencesMapPage() {
             <div style={{ position: 'relative', zIndex: 1 }}>
               <p
                 style={{
-                  fontFamily: "'DM Mono', monospace",
-                  fontSize: 9,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  fontFamily: "'Outfit', sans-serif",
+                  fontSize: 11,
                   fontWeight: 700,
                   color: '#B6871F',
-                  letterSpacing: '0.2em',
+                  letterSpacing: '0.14em',
                   margin: '0 0 8px 0',
                   textTransform: 'uppercase',
                 }}
               >
-                {'CONFERENCES — ' + selectedDef.label.toUpperCase()}
+                <MapPin size={12} strokeWidth={2.5} />
+                On the board
               </p>
 
               <h2
@@ -603,11 +651,40 @@ export default function ConferencesMapPage() {
                 {selectedDef.label}
               </h2>
 
+              {/* Flag cluster — rectangular twemoji flags from the continent's
+                  live listings, so the card feels part of the flag-forward card
+                  system rather than a text-only readout. */}
+              {!cardLoading && detail && detail.flagCountries.length > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 10 }}>
+                  {detail.flagCountries.map((countryName) => {
+                    const code = getCountryByName(countryName)?.code;
+                    if (!code) return null;
+                    return (
+                      <img
+                        key={countryName}
+                        src={getFlagUrl(code)}
+                        alt={countryName}
+                        title={countryName}
+                        style={{
+                          width: 22,
+                          height: 15,
+                          objectFit: 'cover',
+                          borderRadius: 2,
+                          border: '1px solid rgba(27,56,40,0.14)',
+                          boxShadow: '0 1px 2px rgba(27,56,40,0.12)',
+                        }}
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                      />
+                    );
+                  })}
+                </div>
+              )}
+
               <div
                 style={{
                   height: 1,
                   backgroundColor: '#DDD4C0',
-                  margin: '12px 0',
+                  margin: '14px 0',
                 }}
               />
 
@@ -632,75 +709,125 @@ export default function ConferencesMapPage() {
                     }}
                   />
                 </>
+              ) : activeCount === 0 && (!detail || !detail.highlighted) ? (
+                /* Designed 0-state — no live conferences here yet. */
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      flexShrink: 0,
+                      width: 40,
+                      height: 40,
+                      borderRadius: 10,
+                      backgroundColor: 'rgba(27,56,40,0.06)',
+                      border: '1px solid rgba(27,56,40,0.12)',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#1B3828',
+                    }}
+                  >
+                    <MapPin size={18} strokeWidth={2} />
+                  </span>
+                  <div>
+                    <p style={{ fontFamily: "'Outfit', sans-serif", fontSize: 14, fontWeight: 800, color: '#1B3828', margin: 0 }}>
+                      No live conferences yet
+                    </p>
+                    <p style={{ fontFamily: "'Outfit', sans-serif", fontSize: 12, lineHeight: 1.5, color: '#9A8A78', margin: '3px 0 0 0' }}>
+                      Be the first to bring MUN to {selectedDef.label}.
+                    </p>
+                  </div>
+                </div>
               ) : (
                 <>
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      marginBottom: 8,
-                    }}
-                  >
-                    <p
+                  {/* Live count as an oversized gold numeral — the card's hero
+                      figure, not a justify-between debug row. */}
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 4 }}>
+                    <span
+                      style={{
+                        fontFamily: "'Outfit', sans-serif",
+                        fontSize: 46,
+                        fontWeight: 900,
+                        lineHeight: 1,
+                        color: '#B6871F',
+                      }}
+                    >
+                      {activeCount}
+                    </span>
+                    <span
                       style={{
                         fontFamily: "'Outfit', sans-serif",
                         fontSize: 12,
                         fontWeight: 600,
+                        lineHeight: 1.3,
                         color: '#9A8A78',
-                        margin: 0,
+                        maxWidth: 120,
                       }}
                     >
-                      Active Conferences
-                    </p>
-                    <p
-                      style={{
-                        fontFamily: "'DM Mono', monospace",
-                        fontSize: 18,
-                        fontWeight: 700,
-                        color: '#1B3828',
-                        margin: 0,
-                      }}
-                    >
-                      {activeCount.toString()}
-                    </p>
+                      {activeCount === 1 ? 'conference in session' : 'conferences in session'}
+                    </span>
                   </div>
 
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      marginBottom: 8,
-                    }}
-                  >
-                    <p
+                  {/* Highlighted conference as a mini card chip (logo + name +
+                      month·year) reusing the flag-forward card language. */}
+                  {detail?.highlighted && (
+                    <Link
+                      href={'/conferences/' + detail.highlighted.slug}
                       style={{
-                        fontFamily: "'Outfit', sans-serif",
-                        fontSize: 12,
-                        fontWeight: 600,
-                        color: '#9A8A78',
-                        margin: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 10,
+                        marginTop: 14,
+                        padding: '9px 11px',
+                        borderRadius: 12,
+                        backgroundColor: '#EDE7D8',
+                        border: '1px solid #DDD4C0',
+                        textDecoration: 'none',
+                        transition: 'border-color 150ms ease, transform 150ms ease',
                       }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#B6871F'; (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; }}
                     >
-                      Highlighted Conference
-                    </p>
-                    <p
-                      style={{
-                        fontFamily: "'Outfit', sans-serif",
-                        fontSize: 12,
-                        fontWeight: 700,
-                        color: '#1B3828',
-                        margin: 0,
-                        maxWidth: 140,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {highlighted ?? '—'}
-                    </p>
-                  </div>
+                      {detail.highlighted.logo_url ? (
+                        <img
+                          src={detail.highlighted.logo_url}
+                          alt=""
+                          style={{ width: 34, height: 34, borderRadius: 8, objectFit: 'contain', flexShrink: 0, backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                        />
+                      ) : (
+                        <span
+                          aria-hidden="true"
+                          style={{
+                            width: 34, height: 34, borderRadius: 8, flexShrink: 0,
+                            backgroundColor: '#1B3828', color: '#EED98A',
+                            fontFamily: "'DM Mono', monospace", fontSize: 11, fontWeight: 700,
+                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                          }}
+                        >
+                          {(detail.highlighted.acronym ?? detail.highlighted.full_name).slice(0, 2).toUpperCase()}
+                        </span>
+                      )}
+                      <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                        <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: 12, fontWeight: 500, color: '#B6871F', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                          Spotlight
+                        </span>
+                        <span
+                          style={{
+                            fontFamily: "'Outfit', sans-serif", fontSize: 13, fontWeight: 700, color: '#1B3828',
+                            lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 190,
+                          }}
+                        >
+                          {detail.highlighted.full_name}
+                        </span>
+                        {formatMonthYear(detail.highlighted.start_date) && (
+                          <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, color: '#9A8A78', marginTop: 1 }}>
+                            {formatMonthYear(detail.highlighted.start_date)}
+                          </span>
+                        )}
+                      </span>
+                    </Link>
+                  )}
                 </>
               )}
 
