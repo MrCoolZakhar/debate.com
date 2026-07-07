@@ -27,6 +27,8 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowRight, ArrowUpRight, Building2, CreditCard, FileText, Gavel, MapPin, Users, Zap } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
+import { useAuth } from '@/components/AuthProvider';
+import { getAuthedClient } from '@/lib/supabase-auth';
 import { supabase } from '@/lib/supabase';
 import { UN_COUNTRIES } from '@/lib/countries';
 import { ConferenceCard } from '../ConferenceCard';
@@ -99,6 +101,26 @@ export default function VariantStagefront({
   const router = useRouter();
   const headliner = useMemo(() => pickHeadliner(conferences), [conferences]);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+
+  // Conference ids the signed-in viewer already applied to — cards show
+  // APPLIED instead of the APPLY pill. RLS returns only the viewer's own rows.
+  const { user, session, loading: authLoading } = useAuth();
+  const [appliedIds, setAppliedIds] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user || !session) { setAppliedIds(new Set()); return; }
+    let cancelled = false;
+    (async () => {
+      const { data } = await getAuthedClient(session.access_token)
+        .from('applications')
+        .select('conference_id')
+        .eq('user_id', user.id);
+      if (!cancelled) {
+        setAppliedIds(new Set(((data as { conference_id: string }[]) ?? []).map(a => a.conference_id)));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [authLoading, user, session]);
 
   // The three soonest upcoming conferences take the hero's "up next" rail.
   const upcomingTrio = useMemo(
@@ -370,7 +392,7 @@ export default function VariantStagefront({
                         conf={c}
                         heroCompact
                         goldGlow
-                        action="apply"
+                        applied={appliedIds.has(c.id)}
                         hovered={hoveredId === c.id}
                         onHover={() => setHoveredId(c.id)}
                         onLeave={() => setHoveredId(null)}
@@ -538,6 +560,7 @@ export default function VariantStagefront({
 
             <RegionalRail
               conferences={regional.list}
+              appliedIds={appliedIds}
               hoveredId={hoveredId}
               onHover={setHoveredId}
               onClick={goTo}
@@ -1001,9 +1024,10 @@ function BodyLink({ href, children }: { href: string; children: React.ReactNode 
  * motion the track becomes a plain scroll-snap rail (the duplicate is hidden).
  */
 function RegionalRail({
-  conferences, hoveredId, onHover, onClick,
+  conferences, appliedIds, hoveredId, onHover, onClick,
 }: {
   conferences: LabConference[];
+  appliedIds: Set<string>;
   hoveredId: string | null;
   onHover: (id: string | null) => void;
   onClick: (slug: string) => void;
@@ -1035,6 +1059,7 @@ function RegionalRail({
             >
               <ConferenceCard
                 conf={c}
+                applied={appliedIds.has(c.id)}
                 hovered={!isDupe && hoveredId === c.id}
                 onHover={() => onHover(c.id)}
                 onLeave={() => onHover(null)}

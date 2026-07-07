@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Search, SlidersHorizontal, ArrowLeft } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
+import { useAuth } from '@/components/AuthProvider';
+import { getAuthedClient } from '@/lib/supabase-auth';
 import { supabase } from '@/lib/supabase';
 import { ConferenceCard } from '../ConferenceCard';
 
@@ -132,6 +134,26 @@ export default function ConferencesExploreClient() {
     }
     fetchConferences();
   }, []);
+
+  // Conference ids the signed-in viewer already applied to — cards show
+  // APPLIED instead of the APPLY pill. RLS returns only the viewer's own rows.
+  const { user, session, loading: authLoading } = useAuth();
+  const [appliedIds, setAppliedIds] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user || !session) { setAppliedIds(new Set()); return; }
+    let cancelled = false;
+    (async () => {
+      const { data } = await getAuthedClient(session.access_token)
+        .from('applications')
+        .select('conference_id')
+        .eq('user_id', user.id);
+      if (!cancelled) {
+        setAppliedIds(new Set(((data as { conference_id: string }[]) ?? []).map(a => a.conference_id)));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [authLoading, user, session]);
 
   const filtered = conferences.filter(c => {
     if (searchQuery) {
@@ -454,6 +476,7 @@ export default function ConferencesExploreClient() {
                 <ConferenceCard
                   key={conf.id}
                   conf={conf}
+                  applied={appliedIds.has(conf.id)}
                   hovered={hoveredId === conf.id}
                   onHover={() => setHoveredId(conf.id)}
                   onLeave={() => setHoveredId(null)}
