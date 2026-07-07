@@ -62,8 +62,8 @@ function ConfirmationInner() {
         </div>
 
         <p
-          className="text-xs tracking-[0.2em] mb-3"
-          style={{ color: '#B6871F', fontFamily: "'DM Mono', monospace" }}
+          className="text-xs mb-3"
+          style={{ color: '#B6871F', fontFamily: "'Outfit', sans-serif", fontWeight: 700, letterSpacing: '0.14em' }}
         >
           APPLICATION SUBMITTED
         </p>

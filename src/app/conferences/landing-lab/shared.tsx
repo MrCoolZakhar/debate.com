@@ -20,8 +20,11 @@ export const PALE_GOLD = '#EED98A';
 export const TAUPE = '#9A8A78';
 export const HAIRLINE = '#DDD4C0';
 
-export const MONO = "'DM Mono', monospace";
+// Monospace is eliminated on the conferences side (docs/ui-audit/70-typography-rule.md):
+// MONO now resolves to Outfit so nothing renders in a code face. Kept as an export
+// so the lab variants that import it inherit the change automatically.
 export const SANS = "'Outfit', sans-serif";
+export const MONO = SANS;
 
 export const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
 

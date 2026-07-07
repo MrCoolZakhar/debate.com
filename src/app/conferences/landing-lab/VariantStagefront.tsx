@@ -32,7 +32,7 @@ import { UN_COUNTRIES } from '@/lib/countries';
 import { ConferenceCard } from '../ConferenceCard';
 import {
   LabConference, RatingSummary,
-  CREAM, FOREST, GOLD, IVORY, MONO, PALE_GOLD, SANS, HAIRLINE, GRAIN,
+  CREAM, FOREST, GOLD, IVORY, PALE_GOLD, SANS, HAIRLINE, GRAIN,
   isConcluded, pickHeadliner,
   LabFooter,
 } from './shared';
@@ -471,21 +471,24 @@ export default function VariantStagefront({
                     borderTop: '1px solid rgba(238,217,138,0.25)',
                   }}
                 >
-                  <span style={{ fontFamily: MONO, fontSize: '10px', letterSpacing: '0.2em', color: PALE_GOLD }}>
+                  <span style={{ fontFamily: SANS, fontWeight: 700, fontSize: '10px', letterSpacing: '0.15em', color: PALE_GOLD }}>
                     THE DAIS, MID-SESSION
                   </span>
-                  <span style={{ fontFamily: MONO, fontSize: '10px', letterSpacing: '0.14em', color: IVORY_55 }}>
+                  <span style={{ fontFamily: SANS, fontWeight: 700, fontSize: '10px', letterSpacing: '0.14em', color: IVORY_55 }}>
                     CHAIRS · SECRETARIAT · STAFF
                   </span>
                 </div>
               </div>
 
-              {/* Live stat ledger — gold-ringed medallions straddling the photo's
-                  left edge. Matches the conference-detail pricing-medallion language:
-                  a forest disc, gold ring, big Outfit numeral, lucide icon, tiny
-                  caption. Shows a shimmer skeleton until jobStats resolves. */}
+              {/* Live stat ledger — gold-ringed medallions in a tidy row on the
+                  clean cream space directly BELOW the photo (never over the image,
+                  so every label stays legible). Matches the conference-detail
+                  pricing-medallion language: a forest disc, gold ring, big Outfit
+                  numeral, lucide icon, tiny caption. Stacks to one column on mobile,
+                  three across from sm up. Shows a shimmer skeleton until jobStats
+                  resolves. */}
               <div
-                className="lg:absolute lg:-left-20 lg:bottom-10 mt-6 lg:mt-0 flex flex-row lg:flex-col gap-4 lg:gap-4"
+                className="mt-7 grid grid-cols-1 sm:grid-cols-3 gap-5 sm:gap-4"
               >
                 {[
                   { key: 'open', icon: Users, n: jobStats?.open, label: 'Open roles', sub: 'accepting now' },
@@ -603,9 +606,10 @@ export default function VariantStagefront({
                   <li key={title} className="flex gap-4" style={{ marginTop: i === 0 ? 0 : '14px' }}>
                     <span
                       style={{
-                        fontFamily: MONO,
+                        fontFamily: SANS,
                         fontSize: '13px',
-                        fontWeight: 500,
+                        fontWeight: 700,
+                        fontVariantNumeric: 'tabular-nums',
                         color: PALE_GOLD,
                         backgroundColor: FOREST,
                         width: '26px',
@@ -1129,7 +1133,8 @@ function RolePopChip({
           style={{
             width: '24px', height: '24px', borderRadius: '7px', flexShrink: 0,
             backgroundColor: FOREST, color: PALE_GOLD,
-            fontFamily: MONO, fontSize: '8.5px', fontWeight: 700,
+            fontFamily: SANS, fontSize: '8.5px', fontWeight: 700, letterSpacing: '0.06em',
+            fontVariantNumeric: 'tabular-nums',
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
           }}
         >
@@ -1140,7 +1145,7 @@ function RolePopChip({
         <span style={{ fontFamily: SANS, fontSize: '12px', fontWeight: 700, color: INK, lineHeight: 1.2, maxWidth: '170px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {chip.role}
         </span>
-        <span style={{ fontFamily: MONO, fontSize: '8.5px', letterSpacing: '0.14em', color: tint.color, marginTop: '2px' }}>
+        <span style={{ fontFamily: SANS, fontWeight: 700, fontSize: '8.5px', letterSpacing: '0.14em', color: tint.color, marginTop: '2px' }}>
           {chip.acronym.toUpperCase()} · {chip.category.replace(/-/g, ' ').toUpperCase()}
         </span>
       </span>
