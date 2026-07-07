@@ -2,14 +2,16 @@
 
 // Shared UI primitives for the /account section.
 // Design language: ivory bg, glass cream cards, parchment borders, tiny gold
-// DM Mono eyebrows, Outfit for UI text, lucide icons only.
+// Outfit eyebrows, Outfit for UI text, lucide icons only.
 
 import { useState, useRef, useEffect } from 'react';
 import { Medal, Award, Info, X } from 'lucide-react';
 import { EXPERIENCE_BANDS } from '@/lib/munExperience';
 
 export const OUTFIT = "'Outfit', sans-serif";
-export const MONO = "'DM Mono', monospace";
+// No monospace on the conferences side — MONO is an Outfit alias kept only so
+// existing importers keep resolving. Nothing renders as monospace anymore.
+export const MONO = OUTFIT;
 
 // ── Pill / Tag ───────────────────────────────────────────────────────────────
 // The crafted replacement for the old DM-Mono / UPPERCASE / letter-spaced grey
@@ -318,7 +320,7 @@ export function ExperienceInfo({
                   <span className="flex-1" style={{ fontFamily: OUTFIT, fontSize: '13px', fontWeight: isCurrent ? 700 : 600, color: '#1C1410' }}>
                     {band.label}
                   </span>
-                  <span style={{ fontFamily: MONO, fontSize: '11px', color: '#B6871F', letterSpacing: '0.04em' }}>
+                  <span style={{ fontFamily: OUTFIT, fontSize: '11px', fontWeight: 600, color: '#B6871F', fontVariantNumeric: 'tabular-nums' }}>
                     {bandRange(i)}
                   </span>
                 </div>
@@ -345,9 +347,10 @@ export function Eyebrow({ children, color = '#B6871F', className = '' }: {
     <p
       className={className}
       style={{
-        fontFamily: MONO,
+        fontFamily: OUTFIT,
+        fontWeight: 700,
         fontSize: '9px',
-        letterSpacing: '0.26em',
+        letterSpacing: '0.14em',
         color,
         margin: 0,
         textTransform: 'uppercase',

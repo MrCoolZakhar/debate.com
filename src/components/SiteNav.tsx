@@ -192,7 +192,7 @@ export default function SiteNav({ logoOverride, overlay = false }: SiteNavProps 
                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
               >
                 <Globe size={14} strokeWidth={2} />
-                <span style={{ fontFamily: "'DM Mono', monospace" }}>{language.toUpperCase()}</span>
+                <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, letterSpacing: '0.06em' }}>{language.toUpperCase()}</span>
               </button>
             </div>
             {showLangMenu && (
