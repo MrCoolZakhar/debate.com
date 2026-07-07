@@ -2,7 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { AlertTriangle, Camera, Globe, Music, MessageCircle, Search, X } from 'lucide-react';
+import {
+  AlertTriangle, Camera, Globe, Music, MessageCircle, Search, X,
+  Type, Hash, Mail, GraduationCap, CalendarDays, MapPin, Monitor, Users, Banknote, Sparkles, Gavel,
+} from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import { useAuth } from '@/components/AuthProvider';
 import { createClient } from '@supabase/supabase-js';
@@ -33,16 +36,56 @@ const inputStyle: React.CSSProperties = {
   transition: 'border-color 150ms ease',
 };
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, icon, children }: { label: string; icon?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div>
       <label
-        className="block text-sm font-semibold mb-1.5"
+        className="flex items-center gap-1.5 text-sm font-semibold mb-1.5"
         style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}
       >
+        {icon && <span className="inline-flex items-center" style={{ color: '#9A8A78' }}>{icon}</span>}
         {label}
       </label>
       {children}
+    </div>
+  );
+}
+
+/**
+ * A text/number input with a leading lucide icon prefix — the same pattern as
+ * `SocialInput`, generalised so Step 1's fields get the icon affordance Step 2
+ * already has.
+ */
+function IconInput({
+  icon, value, onChange, placeholder, type = 'text', min, step, required, onBlur,
+}: {
+  icon: React.ReactNode;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  type?: string;
+  min?: number;
+  step?: number;
+  required?: boolean;
+  onBlur?: (e: React.FocusEvent<HTMLInputElement>) => void;
+}) {
+  return (
+    <div className="relative">
+      <span className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: '#9A8A78' }}>
+        {icon}
+      </span>
+      <input
+        type={type}
+        required={required}
+        min={min}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        style={{ ...inputStyle, paddingLeft: '40px' }}
+        onFocus={focusGreen}
+        onBlur={onBlur ?? blurGray}
+      />
     </div>
   );
 }
@@ -128,43 +171,45 @@ function SocialInput({
 // ── Step indicator ────────────────────────────────────────────────────────
 
 function StepIndicator({ step }: { step: 1 | 2 }) {
+  const labels: Record<number, string> = { 1: 'The Basics', 2: 'Details' };
+  const pct = step === 1 ? 50 : 100;
   return (
-    <div className="flex items-center gap-3 mb-8">
-      {([1, 2] as const).map((n) => {
-        const active = step === n;
-        const labels: Record<number, string> = { 1: 'The Basics', 2: 'Details' };
-        return (
-          <div key={n} className="flex items-center gap-2">
-            {n > 1 && (
-              <div
-                className="h-px flex-shrink-0"
-                style={{ width: '28px', backgroundColor: '#DDD4C0' }}
-              />
-            )}
-            <div
-              className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold transition-all"
-              style={{
-                backgroundColor: active ? '#1B3828' : 'transparent',
-                color: active ? '#EED98A' : '#9A8A78',
-                border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
-                fontFamily: "'Outfit', sans-serif",
-                letterSpacing: '0.04em',
-              }}
-            >
+    <div className="mb-6">
+      {/* Labels row */}
+      <div className="flex items-center justify-between mb-2.5">
+        {([1, 2] as const).map((n) => {
+          const active = step >= n;
+          return (
+            <div key={n} className="flex items-center gap-2">
               <span
-                className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0"
+                className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0 transition-all"
                 style={{
-                  backgroundColor: active ? '#EED98A' : '#DDD4C0',
-                  color: active ? '#1B3828' : '#9A8A78',
+                  backgroundColor: active ? '#1B3828' : '#DDD4C0',
+                  color: active ? '#EED98A' : '#9A8A78',
                 }}
               >
                 {n}
               </span>
-              {labels[n]}
+              <span
+                className="text-sm font-bold transition-colors"
+                style={{
+                  color: step === n ? '#1B3828' : active ? '#6B5F52' : '#9A8A78',
+                  fontFamily: "'Outfit', sans-serif",
+                }}
+              >
+                {labels[n]}
+              </span>
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
+      {/* Progress bar */}
+      <div className="rounded-full overflow-hidden" style={{ height: '6px', backgroundColor: '#DDD4C0' }}>
+        <div
+          className="h-full rounded-full transition-all duration-500"
+          style={{ width: `${pct}%`, background: 'linear-gradient(to right, #1B3828, #3D7A52)' }}
+        />
+      </div>
     </div>
   );
 }

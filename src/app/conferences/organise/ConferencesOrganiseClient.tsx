@@ -3,9 +3,11 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { Radio, PencilLine, Archive, ArrowRight, MapPin, CalendarDays } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
+import { gradientFor } from '@/app/conferences/ConferenceCard';
 
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
 
@@ -35,88 +37,151 @@ function formatDateRange(start: string, end: string): string {
   return `${s.getDate()} ${months[s.getMonth()]} – ${e.getDate()} ${months[e.getMonth()]} ${e.getFullYear()}`;
 }
 
+// Saturated, bordered, iconed status chip — the roles-board recipe. Replaces
+// the old borderless washed pills.
+function StatusChip({ live, archived }: { live: boolean; archived: boolean }) {
+  const spec = live
+    ? { label: 'LIVE', bg: 'rgba(42,90,60,0.14)', border: 'rgba(42,90,60,0.42)', text: '#1B3828', Icon: Radio }
+    : archived
+    ? { label: 'ARCHIVED', bg: 'rgba(154,138,120,0.18)', border: 'rgba(154,138,120,0.5)', text: '#6E5F4E', Icon: Archive }
+    : { label: 'DRAFT', bg: 'rgba(238,217,138,0.28)', border: 'rgba(182,135,31,0.5)', text: '#7A5A20', Icon: PencilLine };
+  const { Icon } = spec;
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full flex-shrink-0"
+      style={{
+        backgroundColor: spec.bg, border: `1px solid ${spec.border}`, color: spec.text,
+        fontFamily: "'Outfit', sans-serif", fontSize: '10.5px', fontWeight: 700, letterSpacing: '0.06em',
+      }}
+    >
+      <Icon size={11} strokeWidth={2.4} />
+      {spec.label}
+    </span>
+  );
+}
+
 function ConferenceManageCard({ conf }: { conf: OrgConference }) {
   const isLive = conf.is_public;
-  const isDraft = conf.status === 'private' && !conf.is_public;
   const isArchived = conf.status === 'archived';
-
-  const statusLabel = isLive ? 'LIVE' : isArchived ? 'ARCHIVED' : 'DRAFT';
-  const statusStyle = isLive
-    ? { backgroundColor: 'rgba(61,122,82,0.12)', color: '#1B3828' }
-    : isArchived
-    ? { backgroundColor: 'rgba(154,138,120,0.15)', color: '#9A8A78' }
-    : { backgroundColor: 'rgba(238,217,138,0.2)', color: '#B8844A' };
-
-  const stripStyle = isLive
-    ? { background: 'linear-gradient(to right, #1B3828, #3D7A52)' }
-    : isArchived
-    ? { backgroundColor: '#9A8A78' }
-    : { backgroundColor: '#DDD4C0' };
+  const [g0, g1] = gradientFor(conf.acronym);
+  const initials = conf.acronym.slice(0, 3).toUpperCase();
 
   return (
     <div
       className="rounded-2xl overflow-hidden transition-all"
-      style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}
+      style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #DDD4C0' }}
       onMouseEnter={(e) => {
         (e.currentTarget as HTMLElement).style.borderColor = '#1B3828';
-        (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 20px rgba(27,56,40,0.10)';
+        (e.currentTarget as HTMLElement).style.boxShadow = '0 12px 30px rgba(27,56,40,0.12)';
+        (e.currentTarget as HTMLElement).style.transform = 'translateY(-3px)';
       }}
       onMouseLeave={(e) => {
         (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0';
         (e.currentTarget as HTMLElement).style.boxShadow = 'none';
+        (e.currentTarget as HTMLElement).style.transform = 'translateY(0)';
       }}
     >
-      {/* Top accent strip */}
-      <div style={{ height: '6px', ...stripStyle }} />
-
-      <div className="p-5">
-        {/* Row 1: acronym + status pill */}
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-[11px]" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}>{conf.acronym}</span>
-          <span
-            className="text-[9px] font-bold px-2 py-0.5 rounded-full"
-            style={{ ...statusStyle, fontFamily: "'DM Mono', monospace", letterSpacing: '0.08em' }}
-          >
-            {statusLabel}
-          </span>
+      {/* Gradient / banner header band with floating logo */}
+      <div className="relative" style={{ height: '68px', overflow: 'hidden' }}>
+        {conf.logo_url ? (
+          <>
+            <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(120deg, ${g0} 0%, ${g1} 100%)` }} />
+          </>
+        ) : (
+          <>
+            <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(120deg, ${g0} 0%, ${g1} 100%)` }} />
+            <span
+              aria-hidden
+              style={{
+                position: 'absolute', right: '14px', bottom: '-8px',
+                fontFamily: "'DM Mono', monospace", fontSize: '40px', lineHeight: 1,
+                color: 'rgba(238,217,138,0.14)', letterSpacing: '0.02em', userSelect: 'none',
+              }}
+            >
+              {conf.acronym.slice(0, 6)}
+            </span>
+          </>
+        )}
+        {/* Status chip top-right over the band */}
+        <div className="absolute top-2.5 right-2.5">
+          <StatusChip live={isLive} archived={isArchived} />
         </div>
+      </div>
 
-        {/* Row 2: full name */}
+      {/* Floating logo tile overlapping the band */}
+      <div className="px-5" style={{ marginTop: '-26px', position: 'relative' }}>
+        {conf.logo_url ? (
+          <div
+            style={{
+              width: '52px', height: '52px', borderRadius: '13px', overflow: 'hidden',
+              backgroundColor: '#FAF8F3', border: '3px solid #FAF8F3',
+              boxShadow: '0 4px 12px rgba(27,56,40,0.18)',
+            }}
+          >
+            <img src={conf.logo_url} alt={conf.acronym} style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
+          </div>
+        ) : (
+          <div
+            style={{
+              width: '52px', height: '52px', borderRadius: '13px',
+              background: `linear-gradient(135deg, ${g0} 0%, ${g1} 100%)`, border: '3px solid #FAF8F3',
+              boxShadow: '0 4px 12px rgba(27,56,40,0.18)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            <span style={{ fontSize: '13px', fontFamily: "'DM Mono', monospace", color: '#EED98A', fontWeight: 700 }}>
+              {initials}
+            </span>
+          </div>
+        )}
+      </div>
+
+      <div className="px-5 pt-2.5 pb-5">
+        {/* Acronym micro-stamp (mono is fine here) */}
+        <p className="text-[10px] mb-1" style={{ color: '#B6871F', fontFamily: "'DM Mono', monospace", letterSpacing: '0.16em' }}>
+          {conf.acronym}
+        </p>
+
+        {/* Full name */}
         <p
-          className="text-sm font-semibold mb-1 leading-snug"
+          className="text-sm font-semibold mb-2.5 leading-snug"
           style={{
             color: '#1C1410', fontFamily: "'Outfit', sans-serif",
-            display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+            display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', minHeight: '2.6em',
           }}
         >
           {conf.full_name}
         </p>
 
-        {/* Row 3: city + country */}
-        <p className="text-xs mb-1" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-          {conf.city}, {conf.country}
-        </p>
+        {/* Location + date meta rows with icons */}
+        <div className="flex items-center gap-1.5 mb-1">
+          <MapPin size={13} style={{ color: '#9A8A78', flexShrink: 0 }} />
+          <span className="text-xs" style={{ color: '#6B5F52', fontFamily: "'Outfit', sans-serif", fontWeight: 500 }}>
+            {conf.city}, {conf.country}
+          </span>
+        </div>
+        <div className="flex items-center gap-1.5 mb-3">
+          <CalendarDays size={13} style={{ color: '#9A8A78', flexShrink: 0 }} />
+          <span className="text-[11px]" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}>
+            {formatDateRange(conf.start_date, conf.end_date)}
+          </span>
+        </div>
 
-        {/* Row 4: date range */}
-        <p className="text-xs mb-3" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}>
-          {formatDateRange(conf.start_date, conf.end_date)}
-        </p>
-
-        {/* Row 5: action buttons */}
-        <div className="flex gap-2 pt-3" style={{ borderTop: '1px solid #DDD4C0' }}>
+        {/* Action buttons */}
+        <div className="flex gap-2 pt-3" style={{ borderTop: '1px solid rgba(221,212,192,0.6)' }}>
           <Link
             href={`/manage/${conf.slug}`}
-            className="flex-1 text-center rounded-lg py-1.5 px-4 text-xs font-bold transition-colors focus:outline-none"
+            className="flex-1 flex items-center justify-center gap-1 text-center rounded-lg py-1.5 px-4 text-xs font-bold transition-colors focus:outline-none"
             style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", textDecoration: 'none', letterSpacing: '0.04em' }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
           >
-            MANAGE →
+            MANAGE <ArrowRight size={13} />
           </Link>
           <Link
             href={`/conferences/${conf.slug}`}
             className="flex-1 text-center rounded-lg py-1.5 px-4 text-xs font-semibold transition-colors focus:outline-none"
-            style={{ backgroundColor: 'transparent', color: '#1C1410', border: '1px solid #DDD4C0', fontFamily: "'Outfit', sans-serif", textDecoration: 'none' }}
+            style={{ backgroundColor: 'transparent', color: '#1C1410', border: '1.5px solid #DDD4C0', fontFamily: "'Outfit', sans-serif", textDecoration: 'none' }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
           >
@@ -216,7 +281,7 @@ export default function ConferencesOrganiseClient() {
         <div className="px-6 md:px-14 py-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4" style={{ backgroundColor: '#1B3828' }}>
           <div>
             <p className="text-[10px] tracking-[0.2em] mb-1" style={{ color: '#EED98A', fontFamily: "'DM Mono', monospace" }}>MY CONFERENCES</p>
-            <h1 className="font-black text-3xl text-white" style={{ fontFamily: "'Outfit', sans-serif" }}>Your Conferences</h1>
+            <h1 className="font-black text-3xl text-white" style={{ fontFamily: "'Outfit', sans-serif", letterSpacing: '-0.01em' }}>Your Conferences</h1>
           </div>
           <Link
             href="/conferences/new"
@@ -240,11 +305,11 @@ export default function ConferencesOrganiseClient() {
                 backgroundColor: statusFilter === f ? '#1B3828' : 'transparent',
                 color: statusFilter === f ? '#EED98A' : '#1C1410',
                 border: statusFilter === f ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
-                fontFamily: "'DM Mono', monospace",
+                fontFamily: "'Outfit', sans-serif",
                 letterSpacing: '0.06em',
               }}
             >
-              {f}
+              {f.charAt(0) + f.slice(1).toLowerCase()}
             </button>
           ))}
         </div>
@@ -254,7 +319,23 @@ export default function ConferencesOrganiseClient() {
           {loading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="rounded-2xl animate-pulse" style={{ height: '200px', backgroundColor: '#DDD4C0' }} />
+                <div key={i} className="rounded-2xl overflow-hidden animate-pulse" style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #DDD4C0' }}>
+                  <div style={{ height: '68px', backgroundColor: '#DDD4C0' }} />
+                  <div className="px-5" style={{ marginTop: '-26px', position: 'relative' }}>
+                    <div style={{ width: '52px', height: '52px', borderRadius: '13px', backgroundColor: '#CFC5AE', border: '3px solid #FAF8F3' }} />
+                  </div>
+                  <div className="px-5 pt-3 pb-5">
+                    <div className="rounded" style={{ width: '40%', height: '9px', backgroundColor: '#E4DCC9', marginBottom: '10px' }} />
+                    <div className="rounded" style={{ width: '85%', height: '13px', backgroundColor: '#DDD4C0', marginBottom: '6px' }} />
+                    <div className="rounded" style={{ width: '60%', height: '13px', backgroundColor: '#DDD4C0', marginBottom: '14px' }} />
+                    <div className="rounded" style={{ width: '55%', height: '11px', backgroundColor: '#E4DCC9', marginBottom: '6px' }} />
+                    <div className="rounded" style={{ width: '45%', height: '11px', backgroundColor: '#E4DCC9', marginBottom: '16px' }} />
+                    <div className="flex gap-2">
+                      <div className="rounded-lg flex-1" style={{ height: '30px', backgroundColor: '#DDD4C0' }} />
+                      <div className="rounded-lg flex-1" style={{ height: '30px', backgroundColor: '#E4DCC9' }} />
+                    </div>
+                  </div>
+                </div>
               ))}
             </div>
           ) : conferences.length === 0 ? (
@@ -277,7 +358,7 @@ export default function ConferencesOrganiseClient() {
             <>
               {publicConfs.length > 0 && (
                 <>
-                  <p className="text-[10px] tracking-widest mb-3 mt-6 first:mt-0" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}>PUBLIC</p>
+                  <p className="text-[11px] font-bold uppercase tracking-[0.14em] mb-3 mt-6 first:mt-0" style={{ color: '#6B5F52', fontFamily: "'Outfit', sans-serif" }}>Public</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
                     {publicConfs.map(conf => <ConferenceManageCard key={conf.id} conf={conf} />)}
                   </div>
@@ -285,7 +366,7 @@ export default function ConferencesOrganiseClient() {
               )}
               {privateConfs.length > 0 && (
                 <>
-                  <p className="text-[10px] tracking-widest mb-3 mt-6" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}>PRIVATE</p>
+                  <p className="text-[11px] font-bold uppercase tracking-[0.14em] mb-3 mt-6" style={{ color: '#6B5F52', fontFamily: "'Outfit', sans-serif" }}>Private</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {privateConfs.map(conf => <ConferenceManageCard key={conf.id} conf={conf} />)}
                   </div>
