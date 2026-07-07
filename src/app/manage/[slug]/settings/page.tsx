@@ -32,7 +32,7 @@ interface RoleConfig {
   fee_amount: number;
   fee_currency: string;
   auto_accept: boolean;
-  pay_at_application: boolean;
+  payment_timing: 'after_application' | 'after_acceptance' | 'anytime';
   must_pay_before_allocation: boolean;
   custom_questions: CustomQuestion[];
 }
@@ -61,7 +61,13 @@ interface PredecessorSummary {
   acronym: string;
 }
 
-type BooleanRoleKey = 'auto_accept' | 'pay_at_application' | 'must_pay_before_allocation';
+type BooleanRoleKey = 'must_pay_before_allocation';
+
+const PAYMENT_TIMING_OPTIONS: { value: RoleConfig['payment_timing']; label: string; desc: string }[] = [
+  { value: 'after_application', label: 'AFTER APPLICATION', desc: 'Payment opens as soon as the application is submitted.' },
+  { value: 'after_acceptance', label: 'AFTER ACCEPTANCE', desc: 'Payment opens only once the applicant is accepted.' },
+  { value: 'anytime', label: 'PAY AT ANY TIME', desc: 'Applicants can view everything and pay whenever.' },
+];
 
 // ── Constants & helpers ────────────────────────────────────────────────────
 
@@ -392,7 +398,7 @@ export default function SettingsPage() {
       fee_amount: 0,
       fee_currency: conference.fee_currency ?? 'GBP',
       auto_accept: false,
-      pay_at_application: false,
+      payment_timing: 'anytime' as const,
       must_pay_before_allocation: false,
       custom_questions: [],
     }));
@@ -757,8 +763,6 @@ export default function SettingsPage() {
   const activeSection = SECTIONS.find(s => s.key === activeTab) ?? SECTIONS[0];
 
   const TOGGLE_ROWS: { key: BooleanRoleKey; label: string; desc: string }[] = [
-    { key: 'auto_accept', label: 'Auto-accept', desc: 'Automatically accept all applications' },
-    { key: 'pay_at_application', label: 'Pay at application', desc: 'Delegates must pay when submitting' },
     { key: 'must_pay_before_allocation', label: 'Must pay before allocation', desc: 'Block country assignment until paid' },
   ];
 
@@ -992,8 +996,72 @@ export default function SettingsPage() {
                     </div>
                   </div>
 
+                  {/* Acceptance */}
+                  <div className="mt-4">
+                    <label className="block text-xs font-semibold mb-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                      Acceptance
+                    </label>
+                    <div className="flex gap-2">
+                      {([
+                        { value: true, label: 'AUTO-ACCEPT' },
+                        { value: false, label: 'MANUAL REVIEW' },
+                      ] as const).map(opt => {
+                        const active = config.auto_accept === opt.value;
+                        return (
+                          <button
+                            key={String(opt.value)}
+                            type="button"
+                            onClick={() => saveRoleConfig(role, { auto_accept: opt.value })}
+                            className="flex-1 py-2.5 rounded-[10px] font-bold text-sm focus:outline-none transition-all"
+                            style={{
+                              backgroundColor: active ? '#1B3828' : 'transparent',
+                              color: active ? '#EED98A' : '#1C1410',
+                              border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
+                              fontFamily: "'Outfit', sans-serif",
+                              letterSpacing: '0.06em',
+                            }}
+                          >
+                            {opt.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Payment */}
+                  <div className="mt-4">
+                    <label className="block text-xs font-semibold mb-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                      Payment
+                    </label>
+                    <div className="flex gap-2">
+                      {PAYMENT_TIMING_OPTIONS.map(opt => {
+                        const active = (config.payment_timing ?? 'anytime') === opt.value;
+                        return (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => saveRoleConfig(role, { payment_timing: opt.value })}
+                            className="flex-1 py-2.5 rounded-[10px] font-bold text-sm focus:outline-none transition-all"
+                            style={{
+                              backgroundColor: active ? '#1B3828' : 'transparent',
+                              color: active ? '#EED98A' : '#1C1410',
+                              border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
+                              fontFamily: "'Outfit', sans-serif",
+                              letterSpacing: '0.06em',
+                            }}
+                          >
+                            {opt.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="text-xs mt-1.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                      {PAYMENT_TIMING_OPTIONS.find(o => o.value === (config.payment_timing ?? 'anytime'))?.desc}
+                    </p>
+                  </div>
+
                   {/* Boolean toggles */}
-                  <div className="flex flex-col gap-2 mt-3">
+                  <div className="flex flex-col gap-2 mt-4">
                     {TOGGLE_ROWS.map(({ key, label, desc }) => (
                       <div
                         key={key}
