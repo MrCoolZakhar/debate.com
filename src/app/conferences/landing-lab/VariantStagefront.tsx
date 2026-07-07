@@ -40,7 +40,6 @@ import {
 } from './shared';
 
 // Light-on-dark tokens for the hero zone.
-const IVORY_70 = 'rgba(237,231,216,0.7)';
 const IVORY_55 = 'rgba(237,231,216,0.55)';
 
 // Ink-on-cream tokens for the light slabs.
@@ -308,9 +307,6 @@ export default function VariantStagefront({
 
           <div className="relative z-10 flex-1 min-h-0 flex flex-col lg:flex-row lg:items-center gap-6 lg:gap-14 px-6 md:px-14 pb-8 md:pb-9 pt-20 md:pt-24">
             <div className="flex-1 flex flex-col justify-center" style={{ maxWidth: '760px' }}>
-              <p style={{ fontFamily: SANS, fontWeight: 700, fontSize: '12px', letterSpacing: '0.14em', textTransform: 'uppercase', color: PALE_GOLD, margin: '0 0 18px 0' }}>
-                {conferences.length > 0 ? `${conferences.length} Conference${conferences.length === 1 ? '' : 's'} on the board` : 'The MUN circuit'}
-              </p>
               <h1
                 style={{
                   fontFamily: SANS,
@@ -361,10 +357,7 @@ export default function VariantStagefront({
                 >
                   Find a conference <ArrowRight size={17} strokeWidth={2.5} />
                 </Link>
-                <div className="flex flex-col gap-1.5">
-                  <HeroTextLink href="/conferences/new" label="Organising one? List it free" />
-                  <HeroTextLink href="/conferences/roles" label="Chair or staff a committee" />
-                </div>
+                <HeroTextLink href="/conferences/new" label="Organising one? List it free" />
               </div>
             </div>
 
@@ -658,27 +651,10 @@ export default function VariantStagefront({
           </div>
         </section>
 
-        {/* ── Organiser tools — photographic backdrop, 2×2 grid + gold CTA ──── */}
-        <section className="relative overflow-hidden" style={{ paddingTop: '56px', paddingBottom: '64px' }}>
-          {/*
-            Backdrop photo: Marvin Meyer via Unsplash (license-safe, free to use)
-            https://unsplash.com/photos/SYTO3xs06fU
-            /public/landing/organiser-desk.jpg (~161 KB) — a team running an event at a laptop.
-          */}
-          <div className="absolute inset-0 z-0" aria-hidden="true">
-            <img src="/landing/organiser-desk.jpg" alt="" className="w-full h-full object-cover" />
-            <div
-              className="absolute inset-0"
-              style={{
-                background:
-                  'linear-gradient(120deg, rgba(10,22,16,0.9) 0%, rgba(12,26,19,0.82) 45%, rgba(12,26,19,0.72) 100%)',
-              }}
-            />
-            <div
-              className="pointer-events-none absolute inset-0"
-              style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px', mixBlendMode: 'overlay', opacity: 0.08 }}
-            />
-          </div>
+        {/* ── Organiser tools — calm cream band, ivory tiles + forest CTA ────
+            Deliberately quiet (worlddiplomats-style): the hero and the globe
+            finale are the only two dark photographic moments on the page. */}
+        <section className="relative overflow-hidden" style={{ backgroundColor: CREAM, paddingTop: '72px', paddingBottom: '80px' }}>
 
           {/* Slim horizontal split: 2×2 highlight tiles LEFT, heading + copy +
               gold CTA RIGHT (vertically centered) — total height ≈ the job
@@ -702,21 +678,20 @@ export default function VariantStagefront({
                       key={card.title}
                       className="rounded-2xl flex flex-col items-center text-center"
                       style={{
-                        backgroundColor: 'rgba(12,26,19,0.55)',
-                        backdropFilter: 'blur(14px) saturate(1.15)',
-                        WebkitBackdropFilter: 'blur(14px) saturate(1.15)',
-                        border: '1px solid rgba(237,231,216,0.16)',
+                        backgroundColor: '#EDE7D8',
+                        border: '1.5px solid #D8CDB6',
+                        boxShadow: '0 1px 3px rgba(27,56,40,0.05)',
                         aspectRatio: '1 / 1',
                         padding: '16px 14px',
                         justifyContent: 'center',
                         gap: '2px',
                       }}
                     >
-                      <Icon size={46} color={PALE_GOLD} strokeWidth={1.6} />
-                      <h3 style={{ fontFamily: SANS, fontWeight: 700, fontSize: '13.5px', color: CREAM, margin: '12px 0 0 0' }}>
+                      <Icon size={46} color={FOREST} strokeWidth={1.6} />
+                      <h3 style={{ fontFamily: SANS, fontWeight: 700, fontSize: '13.5px', color: INK, margin: '12px 0 0 0' }}>
                         {card.title}
                       </h3>
-                      <p style={{ fontFamily: SANS, fontSize: '10.5px', lineHeight: 1.45, color: IVORY_70, margin: '5px 0 0 0' }}>
+                      <p style={{ fontFamily: SANS, fontSize: '10.5px', lineHeight: 1.45, color: INK_70, margin: '5px 0 0 0' }}>
                         {card.desc}
                       </p>
                     </div>
@@ -724,9 +699,9 @@ export default function VariantStagefront({
                 })}
               </div>
 
-              {/* RIGHT — heading, copy, gold CTA — vertically centered */}
+              {/* RIGHT — heading, copy, forest CTA — vertically centered */}
               <div className="flex-1 flex flex-col justify-center">
-                <p style={{ fontFamily: SANS, fontWeight: 700, fontSize: '12px', letterSpacing: '0.14em', textTransform: 'uppercase', color: PALE_GOLD, margin: '0 0 8px 0' }}>
+                <p style={{ fontFamily: SANS, fontWeight: 700, fontSize: '12px', letterSpacing: '0.14em', textTransform: 'uppercase', color: GOLD, margin: '0 0 8px 0' }}>
                   Organiser tools
                 </p>
                 <h2
@@ -735,13 +710,13 @@ export default function VariantStagefront({
                     fontWeight: 900,
                     fontSize: 'clamp(26px, 3vw, 38px)',
                     letterSpacing: '-0.015em',
-                    color: CREAM,
+                    color: INK,
                     margin: 0,
                   }}
                 >
                   Built for the people running the show.
                 </h2>
-                <p style={{ fontFamily: SANS, fontSize: '15px', lineHeight: 1.6, color: IVORY_70, margin: '12px 0 0 0', maxWidth: '520px' }}>
+                <p style={{ fontFamily: SANS, fontSize: '15px', lineHeight: 1.6, color: INK_70, margin: '12px 0 0 0', maxWidth: '520px' }}>
                   Registration, allocation, documents and live committee sessions — one platform,
                   zero fees for organisers.
                 </p>
@@ -755,21 +730,58 @@ export default function VariantStagefront({
                     fontSize: '15px',
                     fontWeight: 800,
                     letterSpacing: '0.04em',
-                    color: FOREST,
-                    backgroundColor: PALE_GOLD,
+                    color: PALE_GOLD,
+                    backgroundColor: FOREST,
                     padding: '16px 32px',
                     borderRadius: '9999px',
                     textDecoration: 'none',
-                    boxShadow: '0 18px 40px rgba(0,0,0,0.4)',
+                    boxShadow: '0 10px 26px rgba(27,56,40,0.25)',
                     transition: 'transform 180ms ease, background-color 180ms ease',
                   }}
-                  onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.backgroundColor = '#F3E3A1'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.backgroundColor = PALE_GOLD; }}
+                  onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.backgroundColor = '#2A5A3C'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.backgroundColor = FOREST; }}
                 >
                   List your conference <ArrowRight size={18} strokeWidth={2.5} />
                 </Link>
               </div>
             </div>
+          </div>
+        </section>
+
+        {/* ── The circuit in numbers — slim worlddiplomats-style impact strip:
+            three plain figures, no cards, no chrome. Real data from the board. */}
+        <section
+          className="px-6 md:px-14"
+          style={{ backgroundColor: CREAM, borderTop: '1px solid rgba(221,212,192,0.6)', paddingTop: '56px', paddingBottom: '64px' }}
+        >
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-10 sm:gap-0">
+            {[
+              { n: conferences.length, label: 'Conferences on the board' },
+              { n: conferences.reduce((s, c) => s + (c.expected_delegates || 0), 0), label: 'Delegates expected' },
+              { n: new Set(conferences.map(c => c.country)).size, label: 'Countries' },
+            ].map((stat, i) => (
+              <div
+                key={stat.label}
+                className={`flex flex-col items-center text-center sm:px-14 md:px-20 ${i > 0 ? 'sm:border-l sm:border-[#DDD4C0]' : ''}`}
+              >
+                <span
+                  style={{
+                    fontFamily: SANS, fontWeight: 800, fontVariantNumeric: 'tabular-nums',
+                    fontSize: 'clamp(38px, 4.5vw, 56px)', lineHeight: 1, color: FOREST, letterSpacing: '-0.01em',
+                  }}
+                >
+                  {stat.n.toLocaleString()}
+                </span>
+                <span
+                  style={{
+                    fontFamily: SANS, fontWeight: 700, fontSize: '11.5px', letterSpacing: '0.14em',
+                    textTransform: 'uppercase', color: GOLD, marginTop: '10px',
+                  }}
+                >
+                  {stat.label}
+                </span>
+              </div>
+            ))}
           </div>
         </section>
 
