@@ -179,7 +179,9 @@ interface Suggestion {
 // ── Shared bits ───────────────────────────────────────────────────────────────
 
 const OUTFIT = "'Outfit', sans-serif";
-const MONO = "'DM Mono', monospace";
+// Typography rule: no monospace on the conferences side — MONO now resolves to Outfit
+// so every stamp/eyebrow/code that referenced it renders in Outfit (family swap only).
+const MONO = "'Outfit', sans-serif";
 
 // Single write path for every allocation on this page: insert into
 // conference_allocations (incl. conference_id), friendly duplicate errors,

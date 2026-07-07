@@ -765,7 +765,7 @@ export default function SettingsPage() {
   return (
     <div className="px-4 sm:px-6 md:px-10 py-8" style={{ maxWidth: '1080px' }}>
       {/* Header */}
-      <p className="text-xs mb-2" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace", letterSpacing: '0.04em' }}>
+      <p className="text-xs mb-2" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", fontWeight: 700, letterSpacing: '0.12em' }}>
         {conference.acronym} / Settings
       </p>
       <h1 className="font-black text-2xl mb-7" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
@@ -1892,7 +1892,7 @@ export default function SettingsPage() {
                   style={{ borderBottom: isLast ? 'none' : '1px solid #F0EDE6' }}
                 >
                   <div className="flex-1 min-w-0">
-                    <p style={{ fontSize: 10, color: '#B6871F', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                    <p style={{ fontSize: 10, color: '#B6871F', fontFamily: "'Outfit', sans-serif", fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
                       {claim.acronym}{year ? ' · ' + year : ''}
                     </p>
                     <p className="font-semibold text-sm truncate" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
