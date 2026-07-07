@@ -262,7 +262,7 @@ export default function SettingsPage() {
   const router = useRouter();
   const { conference, refreshConference } = useManage();
   const { user, session } = useAuth();
-  const [activeTab, setActiveTab] = useState<'applications' | 'visual' | 'organizers' | 'privacy'>('applications');
+  const [activeTab, setActiveTab] = useState<'applications' | 'conference' | 'organizers' | 'privacy'>('applications');
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
@@ -282,6 +282,21 @@ export default function SettingsPage() {
   const [feeCurrency, setFeeCurrency] = useState('GBP');
   const [feeSaving, setFeeSaving] = useState(false);
   const [feeSaved, setFeeSaved] = useState(false);
+
+  // Conference details (identity + logistics — mirrors the creation form)
+  const [fullName, setFullName] = useState('');
+  const [acronym, setAcronym] = useState('');
+  const [acronymError, setAcronymError] = useState('');
+  const [contactEmail, setContactEmail] = useState('');
+  const [studentLevel, setStudentLevel] = useState<'school' | 'university' | 'both' | ''>('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [country, setCountry] = useState('');
+  const [city, setCity] = useState('');
+  const [format, setFormat] = useState<'in-person' | 'online' | 'hybrid' | ''>('');
+  const [expectedDelegates, setExpectedDelegates] = useState('');
+  const [detailsSaving, setDetailsSaving] = useState(false);
+  const [detailsSaved, setDetailsSaved] = useState(false);
 
   // Minimum age (Applications tab)
   const [minAge, setMinAge] = useState('');
@@ -394,6 +409,17 @@ export default function SettingsPage() {
     setFeeAmount(conference.fee_amount != null ? String(conference.fee_amount) : '');
     setFeeCurrency(conference.fee_currency ?? 'GBP');
     setMinAge(conference.min_age != null ? String(conference.min_age) : '');
+    setFullName(conference.full_name ?? '');
+    setAcronym(conference.acronym ?? '');
+    setAcronymError('');
+    setContactEmail(conference.contact_email ?? '');
+    setStudentLevel((conference.student_level as 'school' | 'university' | 'both' | '') ?? '');
+    setStartDate(conference.start_date ?? '');
+    setEndDate(conference.end_date ?? '');
+    setCountry(conference.country ?? '');
+    setCity(conference.city ?? '');
+    setFormat((conference.format as 'in-person' | 'online' | 'hybrid' | '') ?? '');
+    setExpectedDelegates(conference.expected_delegates != null ? String(conference.expected_delegates) : '');
   }, [conference?.id, loadRoleConfigs, loadOrganizers, loadLineage]);
 
   useEffect(() => {
@@ -661,6 +687,39 @@ export default function SettingsPage() {
     setTimeout(() => setVisualSaved(false), 2500);
   }
 
+  async function handleSaveDetails() {
+    if (!session || !conference) return;
+    const upperAcr = acronym.toUpperCase().trim();
+    if (!upperAcr) {
+      setAcronymError('Acronym is required.');
+      return;
+    }
+    if (!upperAcr.includes('MUN')) {
+      setAcronymError("Acronym must include 'MUN' — e.g. TEIMUN, LIMUN, SMUNC.");
+      return;
+    }
+    setAcronymError('');
+    setDetailsSaving(true);
+    const supabase = getAuthedClient(session.access_token);
+    const parsedDelegates = parseInt(expectedDelegates, 10);
+    await supabase.from('conferences').update({
+      full_name: fullName,
+      acronym: upperAcr,
+      contact_email: contactEmail || null,
+      student_level: studentLevel || null,
+      start_date: startDate || null,
+      end_date: endDate || null,
+      country: country || null,
+      city: city || null,
+      format: format || null,
+      expected_delegates: Number.isFinite(parsedDelegates) ? parsedDelegates : conference.expected_delegates,
+    }).eq('id', conference.id);
+    await refreshConference();
+    setDetailsSaving(false);
+    setDetailsSaved(true);
+    setTimeout(() => setDetailsSaved(false), 2500);
+  }
+
   if (!conference) return null;
 
   const cardStyle: React.CSSProperties = {
@@ -677,9 +736,9 @@ export default function SettingsPage() {
     { key: 'must_pay_before_allocation', label: 'Must pay before allocation', desc: 'Block country assignment until paid' },
   ];
 
-  const TABS: { key: 'applications' | 'visual' | 'organizers' | 'privacy'; label: string }[] = [
+  const TABS: { key: 'applications' | 'conference' | 'organizers' | 'privacy'; label: string }[] = [
     { key: 'applications', label: 'APPLICATIONS' },
-    { key: 'visual', label: 'VISUAL' },
+    { key: 'conference', label: 'CONFERENCE' },
     { key: 'organizers', label: 'ORGANIZERS' },
     { key: 'privacy', label: 'PRIVACY' },
   ];
@@ -856,8 +915,203 @@ export default function SettingsPage() {
       </div>}
 
       {/* ── VISUAL TAB ── */}
-      {activeTab === 'visual' && (
+      {activeTab === 'conference' && (
         <div>
+          {/* Conference Details card */}
+          <div style={cardStyle}>
+            <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Conference Details</p>
+            <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Core information shown on your public conference page and directory listing.</p>
+
+            <div className="mb-4">
+              <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Full name</label>
+              <input
+                type="text"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                placeholder="London International Model United Nations 2027"
+                style={inputStyle}
+                onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
+              />
+            </div>
+
+            <div className="flex gap-3 mb-4">
+              <div style={{ width: '40%' }}>
+                <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Acronym</label>
+                <input
+                  type="text"
+                  value={acronym.toUpperCase()}
+                  onChange={(e) => { setAcronym(e.target.value); if (acronymError) setAcronymError(''); }}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
+                  onBlur={(e) => {
+                    const upper = e.target.value.toUpperCase().trim();
+                    if (!upper) setAcronymError('Acronym is required.');
+                    else if (!upper.includes('MUN')) setAcronymError("Acronym must include 'MUN' — e.g. TEIMUN, LIMUN, SMUNC.");
+                    else setAcronymError('');
+                    e.currentTarget.style.borderColor = '#DDD4C0';
+                  }}
+                  placeholder="e.g. LIMUN"
+                  style={inputStyle}
+                />
+                {acronymError && (
+                  <p className="text-xs mt-1" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{acronymError}</p>
+                )}
+              </div>
+              <div className="flex-1">
+                <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Contact email</label>
+                <input
+                  type="email"
+                  value={contactEmail}
+                  onChange={(e) => setContactEmail(e.target.value)}
+                  placeholder="hello@yourmun.org"
+                  style={inputStyle}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
+                  onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
+                />
+              </div>
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-xs font-semibold mb-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Student level</label>
+              <div className="flex gap-2">
+                {([
+                  { value: 'school', label: 'SCHOOL' },
+                  { value: 'university', label: 'UNIVERSITY' },
+                  { value: 'both', label: 'BOTH' },
+                ] as { value: 'school' | 'university' | 'both'; label: string }[]).map(opt => {
+                  const active = studentLevel === opt.value;
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setStudentLevel(opt.value)}
+                      className="flex-1 rounded-xl py-2.5 font-bold text-xs transition-colors focus:outline-none"
+                      style={{
+                        backgroundColor: active ? '#1B3828' : 'transparent',
+                        color: active ? '#EED98A' : '#9A8A78',
+                        border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
+                        fontFamily: "'Outfit', sans-serif", letterSpacing: '0.07em',
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-xs font-semibold mb-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Format</label>
+              <div className="flex gap-2">
+                {([
+                  { value: 'in-person', label: 'IN-PERSON' },
+                  { value: 'online', label: 'ONLINE' },
+                  { value: 'hybrid', label: 'HYBRID' },
+                ] as { value: 'in-person' | 'online' | 'hybrid'; label: string }[]).map(opt => {
+                  const active = format === opt.value;
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setFormat(opt.value)}
+                      className="flex-1 rounded-xl py-2.5 font-bold text-xs transition-colors focus:outline-none"
+                      style={{
+                        backgroundColor: active ? '#1B3828' : 'transparent',
+                        color: active ? '#EED98A' : '#9A8A78',
+                        border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
+                        fontFamily: "'Outfit', sans-serif", letterSpacing: '0.07em',
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="flex gap-3 mb-4">
+              <div className="flex-1">
+                <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Start date</label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  style={inputStyle}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
+                  onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
+                />
+              </div>
+              <div className="flex-1">
+                <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>End date</label>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  style={inputStyle}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
+                  onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mb-4">
+              <div className="flex-1">
+                <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>City</label>
+                <input
+                  type="text"
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                  placeholder="London"
+                  style={inputStyle}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
+                  onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
+                />
+              </div>
+              <div className="flex-1">
+                <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Country</label>
+                <input
+                  type="text"
+                  value={country}
+                  onChange={(e) => setCountry(e.target.value)}
+                  placeholder="United Kingdom"
+                  style={inputStyle}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
+                  onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
+                />
+              </div>
+            </div>
+
+            <div className="mb-5">
+              <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Expected delegates</label>
+              <input
+                type="number"
+                min={0}
+                value={expectedDelegates}
+                onChange={(e) => setExpectedDelegates(e.target.value)}
+                placeholder="1250"
+                style={inputStyle}
+                onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
+              />
+            </div>
+
+            <button
+              onClick={handleSaveDetails}
+              disabled={detailsSaving}
+              className="w-full rounded-xl py-3 font-bold text-sm tracking-widest transition-colors focus:outline-none"
+              style={{
+                backgroundColor: detailsSaved ? '#3D7A52' : detailsSaving ? '#DDD4C0' : '#1B3828',
+                color: detailsSaving ? '#9A8A78' : '#EED98A',
+                fontFamily: "'Outfit', sans-serif",
+                letterSpacing: '0.08em',
+              }}
+              onMouseEnter={(e) => { if (!detailsSaving && !detailsSaved) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+              onMouseLeave={(e) => { if (!detailsSaving && !detailsSaved) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+            >
+              {detailsSaved ? 'SAVED ✓' : detailsSaving ? 'SAVING...' : 'SAVE CHANGES'}
+            </button>
+          </div>
+
           {/* Banner card */}
           <div style={cardStyle}>
             <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Conference Banner</p>
