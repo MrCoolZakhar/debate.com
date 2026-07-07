@@ -169,7 +169,7 @@ export function ConferenceCard({
             aria-hidden
             style={{
               position: 'absolute', right: '16px', top: '16px',
-              fontFamily: "'DM Mono', monospace", fontSize: '46px', lineHeight: 1,
+              fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontVariantNumeric: 'tabular-nums', fontSize: '46px', lineHeight: 1,
               color: 'rgba(238,217,138,0.13)', letterSpacing: '0.02em', userSelect: 'none',
             }}
           >
@@ -207,7 +207,7 @@ export function ConferenceCard({
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}
           >
-            <span style={{ fontSize: '9px', fontFamily: "'DM Mono', monospace", color: '#1B3828', fontWeight: 700 }}>
+            <span style={{ fontSize: '9px', fontFamily: "'Outfit', sans-serif", color: '#1B3828', fontWeight: 700, letterSpacing: '0.06em', fontVariantNumeric: 'tabular-nums' }}>
               {initials}
             </span>
           </div>
@@ -216,7 +216,7 @@ export function ConferenceCard({
 
       {/* Lower zone: acronym eyebrow · overlaid name · 2×2 facts + APPLY */}
       <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '0 14px 12px' }}>
-        <p style={{ fontFamily: "'DM Mono', monospace", fontSize: '8.5px', letterSpacing: '0.18em', color: '#EED98A', margin: '0 0 3px 0' }}>
+        <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '8.5px', letterSpacing: '0.14em', color: '#EED98A', margin: '0 0 3px 0' }}>
           {conf.acronym}
         </p>
         <h3
@@ -256,14 +256,14 @@ export function ConferenceCard({
             </span>
             <span className="flex items-center gap-1">
               <CalendarDays size={11} style={{ color: 'rgba(237,231,216,0.66)', flexShrink: 0 }} />
-              <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '9.5px', color: 'rgba(237,231,216,0.8)', whiteSpace: 'nowrap' }}>
+              <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 500, fontVariantNumeric: 'tabular-nums', letterSpacing: '0.01em', fontSize: '9.5px', color: 'rgba(237,231,216,0.8)', whiteSpace: 'nowrap' }}>
                 {formatDateRange(conf.start_date, conf.end_date)}
               </span>
             </span>
             {conf.fee_amount === 0 ? (
               <span
                 style={{
-                  justifySelf: 'start', fontFamily: "'DM Mono', monospace", fontSize: '9px', fontWeight: 700,
+                  justifySelf: 'start', fontFamily: "'Outfit', sans-serif", fontSize: '9px', fontWeight: 700, fontVariantNumeric: 'tabular-nums',
                   letterSpacing: '0.08em', color: '#BFEBD1', backgroundColor: 'rgba(42,90,60,0.55)',
                   border: '1px solid rgba(127,214,160,0.35)', padding: '1.5px 8px', borderRadius: '9999px',
                 }}
@@ -273,7 +273,7 @@ export function ConferenceCard({
             ) : (
               <span
                 style={{
-                  justifySelf: 'start', fontFamily: "'DM Mono', monospace", fontSize: '9px',
+                  justifySelf: 'start', fontFamily: "'Outfit', sans-serif", fontSize: '9px', fontWeight: 600, fontVariantNumeric: 'tabular-nums',
                   color: '#EED98A', backgroundColor: 'rgba(238,217,138,0.14)',
                   border: '1px solid rgba(238,217,138,0.32)', padding: '1.5px 8px', borderRadius: '9999px', whiteSpace: 'nowrap',
                 }}
@@ -283,7 +283,7 @@ export function ConferenceCard({
             )}
             <span className="flex items-center gap-1">
               <Users size={11} style={{ color: 'rgba(237,231,216,0.66)', flexShrink: 0 }} />
-              <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '9.5px', color: 'rgba(237,231,216,0.8)' }}>
+              <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '9.5px', color: 'rgba(237,231,216,0.8)' }}>
                 {conf.expected_delegates.toLocaleString()}
               </span>
             </span>
@@ -352,7 +352,7 @@ export function ConferenceCard({
               aria-hidden
               style={{
                 position: 'absolute', right: '14px', bottom: '-6px',
-                fontFamily: "'DM Mono', monospace", fontSize: heroCompact ? '30px' : compact ? '38px' : '52px', lineHeight: 1,
+                fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontVariantNumeric: 'tabular-nums', fontSize: heroCompact ? '30px' : compact ? '38px' : '52px', lineHeight: 1,
                 color: 'rgba(238,217,138,0.13)', letterSpacing: '0.02em', userSelect: 'none',
               }}
             >
@@ -365,7 +365,7 @@ export function ConferenceCard({
           <span
             className="absolute top-3 right-3"
             style={{
-              fontFamily: "'DM Mono', monospace", fontSize: '9px', letterSpacing: '0.12em',
+              fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.12em',
               color: '#FAF8F3', backgroundColor: 'rgba(20,36,27,0.45)',
               backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
               border: '1px solid rgba(250,248,243,0.18)',
@@ -397,7 +397,7 @@ export function ConferenceCard({
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}
           >
-            <span style={{ fontSize: dense ? '10px' : '12px', fontFamily: "'DM Mono', monospace", color: '#1B3828', fontWeight: 700 }}>
+            <span style={{ fontSize: dense ? '10px' : '12px', fontFamily: "'Outfit', sans-serif", color: '#1B3828', fontWeight: 700, letterSpacing: '0.06em', fontVariantNumeric: 'tabular-nums' }}>
               {initials}
             </span>
           </div>
@@ -406,7 +406,7 @@ export function ConferenceCard({
 
       <div className={`${padX} ${heroCompact ? 'pt-1 pb-2.5' : compact ? 'pt-2 pb-4' : 'pt-3 pb-5'}`}>
         {/* Acronym eyebrow */}
-        <p style={{ fontFamily: "'DM Mono', monospace", fontSize: dense ? '9px' : '10px', letterSpacing: '0.16em', color: '#B6871F', margin: heroCompact ? '0 0 2px 0' : '0 0 3px 0' }}>
+        <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: dense ? '9px' : '10px', letterSpacing: '0.14em', color: '#B6871F', margin: heroCompact ? '0 0 2px 0' : '0 0 3px 0' }}>
           {conf.acronym}
         </p>
 
@@ -437,7 +437,7 @@ export function ConferenceCard({
         </div>
         <div className={`flex items-center gap-1.5 ${heroCompact ? 'mb-1.5' : compact ? 'mb-3' : 'mb-4'}`}>
           <CalendarDays size={12} style={{ color: '#9A8A78', flexShrink: 0 }} />
-          <span className="text-[11px]" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}>
+          <span className="text-[11px]" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", fontWeight: 500, fontVariantNumeric: 'tabular-nums', letterSpacing: '0.01em' }}>
             {formatDateRange(conf.start_date, conf.end_date)}
           </span>
         </div>
@@ -450,7 +450,7 @@ export function ConferenceCard({
           <div className="flex items-center gap-2">
             <span
               className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-full"
-              style={{ backgroundColor: 'rgba(27,56,40,0.06)', color: '#4A4238', fontFamily: "'DM Mono', monospace" }}
+              style={{ backgroundColor: 'rgba(27,56,40,0.06)', color: '#4A4238', fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}
             >
               <Users size={10} style={{ color: '#9A8A78' }} />
               {conf.expected_delegates.toLocaleString()}
@@ -458,14 +458,14 @@ export function ConferenceCard({
             {conf.fee_amount === 0 ? (
               <span
                 className="text-[10px] px-2 py-1 rounded-full font-bold"
-                style={{ backgroundColor: 'rgba(61,122,82,0.14)', color: '#2A5A3C', fontFamily: "'DM Mono', monospace", letterSpacing: '0.06em' }}
+                style={{ backgroundColor: 'rgba(61,122,82,0.14)', color: '#2A5A3C', fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums', letterSpacing: '0.06em' }}
               >
                 FREE
               </span>
             ) : (
               <span
                 className="text-[10px] px-2 py-1 rounded-full"
-                style={{ backgroundColor: 'rgba(182,135,31,0.1)', color: '#8A6614', fontFamily: "'DM Mono', monospace" }}
+                style={{ backgroundColor: 'rgba(182,135,31,0.1)', color: '#8A6614', fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}
               >
                 {conf.fee_currency} {conf.fee_amount.toFixed(0)}
               </span>
