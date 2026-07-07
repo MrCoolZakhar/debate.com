@@ -49,6 +49,77 @@ interface Application {
   profiles: { display_name: string; email: string; avatar_url: string | null; nationality: string | null } | null;
   societies: { name: string } | null;
   application_preferences: AppPreference[];
+  allocation_override: boolean;
+  attending: boolean;
+  pledge_type: 'own' | 'delegation' | 'both' | null;
+  spots_pledged: number | null;
+  pledge_confirmed_at: string | null;
+  society_id: string | null;
+}
+
+// ── Pool accounting ──────────────────────────────────────────────────────────
+
+type Pool = 'delegate' | 'advisor';
+
+const POOL_ROLES: Record<Pool, string[]> = {
+  delegate: ['delegate', 'head-delegate'],
+  advisor: ['faculty-advisor'],
+};
+
+const POOL_SPOTS_COLUMN: Record<Pool, 'spots_purchased' | 'advisor_spots_purchased'> = {
+  delegate: 'spots_purchased',
+  advisor: 'advisor_spots_purchased',
+};
+
+function poolForRole(role: string): Pool | null {
+  if (role === 'delegate' || role === 'head-delegate') return 'delegate';
+  if (role === 'faculty-advisor') return 'advisor';
+  return null;
+}
+
+/**
+ * Given a society and a spot pool, promotes the oldest-submitted attending
+ * unpaid members of that pool to 'paid' until the pool's purchased-spots
+ * column is full or there are no more candidates. Idempotent — a no-op when
+ * the pool has no free spots.
+ */
+export async function fillFreeSpots(
+  supabase: ReturnType<typeof getAuthedClient>,
+  societyId: string,
+  pool: Pool
+) {
+  const roles = POOL_ROLES[pool];
+  const spotsColumn = POOL_SPOTS_COLUMN[pool];
+
+  const [{ data: society }, { count: occupancy }] = await Promise.all([
+    supabase.from('societies').select(spotsColumn).eq('id', societyId).single(),
+    supabase
+      .from('applications')
+      .select('id', { count: 'exact', head: true })
+      .eq('society_id', societyId)
+      .in('role', roles)
+      .eq('attending', true)
+      .eq('payment_status', 'paid'),
+  ]);
+
+  const spotsPurchased = (society as Record<string, number> | null)?.[spotsColumn] ?? 0;
+  const freeSpots = spotsPurchased - (occupancy ?? 0);
+  if (freeSpots <= 0) return;
+
+  const { data: candidates } = await supabase
+    .from('applications')
+    .select('id')
+    .eq('society_id', societyId)
+    .in('role', roles)
+    .eq('attending', true)
+    .eq('payment_status', 'unpaid')
+    .order('submitted_at', { ascending: true })
+    .limit(freeSpots);
+
+  const ids = ((candidates ?? []) as { id: string }[]).map(c => c.id);
+  if (ids.length === 0) return;
+
+  await supabase.from('applications').update({ payment_status: 'paid' }).in('id', ids);
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -140,6 +211,7 @@ export default function ApplicationsPage() {
           id, user_id, role, status, is_independent, is_head_delegate, experience_level,
           payment_status, submitted_at, organizer_note, custom_answers,
           assigned_committee_id, assigned_country_code, assigned_country_name,
+          allocation_override, attending, pledge_type, spots_pledged, pledge_confirmed_at, society_id,
           assigned_committee:conference_committees!assigned_committee_id (name, topics),
           profiles (display_name, email, avatar_url, nationality),
           societies (name),
@@ -183,6 +255,60 @@ export default function ApplicationsPage() {
     if (!session) return;
     const supabase = getAuthedClient(session.access_token);
     await supabase.from('applications').update({ status: 'submitted', organizer_note: null }).eq('id', appId);
+    await loadApplications();
+  }
+
+  async function handleMarkPaid(app: Application) {
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
+    await supabase.from('applications').update({ payment_status: 'paid' }).eq('id', app.id);
+
+    const pool = poolForRole(app.role);
+    if (app.society_id && pool) {
+      const spotsColumn = POOL_SPOTS_COLUMN[pool];
+      const { data: soc } = await supabase.from('societies').select(spotsColumn).eq('id', app.society_id).single();
+      const current = (soc as Record<string, number> | null)?.[spotsColumn] ?? 0;
+      await supabase.from('societies').update({ [spotsColumn]: current + 1 }).eq('id', app.society_id);
+      await fillFreeSpots(supabase, app.society_id, pool);
+    }
+    await loadApplications();
+  }
+
+  async function handleMarkUnpaid(app: Application) {
+    if (!session) return;
+    if (!window.confirm('Mark this application unpaid? If their payment opened a delegation spot, one spot will be removed.')) return;
+    const supabase = getAuthedClient(session.access_token);
+    await supabase.from('applications').update({ payment_status: 'unpaid' }).eq('id', app.id);
+
+    const pool = poolForRole(app.role);
+    if (app.society_id && pool) {
+      const spotsColumn = POOL_SPOTS_COLUMN[pool];
+      const { data: soc } = await supabase.from('societies').select(spotsColumn).eq('id', app.society_id).single();
+      const current = (soc as Record<string, number> | null)?.[spotsColumn] ?? 0;
+      await supabase.from('societies').update({ [spotsColumn]: Math.max(0, current - 1) }).eq('id', app.society_id);
+    }
+    await loadApplications();
+  }
+
+  async function handleWaive(app: Application) {
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
+    await supabase.from('applications').update({ payment_status: 'waived' }).eq('id', app.id);
+    await loadApplications();
+  }
+
+  async function handleEnableAllocation(app: Application) {
+    if (!session) return;
+    if (!window.confirm('This delegate has not paid. Are you sure you want to enable allocation for them?')) return;
+    const supabase = getAuthedClient(session.access_token);
+    await supabase.from('applications').update({ allocation_override: true }).eq('id', app.id);
+    await loadApplications();
+  }
+
+  async function handleDisableAllocation(app: Application) {
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
+    await supabase.from('applications').update({ allocation_override: false }).eq('id', app.id);
     await loadApplications();
   }
 
@@ -337,12 +463,76 @@ export default function ApplicationsPage() {
             const sc = statusColors[app.status] ?? { bg: 'rgba(154,138,120,0.12)', color: '#9A8A78', border: 'rgba(154,138,120,0.35)' };
 
             const paid = app.payment_status === 'paid';
+            const waived = app.payment_status === 'waived';
             const roleConfig = roleConfigs.find(rc => rc.role === app.role);
             const isPaidOrWaived = app.payment_status === 'paid' || app.payment_status === 'waived';
-            const mustPayBlocked = !!roleConfig?.must_pay_before_allocation && !isPaidOrWaived;
+            const paymentRequiredForAllocation = !!roleConfig?.must_pay_before_allocation && !isPaidOrWaived;
+            const mustPayBlocked = paymentRequiredForAllocation && !app.allocation_override;
             const questions = roleConfig?.custom_questions ?? [];
             const answers = app.custom_answers ?? {};
             const isExpanded = expandedId === app.id;
+
+            const pledgeLine = app.pledge_type === 'own'
+              ? 'Pledged: own fee'
+              : app.pledge_type === 'delegation'
+              ? `Pledged: ${app.spots_pledged ?? 0} delegation spots`
+              : app.pledge_type === 'both'
+              ? `Pledged: own fee + ${app.spots_pledged ?? 0} delegation spots`
+              : null;
+
+            const showPaymentControls = app.status === 'accepted' || app.status === 'assigned' || app.status === 'submitted';
+            const paymentControls = showPaymentControls ? (
+              <>
+                {!paid ? (
+                  <button
+                    onClick={() => handleMarkPaid(app)}
+                    className="rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
+                    style={{ backgroundColor: 'rgba(61,122,82,0.12)', color: '#3D7A52', border: '1px solid rgba(61,122,82,0.3)', fontFamily: "'Outfit', sans-serif" }}
+                  >
+                    MARK PAID
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleMarkUnpaid(app)}
+                    className="rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
+                    style={{ backgroundColor: 'rgba(184,132,74,0.12)', color: '#B8844A', border: '1px solid rgba(184,132,74,0.3)', fontFamily: "'Outfit', sans-serif" }}
+                  >
+                    MARK UNPAID
+                  </button>
+                )}
+                {app.payment_status === 'unpaid' && (
+                  <button
+                    onClick={() => handleWaive(app)}
+                    className="rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
+                    style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                  >
+                    WAIVE
+                  </button>
+                )}
+                {paymentRequiredForAllocation && !app.allocation_override && (
+                  <button
+                    onClick={() => handleEnableAllocation(app)}
+                    className="rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
+                    style={{ backgroundColor: 'rgba(238,217,138,0.16)', color: '#8A6614', border: '1px solid rgba(182,135,31,0.4)', fontFamily: "'Outfit', sans-serif" }}
+                  >
+                    ENABLE ALLOCATION
+                  </button>
+                )}
+                {app.allocation_override && (
+                  <button
+                    onClick={() => handleDisableAllocation(app)}
+                    title="Click to revert"
+                    className="rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none inline-flex items-center gap-1.5"
+                    style={{ backgroundColor: 'rgba(238,217,138,0.35)', color: '#7A5A10', border: '1px solid rgba(182,135,31,0.45)', fontFamily: "'Outfit', sans-serif" }}
+                  >
+                    <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#B6871F', display: 'inline-block' }} />
+                    ALLOCATION ENABLED
+                  </button>
+                )}
+              </>
+            ) : null;
 
             return (
               <div
@@ -370,10 +560,16 @@ export default function ApplicationsPage() {
                     <span style={{ ...roleBadgeStyle, backgroundColor: sc.bg, color: sc.color, border: `1px solid ${sc.border}` }}>
                       {app.status.toUpperCase()}
                     </span>
-                    <span className="flex items-center gap-1 font-bold" style={{ fontSize: 10, fontFamily: "'Outfit', sans-serif", letterSpacing: '0.06em', color: paid ? '#2A5A3C' : '#9A6B2F' }}>
-                      <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: paid ? '#3D7A52' : '#B6871F', display: 'inline-block' }} />
-                      {paid ? 'PAID' : 'UNPAID'}
-                    </span>
+                    {waived ? (
+                      <span className="px-2 py-0.5 rounded-full font-bold" style={{ backgroundColor: 'rgba(184,132,74,0.16)', color: '#9A6B2F', border: '1px solid rgba(184,132,74,0.42)', fontSize: 9, fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em' }}>
+                        WAIVED
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1 font-bold" style={{ fontSize: 10, fontFamily: "'Outfit', sans-serif", letterSpacing: '0.06em', color: paid ? '#2A5A3C' : '#9A6B2F' }}>
+                        <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: paid ? '#3D7A52' : '#B6871F', display: 'inline-block' }} />
+                        {paid ? 'PAID' : 'UNPAID'}
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -397,6 +593,13 @@ export default function ApplicationsPage() {
                     <span>Applied {formatDate(app.submitted_at)}</span>
                   )}
                 </div>
+
+                {/* Row 2b: pledge */}
+                {pledgeLine && (
+                  <p className="text-xs mt-1" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                    {pledgeLine}{app.pledge_confirmed_at ? ' · received' : ''}
+                  </p>
+                )}
 
                 {/* Row 3: preferences (delegates only) */}
                 {isDelegate && prefs.length > 0 && (
@@ -431,6 +634,7 @@ export default function ApplicationsPage() {
                       >
                         ACCEPT
                       </button>
+                      {paymentControls}
                       {isRejecting ? (
                         <div className="flex items-start gap-2 flex-1">
                           <textarea
@@ -489,6 +693,7 @@ export default function ApplicationsPage() {
                           ASSIGN →
                         </Link>
                       )}
+                      {paymentControls}
                       {isRejecting ? (
                         <div className="flex items-start gap-2 flex-1">
                           <textarea
@@ -528,6 +733,7 @@ export default function ApplicationsPage() {
 
                   {app.status === 'assigned' && (
                     <>
+                      {paymentControls}
                       {app.assigned_country_name && (
                         <span className="text-xs self-center" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
                           {[app.assigned_committee?.name, (app.assigned_committee?.topics ?? []).join(', '), app.assigned_country_name].filter(Boolean).join('  ·  ')}
