@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { FileText, Upload, X, Check } from 'lucide-react';
+import { FileText, Upload, X, Check, Inbox } from 'lucide-react';
 import Link from 'next/link';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
@@ -59,6 +59,25 @@ function formatDate(iso: string): string {
   return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
 }
 
+// Shared card language — thick 1.5px border + layered warm shadow (rulebook F6).
+const CARD_SHADOW = '0 2px 8px rgba(27,56,40,0.05), 0 12px 32px rgba(27,56,40,0.06)';
+
+// Red PDF file-type tile — a saturated square glyph, not the meek grey icon.
+function PdfTile({ size = 40 }: { size?: number }) {
+  return (
+    <span
+      className="flex items-center justify-center flex-shrink-0"
+      style={{
+        width: size, height: size, borderRadius: 10,
+        background: 'linear-gradient(150deg, rgba(139,32,32,0.16), rgba(139,32,32,0.07))',
+        border: '1px solid rgba(139,32,32,0.28)',
+      }}
+    >
+      <FileText size={Math.round(size * 0.5)} strokeWidth={2} style={{ color: '#8B2020' }} />
+    </span>
+  );
+}
+
 // ── Modal overlay ──────────────────────────────────────────────────────────────
 
 function ModalOverlay({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
@@ -76,20 +95,20 @@ function ModalOverlay({ children, onClose }: { children: React.ReactNode; onClos
 // ── Paper status badge ─────────────────────────────────────────────────────────
 
 function PaperStatusBadge({ status }: { status: string }) {
-  const map: Record<string, { bg: string; color: string }> = {
-    submitted: { bg: 'rgba(238,217,138,0.2)',  color: '#B8844A' },
-    reviewed:  { bg: 'rgba(154,138,120,0.15)', color: '#9A8A78' },
-    approved:  { bg: 'rgba(61,122,82,0.12)',   color: '#3D7A52' },
-    rejected:  { bg: 'rgba(139,32,32,0.1)',    color: '#8B2020' },
+  const map: Record<string, { bg: string; color: string; border: string }> = {
+    submitted: { bg: 'rgba(238,217,138,0.2)',  color: '#B8844A', border: 'rgba(184,132,74,0.42)' },
+    reviewed:  { bg: 'rgba(154,138,120,0.15)', color: '#6E5F4E', border: 'rgba(154,138,120,0.42)' },
+    approved:  { bg: 'rgba(61,122,82,0.12)',   color: '#3D7A52', border: 'rgba(61,122,82,0.4)' },
+    rejected:  { bg: 'rgba(139,32,32,0.1)',    color: '#8B2020', border: 'rgba(139,32,32,0.35)' },
   };
   const s = map[status.toLowerCase()] ?? map.submitted;
   return (
     <span style={{
-      backgroundColor: s.bg, color: s.color,
-      fontFamily: "'DM Mono', monospace", fontSize: 9, fontWeight: 700,
-      padding: '2px 8px', borderRadius: 9999, letterSpacing: '0.08em',
+      backgroundColor: s.bg, color: s.color, border: `1px solid ${s.border}`,
+      fontFamily: "'Outfit', sans-serif", fontSize: 11, fontWeight: 700,
+      padding: '2px 9px', borderRadius: 7,
     }}>
-      {status.toUpperCase()}
+      {status.charAt(0).toUpperCase() + status.slice(1)}
     </span>
   );
 }
@@ -153,14 +172,14 @@ function UploadStudyGuideModal({
 
   return (
     <ModalOverlay onClose={onClose}>
-      <div style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', borderRadius: 16, padding: 24, maxWidth: 448, width: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
+      <div style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #D8CDB6', borderRadius: 16, padding: 24, maxWidth: 448, width: '100%', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(27,56,40,0.18)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
           <h2 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 16, color: '#1C1410' }}>Upload Study Guide</h2>
           <button onClick={onClose} className="focus:outline-none" style={{ color: '#9A8A78' }}><X size={18} /></button>
         </div>
 
         <div style={{ marginBottom: 16 }}>
-          <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#9A8A78', fontFamily: "'DM Mono', monospace", textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#6E5F4E', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.02em', marginBottom: 6 }}>
             Title *
           </label>
           <input
@@ -172,7 +191,7 @@ function UploadStudyGuideModal({
         </div>
 
         <div style={{ marginBottom: 16 }}>
-          <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#9A8A78', fontFamily: "'DM Mono', monospace", textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#6E5F4E', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.02em', marginBottom: 6 }}>
             File (PDF · max 5MB)
           </label>
           <input type="file" accept="application/pdf" onChange={handleFileSelect} className="hidden" ref={fileInputRef} />
@@ -258,12 +277,12 @@ function SetDeadlineModal({
 
   return (
     <ModalOverlay onClose={onClose}>
-      <div style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', borderRadius: 16, padding: 24, maxWidth: 380, width: '100%' }}>
+      <div style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #D8CDB6', borderRadius: 16, padding: 24, maxWidth: 380, width: '100%', boxShadow: '0 20px 60px rgba(27,56,40,0.18)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
           <h2 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 16, color: '#1C1410' }}>Position Paper Settings</h2>
           <button onClick={onClose} className="focus:outline-none" style={{ color: '#9A8A78' }}><X size={18} /></button>
         </div>
-        <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#9A8A78', fontFamily: "'DM Mono', monospace", textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+        <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#6E5F4E', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.02em', marginBottom: 6 }}>
           Name of Document
         </label>
         <input
@@ -288,7 +307,7 @@ function SetDeadlineModal({
         </div>
         {enabled && (
           <>
-            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#9A8A78', fontFamily: "'DM Mono', monospace", textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#6E5F4E', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.02em', marginBottom: 6 }}>
               Submission Deadline (optional)
             </label>
             <input
@@ -481,7 +500,10 @@ export default function DocumentsPage() {
       )}
 
       {!loading && committees.length === 0 && (
-        <div style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', borderRadius: 16, padding: 40, textAlign: 'center' }}>
+        <div style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #D8CDB6', borderRadius: 16, padding: 40, textAlign: 'center', boxShadow: CARD_SHADOW }}>
+          <span className="inline-flex items-center justify-center" style={{ width: 56, height: 56, borderRadius: 16, background: 'linear-gradient(150deg, rgba(27,56,40,0.1), rgba(27,56,40,0.04))', border: '1px solid rgba(27,56,40,0.18)', marginBottom: 16 }}>
+            <FileText size={26} strokeWidth={1.8} style={{ color: '#1B3828' }} />
+          </span>
           <p style={{ fontFamily: "'Outfit', sans-serif", fontSize: 15, fontWeight: 600, color: '#1C1410', marginBottom: 6 }}>No committees yet</p>
           <p style={{ fontFamily: "'Outfit', sans-serif", fontSize: 13, color: '#9A8A78', marginBottom: 20 }}>Add committees before managing documents.</p>
           <Link
@@ -505,11 +527,11 @@ export default function DocumentsPage() {
                   onClick={() => setSelectedCommitteeId(c.id)}
                   className="focus:outline-none flex-shrink-0"
                   style={{
-                    fontFamily: "'DM Mono', monospace", fontSize: 12, fontWeight: 600,
+                    fontFamily: "'Outfit', sans-serif", fontSize: 13, fontWeight: 700, letterSpacing: '0.01em',
                     padding: '8px 16px', borderRadius: 9999, whiteSpace: 'nowrap', cursor: 'pointer',
-                    border: isActive ? '1px solid #1B3828' : '1px solid #DDD4C0',
+                    border: isActive ? '1.5px solid #1B3828' : '1.5px solid #D8CDB6',
                     backgroundColor: isActive ? '#1B3828' : 'transparent',
-                    color: isActive ? '#EED98A' : '#9A8A78',
+                    color: isActive ? '#EED98A' : '#6E5F4E',
                     transition: 'all 0.15s',
                   }}
                   onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
@@ -522,7 +544,7 @@ export default function DocumentsPage() {
           </div>
 
           {/* ── Section A: Study Guides ─────────────────────────────────────────── */}
-          <div style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', borderRadius: 16, padding: 24, marginBottom: 24 }}>
+          <div style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #D8CDB6', borderRadius: 16, padding: 24, marginBottom: 24, boxShadow: CARD_SHADOW }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
               <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontSize: 15, color: '#1C1410' }}>Study Guides</p>
               <button
@@ -604,8 +626,8 @@ export default function DocumentsPage() {
             )}
           </div>
 
-          {/* ── Section B: Position Papers ──────────────────────────────────────── */}
-          <div style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', borderRadius: 16, padding: 24 }}>
+          {/* ── Section B: Position Papers (the protagonist) ────────────────────── */}
+          <div style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #D8CDB6', borderTop: '2.5px solid #1B3828', borderRadius: 16, padding: 24, boxShadow: CARD_SHADOW }}>
             {/* Header */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
               <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontSize: 15, color: '#1C1410' }}>Position Papers</p>
