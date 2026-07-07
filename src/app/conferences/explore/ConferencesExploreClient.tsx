@@ -63,12 +63,24 @@ function FilterPill({
       onClick={onClick}
       className="px-3 py-1.5 rounded-full text-[10px] font-bold transition-all focus:outline-none"
       style={{
-        backgroundColor: active ? '#1B3828' : 'rgba(237,231,216,0.5)',
-        color: active ? '#EED98A' : '#6B5F52',
-        border: active ? '1px solid #1B3828' : '1px solid rgba(221,212,192,0.9)',
+        backgroundColor: active ? '#1B3828' : '#FAF8F3',
+        color: active ? '#EED98A' : '#1C1410',
+        border: active ? '1px solid #1B3828' : '1.5px solid #D8CDB6',
         fontFamily: "'Outfit', sans-serif",
         letterSpacing: '0.08em',
         whiteSpace: 'nowrap',
+      }}
+      onMouseEnter={(e) => {
+        if (active) return;
+        (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)';
+        (e.currentTarget as HTMLElement).style.color = '#1B3828';
+        (e.currentTarget as HTMLElement).style.borderColor = 'rgba(27,56,40,0.35)';
+      }}
+      onMouseLeave={(e) => {
+        if (active) return;
+        (e.currentTarget as HTMLElement).style.backgroundColor = '#FAF8F3';
+        (e.currentTarget as HTMLElement).style.color = '#1C1410';
+        (e.currentTarget as HTMLElement).style.borderColor = '#D8CDB6';
       }}
     >
       {label}
@@ -191,22 +203,22 @@ export default function ConferencesExploreClient() {
         <header className="px-6 md:px-14 pt-8 pb-8">
           <Link
             href="/conferences"
-            className="inline-flex items-center gap-1.5 text-[11px] mb-6 transition-colors"
-            style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace", textDecoration: 'none', letterSpacing: '0.06em' }}
+            className="inline-flex items-center gap-1.5 text-[11px] mb-6 transition-colors font-semibold"
+            style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", textDecoration: 'none', letterSpacing: '0.08em', textTransform: 'uppercase' }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
           >
-            <ArrowLeft size={12} />
-            BACK TO CONFERENCES
+            <ArrowLeft size={13} strokeWidth={2.25} />
+            Back to conferences
           </Link>
 
           <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6">
             <div>
               <p
-                className="mb-2"
-                style={{ fontFamily: "'DM Mono', monospace", fontSize: '10px', letterSpacing: '0.28em', color: '#B6871F' }}
+                className="mb-2 font-bold"
+                style={{ fontFamily: "'Outfit', sans-serif", fontSize: '12px', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#B6871F' }}
               >
-                CONFERENCE DIRECTORY
+                Conference directory
               </p>
               <h1
                 style={{
@@ -345,14 +357,14 @@ export default function ConferencesExploreClient() {
                 className="px-4 md:px-5 py-4 flex flex-wrap items-center gap-2"
                 style={{ borderTop: '1px solid rgba(221,212,192,0.7)' }}
               >
-                <span className="text-[10px] font-bold mr-1" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace", letterSpacing: '0.14em' }}>FORMAT</span>
+                <span className="text-[11px] font-bold mr-1" style={{ color: '#6B5F52', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.14em', textTransform: 'uppercase' }}>Format</span>
                 <FilterPill label="IN-PERSON"  active={formatFilter === 'in-person'}  onClick={() => setFormatFilter(f => f === 'in-person' ? '' : 'in-person')} />
                 <FilterPill label="ONLINE"     active={formatFilter === 'online'}     onClick={() => setFormatFilter(f => f === 'online' ? '' : 'online')} />
                 <FilterPill label="HYBRID"     active={formatFilter === 'hybrid'}     onClick={() => setFormatFilter(f => f === 'hybrid' ? '' : 'hybrid')} />
 
                 <div className="w-px h-5 mx-1" style={{ backgroundColor: 'rgba(221,212,192,0.9)' }} />
 
-                <span className="text-[10px] font-bold mr-1" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace", letterSpacing: '0.14em' }}>LEVEL</span>
+                <span className="text-[11px] font-bold mr-1" style={{ color: '#6B5F52', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.14em', textTransform: 'uppercase' }}>Level</span>
                 <FilterPill label="SCHOOL"     active={levelFilter === 'school'}     onClick={() => setLevelFilter(l => l === 'school' ? '' : 'school')} />
                 <FilterPill label="UNIVERSITY" active={levelFilter === 'university'} onClick={() => setLevelFilter(l => l === 'university' ? '' : 'university')} />
                 <FilterPill label="BOTH"       active={levelFilter === 'both'}       onClick={() => setLevelFilter(l => l === 'both' ? '' : 'both')} />
@@ -363,7 +375,7 @@ export default function ConferencesExploreClient() {
 
                 <div className="w-px h-5 mx-1" style={{ backgroundColor: 'rgba(221,212,192,0.9)' }} />
 
-                <span className="text-[10px] font-bold mr-1" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace", letterSpacing: '0.14em' }}>CONTINENT</span>
+                <span className="text-[11px] font-bold mr-1" style={{ color: '#6B5F52', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.14em', textTransform: 'uppercase' }}>Continent</span>
                 {CONTINENT_KEYS.map(key => (
                   <FilterPill
                     key={key}
