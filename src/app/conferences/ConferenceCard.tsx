@@ -8,9 +8,9 @@
 // monogram fallback) with a glass date chip top-left · free-floating logo
 // overlapping the band (marginTop -36px, 72px contain + drop-shadow) · fee
 // bubble (currency symbol + amount) straddling the banner/body seam on the
-// right · small full-name line over a BIG acronym heading · flag + city ·
-// foot row (delegates chip · APPLY pill, or APPLIED state when the viewer
-// already has an application).
+// right · BIG "ACRONYM YYYY" heading · "City, CC" location line · foot row
+// (delegates chip · APPLY pill, or APPLIED state when the viewer already has
+// an application).
 // Hover lifts the card and deepens the shadow so it reads as a floating object.
 //
 // `compact` (default false — the explore directory is untouched) shrinks the
@@ -40,7 +40,7 @@
 
 import { useState } from 'react';
 import { ArrowRight, Check, Users, CalendarDays, Gavel, MapPin } from 'lucide-react';
-import { getFlagUrl, getCountryByName } from '@/lib/countries';
+import { getCountryByName } from '@/lib/countries';
 
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
 
@@ -126,7 +126,9 @@ export function ConferenceCard({
   applied?: boolean;
 }) {
   const countryObj = getCountryByName(conf.country);
-  const flagUrl = countryObj ? getFlagUrl(countryObj.code) : null;
+  // "Oxford, GB" — ISO country code instead of the full country name (or flag)
+  const countryCode = countryObj ? countryObj.code.toUpperCase() : conf.country;
+  const editionYear = conf.start_date.slice(0, 4);
   const initials = conf.acronym.slice(0, 3).toUpperCase();
   const [g0, g1] = gradientFor(conf.acronym);
   // heroCompact reuses compact's tighter horizontal padding.
@@ -215,8 +217,8 @@ export function ConferenceCard({
           padding: '3px 10px', borderRadius: '9999px',
         }}
       >
-        <CalendarDays size={10} style={{ color: '#EED98A', flexShrink: 0 }} />
-        <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', letterSpacing: '0.01em', fontSize: '9.5px', color: '#FAF8F3', whiteSpace: 'nowrap' }}>
+        <CalendarDays size={12} style={{ color: '#EED98A', flexShrink: 0 }} />
+        <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', letterSpacing: '0.01em', fontSize: '11.5px', color: '#FAF8F3', whiteSpace: 'nowrap' }}>
           {formatDateRange(conf.start_date, conf.end_date)}
         </span>
       </span>
@@ -248,53 +250,37 @@ export function ConferenceCard({
         )}
       </div>
 
-      {/* Lower zone: small full name · BIG acronym · facts row + APPLY */}
+      {/* Lower zone: BIG acronym + edition year · facts row + APPLY */}
       <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '0 14px 12px' }}>
-        <p
-          style={{
-            fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontSize: '9.5px', letterSpacing: '0.04em',
-            color: 'rgba(237,231,216,0.78)', margin: '0 0 1px 0',
-            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-          }}
-        >
-          {conf.full_name}
-        </p>
         <h3
           style={{
-            fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '24px', lineHeight: 1.05,
+            fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontVariantNumeric: 'tabular-nums', fontSize: '27px', lineHeight: 1.05,
             letterSpacing: '0.01em', color: '#FAF8F3', margin: 0, textShadow: '0 1px 12px rgba(0,0,0,0.5)',
             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
           }}
         >
-          {conf.acronym}
+          {conf.acronym} {editionYear}
         </h3>
         <div className="flex items-end justify-between gap-3" style={{ marginTop: '7px' }}>
           {/* Facts row: location+flag · fee · attendees (dates live top-right on the photo) */}
           <div className="flex items-center flex-wrap" style={{ columnGap: '12px', rowGap: '5px', minWidth: 0 }}>
             <span className="flex items-center gap-1" style={{ minWidth: 0 }}>
-              <MapPin size={11} style={{ color: '#EED98A', flexShrink: 0 }} />
-              {flagUrl && (
-                <img
-                  src={flagUrl}
-                  alt={conf.country}
-                  style={{ width: '15px', height: '11px', borderRadius: '2px', objectFit: 'cover', flexShrink: 0, boxShadow: '0 1px 2px rgba(0,0,0,0.4)' }}
-                />
-              )}
+              <MapPin size={13} style={{ color: '#EED98A', flexShrink: 0 }} />
               <span
                 style={{
-                  fontFamily: "'Outfit', sans-serif", fontWeight: 500, fontSize: '10.5px',
+                  fontFamily: "'Outfit', sans-serif", fontWeight: 500, fontSize: '11.5px',
                   color: 'rgba(237,231,216,0.92)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                 }}
               >
-                {conf.city}
+                {conf.city}, {countryCode}
               </span>
             </span>
             {conf.fee_amount === 0 ? (
               <span
                 style={{
-                  fontFamily: "'Outfit', sans-serif", fontSize: '9px', fontWeight: 700, fontVariantNumeric: 'tabular-nums',
+                  fontFamily: "'Outfit', sans-serif", fontSize: '11px', fontWeight: 700, fontVariantNumeric: 'tabular-nums',
                   letterSpacing: '0.08em', color: '#BFEBD1', backgroundColor: 'rgba(42,90,60,0.55)',
-                  border: '1px solid rgba(127,214,160,0.35)', padding: '1.5px 8px', borderRadius: '9999px',
+                  border: '1px solid rgba(127,214,160,0.35)', padding: '2px 9px', borderRadius: '9999px',
                 }}
               >
                 FREE
@@ -302,17 +288,17 @@ export function ConferenceCard({
             ) : (
               <span
                 style={{
-                  fontFamily: "'Outfit', sans-serif", fontSize: '9.5px', fontWeight: 700, fontVariantNumeric: 'tabular-nums',
+                  fontFamily: "'Outfit', sans-serif", fontSize: '11.5px', fontWeight: 700, fontVariantNumeric: 'tabular-nums',
                   color: '#EED98A', backgroundColor: 'rgba(238,217,138,0.14)',
-                  border: '1px solid rgba(238,217,138,0.32)', padding: '1.5px 8px', borderRadius: '9999px', whiteSpace: 'nowrap',
+                  border: '1px solid rgba(238,217,138,0.32)', padding: '2px 9px', borderRadius: '9999px', whiteSpace: 'nowrap',
                 }}
               >
                 {currencySymbol(conf.fee_currency)}{conf.fee_amount.toFixed(0)}
               </span>
             )}
             <span className="flex items-center gap-1">
-              <Users size={11} style={{ color: 'rgba(237,231,216,0.66)', flexShrink: 0 }} />
-              <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '9.5px', color: 'rgba(237,231,216,0.8)' }}>
+              <Users size={13} style={{ color: 'rgba(237,231,216,0.66)', flexShrink: 0 }} />
+              <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '11.5px', color: 'rgba(237,231,216,0.8)' }}>
                 {conf.expected_delegates.toLocaleString()}
               </span>
             </span>
@@ -386,8 +372,8 @@ export function ConferenceCard({
             padding: '3px 10px', borderRadius: '9999px',
           }}
         >
-          <CalendarDays size={10} style={{ color: '#EED98A', flexShrink: 0 }} />
-          <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', letterSpacing: '0.01em', fontSize: '9.5px', color: '#FAF8F3', whiteSpace: 'nowrap' }}>
+          <CalendarDays size={12} style={{ color: '#EED98A', flexShrink: 0 }} />
+          <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', letterSpacing: '0.01em', fontSize: '11.5px', color: '#FAF8F3', whiteSpace: 'nowrap' }}>
             {formatDateRange(conf.start_date, conf.end_date)}
           </span>
         </span>
@@ -414,7 +400,7 @@ export function ConferenceCard({
         style={{
           position: 'absolute', zIndex: 2,
           right: dense ? '14px' : '18px',
-          top: `${(compact ? 72 : 104) - 15}px`,
+          top: `${(compact ? 72 : 104) - 17}px`,
           display: 'inline-flex', alignItems: 'baseline', gap: '2px',
           backgroundColor: '#FAF8F3',
           border: conf.fee_amount === 0 ? '2px solid rgba(61,122,82,0.5)' : '2px solid rgba(182,135,31,0.45)',
@@ -423,15 +409,15 @@ export function ConferenceCard({
         }}
       >
         {conf.fee_amount === 0 ? (
-          <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '12px', letterSpacing: '0.08em', color: '#2A5A3C' }}>
+          <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '14px', letterSpacing: '0.08em', color: '#2A5A3C' }}>
             FREE
           </span>
         ) : (
           <>
-            <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '12px', color: '#B6871F' }}>
+            <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '14.5px', color: '#B6871F' }}>
               {currencySymbol(conf.fee_currency)}
             </span>
-            <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontVariantNumeric: 'tabular-nums', fontSize: '13.5px', color: '#1C1410' }}>
+            <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontVariantNumeric: 'tabular-nums', fontSize: '16.5px', color: '#1C1410' }}>
               {conf.fee_amount.toFixed(0)}
             </span>
           </>
@@ -466,40 +452,23 @@ export function ConferenceCard({
       </div>
 
       <div className={`${padX} ${heroCompact ? 'pt-1 pb-2.5' : compact ? 'pt-2 pb-4' : 'pt-3 pb-5'}`}>
-        {/* Full name — small line above the big acronym */}
-        <p
-          style={{
-            fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontSize: dense ? '10.5px' : '11.5px',
-            color: '#6B5F52', margin: '0 0 1px 0',
-            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-          }}
-        >
-          {conf.full_name}
-        </p>
-
-        {/* Acronym — the card's main heading */}
+        {/* Acronym + edition year — the card's main heading */}
         <h3
           className={heroCompact ? 'mb-1.5' : compact ? 'mb-2' : 'mb-2.5'}
           style={{
-            color: '#1C1410', fontFamily: "'Outfit', sans-serif", fontWeight: 800,
-            fontSize: dense ? '21px' : '26px', lineHeight: 1.05, letterSpacing: '0.01em',
+            color: '#1C1410', fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontVariantNumeric: 'tabular-nums',
+            fontSize: dense ? '24px' : '30px', lineHeight: 1.05, letterSpacing: '0.01em',
+            marginTop: dense ? '2px' : '4px',
             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
           }}
         >
-          {conf.acronym}
+          {conf.acronym} {editionYear}
         </h3>
 
         {/* Location */}
         <div className={`flex items-center gap-1.5 ${heroCompact ? 'mb-1.5' : compact ? 'mb-3' : 'mb-4'}`}>
-          {flagUrl && (
-            <img
-              src={flagUrl}
-              alt={conf.country}
-              style={{ width: '18px', height: '13px', borderRadius: '3px', objectFit: 'cover', flexShrink: 0, boxShadow: '0 1px 2px rgba(27,56,40,0.2)' }}
-            />
-          )}
-          <span className="text-xs" style={{ color: '#6B5F52', fontFamily: "'Outfit', sans-serif", fontWeight: 500 }}>
-            {conf.city}, {conf.country}
+          <span className="text-[13px]" style={{ color: '#6B5F52', fontFamily: "'Outfit', sans-serif", fontWeight: 500 }}>
+            {conf.city}, {countryCode}
           </span>
         </div>
 
@@ -509,10 +478,10 @@ export function ConferenceCard({
           style={{ borderTop: '1px solid rgba(221,212,192,0.55)' }}
         >
           <span
-            className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-full"
+            className="flex items-center gap-1.5 text-[13px] px-2.5 py-1 rounded-full"
             style={{ backgroundColor: 'rgba(27,56,40,0.06)', color: '#4A4238', fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}
           >
-            <Users size={10} style={{ color: '#9A8A78' }} />
+            <Users size={13} style={{ color: '#9A8A78' }} />
             {conf.expected_delegates.toLocaleString()}
           </span>
           <ApplyButton applied={applied} />

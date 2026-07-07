@@ -25,7 +25,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowRight, ArrowUpRight, Building2, CreditCard, FileText, Gavel, MapPin, Users, Zap } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, CreditCard, FileText, MapPin, Users, Zap } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -40,7 +40,6 @@ import {
 } from './shared';
 
 // Light-on-dark tokens for the hero zone.
-const IVORY_70 = 'rgba(237,231,216,0.7)';
 const IVORY_55 = 'rgba(237,231,216,0.55)';
 
 // Ink-on-cream tokens for the light slabs.
@@ -240,14 +239,6 @@ export default function VariantStagefront({
           to { opacity: 1; transform: translateY(0) scale(1) rotate(var(--sf-rot, 0deg)); }
         }
         .sf-chip { animation: sfChipIn 640ms cubic-bezier(0.22,1,0.36,1) both; }
-        @keyframes sfShimmer {
-          0%, 100% { opacity: 0.55; }
-          50% { opacity: 1; }
-        }
-        .sf-shimmer { animation: sfShimmer 1.4s ease-in-out infinite; }
-        @media (prefers-reduced-motion: reduce) {
-          .sf-shimmer { animation: none !important; }
-        }
         /* Hero "up next" rail: horizontal snap on narrow screens, vertical stack ≥lg. */
         .sf-hero-rail { scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
         .sf-hero-rail::-webkit-scrollbar { display: none; }
@@ -306,11 +297,8 @@ export default function VariantStagefront({
 
           <SiteNav overlay />
 
-          <div className="relative z-10 flex-1 min-h-0 flex flex-col lg:flex-row lg:items-center gap-6 lg:gap-14 px-6 md:px-14 pb-8 md:pb-9 pt-20 md:pt-24">
+          <div className="relative z-10 flex-1 min-h-0 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6 lg:gap-14 px-6 md:px-14 pb-8 md:pb-9 pt-20 md:pt-24">
             <div className="flex-1 flex flex-col justify-center" style={{ maxWidth: '760px' }}>
-              <p style={{ fontFamily: SANS, fontWeight: 700, fontSize: '12px', letterSpacing: '0.14em', textTransform: 'uppercase', color: PALE_GOLD, margin: '0 0 18px 0' }}>
-                {conferences.length > 0 ? `${conferences.length} Conference${conferences.length === 1 ? '' : 's'} on the board` : 'The MUN circuit'}
-              </p>
               <h1
                 style={{
                   fontFamily: SANS,
@@ -361,10 +349,7 @@ export default function VariantStagefront({
                 >
                   Find a conference <ArrowRight size={17} strokeWidth={2.5} />
                 </Link>
-                <div className="flex flex-col gap-1.5">
-                  <HeroTextLink href="/conferences/new" label="Organising one? List it free" />
-                  <HeroTextLink href="/conferences/roles" label="Chair or staff a committee" />
-                </div>
+                <HeroTextLink href="/conferences/new" label="Organising one? List it free" />
               </div>
             </div>
 
@@ -380,7 +365,7 @@ export default function VariantStagefront({
                 single-row snap rail so all three fit inside one viewport
                 height. */}
             {upcomingTrio.length > 0 && (
-              <aside className="w-full lg:w-[356px] flex-shrink-0 flex flex-col justify-center lg:justify-start lg:self-start lg:pt-3 lg:-mr-9 xl:-mr-10">
+              <aside className="w-full lg:w-[356px] flex-shrink-0 flex flex-col justify-center lg:justify-start lg:self-start lg:pt-3 lg:mr-[calc(5vw-56px)]">
                 <div className="sf-hero-rail flex flex-row lg:flex-col gap-3 lg:gap-2.5 overflow-x-auto lg:overflow-visible -mx-6 px-6 lg:mx-0 lg:px-0 pb-2 lg:pb-0">
                   {upcomingTrio.map(c => (
                     <div
@@ -476,7 +461,7 @@ export default function VariantStagefront({
               */}
               <div
                 className="relative overflow-hidden rounded-3xl"
-                style={{ border: '1.5px solid rgba(182,135,31,0.3)', boxShadow: '0 30px 60px rgba(27,56,40,0.18)' }}
+                style={{ border: '1px solid rgba(27,56,40,0.14)', boxShadow: '0 30px 60px rgba(27,56,40,0.18)' }}
               >
                 <img
                   src="/landing/podium-speaker.jpg"
@@ -502,29 +487,38 @@ export default function VariantStagefront({
                 </div>
               </div>
 
-              {/* Live stat ledger — gold-ringed medallions in a tidy row on the
-                  clean cream space directly BELOW the photo (never over the image,
-                  so every label stays legible). Matches the conference-detail
-                  pricing-medallion language: a forest disc, gold ring, big Outfit
-                  numeral, lucide icon, tiny caption. Stacks to one column on mobile,
-                  three across from sm up. Shows a shimmer skeleton until jobStats
-                  resolves. */}
+              {/* Live stat ledger — the approved forest ledger straddling the
+                  photo's left edge: one dark rounded block, three stacked cells
+                  (a row of three on mobile), big pale-gold numerals. */}
               <div
-                className="mt-7 grid grid-cols-1 sm:grid-cols-3 gap-5 sm:gap-4"
+                className="lg:absolute lg:-left-16 lg:bottom-14 mt-5 lg:mt-0 grid grid-cols-3 lg:grid-cols-1 gap-px overflow-hidden rounded-2xl"
+                style={{
+                  border: '1px solid rgba(27,56,40,0.9)',
+                  backgroundColor: 'rgba(27,56,40,0.9)',
+                  boxShadow: '0 20px 50px rgba(27,56,40,0.28)',
+                  maxWidth: '460px',
+                }}
               >
                 {[
-                  { key: 'open', icon: Users, n: jobStats?.open, label: 'Open roles', sub: 'accepting now' },
-                  { key: 'hiring', icon: Building2, n: jobStats?.hiring, label: 'Conferences hiring', sub: 'across the circuit' },
-                  { key: 'chairing', icon: Gavel, n: jobStats?.chairing, label: 'Chair seats', sub: 'daises open' },
+                  { n: jobStats ? String(jobStats.open) : '—', label: 'Open roles', sub: 'accepting applications now' },
+                  { n: jobStats ? String(jobStats.hiring) : '—', label: 'Conferences hiring', sub: 'across the circuit' },
+                  { n: jobStats ? String(jobStats.chairing) : '—', label: 'Chair seats', sub: 'daises looking for a gavel' },
                 ].map(stat => (
-                  <StatMedallion
-                    key={stat.key}
-                    icon={stat.icon}
-                    value={stat.n}
-                    label={stat.label}
-                    sub={stat.sub}
-                    loaded={jobStats !== null}
-                  />
+                  <div
+                    key={stat.label}
+                    className="px-5 py-4"
+                    style={{ backgroundColor: FOREST }}
+                  >
+                    <p style={{ fontFamily: SANS, fontWeight: 900, fontVariantNumeric: 'tabular-nums', fontSize: '26px', lineHeight: 1, color: PALE_GOLD, margin: 0 }}>
+                      {stat.n}
+                    </p>
+                    <p style={{ fontFamily: SANS, fontWeight: 700, fontSize: '9.5px', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(237,231,216,0.9)', margin: '7px 0 0 0' }}>
+                      {stat.label}
+                    </p>
+                    <p style={{ fontFamily: SANS, fontSize: '11.5px', color: IVORY_55, margin: '3px 0 0 0' }}>
+                      {stat.sub}
+                    </p>
+                  </div>
                 ))}
               </div>
             </div>
@@ -658,27 +652,10 @@ export default function VariantStagefront({
           </div>
         </section>
 
-        {/* ── Organiser tools — photographic backdrop, 2×2 grid + gold CTA ──── */}
-        <section className="relative overflow-hidden" style={{ paddingTop: '56px', paddingBottom: '64px' }}>
-          {/*
-            Backdrop photo: Marvin Meyer via Unsplash (license-safe, free to use)
-            https://unsplash.com/photos/SYTO3xs06fU
-            /public/landing/organiser-desk.jpg (~161 KB) — a team running an event at a laptop.
-          */}
-          <div className="absolute inset-0 z-0" aria-hidden="true">
-            <img src="/landing/organiser-desk.jpg" alt="" className="w-full h-full object-cover" />
-            <div
-              className="absolute inset-0"
-              style={{
-                background:
-                  'linear-gradient(120deg, rgba(10,22,16,0.9) 0%, rgba(12,26,19,0.82) 45%, rgba(12,26,19,0.72) 100%)',
-              }}
-            />
-            <div
-              className="pointer-events-none absolute inset-0"
-              style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px', mixBlendMode: 'overlay', opacity: 0.08 }}
-            />
-          </div>
+        {/* ── Organiser tools — calm cream band, ivory tiles + forest CTA ────
+            Deliberately quiet (worlddiplomats-style): the hero and the globe
+            finale are the only two dark photographic moments on the page. */}
+        <section className="relative overflow-hidden" style={{ backgroundColor: CREAM, paddingTop: '72px', paddingBottom: '80px' }}>
 
           {/* Slim horizontal split: 2×2 highlight tiles LEFT, heading + copy +
               gold CTA RIGHT (vertically centered) — total height ≈ the job
@@ -702,21 +679,20 @@ export default function VariantStagefront({
                       key={card.title}
                       className="rounded-2xl flex flex-col items-center text-center"
                       style={{
-                        backgroundColor: 'rgba(12,26,19,0.55)',
-                        backdropFilter: 'blur(14px) saturate(1.15)',
-                        WebkitBackdropFilter: 'blur(14px) saturate(1.15)',
-                        border: '1px solid rgba(237,231,216,0.16)',
+                        backgroundColor: '#EDE7D8',
+                        border: '1.5px solid #D8CDB6',
+                        boxShadow: '0 1px 3px rgba(27,56,40,0.05)',
                         aspectRatio: '1 / 1',
                         padding: '16px 14px',
                         justifyContent: 'center',
                         gap: '2px',
                       }}
                     >
-                      <Icon size={46} color={PALE_GOLD} strokeWidth={1.6} />
-                      <h3 style={{ fontFamily: SANS, fontWeight: 700, fontSize: '13.5px', color: CREAM, margin: '12px 0 0 0' }}>
+                      <Icon size={46} color={FOREST} strokeWidth={1.6} />
+                      <h3 style={{ fontFamily: SANS, fontWeight: 700, fontSize: '13.5px', color: INK, margin: '12px 0 0 0' }}>
                         {card.title}
                       </h3>
-                      <p style={{ fontFamily: SANS, fontSize: '10.5px', lineHeight: 1.45, color: IVORY_70, margin: '5px 0 0 0' }}>
+                      <p style={{ fontFamily: SANS, fontSize: '10.5px', lineHeight: 1.45, color: INK_70, margin: '5px 0 0 0' }}>
                         {card.desc}
                       </p>
                     </div>
@@ -724,9 +700,9 @@ export default function VariantStagefront({
                 })}
               </div>
 
-              {/* RIGHT — heading, copy, gold CTA — vertically centered */}
+              {/* RIGHT — heading, copy, forest CTA — vertically centered */}
               <div className="flex-1 flex flex-col justify-center">
-                <p style={{ fontFamily: SANS, fontWeight: 700, fontSize: '12px', letterSpacing: '0.14em', textTransform: 'uppercase', color: PALE_GOLD, margin: '0 0 8px 0' }}>
+                <p style={{ fontFamily: SANS, fontWeight: 700, fontSize: '12px', letterSpacing: '0.14em', textTransform: 'uppercase', color: GOLD, margin: '0 0 8px 0' }}>
                   Organiser tools
                 </p>
                 <h2
@@ -735,13 +711,13 @@ export default function VariantStagefront({
                     fontWeight: 900,
                     fontSize: 'clamp(26px, 3vw, 38px)',
                     letterSpacing: '-0.015em',
-                    color: CREAM,
+                    color: INK,
                     margin: 0,
                   }}
                 >
                   Built for the people running the show.
                 </h2>
-                <p style={{ fontFamily: SANS, fontSize: '15px', lineHeight: 1.6, color: IVORY_70, margin: '12px 0 0 0', maxWidth: '520px' }}>
+                <p style={{ fontFamily: SANS, fontSize: '15px', lineHeight: 1.6, color: INK_70, margin: '12px 0 0 0', maxWidth: '520px' }}>
                   Registration, allocation, documents and live committee sessions — one platform,
                   zero fees for organisers.
                 </p>
@@ -755,21 +731,58 @@ export default function VariantStagefront({
                     fontSize: '15px',
                     fontWeight: 800,
                     letterSpacing: '0.04em',
-                    color: FOREST,
-                    backgroundColor: PALE_GOLD,
+                    color: PALE_GOLD,
+                    backgroundColor: FOREST,
                     padding: '16px 32px',
                     borderRadius: '9999px',
                     textDecoration: 'none',
-                    boxShadow: '0 18px 40px rgba(0,0,0,0.4)',
+                    boxShadow: '0 10px 26px rgba(27,56,40,0.25)',
                     transition: 'transform 180ms ease, background-color 180ms ease',
                   }}
-                  onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.backgroundColor = '#F3E3A1'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.backgroundColor = PALE_GOLD; }}
+                  onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.backgroundColor = '#2A5A3C'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.backgroundColor = FOREST; }}
                 >
                   List your conference <ArrowRight size={18} strokeWidth={2.5} />
                 </Link>
               </div>
             </div>
+          </div>
+        </section>
+
+        {/* ── The circuit in numbers — slim worlddiplomats-style impact strip:
+            three plain figures, no cards, no chrome. Real data from the board. */}
+        <section
+          className="px-6 md:px-14"
+          style={{ backgroundColor: CREAM, borderTop: '1px solid rgba(221,212,192,0.6)', paddingTop: '56px', paddingBottom: '64px' }}
+        >
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-10 sm:gap-0">
+            {[
+              { n: conferences.length, label: 'Conferences on the board' },
+              { n: conferences.reduce((s, c) => s + (c.expected_delegates || 0), 0), label: 'Delegates expected' },
+              { n: new Set(conferences.map(c => c.country)).size, label: 'Countries' },
+            ].map((stat, i) => (
+              <div
+                key={stat.label}
+                className={`flex flex-col items-center text-center sm:px-14 md:px-20 ${i > 0 ? 'sm:border-l sm:border-[#DDD4C0]' : ''}`}
+              >
+                <span
+                  style={{
+                    fontFamily: SANS, fontWeight: 800, fontVariantNumeric: 'tabular-nums',
+                    fontSize: 'clamp(38px, 4.5vw, 56px)', lineHeight: 1, color: FOREST, letterSpacing: '-0.01em',
+                  }}
+                >
+                  {stat.n.toLocaleString()}
+                </span>
+                <span
+                  style={{
+                    fontFamily: SANS, fontWeight: 700, fontSize: '11.5px', letterSpacing: '0.14em',
+                    textTransform: 'uppercase', color: GOLD, marginTop: '10px',
+                  }}
+                >
+                  {stat.label}
+                </span>
+              </div>
+            ))}
           </div>
         </section>
 
@@ -906,74 +919,6 @@ export default function VariantStagefront({
 }
 
 // ── Local pieces ─────────────────────────────────────────────────────────────
-
-/**
- * A gold-ringed stat medallion — the pricing-medallion language reused for the
- * live job-board figures. Forest disc, gold ring, lucide icon tucked top-right,
- * big Outfit numeral, tiny caption + sub-line. Before the stat resolves it shows
- * a shimmering ring + placeholder so the hero never reads a bare "—".
- */
-function StatMedallion({
-  icon: Icon, value, label, sub, loaded,
-}: {
-  icon: typeof Users;
-  value: number | undefined;
-  label: string;
-  sub: string;
-  loaded: boolean;
-}) {
-  const ready = loaded && value !== undefined;
-  return (
-    <div className="flex items-center gap-3.5">
-      <div
-        className={ready ? undefined : 'sf-shimmer'}
-        style={{
-          position: 'relative',
-          width: '68px',
-          height: '68px',
-          borderRadius: '9999px',
-          backgroundColor: FOREST,
-          border: `2px solid ${ready ? 'rgba(238,217,138,0.7)' : 'rgba(238,217,138,0.35)'}`,
-          boxShadow: '0 12px 30px rgba(27,56,40,0.32), 0 0 0 5px rgba(238,217,138,0.10)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          flexShrink: 0,
-        }}
-      >
-        <span
-          aria-hidden="true"
-          style={{
-            position: 'absolute',
-            top: '7px',
-            right: '9px',
-            color: 'rgba(238,217,138,0.6)',
-            display: 'inline-flex',
-          }}
-        >
-          <Icon size={13} strokeWidth={2.25} />
-        </span>
-        {ready ? (
-          <span style={{ fontFamily: SANS, fontWeight: 900, fontSize: '27px', lineHeight: 1, color: PALE_GOLD }}>
-            {value}
-          </span>
-        ) : (
-          <span
-            style={{ width: '22px', height: '20px', borderRadius: '5px', backgroundColor: 'rgba(238,217,138,0.28)' }}
-          />
-        )}
-      </div>
-      <div style={{ minWidth: 0 }}>
-        <p style={{ fontFamily: SANS, fontWeight: 800, fontSize: '13px', letterSpacing: '0.01em', color: INK, margin: 0, whiteSpace: 'nowrap' }}>
-          {label}
-        </p>
-        <p style={{ fontFamily: SANS, fontSize: '11.5px', color: INK_55, margin: '2px 0 0 0', whiteSpace: 'nowrap' }}>
-          {sub}
-        </p>
-      </div>
-    </div>
-  );
-}
 
 function HeroTextLink({ href, label }: { href: string; label: string }) {
   const [hover, setHover] = useState(false);
