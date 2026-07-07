@@ -2,11 +2,15 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import {
+  SlidersHorizontal, Building2, Users2, ShieldCheck,
+} from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
 import { createClient } from '@supabase/supabase-js';
 import { UN_COUNTRIES } from '@/lib/countries';
+import { Pill } from '@/app/account/accountUi';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -723,13 +727,34 @@ export default function SettingsPage() {
 
   if (!conference) return null;
 
+  // Inner grouped sub-card. These sit *inside* the raised floating panel, so
+  // they read as quiet content groups (thicker 1.5px edge, a whisper of warm
+  // shadow) and let the panel itself stay the protagonist surface.
   const cardStyle: React.CSSProperties = {
-    backgroundColor: '#FAF8F3',
-    border: '1px solid #DDD4C0',
+    backgroundColor: '#FFFDF9',
+    border: '1.5px solid #D8CDB6',
     borderRadius: '16px',
     padding: '24px',
-    marginBottom: '24px',
+    marginBottom: '20px',
+    boxShadow: '0 1px 2px rgba(27,56,40,0.04)',
   };
+
+  // ── Section rail definition ──────────────────────────────────────────────
+  // Mirrors the manage layout rail's language: lucide icon + Outfit label +
+  // forest active state. Drives the same `activeTab` state the content blocks
+  // already switch on — no logic change, purely the switcher's new skin.
+  const SECTIONS: {
+    key: 'applications' | 'conference' | 'organizers' | 'privacy';
+    label: string;
+    hint: string;
+    icon: typeof SlidersHorizontal;
+  }[] = [
+    { key: 'applications', label: 'Applications', hint: 'Roles, windows & questions', icon: SlidersHorizontal },
+    { key: 'conference',   label: 'Conference',   hint: 'Identity, media & fee',      icon: Building2 },
+    { key: 'organizers',   label: 'Organizers',   hint: 'Team & permissions',         icon: Users2 },
+    { key: 'privacy',      label: 'Privacy',       hint: 'Publishing & lineage',       icon: ShieldCheck },
+  ];
+  const activeSection = SECTIONS.find(s => s.key === activeTab) ?? SECTIONS[0];
 
   const TOGGLE_ROWS: { key: BooleanRoleKey; label: string; desc: string }[] = [
     { key: 'auto_accept', label: 'Auto-accept', desc: 'Automatically accept all applications' },
@@ -737,42 +762,121 @@ export default function SettingsPage() {
     { key: 'must_pay_before_allocation', label: 'Must pay before allocation', desc: 'Block country assignment until paid' },
   ];
 
-  const TABS: { key: 'applications' | 'conference' | 'organizers' | 'privacy'; label: string }[] = [
-    { key: 'applications', label: 'APPLICATIONS' },
-    { key: 'conference', label: 'CONFERENCE' },
-    { key: 'organizers', label: 'ORGANIZERS' },
-    { key: 'privacy', label: 'PRIVACY' },
-  ];
-
   return (
-    <div className="px-6 md:px-10 py-8 max-w-3xl">
+    <div className="px-4 sm:px-6 md:px-10 py-8" style={{ maxWidth: '1080px' }}>
       {/* Header */}
       <p className="text-xs mb-2" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace", letterSpacing: '0.04em' }}>
         {conference.acronym} / Settings
       </p>
-      <h1 className="font-black text-2xl mb-6" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+      <h1 className="font-black text-2xl mb-7" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
         Settings
       </h1>
 
-      {/* Tabs */}
-      <div className="flex gap-2 mb-8 flex-wrap">
-        {TABS.map(tab => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className="px-4 py-1.5 rounded-full text-xs font-bold transition-all focus:outline-none"
+      {/* Rail + floating panel shell */}
+      <div className="flex flex-col md:flex-row md:items-start" style={{ gap: '22px' }}>
+
+        {/* ── Section rail (desktop: vertical glass rail; mobile: horizontal scroller) ── */}
+        <nav
+          aria-label="Settings sections"
+          className="md:flex-shrink-0"
+          style={{ width: '100%', maxWidth: '244px' }}
+        >
+          <div
+            className="flex md:flex-col overflow-x-auto md:overflow-visible"
             style={{
-              backgroundColor: activeTab === tab.key ? '#1B3828' : 'transparent',
-              color: activeTab === tab.key ? '#EED98A' : '#9A8A78',
-              border: activeTab === tab.key ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
-              fontFamily: "'DM Mono', monospace",
-              letterSpacing: '0.06em',
+              gap: '6px',
+              padding: '10px',
+              borderRadius: '20px',
+              backgroundColor: 'rgba(250,248,243,0.72)',
+              backdropFilter: 'blur(16px) saturate(1.3)',
+              WebkitBackdropFilter: 'blur(16px) saturate(1.3)',
+              border: '1.5px solid rgba(216,205,182,0.9)',
+              boxShadow: '0 10px 34px rgba(27,56,40,0.10), 0 1px 3px rgba(27,56,40,0.05)',
+              scrollbarWidth: 'none',
             }}
           >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+            {SECTIONS.map(section => {
+              const active = activeTab === section.key;
+              const Icon = section.icon;
+              return (
+                <button
+                  key={section.key}
+                  onClick={() => setActiveTab(section.key)}
+                  className="flex items-center flex-shrink-0 md:w-full text-left focus:outline-none transition-colors"
+                  style={{
+                    gap: '11px',
+                    padding: '10px 13px',
+                    borderRadius: '13px',
+                    backgroundColor: active ? '#1B3828' : 'transparent',
+                    color: active ? '#EED98A' : '#7A6E5E',
+                    boxShadow: active ? '0 5px 16px rgba(27,56,40,0.26)' : 'none',
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                  }}
+                  onMouseEnter={(e) => { if (!active) { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; (e.currentTarget as HTMLElement).style.color = '#1C1410'; } }}
+                  onMouseLeave={(e) => { if (!active) { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; (e.currentTarget as HTMLElement).style.color = '#7A6E5E'; } }}
+                >
+                  <span
+                    className="flex items-center justify-center flex-shrink-0"
+                    style={{
+                      width: '30px', height: '30px', borderRadius: '9px',
+                      backgroundColor: active ? 'rgba(238,217,138,0.16)' : 'rgba(27,56,40,0.06)',
+                      border: active ? '1px solid rgba(238,217,138,0.28)' : '1px solid rgba(27,56,40,0.08)',
+                    }}
+                  >
+                    <Icon size={16} strokeWidth={2.1} style={{ color: active ? '#EED98A' : '#6E5F4E' }} />
+                  </span>
+                  <span className="hidden md:flex flex-col min-w-0">
+                    <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: '13.5px', fontWeight: 700, letterSpacing: '0.01em' }}>
+                      {section.label}
+                    </span>
+                    <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: '11px', fontWeight: 500, color: active ? 'rgba(238,217,138,0.72)' : '#9A8A78', marginTop: '1px' }}>
+                      {section.hint}
+                    </span>
+                  </span>
+                  <span className="md:hidden" style={{ fontFamily: "'Outfit', sans-serif", fontSize: '13px', fontWeight: 700 }}>
+                    {section.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </nav>
+
+        {/* ── Floating elevated content panel ── */}
+        <section
+          className="flex-1 min-w-0"
+          style={{
+            borderRadius: '22px',
+            backgroundColor: 'rgba(250,248,243,0.9)',
+            backdropFilter: 'blur(14px) saturate(1.25)',
+            WebkitBackdropFilter: 'blur(14px) saturate(1.25)',
+            border: '1.5px solid #D8CDB6',
+            boxShadow: '0 1px 3px rgba(27,56,40,0.06), 0 20px 60px rgba(27,56,40,0.12)',
+            padding: '22px 22px 24px',
+          }}
+        >
+          {/* Panel header — echoes the active rail item, gives the panel a protagonist */}
+          <div className="flex items-center gap-3 mb-6 pb-5" style={{ borderBottom: '1.5px solid rgba(216,205,182,0.75)' }}>
+            <span
+              className="flex items-center justify-center flex-shrink-0"
+              style={{
+                width: '42px', height: '42px', borderRadius: '13px',
+                background: 'linear-gradient(140deg, #16301F, #2A5A3C)',
+                boxShadow: '0 6px 16px rgba(27,56,40,0.28)',
+              }}
+            >
+              <activeSection.icon size={20} strokeWidth={2.1} style={{ color: '#EED98A' }} />
+            </span>
+            <div className="min-w-0">
+              <h2 className="font-black text-lg leading-tight" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                {activeSection.label}
+              </h2>
+              <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                {activeSection.hint}
+              </p>
+            </div>
+          </div>
 
       {/* ── APPLICATIONS TAB ── */}
       {activeTab === 'applications' && <div style={cardStyle}>
@@ -1166,8 +1270,8 @@ export default function SettingsPage() {
 
             {/* Preset picker — one click sets banner_url to a bundled photo */}
             <div style={{ marginTop: 14 }}>
-              <p style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: '0.16em', color: '#9A8A78', margin: '0 0 8px 0' }}>
-                OR PICK A PRESET
+              <p style={{ fontFamily: "'Outfit', sans-serif", fontSize: 12, fontWeight: 600, letterSpacing: '0.01em', color: '#7A6E5E', margin: '0 0 8px 0' }}>
+                Or pick a preset
               </p>
               <div className="flex flex-wrap gap-2">
                 {BANNER_PRESETS.map(p => {
@@ -1425,12 +1529,13 @@ export default function SettingsPage() {
                 <button
                   key={role}
                   onClick={() => setSelectedRole(role)}
-                  className="px-4 py-1.5 rounded-full text-xs font-semibold focus:outline-none transition-all"
+                  className="px-4 py-1.5 rounded-[10px] text-xs font-bold focus:outline-none transition-all"
                   style={{
                     backgroundColor: active ? '#1B3828' : 'transparent',
-                    color: active ? '#EED98A' : '#9A8A78',
-                    border: active ? '1px solid #1B3828' : '1px solid #DDD4C0',
-                    fontFamily: "'DM Mono', monospace",
+                    color: active ? '#EED98A' : '#7A6E5E',
+                    border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
+                    fontFamily: "'Outfit', sans-serif",
+                    letterSpacing: '0.01em',
                   }}
                 >
                   {roleLabel(role)}
@@ -1457,15 +1562,9 @@ export default function SettingsPage() {
                     <p className="font-semibold text-sm mb-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
                       {q.label}
                     </p>
-                    <div className="flex items-center gap-3 mb-2">
-                      <span style={{ fontSize: '9px', color: '#9A8A78', fontFamily: "'DM Mono', monospace", textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                        {q.type}
-                      </span>
-                      {q.required && (
-                        <span style={{ fontSize: '9px', color: '#1B3828', fontFamily: "'DM Mono', monospace", textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                          REQUIRED
-                        </span>
-                      )}
+                    <div className="flex items-center gap-2 mb-2">
+                      <Pill tone="neutral" size="sm">{q.type === 'textarea' ? 'Paragraph' : 'Short answer'}</Pill>
+                      {q.required && <Pill tone="forest" size="sm">Required</Pill>}
                     </div>
                     <div className="flex gap-3">
                       <button
@@ -1548,18 +1647,10 @@ export default function SettingsPage() {
                     <p className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>{org.profiles?.email ?? ''}</p>
                   </div>
 
-                  <span
-                    className="text-[9px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
-                    style={{
-                      fontFamily: "'DM Mono', monospace",
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.08em',
-                      ...(orgIsOwner
-                        ? { backgroundColor: 'rgba(238,217,138,0.2)', color: '#B6871F' }
-                        : { backgroundColor: 'rgba(27,56,40,0.08)', color: '#1B3828' }),
-                    }}
-                  >
-                    {orgIsOwner ? 'OWNER' : 'ORGANIZER'}
+                  <span className="flex-shrink-0">
+                    <Pill tone={orgIsOwner ? 'gold' : 'forest'} size="sm">
+                      {orgIsOwner ? 'Owner' : 'Organizer'}
+                    </Pill>
                   </span>
 
                   {!orgIsOwner && (
@@ -1580,8 +1671,8 @@ export default function SettingsPage() {
                         <button
                           key={s.key}
                           onClick={() => toggleOrgPermission(org.id, org.permissions, s.key)}
-                          className="text-[10px] font-semibold px-2 py-1 rounded-full focus:outline-none transition-colors"
-                          style={{ fontFamily: "'DM Mono', monospace", letterSpacing: '0.04em', textTransform: 'uppercase', border: on ? '1px solid rgba(27,56,40,0.3)' : '1px solid #DDD4C0', backgroundColor: on ? 'rgba(27,56,40,0.1)' : 'transparent', color: on ? '#1B3828' : '#9A8A78' }}
+                          className="text-[11px] font-semibold px-2.5 py-1 rounded-lg focus:outline-none transition-colors"
+                          style={{ fontFamily: "'Outfit', sans-serif", letterSpacing: '0.01em', border: on ? '1.5px solid rgba(27,56,40,0.32)' : '1.5px solid #DDD4C0', backgroundColor: on ? 'rgba(27,56,40,0.10)' : 'transparent', color: on ? '#1B3828' : '#9A8A78' }}
                         >
                           {s.label}
                         </button>
@@ -1738,8 +1829,8 @@ export default function SettingsPage() {
 
         {/* Outgoing claim: this conference's predecessor */}
         <p
-          className="text-[10px] mb-2"
-          style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace", letterSpacing: '0.16em', textTransform: 'uppercase' }}
+          className="text-xs font-bold mb-2"
+          style={{ color: '#6E5F4E', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.02em' }}
         >
           Previous edition
         </p>
@@ -1758,18 +1849,10 @@ export default function SettingsPage() {
                   : 'Waiting for its Main Organiser to confirm the link.'}
               </p>
             </div>
-            <span
-              className="text-[9px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
-              style={{
-                fontFamily: "'DM Mono', monospace",
-                textTransform: 'uppercase',
-                letterSpacing: '0.08em',
-                ...(conference.predecessor_approved
-                  ? { backgroundColor: 'rgba(61,122,82,0.15)', color: '#3D7A52' }
-                  : { backgroundColor: 'rgba(238,217,138,0.25)', color: '#B6871F' }),
-              }}
-            >
-              {conference.predecessor_approved ? 'APPROVED' : 'PENDING APPROVAL'}
+            <span className="flex-shrink-0">
+              <Pill tone={conference.predecessor_approved ? 'forest' : 'gold'} size="sm" dot>
+                {conference.predecessor_approved ? 'Approved' : 'Pending approval'}
+              </Pill>
             </span>
             <button
               onClick={handleWithdrawClaim}
@@ -1788,8 +1871,8 @@ export default function SettingsPage() {
 
         {/* Incoming claims: conferences claiming this one as their predecessor */}
         <p
-          className="text-[10px] mb-2"
-          style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace", letterSpacing: '0.16em', textTransform: 'uppercase' }}
+          className="text-xs font-bold mb-2"
+          style={{ color: '#6E5F4E', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.02em' }}
         >
           Incoming claims
         </p>
@@ -1821,17 +1904,8 @@ export default function SettingsPage() {
                   </div>
 
                   {claim.predecessor_approved ? (
-                    <span
-                      className="text-[9px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
-                      style={{
-                        fontFamily: "'DM Mono', monospace",
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.08em',
-                        backgroundColor: 'rgba(61,122,82,0.15)',
-                        color: '#3D7A52',
-                      }}
-                    >
-                      APPROVED
+                    <span className="flex-shrink-0">
+                      <Pill tone="forest" size="sm" dot>Approved</Pill>
                     </span>
                   ) : isOwner ? (
                     <div className="flex gap-2 flex-shrink-0">
@@ -1868,18 +1942,8 @@ export default function SettingsPage() {
                       </button>
                     </div>
                   ) : (
-                    <span
-                      className="text-[9px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
-                      style={{
-                        fontFamily: "'DM Mono', monospace",
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.08em',
-                        backgroundColor: 'rgba(154,138,120,0.15)',
-                        color: '#9A8A78',
-                      }}
-                      title="Only the conference owner can approve or reject lineage claims."
-                    >
-                      OWNER DECIDES
+                    <span className="flex-shrink-0" title="Only the conference owner can approve or reject lineage claims.">
+                      <Pill tone="neutral" size="sm">Owner decides</Pill>
                     </span>
                   )}
                 </div>
@@ -1895,6 +1959,9 @@ export default function SettingsPage() {
         )}
       </div>
       </>}
+
+        </section>
+      </div>
 
       {/* Question modal */}
       {questionModal.open && (
