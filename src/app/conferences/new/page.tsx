@@ -7,6 +7,7 @@ import SiteNav from '@/components/SiteNav';
 import { useAuth } from '@/components/AuthProvider';
 import { createClient } from '@supabase/supabase-js';
 import { generateSlug } from '@/lib/utils';
+import { UN_COUNTRIES } from '@/lib/countries';
 
 // License-safe banner presets shipped in /public/banners (see its README.md).
 const BANNER_PRESETS = [
@@ -642,16 +643,17 @@ function Step1({
 
         <div className="grid grid-cols-2 gap-4">
           <Field label="Country">
-            <input
-              type="text"
+            <select
               required
               value={country}
               onChange={(e) => setCountry(e.target.value)}
-              placeholder="e.g. Netherlands"
-              style={inputStyle}
+              style={{ ...inputStyle, cursor: 'pointer' }}
               onFocus={focusGreen}
               onBlur={blurGray}
-            />
+            >
+              <option value="">Select a country</option>
+              {UN_COUNTRIES.map(c => <option key={c.code} value={c.name}>{c.name}</option>)}
+            </select>
           </Field>
           <Field label="City">
             <input
