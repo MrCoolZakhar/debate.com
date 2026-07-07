@@ -25,7 +25,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowRight, ArrowUpRight, CreditCard, FileText, MapPin, Users, Zap } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, Building2, CreditCard, FileText, Gavel, MapPin, Users, Zap } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import { supabase } from '@/lib/supabase';
 import { UN_COUNTRIES } from '@/lib/countries';
@@ -218,6 +218,14 @@ export default function VariantStagefront({
           to { opacity: 1; transform: translateY(0) scale(1) rotate(var(--sf-rot, 0deg)); }
         }
         .sf-chip { animation: sfChipIn 640ms cubic-bezier(0.22,1,0.36,1) both; }
+        @keyframes sfShimmer {
+          0%, 100% { opacity: 0.55; }
+          50% { opacity: 1; }
+        }
+        .sf-shimmer { animation: sfShimmer 1.4s ease-in-out infinite; }
+        @media (prefers-reduced-motion: reduce) {
+          .sf-shimmer { animation: none !important; }
+        }
         /* Hero "up next" rail: horizontal snap on narrow screens, vertical stack ≥lg. */
         .sf-hero-rail { scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
         .sf-hero-rail::-webkit-scrollbar { display: none; }
@@ -278,8 +286,8 @@ export default function VariantStagefront({
 
           <div className="relative z-10 flex-1 min-h-0 flex flex-col lg:flex-row lg:items-center gap-6 lg:gap-14 px-6 md:px-14 pb-8 md:pb-9 pt-20 md:pt-24">
             <div className="flex-1 flex flex-col justify-center" style={{ maxWidth: '760px' }}>
-              <p style={{ fontFamily: MONO, fontSize: '11px', letterSpacing: '0.22em', color: PALE_GOLD, margin: '0 0 18px 0' }}>
-                {conferences.length > 0 ? `${conferences.length} CONFERENCE${conferences.length === 1 ? '' : 'S'} ON THE BOARD` : 'THE MUN CIRCUIT'}
+              <p style={{ fontFamily: SANS, fontWeight: 700, fontSize: '12px', letterSpacing: '0.14em', textTransform: 'uppercase', color: PALE_GOLD, margin: '0 0 18px 0' }}>
+                {conferences.length > 0 ? `${conferences.length} Conference${conferences.length === 1 ? '' : 's'} on the board` : 'The MUN circuit'}
               </p>
               <h1
                 style={{
@@ -383,8 +391,8 @@ export default function VariantStagefront({
         >
           <div className="flex flex-col lg:flex-row lg:items-center gap-10 lg:gap-0">
             <div className="lg:w-[42%]" style={{ position: 'relative', zIndex: 2 }}>
-              <p style={{ fontFamily: MONO, fontSize: '11px', letterSpacing: '0.24em', color: GOLD, margin: '0 0 14px 0' }}>
-                THE JOB BOARD
+              <p style={{ fontFamily: SANS, fontWeight: 700, fontSize: '12px', letterSpacing: '0.14em', textTransform: 'uppercase', color: GOLD, margin: '0 0 14px 0' }}>
+                The job board
               </p>
               <h2
                 style={{
@@ -446,7 +454,7 @@ export default function VariantStagefront({
               */}
               <div
                 className="relative overflow-hidden rounded-3xl"
-                style={{ border: '1px solid rgba(27,56,40,0.14)', boxShadow: '0 30px 60px rgba(27,56,40,0.18)' }}
+                style={{ border: '1.5px solid rgba(182,135,31,0.3)', boxShadow: '0 30px 60px rgba(27,56,40,0.18)' }}
               >
                 <img
                   src="/landing/podium-speaker.jpg"
@@ -472,36 +480,26 @@ export default function VariantStagefront({
                 </div>
               </div>
 
-              {/* Live stat ledger — straddles the photo's left edge */}
+              {/* Live stat ledger — gold-ringed medallions straddling the photo's
+                  left edge. Matches the conference-detail pricing-medallion language:
+                  a forest disc, gold ring, big Outfit numeral, lucide icon, tiny
+                  caption. Shows a shimmer skeleton until jobStats resolves. */}
               <div
-                className="lg:absolute lg:-left-16 lg:bottom-14 mt-5 lg:mt-0 grid grid-cols-3 lg:grid-cols-1 gap-px overflow-hidden rounded-2xl"
-                style={{
-                  border: '1px solid rgba(27,56,40,0.9)',
-                  backgroundColor: 'rgba(27,56,40,0.9)',
-                  boxShadow: '0 20px 50px rgba(27,56,40,0.28)',
-                  maxWidth: '460px',
-                }}
+                className="lg:absolute lg:-left-20 lg:bottom-10 mt-6 lg:mt-0 flex flex-row lg:flex-col gap-4 lg:gap-4"
               >
                 {[
-                  { n: jobStats ? String(jobStats.open) : '—', label: 'OPEN ROLES', sub: 'accepting applications now' },
-                  { n: jobStats ? String(jobStats.hiring) : '—', label: 'CONFERENCES HIRING', sub: 'across the circuit' },
-                  { n: jobStats ? String(jobStats.chairing) : '—', label: 'CHAIR SEATS', sub: 'daises looking for a gavel' },
+                  { key: 'open', icon: Users, n: jobStats?.open, label: 'Open roles', sub: 'accepting now' },
+                  { key: 'hiring', icon: Building2, n: jobStats?.hiring, label: 'Conferences hiring', sub: 'across the circuit' },
+                  { key: 'chairing', icon: Gavel, n: jobStats?.chairing, label: 'Chair seats', sub: 'daises open' },
                 ].map(stat => (
-                  <div
-                    key={stat.label}
-                    className="px-5 py-4"
-                    style={{ backgroundColor: FOREST }}
-                  >
-                    <p style={{ fontFamily: SANS, fontWeight: 900, fontSize: '26px', lineHeight: 1, color: PALE_GOLD, margin: 0 }}>
-                      {stat.n}
-                    </p>
-                    <p style={{ fontFamily: MONO, fontSize: '9.5px', letterSpacing: '0.18em', color: 'rgba(237,231,216,0.9)', margin: '7px 0 0 0' }}>
-                      {stat.label}
-                    </p>
-                    <p style={{ fontFamily: SANS, fontSize: '11.5px', color: IVORY_55, margin: '3px 0 0 0' }}>
-                      {stat.sub}
-                    </p>
-                  </div>
+                  <StatMedallion
+                    key={stat.key}
+                    icon={stat.icon}
+                    value={stat.n}
+                    label={stat.label}
+                    sub={stat.sub}
+                    loaded={jobStats !== null}
+                  />
                 ))}
               </div>
             </div>
@@ -515,8 +513,8 @@ export default function VariantStagefront({
             style={{ backgroundColor: IVORY, paddingTop: '64px', paddingBottom: '72px' }}
           >
             <div className="px-6 md:px-14">
-              <p className="flex items-center gap-2" style={{ fontFamily: MONO, fontSize: '11px', letterSpacing: '0.24em', color: GOLD, margin: '0 0 8px 0' }}>
-                <MapPin size={13} strokeWidth={2.25} /> NEAR YOU
+              <p className="flex items-center gap-2" style={{ fontFamily: SANS, fontWeight: 700, fontSize: '12px', letterSpacing: '0.14em', textTransform: 'uppercase', color: GOLD, margin: '0 0 8px 0' }}>
+                <MapPin size={13} strokeWidth={2.25} /> Near you
               </p>
               <h2
                 style={{
@@ -549,8 +547,8 @@ export default function VariantStagefront({
           className="px-6 md:px-14"
           style={{ backgroundColor: CREAM, paddingTop: '72px', paddingBottom: '80px' }}
         >
-          <p style={{ fontFamily: MONO, fontSize: '11px', letterSpacing: '0.24em', color: GOLD, margin: '0 0 8px 0' }}>
-            NEW TO THE CIRCUIT?
+          <p style={{ fontFamily: SANS, fontWeight: 700, fontSize: '12px', letterSpacing: '0.14em', textTransform: 'uppercase', color: GOLD, margin: '0 0 8px 0' }}>
+            New to the circuit?
           </p>
           <h2
             style={{
@@ -566,8 +564,8 @@ export default function VariantStagefront({
           </h2>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
             <ExplainerCard photo="/landing/podium-speaker.jpg" photoAlt="A full committee room mid-debate, chair at the podium">
-              <p style={{ fontFamily: MONO, fontSize: '10.5px', letterSpacing: '0.24em', color: GOLD, margin: 0 }}>
-                THE GAME
+              <p style={{ fontFamily: SANS, fontWeight: 700, fontSize: '11.5px', letterSpacing: '0.14em', textTransform: 'uppercase', color: GOLD, margin: 0 }}>
+                The game
               </p>
               <h3 style={{ fontFamily: SANS, fontWeight: 800, fontSize: 'clamp(22px, 2.4vw, 28px)', letterSpacing: '-0.01em', color: INK, margin: '12px 0 0 0' }}>
                 What is Model UN, exactly?
@@ -588,8 +586,8 @@ export default function VariantStagefront({
             </ExplainerCard>
 
             <ExplainerCard photo="/landing/organiser-desk.jpg" photoAlt="A delegation working together on Gavelling at a laptop" photoPosition="center 42%">
-              <p style={{ fontFamily: MONO, fontSize: '10.5px', letterSpacing: '0.24em', color: GOLD, margin: 0 }}>
-                WHY GAVELLING
+              <p style={{ fontFamily: SANS, fontWeight: 700, fontSize: '11.5px', letterSpacing: '0.14em', textTransform: 'uppercase', color: GOLD, margin: 0 }}>
+                Why Gavelling
               </p>
               <h3 style={{ fontFamily: SANS, fontWeight: 800, fontSize: 'clamp(22px, 2.4vw, 28px)', letterSpacing: '-0.01em', color: INK, margin: '12px 0 0 0' }}>
                 Why participate through Gavelling?
@@ -701,8 +699,8 @@ export default function VariantStagefront({
 
               {/* RIGHT — heading, copy, gold CTA — vertically centered */}
               <div className="flex-1 flex flex-col justify-center">
-                <p style={{ fontFamily: MONO, fontSize: '11px', letterSpacing: '0.24em', color: PALE_GOLD, margin: '0 0 8px 0' }}>
-                  ORGANISER TOOLS
+                <p style={{ fontFamily: SANS, fontWeight: 700, fontSize: '12px', letterSpacing: '0.14em', textTransform: 'uppercase', color: PALE_GOLD, margin: '0 0 8px 0' }}>
+                  Organiser tools
                 </p>
                 <h2
                   style={{
@@ -881,6 +879,74 @@ export default function VariantStagefront({
 }
 
 // ── Local pieces ─────────────────────────────────────────────────────────────
+
+/**
+ * A gold-ringed stat medallion — the pricing-medallion language reused for the
+ * live job-board figures. Forest disc, gold ring, lucide icon tucked top-right,
+ * big Outfit numeral, tiny caption + sub-line. Before the stat resolves it shows
+ * a shimmering ring + placeholder so the hero never reads a bare "—".
+ */
+function StatMedallion({
+  icon: Icon, value, label, sub, loaded,
+}: {
+  icon: typeof Users;
+  value: number | undefined;
+  label: string;
+  sub: string;
+  loaded: boolean;
+}) {
+  const ready = loaded && value !== undefined;
+  return (
+    <div className="flex items-center gap-3.5">
+      <div
+        className={ready ? undefined : 'sf-shimmer'}
+        style={{
+          position: 'relative',
+          width: '68px',
+          height: '68px',
+          borderRadius: '9999px',
+          backgroundColor: FOREST,
+          border: `2px solid ${ready ? 'rgba(238,217,138,0.7)' : 'rgba(238,217,138,0.35)'}`,
+          boxShadow: '0 12px 30px rgba(27,56,40,0.32), 0 0 0 5px rgba(238,217,138,0.10)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0,
+        }}
+      >
+        <span
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            top: '7px',
+            right: '9px',
+            color: 'rgba(238,217,138,0.6)',
+            display: 'inline-flex',
+          }}
+        >
+          <Icon size={13} strokeWidth={2.25} />
+        </span>
+        {ready ? (
+          <span style={{ fontFamily: SANS, fontWeight: 900, fontSize: '27px', lineHeight: 1, color: PALE_GOLD }}>
+            {value}
+          </span>
+        ) : (
+          <span
+            style={{ width: '22px', height: '20px', borderRadius: '5px', backgroundColor: 'rgba(238,217,138,0.28)' }}
+          />
+        )}
+      </div>
+      <div style={{ minWidth: 0 }}>
+        <p style={{ fontFamily: SANS, fontWeight: 800, fontSize: '13px', letterSpacing: '0.01em', color: INK, margin: 0, whiteSpace: 'nowrap' }}>
+          {label}
+        </p>
+        <p style={{ fontFamily: SANS, fontSize: '11.5px', color: INK_55, margin: '2px 0 0 0', whiteSpace: 'nowrap' }}>
+          {sub}
+        </p>
+      </div>
+    </div>
+  );
+}
 
 function HeroTextLink({ href, label }: { href: string; label: string }) {
   const [hover, setHover] = useState(false);

@@ -1,13 +1,14 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, X, Copy, Check } from 'lucide-react';
+import { Plus, X, Copy, Check, Building2, Globe, CalendarClock, Trash2, Users } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
 import { getCountryByName } from '@/lib/countries';
 import { CountryMatrixPicker } from '@/components/CountryMatrixPicker';
 import { CommitteeNameInput } from '@/components/CommitteeNameInput';
+import { Pill, type PillTone } from '@/app/account/accountUi';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -92,6 +93,14 @@ const DIFF_COLOR: Record<string, string> = {
   EXPERT: '#8B2020',
 };
 
+// Difficulty → warm crafted Pill tone (matches the /account level ramp).
+const DIFF_TONE: Record<string, PillTone> = {
+  BEGINNER: 'forest',
+  INTERMEDIATE: 'gold',
+  ADVANCED: 'rose',
+  EXPERT: 'rose',
+};
+
 const inputStyle: React.CSSProperties = {
   width: '100%',
   border: '1px solid #DDD4C0',
@@ -107,11 +116,10 @@ const inputStyle: React.CSSProperties = {
 const labelStyle: React.CSSProperties = {
   display: 'block',
   fontSize: 11,
-  fontWeight: 600,
-  color: '#9A8A78',
-  fontFamily: "'DM Mono', monospace",
-  textTransform: 'uppercase',
-  letterSpacing: '0.06em',
+  fontWeight: 700,
+  color: '#6E5F4E',
+  fontFamily: "'Outfit', sans-serif",
+  letterSpacing: '0.01em',
   marginBottom: 4,
 };
 
@@ -305,7 +313,8 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialCountri
           </div>
         </div>
         <div className="mt-5 pt-5" style={{ borderTop: '1px solid #EDE7D8' }}>
-          <p className="text-xs font-semibold mb-3" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace", textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+          <p className="flex items-center gap-1.5 text-sm font-bold mb-3" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+            {isCrisis ? <Users size={15} style={{ color: '#B6871F' }} /> : <Globe size={15} style={{ color: '#B6871F' }} />}
             {isCrisis ? 'Committee Characters' : 'Committee Countries'}
           </p>
           <CountryMatrixPicker value={countries} onChange={setCountries} noun={isCrisis ? 'character' : 'country'} />
@@ -440,25 +449,61 @@ export default function CommitteesPage() {
       )}
 
       {!loading && committees.length === 0 && (
-        <div className="text-center py-16">
-          <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>No committees yet</p>
-          <p className="text-sm" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Add your first committee to get started.</p>
+        <div
+          className="flex flex-col items-center text-center py-16 px-6 rounded-2xl"
+          style={{
+            border: '1.5px dashed #C8BEA8',
+            backgroundColor: 'rgba(250,248,243,0.6)',
+          }}
+        >
+          <span
+            className="flex items-center justify-center mb-4"
+            style={{
+              width: 56, height: 56, borderRadius: '9999px',
+              background: 'linear-gradient(150deg, rgba(27,56,40,0.12), rgba(27,56,40,0.05))',
+              border: '1.5px solid rgba(27,56,40,0.18)',
+            }}
+          >
+            <Building2 size={24} style={{ color: '#1B3828' }} />
+          </span>
+          <p className="font-bold text-lg mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>No committees yet</p>
+          <p className="text-sm mb-5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", maxWidth: 320 }}>
+            Committees are where delegates debate. Add your first one to give applicants somewhere to be assigned.
+          </p>
+          <button
+            onClick={() => { setPendingType(null); setShowAdd(true); }}
+            className="flex items-center gap-2 rounded-xl py-2.5 px-5 font-bold text-sm focus:outline-none transition-colors"
+            style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+          >
+            <Plus size={15} />
+            ADD YOUR FIRST COMMITTEE
+          </button>
         </div>
       )}
 
       {!loading && committees.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {committees.map(c => {
-            const diffColor = DIFF_COLOR[c.difficulty.toUpperCase()] ?? '#9A8A78';
+            const diffKey = c.difficulty.toUpperCase();
+            const diffColor = DIFF_COLOR[diffKey] ?? '#9A8A78';
+            const diffTone = DIFF_TONE[diffKey] ?? 'neutral';
+            const diffLabel = c.difficulty.charAt(0).toUpperCase() + c.difficulty.slice(1).toLowerCase();
+            const isCrisis = c.committee_type === 'crisis';
             const topics = c.topics ?? [];
-            const ghostBtn: React.CSSProperties = { border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" };
+            const ghostBtn: React.CSSProperties = { border: '1.5px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" };
             return (
               <div
                 key={c.id}
-                className="rounded-2xl overflow-hidden transition-colors"
-                style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
+                className="rounded-2xl overflow-hidden transition-all"
+                style={{
+                  backgroundColor: '#FAF8F3',
+                  border: '1.5px solid #D8CDB6',
+                  boxShadow: '0 1px 3px rgba(27,56,40,0.05), 0 8px 22px rgba(27,56,40,0.05)',
+                }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = '#D8CDB6'; (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; }}
               >
                 {/* Difficulty strip */}
                 <div style={{ height: 5, backgroundColor: diffColor }} />
@@ -467,52 +512,53 @@ export default function CommitteesPage() {
                   {/* Row 1: name + difficulty badge */}
                   <div className="flex items-start justify-between gap-2">
                     <p className="font-semibold text-base" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>{c.name}</p>
-                    <span
-                      className="flex-shrink-0 px-2 py-0.5 rounded-full font-bold"
-                      style={{ fontSize: 9, fontFamily: "'DM Mono', monospace", backgroundColor: `${diffColor}20`, color: diffColor, letterSpacing: '0.06em', marginTop: 2 }}
-                    >
-                      {c.difficulty}
+                    <span className="flex-shrink-0" style={{ marginTop: 1 }}>
+                      <Pill tone={diffTone} size="sm" dot>{diffLabel}</Pill>
                     </span>
                   </div>
 
                   {topics.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-2">
+                    <div className="flex flex-wrap gap-1.5 mt-2.5">
                       {topics.map((t, i) => (
-                        <span key={i} className="px-2 py-0.5 rounded-full" style={{ fontSize: 9, fontFamily: "'DM Mono', monospace", backgroundColor: 'rgba(27,56,40,0.07)', color: '#1B3828' }}>
-                          {t}
-                        </span>
+                        <Pill key={i} tone="neutral" size="sm">{t}</Pill>
                       ))}
                     </div>
                   )}
 
                   {/* Stats row */}
-                  <div className="flex flex-wrap items-center gap-4 mt-3 pt-3" style={{ borderTop: '1px solid #F0EDE6' }}>
-                    <span className="text-xs" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}>
-                      {c.slotCount} countries
-                    </span>
+                  <div className="flex flex-wrap items-center gap-2 mt-3 pt-3" style={{ borderTop: '1px solid #F0EDE6' }}>
+                    <Pill tone="forest" size="sm" icon={isCrisis ? <Users size={11} /> : <Globe size={11} />}>
+                      {c.slotCount} {isCrisis ? (c.slotCount === 1 ? 'character' : 'characters') : (c.slotCount === 1 ? 'country' : 'countries')}
+                    </Pill>
                     {c.session_code && (
                       <button
                         onClick={() => handleCopyCode(c.session_code!)}
-                        className="flex items-center gap-1 focus:outline-none"
-                        style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace", fontSize: 12, cursor: 'pointer' }}
+                        className="inline-flex items-center gap-1.5 focus:outline-none"
+                        title="Copy session code"
+                        style={{
+                          padding: '2px 9px', borderRadius: 7,
+                          backgroundColor: 'rgba(221,212,192,0.30)', border: '1px solid rgba(154,138,120,0.42)',
+                          cursor: 'pointer',
+                        }}
                       >
                         {copiedCode === c.session_code ? (
                           <>
                             <Check size={11} style={{ color: '#3D7A52' }} />
-                            <span style={{ color: '#3D7A52' }}>Copied!</span>
+                            <span style={{ color: '#3D7A52', fontFamily: "'Outfit', sans-serif", fontSize: 11, fontWeight: 600 }}>Copied!</span>
                           </>
                         ) : (
                           <>
-                            <Copy size={11} />
-                            {c.session_code}
+                            <Copy size={11} style={{ color: '#6E5F4E' }} />
+                            {/* Session code is a genuine 6-char micro-stamp — mono is legit here. */}
+                            <span style={{ color: '#6E5F4E', fontFamily: "'DM Mono', monospace", fontSize: 11.5, letterSpacing: '0.04em' }}>{c.session_code}</span>
                           </>
                         )}
                       </button>
                     )}
                     {c.position_paper_deadline && (
-                      <span className="text-xs" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}>
-                        PP due {new Date(c.position_paper_deadline).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                      </span>
+                      <Pill tone="amber" size="sm" icon={<CalendarClock size={11} />}>
+                        PP {new Date(c.position_paper_deadline).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      </Pill>
                     )}
                   </div>
 
@@ -537,10 +583,13 @@ export default function CommitteesPage() {
                     </button>
                     <button
                       onClick={() => setDeleteTarget(c)}
-                      className="rounded-xl px-4 py-2 font-bold text-xs focus:outline-none"
-                      style={{ border: '1.5px solid #E4C8C8', color: '#8B2020', backgroundColor: 'transparent', fontFamily: "'DM Mono', monospace", letterSpacing: '0.06em' }}
+                      className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-3.5 font-semibold text-xs focus:outline-none transition-colors"
+                      style={{ border: '1.5px solid rgba(139,32,32,0.32)', color: '#8B2020', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.06)'; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                     >
-                      DELETE
+                      <Trash2 size={13} />
+                      Delete
                     </button>
                     {!c.session_code && (
                       <button
@@ -567,7 +616,7 @@ export default function CommitteesPage() {
             <div className="w-full flex justify-end">
               <button onClick={() => setShowAdd(false)} className="focus:outline-none" style={{ color: '#9A8A78' }}><X size={18} /></button>
             </div>
-            <p className="text-xs font-semibold text-center" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace", textTransform: 'uppercase', letterSpacing: '0.08em' }}>Choose committee type</p>
+            <p className="text-base font-bold text-center" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Choose committee type</p>
             <div className="flex flex-col gap-3 w-full">
               <button
                 onClick={() => setPendingType('general-assembly')}

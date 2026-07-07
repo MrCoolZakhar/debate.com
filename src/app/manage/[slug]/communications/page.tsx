@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Mail, AlertTriangle, Link as LinkIcon } from 'lucide-react';
+import { Mail, AlertTriangle, Link as LinkIcon, Send, Clock, FileEdit } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
@@ -69,6 +69,9 @@ const STATUS_COLORS: Record<string, { dot: string; text: string; bg: string }> =
   draft:     { dot: '#DDD4C0', text: '#9A8A78', bg: 'rgba(154,138,120,0.1)' },
   failed:    { dot: '#8B2020', text: '#8B2020', bg: 'rgba(139,32,32,0.1)' },
 };
+
+// Shared card language — thick 1.5px border + layered warm shadow (rulebook F6).
+const CARD_SHADOW = '0 2px 8px rgba(27,56,40,0.05), 0 12px 32px rgba(27,56,40,0.06)';
 
 // ── RadioRow ──────────────────────────────────────────────────────────────────
 
@@ -467,24 +470,42 @@ export default function CommunicationsPage() {
       ════════════════════════════════════════════════════════════════════════ */}
       {!composing && (
         <>
-          {/* Stats row */}
+          {/* Stat medallions — the page protagonist. Icon + Outfit-900 number,
+              Sent carries a forest accent so hierarchy exists. */}
           <div className="grid grid-cols-3 gap-4 mb-6">
             {[
-              { label: 'Emails Sent', value: sentCount },
-              { label: 'Scheduled', value: scheduledCount },
-              { label: 'Drafts', value: draftCount },
+              { label: 'Emails Sent', value: sentCount, Icon: Send, accent: '#1B3828', primary: true },
+              { label: 'Scheduled', value: scheduledCount, Icon: Clock, accent: '#B6871F', primary: false },
+              { label: 'Drafts', value: draftCount, Icon: FileEdit, accent: '#4A7896', primary: false },
             ].map(s => (
               <div
                 key={s.label}
-                className="rounded-xl p-4 text-center"
-                style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}
+                className="rounded-2xl p-4 flex items-center gap-3.5"
+                style={{
+                  backgroundColor: '#FAF8F3',
+                  border: `1.5px solid ${s.primary ? 'rgba(27,56,40,0.35)' : '#D8CDB6'}`,
+                  boxShadow: CARD_SHADOW,
+                  borderTop: s.primary ? '2.5px solid #1B3828' : `1.5px solid #D8CDB6`,
+                }}
               >
-                <p className="font-black text-2xl" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-                  {s.value}
-                </p>
-                <p style={{ fontSize: 10, color: '#9A8A78', fontFamily: "'DM Mono', monospace", letterSpacing: '0.06em' }}>
-                  {s.label.toUpperCase()}
-                </p>
+                <span
+                  className="flex items-center justify-center flex-shrink-0"
+                  style={{
+                    width: 44, height: 44, borderRadius: 12,
+                    background: `linear-gradient(150deg, ${s.accent}22, ${s.accent}0F)`,
+                    border: `1px solid ${s.accent}44`,
+                  }}
+                >
+                  <s.Icon size={20} strokeWidth={2} style={{ color: s.accent }} />
+                </span>
+                <div className="min-w-0">
+                  <p className="font-black leading-none" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", fontSize: 26 }}>
+                    {s.value}
+                  </p>
+                  <p className="mt-1" style={{ fontSize: 12, color: '#9A8A78', fontFamily: "'Outfit', sans-serif", fontWeight: 600 }}>
+                    {s.label}
+                  </p>
+                </div>
               </div>
             ))}
           </div>
@@ -530,9 +551,9 @@ export default function CommunicationsPage() {
                   <div
                     key={email.id}
                     className="rounded-2xl p-5 transition-colors"
-                    style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', cursor: 'default' }}
+                    style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #D8CDB6', boxShadow: CARD_SHADOW, cursor: 'default' }}
                     onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
-                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = '#D8CDB6'; }}
                   >
                     {/* Row 1: status dot + subject + badge */}
                     <div className="flex items-center gap-3">
@@ -544,10 +565,10 @@ export default function CommunicationsPage() {
                         {email.subject || '(No subject)'}
                       </p>
                       <span
-                        className="flex-shrink-0 rounded-full px-2 py-0.5"
-                        style={{ fontSize: 9, fontFamily: "'DM Mono', monospace", fontWeight: 700, letterSpacing: '0.06em', backgroundColor: sc.bg, color: sc.text }}
+                        className="flex-shrink-0 rounded-md px-2.5 py-0.5"
+                        style={{ fontSize: 11, fontFamily: "'Outfit', sans-serif", fontWeight: 700, backgroundColor: sc.bg, color: sc.text, border: `1px solid ${sc.dot}55` }}
                       >
-                        {email.status.toUpperCase()}
+                        {email.status.charAt(0).toUpperCase() + email.status.slice(1)}
                       </span>
                     </div>
 
@@ -695,13 +716,14 @@ export default function CommunicationsPage() {
                     value={bodyHtml}
                     onChange={e => setBodyHtml(e.target.value)}
                     placeholder="Write your message here... You can use the toolbar above to format text."
-                    className="w-full rounded-b-xl px-4 py-3 text-sm font-mono focus:outline-none resize-y"
+                    className="w-full rounded-b-xl px-4 py-3 text-sm focus:outline-none resize-y"
                     style={{
                       minHeight: 280,
                       border: '1px solid #DDD4C0',
                       borderTop: 'none',
                       color: '#1C1410',
                       backgroundColor: '#FAF8F3',
+                      fontFamily: "'Outfit', sans-serif",
                     }}
                   />
                 ) : (
@@ -735,7 +757,7 @@ export default function CommunicationsPage() {
             <div className="md:w-[280px] flex-shrink-0">
 
               {/* Audience card */}
-              <div className="rounded-2xl p-5 mb-4" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
+              <div className="rounded-2xl p-5 mb-4" style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #D8CDB6', boxShadow: CARD_SHADOW }}>
                 <p className="font-semibold text-sm mb-4" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
                   Recipients
                 </p>
@@ -820,7 +842,7 @@ export default function CommunicationsPage() {
               </div>
 
               {/* Send Time card */}
-              <div className="rounded-2xl p-5 mb-4" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
+              <div className="rounded-2xl p-5 mb-4" style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #D8CDB6', boxShadow: CARD_SHADOW }}>
                 <p className="font-semibold text-sm mb-3" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
                   Send Time
                 </p>

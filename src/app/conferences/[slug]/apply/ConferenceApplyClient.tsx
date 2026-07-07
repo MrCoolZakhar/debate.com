@@ -8,6 +8,12 @@ import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { getFlagUrl } from '@/lib/countries';
 import { ageAt } from '@/lib/age';
+import { Pill } from '@/app/account/accountUi';
+import {
+  Gavel, Mic, Users, Eye, Building2, User, ListOrdered, Sprout,
+  GraduationCap, Trophy, Crown, ClipboardList, BadgeCheck, Sparkles,
+  MapPin, Landmark, Check, X, Plus, ArrowLeft, ArrowRight, CalendarClock,
+} from 'lucide-react';
 
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
 
@@ -22,6 +28,7 @@ interface Conference {
   fee_currency: string;
   start_date: string;
   min_age: number | null;
+  logo_url: string | null;
 }
 
 interface RoleConfig {
@@ -77,6 +84,95 @@ function currencySymbol(currency: string): string {
   return map[currency?.toUpperCase()] ?? (currency + ' ');
 }
 
+type IconType = typeof Gavel;
+
+/** lucide icon per applying-as role, for the Step 1 role tile. */
+function roleIcon(role: string): IconType {
+  if (role === 'observer') return Eye;
+  if (role === 'head-delegate') return Users;
+  if (role === 'chair') return Gavel;
+  return Mic; // delegate
+}
+
+/** Escalating insignia per experience level (recruit → prestige). */
+const EXPERIENCE_ICON: Record<string, IconType> = {
+  beginner: Sprout,
+  intermediate: GraduationCap,
+  advanced: Trophy,
+  expert: Crown,
+};
+
+const EXPERIENCE_ACCENT: Record<string, string> = {
+  beginner: '#4A7896',
+  intermediate: '#2A5A3C',
+  advanced: '#B8844A',
+  expert: '#B6871F',
+};
+
+/**
+ * A gold-tinted rounded-square icon chip that anchors a step heading —
+ * echoes the detail page's stat-strip icon chips.
+ */
+function StepHeading({
+  icon: Icon,
+  title,
+  subtitle,
+}: {
+  icon: IconType;
+  title: string;
+  subtitle?: string;
+}) {
+  return (
+    <div className="flex items-start gap-3.5 mb-6">
+      <span
+        className="flex items-center justify-center flex-shrink-0"
+        style={{
+          width: '42px',
+          height: '42px',
+          borderRadius: '13px',
+          background: 'linear-gradient(150deg, rgba(238,217,138,0.28), rgba(182,135,31,0.14))',
+          border: '1.5px solid rgba(182,135,31,0.4)',
+        }}
+      >
+        <Icon size={20} strokeWidth={2.1} style={{ color: '#B6871F' }} />
+      </span>
+      <div className="min-w-0 pt-0.5">
+        <h2 style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '18px', lineHeight: 1.2 }}>
+          {title}
+        </h2>
+        {subtitle && (
+          <p className="text-sm mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+            {subtitle}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Icon per wizard step, keyed by label. */
+const STEP_ICON: Record<string, IconType> = {
+  Role: BadgeCheck,
+  Society: Building2,
+  Background: ClipboardList,
+  Preferences: ListOrdered,
+  Experience: GraduationCap,
+};
+
+/** SSR-safe prefers-reduced-motion hook. */
+function useReducedMotion(): boolean {
+  const [reduced, setReduced] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    setReduced(mq.matches);
+    const onChange = () => setReduced(mq.matches);
+    mq.addEventListener?.('change', onChange);
+    return () => mq.removeEventListener?.('change', onChange);
+  }, []);
+  return reduced;
+}
+
 // ── Inner component (requires Suspense for useSearchParams) ────────────────
 
 function ConferenceApplyInner() {
@@ -84,6 +180,7 @@ function ConferenceApplyInner() {
   const searchParams = useSearchParams();
   const role = searchParams.get('role') ?? 'delegate';
   const router = useRouter();
+  const reducedMotion = useReducedMotion();
   const { user, session, loading: authLoading } = useAuth();
 
   // ── Data
@@ -178,7 +275,7 @@ function ConferenceApplyInner() {
 
     const { data: confData } = await supabase
       .from('conferences')
-      .select('id, slug, full_name, acronym, fee_amount, fee_currency, start_date, min_age')
+      .select('id, slug, full_name, acronym, fee_amount, fee_currency, start_date, min_age, logo_url')
       .eq('slug', slug)
       .single();
 
@@ -447,41 +544,68 @@ function ConferenceApplyInner() {
 
   function renderStep1() {
     const rc = roleConfig!;
+    const RoleIcon = roleIcon(role);
+    const isFree = !(rc.fee_amount > 0);
     return (
       <>
-        <h2 className="font-semibold text-base mb-4" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-          Applying as
-        </h2>
+        <StepHeading icon={BadgeCheck} title="Applying as" subtitle="Confirm your role and the registration fee." />
 
-        <div className="rounded-xl p-4 mb-4" style={{ backgroundColor: 'rgba(27,56,40,0.06)', border: '1px solid rgba(27,56,40,0.15)' }}>
-          <p className="font-black text-xl capitalize" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-            {role.replace(/-/g, ' ')}
-          </p>
-          <p className="text-sm mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-            {conference?.full_name}
-          </p>
-          <div className="flex items-center gap-2 flex-wrap mt-3">
-            {rc.fee_amount > 0 ? (
-              <span className="text-sm" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-                Registration fee: {currencySymbol(rc.fee_currency)}{rc.fee_amount}
-              </span>
-            ) : (
-              <span className="text-sm" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>
-                No registration fee
-              </span>
-            )}
-            {rc.auto_accept && (
+        {/* Role + fee — role identity on the left, gold-ringed fee medallion on the right */}
+        <div
+          className="rounded-2xl p-5 mb-4 flex items-center gap-5"
+          style={{ backgroundColor: 'rgba(27,56,40,0.05)', border: '1.5px solid rgba(27,56,40,0.14)' }}
+        >
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2.5 mb-1">
               <span
-                className="text-[9px] font-bold px-2 py-0.5 rounded-full"
-                style={{ backgroundColor: 'rgba(61,122,82,0.1)', color: '#1B3828', fontFamily: "'DM Mono', monospace", letterSpacing: '0.06em' }}
+                className="flex items-center justify-center flex-shrink-0"
+                style={{
+                  width: '34px', height: '34px', borderRadius: '11px',
+                  background: 'linear-gradient(150deg, #16301F, #2A5A3C)',
+                }}
               >
-                AUTO-ACCEPTED
+                <RoleIcon size={17} strokeWidth={2.2} style={{ color: '#EED98A' }} />
+              </span>
+              <p className="font-black text-xl capitalize" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                {role.replace(/-/g, ' ')}
+              </p>
+            </div>
+            <p className="text-sm" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+              {conference?.full_name}
+            </p>
+            {rc.auto_accept && (
+              <div className="mt-3">
+                <Pill tone="forest" icon={<BadgeCheck size={12} strokeWidth={2.4} />}>
+                  Auto-accepted
+                </Pill>
+              </div>
+            )}
+          </div>
+
+          {/* Fee medallion — echoes the detail page's gold-ringed pricing medallion */}
+          <div
+            className="relative flex flex-col items-center justify-center flex-shrink-0"
+            style={{
+              width: '104px', height: '104px', borderRadius: '9999px',
+              background: 'radial-gradient(circle at 50% 36%, rgba(238,217,138,0.32) 0%, rgba(250,248,243,0) 72%)',
+              border: '1.5px solid rgba(182,135,31,0.42)',
+              boxShadow: '0 8px 22px rgba(27,56,40,0.1), 0 0 0 6px rgba(238,217,138,0.12)',
+            }}
+          >
+            {isFree ? (
+              <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: '22px', color: '#1B3828', lineHeight: 1 }}>FREE</span>
+            ) : (
+              <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: '27px', color: '#1C1410', lineHeight: 1 }}>
+                {currencySymbol(rc.fee_currency)}{rc.fee_amount}
               </span>
             )}
+            <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '7.5px', letterSpacing: '0.2em', color: '#9A8A78', marginTop: '6px' }}>
+              PER DELEGATE
+            </span>
           </div>
         </div>
 
-        <div className="rounded-xl p-4 mb-6" style={{ backgroundColor: 'rgba(238,217,138,0.08)', border: '1px solid rgba(238,217,138,0.2)' }}>
+        <div className="rounded-xl p-4 mb-6" style={{ backgroundColor: 'rgba(238,217,138,0.08)', border: '1.5px solid rgba(238,217,138,0.28)' }}>
           <p className="text-xs leading-relaxed" style={{ color: 'rgba(28,20,16,0.7)', fontFamily: "'Outfit', sans-serif" }}>
             By applying you confirm you meet the requirements for this role. Your application will be reviewed by the conference organizing team.
           </p>
@@ -489,12 +613,12 @@ function ConferenceApplyInner() {
 
         <button
           onClick={() => setStep(2)}
-          className="w-full rounded-xl py-3 font-bold text-sm focus:outline-none transition-colors"
-          style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.12em' }}
+          className="w-full rounded-xl py-3 font-bold text-sm focus:outline-none transition-colors flex items-center justify-center gap-2"
+          style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.12em', boxShadow: '0 6px 18px rgba(27,56,40,0.22)' }}
           onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
           onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
         >
-          CONTINUE →
+          CONTINUE <ArrowRight size={16} strokeWidth={2.4} />
         </button>
       </>
     );
@@ -504,16 +628,17 @@ function ConferenceApplyInner() {
     const showSociety = !isObserver;
     return (
       <>
-        <h2 className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-          {isObserver ? 'Background' : 'Your Delegation'}
-        </h2>
-        <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-          {!showSociety
-            ? 'As an observer, no delegation information is required.'
-            : isInvoicingRole
-            ? 'Which society or school are you representing?'
-            : 'Are you applying independently or as part of a school/society?'}
-        </p>
+        <StepHeading
+          icon={isObserver ? ClipboardList : Users}
+          title={isObserver ? 'Background' : 'Your Delegation'}
+          subtitle={
+            !showSociety
+              ? 'As an observer, no delegation information is required.'
+              : isInvoicingRole
+              ? 'Which society or school are you representing?'
+              : 'Are you applying independently or as part of a school/society?'
+          }
+        />
 
         {showSociety && (
           <>
@@ -522,24 +647,41 @@ function ConferenceApplyInner() {
               <div className="grid grid-cols-2 gap-3 mb-6">
                 {(['independent', 'society'] as const).map(type => {
                   const selected = type === 'independent' ? isIndependent : !isIndependent;
+                  const TileIcon = type === 'independent' ? User : Building2;
                   return (
                     <button
                       key={type}
                       onClick={() => setIsIndependent(type === 'independent')}
-                      className="relative rounded-xl p-4 text-center focus:outline-none transition-all"
+                      className="relative rounded-xl p-4 flex flex-col items-center gap-2.5 focus:outline-none"
                       style={{
                         border: selected ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
-                        backgroundColor: selected ? 'rgba(27,56,40,0.06)' : 'transparent',
+                        backgroundColor: selected ? '#1B3828' : 'transparent',
+                        boxShadow: selected ? '0 6px 18px rgba(27,56,40,0.18)' : 'none',
+                        transition: reducedMotion ? 'none' : 'all 200ms cubic-bezier(0.22,1,0.36,1)',
                       }}
+                      onMouseEnter={(e) => { if (!selected) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
+                      onMouseLeave={(e) => { if (!selected) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                     >
-                      <div
-                        className="absolute top-3 right-3 w-4 h-4 rounded-full border"
-                        style={selected
-                          ? { backgroundColor: '#1B3828', borderColor: '#1B3828' }
-                          : { backgroundColor: 'transparent', borderColor: '#DDD4C0' }}
-                      />
-                      <p className="font-bold text-sm" style={{ color: '#1C1410', fontFamily: "'DM Mono', monospace", letterSpacing: '0.06em' }}>
-                        {type === 'independent' ? 'INDEPENDENT' : 'WITH A SOCIETY'}
+                      {selected && (
+                        <span
+                          className="absolute top-2.5 right-2.5 flex items-center justify-center rounded-full"
+                          style={{ width: 18, height: 18, backgroundColor: '#EED98A' }}
+                        >
+                          <Check size={12} strokeWidth={3} style={{ color: '#1B3828' }} />
+                        </span>
+                      )}
+                      <span
+                        className="flex items-center justify-center rounded-xl"
+                        style={{
+                          width: 40, height: 40,
+                          backgroundColor: selected ? 'rgba(238,217,138,0.15)' : 'rgba(27,56,40,0.06)',
+                          border: selected ? '1px solid rgba(238,217,138,0.35)' : '1px solid rgba(27,56,40,0.12)',
+                        }}
+                      >
+                        <TileIcon size={19} strokeWidth={2.1} style={{ color: selected ? '#EED98A' : '#1B3828' }} />
+                      </span>
+                      <p className="font-bold text-sm" style={{ color: selected ? '#EED98A' : '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                        {type === 'independent' ? 'Independent' : 'With a society'}
                       </p>
                     </button>
                   );
@@ -667,21 +809,21 @@ function ConferenceApplyInner() {
         <div className="flex justify-between mt-6">
           <button
             onClick={() => setStep(1)}
-            className="rounded-xl py-2.5 px-5 text-sm font-bold focus:outline-none transition-colors"
-            style={{ border: '1px solid #DDD4C0', color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}
+            className="rounded-xl py-2.5 px-5 text-sm font-bold focus:outline-none transition-colors flex items-center gap-1.5"
+            style={{ border: '1.5px solid #C8BEA8', color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
           >
-            ← BACK
+            <ArrowLeft size={15} strokeWidth={2.4} /> BACK
           </button>
           <button
             onClick={handleContinue}
-            className="rounded-xl py-2.5 px-6 text-sm font-bold focus:outline-none transition-colors"
-            style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em' }}
+            className="rounded-xl py-2.5 px-6 text-sm font-bold focus:outline-none transition-colors flex items-center gap-2"
+            style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', boxShadow: '0 6px 18px rgba(27,56,40,0.22)' }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
           >
-            CONTINUE →
+            CONTINUE <ArrowRight size={16} strokeWidth={2.4} />
           </button>
         </div>
       </>
@@ -794,27 +936,40 @@ function ConferenceApplyInner() {
   function renderStep3Preferences() {
     return (
       <>
-        <h2 className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-          Your Preferences
-        </h2>
-        <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-          Add at least 3 preferences in order of priority. Each preference is a committee + country combination.
-        </p>
+        <StepHeading
+          icon={ListOrdered}
+          title="Your Preferences"
+          subtitle="Add at least 3 preferences in order of priority — each is a committee + country."
+        />
 
         {preferences.map((pref, idx) => (
-          <div key={idx} className="mb-3 p-4 rounded-xl" style={{ backgroundColor: 'rgba(27,56,40,0.04)', border: '1px solid rgba(27,56,40,0.1)' }}>
+          <div key={idx} className="mb-3 p-4 rounded-xl" style={{ backgroundColor: 'rgba(27,56,40,0.04)', border: '1.5px solid rgba(27,56,40,0.12)' }}>
             <div className="flex items-center justify-between">
-              <span className="text-xs" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}>
-                Preference {idx + 1}
+              <span className="flex items-center gap-2.5">
+                <span
+                  className="flex items-center justify-center flex-shrink-0"
+                  style={{
+                    width: 26, height: 26, borderRadius: '9999px',
+                    background: 'linear-gradient(150deg, rgba(238,217,138,0.3), rgba(182,135,31,0.16))',
+                    border: '1.5px solid rgba(182,135,31,0.42)',
+                    fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '12px', color: '#7A5A20',
+                  }}
+                >
+                  {idx + 1}
+                </span>
+                <span className="text-sm font-bold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                  Preference
+                </span>
               </span>
               <button
                 onClick={() => setPreferences(prev => prev.filter((_, i) => i !== idx))}
-                className="text-sm focus:outline-none"
-                style={{ color: '#9A8A78' }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#8B2020'; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
+                aria-label="Remove preference"
+                className="flex items-center justify-center rounded-lg focus:outline-none transition-colors"
+                style={{ width: 26, height: 26, color: '#9A8A78' }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#8B2020'; (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.08)'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
               >
-                ×
+                <X size={15} strokeWidth={2.4} />
               </button>
             </div>
 
@@ -889,12 +1044,12 @@ function ConferenceApplyInner() {
         {preferences.length < 8 && (
           <button
             onClick={() => setPreferences(prev => [...prev, { committeeId: '', committeeName: '', countryCode: '', countryName: '' }])}
-            className="w-full rounded-xl py-3 text-sm font-semibold focus:outline-none mb-2"
-            style={{ border: '1.5px dashed #DDD4C0', backgroundColor: 'transparent', color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}
+            className="w-full rounded-xl py-3 text-sm font-semibold focus:outline-none mb-2 flex items-center justify-center gap-2"
+            style={{ border: '1.5px dashed #C8BEA8', backgroundColor: 'transparent', color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#C8BEA8'; (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
           >
-            + ADD PREFERENCE
+            <Plus size={16} strokeWidth={2.4} /> ADD PREFERENCE
           </button>
         )}
 
@@ -907,21 +1062,21 @@ function ConferenceApplyInner() {
         <div className="flex justify-between mt-4">
           <button
             onClick={() => setStep(s => s - 1)}
-            className="rounded-xl py-2.5 px-5 text-sm font-bold focus:outline-none transition-colors"
-            style={{ border: '1px solid #DDD4C0', color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}
+            className="rounded-xl py-2.5 px-5 text-sm font-bold focus:outline-none transition-colors flex items-center gap-1.5"
+            style={{ border: '1.5px solid #C8BEA8', color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
           >
-            ← BACK
+            <ArrowLeft size={15} strokeWidth={2.4} /> BACK
           </button>
           <button
             onClick={handleContinue}
-            className="rounded-xl py-2.5 px-6 text-sm font-bold focus:outline-none transition-colors"
-            style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em' }}
+            className="rounded-xl py-2.5 px-6 text-sm font-bold focus:outline-none transition-colors flex items-center gap-2"
+            style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', boxShadow: '0 6px 18px rgba(27,56,40,0.22)' }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
           >
-            CONTINUE →
+            CONTINUE <ArrowRight size={16} strokeWidth={2.4} />
           </button>
         </div>
       </>

@@ -3,7 +3,10 @@
 import { Suspense } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { Check, Send, Search, Award } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
+
+const OUTFIT = "'Outfit', sans-serif";
 
 function ConfirmationInner() {
   const { slug } = useParams() as { slug: string };
@@ -15,6 +18,12 @@ function ConfirmationInner() {
     : timing === 'after_acceptance'
     ? 'If accepted, payment will become available in your conference view.'
     : null;
+
+  const timeline = [
+    { icon: Send, label: 'Submitted', sub: 'Your application is in', state: 'done' as const },
+    { icon: Search, label: 'Under review', sub: 'The team reads it over', state: 'active' as const },
+    { icon: Award, label: 'Decision', sub: 'You hear back by email', state: 'todo' as const },
+  ];
 
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#EDE7D8' }}>
@@ -30,40 +39,140 @@ function ConfirmationInner() {
       />
       <SiteNav />
       <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-6 text-center py-20">
+        {/* Celebratory gradient disc with gold ring */}
         <div
-          className="w-16 h-16 rounded-full flex items-center justify-center mb-6"
-          style={{ backgroundColor: 'rgba(27,56,40,0.1)', border: '2px solid rgba(27,56,40,0.2)' }}
+          className="relative flex items-center justify-center mb-7"
+          style={{ width: '104px', height: '104px' }}
         >
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#1B3828" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="20 6 9 17 4 12" />
-          </svg>
+          {/* Gold radial glow behind the disc */}
+          <div
+            className="pointer-events-none absolute"
+            style={{
+              inset: '-24px',
+              borderRadius: '9999px',
+              background: 'radial-gradient(circle at 50% 42%, rgba(238,217,138,0.35) 0%, rgba(237,231,216,0) 70%)',
+            }}
+          />
+          <div
+            className="relative flex items-center justify-center rounded-full"
+            style={{
+              width: '96px',
+              height: '96px',
+              background: 'linear-gradient(150deg, #16301F 0%, #1B3828 48%, #2A5A3C 100%)',
+              border: '1.5px solid rgba(238,217,138,0.55)',
+              boxShadow: '0 12px 34px rgba(27,56,40,0.3), 0 0 0 8px rgba(238,217,138,0.12)',
+            }}
+          >
+            <Check size={44} strokeWidth={2.6} style={{ color: '#EED98A' }} />
+          </div>
         </div>
+
         <p
           className="text-xs tracking-[0.2em] mb-3"
-          style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}
+          style={{ color: '#B6871F', fontFamily: "'DM Mono', monospace" }}
         >
           APPLICATION SUBMITTED
         </p>
         <h1
-          className="font-black text-2xl mb-2"
-          style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}
+          className="mb-2"
+          style={{ color: '#1C1410', fontFamily: OUTFIT, fontWeight: 900, fontSize: '32px', letterSpacing: '-0.01em' }}
         >
           You&apos;re in the queue!
         </h1>
         <p
-          className={`text-sm leading-relaxed max-w-sm ${timingNote ? 'mb-3' : 'mb-8'}`}
-          style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}
+          className={`text-sm leading-relaxed max-w-sm ${timingNote ? 'mb-3' : 'mb-9'}`}
+          style={{ color: '#9A8A78', fontFamily: OUTFIT }}
         >
           Your application as {role.replace(/-/g, ' ')} has been submitted. The conference team will review it and you&apos;ll hear back soon.
         </p>
         {timingNote && (
           <p
-            className="text-sm leading-relaxed mb-8 max-w-sm"
-            style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}
+            className="text-sm leading-relaxed mb-9 max-w-sm"
+            style={{ color: '#9A8A78', fontFamily: OUTFIT }}
           >
             {timingNote}
           </p>
         )}
+
+        {/* What happens next — mini timeline */}
+        <div className="w-full mb-9" style={{ maxWidth: 440 }}>
+          <div
+            className="rounded-2xl px-5 py-6"
+            style={{
+              backgroundColor: '#FAF8F3',
+              border: '1.5px solid #D8CDB6',
+              boxShadow: '0 2px 6px rgba(27,56,40,0.05), 0 16px 40px rgba(27,56,40,0.08)',
+            }}
+          >
+            <p
+              className="mb-5"
+              style={{ fontFamily: OUTFIT, fontSize: '10px', fontWeight: 800, letterSpacing: '0.16em', color: '#B6871F', textTransform: 'uppercase' }}
+            >
+              What happens next
+            </p>
+            <div className="flex items-start justify-between">
+              {timeline.map((t, i) => {
+                const Icon = t.icon;
+                const done = t.state === 'done';
+                const active = t.state === 'active';
+                const discBg = done
+                  ? 'linear-gradient(150deg, #16301F, #2A5A3C)'
+                  : active
+                  ? 'radial-gradient(circle at 50% 36%, rgba(238,217,138,0.28) 0%, rgba(250,248,243,0) 74%)'
+                  : '#EDE7D8';
+                const discBorder = done
+                  ? '1.5px solid rgba(238,217,138,0.4)'
+                  : active
+                  ? '1.5px solid rgba(182,135,31,0.5)'
+                  : '1.5px solid #D8CDB6';
+                const iconColor = done ? '#EED98A' : active ? '#B6871F' : '#9A8A78';
+                return (
+                  <div key={t.label} className="flex items-start flex-1">
+                    <div className="flex flex-col items-center flex-1 min-w-0">
+                      <span
+                        className="flex items-center justify-center rounded-full flex-shrink-0"
+                        style={{
+                          width: '44px',
+                          height: '44px',
+                          background: discBg,
+                          border: discBorder,
+                          boxShadow: active ? '0 0 0 4px rgba(238,217,138,0.18)' : 'none',
+                        }}
+                      >
+                        <Icon size={19} strokeWidth={2.2} style={{ color: iconColor }} />
+                      </span>
+                      <p
+                        className="mt-2.5"
+                        style={{ fontFamily: OUTFIT, fontSize: '12.5px', fontWeight: 700, color: active || done ? '#1C1410' : '#9A8A78' }}
+                      >
+                        {t.label}
+                      </p>
+                      <p
+                        className="mt-0.5 px-1"
+                        style={{ fontFamily: OUTFIT, fontSize: '10.5px', color: '#9A8A78', lineHeight: 1.35 }}
+                      >
+                        {t.sub}
+                      </p>
+                    </div>
+                    {i < timeline.length - 1 && (
+                      <div
+                        className="flex-shrink-0"
+                        style={{
+                          width: '20px',
+                          height: '2px',
+                          marginTop: '21px',
+                          borderRadius: '2px',
+                          backgroundColor: done ? '#2A5A3C' : '#DDD4C0',
+                        }}
+                      />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
         <div className="flex flex-col sm:flex-row gap-3">
           <Link
             href={`/conferences/${slug}`}
@@ -72,8 +181,9 @@ function ConfirmationInner() {
               backgroundColor: '#1B3828',
               color: '#EED98A',
               textDecoration: 'none',
-              fontFamily: "'Outfit', sans-serif",
+              fontFamily: OUTFIT,
               letterSpacing: '0.08em',
+              boxShadow: '0 6px 18px rgba(27,56,40,0.22)',
             }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
@@ -84,10 +194,10 @@ function ConfirmationInner() {
             href="/conferences/explore"
             className="rounded-xl py-3 px-6 font-bold text-sm focus:outline-none transition-colors"
             style={{
-              border: '1px solid #DDD4C0',
+              border: '1.5px solid #C8BEA8',
               color: '#1C1410',
               textDecoration: 'none',
-              fontFamily: "'Outfit', sans-serif",
+              fontFamily: OUTFIT,
               letterSpacing: '0.08em',
               backgroundColor: 'transparent',
             }}
