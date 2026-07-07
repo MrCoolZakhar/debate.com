@@ -2,6 +2,7 @@
 
 import { useState, Suspense } from 'react';
 import Link from 'next/link';
+import { ArrowLeft, Gavel, Globe2, CalendarCheck } from 'lucide-react';
 import { createAuthClient } from '@/lib/supabase-auth';
 import { ageAt } from '@/lib/age';
 
@@ -62,32 +63,63 @@ function SignUpInner() {
 
   return (
     <div
-      className="min-h-screen flex items-center justify-center px-4 py-12 relative"
-      style={{ backgroundColor: '#EDE7D8' }}
+      className="min-h-screen w-full lg:grid relative"
+      style={{ backgroundColor: '#EDE7D8', gridTemplateColumns: '46% 54%' }}
     >
-      {/* Grain texture */}
-      <div
-        className="pointer-events-none fixed inset-0 z-0"
-        style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`,
-          backgroundRepeat: 'repeat',
-          backgroundSize: '300px 300px',
-          mixBlendMode: 'multiply',
-          opacity: 0.18,
-        }}
+      {/* ── LEFT: scrimmed conference photo + brand moment ─────────────────── */}
+      <BrandPanel
+        eyebrow="Model UN, run properly"
+        headline="Take the floor."
+        sub="Create an account to attend conferences, build your MUN CV, and run committees of your own."
       />
 
-      {/* Card */}
-      <div
-        className="relative z-10 w-full max-w-md"
-        style={{
-          backgroundColor: '#FAF8F3',
-          border: '1px solid #DDD4C0',
-          borderRadius: '16px',
-          boxShadow: '0 8px 40px rgba(28, 20, 16, 0.10), 0 2px 8px rgba(28, 20, 16, 0.06)',
-          padding: '40px 36px',
-        }}
-      >
+      {/* ── RIGHT: form column ─────────────────────────────────────────────── */}
+      <div className="relative flex items-center justify-center px-5 py-10 md:px-8 lg:py-12 min-h-screen lg:min-h-0">
+        {/* Grain texture */}
+        <div
+          className="pointer-events-none absolute inset-0 z-0"
+          style={{
+            backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`,
+            backgroundRepeat: 'repeat',
+            backgroundSize: '300px 300px',
+            mixBlendMode: 'multiply',
+            opacity: 0.18,
+          }}
+        />
+        {/* Soft gold radial glow behind the card */}
+        <div
+          className="pointer-events-none absolute z-0"
+          style={{
+            width: '520px', height: '520px', borderRadius: '9999px',
+            background: 'radial-gradient(circle, rgba(238,217,138,0.30) 0%, rgba(238,217,138,0) 68%)',
+            filter: 'blur(8px)',
+          }}
+        />
+
+        <div className="relative z-10 w-full max-w-md">
+          {/* Back link */}
+          <Link
+            href="/"
+            className="inline-flex items-center gap-1.5 text-sm font-semibold mb-5 focus:outline-none"
+            style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", textDecoration: 'none' }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
+          >
+            <ArrowLeft size={15} /> Back
+          </Link>
+
+          {/* Glass card */}
+          <div
+            style={{
+              backgroundColor: 'rgba(250,248,243,0.82)',
+              backdropFilter: 'blur(14px) saturate(1.4)',
+              WebkitBackdropFilter: 'blur(14px) saturate(1.4)',
+              border: '1.5px solid #D8CDB6',
+              borderRadius: '20px',
+              boxShadow: '0 1px 3px rgba(27,56,40,0.07), 0 12px 32px rgba(27,56,40,0.10)',
+              padding: '38px 34px',
+            }}
+          >
         {/* Logo */}
         <div className="flex justify-center mb-6">
           <Link href="/">
@@ -341,6 +373,113 @@ function SignUpInner() {
             </p>
           </>
         )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The split-screen brand panel: a scrimmed conference photo (a speaker
+ * addressing a full auditorium) with a forest-tinted scrim, the Gavelling
+ * wordmark, a tagline and a small trust stat. Full-height on lg+, a shorter
+ * scrimmed top banner on mobile.
+ */
+function BrandPanel({ eyebrow, headline, sub }: { eyebrow: string; headline: string; sub: string }) {
+  return (
+    <div
+      className="relative overflow-hidden h-[190px] sm:h-[230px] lg:h-auto lg:min-h-screen"
+      style={{ backgroundColor: '#14241B' }}
+    >
+      {/* Photo */}
+      <img
+        src="/landing/podium-speaker.jpg"
+        alt=""
+        aria-hidden
+        className="absolute inset-0 w-full h-full object-cover"
+        style={{ objectPosition: 'center 30%' }}
+      />
+      {/* Forest-tinted scrim — heavier at the bottom for legibility */}
+      <div
+        className="absolute inset-0"
+        style={{
+          background:
+            'linear-gradient(160deg, rgba(20,36,27,0.62) 0%, rgba(18,32,24,0.78) 55%, rgba(10,22,16,0.94) 100%)',
+        }}
+      />
+      {/* Gold radial accent, top-left */}
+      <div
+        className="absolute pointer-events-none"
+        style={{
+          top: '-120px', left: '-120px', width: '380px', height: '380px', borderRadius: '9999px',
+          background: 'radial-gradient(circle, rgba(238,217,138,0.22) 0%, rgba(238,217,138,0) 70%)',
+        }}
+      />
+
+      {/* Content */}
+      <div className="relative z-10 h-full flex flex-col justify-between p-7 sm:p-9 lg:p-12">
+        {/* Wordmark */}
+        <div className="flex items-center gap-2.5">
+          <span
+            className="flex items-center justify-center rounded-xl"
+            style={{ width: '38px', height: '38px', backgroundColor: 'rgba(238,217,138,0.14)', border: '1.5px solid rgba(238,217,138,0.4)' }}
+          >
+            <Gavel size={19} color="#EED98A" strokeWidth={2.25} />
+          </span>
+          <span
+            className="font-black text-xl"
+            style={{ color: '#FAF8F3', fontFamily: "'Outfit', sans-serif", letterSpacing: '-0.01em' }}
+          >
+            Gavelling
+          </span>
+        </div>
+
+        {/* Headline block — hidden on the short mobile banner, shown lg+ */}
+        <div className="hidden lg:block max-w-[420px]">
+          <p
+            className="mb-3"
+            style={{ fontFamily: "'DM Mono', monospace", fontSize: '10.5px', letterSpacing: '0.22em', color: '#EED98A', textTransform: 'uppercase' }}
+          >
+            {eyebrow}
+          </p>
+          <h2
+            className="font-black leading-[1.08] mb-4"
+            style={{ color: '#FAF8F3', fontFamily: "'Outfit', sans-serif", fontSize: '40px', textShadow: '0 2px 20px rgba(0,0,0,0.4)' }}
+          >
+            {headline}
+          </h2>
+          <p
+            className="text-sm leading-relaxed"
+            style={{ color: 'rgba(237,231,216,0.86)', fontFamily: "'Outfit', sans-serif", maxWidth: '360px' }}
+          >
+            {sub}
+          </p>
+        </div>
+
+        {/* Trust stats row */}
+        <div className="flex items-center gap-6 sm:gap-8">
+          <BrandStat icon={<Globe2 size={15} color="#EED98A" />} value="120+" label="Countries" />
+          <span className="hidden sm:block" style={{ width: '1px', height: '30px', backgroundColor: 'rgba(238,217,138,0.28)' }} />
+          <BrandStat icon={<CalendarCheck size={15} color="#EED98A" />} value="Conferences" label="Run end-to-end" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BrandStat({ icon, value, label }: { icon: React.ReactNode; value: string; label: string }) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <span
+        className="flex items-center justify-center rounded-lg flex-shrink-0"
+        style={{ width: '30px', height: '30px', backgroundColor: 'rgba(238,217,138,0.12)', border: '1px solid rgba(238,217,138,0.3)' }}
+      >
+        {icon}
+      </span>
+      <div className="leading-tight">
+        <p className="font-bold text-sm" style={{ color: '#FAF8F3', fontFamily: "'Outfit', sans-serif" }}>{value}</p>
+        <p className="text-[11px]" style={{ color: 'rgba(237,231,216,0.66)', fontFamily: "'Outfit', sans-serif" }}>{label}</p>
       </div>
     </div>
   );
