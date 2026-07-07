@@ -8,6 +8,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { getFlagUrl, getCountryByName } from '@/lib/countries';
 import { LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
 import DelegationsView from '@/app/manage/[slug]/assignment/DelegationsView';
+import IndependentsView from '@/app/manage/[slug]/assignment/IndependentsView';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -939,7 +940,7 @@ export default function AssignmentPage() {
   const [roleConfigs, setRoleConfigs] = useState<RoleConfigLite[]>([]);
   const [chairApps, setChairApps] = useState<ChairApp[]>([]);
   const [history, setHistory] = useState<Record<string, UserHistory>>({});
-  const [mode, setMode] = useState<'delegates' | 'chairs' | 'delegations'>('delegates');
+  const [mode, setMode] = useState<'delegates' | 'chairs' | 'delegations' | 'independents'>('delegates');
   const [loading, setLoading] = useState(true);
   const [selectedCommitteeId, setSelectedCommitteeId] = useState<string | null>(null); // chairs mode tabs
   const [search, setSearch] = useState('');
@@ -1276,9 +1277,9 @@ export default function AssignmentPage() {
         )}
       </div>
 
-      {/* Mode toggle: Delegates | Chairs */}
-      <div className="inline-flex rounded-xl p-1 mb-6" style={{ border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3' }}>
-        {(['delegates', 'chairs', 'delegations'] as const).map(m => (
+      {/* Mode toggle: Delegates | Chairs | Delegations | Independents */}
+      <div className="inline-flex rounded-xl p-1 mb-6 flex-wrap" style={{ border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3' }}>
+        {(['delegates', 'chairs', 'delegations', 'independents'] as const).map(m => (
           <button
             key={m}
             onClick={() => setMode(m)}
@@ -1296,7 +1297,7 @@ export default function AssignmentPage() {
               cursor: 'pointer',
             }}
           >
-            {m === 'delegates' ? 'DELEGATES' : m === 'chairs' ? 'CHAIRS' : 'DELEGATIONS'}
+            {m === 'delegates' ? 'DELEGATES' : m === 'chairs' ? 'CHAIRS' : m === 'delegations' ? 'DELEGATIONS' : 'INDEPENDENTS'}
           </button>
         ))}
       </div>
@@ -1721,6 +1722,10 @@ export default function AssignmentPage() {
 
       {mode === 'delegations' && (
         <DelegationsView conference={conference} showFlash={showFlash} />
+      )}
+
+      {mode === 'independents' && (
+        <IndependentsView conference={conference} showFlash={showFlash} />
       )}
 
       {/* Slot-first assign modal (from a panel's expanded slot list) */}
