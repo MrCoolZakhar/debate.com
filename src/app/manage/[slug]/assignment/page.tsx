@@ -7,6 +7,7 @@ import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
 import { getFlagUrl, getCountryByName } from '@/lib/countries';
 import { LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
+import DelegationsView from '@/app/manage/[slug]/assignment/DelegationsView';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -25,6 +26,8 @@ interface AcceptedApp {
   is_head_delegate: boolean;
   is_independent: boolean;
   payment_status: string | null;
+  attending: boolean;
+  allocation_override: boolean;
   profiles: {
     id: string;
     display_name: string;
@@ -45,6 +48,7 @@ interface RoleConfigLite {
 function isAllocationBlocked(app: AcceptedApp, roleConfigs: RoleConfigLite[]): boolean {
   const cfg = roleConfigs.find(rc => rc.role === app.role);
   if (!cfg?.must_pay_before_allocation) return false;
+  if (app.allocation_override) return false;
   return app.payment_status !== 'paid' && app.payment_status !== 'waived';
 }
 
@@ -89,16 +93,6 @@ interface CommitteeData {
   chair_user_ids: string[] | null;
   committee_country_slots: SlotRow[];
   conference_allocations: AllocationRow[];
-}
-
-interface DelegationRow {
-  id: string;
-  name: string;
-  advisor_user_id: string | null;
-  spots_purchased: number;
-  payment_status: string;
-  advisor: { display_name: string } | null;
-  applications: { count: number }[];
 }
 
 interface ChairApp {
@@ -944,7 +938,6 @@ export default function AssignmentPage() {
   const [committees, setCommittees] = useState<CommitteeData[]>([]);
   const [roleConfigs, setRoleConfigs] = useState<RoleConfigLite[]>([]);
   const [chairApps, setChairApps] = useState<ChairApp[]>([]);
-  const [delegations, setDelegations] = useState<DelegationRow[]>([]);
   const [history, setHistory] = useState<Record<string, UserHistory>>({});
   const [mode, setMode] = useState<'delegates' | 'chairs' | 'delegations'>('delegates');
   const [loading, setLoading] = useState(true);
@@ -974,11 +967,12 @@ export default function AssignmentPage() {
     setLoading(true);
     const supabase = getAuthedClient(session.access_token);
 
-    const [appRes, commRes, cfgRes, chairRes, socRes] = await Promise.all([
+    const [appRes, commRes, cfgRes, chairRes] = await Promise.all([
       supabase
         .from('applications')
         .select(`
           id, role, experience_level, is_head_delegate, is_independent, payment_status,
+          attending, allocation_override,
           profiles (id, display_name, email, nationality, mun_experience_level, avatar_url),
           societies (name),
           application_preferences (
@@ -1011,21 +1005,15 @@ export default function AssignmentPage() {
         .eq('conference_id', conference.id)
         .eq('role', 'chair')
         .in('status', ['accepted', 'assigned']),
-      supabase
-        .from('societies')
-        .select('id, name, advisor_user_id, spots_purchased, payment_status, advisor:profiles!advisor_user_id(display_name), applications(count)')
-        .eq('conference_id', conference.id)
-        .order('name', { ascending: true }),
     ]);
 
-    const apps = (appRes.data ?? []) as unknown as AcceptedApp[];
+    const apps = ((appRes.data ?? []) as unknown as AcceptedApp[]).filter(a => a.attending !== false);
     const comms = (commRes.data ?? []) as unknown as CommitteeData[];
 
     setAccepted(apps);
     setCommittees(comms);
     setRoleConfigs((cfgRes.data ?? []) as unknown as RoleConfigLite[]);
     setChairApps((chairRes.data ?? []) as unknown as ChairApp[]);
-    setDelegations((socRes.data ?? []) as unknown as DelegationRow[]);
     if (comms.length > 0 && !selectedCommitteeId) {
       setSelectedCommitteeId(comms[0].id);
     }
@@ -1135,20 +1123,6 @@ export default function AssignmentPage() {
         assigned_country_name: null,
       }).eq('id', allocation.application_id);
     }
-    await loadData();
-  }
-
-  async function handleSetSpots(societyId: string, spots: number) {
-    if (!session) return;
-    const supabase = getAuthedClient(session.access_token);
-    await supabase.from('societies').update({ spots_purchased: Math.max(0, spots) }).eq('id', societyId);
-    await loadData();
-  }
-
-  async function handleToggleDelegationPaid(societyId: string, current: string) {
-    if (!session) return;
-    const supabase = getAuthedClient(session.access_token);
-    await supabase.from('societies').update({ payment_status: current === 'paid' ? 'unpaid' : 'paid' }).eq('id', societyId);
     await loadData();
   }
 
@@ -1746,53 +1720,7 @@ export default function AssignmentPage() {
 
 
       {mode === 'delegations' && (
-        <div style={{ maxWidth: 720 }}>
-          <p className="text-xs font-semibold tracking-widest mb-1" style={{ color: '#9A8A78', fontFamily: MONO }}>DELEGATIONS</p>
-          <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-            Groups brought by a faculty advisor or head delegate. Set how many spots each has paid for; members of a paid delegation are covered automatically.
-          </p>
-          {delegations.length === 0 ? (
-            <p className="text-sm" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>No delegations yet.</p>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {delegations.map(d => {
-                const filled = d.applications?.[0]?.count ?? 0;
-                const paid = d.payment_status === 'paid';
-                return (
-                  <div key={d.id} className="flex items-center justify-between rounded-xl p-3" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
-                    <div className="min-w-0">
-                      <p className="font-semibold text-sm truncate" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>{d.name}</p>
-                      <p className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                        {d.advisor?.display_name ? `Advisor: ${d.advisor.display_name}` : 'No advisor set'} · {filled} member{filled === 1 ? '' : 's'}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-3 flex-shrink-0">
-                      <div className="flex items-center gap-1">
-                        <span className="text-xs" style={{ color: '#9A8A78', fontFamily: MONO }}>SPOTS</span>
-                        <input
-                          type="number"
-                          min={0}
-                          defaultValue={d.spots_purchased}
-                          onBlur={e => { const v = parseInt(e.target.value, 10); if (!isNaN(v) && v !== d.spots_purchased) handleSetSpots(d.id, v); }}
-                          className="rounded-lg px-2 py-1 text-sm focus:outline-none"
-                          style={{ width: 64, border: '1px solid #DDD4C0', backgroundColor: '#FFFFFF', color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}
-                        />
-                        <span className="text-xs" style={{ color: filled > d.spots_purchased ? '#B8844A' : '#9A8A78', fontFamily: MONO }}>{filled}/{d.spots_purchased} filled</span>
-                      </div>
-                      <button
-                        onClick={() => handleToggleDelegationPaid(d.id, d.payment_status)}
-                        className="rounded-lg py-1.5 px-3 text-xs font-bold focus:outline-none transition-colors"
-                        style={{ backgroundColor: paid ? 'rgba(27,56,40,0.1)' : 'transparent', color: paid ? '#1B3828' : '#B8844A', border: paid ? '1px solid rgba(27,56,40,0.3)' : '1px solid rgba(184,132,74,0.4)', fontFamily: "'Outfit', sans-serif" }}
-                      >
-                        {paid ? 'PAID' : 'MARK PAID'}
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+        <DelegationsView conference={conference} showFlash={showFlash} />
       )}
 
       {/* Slot-first assign modal (from a panel's expanded slot list) */}
