@@ -94,7 +94,7 @@ function ConferenceManageCard({ conf }: { conf: OrgConference }) {
               aria-hidden
               style={{
                 position: 'absolute', right: '14px', bottom: '-8px',
-                fontFamily: "'DM Mono', monospace", fontSize: '40px', lineHeight: 1,
+                fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '40px', lineHeight: 1,
                 color: 'rgba(238,217,138,0.14)', letterSpacing: '0.02em', userSelect: 'none',
               }}
             >
@@ -129,7 +129,7 @@ function ConferenceManageCard({ conf }: { conf: OrgConference }) {
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}
           >
-            <span style={{ fontSize: '13px', fontFamily: "'DM Mono', monospace", color: '#EED98A', fontWeight: 700 }}>
+            <span style={{ fontSize: '13px', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.06em', color: '#EED98A', fontWeight: 700 }}>
               {initials}
             </span>
           </div>
@@ -137,8 +137,8 @@ function ConferenceManageCard({ conf }: { conf: OrgConference }) {
       </div>
 
       <div className="px-5 pt-2.5 pb-5">
-        {/* Acronym micro-stamp (mono is fine here) */}
-        <p className="text-[10px] mb-1" style={{ color: '#B6871F', fontFamily: "'DM Mono', monospace", letterSpacing: '0.16em' }}>
+        {/* Acronym micro-stamp */}
+        <p className="text-[10px] mb-1" style={{ color: '#B6871F', fontFamily: "'Outfit', sans-serif", fontWeight: 700, letterSpacing: '0.14em' }}>
           {conf.acronym}
         </p>
 
@@ -162,7 +162,7 @@ function ConferenceManageCard({ conf }: { conf: OrgConference }) {
         </div>
         <div className="flex items-center gap-1.5 mb-3">
           <CalendarDays size={13} style={{ color: '#9A8A78', flexShrink: 0 }} />
-          <span className="text-[11px]" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}>
+          <span className="text-[11px]" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", fontWeight: 500, letterSpacing: '0.01em', fontVariantNumeric: 'tabular-nums' }}>
             {formatDateRange(conf.start_date, conf.end_date)}
           </span>
         </div>
@@ -280,7 +280,7 @@ export default function ConferencesOrganiseClient() {
         {/* Hero bar */}
         <div className="px-6 md:px-14 py-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4" style={{ backgroundColor: '#1B3828' }}>
           <div>
-            <p className="text-[10px] tracking-[0.2em] mb-1" style={{ color: '#EED98A', fontFamily: "'DM Mono', monospace" }}>MY CONFERENCES</p>
+            <p className="text-[10px] mb-1" style={{ color: '#EED98A', fontFamily: "'Outfit', sans-serif", fontWeight: 700, letterSpacing: '0.14em' }}>MY CONFERENCES</p>
             <h1 className="font-black text-3xl text-white" style={{ fontFamily: "'Outfit', sans-serif", letterSpacing: '-0.01em' }}>Your Conferences</h1>
           </div>
           <Link

@@ -192,7 +192,7 @@ function FeaturedSection() {
                 }}
               >
                 {searchLoading ? (
-                  <div style={{ padding: '12px', fontFamily: "'DM Mono', monospace", fontSize: '11px', color: '#9A8A78' }}>
+                  <div style={{ padding: '12px', fontFamily: "'Outfit', sans-serif", fontWeight: 500, fontSize: '11px', color: '#9A8A78' }}>
                     Searching...
                   </div>
                 ) : (
@@ -216,7 +216,7 @@ function FeaturedSection() {
                       <p style={{ fontFamily: "'Outfit', sans-serif", fontSize: '13px', fontWeight: 700, color: '#1C1410', margin: 0 }}>
                         {result.full_name}
                       </p>
-                      <p style={{ fontFamily: "'DM Mono', monospace", fontSize: '10px', color: '#9A8A78', margin: '2px 0 0 0' }}>
+                      <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 500, letterSpacing: '0.01em', fontVariantNumeric: 'tabular-nums', fontSize: '10px', color: '#9A8A78', margin: '2px 0 0 0' }}>
                         {result.city}, {result.country} · {formatDateRange(result.start_date, result.end_date)}
                       </p>
                     </div>
@@ -339,7 +339,7 @@ function RolesSection() {
               <span
                 key={pill}
                 className="px-3 py-1.5 rounded-full text-[10px]"
-                style={{ backgroundColor: 'rgba(27,56,40,0.07)', border: '1px solid rgba(27,56,40,0.15)', color: '#1B3828', fontFamily: "'DM Mono', monospace" }}
+                style={{ backgroundColor: 'rgba(27,56,40,0.07)', border: '1px solid rgba(27,56,40,0.15)', color: '#1B3828', fontFamily: "'Outfit', sans-serif", fontWeight: 700, letterSpacing: '0.1em' }}
               >
                 {pill}
               </span>

@@ -921,7 +921,7 @@ function Step2({
 
           {/* Preset picker — sets the local bannerUrl; saved with the conference on create */}
           <div style={{ marginTop: 12 }}>
-            <p style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: '0.16em', color: '#9A8A78', margin: '0 0 8px 0' }}>
+            <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 10, letterSpacing: '0.14em', color: '#9A8A78', margin: '0 0 8px 0' }}>
               OR PICK A PRESET
             </p>
             <div className="flex flex-wrap gap-2">
@@ -1028,7 +1028,7 @@ function Step2({
                   style={{ border: '1.5px solid #1B3828', backgroundColor: 'rgba(27,56,40,0.04)' }}
                 >
                   <div className="flex-1 min-w-0">
-                    <p style={{ fontSize: 10, color: '#B6871F', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2 }}>
+                    <p style={{ fontSize: 10, color: '#B6871F', fontFamily: "'Outfit', sans-serif", fontWeight: 700, letterSpacing: '0.12em', fontVariantNumeric: 'tabular-nums', textTransform: 'uppercase', marginBottom: 2 }}>
                       {predecessor.acronym}
                       {predecessor.start_date ? ' · ' + new Date(predecessor.start_date + 'T00:00:00').getFullYear() : ''}
                     </p>
@@ -1096,7 +1096,7 @@ function Step2({
                             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
                             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                           >
-                            <p style={{ fontSize: 10, color: '#B6871F', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                            <p style={{ fontSize: 10, color: '#B6871F', fontFamily: "'Outfit', sans-serif", fontWeight: 700, letterSpacing: '0.12em', fontVariantNumeric: 'tabular-nums', textTransform: 'uppercase' }}>
                               {opt.acronym}
                               {opt.start_date ? ' · ' + new Date(opt.start_date + 'T00:00:00').getFullYear() : ''}
                               {opt.city ? ' · ' + opt.city : ''}
