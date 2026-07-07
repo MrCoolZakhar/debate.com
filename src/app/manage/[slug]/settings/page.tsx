@@ -6,6 +6,7 @@ import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
 import { createClient } from '@supabase/supabase-js';
+import { UN_COUNTRIES } from '@/lib/countries';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -1069,15 +1070,16 @@ export default function SettingsPage() {
               </div>
               <div className="flex-1">
                 <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Country</label>
-                <input
-                  type="text"
+                <select
                   value={country}
                   onChange={(e) => setCountry(e.target.value)}
-                  placeholder="United Kingdom"
-                  style={inputStyle}
+                  style={{ ...inputStyle, cursor: 'pointer' }}
                   onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
                   onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
-                />
+                >
+                  <option value="">Select a country</option>
+                  {UN_COUNTRIES.map(c => <option key={c.code} value={c.name}>{c.name}</option>)}
+                </select>
               </div>
             </div>
 
