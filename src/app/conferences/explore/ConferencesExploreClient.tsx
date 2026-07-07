@@ -404,7 +404,7 @@ export default function ConferencesExploreClient() {
           {/* Results rule */}
           {!loading && filtered.length > 0 && (
             <div className="flex items-center gap-4 mb-6">
-              <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '10px', letterSpacing: '0.2em', color: '#9A8A78', whiteSpace: 'nowrap' }}>
+              <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '10px', letterSpacing: '0.14em', color: '#9A8A78', whiteSpace: 'nowrap' }}>
                 SHOWING {filtered.length} {filtered.length === 1 ? 'CONFERENCE' : 'CONFERENCES'}
               </span>
               <div className="flex-1 h-px" style={{ backgroundColor: 'rgba(221,212,192,0.8)' }} />

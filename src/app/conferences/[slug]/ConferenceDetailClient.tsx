@@ -210,7 +210,7 @@ function ReviewCard({ review }: { review: ConferenceReview }) {
         </div>
         <div className="flex items-center gap-3 flex-shrink-0">
           <StarRow rating={review.rating} />
-          <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '10px', color: '#9A8A78', letterSpacing: '0.06em' }}>
+          <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 500, fontVariantNumeric: 'tabular-nums', fontSize: '10px', color: '#9A8A78', letterSpacing: '0.01em' }}>
             {fmtReviewDate(review.created_at)}
           </span>
         </div>
@@ -770,7 +770,7 @@ export default function ConferenceDetailClient() {
                 aria-hidden
                 style={{
                   position: 'absolute', right: '4%', bottom: '-24px',
-                  fontFamily: "'DM Mono', monospace", fontSize: 'clamp(120px, 18vw, 240px)', lineHeight: 1,
+                  fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontVariantNumeric: 'tabular-nums', fontSize: 'clamp(120px, 18vw, 240px)', lineHeight: 1,
                   color: 'rgba(238,217,138,0.07)', userSelect: 'none', pointerEvents: 'none',
                 }}
               >
@@ -783,7 +783,8 @@ export default function ConferenceDetailClient() {
           <div className="absolute right-6 md:right-14 flex gap-2 z-10" style={{ top: '84px' }}>
             <span
               style={{
-                fontFamily: "'DM Mono', monospace",
+                fontFamily: "'Outfit', sans-serif",
+                fontWeight: 700,
                 fontSize: '10px',
                 letterSpacing: '0.12em',
                 color: 'white',
@@ -814,7 +815,7 @@ export default function ConferenceDetailClient() {
                 />
               )}
               <div className="min-w-0">
-                <p style={{ fontFamily: "'DM Mono', monospace", fontSize: '11px', color: '#EED98A', letterSpacing: '0.24em', marginBottom: '6px' }}>
+                <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '11px', color: '#EED98A', letterSpacing: '0.14em', marginBottom: '6px' }}>
                   {conference.acronym}
                 </p>
                 <h1 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, color: 'white', fontSize: 'clamp(26px, 4vw, 54px)', lineHeight: 1.05, marginBottom: '10px', textShadow: '0 2px 24px rgba(0,0,0,0.3)' }}>
@@ -834,7 +835,7 @@ export default function ConferenceDetailClient() {
                     </span>
                   </span>
                   <span aria-hidden style={{ color: 'rgba(238,217,138,0.5)', fontSize: '10px' }}>◆</span>
-                  <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '12px', color: 'rgba(237,231,216,0.78)' }}>
+                  <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 500, fontVariantNumeric: 'tabular-nums', letterSpacing: '0.01em', fontSize: '12px', color: 'rgba(237,231,216,0.78)' }}>
                     {formatDateRange(conference.start_date, conference.end_date)}
                   </span>
                 </div>
@@ -1007,7 +1008,7 @@ export default function ConferenceDetailClient() {
               {/* Organiser */}
               {activeTab === 'overview' && (
                 <SectionCard className="mb-6">
-                  <p className="mb-3" style={{ fontFamily: "'DM Mono', monospace", fontSize: '9px', letterSpacing: '0.26em', color: '#B6871F', margin: '0 0 12px 0' }}>
+                  <p className="mb-3" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#B6871F', margin: '0 0 12px 0' }}>
                     ORGANISED BY
                   </p>
                   <div className="flex items-center gap-4">
@@ -1020,7 +1021,7 @@ export default function ConferenceDetailClient() {
                     )}
                     <div className="min-w-0">
                       <p className="font-semibold text-[15px]" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", margin: 0 }}>{conference.full_name}</p>
-                      <p className="text-[11px] mt-0.5" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace", margin: 0 }}>{conference.acronym}</p>
+                      <p className="text-[11px] mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", fontWeight: 500, margin: 0 }}>{conference.acronym}</p>
                       {conference.contact_email && (
                         <a
                           href={`mailto:${conference.contact_email}`}
@@ -1139,7 +1140,7 @@ export default function ConferenceDetailClient() {
                 <div className="flex flex-col gap-6">
                   {/* Study Guides */}
                   <SectionCard>
-                    <p className="mb-3" style={{ fontFamily: "'DM Mono', monospace", fontSize: '9px', letterSpacing: '0.26em', color: '#B6871F', margin: '0 0 12px 0' }}>
+                    <p className="mb-3" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#B6871F', margin: '0 0 12px 0' }}>
                       STUDY GUIDES
                     </p>
                     {studyGuidesLoading ? (
@@ -1171,7 +1172,7 @@ export default function ConferenceDetailClient() {
                             </div>
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-semibold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', margin: 0 }}>{sg.title}</p>
-                              <p className="text-[11px] mt-0.5" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace", margin: 0 }}>{sg.file_name}</p>
+                              <p className="text-[11px] mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", fontWeight: 500, margin: 0 }}>{sg.file_name}</p>
                             </div>
                             <Download size={15} style={{ color: '#9A8A78', flexShrink: 0 }} />
                           </a>
@@ -1198,10 +1199,10 @@ export default function ConferenceDetailClient() {
                     };
                     return (
                       <SectionCard>
-                        <p style={{ fontFamily: "'DM Mono', monospace", fontSize: '9px', letterSpacing: '0.26em', color: '#B6871F', margin: '0 0 6px 0' }}>
+                        <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#B6871F', margin: '0 0 6px 0' }}>
                           POSITION PAPER
                         </p>
-                        <p style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#9A8A78', marginBottom: 16 }}>
+                        <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 500, fontSize: 11, color: '#9A8A78', marginBottom: 16 }}>
                           {myAllocation.conference_committees?.name} · {myAllocation.country_name}
                         </p>
 
@@ -1212,7 +1213,7 @@ export default function ConferenceDetailClient() {
                         ) : showUploadForm ? (
                           <>
                             {deadline && (
-                              <p style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: deadlineSoon ? '#B8844A' : '#9A8A78', marginBottom: 14 }}>
+                              <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 500, fontVariantNumeric: 'tabular-nums', fontSize: 11, color: deadlineSoon ? '#B8844A' : '#9A8A78', marginBottom: 14 }}>
                                 Due {fmtDate(deadline)}
                               </p>
                             )}
@@ -1225,7 +1226,7 @@ export default function ConferenceDetailClient() {
                                 onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.borderColor = 'rgba(154,138,120,0.6)'; el.style.backgroundColor = 'rgba(237,231,216,0.25)'; }}
                               >
                                 <p style={{ fontSize: 13, color: '#4A4238', fontFamily: "'Outfit', sans-serif", marginBottom: 2, fontWeight: 600 }}>Click to select PDF</p>
-                                <p style={{ fontSize: 11, color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}>MAX 5MB</p>
+                                <p style={{ fontSize: 11, color: '#9A8A78', fontFamily: "'Outfit', sans-serif", fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>MAX 5MB</p>
                               </div>
                             ) : (
                               <div style={{ border: '1px solid rgba(61,122,82,0.3)', borderRadius: 12, padding: '10px 14px', backgroundColor: 'rgba(61,122,82,0.05)', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
@@ -1264,13 +1265,13 @@ export default function ConferenceDetailClient() {
                         ) : (
                           <>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                              <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#9A8A78', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 500, fontSize: 11, color: '#9A8A78', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                 {myPositionPaper.file_name}
                               </span>
                               {(() => {
                                 const s = ppStatusMap[myPositionPaper.status] ?? ppStatusMap.submitted;
                                 return (
-                                  <span style={{ backgroundColor: s.bg, color: s.color, fontFamily: "'DM Mono', monospace", fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 9999, letterSpacing: '0.08em', flexShrink: 0 }}>
+                                  <span style={{ backgroundColor: s.bg, color: s.color, fontFamily: "'Outfit', sans-serif", fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 9999, letterSpacing: '0.08em', flexShrink: 0 }}>
                                     {myPositionPaper.status.toUpperCase()}
                                   </span>
                                 );
@@ -1307,7 +1308,7 @@ export default function ConferenceDetailClient() {
               {activeTab === 'reviews' && (
                 <div className="flex flex-col gap-6">
                   <SectionCard>
-                    <p style={{ fontFamily: "'DM Mono', monospace", fontSize: '9px', letterSpacing: '0.26em', color: '#B6871F', margin: '0 0 14px 0' }}>
+                    <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#B6871F', margin: '0 0 14px 0' }}>
                       DELEGATE REVIEWS
                     </p>
                     {reviewCount === 0 ? (
@@ -1332,7 +1333,7 @@ export default function ConferenceDetailClient() {
                         </span>
                         <div className="flex flex-col gap-1">
                           <StarRow rating={Math.round(avgRating)} size={16} />
-                          <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '10.5px', letterSpacing: '0.1em', color: '#9A8A78' }}>
+                          <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontVariantNumeric: 'tabular-nums', fontSize: '10.5px', letterSpacing: '0.1em', color: '#9A8A78' }}>
                             {reviewCount} {reviewCount === 1 ? 'REVIEW' : 'REVIEWS'}
                           </span>
                         </div>
@@ -1343,7 +1344,7 @@ export default function ConferenceDetailClient() {
                   {/* Write a review — attendees only */}
                   {canReview && (
                     <SectionCard>
-                      <p style={{ fontFamily: "'DM Mono', monospace", fontSize: '9px', letterSpacing: '0.26em', color: '#B6871F', margin: '0 0 12px 0' }}>
+                      <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#B6871F', margin: '0 0 12px 0' }}>
                         YOUR REVIEW
                       </p>
                       <div className="flex items-center gap-1.5 mb-4" onMouseLeave={() => setReviewHover(0)}>
@@ -1413,7 +1414,7 @@ export default function ConferenceDetailClient() {
                     <div className="flex flex-col gap-3">
                       <div className="flex items-center gap-3 mt-1">
                         <span className="flex-1" style={{ height: '1px', backgroundColor: 'rgba(221,212,192,0.9)' }} />
-                        <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '9px', letterSpacing: '0.26em', color: '#9A8A78', whiteSpace: 'nowrap' }}>
+                        <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#9A8A78', whiteSpace: 'nowrap' }}>
                           FROM PREVIOUS EDITION{predAcronym ? ` · ${predAcronym.toUpperCase()}` : ''}
                         </span>
                         <span className="flex-1" style={{ height: '1px', backgroundColor: 'rgba(221,212,192,0.9)' }} />
@@ -1479,7 +1480,7 @@ export default function ConferenceDetailClient() {
                     {isOrganizerViewer ? (
                       /* 1 — Organizer/secretariat: manage affordances, never apply buttons */
                       <>
-                        <p style={{ fontFamily: "'DM Mono', monospace", fontSize: '9px', letterSpacing: '0.26em', color: '#EED98A', margin: '0 0 8px 0' }}>
+                        <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#EED98A', margin: '0 0 8px 0' }}>
                           {(organizerRole ?? 'owner').toUpperCase()}
                         </p>
                         <p className="font-bold text-base mb-1 text-white" style={{ fontFamily: "'Outfit', sans-serif" }}>
@@ -1496,7 +1497,7 @@ export default function ConferenceDetailClient() {
                             <span className="text-[12px] font-semibold" style={{ color: 'rgba(237,231,216,0.9)', fontFamily: "'Outfit', sans-serif" }}>
                               Also applied as {roleLabel(myApp.role)}
                             </span>
-                            <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '9px', letterSpacing: '0.1em', color: '#EED98A' }}>
+                            <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.1em', color: '#EED98A' }}>
                               {myApp.status.toUpperCase()}
                             </span>
                           </div>
@@ -1538,7 +1539,7 @@ export default function ConferenceDetailClient() {
                         const allocFlag = allocCountry ? getFlagUrl(allocCountry.code) : null;
                         return (
                           <>
-                            <p style={{ fontFamily: "'DM Mono', monospace", fontSize: '9px', letterSpacing: '0.26em', color: '#EED98A', margin: '0 0 8px 0' }}>
+                            <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#EED98A', margin: '0 0 8px 0' }}>
                               YOUR APPLICATION
                             </p>
                             <div className="flex items-center justify-between gap-3 mb-1">
@@ -1547,7 +1548,7 @@ export default function ConferenceDetailClient() {
                               </p>
                               <span
                                 className="flex-shrink-0"
-                                style={{ backgroundColor: meta.bg, color: meta.color, fontFamily: "'DM Mono', monospace", fontSize: '9px', fontWeight: 700, padding: '4px 10px', borderRadius: '9999px', letterSpacing: '0.1em' }}
+                                style={{ backgroundColor: meta.bg, color: meta.color, fontFamily: "'Outfit', sans-serif", fontSize: '9px', fontWeight: 700, padding: '4px 10px', borderRadius: '9999px', letterSpacing: '0.1em' }}
                               >
                                 {meta.label}
                               </span>
@@ -1562,7 +1563,7 @@ export default function ConferenceDetailClient() {
                                 className="mt-4 rounded-xl px-4 py-3.5"
                                 style={{ backgroundColor: 'rgba(238,217,138,0.08)', border: '1px solid rgba(238,217,138,0.18)' }}
                               >
-                                <p style={{ fontFamily: "'DM Mono', monospace", fontSize: '8.5px', letterSpacing: '0.22em', color: 'rgba(238,217,138,0.75)', margin: '0 0 6px 0' }}>
+                                <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '8.5px', letterSpacing: '0.14em', color: 'rgba(238,217,138,0.75)', margin: '0 0 6px 0' }}>
                                   YOUR ALLOCATION
                                 </p>
                                 <p className="text-[13.5px] font-bold text-white" style={{ fontFamily: "'Outfit', sans-serif", margin: 0 }}>
@@ -1639,7 +1640,7 @@ export default function ConferenceDetailClient() {
                         </button>
                         {rolePickerOpen && (
                           <div className="mt-3 flex flex-col gap-1.5">
-                            <p style={{ fontFamily: "'DM Mono', monospace", fontSize: '8.5px', letterSpacing: '0.22em', color: 'rgba(238,217,138,0.75)', margin: '4px 0 2px 0' }}>
+                            <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '8.5px', letterSpacing: '0.14em', color: 'rgba(238,217,138,0.75)', margin: '4px 0 2px 0' }}>
                               CHOOSE YOUR ROLE
                             </p>
                             {enabledRoles.map(r => {
@@ -1674,7 +1675,7 @@ export default function ConferenceDetailClient() {
                                     </span>
                                     <span
                                       className="block mt-0.5"
-                                      style={{ fontFamily: "'DM Mono', monospace", fontSize: '10px', letterSpacing: '0.08em', color: open ? '#EED98A' : 'rgba(237,231,216,0.55)' }}
+                                      style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '10px', letterSpacing: '0.08em', color: open ? '#EED98A' : 'rgba(237,231,216,0.55)' }}
                                     >
                                       {open ? fee : reason}
                                     </span>
@@ -1709,7 +1710,7 @@ export default function ConferenceDetailClient() {
                           {currencySymbol(conference.fee_currency)}{conference.fee_amount.toFixed(0)}
                         </span>
                       )}
-                      <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '8.5px', letterSpacing: '0.22em', color: '#9A8A78', marginTop: '7px' }}>
+                      <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '8.5px', letterSpacing: '0.14em', color: '#9A8A78', marginTop: '7px' }}>
                         PER DELEGATE
                       </span>
                     </div>
@@ -1739,7 +1740,7 @@ export default function ConferenceDetailClient() {
                             <span className="text-[13px] font-medium" style={{ color: '#4A4238', fontFamily: "'Outfit', sans-serif" }}>
                               {capitalize(r.role.replace(/-/g, ' '))}
                             </span>
-                            <span className="text-[13px] font-bold" style={{ color: '#1C1410', fontFamily: "'DM Mono', monospace" }}>
+                            <span className="text-[13px] font-bold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}>
                               {r.fee_amount != null && r.fee_amount > 0
                                 ? `${currencySymbol(r.fee_currency ?? conference.fee_currency)}${r.fee_amount.toFixed(0)}`
                                 : 'Free'}
@@ -1757,7 +1758,8 @@ export default function ConferenceDetailClient() {
                               style={{
                                 backgroundColor: 'rgba(238,217,138,0.15)',
                                 color: '#B6871F',
-                                fontFamily: "'DM Mono', monospace",
+                                fontFamily: "'Outfit', sans-serif",
+                                fontWeight: 500,
                               }}
                             >
                               ✦ Surcharge waived with your Unlimited plan
@@ -1943,7 +1945,7 @@ export default function ConferenceDetailClient() {
                                       }}
                                     >
                                       <div className="pointer-events-none absolute inset-0" style={{ backgroundImage: GRAIN, backgroundSize: '300px', mixBlendMode: 'overlay', opacity: 0.12 }} />
-                                      <span style={{ fontFamily: "'DM Mono', monospace", fontSize: monogram.length > 4 ? '13px' : '16px', fontWeight: 700, color: '#EED98A', letterSpacing: '0.04em' }}>
+                                      <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: monogram.length > 4 ? '13px' : '16px', fontWeight: 700, color: '#EED98A', letterSpacing: '0.06em', fontVariantNumeric: 'tabular-nums' }}>
                                         {monogram}
                                       </span>
                                     </div>
@@ -1962,7 +1964,7 @@ export default function ConferenceDetailClient() {
                                     {c.difficulty && (
                                       <span
                                         className="px-2.5 py-0.5 rounded-full"
-                                        style={{ ...diffStyle, fontSize: '10px', fontFamily: "'DM Mono', monospace", letterSpacing: '0.06em', fontWeight: 700 }}
+                                        style={{ ...diffStyle, fontSize: '10px', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.06em', fontWeight: 700 }}
                                       >
                                         {capitalize(diff)}
                                       </span>
@@ -1974,7 +1976,7 @@ export default function ConferenceDetailClient() {
                                     {isCrisis && (
                                       <>
                                         <span aria-hidden style={{ color: 'rgba(182,135,31,0.55)', fontSize: '7px' }}>◆</span>
-                                        <span className="text-[10px] font-bold" style={{ color: '#8B2020', fontFamily: "'DM Mono', monospace", letterSpacing: '0.12em' }}>
+                                        <span className="text-[10px] font-bold" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.12em' }}>
                                           CRISIS
                                         </span>
                                       </>
@@ -1988,7 +1990,7 @@ export default function ConferenceDetailClient() {
                                         <div key={topic} className="flex items-start gap-2.5 py-1">
                                           <span
                                             className="flex-shrink-0 text-right"
-                                            style={{ fontFamily: "'DM Mono', monospace", fontSize: '11px', color: '#B6871F', width: '18px', lineHeight: '19px' }}
+                                            style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '11px', color: '#B6871F', width: '18px', lineHeight: '19px' }}
                                           >
                                             {ROMAN[ti] ?? String(ti + 1)}.
                                           </span>
@@ -2063,10 +2065,10 @@ export default function ConferenceDetailClient() {
                                   {/* Capacity */}
                                   <div className="w-full mt-4">
                                     <div className="flex items-center justify-between mb-1.5">
-                                      <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '9.5px', letterSpacing: '0.08em', color: '#6B5F52' }}>
+                                      <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '9.5px', letterSpacing: '0.08em', color: '#6B5F52' }}>
                                         {taken}/{capacity} FILLED
                                       </span>
-                                      <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '9.5px', color: '#9A8A78' }}>
+                                      <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '9.5px', color: '#9A8A78' }}>
                                         {pct}%
                                       </span>
                                     </div>
@@ -2132,7 +2134,7 @@ export default function ConferenceDetailClient() {
                                   <p className="font-bold text-[16px] leading-snug" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", margin: 0 }}>
                                     {c.name}
                                   </p>
-                                  <p className="mt-1" style={{ fontFamily: "'DM Mono', monospace", fontSize: '10px', letterSpacing: '0.1em', color: '#9A8A78', margin: '4px 0 0 0' }}>
+                                  <p className="mt-1" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '10px', letterSpacing: '0.1em', color: '#9A8A78', margin: '4px 0 0 0' }}>
                                     {taken}/{capacity} {isCrisis ? 'ROLES' : 'SEATS'} FILLED
                                   </p>
                                 </div>
@@ -2176,7 +2178,7 @@ export default function ConferenceDetailClient() {
                                       ) : (
                                         <span
                                           className="flex items-center justify-center flex-shrink-0"
-                                          style={{ width: '22px', height: '22px', borderRadius: '9999px', backgroundColor: 'rgba(27,56,40,0.08)', fontFamily: "'DM Mono', monospace", fontSize: '8px', fontWeight: 700, color: '#1B3828' }}
+                                          style={{ width: '22px', height: '22px', borderRadius: '9999px', backgroundColor: 'rgba(27,56,40,0.08)', fontFamily: "'Outfit', sans-serif", fontSize: '8px', fontWeight: 700, letterSpacing: '0.06em', fontVariantNumeric: 'tabular-nums', color: '#1B3828' }}
                                         >
                                           {s.country_code.slice(0, 2)}
                                         </span>
@@ -2190,7 +2192,7 @@ export default function ConferenceDetailClient() {
                                       {isTaken ? (
                                         <span
                                           className="flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
-                                          style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'DM Mono', monospace", letterSpacing: '0.08em' }}
+                                          style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em' }}
                                         >
                                           <Check size={10} strokeWidth={2.6} />
                                           TAKEN
@@ -2198,7 +2200,7 @@ export default function ConferenceDetailClient() {
                                       ) : (
                                         <span
                                           className="text-[9px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
-                                          style={{ backgroundColor: 'rgba(61,122,82,0.1)', color: '#2A5A3C', border: '1px solid rgba(61,122,82,0.25)', fontFamily: "'DM Mono', monospace", letterSpacing: '0.08em' }}
+                                          style={{ backgroundColor: 'rgba(61,122,82,0.1)', color: '#2A5A3C', border: '1px solid rgba(61,122,82,0.25)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em' }}
                                         >
                                           OPEN
                                         </span>
