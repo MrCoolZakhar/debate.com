@@ -113,7 +113,9 @@ function ToolbarBtn({ onClick, title, children, mono }: {
       style={{
         width: 28, height: 28,
         color: '#1C1410', backgroundColor: 'transparent',
-        fontFamily: mono ? "'DM Mono', monospace" : 'inherit',
+        fontFamily: mono ? "'Outfit', sans-serif" : 'inherit',
+        fontWeight: mono ? 700 : undefined,
+        letterSpacing: mono ? '0.06em' : undefined,
         fontSize: mono ? 11 : 14,
       }}
       onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.08)'; }}
@@ -407,7 +409,7 @@ export default function CommunicationsPage() {
       {!composing && (
         <div className="flex items-center justify-between mb-6">
           <div>
-            <p className="text-xs mb-1" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}>
+            <p className="text-xs mb-1" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", fontWeight: 700, letterSpacing: '0.12em' }}>
               {conference.acronym} / Communications
             </p>
             <h1 className="font-black text-2xl" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
@@ -826,15 +828,15 @@ export default function CommunicationsPage() {
                 {/* Recipient count preview */}
                 <div className="mt-3 pt-3" style={{ borderTop: '1px solid #F0EDE6' }}>
                   {audienceType === 'committee' ? (
-                    <p style={{ fontSize: 11, color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}>
+                    <p style={{ fontSize: 11, color: '#9A8A78', fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
                       ? estimated recipients
                     </p>
                   ) : recipientCount === 0 ? (
-                    <p style={{ fontSize: 11, color: '#B6871F', fontFamily: "'DM Mono', monospace" }}>
+                    <p style={{ fontSize: 11, color: '#B6871F', fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
                       No recipients match this filter.
                     </p>
                   ) : (
-                    <p style={{ fontSize: 11, color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}>
+                    <p style={{ fontSize: 11, color: '#9A8A78', fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
                       {recipientCount} estimated recipient{recipientCount !== 1 ? 's' : ''}
                     </p>
                   )}

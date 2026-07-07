@@ -84,7 +84,7 @@ export function CommitteeNameInput({ value, onChange, onPresetSelect }: {
                 <div className="w-[22px] h-[22px] rounded-md shrink-0" style={{ backgroundColor: 'rgba(27,56,40,0.08)' }} />
               )}
               <span className="text-sm flex-1">{p.name}</span>
-              <span className="text-[10px] font-bold shrink-0" style={{ fontFamily: "'DM Mono', monospace", color: '#1B3828' }}>{p.acronym}</span>
+              <span className="text-[10px] font-bold shrink-0" style={{ fontFamily: "'Outfit', sans-serif", letterSpacing: '0.06em', color: '#1B3828' }}>{p.acronym}</span>
               {i === 0 && <span className="text-[10px] shrink-0" style={{ color: '#9A8A78' }}>↵</span>}
             </button>
           ))}

@@ -423,7 +423,7 @@ export default function CommitteesPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <p className="text-xs mb-1" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}>
+          <p className="text-xs mb-1" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", fontWeight: 700, letterSpacing: '0.12em' }}>
             {conference.acronym} / Committees
           </p>
           <h1 className="font-black text-2xl" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
@@ -549,8 +549,8 @@ export default function CommitteesPage() {
                         ) : (
                           <>
                             <Copy size={11} style={{ color: '#6E5F4E' }} />
-                            {/* Session code is a genuine 6-char micro-stamp — mono is legit here. */}
-                            <span style={{ color: '#6E5F4E', fontFamily: "'DM Mono', monospace", fontSize: 11.5, letterSpacing: '0.04em' }}>{c.session_code}</span>
+                            {/* Session code is a genuine 6-char micro-stamp — Outfit stamp per typography rule. */}
+                            <span style={{ color: '#6E5F4E', fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 11.5, letterSpacing: '0.06em', fontVariantNumeric: 'tabular-nums' }}>{c.session_code}</span>
                           </>
                         )}
                       </button>

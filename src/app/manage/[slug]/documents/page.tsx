@@ -213,7 +213,7 @@ function UploadStudyGuideModal({
               <Check size={16} style={{ color: '#3D7A52', flexShrink: 0 }} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ fontSize: 13, color: '#1C1410', fontFamily: "'Outfit', sans-serif", fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selectedFile.name}</p>
-                <p style={{ fontSize: 11, color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}>{formatFileSize(selectedFile.size)}</p>
+                <p style={{ fontSize: 11, color: '#9A8A78', fontFamily: "'Outfit', sans-serif", fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>{formatFileSize(selectedFile.size)}</p>
               </div>
               <button onClick={() => fileInputRef.current?.click()} className="focus:outline-none" style={{ fontSize: 11, color: '#9A8A78', fontFamily: "'Outfit', sans-serif", textDecoration: 'underline', cursor: 'pointer', background: 'none', border: 'none', flexShrink: 0 }}>
                 Change file
@@ -486,7 +486,7 @@ export default function DocumentsPage() {
   return (
     <div className="px-6 md:px-10 py-8">
       {/* Header */}
-      <p style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#9A8A78', letterSpacing: '0.12em', marginBottom: 4 }}>
+      <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 11, color: '#9A8A78', letterSpacing: '0.12em', marginBottom: 4 }}>
         {conference.acronym} / Documents
       </p>
       <h1 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: 24, color: '#1C1410', marginBottom: 24 }}>
@@ -571,14 +571,14 @@ export default function DocumentsPage() {
                     <FileText size={18} style={{ color: '#9A8A78', flexShrink: 0 }} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontSize: 13, color: '#1C1410' }}>{guide.title}</p>
-                      <p style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#9A8A78', marginTop: 2 }}>
+                      <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 500, fontVariantNumeric: 'tabular-nums', fontSize: 11, color: '#9A8A78', marginTop: 2 }}>
                         {guide.file_name} · {formatFileSize(guide.file_size_bytes)}
                       </p>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                       {guide.is_published ? (
                         <>
-                          <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 9999, backgroundColor: 'rgba(61,122,82,0.12)', color: '#3D7A52', letterSpacing: '0.08em' }}>
+                          <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 9999, backgroundColor: 'rgba(61,122,82,0.12)', color: '#3D7A52', letterSpacing: '0.08em' }}>
                             PUBLISHED
                           </span>
                           {guide.published_at && (
@@ -598,7 +598,7 @@ export default function DocumentsPage() {
                         </>
                       ) : (
                         <>
-                          <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 9999, backgroundColor: 'rgba(238,217,138,0.15)', color: '#B8844A', letterSpacing: '0.08em' }}>
+                          <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 9999, backgroundColor: 'rgba(238,217,138,0.15)', color: '#B8844A', letterSpacing: '0.08em' }}>
                             DRAFT
                           </span>
                           <button
@@ -632,7 +632,7 @@ export default function DocumentsPage() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
               <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontSize: 15, color: '#1C1410' }}>Position Papers</p>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#9A8A78' }}>
+                <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 500, letterSpacing: '0.01em', fontVariantNumeric: 'tabular-nums', fontSize: 11, color: '#9A8A78' }}>
                   {selectedCommittee?.position_paper_deadline
                     ? `Due ${formatDate(selectedCommittee.position_paper_deadline)}`
                     : 'No deadline set'}
@@ -651,10 +651,10 @@ export default function DocumentsPage() {
 
             {/* Stats */}
             <div style={{ display: 'flex', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
-              <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#9A8A78' }}>{totalCount} submitted</span>
-              <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#3D7A52' }}>{approvedCount} approved</span>
-              <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#B8844A' }}>{pendingCount} awaiting review</span>
-              <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#8B2020' }}>{rejectedCount} rejected</span>
+              <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: 11, color: '#9A8A78' }}>{totalCount} submitted</span>
+              <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: 11, color: '#3D7A52' }}>{approvedCount} approved</span>
+              <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: 11, color: '#B8844A' }}>{pendingCount} awaiting review</span>
+              <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: 11, color: '#8B2020' }}>{rejectedCount} rejected</span>
             </div>
 
             {/* Filter pills */}
@@ -667,7 +667,7 @@ export default function DocumentsPage() {
                     onClick={() => setFilterStatus(f)}
                     className="focus:outline-none"
                     style={{
-                      fontFamily: "'DM Mono', monospace", fontSize: 10, fontWeight: 700,
+                      fontFamily: "'Outfit', sans-serif", fontSize: 10, fontWeight: 700,
                       padding: '5px 12px', borderRadius: 9999, cursor: 'pointer', letterSpacing: '0.06em',
                       border: isActive ? '1px solid #1B3828' : '1px solid #DDD4C0',
                       backgroundColor: isActive ? '#1B3828' : 'transparent',
@@ -701,8 +701,8 @@ export default function DocumentsPage() {
 
                     {/* Row 2 */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6, flexWrap: 'wrap' }}>
-                      <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#9A8A78' }}>{paper.file_name}</span>
-                      <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#9A8A78' }}>{formatFileSize(paper.file_size_bytes)}</span>
+                      <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 500, fontSize: 11, color: '#9A8A78' }}>{paper.file_name}</span>
+                      <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 500, fontVariantNumeric: 'tabular-nums', fontSize: 11, color: '#9A8A78' }}>{formatFileSize(paper.file_size_bytes)}</span>
                       <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: 11, color: '#9A8A78' }}>Submitted {formatDate(paper.submitted_at)}</span>
                       <a
                         href={paper.file_url}

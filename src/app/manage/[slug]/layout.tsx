@@ -519,7 +519,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
     return (
       <div className="min-h-screen flex items-center justify-center px-6" style={{ backgroundColor: '#EDE7D8' }}>
         <div className="max-w-md w-full text-center rounded-2xl p-8" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
-          <p style={{ fontSize: 10, color: '#B8844A', fontFamily: "'DM Mono', monospace", letterSpacing: '0.16em', fontWeight: 600, marginBottom: 12 }}>
+          <p style={{ fontSize: 10, color: '#B8844A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.14em', fontWeight: 700, marginBottom: 12 }}>
             ACCESS DENIED
           </p>
           <h1 className="text-xl font-bold mb-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
@@ -555,7 +555,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
     return (
       <div className="min-h-screen flex items-center justify-center px-6" style={{ backgroundColor: '#EDE7D8' }}>
         <div className="max-w-md w-full text-center rounded-2xl p-8" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
-          <p style={{ fontSize: 10, color: '#B8844A', fontFamily: "'DM Mono', monospace", letterSpacing: '0.16em', fontWeight: 600, marginBottom: 12 }}>
+          <p style={{ fontSize: 10, color: '#B8844A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.14em', fontWeight: 700, marginBottom: 12 }}>
             SECTION RESTRICTED
           </p>
           <h1 className="text-xl font-bold mb-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
