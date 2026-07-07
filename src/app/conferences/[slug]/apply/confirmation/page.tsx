@@ -9,6 +9,12 @@ function ConfirmationInner() {
   const { slug } = useParams() as { slug: string };
   const searchParams = useSearchParams();
   const role = searchParams.get('role') ?? 'delegate';
+  const timing = searchParams.get('timing');
+  const timingNote = timing === 'after_application'
+    ? 'Payment for your registration is now available in your conference view.'
+    : timing === 'after_acceptance'
+    ? 'If accepted, payment will become available in your conference view.'
+    : null;
 
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#EDE7D8' }}>
@@ -45,11 +51,19 @@ function ConfirmationInner() {
           You&apos;re in the queue!
         </h1>
         <p
-          className="text-sm leading-relaxed mb-8 max-w-sm"
+          className={`text-sm leading-relaxed max-w-sm ${timingNote ? 'mb-3' : 'mb-8'}`}
           style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}
         >
           Your application as {role.replace(/-/g, ' ')} has been submitted. The conference team will review it and you&apos;ll hear back soon.
         </p>
+        {timingNote && (
+          <p
+            className="text-sm leading-relaxed mb-8 max-w-sm"
+            style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}
+          >
+            {timingNote}
+          </p>
+        )}
         <div className="flex flex-col sm:flex-row gap-3">
           <Link
             href={`/conferences/${slug}`}

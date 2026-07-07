@@ -33,8 +33,11 @@ interface RoleConfig {
   fee_currency: string;
   auto_accept: boolean;
   pay_at_application: boolean;
+  payment_timing: 'after_application' | 'after_acceptance' | 'anytime' | string;
   custom_questions: Array<{ id: string; label: string; required: boolean; type: string }>;
 }
+
+type PledgeType = 'own' | 'delegation' | 'both';
 
 interface CommitteeOption {
   id: string;
@@ -112,6 +115,11 @@ function ConferenceApplyInner() {
   const [societyDropdownOpen, setSocietyDropdownOpen] = useState(false);
   const [societyError, setSocietyError] = useState('');
 
+  // ── Step — Invoicing (head-delegate / faculty-advisor only)
+  const [pledgeType, setPledgeType] = useState<PledgeType | ''>('');
+  const [spotsPledged, setSpotsPledged] = useState<number | ''>('');
+  const [invoicingError, setInvoicingError] = useState('');
+
   // ── Step 3 — Preferences
   const [preferences, setPreferences] = useState<Preference[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
@@ -130,10 +138,27 @@ function ConferenceApplyInner() {
 
   const isPreferenceRole = role === 'delegate' || role === 'head-delegate';
   const isObserver = role === 'observer';
-  const totalSteps = isPreferenceRole ? 4 : 3;
-  const stepLabels = isPreferenceRole
-    ? ['Role', 'Society', 'Preferences', 'Experience']
-    : ['Role', isObserver ? 'Background' : 'Society', 'Experience'];
+  const isInvoicingRole = role === 'head-delegate' || role === 'faculty-advisor';
+
+  const stepSequence = [
+    'role',
+    'society',
+    ...(isInvoicingRole ? ['invoicing'] : []),
+    ...(isPreferenceRole ? ['preferences'] : []),
+    'experience',
+  ] as const;
+  type StepKind = (typeof stepSequence)[number];
+  const totalSteps = stepSequence.length;
+  const stepLabels = stepSequence.map((kind) => {
+    switch (kind) {
+      case 'role': return 'Role';
+      case 'society': return isObserver ? 'Background' : 'Society';
+      case 'invoicing': return 'Invoicing';
+      case 'preferences': return 'Preferences';
+      case 'experience': return 'Experience';
+    }
+  });
+  const currentStepKind: StepKind = stepSequence[step - 1] ?? 'role';
 
   // ── Auth gate + fetch
   useEffect(() => {
@@ -204,6 +229,11 @@ function ConferenceApplyInner() {
     setLoading(false);
   }
 
+  // head-delegate / faculty-advisor always belong to a society — no independent option
+  useEffect(() => {
+    if (isInvoicingRole) setIsIndependent(false);
+  }, [isInvoicingRole]);
+
   // Society autocomplete
   useEffect(() => {
     if (!societyInput.trim()) {
@@ -251,16 +281,33 @@ function ConferenceApplyInner() {
   }
 
   function handleContinue() {
-    if (step === 2) {
+    if (currentStepKind === 'society') {
       if (!isObserver && !isIndependent && !societyInput.trim()) {
         setSocietyError('Please enter your society name.');
+        return;
+      }
+      if (!isObserver && !isIndependent && !isInvoicingRole && societyInput.trim() && !selectedSocietyId) {
+        setSocietyError('Please select an existing delegation from the list.');
         return;
       }
       setSocietyError('');
       setStep(s => s + 1);
       return;
     }
-    if (step === 3 && isPreferenceRole) {
+    if (currentStepKind === 'invoicing') {
+      if (!pledgeType) {
+        setInvoicingError('Please select an option.');
+        return;
+      }
+      if ((pledgeType === 'delegation' || pledgeType === 'both') && (spotsPledged === '' || spotsPledged < 1)) {
+        setInvoicingError('Please enter how many delegate spots you will pay for.');
+        return;
+      }
+      setInvoicingError('');
+      setStep(s => s + 1);
+      return;
+    }
+    if (currentStepKind === 'preferences') {
       if (preferences.length < 3) {
         setPrefError('Please add at least 3 preferences.');
         return;
@@ -296,7 +343,7 @@ function ConferenceApplyInner() {
       if (!isIndependent && !isObserver && societyInput.trim()) {
         if (selectedSocietyId) {
           societyId = selectedSocietyId;
-        } else {
+        } else if (isInvoicingRole) {
           const normalized = societyInput.trim().toLowerCase();
           const { data: existingSoc } = await supabase
             .from('societies')
@@ -318,20 +365,59 @@ function ConferenceApplyInner() {
         }
       }
 
+      // Auto-cover: if the society already has a purchased spot free, mark this
+      // application paid immediately instead of leaving it unpaid.
+      let paymentStatus: 'unpaid' | 'paid' = 'unpaid';
+      if (societyId) {
+        if (role === 'delegate' || role === 'head-delegate') {
+          const [{ count: occupancy }, { data: socData }] = await Promise.all([
+            supabase
+              .from('applications')
+              .select('id', { count: 'exact', head: true })
+              .eq('society_id', societyId)
+              .in('role', ['delegate', 'head-delegate'])
+              .eq('attending', true)
+              .eq('payment_status', 'paid'),
+            supabase.from('societies').select('spots_purchased').eq('id', societyId).single(),
+          ]);
+          const spotsPurchased = (socData as { spots_purchased: number } | null)?.spots_purchased ?? 0;
+          if ((occupancy ?? 0) < spotsPurchased) paymentStatus = 'paid';
+        } else if (role === 'faculty-advisor') {
+          const [{ count: occupancy }, { data: socData }] = await Promise.all([
+            supabase
+              .from('applications')
+              .select('id', { count: 'exact', head: true })
+              .eq('society_id', societyId)
+              .eq('role', 'faculty-advisor')
+              .eq('attending', true)
+              .eq('payment_status', 'paid'),
+            supabase.from('societies').select('advisor_spots_purchased').eq('id', societyId).single(),
+          ]);
+          const spotsPurchased = (socData as { advisor_spots_purchased: number } | null)?.advisor_spots_purchased ?? 0;
+          if ((occupancy ?? 0) < spotsPurchased) paymentStatus = 'paid';
+        }
+      }
+
+      const insertPayload: Record<string, unknown> = {
+        conference_id: conference!.id,
+        user_id: user!.id,
+        role,
+        status: roleConfig?.auto_accept ? 'accepted' : 'submitted',
+        is_independent: isIndependent,
+        society_id: societyId,
+        is_head_delegate: isHeadDelegate && !isIndependent,
+        experience_level: experienceLevel || null,
+        custom_answers: customAnswers,
+        payment_status: paymentStatus,
+      };
+      if (isInvoicingRole) {
+        insertPayload.pledge_type = pledgeType;
+        insertPayload.spots_pledged = pledgeType === 'own' ? 0 : (spotsPledged || 0);
+      }
+
       const { data: app, error: appError } = await supabase
         .from('applications')
-        .insert({
-          conference_id: conference!.id,
-          user_id: user!.id,
-          role,
-          status: roleConfig?.auto_accept ? 'accepted' : 'submitted',
-          is_independent: isIndependent,
-          society_id: societyId,
-          is_head_delegate: isHeadDelegate && !isIndependent,
-          experience_level: experienceLevel || null,
-          custom_answers: customAnswers,
-          payment_status: 'unpaid',
-        })
+        .insert(insertPayload)
         .select('id')
         .single();
 
@@ -348,7 +434,8 @@ function ConferenceApplyInner() {
         await supabase.from('application_preferences').insert(prefRows);
       }
 
-      router.push(`/conferences/${slug}/apply/confirmation?role=${role}`);
+      const timingParam = roleConfig?.payment_timing ? `&timing=${roleConfig.payment_timing}` : '';
+      router.push(`/conferences/${slug}/apply/confirmation?role=${role}${timingParam}`);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Something went wrong. Please try again.';
       setSubmitError(msg);
@@ -421,40 +508,44 @@ function ConferenceApplyInner() {
           {isObserver ? 'Background' : 'Your Delegation'}
         </h2>
         <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-          {showSociety
-            ? 'Are you applying independently or as part of a school/society?'
-            : 'As an observer, no delegation information is required.'}
+          {!showSociety
+            ? 'As an observer, no delegation information is required.'
+            : isInvoicingRole
+            ? 'Which society or school are you representing?'
+            : 'Are you applying independently or as part of a school/society?'}
         </p>
 
         {showSociety && (
           <>
             {/* Toggle */}
-            <div className="grid grid-cols-2 gap-3 mb-6">
-              {(['independent', 'society'] as const).map(type => {
-                const selected = type === 'independent' ? isIndependent : !isIndependent;
-                return (
-                  <button
-                    key={type}
-                    onClick={() => setIsIndependent(type === 'independent')}
-                    className="relative rounded-xl p-4 text-center focus:outline-none transition-all"
-                    style={{
-                      border: selected ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
-                      backgroundColor: selected ? 'rgba(27,56,40,0.06)' : 'transparent',
-                    }}
-                  >
-                    <div
-                      className="absolute top-3 right-3 w-4 h-4 rounded-full border"
-                      style={selected
-                        ? { backgroundColor: '#1B3828', borderColor: '#1B3828' }
-                        : { backgroundColor: 'transparent', borderColor: '#DDD4C0' }}
-                    />
-                    <p className="font-bold text-sm" style={{ color: '#1C1410', fontFamily: "'DM Mono', monospace", letterSpacing: '0.06em' }}>
-                      {type === 'independent' ? 'INDEPENDENT' : 'WITH A SOCIETY'}
-                    </p>
-                  </button>
-                );
-              })}
-            </div>
+            {!isInvoicingRole && (
+              <div className="grid grid-cols-2 gap-3 mb-6">
+                {(['independent', 'society'] as const).map(type => {
+                  const selected = type === 'independent' ? isIndependent : !isIndependent;
+                  return (
+                    <button
+                      key={type}
+                      onClick={() => setIsIndependent(type === 'independent')}
+                      className="relative rounded-xl p-4 text-center focus:outline-none transition-all"
+                      style={{
+                        border: selected ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
+                        backgroundColor: selected ? 'rgba(27,56,40,0.06)' : 'transparent',
+                      }}
+                    >
+                      <div
+                        className="absolute top-3 right-3 w-4 h-4 rounded-full border"
+                        style={selected
+                          ? { backgroundColor: '#1B3828', borderColor: '#1B3828' }
+                          : { backgroundColor: 'transparent', borderColor: '#DDD4C0' }}
+                      />
+                      <p className="font-bold text-sm" style={{ color: '#1C1410', fontFamily: "'DM Mono', monospace", letterSpacing: '0.06em' }}>
+                        {type === 'independent' ? 'INDEPENDENT' : 'WITH A SOCIETY'}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
 
             {/* Society input */}
             {!isIndependent && (
@@ -503,19 +594,30 @@ function ConferenceApplyInner() {
                           {s.name}
                         </button>
                       ))}
-                      {!societySuggestions.some(s => s.name.toLowerCase() === societyInput.toLowerCase()) && (
-                        <button
-                          className="w-full text-left px-4 py-2.5 text-sm focus:outline-none"
-                          style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif", borderTop: '1px solid #F0EDE6' }}
-                          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
-                          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                          onMouseDown={() => {
-                            setSelectedSocietyId(null);
-                            setSocietyDropdownOpen(false);
-                          }}
-                        >
-                          Create &quot;{societyInput}&quot;
-                        </button>
+                      {isInvoicingRole ? (
+                        !societySuggestions.some(s => s.name.toLowerCase() === societyInput.toLowerCase()) && (
+                          <button
+                            className="w-full text-left px-4 py-2.5 text-sm focus:outline-none"
+                            style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif", borderTop: '1px solid #F0EDE6' }}
+                            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
+                            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                            onMouseDown={() => {
+                              setSelectedSocietyId(null);
+                              setSocietyDropdownOpen(false);
+                            }}
+                          >
+                            Create &quot;{societyInput}&quot;
+                          </button>
+                        )
+                      ) : (
+                        societySuggestions.length === 0 && (
+                          <p
+                            className="px-4 py-2.5 text-xs leading-relaxed"
+                            style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", borderTop: '1px solid #F0EDE6' }}
+                          >
+                            This delegation has not been created. Please ask your Head Delegate or Faculty Advisor to create it.
+                          </p>
+                        )
                       )}
                     </div>
                   )}
@@ -565,6 +667,109 @@ function ConferenceApplyInner() {
         <div className="flex justify-between mt-6">
           <button
             onClick={() => setStep(1)}
+            className="rounded-xl py-2.5 px-5 text-sm font-bold focus:outline-none transition-colors"
+            style={{ border: '1px solid #DDD4C0', color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+          >
+            ← BACK
+          </button>
+          <button
+            onClick={handleContinue}
+            className="rounded-xl py-2.5 px-6 text-sm font-bold focus:outline-none transition-colors"
+            style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em' }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+          >
+            CONTINUE →
+          </button>
+        </div>
+      </>
+    );
+  }
+
+  function renderStepInvoicing() {
+    const options: Array<{ value: PledgeType; label: string }> = [
+      { value: 'own', label: 'MY OWN FEE ONLY' },
+      { value: 'delegation', label: 'DELEGATION SPOTS ONLY' },
+      { value: 'both', label: 'MY FEE + DELEGATION' },
+    ];
+    const showSpots = pledgeType === 'delegation' || pledgeType === 'both';
+
+    return (
+      <>
+        <h2 className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+          Payment &amp; delegation size
+        </h2>
+        <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+          Tell us what your payment will cover. This helps the organizers invoice your delegation correctly.
+        </p>
+
+        <div className="flex flex-col gap-3 mb-6">
+          {options.map(opt => {
+            const selected = pledgeType === opt.value;
+            return (
+              <button
+                key={opt.value}
+                onClick={() => { setPledgeType(opt.value); setInvoicingError(''); }}
+                className="relative rounded-xl p-4 text-left focus:outline-none transition-all"
+                style={{
+                  border: selected ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
+                  backgroundColor: selected ? 'rgba(27,56,40,0.06)' : 'transparent',
+                }}
+              >
+                <div
+                  className="absolute top-1/2 right-4 w-4 h-4 rounded-full border"
+                  style={{
+                    transform: 'translateY(-50%)',
+                    ...(selected
+                      ? { backgroundColor: '#1B3828', borderColor: '#1B3828' }
+                      : { backgroundColor: 'transparent', borderColor: '#DDD4C0' }),
+                  }}
+                />
+                <p className="font-bold text-sm pr-8" style={{ color: '#1C1410', fontFamily: "'DM Mono', monospace", letterSpacing: '0.06em' }}>
+                  {opt.label}
+                </p>
+              </button>
+            );
+          })}
+        </div>
+
+        {showSpots && (
+          <div className="mb-6">
+            <label className="block font-semibold text-sm mb-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+              How many delegate spots will you pay for?
+            </label>
+            <input
+              type="number"
+              min={1}
+              step={1}
+              value={spotsPledged}
+              onChange={(e) => {
+                const raw = e.target.value;
+                setSpotsPledged(raw === '' ? '' : Math.max(1, Math.floor(Number(raw))));
+                setInvoicingError('');
+              }}
+              className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none"
+              style={{ border: '1.5px solid #DDD4C0', backgroundColor: '#FAF8F3', color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}
+              onFocus={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
+              onBlur={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
+            />
+            <p className="mt-1.5 text-xs leading-relaxed" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+              These spots stay with your delegation once purchased. If a delegate drops out, the spot remains and can be given to their replacement.
+            </p>
+          </div>
+        )}
+
+        {invoicingError && (
+          <p className="mb-3 text-xs" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>
+            {invoicingError}
+          </p>
+        )}
+
+        <div className="flex justify-between mt-2">
+          <button
+            onClick={() => setStep(s => s - 1)}
             className="rounded-xl py-2.5 px-5 text-sm font-bold focus:outline-none transition-colors"
             style={{ border: '1px solid #DDD4C0', color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
@@ -701,7 +906,7 @@ function ConferenceApplyInner() {
 
         <div className="flex justify-between mt-4">
           <button
-            onClick={() => setStep(2)}
+            onClick={() => setStep(s => s - 1)}
             className="rounded-xl py-2.5 px-5 text-sm font-bold focus:outline-none transition-colors"
             style={{ border: '1px solid #DDD4C0', color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
@@ -724,7 +929,6 @@ function ConferenceApplyInner() {
   }
 
   function renderStepExperience() {
-    const prevStep = isPreferenceRole ? 3 : 2;
     const levels = [
       { value: 'beginner', label: 'BEGINNER', sub: 'First or second conference' },
       { value: 'intermediate', label: 'INTERMEDIATE', sub: '3–10 conferences' },
@@ -793,7 +997,7 @@ function ConferenceApplyInner() {
 
         <div className="flex justify-between mt-2 gap-4">
           <button
-            onClick={() => setStep(prevStep)}
+            onClick={() => setStep(s => s - 1)}
             className="rounded-xl py-2.5 px-5 text-sm font-bold focus:outline-none transition-colors flex-shrink-0"
             style={{ border: '1px solid #DDD4C0', color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
@@ -1081,11 +1285,11 @@ function ConferenceApplyInner() {
 
         {/* Form card */}
         <div className="rounded-2xl p-6 md:p-8" style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #C8BEA8', boxShadow: '0 2px 6px rgba(27,56,40,0.05), 0 16px 40px rgba(27,56,40,0.08)' }}>
-          {step === 1 && renderStep1()}
-          {step === 2 && renderStep2()}
-          {step === 3 && isPreferenceRole && renderStep3Preferences()}
-          {step === 3 && !isPreferenceRole && renderStepExperience()}
-          {step === 4 && isPreferenceRole && renderStepExperience()}
+          {currentStepKind === 'role' && renderStep1()}
+          {currentStepKind === 'society' && renderStep2()}
+          {currentStepKind === 'invoicing' && renderStepInvoicing()}
+          {currentStepKind === 'preferences' && renderStep3Preferences()}
+          {currentStepKind === 'experience' && renderStepExperience()}
         </div>
 
         {submitError && (
