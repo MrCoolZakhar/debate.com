@@ -365,7 +365,7 @@ export default function VariantStagefront({
                 single-row snap rail so all three fit inside one viewport
                 height. */}
             {upcomingTrio.length > 0 && (
-              <aside className="w-full lg:w-[356px] flex-shrink-0 flex flex-col justify-center lg:justify-start lg:self-start lg:pt-3 lg:-mr-12 xl:-mr-12">
+              <aside className="w-full lg:w-[356px] flex-shrink-0 flex flex-col justify-center lg:justify-start lg:self-start lg:pt-3 lg:mr-[calc(5vw-56px)]">
                 <div className="sf-hero-rail flex flex-row lg:flex-col gap-3 lg:gap-2.5 overflow-x-auto lg:overflow-visible -mx-6 px-6 lg:mx-0 lg:px-0 pb-2 lg:pb-0">
                   {upcomingTrio.map(c => (
                     <div
