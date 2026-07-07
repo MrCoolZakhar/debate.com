@@ -240,7 +240,7 @@ export default function ApplicationsPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div>
-          <p className="text-xs mb-1" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}>
+          <p className="text-xs mb-1" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", fontWeight: 700, letterSpacing: '0.12em' }}>
             {conference.acronym} / Applications
           </p>
           <h1 className="font-black text-2xl" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Applications</h1>
@@ -277,7 +277,7 @@ export default function ApplicationsPage() {
         {statItems.map(s => (
           <div key={s.label} className="rounded-xl px-4 py-2 text-center" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
             <p className="font-black text-lg" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>{s.value}</p>
-            <p style={{ fontSize: 10, color: '#9A8A78', fontFamily: "'DM Mono', monospace", letterSpacing: '0.06em' }}>{s.label.toUpperCase()}</p>
+            <p style={{ fontSize: 10, color: '#9A8A78', fontFamily: "'Outfit', sans-serif", fontWeight: 700, letterSpacing: '0.12em' }}>{s.label.toUpperCase()}</p>
           </div>
         ))}
       </div>
@@ -386,7 +386,7 @@ export default function ApplicationsPage() {
                     </span>
                   )}
                   {app.is_head_delegate && (
-                    <span className="px-2 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(27,56,40,0.08)', color: '#1B3828', fontSize: 10, fontFamily: "'DM Mono', monospace", fontWeight: 700 }}>
+                    <span className="px-2 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(27,56,40,0.08)', color: '#1B3828', fontSize: 10, fontFamily: "'Outfit', sans-serif", fontWeight: 700, letterSpacing: '0.06em' }}>
                       HEAD DEL.
                     </span>
                   )}
@@ -561,7 +561,7 @@ export default function ApplicationsPage() {
                   <div className="mt-3 pt-3" style={{ borderTop: '1px solid #F0EDE6' }}>
                     {app.profiles?.nationality && (
                       <p className="text-xs mb-3" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                        <span style={{ fontFamily: "'DM Mono', monospace", letterSpacing: '0.06em' }}>NATIONALITY</span>{'  '}
+                        <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, letterSpacing: '0.12em' }}>NATIONALITY</span>{'  '}
                         <span style={{ color: '#1C1410' }}>{app.profiles.nationality}</span>
                       </p>
                     )}

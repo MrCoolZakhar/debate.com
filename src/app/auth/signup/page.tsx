@@ -439,7 +439,7 @@ function BrandPanel({ eyebrow, headline, sub }: { eyebrow: string; headline: str
         <div className="hidden lg:block max-w-[420px]">
           <p
             className="mb-3"
-            style={{ fontFamily: "'DM Mono', monospace", fontSize: '10.5px', letterSpacing: '0.22em', color: '#EED98A', textTransform: 'uppercase' }}
+            style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '10.5px', letterSpacing: '0.14em', color: '#EED98A', textTransform: 'uppercase' }}
           >
             {eyebrow}
           </p>

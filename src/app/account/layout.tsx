@@ -145,7 +145,7 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
 
                 <p
                   className="text-xs text-center mt-0.5"
-                  style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}
+                  style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", fontWeight: 500 }}
                 >
                   {profile?.email ?? user.email ?? ''}
                 </p>
@@ -158,9 +158,10 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
                         backgroundColor: 'rgba(238,217,138,0.22)',
                         border: '1px solid rgba(182,135,31,0.4)',
                         color: '#B6871F',
-                        fontFamily: "'DM Mono', monospace",
+                        fontFamily: "'Outfit', sans-serif",
+                        fontWeight: 700,
                         fontSize: '9px',
-                        letterSpacing: '0.08em',
+                        letterSpacing: '0.12em',
                       }}
                     >
                       ✦ UNLIMITED
@@ -172,7 +173,7 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
 
                 <p
                   className="px-3 mb-1.5"
-                  style={{ fontFamily: "'DM Mono', monospace", fontSize: '8.5px', letterSpacing: '0.24em', color: '#B6871F' }}
+                  style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '8.5px', letterSpacing: '0.14em', color: '#B6871F', textTransform: 'uppercase' }}
                 >
                   ACCOUNT
                 </p>

@@ -599,7 +599,7 @@ function ConferenceApplyInner() {
                 {currencySymbol(rc.fee_currency)}{rc.fee_amount}
               </span>
             )}
-            <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '7.5px', letterSpacing: '0.2em', color: '#9A8A78', marginTop: '6px' }}>
+            <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '7.5px', letterSpacing: '0.15em', color: '#9A8A78', marginTop: '6px' }}>
               PER DELEGATE
             </span>
           </div>
@@ -1204,7 +1204,7 @@ function ConferenceApplyInner() {
         <SiteNav />
         <div className="relative z-10 flex-1 flex items-center justify-center px-6 py-20 text-center">
           <div>
-            <p className="text-xs tracking-widest mb-3" style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace" }}>404</p>
+            <p className="text-xs tracking-widest mb-3" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>404</p>
             <h1 className="font-black text-2xl mb-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Conference Not Found</h1>
             <Link href="/conferences/explore" className="text-sm font-semibold" style={{ color: '#1B3828', textDecoration: 'none' }}>
               Explore conferences →
@@ -1396,7 +1396,7 @@ function ConferenceApplyInner() {
           <Link
             href={`/conferences/${slug}`}
             className="text-xs"
-            style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace", textDecoration: 'none' }}
+            style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", fontWeight: 600, letterSpacing: '0.06em', textDecoration: 'none' }}
           >
             ← {conference.acronym}
           </Link>
@@ -1418,7 +1418,7 @@ function ConferenceApplyInner() {
                     style={{
                       width: 32, height: 32, borderRadius: '50%',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 12, fontWeight: 700, fontFamily: "'DM Mono', monospace",
+                      fontSize: 12, fontWeight: 700, fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums',
                       backgroundColor: isActive ? '#1B3828' : isCompleted ? 'rgba(27,56,40,0.12)' : '#EDE7D8',
                       color: isActive ? '#EED98A' : isCompleted ? '#1B3828' : '#9A8A78',
                       border: (!isActive && !isCompleted) ? '1px solid #DDD4C0' : 'none',
@@ -1426,7 +1426,7 @@ function ConferenceApplyInner() {
                   >
                     {isCompleted ? '✓' : stepNum}
                   </div>
-                  <span style={{ fontSize: 10, marginTop: 4, color: '#9A8A78', fontFamily: "'DM Mono', monospace", textAlign: 'center', whiteSpace: 'nowrap' }}>
+                  <span style={{ fontSize: 10, marginTop: 4, color: '#9A8A78', fontFamily: "'Outfit', sans-serif", fontWeight: 600, textAlign: 'center', whiteSpace: 'nowrap' }}>
                     {label}
                   </span>
                 </div>

@@ -801,7 +801,7 @@ export default function ConferencesMapPage() {
                           style={{
                             width: 34, height: 34, borderRadius: 8, flexShrink: 0,
                             backgroundColor: '#1B3828', color: '#EED98A',
-                            fontFamily: "'DM Mono', monospace", fontSize: 11, fontWeight: 700,
+                            fontFamily: "'Outfit', sans-serif", fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', fontVariantNumeric: 'tabular-nums',
                             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                           }}
                         >
@@ -821,7 +821,7 @@ export default function ConferencesMapPage() {
                           {detail.highlighted.full_name}
                         </span>
                         {formatMonthYear(detail.highlighted.start_date) && (
-                          <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, color: '#9A8A78', marginTop: 1 }}>
+                          <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 500, letterSpacing: '0.01em', fontVariantNumeric: 'tabular-nums', fontSize: 10, color: '#9A8A78', marginTop: 1 }}>
                             {formatMonthYear(detail.highlighted.start_date)}
                           </span>
                         )}
@@ -864,9 +864,10 @@ export default function ConferencesMapPage() {
           >
             <p
               style={{
-                fontFamily: "'DM Mono', monospace",
+                fontFamily: "'Outfit', sans-serif",
+                fontWeight: 700,
                 fontSize: 11,
-                letterSpacing: '0.18em',
+                letterSpacing: '0.14em',
                 color: '#EDE7D8',
                 backgroundColor: '#1B3828',
                 borderRadius: 24,
@@ -897,9 +898,10 @@ export default function ConferencesMapPage() {
         >
           <p
             style={{
-              fontFamily: "'DM Mono', monospace",
+              fontFamily: "'Outfit', sans-serif",
+              fontWeight: 700,
               fontSize: 11,
-              letterSpacing: '0.18em',
+              letterSpacing: '0.14em',
               color: '#EDE7D8',
               backgroundColor: '#1B3828',
               borderRadius: 24,
@@ -928,8 +930,8 @@ export default function ConferencesMapPage() {
               fontSize: 11,
               fontWeight: 700,
               color: '#EDE7D8',
-              fontFamily: "'DM Mono', monospace",
-              letterSpacing: '0.18em',
+              fontFamily: "'Outfit', sans-serif",
+              letterSpacing: '0.14em',
               textDecoration: 'none',
               whiteSpace: 'nowrap',
               boxShadow: '0 2px 12px rgba(27,56,40,0.15)',

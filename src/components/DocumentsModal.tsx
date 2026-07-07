@@ -154,7 +154,7 @@ function StageTimer({
         {doc.type === 'working-paper' ? t('documents_working_paper_type') : t('documents_draft_resolution_type')} · {doc.docCode}
       </p>
       <h2 className="text-2xl font-black mb-1" style={{ color: '#1C1410' }}>{doc.title}</h2>
-      <p className="text-xs font-black mb-6 mt-1 tracking-widest uppercase" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>{label}</p>
+      <p className="text-xs font-black mb-6 mt-1 tracking-widest uppercase" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{label}</p>
 
       {!done ? (
         <>
@@ -519,7 +519,7 @@ function TimingSetup({ doc, onStart, onSkip }: {
         ].map(({ key, label, value, set, note }) => (
           <div key={key} className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl p-4">
             <div className="flex items-center justify-between mb-1">
-              <span className="font-black text-sm" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>{label}</span>
+              <span className="font-black text-sm" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{label}</span>
               <div className="flex items-center gap-2">
                 <input type="number" min={0} max={60}
                   value={value === 0 ? '' : value}
@@ -712,7 +712,7 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate }
           <div className="flex items-center gap-3">
             <span className="text-sm font-bold text-[#1C1410]">{activeDoc.docCode}</span>
             {['reading', 'presentation', 'qa'].map((s) => (
-              <span key={s} className={`text-xs px-2 py-0.5 rounded-full font-bold`} style={{ backgroundColor: stage === s ? '#1B3828' : '#DDD4C0', color: stage === s ? '#EED98A' : '#9A8A78', fontFamily: "'DM Mono', monospace" }}>
+              <span key={s} className={`text-xs px-2 py-0.5 rounded-full font-bold`} style={{ backgroundColor: stage === s ? '#1B3828' : '#DDD4C0', color: stage === s ? '#EED98A' : '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
                 {s === 'reading' ? t('documents_stage_reading_short') : s === 'presentation' ? t('documents_stage_presentation') : t('documents_stage_qa')}
               </span>
             ))}
@@ -758,7 +758,7 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate }
     return (
       <div className="fixed inset-0 z-50 bg-[#F6F1E9] flex flex-col">
         <div className="flex items-center justify-between px-6 pt-4 pb-2 border-b border-[#DDD4C0] shrink-0">
-          <span className="text-sm font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>{t('documents_introduce_header')}</span>
+          <span className="text-sm font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{t('documents_introduce_header')}</span>
           <button onClick={() => { setStage(null); setActiveDoc(null); }} className="text-[#9A8A78] hover:text-[#1C1410] transition-colors text-xl">✕</button>
         </div>
         <TimingSetup doc={activeDoc} onStart={handleTimingConfirmed} onSkip={handleSkipToVote} />

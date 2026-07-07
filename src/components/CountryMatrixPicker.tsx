@@ -38,11 +38,11 @@ function fuzzyMatchCountry(raw: string): string | null {
 const labelStyle: React.CSSProperties = {
   display: 'block',
   fontSize: 11,
-  fontWeight: 600,
+  fontWeight: 700,
   color: '#9A8A78',
-  fontFamily: "'DM Mono', monospace",
+  fontFamily: "'Outfit', sans-serif",
   textTransform: 'uppercase',
-  letterSpacing: '0.06em',
+  letterSpacing: '0.12em',
   marginBottom: 4,
 };
 
@@ -150,7 +150,7 @@ export function CountryMatrixPicker({ value, onChange, noun = 'country' }: { val
                 key={key}
                 onClick={() => addBundle(key)}
                 className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wide transition-all"
-                style={{ backgroundColor: '#FAF8F3', color: '#1B3828', border: '1px solid #DDD4C0', fontFamily: "'DM Mono', monospace" }}
+                style={{ backgroundColor: '#FAF8F3', color: '#1B3828', border: '1px solid #DDD4C0', fontFamily: "'Outfit', sans-serif" }}
                 onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = '#1B3828'; el.style.color = '#EED98A'; el.style.borderColor = '#1B3828'; }}
                 onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = '#FAF8F3'; el.style.color = '#1B3828'; el.style.borderColor = '#DDD4C0'; }}
               >
@@ -195,7 +195,7 @@ export function CountryMatrixPicker({ value, onChange, noun = 'country' }: { val
         <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-1.5">
             <label style={{ ...labelStyle, marginBottom: 0 }}>Selected</label>
-            <span style={{ fontSize: 9, fontWeight: 700, color: '#1B3828', backgroundColor: 'rgba(238,217,138,0.3)', padding: '1px 6px', borderRadius: 999, fontFamily: "'DM Mono', monospace" }}>
+            <span style={{ fontSize: 9, fontWeight: 700, color: '#1B3828', backgroundColor: 'rgba(238,217,138,0.3)', padding: '1px 6px', borderRadius: 999, fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}>
               {value.length}
             </span>
           </div>
@@ -203,7 +203,7 @@ export function CountryMatrixPicker({ value, onChange, noun = 'country' }: { val
             <button
               onClick={() => onChange([])}
               className="text-xs font-bold uppercase tracking-wide transition-colors focus:outline-none"
-              style={{ color: '#9A8A78', fontFamily: "'DM Mono', monospace", fontSize: 9 }}
+              style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 9 }}
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#8B2020'; }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
             >
@@ -214,7 +214,7 @@ export function CountryMatrixPicker({ value, onChange, noun = 'country' }: { val
         <div className="flex-1 rounded-xl overflow-hidden" style={{ border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3', maxHeight: 260, overflowY: 'auto' }}>
           {value.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full px-3 py-8">
-              <p className="text-xs font-bold uppercase text-center" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>{noun === 'character' ? 'NO CHARACTERS' : 'NO DELEGATES'}</p>
+              <p className="text-xs font-bold uppercase text-center" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{noun === 'character' ? 'NO CHARACTERS' : 'NO DELEGATES'}</p>
               <p className="text-xs text-center mt-1" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>{noun === 'character' ? 'Search or type a name to add' : 'Search or use bundles to add'}</p>
             </div>
           ) : (

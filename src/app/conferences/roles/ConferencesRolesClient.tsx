@@ -499,7 +499,7 @@ function PostingCard({
                   <div style={{ marginTop: posting.description ? '12px' : 0 }}>
                     <p
                       className="text-[9px] font-bold"
-                      style={{ color: GOLD_DEEP, fontFamily: "'DM Mono', monospace", letterSpacing: '0.18em', margin: 0, marginBottom: '7px' }}
+                      style={{ color: GOLD_DEEP, fontFamily: "'Outfit', sans-serif", fontWeight: 700, letterSpacing: '0.14em', margin: 0, marginBottom: '7px' }}
                     >
                       LOOKING FOR
                     </p>
@@ -571,7 +571,8 @@ function GroupHeader({ catKey, count }: { catKey: string; count: number }) {
           backgroundColor: 'rgba(27,56,40,0.07)',
           border: '1px solid rgba(27,56,40,0.12)',
           color: FOREST,
-          fontFamily: "'DM Mono', monospace",
+          fontFamily: "'Outfit', sans-serif",
+          fontVariantNumeric: 'tabular-nums',
         }}
       >
         {count}
@@ -669,7 +670,7 @@ function ApplyModal({
         <div className="mb-4">
           <label
             className="block text-xs font-bold mb-1.5"
-            style={{ color: MUTED, fontFamily: "'DM Mono', monospace", letterSpacing: '0.05em' }}
+            style={{ color: MUTED, fontFamily: "'Outfit', sans-serif", fontWeight: 700, letterSpacing: '0.12em' }}
           >
             COVER NOTE (OPTIONAL)
           </label>
@@ -958,7 +959,7 @@ export default function ConferencesRolesClient() {
         <header className="px-6 md:px-14 pt-8 pb-8">
           <p
             className="mb-2"
-            style={{ fontFamily: "'DM Mono', monospace", fontSize: '10px', letterSpacing: '0.28em', color: GOLD_DEEP }}
+            style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '10px', letterSpacing: '0.15em', color: GOLD_DEEP }}
           >
             CHAIR &amp; STAFF BOARD
           </p>
@@ -979,11 +980,11 @@ export default function ConferencesRolesClient() {
             Open positions for chairs, secretariat, and staff across MUN conferences worldwide.
           </p>
 
-          {/* DM Mono stat fragments */}
+          {/* Stat fragments */}
           {!loading && (
             <p
               className="mt-5 flex items-center gap-2.5 flex-wrap"
-              style={{ fontFamily: "'DM Mono', monospace", fontSize: '11px', letterSpacing: '0.08em', color: '#6B5D4B', margin: 0, marginTop: '20px' }}
+              style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontSize: '11px', letterSpacing: '0.08em', color: '#6B5D4B', margin: 0, marginTop: '20px', fontVariantNumeric: 'tabular-nums' }}
             >
               <span><span style={{ color: FOREST, fontWeight: 700 }}>{pad(totalOpen)}</span> OPEN ROLES</span>
               <span style={{ color: GOLD_DEEP, fontSize: '8px' }}>◆</span>
@@ -1056,7 +1057,7 @@ export default function ConferencesRolesClient() {
                   <button
                     onClick={() => { setSearchQuery(''); setCategoryFilter(''); setCompensationFilter(''); }}
                     className="flex items-center gap-1 text-[10px] font-bold focus:outline-none transition-colors"
-                    style={{ color: MUTED, fontFamily: "'DM Mono', monospace", letterSpacing: '0.08em' }}
+                    style={{ color: MUTED, fontFamily: "'Outfit', sans-serif", letterSpacing: '0.12em' }}
                     onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = DANGER; }}
                     onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = MUTED; }}
                   >
@@ -1066,7 +1067,7 @@ export default function ConferencesRolesClient() {
                 )}
                 <p
                   className="text-[11px]"
-                  style={{ color: MUTED, fontFamily: "'DM Mono', monospace", margin: 0 }}
+                  style={{ color: MUTED, fontFamily: "'Outfit', sans-serif", fontWeight: 600, letterSpacing: '0.06em', margin: 0, fontVariantNumeric: 'tabular-nums' }}
                 >
                   {filtered.length} ROLE{filtered.length !== 1 ? 'S' : ''}
                 </p>

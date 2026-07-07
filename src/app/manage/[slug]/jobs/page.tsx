@@ -134,7 +134,7 @@ function ApplicationsPanel({
         className="rounded-xl p-4 mt-3"
         style={{ background: 'rgba(27,56,40,0.03)', border: '1px solid rgba(27,56,40,0.08)' }}
       >
-        <p className="text-xs text-center py-2" style={{ color: MUTED, fontFamily: "'DM Mono', monospace" }}>Loading…</p>
+        <p className="text-xs text-center py-2" style={{ color: MUTED, fontFamily: "'Outfit', sans-serif", fontWeight: 500 }}>Loading…</p>
       </div>
     );
   }
@@ -188,7 +188,7 @@ function ApplicationsPanel({
               {/* Status badge */}
               <span
                 className="text-[9px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
-                style={{ ...statusStyle, fontFamily: "'DM Mono', monospace" }}
+                style={{ ...statusStyle, fontFamily: "'Outfit', sans-serif", letterSpacing: '0.06em' }}
               >
                 {app.status.toUpperCase()}
               </span>
@@ -264,7 +264,7 @@ function PostingCard({
       <div className="flex items-center gap-3">
         <span
           className="text-[9px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
-          style={{ ...catStyle, fontFamily: "'DM Mono', monospace" }}
+          style={{ ...catStyle, fontFamily: "'Outfit', sans-serif", letterSpacing: '0.06em' }}
         >
           {posting.category}
         </span>
@@ -273,7 +273,7 @@ function PostingCard({
         </p>
         <span
           className="text-[9px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
-          style={{ ...openStyle, fontFamily: "'DM Mono', monospace" }}
+          style={{ ...openStyle, fontFamily: "'Outfit', sans-serif", letterSpacing: '0.06em' }}
         >
           {posting.is_open ? 'OPEN' : 'CLOSED'}
         </span>
@@ -412,7 +412,7 @@ function PostingModal({
     fontWeight: 700,
     marginBottom: '6px',
     color: MUTED,
-    fontFamily: "'DM Mono', monospace",
+    fontFamily: "'Outfit', sans-serif",
     letterSpacing: '0.05em',
   };
 
@@ -428,7 +428,7 @@ function PostingModal({
             onClick={() => onChange(opt)}
             className="flex-1 py-2 rounded-lg text-xs font-bold transition-all focus:outline-none"
             style={{
-              fontFamily: "'DM Mono', monospace",
+              fontFamily: "'Outfit', sans-serif",
               backgroundColor: value === opt ? FOREST : 'transparent',
               color: value === opt ? GOLD : MUTED,
               letterSpacing: '0.04em',
@@ -774,7 +774,7 @@ export default function JobBoardPage() {
         <div>
           <p
             className="text-xs tracking-widest mb-1"
-            style={{ color: MUTED, fontFamily: "'DM Mono', monospace" }}
+            style={{ color: MUTED, fontFamily: "'Outfit', sans-serif", fontWeight: 700 }}
           >
             {conference?.acronym} / Job Board
           </p>
@@ -813,7 +813,7 @@ export default function JobBoardPage() {
             <span className="font-black text-xl" style={{ color: INK, fontFamily: "'Outfit', sans-serif" }}>
               {value}
             </span>
-            <span className="text-xs" style={{ color: MUTED, fontFamily: "'DM Mono', monospace" }}>
+            <span className="text-xs" style={{ color: MUTED, fontFamily: "'Outfit', sans-serif", fontWeight: 500 }}>
               {label}
             </span>
           </div>
@@ -831,7 +831,7 @@ export default function JobBoardPage() {
               backgroundColor: categoryTab === cat ? FOREST : 'transparent',
               color: categoryTab === cat ? GOLD : INK,
               border: categoryTab === cat ? `1.5px solid ${FOREST}` : `1.5px solid ${BORDER}`,
-              fontFamily: "'DM Mono', monospace",
+              fontFamily: "'Outfit', sans-serif",
               letterSpacing: '0.07em',
             }}
           >
