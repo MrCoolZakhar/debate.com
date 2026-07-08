@@ -5,6 +5,8 @@ import { ChevronLeft, Check } from 'lucide-react';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
 import type { Conference } from '@/app/manage/[slug]/layout';
+import { queueEventEmail } from '@/lib/emailEvents';
+import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
 import {
   OUTFIT, MONO, POOL_MEMBER_SELECT, POOL_SPOTS_COLUMN,
   poolForRole, fillFreeSpots, fetchSearchPool, performSwap, markApplicationPaid, markNotAttending, undoNotAttending,
@@ -84,6 +86,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
   const [dragMemberId, setDragMemberId] = useState<string | null>(null);
   const [dropTargetKey, setDropTargetKey] = useState<string | null>(null);
   const [swapConfirm, setSwapConfirm] = useState<{ sourceId: string; targetId: string } | null>(null);
+  const { draftNotices, pushDraftNotice, dismissDraftNotice } = useDraftNotices();
 
   const loadData = useCallback(async () => {
     if (!conference || !session) return;
@@ -137,6 +140,10 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
     const supabase = getAuthedClient(session.access_token);
     await supabase.from('applications').update({ society_id: society.id }).eq('id', app.id);
     setSearchQuery('');
+
+    const result = await queueEventEmail(supabase, conference.id, 'added_to_delegation', [app.id]);
+    if (!result.drafted) pushDraftNotice('added_to_delegation');
+
     await loadData();
   }
 
@@ -170,6 +177,13 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
       await fillFreeSpots(supabase, societyId, 'advisor');
     }
 
+    const headDelegateIds = members
+      .filter(m => m.society_id === societyId && (m.role === 'head-delegate' || m.is_head_delegate))
+      .map(m => m.id);
+    const pledgeRecipientIds = Array.from(new Set([member.id, ...headDelegateIds]));
+    const result = await queueEventEmail(supabase, conference.id, 'pledge_received', pledgeRecipientIds);
+    if (!result.drafted) pushDraftNotice('pledge_received');
+
     showFlash('ok', 'Pledge marked received.');
     await loadData();
   }
@@ -183,14 +197,16 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
     if (!window.confirm(msg)) return;
 
     const supabase = getAuthedClient(session.access_token);
-    await markNotAttending(supabase, member);
+    const result = await markNotAttending(supabase, conference.id, member);
+    if (!result.drafted) pushDraftNotice('not_attending');
     await loadData();
   }
 
   async function handleUndoNotAttending(member: PoolMember) {
     if (!session) return;
     const supabase = getAuthedClient(session.access_token);
-    await undoNotAttending(supabase, member);
+    const result = await undoNotAttending(supabase, conference.id, member);
+    if (!result.drafted) pushDraftNotice('attendance_restored');
     await loadData();
   }
 
@@ -209,7 +225,9 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
     const target = members.find(m => m.id === targetId);
     if (!source || !target) return;
 
-    await performSwap(supabase, source, target, transfer);
+    const emailResult = await performSwap(supabase, conference.id, source, target, transfer);
+    if (!emailResult.incomingDrafted) pushDraftNotice('spot_received');
+    if (!emailResult.outgoingDrafted) pushDraftNotice('spot_lost');
 
     setSwapConfirm(null);
     showFlash('ok', 'Delegates switched.');
@@ -252,6 +270,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
   if (!expandedSociety) {
     return (
       <div>
+        <DraftNoticeList notices={draftNotices} conferenceSlug={conference.slug} onDismiss={dismissDraftNotice} />
         <p className="text-xs font-semibold tracking-widest mb-1" style={{ color: '#9A8A78', fontFamily: MONO }}>DELEGATIONS</p>
         <p className="text-sm mb-5" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
           Groups brought by a faculty advisor or head delegate. Click a delegation to manage its members, payments and spots.
@@ -303,6 +322,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
 
   return (
     <div>
+      <DraftNoticeList notices={draftNotices} conferenceSlug={conference.slug} onDismiss={dismissDraftNotice} />
       <div className="flex items-center gap-3 mb-6">
         <button
           onClick={() => { setExpandedId(null); setSelectedMemberId(null); setSearchQuery(''); }}

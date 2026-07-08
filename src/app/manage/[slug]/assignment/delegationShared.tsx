@@ -8,6 +8,7 @@
 import { useState } from 'react';
 import { GripVertical, Lock, User, Check } from 'lucide-react';
 import { getAuthedClient } from '@/lib/supabase-auth';
+import { queueEventEmail } from '@/lib/emailEvents';
 
 // ── Shared bits (matches the visual language of the rest of this page) ─────────
 
@@ -152,18 +153,26 @@ export async function markApplicationPaid(supabase: ReturnType<typeof getAuthedC
   await supabase.from('applications').update({ payment_status: 'paid' }).eq('id', applicationId);
 }
 
+export interface SwapEmailResult {
+  incomingDrafted: boolean;
+  outgoingDrafted: boolean;
+}
+
 /**
  * Swaps payment status between a source (gaining 'paid') and a target
  * (losing it, dropping to 'unpaid'). If transfer is requested and the target
  * holds a committee allocation, that allocation row and the assigned_* fields
  * move to the source, and status flips 'assigned' <-> 'accepted' accordingly.
+ * Queues spot_received for the incoming delegate and spot_lost for the
+ * outgoing one; the returned flags say whether either had no enabled template.
  */
 export async function performSwap(
   supabase: ReturnType<typeof getAuthedClient>,
+  conferenceId: string,
   source: NamedApp,
   target: PoolMember,
   transfer: boolean
-) {
+): Promise<SwapEmailResult> {
   await Promise.all([
     supabase.from('applications').update({ payment_status: 'paid' }).eq('id', source.id),
     supabase.from('applications').update({ payment_status: 'unpaid' }).eq('id', target.id),
@@ -193,9 +202,19 @@ export async function performSwap(
       assigned_country_name: null,
     }).eq('id', target.id);
   }
+
+  const [incoming, outgoing] = await Promise.all([
+    queueEventEmail(supabase, conferenceId, 'spot_received', [source.id]),
+    queueEventEmail(supabase, conferenceId, 'spot_lost', [target.id]),
+  ]);
+  return { incomingDrafted: incoming.drafted, outgoingDrafted: outgoing.drafted };
 }
 
-export async function markNotAttending(supabase: ReturnType<typeof getAuthedClient>, member: PoolMember) {
+export async function markNotAttending(
+  supabase: ReturnType<typeof getAuthedClient>,
+  conferenceId: string,
+  member: PoolMember
+): Promise<{ drafted: boolean }> {
   const hasAllocation = !!member.assigned_committee_id;
   await supabase.from('applications').update({
     attending: false,
@@ -207,10 +226,18 @@ export async function markNotAttending(supabase: ReturnType<typeof getAuthedClie
   if (hasAllocation) {
     await supabase.from('conference_allocations').delete().eq('application_id', member.id);
   }
+  const result = await queueEventEmail(supabase, conferenceId, 'not_attending', [member.id]);
+  return { drafted: result.drafted };
 }
 
-export async function undoNotAttending(supabase: ReturnType<typeof getAuthedClient>, member: PoolMember) {
+export async function undoNotAttending(
+  supabase: ReturnType<typeof getAuthedClient>,
+  conferenceId: string,
+  member: PoolMember
+): Promise<{ drafted: boolean }> {
   await supabase.from('applications').update({ attending: true, payment_status: 'unpaid' }).eq('id', member.id);
+  const result = await queueEventEmail(supabase, conferenceId, 'attendance_restored', [member.id]);
+  return { drafted: result.drafted };
 }
 
 // ── Small shared bits ────────────────────────────────────────────────────────

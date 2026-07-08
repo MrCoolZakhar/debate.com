@@ -9,6 +9,8 @@ import { getFlagUrl, getCountryByName } from '@/lib/countries';
 import { LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
 import DelegationsView from '@/app/manage/[slug]/assignment/DelegationsView';
 import IndependentsView from '@/app/manage/[slug]/assignment/IndependentsView';
+import { queueEventEmail } from '@/lib/emailEvents';
+import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -952,10 +954,12 @@ export default function AssignmentPage() {
   const [dropModal, setDropModal] = useState<{ committeeId: string; appId: string } | null>(null);
   const [assignModal, setAssignModal] = useState<{ committeeId: string; preSlot?: SlotRow } | null>(null);
   const [sendingAll, setSendingAll] = useState(false);
+  const [sendingAllocationEmails, setSendingAllocationEmails] = useState(false);
   const [quickAssigning, setQuickAssigning] = useState<string | null>(null); // suggestion key in flight
   const [flash, setFlash] = useState<{ kind: 'ok' | 'err'; msg: string } | null>(null);
   const [chairInviteEmail, setChairInviteEmail] = useState('');
   const [chairInviting, setChairInviting] = useState(false);
+  const { draftNotices, pushDraftNotice, dismissDraftNotice } = useDraftNotices();
 
   function showFlash(kind: 'ok' | 'err', msg: string) {
     setFlash({ kind, msg });
@@ -1113,7 +1117,7 @@ export default function AssignmentPage() {
   }
 
   async function handleRemoveAllocation(allocation: AllocationRow) {
-    if (!session) return;
+    if (!session || !conference) return;
     const supabase = getAuthedClient(session.access_token);
     await supabase.from('conference_allocations').delete().eq('id', allocation.id);
     if (allocation.application_id) {
@@ -1123,8 +1127,37 @@ export default function AssignmentPage() {
         assigned_country_code: null,
         assigned_country_name: null,
       }).eq('id', allocation.application_id);
+
+      const result = await queueEventEmail(supabase, conference.id, 'allocation_removed', [allocation.application_id]);
+      if (!result.drafted) pushDraftNotice('allocation_removed');
     }
     await loadData();
+  }
+
+  // Batch-queue allocation_assigned (delivery: manual) for every currently
+  // assigned application, derived from the committees already loaded here —
+  // conference_allocations rows are only ever created for delegate/head-delegate
+  // committee assignments, so this never includes chairs.
+  async function handleSendAllocationEmails() {
+    if (!session || !conference) return;
+    const applicationIds = Array.from(new Set(
+      committees.flatMap(c => c.conference_allocations.map(a => a.application_id)).filter((id): id is string => !!id)
+    ));
+    if (applicationIds.length === 0) {
+      showFlash('err', 'No assigned delegates to email.');
+      return;
+    }
+    if (!window.confirm(`Queue allocation emails for ${applicationIds.length} assigned delegate${applicationIds.length === 1 ? '' : 's'}?`)) return;
+
+    setSendingAllocationEmails(true);
+    const supabase = getAuthedClient(session.access_token);
+    const result = await queueEventEmail(supabase, conference.id, 'allocation_assigned', applicationIds);
+    setSendingAllocationEmails(false);
+    if (!result.drafted) {
+      pushDraftNotice('allocation_assigned');
+    } else {
+      showFlash('ok', `Queued ${result.queued ?? 0} allocation email${(result.queued ?? 0) === 1 ? '' : 's'}.`);
+    }
   }
 
   async function handleAssignChair(chairApp: ChairApp, committee: CommitteeData) {
@@ -1264,18 +1297,32 @@ export default function AssignmentPage() {
           <h1 className="font-black text-2xl" style={{ color: '#1C1410', fontFamily: OUTFIT }}>Assignment</h1>
         </div>
         {mode === 'delegates' && (
-          <button
-            onClick={handleSendAllAllocations}
-            disabled={sendingAll}
-            className="rounded-xl py-2.5 px-5 font-bold text-sm focus:outline-none transition-colors"
-            style={{ backgroundColor: sendingAll ? '#DDD4C0' : '#1B3828', color: sendingAll ? '#9A8A78' : '#EED98A', fontFamily: OUTFIT, letterSpacing: '0.05em' }}
-            onMouseEnter={e => { if (!sendingAll) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-            onMouseLeave={e => { if (!sendingAll) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-          >
-            {sendingAll ? 'SENDING...' : 'SEND ALL ALLOCATIONS'}
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={handleSendAllocationEmails}
+              disabled={sendingAllocationEmails}
+              className="rounded-xl py-2.5 px-5 font-bold text-sm focus:outline-none transition-colors"
+              style={{ border: '1px solid #DDD4C0', color: sendingAllocationEmails ? '#9A8A78' : '#1C1410', backgroundColor: 'transparent', fontFamily: OUTFIT, letterSpacing: '0.05em' }}
+              onMouseEnter={e => { if (!sendingAllocationEmails) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+            >
+              {sendingAllocationEmails ? 'QUEUEING...' : 'SEND ALLOCATION EMAILS'}
+            </button>
+            <button
+              onClick={handleSendAllAllocations}
+              disabled={sendingAll}
+              className="rounded-xl py-2.5 px-5 font-bold text-sm focus:outline-none transition-colors"
+              style={{ backgroundColor: sendingAll ? '#DDD4C0' : '#1B3828', color: sendingAll ? '#9A8A78' : '#EED98A', fontFamily: OUTFIT, letterSpacing: '0.05em' }}
+              onMouseEnter={e => { if (!sendingAll) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+              onMouseLeave={e => { if (!sendingAll) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+            >
+              {sendingAll ? 'SENDING...' : 'SEND ALL ALLOCATIONS'}
+            </button>
+          </div>
         )}
       </div>
+
+      <DraftNoticeList notices={draftNotices} conferenceSlug={conference.slug} onDismiss={dismissDraftNotice} />
 
       {/* Mode toggle: Delegates | Chairs | Delegations | Independents */}
       <div className="inline-flex rounded-xl p-1 mb-6 flex-wrap" style={{ border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3' }}>

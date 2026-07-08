@@ -6,6 +6,8 @@ import Link from 'next/link';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
+import { queueEventEmail } from '@/lib/emailEvents';
+import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -27,6 +29,7 @@ interface CustomQuestion {
 interface RoleConfigLite {
   role: string;
   must_pay_before_allocation: boolean;
+  payment_timing: 'after_application' | 'after_acceptance' | 'anytime' | string;
   custom_questions: CustomQuestion[];
 }
 
@@ -198,6 +201,7 @@ export default function ApplicationsPage() {
   const [rejectNote, setRejectNote] = useState('');
   const [roleConfigs, setRoleConfigs] = useState<RoleConfigLite[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const { draftNotices, pushDraftNotice, dismissDraftNotice } = useDraftNotices();
 
   const loadApplications = useCallback(async () => {
     if (!conference) return;
@@ -224,7 +228,7 @@ export default function ApplicationsPage() {
         .order('submitted_at', { ascending: false }),
       supabase
         .from('application_role_configs')
-        .select('role, must_pay_before_allocation, custom_questions')
+        .select('role, must_pay_before_allocation, payment_timing, custom_questions')
         .eq('conference_id', conference.id),
     ]);
 
@@ -236,18 +240,33 @@ export default function ApplicationsPage() {
   useEffect(() => { loadApplications(); }, [loadApplications]);
 
   async function handleAccept(appId: string) {
-    if (!session) return;
+    if (!session || !conference) return;
     const supabase = getAuthedClient(session.access_token);
     await supabase.from('applications').update({ status: 'accepted' }).eq('id', appId);
+
+    const result = await queueEventEmail(supabase, conference.id, 'application_accepted', [appId]);
+    if (!result.drafted) pushDraftNotice('application_accepted');
+
+    const app = applications.find(a => a.id === appId);
+    const roleConfig = app ? roleConfigs.find(rc => rc.role === app.role) : undefined;
+    if (roleConfig?.payment_timing === 'after_acceptance') {
+      const payResult = await queueEventEmail(supabase, conference.id, 'payment_available', [appId]);
+      if (!payResult.drafted) pushDraftNotice('payment_available');
+    }
+
     await loadApplications();
   }
 
   async function handleReject(appId: string) {
-    if (!session) return;
+    if (!session || !conference) return;
     const supabase = getAuthedClient(session.access_token);
     await supabase.from('applications').update({ status: 'rejected', organizer_note: rejectNote.trim() || null }).eq('id', appId);
     setRejectingId(null);
     setRejectNote('');
+
+    const result = await queueEventEmail(supabase, conference.id, 'application_rejected', [appId]);
+    if (!result.drafted) pushDraftNotice('application_rejected');
+
     await loadApplications();
   }
 
@@ -259,7 +278,7 @@ export default function ApplicationsPage() {
   }
 
   async function handleMarkPaid(app: Application) {
-    if (!session) return;
+    if (!session || !conference) return;
     const supabase = getAuthedClient(session.access_token);
     await supabase.from('applications').update({ payment_status: 'paid' }).eq('id', app.id);
 
@@ -271,6 +290,10 @@ export default function ApplicationsPage() {
       await supabase.from('societies').update({ [spotsColumn]: current + 1 }).eq('id', app.society_id);
       await fillFreeSpots(supabase, app.society_id, pool);
     }
+
+    const result = await queueEventEmail(supabase, conference.id, 'payment_received', [app.id]);
+    if (!result.drafted) pushDraftNotice('payment_received');
+
     await loadApplications();
   }
 
@@ -291,9 +314,13 @@ export default function ApplicationsPage() {
   }
 
   async function handleWaive(app: Application) {
-    if (!session) return;
+    if (!session || !conference) return;
     const supabase = getAuthedClient(session.access_token);
     await supabase.from('applications').update({ payment_status: 'waived' }).eq('id', app.id);
+
+    const result = await queueEventEmail(supabase, conference.id, 'fee_waived', [app.id]);
+    if (!result.drafted) pushDraftNotice('fee_waived');
+
     await loadApplications();
   }
 
@@ -382,6 +409,8 @@ export default function ApplicationsPage() {
           EXPORT CSV
         </button>
       </div>
+
+      <DraftNoticeList notices={draftNotices} conferenceSlug={conference.slug} onDismiss={dismissDraftNotice} />
 
       {/* Filter bar */}
       <div className="flex flex-wrap gap-2 mb-4">
