@@ -10,6 +10,8 @@ import { useManage } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { supabase as anonSupabase } from '@/lib/supabase';
+import { queueEventEmail } from '@/lib/emailEvents';
+import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
 import { FlagImg } from '@/components/FlagImg';
 import {
   type LiveCommittee, type CaucusJson, cardStatus, PHASE_LABELS, fmtClock, flagCodeFor,
@@ -22,6 +24,19 @@ const OUTFIT = "'Outfit', sans-serif";
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
 
 const EASE = 'cubic-bezier(0.22,1,0.36,1)';
+
+// Outcome of queueing a session invite via the event-email system.
+type InviteResult =
+  | { kind: 'queued'; count: number }
+  | { kind: 'empty'; message: string }
+  | { kind: 'not-drafted' } // DraftNoticeList at the top of the page surfaces the nudge
+  | { kind: 'error' };
+
+const INVITE_MSG_COLORS: Record<string, string> = {
+  queued: '#2A5A3C',
+  empty: '#9A8A78',
+  error: '#B8844A',
+};
 
 // ── Small shared bits ───────────────────────────────────────────────────────
 
@@ -78,9 +93,9 @@ function NotStartedCard({
 }: {
   data: LiveCommittee;
   committeesHref: string;
-  onQueueEmail: (data: LiveCommittee, audience: 'chairs' | 'participants') => Promise<boolean>;
+  onQueueEmail: (data: LiveCommittee, audience: 'chairs' | 'participants') => Promise<InviteResult>;
 }) {
-  const [queuedMsg, setQueuedMsg] = useState('');
+  const [queuedMsg, setQueuedMsg] = useState<{ text: string; color: string } | null>(null);
   const [queueing, setQueueing] = useState(false);
   const session = data.session;
   const chairCode = session?.chairJoinSuffix ? `${session.code}-${session.chairJoinSuffix}` : null;
@@ -88,10 +103,16 @@ function NotStartedCard({
   async function handleQueue(audience: 'chairs' | 'participants') {
     if (queueing) return;
     setQueueing(true);
-    const ok = await onQueueEmail(data, audience);
+    const result = await onQueueEmail(data, audience);
     setQueueing(false);
-    setQueuedMsg(ok ? 'Queued — delivery wiring pending' : 'Could not queue — try again');
-    setTimeout(() => setQueuedMsg(''), 4000);
+    if (result.kind === 'not-drafted') return; // nudge shown at the top of the page
+    const text = result.kind === 'queued'
+      ? `Queued ${result.count} email${result.count === 1 ? '' : 's'} to outbox`
+      : result.kind === 'empty'
+      ? result.message
+      : 'Could not queue — try again';
+    setQueuedMsg({ text, color: INVITE_MSG_COLORS[result.kind] });
+    setTimeout(() => setQueuedMsg(null), 4000);
   }
 
   return (
@@ -146,7 +167,6 @@ function NotStartedCard({
                 </div>
               </div>
             )}
-            {/* TODO(merge): email delivery transport lands later — these only queue email_sends rows */}
             <div className="flex gap-2">
               <button
                 onClick={() => handleQueue('chairs')}
@@ -172,7 +192,7 @@ function NotStartedCard({
               </button>
             </div>
             {queuedMsg && (
-              <p className="text-[11px] mt-2 text-center" style={{ color: '#B6871F', fontFamily: OUTFIT }}>{queuedMsg}</p>
+              <p className="text-[11px] mt-2 text-center" style={{ color: queuedMsg.color, fontFamily: OUTFIT }}>{queuedMsg.text}</p>
             )}
           </>
         ) : (
@@ -445,7 +465,8 @@ function LiveCard({
 
 export default function LiveStatusPage() {
   const { conference } = useManage();
-  const { user, session: authSession } = useAuth();
+  const { session: authSession } = useAuth();
+  const { draftNotices, pushDraftNotice, dismissDraftNotice } = useDraftNotices();
 
   const [rows, setRows] = useState<LiveCommittee[] | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -618,33 +639,53 @@ export default function LiveStatusPage() {
     return () => clearInterval(t);
   }, []);
 
-  // Queue an email_sends row. There is NO email transport in the app yet — the
-  // communications page only inserts rows too (delivery via API route wired later).
-  // TODO(merge): actual email delivery transport lands later.
-  const queueEmail = useCallback(async (data: LiveCommittee, audience: 'chairs' | 'participants'): Promise<boolean> => {
-    if (!conference || !authSession || !user || !data.session) return false;
+  // Queue session invites through the event-email system: resolve the
+  // committee's recipient application ids, then let queueEventEmail insert
+  // email_outbox rows (status 'pending') from the conference's template.
+  // No enabled template → { drafted: false } → DRAFT IT nudge at the top.
+  const queueEmail = useCallback(async (data: LiveCommittee, audience: 'chairs' | 'participants'): Promise<InviteResult> => {
+    if (!conference || !authSession || !data.session) return { kind: 'error' };
     const authed = getAuthedClient(authSession.access_token);
-    const label = data.conf.abbreviation ?? data.conf.name;
-    const chairCode = data.session.chairJoinSuffix ? `${data.session.code}-${data.session.chairJoinSuffix}` : data.session.code;
-    const subject = audience === 'chairs'
-      ? `${label} — your chair access code`
-      : `${label} — join your committee session`;
-    const bodyHtml = audience === 'chairs'
-      ? `<p>Your committee <b>${data.conf.name}</b> is ready on Gavelling.</p><p>Chair code: <b>${chairCode}</b></p><p>Join at gavelling.com and enter the code above as a chair.</p>`
-      : `<p>Your committee <b>${data.conf.name}</b> is ready on Gavelling.</p><p>Session code: <b>${data.session.code}</b></p><p>Join at gavelling.com and enter the code above.</p>`;
-    const { error } = await authed.from('email_sends').insert({
-      conference_id: conference.id,
-      sent_by: user.id,
-      subject,
-      body_html: bodyHtml,
-      recipient_filter: { audience: 'committee', committee_id: data.conf.id, group: audience },
-      recipient_count: audience === 'chairs' ? data.conf.chairUserIds.length : 0,
-      scheduled_at: null,
-      status: 'sent',
-      sent_at: new Date().toISOString(),
-    });
-    return !error;
-  }, [conference?.id, authSession?.access_token, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Chair application ids: role='chair' apps whose user is in the committee's
+    // chair_user_ids, or assigned to the committee (assignment sets both).
+    const { data: chairApps, error: chairErr } = await authed
+      .from('applications')
+      .select('id, user_id, assigned_committee_id')
+      .eq('conference_id', conference.id)
+      .eq('role', 'chair')
+      .in('status', ['accepted', 'assigned']);
+    if (chairErr) return { kind: 'error' };
+    const chairIds = (chairApps ?? [])
+      .filter((a) => data.conf.chairUserIds.includes(a.user_id as string) || a.assigned_committee_id === data.conf.id)
+      .map((a) => a.id as string);
+
+    let applicationIds: string[];
+    let eventKey: string;
+    if (audience === 'chairs') {
+      if (chairIds.length === 0) return { kind: 'empty', message: 'No chairs assigned yet' };
+      applicationIds = chairIds;
+      eventKey = 'session_chair_invite';
+    } else {
+      const { data: allocs, error: allocErr } = await authed
+        .from('conference_allocations')
+        .select('application_id')
+        .eq('conference_committee_id', data.conf.id);
+      if (allocErr) return { kind: 'error' };
+      const delegateIds = (allocs ?? []).map((a) => a.application_id as string).filter(Boolean);
+      applicationIds = Array.from(new Set([...delegateIds, ...chairIds]));
+      if (applicationIds.length === 0) return { kind: 'empty', message: 'No participants allocated yet' };
+      eventKey = 'session_join_invite';
+    }
+
+    const result = await queueEventEmail(authed, conference.id, eventKey, applicationIds);
+    if (!result.drafted) {
+      pushDraftNotice(eventKey);
+      return { kind: 'not-drafted' };
+    }
+    if ((result.queued ?? 0) === 0) return { kind: 'error' };
+    return { kind: 'queued', count: result.queued! };
+  }, [conference?.id, authSession?.access_token]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Derived ──
   const recapData = recapFor ? rows?.find((r) => r.conf.id === recapFor) ?? null : null;
@@ -684,6 +725,10 @@ export default function LiveStatusPage() {
           </button>
         </div>
       </div>
+
+      {conference && (
+        <DraftNoticeList notices={draftNotices} conferenceSlug={conference.slug} onDismiss={dismissDraftNotice} />
+      )}
 
       {/* Summary hero strip */}
       <div
