@@ -548,6 +548,10 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false }: 
   const [cowOpen, setCowOpen] = useState(false);
   const [cowActive, setCowActive] = useState(false);
   const [cowRemaining, setCowRemaining] = useState(cowDefaultSecs);
+  // The duration the CoW timer was last set to (preset or custom). Used as the progress-bar
+  // denominator so the bar reads correctly for any value, not only the default.
+  const [cowSetSecs, setCowSetSecs] = useState(cowDefaultSecs);
+  const [cowCustom, setCowCustom] = useState('');
   const cowIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -682,7 +686,7 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false }: 
             </div>
             <div className="flex gap-2 mb-3">
               {[30, 60, 90].map((s) => (
-                <button key={s} onClick={() => { setCowActive(false); setCowRemaining(s); }}
+                <button key={s} onClick={() => { setCowActive(false); setCowRemaining(s); setCowSetSecs(s); }}
                   className={`flex-1 py-1.5 rounded-lg text-xs font-black uppercase tracking-wide transition-colors border ${
                     cowRemaining === s && !cowActive ? 'bg-[#B8844A] border-[#B8844A] text-[#1C1410]' : 'bg-[#EDE7D8] border-[#DDD4C0] text-[#6A5A4A] hover:border-[#B8844A]/50'
                   }`}>
@@ -690,21 +694,40 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false }: 
                 </button>
               ))}
             </div>
+            {/* Custom seconds — set the CoW timer to any value, alongside the presets */}
+            <div className="flex gap-2 mb-3">
+              <input
+                type="number" min={1}
+                value={cowCustom}
+                onChange={(e) => setCowCustom(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { const s = parseInt(cowCustom, 10); if (s > 0) { setCowActive(false); setCowRemaining(s); setCowSetSecs(s); setCowCustom(''); } } }}
+                placeholder={String(cowDefaultSecs)}
+                className="flex-1 min-w-0 bg-[#EDE7D8] border border-[#DDD4C0] rounded-lg px-2 py-1.5 text-xs text-center text-[#1C1410] focus:outline-none focus:border-[#B8844A]"
+              />
+              <span className="text-xs font-black self-center shrink-0" style={{ color: '#6A5A4A' }}>s</span>
+              <button
+                onClick={() => { const s = parseInt(cowCustom, 10); if (s > 0) { setCowActive(false); setCowRemaining(s); setCowSetSecs(s); setCowCustom(''); } }}
+                className="px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wide bg-[#B8844A] hover:bg-[#B8844A]/80 text-[#1C1410] transition-colors focus:outline-none shrink-0"
+                aria-label="Set custom time"
+              >
+                ✓
+              </button>
+            </div>
             <div className={`text-5xl font-black font-mono text-center mb-3 tabular-nums ${
               cowRemaining <= 5 ? 'text-red-500' : cowRemaining <= 10 ? 'text-[#B6871F]' : 'text-[#B8844A]'
             }`}>
               {Math.floor(cowRemaining / 60)}:{String(cowRemaining % 60).padStart(2, '0')}
             </div>
             <div className="w-full h-1.5 bg-[#DDD4C0] rounded-full overflow-hidden mb-3">
-              <div className={`h-full rounded-full transition-all ${cowRemaining / cowDefaultSecs > 0.5 ? 'bg-[#B8844A]' : cowRemaining / cowDefaultSecs > 0.2 ? 'bg-[#B6871F]' : 'bg-red-500'}`}
-                style={{ width: `${Math.min(100, (cowRemaining / cowDefaultSecs) * 100)}%` }} />
+              <div className={`h-full rounded-full transition-all ${cowRemaining / cowSetSecs > 0.5 ? 'bg-[#B8844A]' : cowRemaining / cowSetSecs > 0.2 ? 'bg-[#B6871F]' : 'bg-red-500'}`}
+                style={{ width: `${Math.min(100, (cowRemaining / cowSetSecs) * 100)}%` }} />
             </div>
             <div className="flex gap-2">
               <button onClick={() => setCowActive((r) => !r)}
                 className={`flex-1 py-2 rounded-lg font-bold text-xs transition-colors ${cowActive ? 'bg-[#B6871F] hover:bg-[#B6871F]/80 text-white' : 'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'}`}>
                 {cowActive ? t('rtr_pause') : t('rtr_start')}
               </button>
-              <button onClick={() => { setCowActive(false); setCowRemaining(cowDefaultSecs); }}
+              <button onClick={() => { setCowActive(false); setCowRemaining(cowDefaultSecs); setCowSetSecs(cowDefaultSecs); setCowCustom(''); }}
                 className="px-3 py-2 rounded-lg font-bold text-xs bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#6A5A4A] transition-colors">
                 ↺
               </button>
