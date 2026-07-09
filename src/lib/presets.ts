@@ -6,7 +6,7 @@ export const WORLD_BANK_MEMBERS: string[] = [];
 
 export const UNEP_MEMBERS: string[] = [];
 
-// Current UNSC members (2026) — P5 + 10 elected
+// Current UNSC members (June 2026) — P5 + 10 elected
 export const UNSC_MEMBERS = [
   'United States',
   'United Kingdom',
@@ -20,9 +20,9 @@ export const UNSC_MEMBERS = [
   'Panama',
   'Somalia',
   // Elected 2026–2027
-  'Japan',
-  'Malta',
-  'Mozambique',
-  'Ecuador',
-  'South Africa',
+  'Bahrain',
+  'Colombia',
+  'DR Congo',
+  'Latvia',
+  'Liberia',
 ];

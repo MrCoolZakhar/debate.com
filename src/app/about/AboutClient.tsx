@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { supabase } from '@/lib/supabase';
 import SiteNav from '@/components/SiteNav';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { getCountryDisplayName } from '@/lib/countries';
@@ -11,11 +12,17 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 
 const AMBASSADORS = [
+  // Latin America
+  { name: 'Santiago Rosas Peña',      country: 'Venezuela',      initials: 'SR', photo: '/ambassador-photos/santiago_ambassador.png', photoPosition: 'center 35%' },
   // Europe
-  { name: 'Kyle Wilkinson',          country: 'United Kingdom', initials: 'KW', photo: '/ambassador-photos/kyle_ambassador.png' },
+  { name: 'Kyle Wilkinson',          country: 'United Kingdom', initials: 'KW', photo: '/ambassador-photos/kyle_ambassador.png', photoPosition: 'center 50%' },
   { name: 'Celine Nasser',           country: 'United Kingdom', initials: 'CN', photo: '/ambassador-photos/celine_ambassador.png' },
+  { name: 'Daniel O\'Neil Ferrero',  country: 'Scotland',       initials: 'DF', photo: '/ambassador-photos/Daniel_ambassador.png', photoPosition: 'center 20%', photoScale: 1.2 },
   { name: 'Noelia Alvarez Iglesias', country: 'Spain',          initials: 'NA', photo: '/ambassador-photos/noelia_ambassador.png' },
   { name: 'Félix Losada Ottino',     country: 'Spain',          initials: 'FL', photo: '/ambassador-photos/felix_ambassador.png', photoPosition: 'center 25%' },
+  { name: 'Luca Formichella',        country: 'Italy',          initials: 'LF', photo: '/ambassador-photos/luca_ambassador.png', photoPosition: 'center 20%' },
+  { name: 'Amna Sikandar',           country: 'France',         initials: 'AS', photo: '/ambassador-photos/Amna_ambassador.png' },
+  { name: 'Vlad Gheorghe',           country: 'Romania',        initials: 'VG', photo: '/ambassador-photos/Vlad_ambassador.png', photoPosition: 'center 25%', photoScale: 1.6 },
   // North America
   { name: 'Spencer Lindsay',         country: 'Canada',         initials: 'SL', photo: '/ambassador-photos/spencer_ambassador.jpeg' },
   { name: 'Armande Loretz',          country: 'France',         initials: 'AL', photo: '/ambassador-photos/armande_ambassador.png' },
@@ -25,11 +32,15 @@ const AMBASSADORS = [
   { name: 'Paolo Marinuzzi',         country: 'Venezuela',      initials: 'PM', photo: '/ambassador-photos/paolo_ambassador.png' },
   { name: 'Anna Cocconi',            country: 'Venezuela',      initials: 'AC', photo: '/ambassador-photos/anna_ambassador.png' },
   // Asia (west to east)
-  { name: 'Farah Lahiani',           country: 'UAE',            initials: 'FH', photo: '/ambassador-photos/farah_ambassador.png' },
+  { name: 'Farah Lahiani',           country: 'UAE',            initials: 'FH', photo: '/ambassador-photos/farah_ambassador.png', photoPosition: 'center 62%' },
+  { name: 'Abdul Rehman',            country: 'Pakistan',       initials: 'AR', photo: '/ambassador-photos/abdulrehman_ambassador.png', photoPosition: 'center 30%' },
+  { name: 'Saayoojya Variyath',      country: 'India',          initials: 'SV', photo: '/ambassador-photos/saayoojya_ambassador.png' },
+  { name: 'Sri Harsha Vardhan Pachava', country: 'India',       initials: 'SH', photo: '/ambassador-photos/sriharsha_ambassador.png' },
   { name: 'Tyler Serano',            country: 'Philippines',    initials: 'TS', photo: '/ambassador-photos/tyler_ambassador.png' },
   { name: 'Andrew Mailoa',           country: 'Indonesia',      initials: 'AM', photo: '/ambassador-photos/andrew_ambassador.png' },
   { name: 'Charlito Gunawan',        country: 'Indonesia',      initials: 'CG', photo: '/ambassador-photos/charlito_ambassador.png' },
   { name: 'Victor Mikusek',          country: 'Hong Kong',      initials: 'VM', photo: '/ambassador-photos/victor_ambassador.png' },
+  { name: 'Isabella Romero',         country: 'Honduras',       initials: 'IR', photo: '/ambassador-photos/isabella_ambassador.png' },
 ];
 
 const inputStyle: React.CSSProperties = {
@@ -56,8 +67,14 @@ export default function AboutClient() {
   const [form, setForm] = useState({ name: '', email: '', country: '', experience: '' });
   const [submitted, setSubmitted] = useState(false);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!form.name || !form.email || !form.country) return;
+    await supabase.from('ambassador_applications').insert({
+      name: form.name.trim(),
+      email: form.email.trim(),
+      country: form.country.trim(),
+      experience: form.experience.trim() || null,
+    });
     setSubmitted(true);
   };
 
@@ -105,31 +122,34 @@ export default function AboutClient() {
 
       {/* Global Ambassadors */}
       <section className="relative z-10 py-24 px-6" style={{ borderTop: '1px solid rgba(221, 212, 192, 0.8)' }}>
-        <div className="max-w-4xl mx-auto">
-          <div className="text-center mb-16">
-            <p className="text-xs font-mono tracking-[0.2em] text-[#9A8A78] mb-3 uppercase">{t('about_representing')}</p>
-            <h2 className="text-4xl font-black text-[#1C1410]">{t('about_ambassadors_title')}</h2>
-          </div>
-          <div className="grid grid-cols-5 gap-8">
-            {AMBASSADORS.map((amb) => (
-              <div key={amb.name} className="flex flex-col items-center gap-3">
-                <div style={{ width: 120, height: 120, borderRadius: '50%', overflow: 'hidden', border: '2px solid rgba(28,20,16,0.15)', backgroundColor: 'rgba(221,212,192,0.5)', flexShrink: 0 }}>
-                  {amb.photo ? (
-                    <img
-                      src={amb.photo}
-                      alt={amb.name}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: amb.photoPosition ?? 'center top', display: 'block' }}
-                    />
-                  ) : (
-                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(221,212,192,0.8)', color: '#B6871F', fontWeight: 700, fontSize: 16 }}>
-                      {amb.initials}
+        <div className="text-center mb-16">
+          <p className="text-xs font-mono tracking-[0.2em] text-[#9A8A78] mb-3 uppercase">{t('about_representing')}</p>
+          <h2 className="text-4xl font-black text-[#1C1410]">{t('about_ambassadors_title')}</h2>
+        </div>
+        {/* Seamless 3-row auto-scroll marquee (left → right). Pauses on hover.
+            Three identical grid copies; shifting by one copy loops seamlessly. */}
+        <div
+          className="ambassador-marquee"
+          style={{ ['--ambassador-duration' as string]: `${AMBASSADORS.length * 1.6}s` }}
+        >
+          <div className="ambassador-marquee__track">
+            {[0, 1, 2].map((copy) => (
+              <div key={copy} aria-hidden={copy !== 0} className="ambassador-marquee__grid">
+                {AMBASSADORS.map((amb) => (
+                  <div key={amb.name} className="flex flex-col items-center gap-3" style={{ width: 120 }}>
+                    <div style={{ width: 120, height: 120, borderRadius: '50%', overflow: 'hidden', border: '2px solid rgba(28,20,16,0.15)', backgroundColor: 'rgba(221,212,192,0.5)', flexShrink: 0 }}>
+                      {amb.photo ? (
+                        <img src={amb.photo} alt={amb.name} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: amb.photoPosition ?? 'center top', display: 'block', transform: `scale(${(amb as {photoScale?: number}).photoScale ?? 1})`, transformOrigin: amb.photoPosition ?? 'center top' }} />
+                      ) : (
+                        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(221,212,192,0.8)', color: '#B6871F', fontWeight: 700, fontSize: 16 }}>{amb.initials}</div>
+                      )}
                     </div>
-                  )}
-                </div>
-                <div className="text-center">
-                  <p className="text-[#1C1410] text-xs font-bold leading-tight">{amb.name}</p>
-                  <p className="text-[#9A8A78] text-[10px] mt-0.5">{getCountryDisplayName(amb.country, language)}</p>
-                </div>
+                    <div className="text-center">
+                      <p className="text-[#1C1410] text-xs font-bold leading-tight">{amb.name}</p>
+                      <p className="text-[#9A8A78] text-[10px] mt-0.5">{getCountryDisplayName(amb.country, language)}</p>
+                    </div>
+                  </div>
+                ))}
               </div>
             ))}
           </div>
@@ -241,7 +261,10 @@ export default function AboutClient() {
               </svg>
             </span>
           </div>
-          <p className="text-xs text-[#9A8A78] md:text-right">{t('about_footer_copy').replace('{year}', String(new Date().getFullYear()))}</p>
+          <div className="flex flex-col items-center gap-1 md:items-end">
+            <p className="text-xs text-[#9A8A78]">{t('about_footer_copy').replace('{year}', String(new Date().getFullYear()))}</p>
+            <a href="/privacy" className="text-xs transition-colors" style={{ color: '#9A8A78' }} onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#1B3828'; }} onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#9A8A78'; }}>Privacy Policy</a>
+          </div>
         </div>
       </footer>
     </div>

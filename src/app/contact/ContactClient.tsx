@@ -379,7 +379,7 @@ export default function ContactClient() {
                     </a>
 
                     {/* Book a call */}
-                    <a href="https://calendar.app.google/8VnuxHW7eG7iVZYX7" target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none' }}>
+                    <a href="https://calendar.app.google/BgWXxMdKmEJE3dDq6" target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none' }}>
                       <div style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(27, 56, 40, 0.08)', border: '1px solid rgba(27, 56, 40, 0.14)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1B3828" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                           <rect x="3" y="4" width="18" height="18" rx="2" />
@@ -428,7 +428,10 @@ export default function ContactClient() {
                 </svg>
               </span>
             </div>
-            <p className="text-xs text-[#9A8A78] md:text-right">{t('contact_footer_copy').replace('{year}', String(new Date().getFullYear()))}</p>
+            <div className="flex flex-col items-center gap-1 md:items-end">
+              <p className="text-xs text-[#9A8A78]">{t('contact_footer_copy').replace('{year}', String(new Date().getFullYear()))}</p>
+              <a href="/privacy" className="text-xs transition-colors" style={{ color: '#9A8A78' }} onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#1B3828'; }} onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#9A8A78'; }}>Privacy Policy</a>
+            </div>
           </div>
         </footer>
       </div>

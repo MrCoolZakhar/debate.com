@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { Dialog as RadixDialog } from 'radix-ui';
 import { Dialog, DialogPortal, DialogOverlay, DialogTitle } from '@/components/ui/dialog';
@@ -10,6 +10,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { Field, FieldLabel } from '@/components/ui/field';
 import { cn } from '@/lib/utils';
 import { CalendarIcon, GiftIcon, CircleCheckIcon } from 'lucide-react';
+import { markPreRegistered } from '@/lib/preregStatus';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const SPOTS_TOTAL = 1000;
@@ -26,7 +27,6 @@ export default function PreRegisterModal({ open, onClose }: { open: boolean; onC
   const [invalid, setInvalid]     = useState(false);
   const [apiError, setApiError]   = useState<string | null>(null);
   const [spotsClaimed, setSpotsClaimed] = useState(123);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchCount = async () => {
     try {
@@ -39,9 +39,9 @@ export default function PreRegisterModal({ open, onClose }: { open: boolean; onC
   };
 
   useEffect(() => {
+    // Fetch the spots count once when the modal opens. (Previously polled every 15s, which
+    // multiplied across every open modal and helped overwhelm the Supabase REST origin.)
     fetchCount();
-    pollRef.current = setInterval(fetchCount, 15000);
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -57,8 +57,9 @@ export default function PreRegisterModal({ open, onClose }: { open: boolean; onC
         body: JSON.stringify({ email }),
       });
       const data = await res.json();
-      if (data.duplicate) { setDuplicate(true); setSubmitted(true); return; }
+      if (data.duplicate) { markPreRegistered(); setDuplicate(true); setSubmitted(true); return; }
       if (!res.ok) { setApiError(data.error ?? 'Something went wrong'); return; }
+      markPreRegistered();
       setSpotsClaimed((n) => n + 1);
       setSubmitted(true);
     } catch {
@@ -212,7 +213,7 @@ export default function PreRegisterModal({ open, onClose }: { open: boolean; onC
                         {duplicate ? t('prereg_success_duplicate') : t('prereg_success_new')}
                       </span>
                     </div>
-                    <p className="text-xs pl-[28px]" style={{ color: '#9A8A78' }}>{email}</p>
+                    <p className="text-xs ps-[28px]" style={{ color: '#9A8A78' }}>{email}</p>
                   </div>
                 ) : (
                   <form onSubmit={handleSubmit} className="flex flex-col gap-2.5">

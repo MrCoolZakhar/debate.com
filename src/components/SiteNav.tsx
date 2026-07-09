@@ -8,10 +8,10 @@ import { useLanguage, useT } from '@/contexts/LanguageContext';
 import { Globe } from 'lucide-react';
 
 const NAV_LINKS_CONFIG = [
-  { en: 'SESSIONS',    es: 'SESIONES',     href: '/' },
-  { en: 'CONFERENCES', es: 'CONFERENCIAS', href: '/conferences' },
-  { en: 'ABOUT US',    es: 'NOSOTROS',     href: '/about' },
-  { en: 'CONTACT',     es: 'CONTÁCTANOS',  href: '/contact' },
+  { en: 'SESSIONS',    es: 'SESIONES',     fr: 'SESSIONS',        ar: 'الجلسات',    href: '/' },
+  { en: 'CONFERENCES', es: 'CONFERENCIAS', fr: 'CONFÉRENCES',     ar: 'المؤتمرات',  href: '/conferences' },
+  { en: 'ABOUT US',    es: 'NOSOTROS',     fr: 'QUI SOMMES-NOUS', ar: 'من نحن',     href: '/about' },
+  { en: 'CONTACT',     es: 'CONTÁCTANOS',  fr: 'CONTACT',         ar: 'تواصل معنا', href: '/contact' },
 ];
 
 interface SiteNavProps {
@@ -205,7 +205,7 @@ export default function SiteNav({ logoOverride, overlay = false }: SiteNavProps 
                   zIndex: 50,
                 }}
               >
-                {(['en', 'es'] as const).map((lang) => (
+                {(['en', 'es', 'fr', 'ar'] as const).map((lang) => (
                   <button
                     key={lang}
                     onClick={() => { setLanguage(lang); setShowLangMenu(false); }}
@@ -222,7 +222,7 @@ export default function SiteNav({ logoOverride, overlay = false }: SiteNavProps 
                     onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
                     onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                   >
-                    {lang === 'en' ? t('settings_english') : t('settings_spanish')}
+                    {lang === 'en' ? t('settings_english') : lang === 'es' ? t('settings_spanish') : lang === 'fr' ? t('settings_french') : 'العربية'}
                     {language === lang && <span className="ml-1" style={{ color: '#B6871F' }}>✓</span>}
                   </button>
                 ))}
@@ -466,7 +466,7 @@ export default function SiteNav({ logoOverride, overlay = false }: SiteNavProps 
 
           {/* Mobile language toggle */}
           <div className="flex gap-2 px-2 pb-1">
-            {(['en', 'es'] as const).map((lang) => (
+            {(['en', 'es', 'fr', 'ar'] as const).map((lang) => (
               <button
                 key={lang}
                 onClick={() => setLanguage(lang)}
@@ -480,7 +480,7 @@ export default function SiteNav({ logoOverride, overlay = false }: SiteNavProps 
                   cursor: 'pointer',
                 }}
               >
-                {lang === 'en' ? `EN — ${t('settings_english')}` : `ES — ${t('settings_spanish')}`}
+                {lang === 'en' ? `EN — ${t('settings_english')}` : lang === 'es' ? `ES — ${t('settings_spanish')}` : lang === 'fr' ? `FR — ${t('settings_french')}` : 'AR — العربية'}
               </button>
             ))}
           </div>

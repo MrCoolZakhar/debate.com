@@ -1,15 +1,20 @@
 'use client';
 
 import { use, useEffect, useRef, useState } from 'react';
+import FitToScreen from '@/components/FitToScreen';
+import Portal from '@/components/Portal';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { Committee, DelegateStatus } from '@/lib/types';
-import { getCountryByName, getFlagUrl } from '@/lib/countries';
+import { getCountryByName, getFlagUrl, getCountryDisplayName, compareCountryNames } from '@/lib/countries';
 import { Emoji } from '@/components/Emoji';
+import { MajorityPie } from '@/components/RollCallPanel';
 import { getCommitteeByCode, setPhase as setPhaseInDB, setDelegateStatus as setDelegateStatusInDB, updateDocumentStatus as updateDocumentStatusInDB } from '@/lib/committeeService';
-import { useSettingsStore } from '@/lib/settingsStore';
+import { useSettingsStore, type CommitteeSettings } from '@/lib/settingsStore';
 import { useAuth } from '@/components/AuthProvider';
 import { detectConferenceSession, verifyConferenceAccess } from '@/lib/conferenceAccess';
+import { sponsorLabel } from '@/lib/committeeFlags';
 import { SettingsPanel } from '@/components/SettingsPanel';
 
 function abbreviateCommitteeName(name: string): string {
@@ -48,19 +53,30 @@ function RollCallModal({
   onCycleStatus: (id: string) => void;
   onConfirm: () => void;
 }) {
-  const sorted = [...delegates].sort((a, b) => a.country.localeCompare(b.country));
+  const t = useT();
+  const { language } = useLanguage();
+  // Observers are excluded from the voting roster entirely.
+  const votable = delegates.filter((d) => !d.isObserver);
+  const sorted = [...votable].sort((a, b) => compareCountryNames(a.country, b.country, language));
   const thumbPos = (status: DelegateStatus) =>
     status === 'absent' ? 'left-[2px]' : status === 'present' ? 'left-[32px]' : 'left-[62px]';
   const thumbColor = (status: DelegateStatus) =>
     status === 'absent' ? 'bg-[#8B2020]' : status === 'present' ? 'bg-[#3D7A52]' : 'bg-[#B6871F]';
-  const presentCount = Object.values(rollCallStatuses).filter((s) => s !== 'absent').length;
+  const presentCount = votable.filter((d) => (rollCallStatuses[d.id] ?? d.status) !== 'absent').length;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(5,4,3,0.92)', backdropFilter: 'blur(4px)' }}>
-      <div className="rounded-2xl w-full max-w-md shadow-2xl flex flex-col" style={{ maxHeight: '85vh', backgroundColor: '#1B3828', border: '1px solid rgba(255,255,255,0.12)' }}>
+    <Portal><div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(5,4,3,0.92)', backdropFilter: 'blur(4px)' }}>
+      <div className="rounded-2xl w-full max-w-md shadow-2xl flex flex-col" style={{ maxHeight: '85%', backgroundColor: '#1B3828', border: '1px solid rgba(255,255,255,0.12)' }}>
         <div className="px-5 py-4 shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.12)' }}>
-          <h2 className="text-base font-black text-white">Roll Call</h2>
-          <p className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.5)' }}>
-            {presentCount} of {delegates.length} delegates present — confirm before voting
+          <div className="flex items-center justify-between mb-1">
+            <h2 className="text-base font-black text-white">{t('voting_roll_call_heading')}</h2>
+            <div className="flex gap-1.5">
+              <MajorityPie arcFill={1}     color="#2A5A3C" label={`${presentCount}`} />
+              <MajorityPie arcFill={2 / 3} color="#B6871F" label={`${Math.ceil(presentCount * 2 / 3)}`} />
+              <MajorityPie arcFill={0.5}   color="#8A7A6A" label={`${Math.floor(presentCount / 2) + 1}`} />
+            </div>
+          </div>
+          <p className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>
+            {t('voting_roll_call_sub').replace('{present}', String(presentCount)).replace('{total}', String(votable.length))}
           </p>
         </div>
         <div className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
@@ -79,7 +95,7 @@ function RollCallModal({
                 <div className="w-9 h-9 rounded-full bg-[#DDD4C0] border border-[#C8BAA8] flex items-center justify-center shrink-0 overflow-hidden">
                   {(() => { const f = getCountryByName(d.country); return f ? <img src={getFlagUrl(f.code)} alt={f.code} className="w-6 h-6 object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <Emoji size="1.25rem">🌐</Emoji>; })()}
                 </div>
-                <span className="flex-1 text-sm text-white truncate">{d.country}</span>
+                <span className="flex-1 text-sm text-white truncate">{getCountryDisplayName(d.country, language)}</span>
                 <button
                   onClick={() => onCycleStatus(d.id)}
                   className="relative w-[90px] h-[30px] rounded-full cursor-pointer shrink-0 select-none"
@@ -107,11 +123,11 @@ function RollCallModal({
               color: presentCount > 0 ? '#1C1410' : 'rgba(255,255,255,0.4)',
             }}
           >
-            {presentCount > 0 ? `Start Voting with ${presentCount} delegates →` : 'Mark at least 1 delegate present'}
+            {presentCount > 0 ? t('voting_start_btn').replace('{n}', String(presentCount)) : t('voting_mark_present')}
           </button>
         </div>
       </div>
-    </div>
+    </div></Portal>
   );
 }
 
@@ -125,10 +141,11 @@ function getFlag(country: string) {
 function VoteScale({ forCount, againstCount, totalVoted }: {
   forCount: number; againstCount: number; totalVoted: number;
 }) {
+  const t = useT();
   const forPct = totalVoted > 0 ? (forCount / totalVoted) * 50 : 0;
   const againstPct = totalVoted > 0 ? (againstCount / totalVoted) * 50 : 0;
   return (
-    <div className="w-full max-w-2xl px-4">
+    <div className="w-full px-0">
       <div className="relative h-7 bg-[#EDE7D8] rounded-full overflow-hidden border border-[#DDD4C0]">
         <div
           className="absolute right-1/2 top-0 bottom-0 bg-red-500/70 transition-all duration-300"
@@ -141,10 +158,63 @@ function VoteScale({ forCount, againstCount, totalVoted }: {
         <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-[#9A8A78] -translate-x-px" />
       </div>
       <div className="flex justify-between mt-1.5 text-xs font-bold">
-        <span className="text-red-400">← {againstCount} Against</span>
-        <span className="text-[#9A8A78] text-[10px] font-normal">{totalVoted} voted</span>
-        <span className="text-green-400">{forCount} For →</span>
+        <span className="text-red-400">{t('voting_against_bar').replace('{n}', String(againstCount))}</span>
+        <span className="text-[#9A8A78] text-[10px] font-normal">{t('voting_voted_count').replace('{n}', String(totalVoted))}</span>
+        <span className="text-green-400">{t('voting_for_bar').replace('{n}', String(forCount))}</span>
       </div>
+    </div>
+  );
+}
+
+function PieChart({ forVotes, against, abstain }: { forVotes: number; against: number; abstain: number }) {
+  const total = forVotes + against + abstain;
+  if (total === 0) return null;
+  const cx = 60, cy = 60, r = 50;
+  const slice = (startAngle: number, value: number, color: string) => {
+    if (value === 0) return null;
+    const pct = value / total;
+    const angle = pct * 2 * Math.PI;
+    const x1 = cx + r * Math.sin(startAngle);
+    const y1 = cy - r * Math.cos(startAngle);
+    const x2 = cx + r * Math.sin(startAngle + angle);
+    const y2 = cy - r * Math.cos(startAngle + angle);
+    const large = angle > Math.PI ? 1 : 0;
+    return <path key={color} d={`M${cx},${cy} L${x1},${y1} A${r},${r} 0 ${large},1 ${x2},${y2} Z`} fill={color} />;
+  };
+  const forAngle = (forVotes / total) * 2 * Math.PI;
+  const againstAngle = (against / total) * 2 * Math.PI;
+  return (
+    <svg width="120" height="120" viewBox="0 0 120 120" className="shrink-0">
+      {slice(0, forVotes, '#4ade80')}
+      {slice(forAngle, against, '#f87171')}
+      {slice(forAngle + againstAngle, abstain, '#9A8A78')}
+    </svg>
+  );
+}
+
+function GavelLoader() {
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center gap-4" style={{ backgroundColor: '#EDE7D8' }}>
+      <style>{`
+        @keyframes gavel-strike {
+          0%   { transform: rotate(-30deg); }
+          35%  { transform: rotate(15deg); }
+          50%  { transform: rotate(10deg); }
+          65%  { transform: rotate(15deg); }
+          100% { transform: rotate(-30deg); }
+        }
+        .gavel-anim {
+          animation: gavel-strike 1s ease-in-out infinite;
+          transform-origin: 85% 85%;
+        }
+      `}</style>
+      <svg className="gavel-anim" width="72" height="72" viewBox="0 0 72 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="38" y="38" width="8" height="28" rx="3" transform="rotate(-45 38 38)" fill="#1B3828" />
+        <rect x="8" y="14" width="36" height="16" rx="5" transform="rotate(-45 8 14)" fill="#B6871F" />
+        <rect x="10" y="16" width="36" height="7" rx="3" transform="rotate(-45 10 16)" fill="#6A5A4A" opacity="0.4" />
+        <circle cx="56" cy="56" r="3" fill="#1B3828" opacity="0.5" />
+      </svg>
+      <p className="text-[#9A8A78] text-sm font-mono tracking-widest">LOADING…</p>
     </div>
   );
 }
@@ -154,9 +224,12 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   const router = useRouter();
 
   // ── ALL hooks must be called before any early returns ──────────────────────
+  const t = useT();
+  const { language } = useLanguage();
   const getSettings = useSettingsStore((s) => s.getSettings);
   const { user, session, loading: authLoading } = useAuth();
   const [accessState, setAccessState] = useState<'checking' | 'allowed' | 'denied' | 'signin'>('checking');
+  const hydrateSettings = useSettingsStore((s) => s.hydrateSettings);
   const [committee, setCommittee] = useState<Committee | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
@@ -173,7 +246,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       if (!session || !user) { setAccessState('signin'); return; }
       const access = await verifyConferenceAccess(code, session.access_token, user.id);
       if (cancelled) return;
-      setAccessState(access.kind === 'chair' ? 'allowed' : 'denied');
+      setAccessState(access.kind === 'chair' || access.kind === 'organizer' ? 'allowed' : 'denied');
     }
     setAccessState('checking');
     guard();
@@ -182,6 +255,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   const [votes, setVotes] = useState<DelegateVote[]>([]);
   const [phase, setPhase] = useState<VotingPhase>('voting');
   const [currentVoterIndex, setCurrentVoterIndex] = useState(0);
+  const [passedIds, setPassedIds] = useState<string[]>([]);
   const [rightsIndex, setRightsIndex] = useState(0);
   const [rightsSpeakerTime, setRightsSpeakerTime] = useState(60);
   const [rightsRunning, setRightsRunning] = useState(false);
@@ -192,6 +266,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   const [rollCallStatuses, setRollCallStatuses] = useState<Record<string, DelegateStatus>>({});
   const [rightsTimerLimit, setRightsTimerLimit] = useState(60);
   const [showEndDebateConfirm, setShowEndDebateConfirm] = useState(false);
+  const [hideVotes, setHideVotes] = useState(false);
   const [orderedRights, setOrderedRights] = useState<DelegateVote[]>([]);
   const dragIndexRef = useRef<number | null>(null);
   const resultPersistedRef = useRef(false);
@@ -201,6 +276,12 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       const found = await getCommitteeByCode(code);
       setCommittee(found ?? null);
       if (found) {
+        if (found.dbSettings) {
+          // DB is the source of truth — apply the master chair's saved thresholds/veto/etc.
+          const { chairJoinSuffix: _cjs, separateChairCode: _scc, ...rest } = found.dbSettings as Record<string, unknown>;
+          void _cjs; void _scc;
+          hydrateSettings(code, rest as Partial<CommitteeSettings>);
+        }
         const statuses: Record<string, DelegateStatus> = {};
         found.delegates.forEach((d) => { statuses[d.id] = d.status; });
         setRollCallStatuses(statuses);
@@ -237,11 +318,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   }, [rightsIndex, rightsTimerLimit]);
 
   if (loading || authLoading || accessState === 'checking') {
-    return (
-      <div className="min-h-screen bg-[#F6F1E9] flex items-center justify-center">
-        <img src="/loading.gif" alt="Loading..." className="w-24 h-24 object-contain" />
-      </div>
-    );
+    return <GavelLoader />;
   }
 
   if (accessState === 'signin') {
@@ -293,27 +370,28 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   const selectedDoc = allDRs.find((d) => d.id === selectedDocId) ?? null;
   // Use roll call statuses (local) if roll call is done, else use DB status
   const presentDelegates = committee.delegates
-    .filter((d) => (rollCallDone ? rollCallStatuses[d.id] ?? d.status : d.status) !== 'absent')
-    .sort((a, b) => a.country.localeCompare(b.country));
+    .filter((d) => !d.isObserver && (rollCallDone ? rollCallStatuses[d.id] ?? d.status : d.status) !== 'absent')
+    .sort((a, b) => compareCountryNames(a.country, b.country, language));
 
   const forCount = votes.filter((v) => v.choice === 'for' || v.choice === 'for-rights').length;
   const againstCount = votes.filter((v) => v.choice === 'against' || v.choice === 'against-rights').length;
   const abstainCount = votes.filter((v) => v.choice === 'abstain').length;
   const withRightsAll = votes
     .filter((v) => v.choice === 'for-rights' || v.choice === 'against-rights')
-    .sort((a, b) => a.country.localeCompare(b.country));
+    .sort((a, b) => compareCountryNames(a.country, b.country, language));
   const withRights = withRightsAll.slice(0, 10);
 
-  // Veto check (2c: use vetoCountries if set, else fall back to p5Delegations then hardcoded P5)
-  const vetoList = settings.vetoCountries?.length
-    ? settings.vetoCountries
+  // Veto check: custom → chair-picked vetoCountries; p5 → p5Delegations (fallback to hardcoded P5)
+  const vetoList = settings.vetoMode === 'custom'
+    ? (settings.vetoCountries ?? [])
     : (settings.p5Delegations?.length ? settings.p5Delegations : ["China","France","Russia","United Kingdom","United States"]);
-  const p5Veto = settings.vetoMode === 'p5'
+  const p5Veto = (settings.vetoMode === 'p5' || settings.vetoMode === 'custom')
+    && vetoList.length > 0
     && votes.some((v) => vetoList.includes(v.country) && (v.choice === 'against' || v.choice === 'against-rights'));
   const unanimousRequired = settings.vetoMode === 'unanimous';
   // Unanimous: every present delegate (P and PV) must vote 'for' or 'for-rights'
   const presentAndPvDelegates = committee.delegates.filter(
-    (d) => (rollCallStatuses[d.id] ?? d.status) !== 'absent'
+    (d) => !d.isObserver && (rollCallStatuses[d.id] ?? d.status) !== 'absent'
   );
   const unanimousFail =
     unanimousRequired &&
@@ -360,6 +438,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     setCurrentVoterIndex(0);
     setRightsIndex(0);
     setOrderedRights([]);
+    setPassedIds([]);
     resultPersistedRef.current = false;
   };
 
@@ -370,6 +449,11 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       return [...prev, { delegateId, country, choice }];
     });
     setCurrentVoterIndex((i) => i + 1);
+  };
+
+  const handlePass = (delegateId: string) => {
+    setPassedIds(prev => [...prev, delegateId]);
+    setCurrentVoterIndex(i => i + 1);
   };
 
   const handleFinishVoting = () => {
@@ -407,7 +491,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
         <img
           src="/GavellingLogo.png"
           alt="Gavelling"
-          className="w-[16vw] h-auto max-h-8 object-contain"
+          className="w-[150px] h-auto max-h-8 object-contain"
           onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
         />
       </Link>
@@ -421,7 +505,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
         onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
       >
-        ← Back to Session
+        {t('voting_back_to_session')}
       </button>
       <button
         onClick={() => setShowEndDebateConfirm(true)}
@@ -430,7 +514,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
         onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#A03030'; }}
         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#8B2020'; }}
       >
-        End Debate
+        {t('voting_end_debate')}
       </button>
       <button onClick={() => setShowSettings(true)} className="text-[#9A8A78] hover:text-[#1C1410] transition-colors shrink-0 text-2xl">⚙</button>
       {children}
@@ -464,7 +548,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
         <div className="flex-1 flex items-center justify-center">
           <div className="w-96 space-y-3">
             <p className="text-xs font-mono text-[#9A8A78] text-center mb-5 tracking-widest">
-              SELECT DRAFT RESOLUTION TO VOTE ON
+              {t('voting_select_dr')}
             </p>
             {allDRs.length === 0 ? (
               <p className="text-sm text-[#9A8A78] text-center py-8">No introduced draft resolutions.</p>
@@ -476,7 +560,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                     key={doc.id}
                     onClick={() => !isVoted && startNewVote(doc.id)}
                     disabled={isVoted}
-                    className={`w-full text-left px-4 py-4 rounded-xl border transition-colors ${
+                    className={`w-full text-start px-4 py-4 rounded-xl border transition-colors ${
                       isVoted
                         ? 'border-[#DDD4C0] bg-[#F6F1E9] opacity-60 cursor-not-allowed'
                         : 'border-[#DDD4C0] bg-[#EDE7D8] text-[#6A5A4A] hover:border-[#1B3828]/60 hover:bg-[#1B3828]/10'
@@ -493,7 +577,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                     </div>
                     <span className="text-base font-bold text-[#1C1410] block">{doc.title}</span>
                     {doc.sponsors.length > 0 && (
-                      <span className="text-xs text-[#9A8A78] block mt-1">Sponsors: {doc.sponsors.join(', ')}</span>
+                      <span className="text-xs text-[#9A8A78] block mt-1">{sponsorLabel(committee, t('voting_sponsors'))}: {doc.sponsors.join(', ')}</span>
                     )}
                   </button>
                 );
@@ -505,38 +589,72 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     );
   }
 
-  const currentDelegate = currentVoterIndex < presentDelegates.length
-    ? presentDelegates[currentVoterIndex]
-    : null;
-  const upcomingDelegates = presentDelegates.slice(currentVoterIndex + 1, currentVoterIndex + 6);
+  // Pass-round: derived, no extra state needed
+  const mainRoundComplete = currentVoterIndex >= presentDelegates.length;
+  const passVoterIndex = passedIds.filter(id => votes.some(v => v.delegateId === id)).length;
+  const inPassRound = mainRoundComplete && passVoterIndex < passedIds.length;
+
+  const currentDelegate = (() => {
+    if (!mainRoundComplete) return presentDelegates[currentVoterIndex];
+    if (inPassRound) {
+      const nextId = passedIds[passVoterIndex];
+      return committee.delegates.find(d => d.id === nextId) ?? null;
+    }
+    return null;
+  })();
+
+  const upcomingDelegates = (() => {
+    if (!mainRoundComplete) return presentDelegates.slice(currentVoterIndex + 1, currentVoterIndex + 6);
+    if (inPassRound) {
+      return passedIds
+        .slice(passVoterIndex + 1, passVoterIndex + 6)
+        .map(id => committee.delegates.find(d => d.id === id)!)
+        .filter(Boolean);
+    }
+    return [];
+  })();
 
   return (
-    <div className="h-screen bg-[#F6F1E9] flex flex-col overflow-hidden">
+    <FitToScreen>
+    <div className="h-full w-full bg-[#F6F1E9] flex flex-col overflow-hidden">
       <Header>
         <span className="text-xs font-mono font-bold text-[#1B3828] bg-[#DDD4C0] px-2 py-0.5 rounded shrink-0">
           {selectedDoc.docCode}
         </span>
         <span className="text-sm font-bold text-[#1C1410] truncate hidden sm:block">{selectedDoc.title}</span>
         <span className="text-xs text-[#9A8A78] shrink-0">
-          {Math.min(currentVoterIndex, presentDelegates.length)}/{presentDelegates.length} voted
+          {votes.length}/{presentDelegates.length} voted
         </span>
         <button
           onClick={() => setSelectedDocId(null)}
           className="text-xs text-[#9A8A78] hover:text-[#6A5A4A] transition-colors shrink-0"
         >
-          ← DRs
+          {t('voting_back_drs')}
         </button>
       </Header>
 
       {/* ── Active voting: one delegate at a time ── */}
       {phase === 'voting' && currentDelegate && (
         <div className="flex-1 flex flex-col items-center py-6 px-4 overflow-hidden">
+          {inPassRound && (
+            <div className="w-full max-w-3xl mb-2 flex items-center justify-center gap-2 py-1 px-3 rounded-xl"
+              style={{ backgroundColor: 'rgba(182,135,31,0.15)', border: '1px solid rgba(182,135,31,0.35)' }}>
+              <span className="text-[10px] font-black text-amber-400 font-mono tracking-widest">
+                {t('voting_pass_round')}
+              </span>
+              <span className="text-[10px] text-[#9A8A78] font-mono">
+                {t('voting_pass_round_sub')
+                  .replace('{current}', String(passVoterIndex + 1))
+                  .replace('{total}', String(passedIds.length))}
+              </span>
+            </div>
+          )}
           {/* Current voter */}
           <div className="flex-1 flex flex-col items-center justify-center min-h-0">
             <div className="select-none mb-3 flex items-center justify-center">
               {(() => {
                 const f = getCountryByName(currentDelegate.country);
-                const size = 'min(33vw, 27vh)';
+                const size = '220px';
                 return f ? (
                   <div style={{ width: size, aspectRatio: '3 / 2', borderRadius: '14px', overflow: 'hidden', boxShadow: '0 0 0 3.75px rgba(28,20,16,0.22)', flexShrink: 0 }}>
                     <img
@@ -554,13 +672,13 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
               })()}
             </div>
             <h1
-              style={{ fontSize: 'min(5.5vw, 5vh)' }}
+              style={{ fontSize: '40px' }}
               className="font-black text-[#1C1410] text-center leading-tight mb-1"
             >
-              {currentDelegate.country}
+              {getCountryDisplayName(currentDelegate.country, language)}
             </h1>
             <p className="text-[#9A8A78] text-sm">
-              {currentVoterIndex + 1} of {presentDelegates.length}
+              {currentVoterIndex + 1} / {presentDelegates.length}
             </p>
           </div>
 
@@ -570,48 +688,78 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
               onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'for')}
               className="flex-1 bg-[#2A7A3C] hover:bg-[#3D8A52] border border-[#2A7A3C] text-white font-black text-base py-6 rounded-2xl transition-colors"
             >
-              In Favour
+              {t('voting_in_favour')}
             </button>
             <button
               onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'for-rights')}
               className="flex-1 bg-[#1B5C2E] hover:bg-[#2A7A3C] border border-[#3D7A52] text-[#EED98A] font-black text-sm py-6 rounded-2xl transition-colors leading-snug"
             >
-              In Favour<br />with Rights
+              {t('voting_in_favour')}<br />{t('voting_with_rights_label')}
             </button>
-            {(rollCallStatuses[currentDelegate.id] ?? currentDelegate.status) === 'present' ? (
+            {settings.allowAbstentions && (
+              (rollCallStatuses[currentDelegate.id] ?? currentDelegate.status) === 'present' ? (
+                <button
+                  onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'abstain')}
+                  className="flex-1 bg-[#DDD4C0] hover:bg-[#C8BAA8] border border-[#C8BAA8] text-[#6A5A4A] font-black text-base py-6 rounded-2xl transition-colors"
+                >
+                  {t('voting_abstain')}
+                </button>
+              ) : (
+                <button disabled className="flex-1 bg-[#EDE7D8] border border-[#DDD4C0] text-[#9A8A78] font-black text-base py-6 rounded-2xl opacity-40 cursor-not-allowed">
+                  {t('voting_abstain_pv')}
+                </button>
+              )
+            )}
+            {!inPassRound && (
               <button
-                onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'abstain')}
-                className="flex-1 bg-[#DDD4C0] hover:bg-[#C8BAA8] border border-[#C8BAA8] text-[#6A5A4A] font-black text-base py-6 rounded-2xl transition-colors"
+                onClick={() => handlePass(currentDelegate.id)}
+                className="flex-1 bg-[#EDE7D8] hover:bg-[#DDD4C0] border border-[#DDD4C0] text-[#6A5A4A] font-black text-sm py-6 rounded-2xl transition-colors"
               >
-                Abstain
-              </button>
-            ) : (
-              <button disabled className="flex-1 bg-[#EDE7D8] border border-[#DDD4C0] text-[#9A8A78] font-black text-base py-6 rounded-2xl opacity-40 cursor-not-allowed">
-                Abstain (P+V)
+                {t('voting_pass')}
               </button>
             )}
             <button
               onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'against-rights')}
               className="flex-1 bg-[#7A2020] hover:bg-[#8B3030] border border-[#7A2020] text-[#EED98A] font-black text-sm py-6 rounded-2xl transition-colors leading-snug"
             >
-              Against<br />with Rights
+              {t('voting_against')}<br />{t('voting_with_rights_label')}
             </button>
             <button
               onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'against')}
               className="flex-1 bg-[#8B2020] hover:bg-[#A03030] border border-[#8B2020] text-white font-black text-base py-6 rounded-2xl transition-colors"
             >
-              Against
+              {t('voting_against')}
             </button>
           </div>
 
           {/* Scale */}
-          <div className="mb-4 w-full flex justify-center">
-            <VoteScale forCount={forCount} againstCount={againstCount} totalVoted={votes.length} />
+          <div className="mb-4 w-full max-w-3xl relative">
+            <div className={hideVotes ? 'blur-sm select-none pointer-events-none' : ''}>
+              <VoteScale forCount={forCount} againstCount={againstCount} totalVoted={votes.length} />
+            </div>
+            <button
+              onClick={() => setHideVotes((v) => !v)}
+              title={hideVotes ? 'Show vote count' : 'Hide vote count'}
+              className="absolute right-0 top-0 h-7 w-9 flex items-center justify-center rounded-r-full text-[#9A8A78] hover:text-[#1C1410] transition-colors focus:outline-none"
+              style={{ backgroundColor: 'rgba(221,212,192,0.85)', borderLeft: '1px solid #DDD4C0' }}>
+              {hideVotes ? (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/>
+                  <path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/>
+                  <line x1="1" y1="1" x2="23" y2="23"/>
+                </svg>
+              ) : (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+              )}
+            </button>
           </div>
 
           {/* Upcoming voters — fixed height, invisible when empty so layout never shifts */}
           <div className={`mt-4 w-full max-w-2xl h-[110px] shrink-0 ${upcomingDelegates.length === 0 ? 'invisible' : ''}`}>
-            <p className="text-[10px] text-[#9A8A78] font-mono text-center mb-2 tracking-widest">UP NEXT</p>
+            <p className="text-[10px] text-[#9A8A78] font-mono text-center mb-2 tracking-widest">{t('voting_up_next')}</p>
             <div className="flex items-center justify-center gap-4 h-[80px]">
               {upcomingDelegates.map((d, i) => {
                 const qf = getCountryByName(d.country);
@@ -630,7 +778,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                         <Emoji size={`${Math.round(qHeight * 0.65)}px`}>🌐</Emoji>
                       </div>
                     )}
-                    <span className="text-[9px] text-[#9A8A78] text-center max-w-[52px] truncate">{d.country}</span>
+                    <span className="text-[9px] text-[#9A8A78] text-center max-w-[52px] truncate">{getCountryDisplayName(d.country, language)}</span>
                   </div>
                 );
               })}
@@ -642,29 +790,28 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       {/* ── All voted — proceed screen ── */}
       {phase === 'voting' && !currentDelegate && (
         <div className="flex-1 flex flex-col items-center justify-center px-8 gap-6">
-          <Emoji size="3.75rem">🗳️</Emoji>
-          <h2 className="text-3xl font-black text-[#1C1410]">
-            All {presentDelegates.length} delegates have voted
+          <h2 className="text-4xl font-black text-[#1C1410]">
+            {t('voting_all_voted').replace('{n}', String(presentDelegates.length))}
           </h2>
           <div className="flex gap-10 text-center">
             <div>
               <div className="text-4xl font-black text-green-400">{forCount}</div>
-              <div className="text-[#6A5A4A] text-sm mt-1">For</div>
+              <div className="text-[#6A5A4A] text-sm mt-1">{t('voting_for_label')}</div>
             </div>
             <div>
               <div className="text-4xl font-black text-red-400">{againstCount}</div>
-              <div className="text-[#6A5A4A] text-sm mt-1">Against</div>
+              <div className="text-[#6A5A4A] text-sm mt-1">{t('voting_against_label')}</div>
             </div>
             {abstainCount > 0 && (
               <div>
                 <div className="text-4xl font-black text-[#6A5A4A]">{abstainCount}</div>
-                <div className="text-[#9A8A78] text-sm mt-1">Abstain</div>
+                <div className="text-[#9A8A78] text-sm mt-1">{t('voting_abstain_label')}</div>
               </div>
             )}
             {withRights.length > 0 && (
               <div>
                 <div className="text-4xl font-black text-amber-400">{withRights.length}</div>
-                <div className="text-[#6A5A4A] text-sm mt-1">w/ Rights</div>
+                <div className="text-[#6A5A4A] text-sm mt-1">{t('voting_with_rights_label')}</div>
               </div>
             )}
           </div>
@@ -674,8 +821,8 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             className="bg-[#1B3828] hover:bg-[#2A5A3C] text-white px-12 py-4 rounded-2xl font-black text-lg transition-colors mt-2"
           >
             {withRights.length > 0
-              ? `Proceed to Rights Speakers (${withRights.length}) →`
-              : 'See Final Result →'}
+              ? t('voting_proceed_rights').replace('{n}', String(withRights.length))
+              : t('voting_see_result')}
           </button>
         </div>
       )}
@@ -685,12 +832,12 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
         <div className="flex-1 flex flex-col items-center justify-between py-8 px-8 overflow-hidden">
           <div className="flex-1 flex flex-col items-center justify-center min-h-0">
             <p className="text-xs text-amber-400 font-mono tracking-widest mb-6">
-              RIGHTS SPEAKERS — {rightsIndex + 1} OF {orderedRights.length}
+              {t('voting_rights_header').replace('{current}', String(rightsIndex + 1)).replace('{total}', String(orderedRights.length))}
             </p>
             <div className="select-none mb-3 flex items-center justify-center">
               {(() => {
                 const f = getCountryByName(orderedRights[rightsIndex].country);
-                const size = 'min(27vw, 24vh)';
+                const size = '196px';
                 return f ? (
                   <div style={{ width: size, aspectRatio: '3 / 2', borderRadius: '14px', overflow: 'hidden', boxShadow: '0 0 0 3.75px rgba(28,20,16,0.22)', flexShrink: 0 }}>
                     <img
@@ -708,13 +855,13 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
               })()}
             </div>
             <h1
-              style={{ fontSize: 'min(5vw, 4vh)' }}
+              style={{ fontSize: '32px' }}
               className="font-black text-[#1C1410] text-center mb-2"
             >
-              {orderedRights[rightsIndex].country}
+              {getCountryDisplayName(orderedRights[rightsIndex].country, language)}
             </h1>
             <p className="text-amber-400 font-semibold">
-              {orderedRights[rightsIndex].choice === 'for-rights' ? '★ In Favour with Rights' : '★ Against with Rights'}
+              {orderedRights[rightsIndex].choice === 'for-rights' ? t('voting_rights_for') : t('voting_rights_against')}
             </p>
             {/* Rights speaker countdown timer */}
             <div className={`text-6xl font-black font-mono mt-4 tabular-nums ${rightsSpeakerTime <= 10 ? 'text-red-500' : rightsSpeakerTime <= 20 ? 'text-yellow-500' : 'text-[#1C1410]'}`}>
@@ -725,7 +872,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                 onClick={() => setRightsRunning((r) => !r)}
                 className={`px-6 py-2.5 rounded-xl font-bold text-sm transition-colors ${rightsRunning ? 'bg-yellow-600 hover:bg-yellow-500 text-white' : 'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'}`}
               >
-                {rightsRunning ? '⏸ Pause' : '▶ Start'}
+                {rightsRunning ? t('voting_pause') : t('voting_start')}
               </button>
               {[30, 45, 60, 90, 120].map((s) => (
                 <button key={s} onClick={() => setRightsTimerLimit(s)}
@@ -764,13 +911,13 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                   }`}
                 >
                   {!isCurrent && <span className="text-[#9A8A78] text-xs">⠿</span>}
-                  <span className="text-xs w-5 font-mono text-right opacity-60">{absIdx + 1}</span>
-                  <span>{getFlag(v.country)} {v.country}</span>
-                  <span className={`ml-auto text-xs font-semibold ${
+                  <span className="text-xs w-5 font-mono text-end opacity-60">{absIdx + 1}</span>
+                  <span>{getFlag(v.country)} {getCountryDisplayName(v.country, language)}</span>
+                  <span className={`ms-auto text-xs font-semibold ${
                     isCurrent ? 'text-[#EED98A]' :
                     v.choice === 'for-rights' ? 'text-[#2A7A3C]' : 'text-[#8B2020]'
                   }`}>
-                    {isCurrent ? 'Speaking' : v.choice === 'for-rights' ? 'For w/ Rights' : 'Against w/ Rights'}
+                    {isCurrent ? t('voting_speaking') : v.choice === 'for-rights' ? t('voting_for_rights_list') : t('voting_against_rights_list')}
                   </span>
                 </div>
               );
@@ -781,7 +928,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             onClick={() => { setRightsRunning(false); handleNextRightsSpeaker(); }}
             className="w-full max-w-md bg-[#1B3828] hover:bg-[#2A5A3C] text-white py-4 rounded-2xl font-black text-lg transition-colors"
           >
-            {rightsIndex + 1 < orderedRights.length ? 'Next Rights Speaker →' : 'See Final Result →'}
+            {rightsIndex + 1 < orderedRights.length ? t('voting_next_rights') : t('voting_see_result')}
           </button>
         </div>
       )}
@@ -790,7 +937,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       {phase === 'result' && (
         <div className="flex-1 flex flex-col items-center justify-center px-8 gap-6">
           <p className="text-xs font-mono text-[#9A8A78] tracking-widest uppercase">
-            Final Result — {selectedDoc.docCode}
+            {t('voting_final_result').replace('{code}', selectedDoc.docCode)}
           </p>
 
           {/* Main result bubble */}
@@ -804,7 +951,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             }}
           >
             <div className="text-6xl font-black mb-3" style={{ color: passed ? '#EED98A' : '#FFD0D0' }}>
-              {passed ? '✓ PASSED' : '✗ FAILED'}
+              {passed ? t('voting_passed') : t('voting_failed')}
             </div>
             <p className="text-xl font-bold mb-6" style={{ color: passed ? 'rgba(238,217,138,0.75)' : 'rgba(255,208,208,0.75)' }}>
               {selectedDoc.title}
@@ -812,48 +959,51 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             <div className="flex justify-center gap-10">
               <div className="text-center">
                 <div className="text-4xl font-black" style={{ color: '#6EE7A0' }}>{forCount}</div>
-                <div className="text-sm mt-1" style={{ color: passed ? 'rgba(238,217,138,0.6)' : 'rgba(255,208,208,0.6)' }}>For</div>
+                <div className="text-sm mt-1" style={{ color: passed ? 'rgba(238,217,138,0.6)' : 'rgba(255,208,208,0.6)' }}>{t('voting_for_label')}</div>
               </div>
               <div className="text-center">
                 <div className="text-4xl font-black" style={{ color: '#FCA5A5' }}>{againstCount}</div>
-                <div className="text-sm mt-1" style={{ color: passed ? 'rgba(238,217,138,0.6)' : 'rgba(255,208,208,0.6)' }}>Against</div>
+                <div className="text-sm mt-1" style={{ color: passed ? 'rgba(238,217,138,0.6)' : 'rgba(255,208,208,0.6)' }}>{t('voting_against_label')}</div>
               </div>
               {abstainCount > 0 && (
                 <div className="text-center">
                   <div className="text-4xl font-black" style={{ color: 'rgba(255,255,255,0.5)' }}>{abstainCount}</div>
-                  <div className="text-sm mt-1" style={{ color: passed ? 'rgba(238,217,138,0.6)' : 'rgba(255,208,208,0.6)' }}>Abstain</div>
+                  <div className="text-sm mt-1" style={{ color: passed ? 'rgba(238,217,138,0.6)' : 'rgba(255,208,208,0.6)' }}>{t('voting_abstain_label')}</div>
                 </div>
               )}
               {withRights.length > 0 && (
                 <div className="text-center">
                   <div className="text-4xl font-black" style={{ color: '#FCD34D' }}>{withRights.length}</div>
-                  <div className="text-sm mt-1" style={{ color: passed ? 'rgba(238,217,138,0.6)' : 'rgba(255,208,208,0.6)' }}>w/ Rights</div>
+                  <div className="text-sm mt-1" style={{ color: passed ? 'rgba(238,217,138,0.6)' : 'rgba(255,208,208,0.6)' }}>{t('voting_with_rights_label')}</div>
                 </div>
               )}
             </div>
             {p5Veto && (
               <p className="text-sm mt-4 font-semibold flex items-center gap-1 justify-center" style={{ color: '#FCA5A5' }}>
-                <Emoji size="1em">🛡️</Emoji> P5 veto exercised
+                <Emoji size="1em">🛡️</Emoji> {t('voting_p5_veto')}
               </p>
             )}
             {unanimousFail && (
               <p className="text-sm mt-4 font-semibold" style={{ color: '#FCA5A5' }}>
-                ⚠️ Unanimous vote required — one or more delegates voted against or abstained
+                {t('voting_unanimous_fail')}
               </p>
             )}
             {!p5Veto && !unanimousFail && settings.substantiveThreshold === 'supermajority-2-3' && (
               <p className="text-sm mt-3 font-semibold" style={{ color: thresholdMet ? '#6EE7A0' : '#FCA5A5' }}>
-                2/3 supermajority required · {forCount}/{totalDecisive} ({totalDecisive > 0 ? Math.round(forCount / totalDecisive * 100) : 0}%)
+                {t('voting_supermajority').replace('{for}', String(forCount)).replace('{total}', String(totalDecisive)).replace('{pct}', String(totalDecisive > 0 ? Math.round(forCount / totalDecisive * 100) : 0))}
               </p>
             )}
             {!p5Veto && !unanimousFail && settings.substantiveThreshold === 'consensus' && (
               <p className="text-sm mt-3 font-semibold" style={{ color: thresholdMet ? '#6EE7A0' : '#FCA5A5' }}>
-                Consensus required · {againstCount} voted against
+                {t('voting_consensus').replace('{against}', String(againstCount))}
               </p>
             )}
           </div>
 
-          <VoteScale forCount={forCount} againstCount={againstCount} totalVoted={votes.length} />
+          <div className="flex items-center justify-center gap-6">
+            <PieChart forVotes={forCount} against={againstCount} abstain={abstainCount} />
+            <VoteScale forCount={forCount} againstCount={againstCount} totalVoted={votes.length} />
+          </div>
 
           {/* Action buttons */}
           <div className="flex gap-3">
@@ -864,7 +1014,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#C8BAA8'; }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#DDD4C0'; }}
             >
-              Vote Again
+              {t('voting_vote_again')}
             </button>
             <button
               onClick={() => setSelectedDocId(null)}
@@ -873,7 +1023,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
             >
-              Move to Next DR →
+              {t('voting_next_dr')}
             </button>
             <button
               onClick={() => setShowEndDebateConfirm(true)}
@@ -882,7 +1032,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#A03030'; }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#8B2020'; }}
             >
-              End Debate
+              {t('voting_end_debate')}
             </button>
           </div>
         </div>
@@ -891,7 +1041,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
 
       {/* ── End Debate confirmation modal ── */}
       {showEndDebateConfirm && (
-        <div
+        <Portal><div
           className="fixed inset-0 z-50 flex items-center justify-center"
           style={{ background: 'rgba(5,4,3,0.80)', backdropFilter: 'blur(6px)' }}
           onClick={() => setShowEndDebateConfirm(false)}
@@ -910,10 +1060,10 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                 >
                   🔨
                 </div>
-                <h2 className="text-lg font-black text-[#1C1410]">End Debate?</h2>
+                <h2 className="text-lg font-black text-[#1C1410]">{t('voting_end_debate_title')}</h2>
               </div>
               <p className="text-sm text-[#6A5A4A] leading-relaxed mt-2">
-                This will permanently adjourn the committee. All delegates will be shown a session-closed screen and no further changes can be made.
+                {t('voting_end_debate_body')}
               </p>
             </div>
             {/* Buttons */}
@@ -925,7 +1075,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                 onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#DDD4C0'; }}
                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#EDE7D8'; }}
               >
-                Cancel
+                {t('voting_cancel')}
               </button>
               <button
                 onClick={() => { setShowEndDebateConfirm(false); handleEndDebate(); }}
@@ -934,12 +1084,13 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                 onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#A03030'; }}
                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#8B2020'; }}
               >
-                Yes, End Debate
+                {t('voting_confirm_end')}
               </button>
             </div>
           </div>
-        </div>
+        </div></Portal>
       )}
     </div>
+    </FitToScreen>
   );
 }

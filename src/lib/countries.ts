@@ -281,11 +281,135 @@ export const COUNTRY_NAMES_ES: Record<string, string> = {
   AE: 'Emiratos Árabes Unidos', GB: 'Reino Unido', US: 'Estados Unidos',
   UY: 'Uruguay', UZ: 'Uzbekistán', VU: 'Vanuatu', VE: 'Venezuela', VN: 'Vietnam',
   YE: 'Yemen', ZM: 'Zambia', ZW: 'Zimbabue', EU: 'Unión Europea',
+  // Non-UN-member / observer states
   PS: 'Palestina', VA: 'Santa Sede', XK: 'Kosovo', CK: 'Islas Cook', NU: 'Niue',
 };
 
+export const COUNTRY_NAMES_FR: Record<string, string> = {
+  AF: 'Afghanistan', AL: 'Albanie', DZ: 'Algérie', AD: 'Andorre', AO: 'Angola',
+  AG: 'Antigua-et-Barbuda', AR: 'Argentine', AM: 'Arménie', AU: 'Australie',
+  AT: 'Autriche', AZ: 'Azerbaïdjan', BS: 'Bahamas', BH: 'Bahreïn', BD: 'Bangladesh',
+  BB: 'Barbade', BY: 'Biélorussie', BE: 'Belgique', BZ: 'Belize', BJ: 'Bénin',
+  BT: 'Bhoutan', BO: 'Bolivie', BA: 'Bosnie-Herzégovine', BW: 'Botswana',
+  BR: 'Brésil', BN: 'Brunéi', BG: 'Bulgarie', BF: 'Burkina Faso', BI: 'Burundi',
+  CV: 'Cap-Vert', KH: 'Cambodge', CM: 'Cameroun', CA: 'Canada', CF: 'République centrafricaine',
+  TD: 'Tchad', CL: 'Chili', CN: 'Chine', CO: 'Colombie', KM: 'Comores',
+  CG: 'Congo', CD: 'République démocratique du Congo', CR: 'Costa Rica',
+  CI: "Côte d'Ivoire", HR: 'Croatie', CU: 'Cuba', CY: 'Chypre',
+  CZ: 'République tchèque', DK: 'Danemark', DJ: 'Djibouti', DM: 'Dominique',
+  DO: 'République dominicaine', EC: 'Équateur', EG: 'Égypte', SV: 'El Salvador',
+  GQ: 'Guinée équatoriale', ER: 'Érythrée', EE: 'Estonie', SZ: 'Eswatini',
+  ET: 'Éthiopie', FJ: 'Fidji', FI: 'Finlande', FR: 'France', GA: 'Gabon',
+  GM: 'Gambie', GE: 'Géorgie', DE: 'Allemagne', GH: 'Ghana', GR: 'Grèce',
+  GD: 'Grenade', GT: 'Guatemala', GN: 'Guinée', GW: 'Guinée-Bissau',
+  GY: 'Guyana', HT: 'Haïti', HN: 'Honduras', HU: 'Hongrie', IS: 'Islande',
+  IN: 'Inde', ID: 'Indonésie', IR: 'Iran', IQ: 'Irak', IE: 'Irlande',
+  IL: 'Israël', IT: 'Italie', JM: 'Jamaïque', JP: 'Japon', JO: 'Jordanie',
+  KZ: 'Kazakhstan', KE: 'Kenya', KI: 'Kiribati', KP: 'Corée du Nord',
+  KR: 'Corée du Sud', KW: 'Koweït', KG: 'Kirghizistan', LA: 'Laos', LV: 'Lettonie',
+  LB: 'Liban', LS: 'Lesotho', LR: 'Libéria', LY: 'Libye', LI: 'Liechtenstein',
+  LT: 'Lituanie', LU: 'Luxembourg', MG: 'Madagascar', MW: 'Malawi',
+  MY: 'Malaisie', MV: 'Maldives', ML: 'Mali', MT: 'Malte', MH: 'Îles Marshall',
+  MR: 'Mauritanie', MU: 'Maurice', MX: 'Mexique', FM: 'Micronésie',
+  MD: 'Moldavie', MC: 'Monaco', MN: 'Mongolie', ME: 'Monténégro', MA: 'Maroc',
+  MZ: 'Mozambique', MM: 'Myanmar', NA: 'Namibie', NR: 'Nauru', NP: 'Népal',
+  NL: 'Pays-Bas', NZ: 'Nouvelle-Zélande', NI: 'Nicaragua', NE: 'Niger',
+  NG: 'Nigéria', NO: 'Norvège', OM: 'Oman', PK: 'Pakistan', PW: 'Palaos',
+  PA: 'Panama', PG: 'Papouasie-Nouvelle-Guinée', PY: 'Paraguay', PE: 'Pérou',
+  PH: 'Philippines', PL: 'Pologne', PT: 'Portugal', QA: 'Qatar', RO: 'Roumanie',
+  RU: 'Russie', RW: 'Rwanda', KN: 'Saint-Kitts-et-Nevis', LC: 'Sainte-Lucie',
+  VC: 'Saint-Vincent-et-les-Grenadines', WS: 'Samoa', SM: 'Saint-Marin',
+  ST: 'Sao Tomé-et-Principe', SA: 'Arabie saoudite', SN: 'Sénégal', RS: 'Serbie',
+  SC: 'Seychelles', SL: 'Sierra Leone', SG: 'Singapour', SK: 'Slovaquie',
+  SI: 'Slovénie', SB: 'Îles Salomon', SO: 'Somalie', ZA: 'Afrique du Sud',
+  SS: 'Soudan du Sud', ES: 'Espagne', LK: 'Sri Lanka', SD: 'Soudan',
+  SR: 'Suriname', SE: 'Suède', CH: 'Suisse', SY: 'Syrie', TW: 'Taïwan',
+  TJ: 'Tadjikistan', TZ: 'Tanzanie', TH: 'Thaïlande', TL: 'Timor oriental',
+  TG: 'Togo', TO: 'Tonga', TT: 'Trinité-et-Tobago', TN: 'Tunisie', TR: 'Turquie',
+  TM: 'Turkménistan', TV: 'Tuvalu', UG: 'Ouganda', UA: 'Ukraine',
+  AE: 'Émirats arabes unis', GB: 'Royaume-Uni', US: 'États-Unis',
+  UY: 'Uruguay', UZ: 'Ouzbékistan', VU: 'Vanuatu', VE: 'Venezuela', VN: 'Viêt Nam',
+  YE: 'Yémen', ZM: 'Zambie', ZW: 'Zimbabwe', EU: 'Union européenne',
+  PS: 'Palestine', VA: 'Saint-Siège', XK: 'Kosovo', CK: 'Îles Cook', NU: 'Niue',
+};
+
+export const COUNTRY_NAMES_AR: Record<string, string> = {
+  AF: 'أفغانستان', AL: 'ألبانيا', DZ: 'الجزائر', AD: 'أندورا', AO: 'أنغولا',
+  AG: 'أنتيغوا وبربودا', AR: 'الأرجنتين', AM: 'أرمينيا', AU: 'أستراليا',
+  AT: 'النمسا', AZ: 'أذربيجان', BS: 'الباهاما', BH: 'البحرين', BD: 'بنغلاديش',
+  BB: 'بربادوس', BY: 'بيلاروسيا', BE: 'بلجيكا', BZ: 'بليز', BJ: 'بنين',
+  BT: 'بوتان', BO: 'بوليفيا', BA: 'البوسنة والهرسك', BW: 'بوتسوانا',
+  BR: 'البرازيل', BN: 'بروناي', BG: 'بلغاريا', BF: 'بوركينا فاسو', BI: 'بوروندي',
+  CV: 'الرأس الأخضر', KH: 'كمبوديا', CM: 'الكاميرون', CA: 'كندا', CF: 'جمهورية أفريقيا الوسطى',
+  TD: 'تشاد', CL: 'تشيلي', CN: 'الصين', CO: 'كولومبيا', KM: 'جزر القمر',
+  CG: 'الكونغو', CD: 'جمهورية الكونغو الديمقراطية', CR: 'كوستاريكا',
+  CI: 'ساحل العاج', HR: 'كرواتيا', CU: 'كوبا', CY: 'قبرص',
+  CZ: 'جمهورية التشيك', DK: 'الدنمارك', DJ: 'جيبوتي', DM: 'دومينيكا',
+  DO: 'جمهورية الدومينيكان', EC: 'الإكوادور', EG: 'مصر', SV: 'السلفادور',
+  GQ: 'غينيا الاستوائية', ER: 'إريتريا', EE: 'إستونيا', SZ: 'إسواتيني',
+  ET: 'إثيوبيا', FJ: 'فيجي', FI: 'فنلندا', FR: 'فرنسا', GA: 'الغابون',
+  GM: 'غامبيا', GE: 'جورجيا', DE: 'ألمانيا', GH: 'غانا', GR: 'اليونان',
+  GD: 'غرينادا', GT: 'غواتيمالا', GN: 'غينيا', GW: 'غينيا بيساو',
+  GY: 'غيانا', HT: 'هايتي', HN: 'هندوراس', HU: 'المجر', IS: 'آيسلندا',
+  IN: 'الهند', ID: 'إندونيسيا', IR: 'إيران', IQ: 'العراق', IE: 'أيرلندا',
+  IL: 'إسرائيل', IT: 'إيطاليا', JM: 'جامايكا', JP: 'اليابان', JO: 'الأردن',
+  KZ: 'كازاخستان', KE: 'كينيا', KI: 'كيريباتي', KP: 'كوريا الشمالية',
+  KR: 'كوريا الجنوبية', KW: 'الكويت', KG: 'قيرغيزستان', LA: 'لاوس', LV: 'لاتفيا',
+  LB: 'لبنان', LS: 'ليسوتو', LR: 'ليبيريا', LY: 'ليبيا', LI: 'ليختنشتاين',
+  LT: 'ليتوانيا', LU: 'لوكسمبورغ', MG: 'مدغشقر', MW: 'مالاوي',
+  MY: 'ماليزيا', MV: 'المالديف', ML: 'مالي', MT: 'مالطا', MH: 'جزر مارشال',
+  MR: 'موريتانيا', MU: 'موريشيوس', MX: 'المكسيك', FM: 'ميكرونيزيا',
+  MD: 'مولدوفا', MC: 'موناكو', MN: 'منغوليا', ME: 'الجبل الأسود', MA: 'المغرب',
+  MZ: 'موزمبيق', MM: 'ميانمار', NA: 'ناميبيا', NR: 'ناورو', NP: 'نيبال',
+  NL: 'هولندا', NZ: 'نيوزيلندا', NI: 'نيكاراغوا', NE: 'النيجر',
+  NG: 'نيجيريا', NO: 'النرويج', OM: 'عُمان', PK: 'باكستان', PW: 'بالاو',
+  PA: 'بنما', PG: 'بابوا غينيا الجديدة', PY: 'باراغواي', PE: 'بيرو',
+  PH: 'الفلبين', PL: 'بولندا', PT: 'البرتغال', QA: 'قطر', RO: 'رومانيا',
+  RU: 'روسيا', RW: 'رواندا', KN: 'سانت كيتس ونيفيس', LC: 'سانت لوسيا',
+  VC: 'سانت فنسنت والغرينادين', WS: 'ساموا', SM: 'سان مارينو',
+  ST: 'ساو تومي وبرينسيبي', SA: 'المملكة العربية السعودية', SN: 'السنغال', RS: 'صربيا',
+  SC: 'سيشل', SL: 'سيراليون', SG: 'سنغافورة', SK: 'سلوفاكيا',
+  SI: 'سلوفينيا', SB: 'جزر سليمان', SO: 'الصومال', ZA: 'جنوب أفريقيا',
+  SS: 'جنوب السودان', ES: 'إسبانيا', LK: 'سريلانكا', SD: 'السودان',
+  SR: 'سورينام', SE: 'السويد', CH: 'سويسرا', SY: 'سوريا', TW: 'تايوان',
+  TJ: 'طاجيكستان', TZ: 'تنزانيا', TH: 'تايلاند', TL: 'تيمور الشرقية',
+  TG: 'توغو', TO: 'تونغا', TT: 'ترينيداد وتوباغو', TN: 'تونس', TR: 'تركيا',
+  TM: 'تركمانستان', TV: 'توفالو', UG: 'أوغندا', UA: 'أوكرانيا',
+  AE: 'الإمارات العربية المتحدة', GB: 'المملكة المتحدة', US: 'الولايات المتحدة',
+  UY: 'أوروغواي', UZ: 'أوزبكستان', VU: 'فانواتو', VE: 'فنزويلا', VN: 'فيتنام',
+  YE: 'اليمن', ZM: 'زامبيا', ZW: 'زيمبابوي', EU: 'الاتحاد الأوروبي',
+  // Non-UN-member / observer states
+  PS: 'فلسطين', VA: 'الكرسي الرسولي', XK: 'كوسوفو', CK: 'جزر كوك', NU: 'نيوي',
+};
+
 export function getCountryDisplayName(name: string, language: string): string {
-  if (language !== 'es') return name;
+  if (language !== 'es' && language !== 'fr' && language !== 'ar') return name;
+  if (language === 'ar') {
+    if (name === 'African Union') return 'الاتحاد الأفريقي';
+    const country = getCountryByName(name);
+    if (!country) return name;
+    const fromDict = COUNTRY_NAMES_AR[country.code];
+    if (fromDict) return fromDict;
+    try {
+      const dn = new Intl.DisplayNames(['ar'], { type: 'region' });
+      return dn.of(country.code) ?? name;
+    } catch {
+      return name;
+    }
+  }
+  if (language === 'fr') {
+    if (name === 'African Union') return 'Union africaine';
+    const country = getCountryByName(name);
+    if (!country) return name;
+    const fromDict = COUNTRY_NAMES_FR[country.code];
+    if (fromDict) return fromDict;
+    try {
+      const dn = new Intl.DisplayNames(['fr'], { type: 'region' });
+      return dn.of(country.code) ?? name;
+    } catch {
+      return name;
+    }
+  }
   if (name === 'African Union') return 'Unión Africana';
   const country = getCountryByName(name);
   if (!country) return name;
@@ -297,6 +421,34 @@ export function getCountryDisplayName(name: string, language: string): string {
   } catch {
     return name;
   }
+}
+
+// Accent/diacritic-insensitive, language-aware comparator on DISPLAY names
+export function compareCountryNames(a: string, b: string, language: string): number {
+  return getCountryDisplayName(a, language).localeCompare(
+    getCountryDisplayName(b, language), language, { sensitivity: 'base' });
+}
+
+// Fold accents + lowercase for matching
+function fold(s: string): string {
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+
+// Match a free-text token to a country across EN + ES + FR names, accent-insensitive
+export function findCountryFlexible(input: string): string | null {
+  const n = fold(input);
+  if (!n) return null;
+  // exact across EN names
+  let hit = UN_COUNTRIES.find((c) => fold(c.name) === n);
+  if (hit) return hit.name;
+  // exact across ES/FR dictionaries (value match → map code back to EN canonical name)
+  for (const dict of [COUNTRY_NAMES_ES, COUNTRY_NAMES_FR]) {
+    const codeEntry = Object.entries(dict).find(([, v]) => fold(v) === n);
+    if (codeEntry) { const c = UN_COUNTRIES.find((u) => u.code === codeEntry[0]); if (c) return c.name; }
+  }
+  // startsWith / includes fallback on EN names
+  hit = UN_COUNTRIES.find((c) => fold(c.name).startsWith(n)) ?? UN_COUNTRIES.find((c) => fold(c.name).includes(n) || n.includes(fold(c.name)));
+  return hit ? hit.name : null;
 }
 
 export function matchesSearch(c: Country, search: string, language: string): boolean {

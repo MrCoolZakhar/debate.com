@@ -1,15 +1,17 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import Portal from '@/components/Portal';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { Committee, PendingMotion, PendingMotionType } from '@/lib/types';
-import { getCountryByName, getFlagUrl, getCountryDisplayName } from '@/lib/countries';
+import { getCountryByName, getFlagUrl, getCountryDisplayName, compareCountryNames } from '@/lib/countries';
+
+const SQUARE_FLAGS = new Set(['CH', 'NP']);
 import { Emoji } from '@/components/Emoji';
 import { useSettingsStore, DEFAULT_MOTION_NAMES, MotionNames } from '@/lib/settingsStore';
 import {
   addPendingMotion as addPendingMotionInDB,
   removePendingMotion as removePendingMotionInDB,
-  clearPendingMotions as clearPendingMotionsInDB,
   setPhase as setPhaseInDB,
   updateCaucus as updateCaucusInDB,
   addToCaucusList as addToCaucusListInDB,
@@ -17,6 +19,7 @@ import {
   clearCaucusList as clearCaucusListInDB,
   suspendDebate as suspendDebateInDB,
   endDebate as endDebateInDB,
+  logEvent,
 } from '@/lib/committeeService';
 
 type ModalView = 'list' | 'raise' | 'vote';
@@ -42,8 +45,6 @@ function buildTypeMeta(motionNames: MotionNames): TypeMeta {
   };
 }
 
-// Regular motion types (moderated first per design spec)
-const TYPE_ORDER: PendingMotionType[] = ['moderated', 'unmoderated', 'tour', 'consultation'];
 
 function requiredVotes(type: PendingMotionType, present: number): { needed: number; fraction: string } {
   if (type === 'consultation' || type === 'tour') return { needed: Math.ceil((present * 2) / 3), fraction: '2/3 majority' };
@@ -68,6 +69,9 @@ function DisruptivenessBadge({ type }: { type: PendingMotionType }) {
   return <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${colors[type]}`}>{labels[type]}</span>;
 }
 
+const CHAIR_KEY = '__chair__';
+const chairDisplayName = (language: string) => language === 'ar' ? 'الرئيس' : language === 'fr' ? 'Président' : language === 'es' ? 'Presidente' : 'Chair';
+
 function ProposerInput({ candidates, value, onChange, blockedCountries }: {
   candidates: string[]; value: string; onChange: (v: string) => void; blockedCountries?: Set<string>;
 }) {
@@ -77,25 +81,28 @@ function ProposerInput({ candidates, value, onChange, blockedCountries }: {
   const [open, setOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const q = query.trim().toLowerCase();
-  const matches = q
-    ? candidates
-        .filter((c) => getCountryDisplayName(c, language).toLowerCase().startsWith(q))
-        .concat(candidates.filter((c) =>
-          !getCountryDisplayName(c, language).toLowerCase().startsWith(q) &&
-          getCountryDisplayName(c, language).toLowerCase().includes(q)
-        ))
+  const dName = (c: string) => c === CHAIR_KEY ? chairDisplayName(language) : getCountryDisplayName(c, language);
+  // Chair entry: always show at top when query is empty or matches "chair"
+  const chairBlocked = blockedCountries?.has(CHAIR_KEY) ?? false;
+  const showChair = !q || chairDisplayName(language).toLowerCase().includes(q);
+  const delegateMatches = q
+    ? candidates.filter((c) => c !== CHAIR_KEY && dName(c).toLowerCase().startsWith(q))
+        .concat(candidates.filter((c) => c !== CHAIR_KEY && !dName(c).toLowerCase().startsWith(q) && dName(c).toLowerCase().includes(q)))
     : [];
+  const matches = showChair ? [CHAIR_KEY, ...delegateMatches] : delegateMatches;
   const top = matches[0] ?? null;
   const commit = (country: string) => {
     if (blockedCountries?.has(country)) return;
-    onChange(country); setQuery(getCountryDisplayName(country, language)); setOpen(false);
+    onChange(country); setQuery(dName(country)); setOpen(false);
   };
   return (
     <div className="relative">
       {value && !open ? (
         <div className="flex items-center gap-3 bg-[#1B3828]/10 border-2 border-[#3D7A52]/40 rounded-xl px-4 py-3">
-          {(() => { const f = getCountryByName(value); return f ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ borderRadius: '6px', border: '1.5px solid rgba(28,20,16,0.10)', objectFit: 'cover' }} className="w-7 h-5 inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : null; })()}
-          <span className="text-sm text-[#1C1410] flex-1 font-semibold">{getCountryDisplayName(value, language)}</span>
+          {value === CHAIR_KEY
+            ? <span className="text-lg leading-none">🪑</span>
+            : (() => { const f = getCountryByName(value); return f ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ borderRadius: '6px', border: '1.5px solid rgba(28,20,16,0.10)', objectFit: 'cover' }} className="w-7 h-5 inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : null; })()}
+          <span className="text-sm text-[#1C1410] flex-1 font-semibold">{dName(value)}</span>
           <button onClick={() => { setOpen(true); setQuery(''); onChange(''); inputRef.current?.focus(); }} className="text-xs font-bold transition-colors focus:outline-none" style={{ color: '#2A5A3C' }}>{t('motions_change')}</button>
         </div>
       ) : (
@@ -105,27 +112,30 @@ function ProposerInput({ candidates, value, onChange, blockedCountries }: {
             onKeyDown={(e) => { if (e.key === 'Enter' && top) { e.preventDefault(); commit(top); } if (e.key === 'Escape') { setQuery(''); setOpen(false); } }}
             placeholder={t('motions_proposer_placeholder')}
             className="flex-1 bg-transparent px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none text-sm" />
-          {top && query && <span className="text-xs text-[#9A8A78] px-3 truncate max-w-[120px]">↵ {getCountryDisplayName(top, language)}</span>}
+          {top && query && <span className="text-xs text-[#9A8A78] px-3 truncate max-w-[120px]">↵ {dName(top)}</span>}
         </div>
       )}
-      {open && query && matches.length > 0 && (
+      {open && (query || showChair) && matches.length > 0 && (
         <div className="absolute top-full left-0 right-0 mt-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl overflow-hidden z-50 shadow-xl max-h-48 overflow-y-auto">
-          {matches.slice(0, 6).map((country, i) => {
-            const found = getCountryByName(country);
+          {matches.slice(0, 7).map((country, i) => {
+            const isChair = country === CHAIR_KEY;
+            const found = isChair ? null : getCountryByName(country);
             const isBlocked = blockedCountries?.has(country) ?? false;
             return (
               <button key={country}
                 onMouseDown={(e) => { e.preventDefault(); if (!isBlocked) commit(country); }}
                 disabled={isBlocked}
-                className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
+                className={`w-full flex items-center gap-3 px-4 py-2.5 text-start transition-colors ${
                   isBlocked ? 'opacity-50 cursor-not-allowed bg-[#FAF8F3]' :
                   i === 0 ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'
                 }`}>
-                {found ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <Emoji size="1.125rem">🌐</Emoji>}
-                <span className="text-sm flex-1">{getCountryDisplayName(country, language)}</span>
+                {isChair
+                  ? <span className="text-base leading-none">🪑</span>
+                  : found ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <Emoji size="1.125rem">🌐</Emoji>}
+                <span className="text-sm flex-1">{dName(country)}</span>
                 {isBlocked
                   ? <span className="text-xs text-[#B8844A] shrink-0 font-semibold">{t('motions_motion_on_floor')}</span>
-                  : i === 0 && <span className="ml-auto text-xs text-[#9A8A78]">Enter ↵</span>}
+                  : i === 0 && <span className="ms-auto text-xs text-[#9A8A78]">Enter ↵</span>}
               </button>
             );
           })}
@@ -136,19 +146,21 @@ function ProposerInput({ candidates, value, onChange, blockedCountries }: {
 }
 
 // ── Raise Motion Form ─────────────────────────────────────────────────────────
-function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion, belowQuorum = false }: {
+function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion, belowQuorum = false, isViewOnly = false }: {
   committee: Committee;
   typeMeta: TypeMeta;
   onBack: () => void;
   onRaised: (motion: Omit<PendingMotion, 'id' | 'disruptiveness'>) => void;
   editingMotion?: PendingMotion | null;
   belowQuorum?: boolean;
+  isViewOnly?: boolean;
 }) {
   const t = useT();
   const { language } = useLanguage();
   const { getSettings } = useSettingsStore();
   const s = getSettings(committee.code);
-  const enabledTypes = TYPE_ORDER.filter((motionType) => {
+  const DEFAULT_ORDER: PendingMotionType[] = ['moderated', 'unmoderated', 'tour', 'consultation'];
+  const enabledTypes = DEFAULT_ORDER.filter((motionType) => {
     if (motionType === 'moderated')    return s.motionModeratedCaucus !== false;
     if (motionType === 'unmoderated')  return s.motionUnmoderatedCaucus !== false;
     if (motionType === 'consultation') return s.motionCoW !== false;
@@ -217,9 +229,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
 
   return (
     <div className="flex flex-col h-full">
-      {/* PERMANENT NOTE: No scroll in raise motion form. If content doesn't fit, reduce spacing
-          or lay fields side-by-side — never re-add overflow-y-auto here. */}
-      <div className="flex-1 px-7 pt-0 pb-4 space-y-4">
+      <div className="flex-1 px-7 pt-0 pb-4 space-y-4 overflow-y-auto">
         <h2 className="text-3xl font-black tracking-wide" style={{ color: '#1B3828' }}>{editingMotion ? t('motions_edit_heading') : t('motions_raise_heading')}</h2>
 
         {/* Type tabs — always shown */}
@@ -249,6 +259,17 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
 
         {type && (
           <>
+            {/* Tour de Table & Consultation — optional topic at the very top */}
+            {(type === 'tour' || type === 'consultation') && (
+              <div>
+                <label className="block text-lg font-semibold text-[#6A5A4A] mb-2">
+                  {t('motions_topic_label')} <span className="text-[#9A8A78] text-sm font-normal">({t('motions_optional')})</span>
+                </label>
+                <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)} placeholder={t('motions_topic_optional_ph')}
+                  className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-2.5 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] transition-colors" />
+              </div>
+            )}
+
             {/* For moderated caucus: Topic first, then Proposed By */}
             {type !== 'moderated' && (
               <div>
@@ -260,7 +281,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
             {/* Tour de Table — speaking time per delegate + order */}
             {type === 'tour' && (
               <>
-                <div className="bg-transparent border border-[#DDD4C0] rounded-2xl p-3 space-y-2">
+                <div className="bg-transparent border border-[#DDD4C0] rounded-2xl p-2.5 space-y-1.5">
                   <p className="text-[#1C1410] font-semibold text-xs">
                     {t('motions_all_speak', { n: presentCountries.length })}
                   </p>
@@ -302,7 +323,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
                         {t('motions_room_order')}
                       </button>
                     </div>
-                    <div style={{ height: '32px', display: 'flex', alignItems: 'center' }}>
+                    <div style={{ height: '24px', display: 'flex', alignItems: 'center' }}>
                       {tourOrder === 'custom' && (
                         <p className="text-xs text-[#9A8A78] leading-relaxed">{t('motions_room_order_hint')}</p>
                       )}
@@ -347,7 +368,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
                 <div>
                   <label className="block text-lg font-semibold text-[#6A5A4A] mb-2">{t('motions_topic_label')} <span className="text-[#8B2020]">*</span></label>
                   <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)}
-                    placeholder={language === 'es' ? 'ej. Respuesta humanitaria en zonas de conflicto' : 'e.g. Humanitarian response in conflict zones'}
+                    placeholder={language === 'ar' ? 'مثال: الاستجابة الإنسانية في مناطق النزاع' : language === 'fr' ? 'ex. Réponse humanitaire dans les zones de conflit' : language === 'es' ? 'ej. Respuesta humanitaria en zonas de conflicto' : 'e.g. Humanitarian response in conflict zones'}
                     className="w-full bg-[#FAF8F3] border-2 border-[#DDD4C0] rounded-xl px-4 py-4 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] transition-colors" />
                 </div>
                 <div>
@@ -402,7 +423,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
                         <span className="font-black text-xl leading-tight" style={{ color: '#1B3828' }}>{speakerCount}</span>
                         <span className="text-sm font-semibold" style={{ color: '#6A5A4A' }}>{speakerCount === 1 ? t('motions_delegate_speak').replace('{s}', t('motions_delegate_singular')) : t('motions_delegate_speak').replace('{s}', t('motions_delegate_plural'))}</span>
                         {unusedSecs > 0 && (
-                          <span className="text-xs font-semibold ml-1" style={{ color: '#B8844A' }}>{t('motions_unused_secs').replace('{n}', String(unusedSecs))}</span>
+                          <span className="text-xs font-semibold ms-1" style={{ color: '#B8844A' }}>{t('motions_unused_secs').replace('{n}', String(unusedSecs))}</span>
                         )}
                       </div>
                     )}
@@ -422,10 +443,12 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
             </div>
           )}
           {error && <p className="text-[#8B2020] text-sm font-medium mb-3">{error}</p>}
-          <button onClick={submit} disabled={!canSubmit() || belowQuorum}
-            className="w-full bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white py-5 rounded-2xl text-base font-black transition-colors focus:outline-none" style={{ letterSpacing: '0.05em' }}>
-            {editingMotion ? t('motions_edit_btn') : t('motions_raise_btn')}
-          </button>
+          {!isViewOnly && (
+            <button onClick={submit} disabled={!canSubmit() || belowQuorum}
+              className="w-full bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white py-5 rounded-2xl text-base font-black transition-colors focus:outline-none" style={{ letterSpacing: '0.05em' }}>
+              {editingMotion ? t('motions_edit_btn') : t('motions_raise_btn')}
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -433,7 +456,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
 }
 
 // ── Voting View ───────────────────────────────────────────────────────────────
-function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBack, onEdit, pendingIds }: {
+function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBack, onEdit, pendingIds, isViewOnly = false }: {
   committee: Committee;
   typeMeta: TypeMeta;
   onAccepted: (motion: PendingMotion) => void;
@@ -442,11 +465,13 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
   onBack: () => void;
   onEdit: (motionId: string) => void;
   pendingIds: Set<string>;
+  isViewOnly?: boolean;
 }) {
   const t = useT();
+  const { getSettings } = useSettingsStore();
   // Filter out join-request pseudo-motions — those are handled in the chair banner, not here
   const initialSorted = [...(committee.pendingMotions ?? [])]
-    .filter((m) => m.type !== ('join-request' as string))
+    .filter((m) => m.type !== ('join-request' as string) && (m.type as string) !== 'gsl-request')
     .sort((a, b) => {
       if (b.disruptiveness !== a.disruptiveness) return b.disruptiveness - a.disruptiveness;
       const aIdx = (committee.pendingMotions ?? []).findIndex((m) => m.id === a.id);
@@ -460,7 +485,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
   // Keep order in sync when motions are removed externally
   const motionIdKey = (committee.pendingMotions ?? []).map((m) => m.id).join(',');
   useEffect(() => {
-    const current = (committee.pendingMotions ?? []).filter((m) => m.type !== ('join-request' as string));
+    const current = (committee.pendingMotions ?? []).filter((m) => m.type !== ('join-request' as string) && (m.type as string) !== 'gsl-request');
     setOrder((prev) => {
       // Match by proposer+type so temp ID → real UUID swaps don't create duplicates
       const currentMap = new Map(current.map((m) => [`${m.proposedBy}|${m.type}`, m]));
@@ -476,7 +501,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [motionIdKey]);
 
-  const present = committee.delegates.filter((d) => d.status !== 'absent').length;
+  const present = committee.delegates.filter((d) => d.status !== 'absent' && !d.isObserver).length;
 
   if (order.length === 0) {
     return (
@@ -488,10 +513,14 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
   }
 
   const primary = order[0];
-  const rest = order.slice(1, 4);
+  const rest = order.slice(1, 5);
 
   const renderCard = (m: PendingMotion, large: boolean, idx: number) => {
     const meta = typeMeta[m.type];
+    if (!meta) {
+      console.warn('Unknown motion type, skipping render:', m.type, m.id);
+      return null;
+    }
     const { needed, fraction } = requiredVotes(m.type, present);
     const totalMins = Math.floor(m.totalTime / 60);
     const totalSecs = m.totalTime % 60;
@@ -518,16 +547,39 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
           dragIndexRef.current = null;
         }}
         onDragEnd={() => { dragIndexRef.current = null; }}
-        className={`bg-transparent rounded-2xl flex flex-col cursor-grab ${
+        className={`relative bg-transparent rounded-2xl flex flex-col cursor-grab ${
           large
             ? `p-6 space-y-3 flex-1 min-w-0 border-2 ${isPrimary ? 'border-[#1B3828]' : 'border-[#DDD4C0]'}`
-            : 'p-4 space-y-2 border border-[#DDD4C0]'
+            : 'p-3 space-y-1 border border-[#DDD4C0]'
         }`}
       >
+        {/* Position badge — straddles the top-right border corner */}
+        <div
+          className="absolute top-0 right-0 translate-x-1/2 -translate-y-1/2 w-6 h-6 rounded-full flex items-center justify-center text-xs font-black z-10 pointer-events-none select-none"
+          style={{ backgroundColor: '#1B3828', color: '#EED98A' }}
+        >
+          {idx + 1}
+        </div>
         {/* Header: icon + type label + flag in top-right */}
         <div className="flex items-center gap-2">
-          <span className={`font-black text-[#1C1410] flex-1 ${large ? 'text-3xl' : 'text-lg'}`}>{meta.label}</span>
-          {f ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ borderRadius: '8px', border: '1.5px solid rgba(28,20,16,0.10)', objectFit: 'cover' }} className={large ? 'w-14 h-10 inline-block' : 'w-8 h-6 inline-block'} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : null}
+          <span className={`font-black text-[#1C1410] flex-1 ${large ? 'text-3xl' : 'text-lg'} flex items-center gap-1.5`}>
+            {meta.label}
+            {!isPrimary && !isViewOnly && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onEdit(m.id); }}
+                title="Edit motion"
+                className="opacity-40 hover:opacity-80 transition-opacity focus:outline-none shrink-0"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" stroke="#4A4A4A" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M19.5 7.125L16.5 4.125" stroke="#4A4A4A" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </button>
+            )}
+          </span>
+          {m.proposedBy === CHAIR_KEY
+            ? <span className={`shrink-0 ${large ? 'text-3xl' : 'text-xl'}`}>🪑</span>
+            : f ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ borderRadius: '8px', border: SQUARE_FLAGS.has(f.code) ? 'none' : '1.5px solid rgba(28,20,16,0.10)', objectFit: 'cover' }} className={large ? 'w-14 h-10 inline-block' : 'w-8 h-6 inline-block'} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : null}
         </div>
 
         {/* Topic inline */}
@@ -540,21 +592,46 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
         {/* Timings — emphasised */}
         {m.type !== 'tour' && m.totalTime > 0 && (
           <div className="flex flex-col gap-0.5">
-            <p className={`${large ? 'text-sm' : 'text-xs'}`} style={{ color: '#1C1410' }}>
-              <span className="font-semibold" style={{ color: '#1B3828' }}>{t('motions_total_time_display')} </span>
-              <span className="font-black">{fmtTime(totalMins, totalSecs)}</span>
-            </p>
-            {m.type === 'moderated' && m.speakingTime > 0 && (
-              <p className={`${large ? 'text-sm' : 'text-xs'}`} style={{ color: '#1C1410' }}>
-                <span className="font-semibold" style={{ color: '#1B3828' }}>{t('motions_speaker_time_display')} </span>
-                <span className="font-black">{fmtTime(speakMins, speakSecs)}</span>
-              </p>
-            )}
-            {m.type === 'moderated' && m.speakingTime > 0 && m.totalTime > 0 && (
-              <p className={`${large ? 'text-sm' : 'text-xs'}`} style={{ color: '#1C1410' }}>
-                <span className="font-semibold" style={{ color: '#1B3828' }}>{t('motions_total_speakers_display')} </span>
-                <span className="font-black">{Math.floor(m.totalTime / m.speakingTime)} {Math.floor(m.totalTime / m.speakingTime) === 1 ? t('motions_speaker_singular') : t('motions_speaker_plural')}{m.totalTime % m.speakingTime !== 0 ? ' ⚠' : ''}</span>
-              </p>
+            {large ? (
+              <>
+                <p className="text-sm" style={{ color: '#1C1410' }}>
+                  <span className="font-semibold" style={{ color: '#1B3828' }}>{t('motions_total_time_display')} </span>
+                  <span className="font-black">{fmtTime(totalMins, totalSecs)}</span>
+                </p>
+                {m.type === 'moderated' && m.speakingTime > 0 && (
+                  <p className="text-sm" style={{ color: '#1C1410' }}>
+                    <span className="font-semibold" style={{ color: '#1B3828' }}>{t('motions_speaker_time_display')} </span>
+                    <span className="font-black">{fmtTime(speakMins, speakSecs)}</span>
+                  </p>
+                )}
+                {m.type === 'moderated' && m.speakingTime > 0 && m.totalTime > 0 && (
+                  <p className="text-sm" style={{ color: '#1C1410' }}>
+                    <span className="font-semibold" style={{ color: '#1B3828' }}>{t('motions_total_speakers_display')} </span>
+                    <span className="font-black">{Math.floor(m.totalTime / m.speakingTime)} {Math.floor(m.totalTime / m.speakingTime) === 1 ? t('motions_speaker_singular') : t('motions_speaker_plural')}{m.totalTime % m.speakingTime !== 0 ? ' ⚠' : ''}</span>
+                  </p>
+                )}
+              </>
+            ) : (
+              <>
+                {/* Small cards: merge total + speaker time onto one line */}
+                <p className="text-xs" style={{ color: '#1C1410' }}>
+                  <span className="font-semibold" style={{ color: '#1B3828' }}>{t('motions_total_time_display')} </span>
+                  <span className="font-black">{fmtTime(totalMins, totalSecs)}</span>
+                  {m.type === 'moderated' && m.speakingTime > 0 && (
+                    <>
+                      <span className="mx-1 opacity-40">·</span>
+                      <span className="font-semibold" style={{ color: '#1B3828' }}>{t('motions_speaker_time_display')} </span>
+                      <span className="font-black">{fmtTime(speakMins, speakSecs)}</span>
+                    </>
+                  )}
+                </p>
+                {m.type === 'moderated' && m.speakingTime > 0 && m.totalTime > 0 && (
+                  <p className="text-xs" style={{ color: '#1C1410' }}>
+                    <span className="font-semibold" style={{ color: '#1B3828' }}>{t('motions_total_speakers_display')} </span>
+                    <span className="font-black">{Math.floor(m.totalTime / m.speakingTime)} {Math.floor(m.totalTime / m.speakingTime) === 1 ? t('motions_speaker_singular') : t('motions_speaker_plural')}{m.totalTime % m.speakingTime !== 0 ? ' ⚠' : ''}</span>
+                  </p>
+                )}
+              </>
             )}
           </div>
         )}
@@ -569,14 +646,16 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
           </div>
         )}
 
-        {/* Required votes */}
-        <div className="flex items-center gap-2 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-3 py-1.5">
-          <span className="text-xs font-semibold" style={{ color: '#1B3828' }}>{fraction === 'Simple majority' ? t('motions_simple_majority') : t('motions_supermajority')}</span>
-          <span className="text-xs font-bold ml-auto" style={{ color: '#1C1410' }}>{t('motions_needs_votes', { needed, present })}</span>
-        </div>
-
-        {/* Accept/Reject/Edit — ONLY on the primary (idx===0) card being voted upon */}
+        {/* Required votes — primary card only */}
         {isPrimary && (
+          <div className="flex items-center gap-2 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-3 py-1.5">
+            <span className="text-xs font-semibold" style={{ color: '#1B3828' }}>{fraction === 'Simple majority' ? t('motions_simple_majority') : t('motions_supermajority')}</span>
+            <span className="text-xs font-bold ms-auto" style={{ color: '#1C1410' }}>{t('motions_needs_votes', { needed, present })}</span>
+          </div>
+        )}
+
+        {/* Accept/Reject/Edit — primary card only; non-primary has inline pencil */}
+        {isPrimary && !isViewOnly && (
           <div className="flex gap-2 mt-auto">
             <button onClick={() => onAccepted(m)}
               className="flex-1 bg-[#2A5A3C] hover:bg-[#3D7A52] text-white py-2.5 rounded-xl font-bold text-sm transition-colors focus:outline-none" style={{ fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}>
@@ -606,21 +685,57 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
       <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs shrink-0 font-semibold" style={{ backgroundColor: '#1B3828', color: '#EED98A' }}>
         <span>{t('motions_drag_hint')}</span>
       </div>
-      <div className="flex gap-4 flex-1 min-h-0">
+      <div className="flex flex-1 min-h-0">
         {/* Left column — primary motion being voted on */}
-        <div className="flex-1 flex flex-col min-w-0">
+        {/* pt-3 pe-4: give room for the badge that translates outside the card's top-right corner */}
+        <div className="flex-1 flex flex-col min-w-0 overflow-y-auto pt-3 pe-4">
           {renderCard(primary, true, 0)}
         </div>
+        {/* Vertical divider between column 1 and column 2 */}
+        <div className="flex flex-col items-center gap-2 py-4 pointer-events-none select-none" style={{ opacity: 0.35, width: '20px' }}>
+          <div className="flex-1 w-px" style={{ backgroundColor: '#C8BAA8' }} />
+          <svg width="10" height="16" viewBox="0 0 10 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="2" cy="2"  r="1.5" fill="#1C1410"/>
+            <circle cx="8" cy="2"  r="1.5" fill="#1C1410"/>
+            <circle cx="2" cy="8"  r="1.5" fill="#1C1410"/>
+            <circle cx="8" cy="8"  r="1.5" fill="#1C1410"/>
+            <circle cx="2" cy="14" r="1.5" fill="#1C1410"/>
+            <circle cx="8" cy="14" r="1.5" fill="#1C1410"/>
+          </svg>
+          <div className="flex-1 w-px" style={{ backgroundColor: '#C8BAA8' }} />
+        </div>
         {/* Right column — queued motions + Raise a Motion button */}
-        <div className="w-72 flex flex-col gap-3 overflow-y-auto">
-          {rest.map((m, i) => renderCard(m, false, i + 1))}
-          <button
-            onClick={onBack}
-            className="w-full bg-[#2A5A3C] hover:bg-[#3D7A52] text-white py-3 rounded-2xl font-black text-sm transition-colors shrink-0 focus:outline-none"
-            style={{ letterSpacing: '0.05em' }}
-          >
-            {t('motions_raise_motion_btn')}
-          </button>
+        {/* pt-3 pe-4: give room for the badge that translates outside each card's top-right corner */}
+        <div className="w-72 flex flex-col pt-3 pe-4">
+          {rest.map((m, i) => (
+            <React.Fragment key={m.id}>
+              {renderCard(m, false, i + 1)}
+              {i < rest.length - 1 && (
+                <div className="flex items-center gap-2 px-2 pointer-events-none select-none" style={{ opacity: 0.35, height: '14px' }}>
+                  <div className="flex-1 h-px" style={{ backgroundColor: '#C8BAA8' }} />
+                  <svg width="16" height="10" viewBox="0 0 16 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="2"  cy="2" r="1.5" fill="#1C1410"/>
+                    <circle cx="8"  cy="2" r="1.5" fill="#1C1410"/>
+                    <circle cx="14" cy="2" r="1.5" fill="#1C1410"/>
+                    <circle cx="2"  cy="8" r="1.5" fill="#1C1410"/>
+                    <circle cx="8"  cy="8" r="1.5" fill="#1C1410"/>
+                    <circle cx="14" cy="8" r="1.5" fill="#1C1410"/>
+                  </svg>
+                  <div className="flex-1 h-px" style={{ backgroundColor: '#C8BAA8' }} />
+                </div>
+              )}
+              {i === rest.length - 1 && <div style={{ height: '6px' }} />}
+            </React.Fragment>
+          ))}
+          {!isViewOnly && (
+            <button
+              onClick={onBack}
+              className="w-full bg-[#2A5A3C] hover:bg-[#3D7A52] text-white py-3 rounded-2xl font-black text-sm transition-colors shrink-0 focus:outline-none"
+              style={{ letterSpacing: '0.05em' }}
+            >
+              {t('motions_raise_motion_btn')}
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -628,15 +743,31 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
 }
 
 // ── Main Modal ────────────────────────────────────────────────────────────────
-export default function MotionsModal({ committee, onClose, onCommitteeUpdate, belowQuorum = false }: {
+export default function MotionsModal({ committee, onClose, onCommitteeUpdate, belowQuorum = false, isViewOnly = false }: {
   committee: Committee;
   onClose: () => void;
   onCommitteeUpdate?: (updater: (c: Committee) => Committee) => void;
   belowQuorum?: boolean;
+  isViewOnly?: boolean;
 }) {
   const t = useT();
   const { language } = useLanguage();
-  const DEFAULT_MOTION_NAMES_LOCALIZED = language === 'es' ? {
+  const { getSettings } = useSettingsStore();
+  const DEFAULT_MOTION_NAMES_LOCALIZED = language === 'ar' ? {
+    moderated: 'حوار منهجي',
+    unmoderated: 'حوار حر',
+    consultation: 'مشاورات الهيئة',
+    tour: 'جولة المتحدثين',
+    suspendDebate: 'تعليق النقاش',
+    endDebate: 'إنهاء النقاش',
+  } : language === 'fr' ? {
+    moderated: 'Caucus modéré',
+    unmoderated: 'Caucus non modéré',
+    consultation: "Consultation de l'assemblée",
+    tour: 'Tour de table',
+    suspendDebate: 'Suspension du débat',
+    endDebate: 'Clôture du débat',
+  } : language === 'es' ? {
     moderated: 'Cáucus Moderado',
     unmoderated: 'Cáucus No Moderado',
     consultation: 'Consulta de Gabinete',
@@ -644,10 +775,27 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
     suspendDebate: 'Suspender Debate',
     endDebate: 'Cerrar Debate',
   } : DEFAULT_MOTION_NAMES;
-  const motionNames = { ...DEFAULT_MOTION_NAMES_LOCALIZED };
+  const committeeSettings = getSettings(committee.code);
+  const storedNames = committeeSettings.motionNames;
+  const motionOrder: string[] = committeeSettings.motionOrder ?? ['consultation', 'tour', 'unmoderated', 'moderated'];
+  const localCalcDisruptiveness = (type: string, totalTime: number) => {
+    if (type === 'end-debate') return 6_000_000 + totalTime;
+    if (type === 'suspend-debate') return 5_000_000 + totalTime;
+    const idx = motionOrder.indexOf(type);
+    const base = idx >= 0 ? (4 - idx) * 1_000_000 : 1_000_000;
+    return base + totalTime;
+  };
+  const motionNames = {
+    moderated:     storedNames.moderated     !== DEFAULT_MOTION_NAMES.moderated     ? storedNames.moderated     : DEFAULT_MOTION_NAMES_LOCALIZED.moderated,
+    unmoderated:   storedNames.unmoderated   !== DEFAULT_MOTION_NAMES.unmoderated   ? storedNames.unmoderated   : DEFAULT_MOTION_NAMES_LOCALIZED.unmoderated,
+    consultation:  storedNames.consultation  !== DEFAULT_MOTION_NAMES.consultation  ? storedNames.consultation  : DEFAULT_MOTION_NAMES_LOCALIZED.consultation,
+    tour:          storedNames.tour          !== DEFAULT_MOTION_NAMES.tour          ? storedNames.tour          : DEFAULT_MOTION_NAMES_LOCALIZED.tour,
+    suspendDebate: storedNames.suspendDebate !== DEFAULT_MOTION_NAMES.suspendDebate ? storedNames.suspendDebate : DEFAULT_MOTION_NAMES_LOCALIZED.suspendDebate,
+    endDebate:     storedNames.endDebate     !== DEFAULT_MOTION_NAMES.endDebate     ? storedNames.endDebate     : DEFAULT_MOTION_NAMES_LOCALIZED.endDebate,
+  };
   const typeMeta = buildTypeMeta(motionNames);
-  const pending = [...(committee.pendingMotions ?? [])].filter((m) => m.type !== ('join-request' as string)).sort((a, b) => b.disruptiveness - a.disruptiveness);
-  const [view, setView] = useState<ModalView>(pending.length === 0 ? 'raise' : 'vote');
+  const pending = [...(committee.pendingMotions ?? [])].filter((m) => m.type !== ('join-request' as string) && (m.type as string) !== 'gsl-request').sort((a, b) => b.disruptiveness - a.disruptiveness);
+  const [view, setView] = useState<ModalView>(pending.length === 0 && !isViewOnly ? 'raise' : 'vote');
   const [specialVoteMotion, setSpecialVoteMotion] = useState<PendingMotion | null>(null);
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const [editingMotionId, setEditingMotionId] = useState<string | null>(null);
@@ -661,16 +809,12 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
     )) return;
 
     const tempId = `temp-${Date.now()}`;
-    const base = {
-      'end-debate': 6_000_000, 'suspend-debate': 5_000_000,
-      consultation: 4_000_000, tour: 3_000_000, unmoderated: 2_000_000, moderated: 1_000_000,
-    };
-    const disruptiveness = base[motion.type] + motion.totalTime;
+    const disruptiveness = localCalcDisruptiveness(motion.type, motion.totalTime);
 
     setPendingIds((prev) => new Set([...prev, tempId]));
     update((c) => ({ ...c, pendingMotions: [...(c.pendingMotions ?? []), { ...motion, id: tempId, disruptiveness }] }));
 
-    addPendingMotionInDB(committee.id, motion).then((realId) => {
+    addPendingMotionInDB(committee.id, motion, motionOrder).then((realId) => {
       if (!realId) return;
       update((c) => ({
         ...c,
@@ -703,16 +847,12 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
 
     // Add replacement — same logic as handleRaised but NO duplicate check
     const tempId = `temp-${Date.now()}`;
-    const base: Record<string, number> = {
-      'end-debate': 6_000_000, 'suspend-debate': 5_000_000,
-      consultation: 4_000_000, tour: 3_000_000, unmoderated: 2_000_000, moderated: 1_000_000,
-    };
-    const disruptiveness = (base[motion.type] ?? 0) + motion.totalTime;
+    const disruptiveness = localCalcDisruptiveness(motion.type, motion.totalTime);
 
     setPendingIds((prev) => new Set([...prev, tempId]));
     update((c) => ({ ...c, pendingMotions: [...(c.pendingMotions ?? []), { ...motion, id: tempId, disruptiveness }] }));
 
-    addPendingMotionInDB(committee.id, motion).then((realId) => {
+    addPendingMotionInDB(committee.id, motion, motionOrder).then((realId) => {
       if (!realId) return;
       update((c) => ({
         ...c,
@@ -734,6 +874,11 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
       return;
     }
 
+    // The proposer earns a point for getting a motion approved onto the floor.
+    if (motion.proposedBy) {
+      logEvent(committee.id, { country: motion.proposedBy, type: 'motion-raised', sourceId: 'motionRaised' });
+    }
+
     if (motion.type === 'unmoderated') {
       const caucus = {
         active: true, type: 'unmoderated' as const, motionLabel: typeMeta['unmoderated'].label,
@@ -742,9 +887,9 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
         speakingTime: 0, speakerTimeRemaining: 0, currentSpeaker: null,
         proposerPosition: null, spokenCountries: [],
       };
-      update((c) => ({ ...c, phase: 'unmoderated-caucus', caucus, pendingMotions: [], caucusQueue: [], currentSpeaker: null }));
+      update((c) => ({ ...c, phase: 'unmoderated-caucus', caucus, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== motion.id), caucusQueue: [], currentSpeaker: null }));
       onClose();
-      clearPendingMotionsInDB(committee.id);
+      removePendingMotionInDB(motion.id);
       clearCaucusListInDB(committee.id);
       updateCaucusInDB(committee.id, caucus);
       setPhaseInDB(committee.id, 'unmoderated-caucus');
@@ -756,12 +901,12 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
         purpose: motion.topic || '', proposedBy: motion.proposedBy,
         totalTime: motion.totalTime, remainingTime: motion.totalTime,
         speakingTime: 0, speakerTimeRemaining: 0, currentSpeaker: null,
-        proposerPosition: null, spokenCountries: [],
+        proposerPosition: null, spokenCountries: [], isConsultation: true,
       };
       // GSL preserved, caucusQueue cleared, phase → unmoderated-caucus
-      update((c) => ({ ...c, phase: 'unmoderated-caucus', caucus, pendingMotions: [], caucusQueue: [], currentSpeaker: null }));
+      update((c) => ({ ...c, phase: 'unmoderated-caucus', caucus, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== motion.id), caucusQueue: [], currentSpeaker: null }));
       onClose();
-      clearPendingMotionsInDB(committee.id);
+      removePendingMotionInDB(motion.id);
       clearCaucusListInDB(committee.id);
       updateCaucusInDB(committee.id, caucus);
       setPhaseInDB(committee.id, 'unmoderated-caucus');
@@ -775,9 +920,9 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
         speakingTime: motion.speakingTime, speakerTimeRemaining: motion.speakingTime,
         currentSpeaker: null, proposerPosition: null, spokenCountries: [],
       };
-      update((c) => ({ ...c, phase: 'moderated-caucus', caucus, pendingMotions: [], caucusQueue: [], currentSpeaker: null }));
+      update((c) => ({ ...c, phase: 'moderated-caucus', caucus, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== motion.id), caucusQueue: [], currentSpeaker: null }));
       onClose();
-      clearPendingMotionsInDB(committee.id);
+      removePendingMotionInDB(motion.id);
       clearCaucusListInDB(committee.id);
       updateCaucusInDB(committee.id, caucus);
       setPhaseInDB(committee.id, 'moderated-caucus');
@@ -786,11 +931,12 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
     } else if (motion.type === 'tour') {
       // Tour de Table — all present delegates ordered by tourOrder
       // GSL is NEVER touched — tour uses caucusQueue exclusively
+      const tourOrder = motion.tourOrder ?? 'asc';   // explicit default — never silently desc
       const alphabetical = committee.delegates
         .filter((d) => d.status !== 'absent')
-        .sort((a, b) => a.country.localeCompare(b.country));
+        .sort((a, b) => compareCountryNames(a.country, b.country, language));
 
-      if (motion.tourOrder === 'custom') {
+      if (tourOrder === 'custom') {
         // Room Order — empty queue, chair calls speakers manually
         const n = alphabetical.length;
         const totalTourTime = n * motion.speakingTime;
@@ -806,9 +952,9 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
           delegateId: `room-order-${i + 1}`,
           country: `Speaker ${i + 1}`,
         }));
-        update((c) => ({ ...c, phase: 'moderated-caucus', caucus, pendingMotions: [], caucusQueue, currentSpeaker: null }));
+        update((c) => ({ ...c, phase: 'moderated-caucus', caucus, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== motion.id), caucusQueue, currentSpeaker: null }));
         onClose();
-        clearPendingMotionsInDB(committee.id);
+        removePendingMotionInDB(motion.id);
         updateCaucusInDB(committee.id, caucus);
         setPhaseInDB(committee.id, 'moderated-caucus');
         clearCaucusListInDB(committee.id).then(() =>
@@ -819,9 +965,9 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
 
       const sorted = committee.delegates
         .filter((d) => d.status !== 'absent')
-        .sort((a, b) => motion.tourOrder === 'asc'
-          ? a.country.localeCompare(b.country)
-          : b.country.localeCompare(a.country));
+        .sort((a, b) => tourOrder === 'asc'
+          ? compareCountryNames(a.country, b.country, language)
+          : compareCountryNames(b.country, a.country, language));
       const proposerIdx = sorted.findIndex((d) => d.country === motion.proposedBy);
       const presentDelegates = proposerIdx >= 0
         ? [...sorted.slice(proposerIdx), ...sorted.slice(0, proposerIdx)]
@@ -830,7 +976,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
       const totalTourTime = presentDelegates.length * motion.speakingTime;
       const caucus = {
         active: true, type: 'moderated' as const, motionLabel: typeMeta['tour'].label,
-        purpose: `Tour de Table (${motion.tourOrder === 'desc' ? 'Z→A' : 'A→Z'})`,
+        purpose: `Tour de Table (${tourOrder === 'desc' ? 'Z→A' : 'A→Z'})`,
         proposedBy: motion.proposedBy, totalTime: totalTourTime, remainingTime: totalTourTime,
         speakingTime: motion.speakingTime, speakerTimeRemaining: motion.speakingTime,
         currentSpeaker: null, proposerPosition: null, spokenCountries: [],
@@ -838,9 +984,9 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
       const caucusQueue = presentDelegates.map((d) => ({ delegateId: d.id, country: d.country }));
 
       // GSL preserved, caucusQueue filled with ordered delegates
-      update((c) => ({ ...c, phase: 'moderated-caucus', caucus, pendingMotions: [], caucusQueue, currentSpeaker: null }));
+      update((c) => ({ ...c, phase: 'moderated-caucus', caucus, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== motion.id), caucusQueue, currentSpeaker: null }));
       onClose();
-      clearPendingMotionsInDB(committee.id);
+      removePendingMotionInDB(motion.id);
       updateCaucusInDB(committee.id, caucus);
       setPhaseInDB(committee.id, 'moderated-caucus');
       // Await clear before insert to prevent race condition (DELETE winning after INSERT)
@@ -858,9 +1004,9 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
   if (specialVoteMotion) {
     const isSuspend = specialVoteMotion.type === 'suspend-debate';
     return (
-      <div className="fixed inset-0 z-[60] bg-[#F6F1E9] flex flex-col items-center justify-center text-center px-8">
+      <Portal><div className="fixed inset-0 z-[60] bg-[#F6F1E9] flex flex-col items-center justify-center text-center px-8">
         <p className="text-xs font-mono tracking-widest text-[#9A8A78] mb-6">
-          {typeMeta[specialVoteMotion.type].label.toUpperCase()} · {getCountryDisplayName(specialVoteMotion.proposedBy, language)}
+          {(typeMeta[specialVoteMotion.type]?.label ?? specialVoteMotion.type).toUpperCase()} · {specialVoteMotion.proposedBy === CHAIR_KEY ? chairDisplayName(language) : getCountryDisplayName(specialVoteMotion.proposedBy, language)}
         </p>
         <h1 className="text-4xl font-black mb-14 tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{t('motions_does_pass')}</h1>
         <div className="flex gap-8">
@@ -902,15 +1048,15 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
             {t('motions_no')}
           </button>
         </div>
-      </div>
+      </div></Portal>
     );
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+    <Portal><div className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background: 'rgba(5, 8, 20, 0.88)', backdropFilter: 'blur(4px)' }}
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="bg-[#FAF8F3] border border-[#DDD4C0] rounded-3xl w-full shadow-2xl overflow-hidden flex flex-col max-w-5xl" style={{ height: '88vh' }}>
+      <div className="bg-[#FAF8F3] border border-[#DDD4C0] rounded-3xl w-full shadow-2xl overflow-hidden flex flex-col max-w-5xl" style={{ height: '88%' }}>
         <div className="flex items-center justify-end px-7 pt-6 pb-0 shrink-0">
           <button onClick={onClose} className="text-[#9A8A78] hover:text-[#1C1410] transition-colors text-xl leading-none">✕</button>
         </div>
@@ -923,6 +1069,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
               onRaised={editingMotionId ? handleEdited : handleRaised}
               editingMotion={editingMotionId ? ((committee.pendingMotions ?? []).find((m) => m.id === editingMotionId) ?? null) : null}
               belowQuorum={belowQuorum}
+              isViewOnly={isViewOnly}
             />
           )}
           {view === 'vote' && (
@@ -935,6 +1082,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
               onBack={() => setView('raise')}
               onEdit={(motionId) => { setEditingMotionId(motionId); setView('raise'); }}
               pendingIds={pendingIds}
+              isViewOnly={isViewOnly}
             />
           )}
           {view === 'list' && (
@@ -951,6 +1099,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
                   <p className="text-xs text-[#9A8A78] font-mono">{t('motions_ranked')}</p>
                   {pending.map((m, i) => {
                     const meta = typeMeta[m.type];
+                    if (!meta) return null;
                     const mins = Math.floor(m.totalTime / 60);
                     const secs = m.totalTime % 60;
                     const proposerFlag = getCountryByName(m.proposedBy);
@@ -965,8 +1114,10 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
                               <DisruptivenessBadge type={m.type} />
                             </div>
                             <div className="flex items-center gap-1.5 mt-1">
-                              {proposerFlag ? <img src={getFlagUrl(proposerFlag.code)} alt={proposerFlag.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <Emoji size="1rem">🌐</Emoji>}
-                              <span className="text-sm font-semibold text-[#1C1410]">{getCountryDisplayName(m.proposedBy, language)}</span>
+                              {m.proposedBy === CHAIR_KEY
+                                ? <span className="text-base leading-none">🪑</span>
+                                : proposerFlag ? <img src={getFlagUrl(proposerFlag.code)} alt={proposerFlag.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <Emoji size="1rem">🌐</Emoji>}
+                              <span className="text-sm font-semibold text-[#1C1410]">{m.proposedBy === CHAIR_KEY ? chairDisplayName(language) : getCountryDisplayName(m.proposedBy, language)}</span>
                             </div>
                             {m.topic && <p className="text-sm text-[#6A5A4A] mt-1 font-medium">"{m.topic}"</p>}
                             <div className="flex items-center gap-2 mt-1.5 flex-wrap">
@@ -1015,6 +1166,6 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
           )}
         </div>
       </div>
-    </div>
+    </div></Portal>
   );
 }

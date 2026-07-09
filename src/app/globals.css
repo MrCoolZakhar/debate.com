@@ -51,6 +51,13 @@ body {
   font-family: 'Outfit', system-ui, sans-serif;
 }
 
+/* Arabic only: prefer Noto Sans Arabic for clean Arabic glyphs. Scoped to
+   :lang(ar) so Latin/English text is completely unaffected (it keeps the
+   original 'Outfit', system-ui stack and never loads/uses the Arabic face). */
+:lang(ar) {
+  font-family: 'Noto Sans Arabic', 'Outfit', system-ui, sans-serif;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -154,4 +161,64 @@ body {
 @keyframes skeleton-pulse {
   0%, 100% { opacity: 0.5; }
   50% { opacity: 1; }
+}
+
+/* Ambassador marquee — seamless left→right auto-scroll, pauses on hover */
+.ambassador-marquee {
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 6rem,
+    #000 calc(100% - 6rem),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 6rem,
+    #000 calc(100% - 6rem),
+    transparent 100%
+  );
+}
+
+.ambassador-marquee__track {
+  display: flex;
+  width: max-content;
+  animation: ambassador-scroll var(--ambassador-duration, 60s) linear infinite;
+}
+
+/* Each copy is a 3-row grid that grows columns (matches the prior layout).
+   A trailing margin equal to the column gap makes the seam spacing uniform,
+   so shifting by exactly one copy (-100% / 3) loops seamlessly with no
+   half-gap error. Three copies keep the track wider than any viewport. */
+.ambassador-marquee__grid {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(3, auto);
+  gap: var(--ambassador-gap, 1.5rem);
+  align-items: start;
+  margin-right: var(--ambassador-gap, 1.5rem);
+  flex: none;
+}
+
+/* Start shifted left by one copy and slide to 0 => content travels rightward. */
+@keyframes ambassador-scroll {
+  from {
+    transform: translateX(calc(-100% / 3));
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.ambassador-marquee:hover .ambassador-marquee__track {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ambassador-marquee__track {
+    animation: none;
+    transform: translateX(0);
+  }
 }

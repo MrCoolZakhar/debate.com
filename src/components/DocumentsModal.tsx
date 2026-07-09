@@ -1,18 +1,22 @@
 'use client';
 
 import React, { useState, useRef, useEffect, KeyboardEvent } from 'react';
+import Portal from '@/components/Portal';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { useRouter } from 'next/navigation';
 import { Committee, CommitteeDocument, DocumentType, DocumentStatus } from '@/lib/types';
+import { sponsorLabel } from '@/lib/committeeFlags';
 import { TranslationKey } from '@/lib/translations';
 import { getCountryByName, getFlagUrl, getCountryDisplayName, matchesCountryQuery, startsWithCountryQuery } from '@/lib/countries';
 import { Emoji } from '@/components/Emoji';
 import { useSettingsStore } from '@/lib/settingsStore';
+import { supabase } from '@/lib/supabase';
 import {
   addDocument as addDocumentInDB,
   updateDocumentStatus as updateDocumentStatusInDB,
   updateDocumentTimings as updateDocumentTimingsInDB,
   removeDocument as removeDocumentInDB,
+  updateDocumentApproval as updateDocumentApprovalInDB,
   suspendDebate as suspendDebateInDB,
 } from '@/lib/committeeService';
 
@@ -29,7 +33,7 @@ const STATUS_META: Record<DocumentStatus, { label: string; color: string }> = {
 };
 
 const STATUS_NEXT: Partial<Record<DocumentStatus, DocumentStatus>> = {
-  submitted: 'on-floor', 'on-floor': 'introduced', introduced: 'passed',
+  submitted: 'introduced', 'on-floor': 'introduced', introduced: 'passed',
 };
 
 function getStatusLabel(status: DocumentStatus, t: (key: TranslationKey) => string): string {
@@ -54,14 +58,14 @@ function CountryChip({ country, onRemove }: { country: string; onRemove: () => v
   const found = getCountryByName(country);
   return (
     <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-[#DDD4C0] border border-[#DDD4C0] rounded-full text-xs text-[#1C1410]">
-      {found ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-4 h-4 object-contain inline-block mr-1" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : '🌐'}{getCountryDisplayName(country, language)}
-      <button onClick={onRemove} className="text-[#9A8A78] hover:text-red-500 ml-0.5 leading-none">✕</button>
+      {found ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-4 h-4 object-contain inline-block me-1" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : '🌐'}{getCountryDisplayName(country, language)}
+      <button onClick={onRemove} className="text-[#9A8A78] hover:text-red-500 ms-0.5 leading-none">✕</button>
     </span>
   );
 }
 
-function SponsorSelect({ candidates, selected, onChange }: {
-  candidates: string[]; selected: string[]; onChange: (v: string[]) => void;
+function SponsorSelect({ candidates, selected, onChange, committee }: {
+  candidates: string[]; selected: string[]; onChange: (v: string[]) => void; committee: Committee;
 }) {
   const t = useT();
   const { language } = useLanguage();
@@ -77,10 +81,7 @@ function SponsorSelect({ candidates, selected, onChange }: {
   };
   return (
     <div>
-      <label className="block text-sm font-semibold text-[#6A5A4A] mb-1.5">{t('documents_sponsors_label')} <span className="text-red-500">*</span></label>
-      <div className="flex flex-wrap gap-1.5 mb-2 min-h-[28px]">
-        {selected.map((c) => <CountryChip key={c} country={c} onRemove={() => onChange(selected.filter((s) => s !== c))} />)}
-      </div>
+      <label className="block text-sm font-semibold text-[#6A5A4A] mb-1.5">{sponsorLabel(committee, t('documents_sponsors_label'))}</label>
       <div className="relative">
         <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={handleKeyDown}
           placeholder={t('documents_sponsor_placeholder')}
@@ -91,7 +92,7 @@ function SponsorSelect({ candidates, selected, onChange }: {
               const found = getCountryByName(c);
               return (
                 <button key={c} onMouseDown={(e) => { e.preventDefault(); add(c); }}
-                  className={`w-full flex items-center gap-2 px-3 py-2 text-left transition-colors ${i === 0 ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'}`}>
+                  className={`w-full flex items-center gap-2 px-3 py-2 text-start transition-colors ${i === 0 ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'}`}>
                   {found ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <span>🌐</span>}
                   <span className="text-sm">{getCountryDisplayName(c, language)}</span>
                 </button>
@@ -100,6 +101,30 @@ function SponsorSelect({ candidates, selected, onChange }: {
           </div>
         )}
       </div>
+      {/* Selected sponsors — flags only, below input */}
+      {selected.length > 0 && (
+        <div className="flex flex-wrap gap-2 mt-2">
+          {selected.map((c) => {
+            const f = getCountryByName(c);
+            return (
+              <button key={c} onClick={() => onChange(selected.filter((s) => s !== c))}
+                title={`Remove ${c}`}
+                className="relative group focus:outline-none">
+                {f ? (
+                  <img src={getFlagUrl(f.code)} alt={f.code}
+                    className="w-10 h-7 object-cover rounded"
+                    style={{ border: '1.5px solid rgba(28,20,16,0.15)' }}
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                ) : (
+                  <span className="text-2xl">🌐</span>
+                )}
+                <span className="absolute inset-0 flex items-center justify-center rounded opacity-0 group-hover:opacity-100 transition-opacity text-xs font-bold text-white"
+                  style={{ backgroundColor: 'rgba(139,32,32,0.7)' }}>✕</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -131,6 +156,27 @@ function StageTimer({
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const remainingRef = useRef(totalSeconds);
   remainingRef.current = remaining;
+  const [splitPct, setSplitPct] = useState(50);
+  const isDraggingDivider = useRef(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  const onDividerMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    isDraggingDivider.current = true;
+    const onMouseMove = (ev: MouseEvent) => {
+      if (!isDraggingDivider.current || !containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const pct = ((ev.clientX - rect.left) / rect.width) * 100;
+      setSplitPct(Math.min(65, Math.max(35, pct)));
+    };
+    const onMouseUp = () => {
+      isDraggingDivider.current = false;
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  };
 
   useEffect(() => {
     if (running) {
@@ -148,8 +194,8 @@ function StageTimer({
   const progress = totalSeconds > 0 ? ((totalSeconds - remaining) / totalSeconds) * 100 : 100;
 
   return (
-    <div className={`flex-1 flex ${showDocument ? 'flex-row items-stretch' : 'flex-col items-center justify-center px-8 py-8 text-center'}`}>
-      <div className={`flex flex-col items-center justify-center text-center ${showDocument ? 'w-1/2 px-6 py-8 border-r border-[#DDD4C0]' : 'w-full px-8 py-8'}`}>
+    <div ref={containerRef} className={`flex-1 flex ${showDocument ? 'flex-row items-stretch' : 'flex-col items-center justify-center px-8 py-8 text-center'}`}>
+      <div className={`flex flex-col items-center justify-center text-center ${showDocument ? 'px-6 py-8' : 'w-full px-8 py-8'}`} style={showDocument ? { width: `${splitPct}%` } : undefined}>
       <p className="text-xs font-mono tracking-widest mb-2" style={{ color: '#9A8A78' }}>
         {doc.type === 'working-paper' ? t('documents_working_paper_type') : t('documents_draft_resolution_type')} · {doc.docCode}
       </p>
@@ -172,6 +218,15 @@ function StageTimer({
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; (e.currentTarget as HTMLElement).style.color = '#6A5A4A'; }}
               title="Back">
               ←
+            </button>
+            <button
+              onClick={() => { setRemaining(totalSeconds); setRunning(false); setStarted(false); }}
+              title="Reset timer"
+              className="w-10 h-10 rounded-xl font-bold transition-colors focus:outline-none flex items-center justify-center"
+              style={{ backgroundColor: 'transparent', color: '#6A5A4A', border: '1px solid #DDD4C0' }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; (e.currentTarget as HTMLElement).style.color = '#6A5A4A'; }}>
+              ↺
             </button>
             <button onClick={() => { setRunning((r) => !r); setStarted(true); }}
               className="px-8 py-3 rounded-xl font-bold transition-colors focus:outline-none"
@@ -215,7 +270,16 @@ function StageTimer({
       </div>
 
       {showDocument && (
-        <div className="w-1/2 flex flex-col p-4 overflow-hidden">
+        <div
+          onMouseDown={onDividerMouseDown}
+          style={{ width: '6px', cursor: 'col-resize', backgroundColor: 'transparent', flexShrink: 0, position: 'relative' }}
+          className="hover:bg-[#DDD4C0] transition-colors"
+        >
+          <div style={{ position: 'absolute', top: 0, bottom: 0, left: '2px', width: '2px', backgroundColor: '#DDD4C0', borderRadius: '1px' }} />
+        </div>
+      )}
+      {showDocument && (
+        <div className="flex flex-col p-4 overflow-hidden min-h-0" style={{ flex: 1, minWidth: 0 }}>
           {doc.fileUrl ? (
             <iframe
               src={doc.fileUrl}
@@ -224,7 +288,7 @@ function StageTimer({
               style={{ minHeight: 0 }}
             />
           ) : doc.content ? (
-            <div className="flex-1 overflow-y-auto bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl p-6">
+            <div className="flex-1 min-h-0 overflow-y-auto bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl p-6">
               <div className="flex items-center gap-3 mb-4">
                 <span className="text-xs font-mono font-bold text-[#1B3828]">{doc.docCode}</span>
                 <span className="text-sm font-bold text-[#1C1410]">{doc.title}</span>
@@ -276,7 +340,7 @@ function DocumentVote({ doc, committee, onDone, onStatusChange }: {
   // Suspend vote prompt
   if (showSuspendVote && !showSuspended) {
     return (
-      <div className="fixed inset-0 z-[70] bg-[#F6F1E9] flex flex-col items-center justify-center text-center px-8">
+      <Portal><div className="fixed inset-0 z-[70] bg-[#F6F1E9] flex flex-col items-center justify-center text-center px-8">
         <p className="text-xs font-mono tracking-widest text-[#9A8A78] mb-6">MOTION TO SUSPEND DEBATE · {suspendProposer}</p>
         <h1 className="text-4xl font-black mb-14 tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>DOES THIS MOTION PASS?</h1>
         <div className="flex gap-8">
@@ -298,17 +362,17 @@ function DocumentVote({ doc, committee, onDone, onStatusChange }: {
             NO
           </button>
         </div>
-      </div>
+      </div></Portal>
     );
   }
 
   if (showSuspended) {
     return (
-      <div className="fixed inset-0 z-[70] bg-[#F6F1E9] flex flex-col items-center justify-center text-center px-8">
+      <Portal><div className="fixed inset-0 z-[70] bg-[#F6F1E9] flex flex-col items-center justify-center text-center px-8">
         <h1 className="text-6xl font-black text-[#1C1410] mb-4">Session is now suspended.</h1>
         <p className="text-4xl font-black text-[#1C1410] mb-16">See you again soon!</p>
         <p className="text-lg text-[#1C1410]/40">— Press ESC to go back to main menu</p>
-      </div>
+      </div></Portal>
     );
   }
 
@@ -332,7 +396,7 @@ function DocumentVote({ doc, committee, onDone, onStatusChange }: {
 
           {/* Proceed with Session panel */}
           {showProceedPanel && (
-            <div className="fixed inset-0 z-[60] flex items-center justify-center p-4"
+            <Portal><div className="fixed inset-0 z-[60] flex items-center justify-center p-4"
               style={{ background: 'rgba(5, 8, 20, 0.88)', backdropFilter: 'blur(4px)' }}>
               <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-3xl w-full max-w-md shadow-2xl p-8 space-y-6">
                 <h2 className="text-2xl font-black text-[#1C1410]">Proceed with Session</h2>
@@ -366,7 +430,7 @@ function DocumentVote({ doc, committee, onDone, onStatusChange }: {
                   Go back to Session
                 </button>
               </div>
-            </div>
+            </div></Portal>
           )}
         </>
       ) : (
@@ -410,29 +474,60 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
   const [content, setContent] = useState('');
   const [fileName, setFileName] = useState<string | null>(null);
   const [fileUrl, setFileUrl] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const docCode = autoDocCode(type, committee.documents ?? []);
-  const canSubmit = !limitReached && title.trim() && sponsors.length > 0 && !!fileUrl;
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]; if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => { setFileUrl(reader.result as string); setFileName(file.name); };
-    reader.readAsDataURL(file);
+  const isDuplicate = (committee.documents ?? []).some(
+    (d) => d.title.trim().toLowerCase() === title.trim().toLowerCase()
+  );
+
+  const canSubmit = !limitReached && !isSubmitting && !isUploading && !isDuplicate && !!title.trim();
+
+  const uploadFile = async (file: File) => {
+    setFileName(file.name);
+    setIsUploading(true);
+    try {
+      const path = committee.id + '/' + Date.now() + '-' + file.name;
+      const { error } = await supabase.storage.from('session-documents').upload(path, file, { upsert: true });
+      if (error) { console.error('Storage upload error:', error); setFileName(null); return; }
+      const { data } = supabase.storage.from('session-documents').getPublicUrl(path);
+      setFileUrl(data.publicUrl);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    await uploadFile(f);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (!file || file.type !== 'application/pdf') return;
+    await uploadFile(file);
   };
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
-    const newDoc: Omit<CommitteeDocument, 'id' | 'submittedAt'> = {
-      type, docCode, title: title.trim(), sponsors, content: content.trim(), status: 'submitted',
-      ...(fileUrl && fileName ? { fileUrl, fileName } : {}),
-    };
-    // Insert first to get the real UUID back — never use temp IDs for DB operations
-    const saved = await addDocumentInDB(committee.id, newDoc);
-    if (saved) {
-      onDocumentAdded(saved);
+    setIsSubmitting(true);
+    try {
+      const newDoc: Omit<CommitteeDocument, 'id' | 'submittedAt'> = {
+        type, docCode, title: title.trim(), sponsors, content: content.trim(), status: 'submitted',
+        ...(fileUrl && fileName ? { fileUrl, fileName } : {}),
+      };
+      const saved = await addDocumentInDB(committee.id, newDoc);
+      if (saved) onDocumentAdded(saved);
+      onDone();
+    } finally {
+      setIsSubmitting(false);
     }
-    onDone();
   };
 
   return (
@@ -447,7 +542,7 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
       </div>
       <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl px-4 py-2.5">
         <span className="text-xs text-[#9A8A78] font-mono">{t('documents_doc_code_label')}</span>
-        <span className="ml-3 text-sm font-bold text-[#1C1410] font-mono">{docCode}</span>
+        <span className="ms-3 text-sm font-bold text-[#1C1410] font-mono">{docCode}</span>
       </div>
       <div>
         <label className="block text-sm font-semibold text-[#6A5A4A] mb-1.5">{t('documents_title_label')} <span className="text-red-500">*</span></label>
@@ -455,7 +550,7 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
           placeholder={type === 'working-paper' ? t('documents_title_placeholder_wp') : t('documents_title_placeholder_dr')}
           className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] transition-colors" />
       </div>
-      <SponsorSelect candidates={presentCountries} selected={sponsors} onChange={setSponsors} />
+      <SponsorSelect candidates={presentCountries} selected={sponsors} onChange={setSponsors} committee={committee} />
       <div>
         <label className="block text-sm font-semibold text-[#6A5A4A] mb-1.5">{t('documents_google_docs_label')} <span className="text-[#9A8A78] font-normal">({t('documents_google_docs_optional')})</span></label>
         <input type="text" value={content} onChange={(e) => setContent(e.target.value)}
@@ -463,18 +558,36 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
           className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] transition-colors text-sm" />
       </div>
       <div>
-        <label className="block text-sm font-semibold text-[#6A5A4A] mb-1.5">{t('documents_attachment_label')} <span className="text-red-500">*</span></label>
+        <label className="block text-sm font-semibold text-[#6A5A4A] mb-1.5">
+          {t('documents_attachment_label')} <span className="text-[#9A8A78] font-normal">(optional)</span>
+        </label>
         {fileName ? (
           <div className="flex items-center gap-2 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3">
-            <span className="text-sm text-[#1C1410] flex-1 truncate">📎 {fileName}</span>
+            <span className="text-sm text-[#1C1410] flex-1 truncate flex items-center gap-2">
+              {isUploading
+                ? <><div className="w-3.5 h-3.5 border-2 border-[#1B3828] border-t-transparent rounded-full animate-spin shrink-0" /> Uploading…</>
+                : <>📎 {fileName}</>
+              }
+            </span>
             <button onClick={() => { setFileName(null); setFileUrl(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
               className="text-[#9A8A78] hover:text-red-500 transition-colors text-sm">✕</button>
           </div>
         ) : (
-          <button type="button" onClick={() => fileInputRef.current?.click()}
-            className="w-full bg-[#FAF8F3] border border-dashed border-[#DDD4C0] hover:border-[#1B3828] rounded-xl px-4 py-3 text-[#9A8A78] hover:text-[#6A5A4A] text-sm transition-colors text-left">
-            {t('documents_upload_pdf')}
-          </button>
+          <div
+            onClick={() => fileInputRef.current?.click()}
+            onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+            onDragEnter={(e) => { e.preventDefault(); setIsDragging(true); }}
+            onDragLeave={() => setIsDragging(false)}
+            onDrop={handleDrop}
+            className={`w-full border border-dashed rounded-xl px-4 py-5 text-sm transition-colors text-center cursor-pointer select-none ${
+              isDragging
+                ? 'border-[#1B3828] bg-[#1B3828]/10 text-[#1B3828]'
+                : 'bg-[#FAF8F3] border-[#DDD4C0] hover:border-[#1B3828] text-[#9A8A78] hover:text-[#6A5A4A]'
+            }`}
+          >
+            <span className="block text-xl mb-1">📎</span>
+            {isDragging ? 'Drop PDF here' : 'Click to upload or drag & drop a PDF'}
+          </div>
         )}
         <input ref={fileInputRef} type="file" accept=".pdf" onChange={handleFileChange} style={{ position: 'fixed', top: '-9999px', left: '-9999px', opacity: 0, width: 0, height: 0, pointerEvents: 'none' }} />
       </div>
@@ -483,10 +596,20 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
           {t('documents_limit_exceeded').replace('{current}', String(existingCount)).replace('{limit}', String(limit)).replace('{type}', type === 'working-paper' ? t('documents_type_wp') : t('documents_type_dr'))}
         </p>
       )}
-      <button onClick={handleSubmit} disabled={!canSubmit}
-        className="w-full bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white py-3.5 rounded-xl font-bold transition-colors">
-        {limitReached ? t('documents_limit_reached').replace('{current}', String(existingCount)).replace('{limit}', String(limit)) : t('documents_submit_document')}
-      </button>
+      {isSubmitting ? (
+        <button disabled className="w-full bg-[#9A8A78] text-white py-3.5 rounded-xl font-bold cursor-not-allowed">
+          Uploading…
+        </button>
+      ) : (
+        <button onClick={handleSubmit} disabled={!canSubmit}
+          className="w-full bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white py-3.5 rounded-xl font-bold transition-colors">
+          {limitReached
+            ? t('documents_limit_reached').replace('{current}', String(existingCount)).replace('{limit}', String(limit))
+            : isDuplicate
+              ? 'A document with this title already exists'
+              : t('documents_submit_document')}
+        </button>
+      )}
     </div>
   );
 }
@@ -499,9 +622,9 @@ function TimingSetup({ doc, onStart, onSkip }: {
 }) {
   const t = useT();
   const isWP = doc.type === 'working-paper';
-  const [readingMins, setReadingMins] = useState(5);
-  const [presentationMins, setPresentationMins] = useState(5);
-  const [qaMins, setQaMins] = useState(isWP ? 0 : 3);
+  const [readingMins, setReadingMins] = useState(0);
+  const [presentationMins, setPresentationMins] = useState(0);
+  const [qaMins, setQaMins] = useState(0);
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center px-8 py-12">
@@ -549,11 +672,13 @@ function TimingSetup({ doc, onStart, onSkip }: {
 }
 
 // ── Doc Card ──────────────────────────────────────────────────────────────────
-function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation }: {
+function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation, requireApproval, onApprovalChange }: {
   doc: CommitteeDocument; committee: Committee;
   onStatusChange: (docId: string, status: DocumentStatus) => void;
   onRemove: (docId: string) => void;
   onStartPresentation: (doc: CommitteeDocument) => void;
+  requireApproval: boolean;
+  onApprovalChange: (docId: string, approval: 'approved' | 'rejected') => void;
 }) {
   const t = useT();
   const { language } = useLanguage();
@@ -561,6 +686,11 @@ function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation
   const [showPdf, setShowPdf] = useState(false);
   const nextStatus = STATUS_NEXT[doc.status];
   const needsPresentation = nextStatus === 'introduced';
+  // Approval gate: while the setting is on and this doc isn't approved yet, offer Approve/Reject
+  // (also lets a chair reverse a rejection) and hold back Introduce until approved. Once the doc has
+  // been introduced/passed/failed the gate is moot.
+  const canDecide = requireApproval && doc.approval !== 'approved' && (doc.status === 'submitted' || doc.status === 'on-floor');
+  const approvalBlocksIntroduce = requireApproval && doc.approval !== 'approved';
 
   const handleAdvance = () => {
     if (!nextStatus) return;
@@ -569,58 +699,152 @@ function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation
   };
 
   return (
-    <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl p-4 space-y-3">
-      <div className="flex items-start gap-3">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap mb-1">
-            <span className="text-xs font-mono font-bold text-[#1B3828]">{doc.docCode}</span>
-            <StatusBadge status={doc.status} />
+    <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl overflow-hidden">
+      <div className="flex items-stretch">
+
+        {/* Left strip — doc thumbnail with padding from border */}
+        <div className="flex flex-col items-center justify-between shrink-0 p-2"
+          style={{ backgroundColor: 'rgba(27,56,40,0.10)', width: '88px' }}>
+
+          {/* Thumbnail — PDF preview or fallback emoji */}
+          <div className="w-full rounded-lg overflow-hidden flex-1 flex items-center justify-center"
+            style={{ maxHeight: '120px', minHeight: '80px' }}>
+            {doc.fileUrl ? (
+              <iframe
+                src={doc.fileUrl}
+                title={doc.docCode}
+                className="w-full"
+                style={{ height: '120px', pointerEvents: 'none' }}
+                scrolling="no"
+              />
+            ) : (
+              <span style={{ fontSize: '5.5rem', lineHeight: 1, userSelect: 'none' }}>📋</span>
+            )}
           </div>
-          <p className="text-sm font-bold text-[#1C1410] leading-snug">{doc.title}</p>
+
+          {/* Doc code below the thumbnail */}
+          <span className="mt-1.5 text-center font-black"
+            style={{ fontSize: '11px', color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.03em' }}>
+            {doc.docCode}
+          </span>
         </div>
-        <button onClick={() => onRemove(doc.id)} className="text-[#9A8A78] hover:text-red-500 transition-colors text-sm shrink-0 focus:outline-none" title="Delete">✕</button>
-      </div>
-      <div className="text-xs text-[#6A5A4A]"><span className="font-semibold">{t('documents_sponsors_label_card')}: </span>{doc.sponsors.map(s => getCountryDisplayName(s, language)).join(', ') || '—'}</div>
-      {doc.readingMinutes && <div className="text-xs flex items-center gap-1 flex-wrap" style={{ color: '#1C1410' }}>{t('documents_reading_summary').replace('{r}', String(doc.readingMinutes))}{doc.presentationMinutes ? ` · ${t('documents_presentation_summary').replace('{p}', String(doc.presentationMinutes))}` : ''}{doc.qaMinutes ? ` · ${t('documents_qa_summary').replace('{q}', String(doc.qaMinutes))}` : ''}</div>}
-      {doc.fileUrl && doc.fileName && (
-        <div className="text-xs space-y-2">
-          <button onClick={() => setShowPdf((v) => !v)} className="transition-colors focus:outline-none" style={{ color: '#1B3828' }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#2A5A3C'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}>
-            📎 {doc.fileName} {showPdf ? '▲' : '▼'}
-          </button>
-          {showPdf && (
-            <iframe src={doc.fileUrl} title={doc.fileName} className="w-full rounded-lg border border-[#DDD4C0]" style={{ height: '480px' }} />
+
+        {/* Right content */}
+        <div className="flex-1 min-w-0 p-4 space-y-2.5">
+
+          {/* Title row + delete */}
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-base font-black text-[#1C1410] leading-snug">{doc.title}</p>
+              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                <StatusBadge status={doc.status} />
+                {doc.approval === 'approved' && (
+                  <span className="text-xs px-2 py-0.5 rounded-full border font-medium bg-[#1B3828]/15 text-[#1B3828] border-[#1B3828]/40">{t('documents_status_approved')}</span>
+                )}
+                {doc.approval === 'rejected' && (
+                  <span className="text-xs px-2 py-0.5 rounded-full border font-medium bg-[#8B2020]/10 text-[#8B2020] border-[#8B2020]/40">{t('documents_status_rejected')}</span>
+                )}
+              </div>
+            </div>
+            <button onClick={() => onRemove(doc.id)}
+              className="text-[#9A8A78] hover:text-red-500 transition-colors text-sm shrink-0 focus:outline-none mt-0.5"
+              title="Delete">✕</button>
+          </div>
+
+          {/* Sponsors with flags */}
+          {doc.sponsors.length > 0 && (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-xs font-semibold text-[#6A5A4A] shrink-0">{sponsorLabel(committee, t('documents_sponsors_label_card'))}:</span>
+              {doc.sponsors.map((s) => {
+                const f = getCountryByName(s);
+                return (
+                  <span key={s} className="inline-flex items-center gap-1">
+                    {f && (
+                      <img src={getFlagUrl(f.code)} alt={f.code}
+                        className="w-6 h-4 object-cover rounded-sm"
+                        style={{ border: '1px solid rgba(28,20,16,0.12)' }}
+                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                    )}
+                    <span className="text-xs text-[#6A5A4A]">{getCountryDisplayName(s, language)}</span>
+                  </span>
+                );
+              })}
+            </div>
           )}
+
+          {/* PDF toggle */}
+          {doc.fileUrl && doc.fileName && (
+            <div className="text-xs space-y-2">
+              <button onClick={() => setShowPdf((v) => !v)}
+                className="transition-colors focus:outline-none" style={{ color: '#1B3828' }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#2A5A3C'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}>
+                📎 {doc.fileName} {showPdf ? '▲' : '▼'}
+              </button>
+              {showPdf && (
+                <iframe src={doc.fileUrl} title={doc.fileName}
+                  className="w-full rounded-lg border border-[#DDD4C0]"
+                  style={{ height: '480px' }} />
+              )}
+            </div>
+          )}
+
+          {/* Content toggle */}
+          {doc.content && (
+            <div>
+              <button onClick={() => setExpanded((v) => !v)}
+                className="text-xs text-[#1B3828] hover:text-[#6A5A4A] transition-colors">
+                {expanded ? '▲ Hide content' : '▼ Show content'}
+              </button>
+              {expanded && (
+                <pre className="mt-2 text-xs text-[#1C1410] bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-3 py-2 whitespace-pre-wrap font-sans leading-relaxed max-h-48 overflow-y-auto">
+                  {doc.content}
+                </pre>
+              )}
+            </div>
+          )}
+
+          {/* Chair approval gate — approve/reject before the doc can be introduced */}
+          {canDecide && (
+            <div className="flex gap-2">
+              <button onClick={() => onApprovalChange(doc.id, 'approved')}
+                className="flex-1 bg-[#1B3828] hover:bg-[#2A5A3C] text-white py-2 rounded-lg font-bold text-sm transition-colors focus:outline-none">
+                {t('documents_approve')}
+              </button>
+              <button onClick={() => onApprovalChange(doc.id, 'rejected')}
+                className="flex-1 py-2 rounded-lg font-bold text-sm transition-colors focus:outline-none"
+                style={{ backgroundColor: '#8B2020', color: '#EDE7D8' }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#7A1C1C'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#8B2020'; }}>
+                {t('documents_reject')}
+              </button>
+            </div>
+          )}
+
+          {/* Introduce / advance button — withheld until approved when approval is required */}
+          {nextStatus && doc.status !== 'passed' && doc.status !== 'failed' && doc.status !== 'introduced' && !approvalBlocksIntroduce && (
+            <button onClick={handleAdvance}
+              className="w-full bg-[#1B3828] hover:bg-[#2A5A3C] text-white py-2 rounded-lg font-bold text-sm transition-colors focus:outline-none">
+              {needsPresentation ? `${t('documents_introduce')} →` : `${t('documents_advance')}${getStatusLabel(nextStatus, t)}`}
+            </button>
+          )}
+
         </div>
-      )}
-      {doc.content && (
-        <div>
-          <button onClick={() => setExpanded((v) => !v)} className="text-xs text-[#1B3828] hover:text-[#6A5A4A] transition-colors">
-            {expanded ? '▲ Hide content' : '▼ Show content'}
-          </button>
-          {expanded && <pre className="mt-2 text-xs text-[#1C1410] bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-3 py-2 whitespace-pre-wrap font-sans leading-relaxed max-h-48 overflow-y-auto">{doc.content}</pre>}
-        </div>
-      )}
-      <div className="flex gap-2 pt-1">
-        {nextStatus && doc.status !== 'passed' && doc.status !== 'failed' && doc.status !== 'introduced' && (
-          <button onClick={handleAdvance} className="flex-1 bg-[#1B3828] hover:bg-[#2A5A3C] text-white py-2 rounded-lg font-bold text-xs transition-colors">
-            {needsPresentation ? t('documents_introduce') + ' →' : `${t('documents_advance')}${getStatusLabel(nextStatus, t)}`}
-          </button>
-        )}
       </div>
-      <div className="text-xs text-[#9A8A78]">{t('documents_submitted_date').replace('{date}', new Date(doc.submittedAt).toLocaleDateString())}</div>
     </div>
   );
 }
 
 // ── Main Modal ────────────────────────────────────────────────────────────────
-export default function DocumentsModal({ committee, onClose, onCommitteeUpdate }: {
+export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, isViewOnly = false }: {
   committee: Committee; onClose: () => void;
   onCommitteeUpdate?: (updater: (c: Committee) => Committee) => void;
+  isViewOnly?: boolean;
 }) {
   const t = useT();
   const router = useRouter();
+  const { getSettings } = useSettingsStore();
+  const requireDocApproval = getSettings(committee.code).requireDocApproval;
   const [tab, setTab] = useState<DocTab>('working-paper');
   const hasWPs = (committee.documents ?? []).filter((d) => d.type === 'working-paper').length > 0;
   const [showForm, setShowForm] = useState(false);
@@ -641,6 +865,11 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate }
   const handleStatusChange = (docId: string, status: DocumentStatus) => {
     update((c) => ({ ...c, documents: (c.documents ?? []).map((d) => d.id === docId ? { ...d, status } : d) }));
     updateDocumentStatusInDB(docId, status);
+  };
+
+  const handleApprovalChange = (docId: string, approval: 'approved' | 'rejected') => {
+    update((c) => ({ ...c, documents: (c.documents ?? []).map((d) => d.id === docId ? { ...d, approval } : d) }));
+    updateDocumentApprovalInDB(docId, approval);
   };
 
   const handleRemove = (docId: string) => {
@@ -707,7 +936,7 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate }
   // Fullscreen stages
   if (activeDoc && stage && stage !== 'setup') {
     return (
-      <div className="fixed inset-0 z-50 bg-[#F6F1E9] flex flex-col">
+      <Portal><div className="fixed inset-0 z-50 bg-[#F6F1E9] flex flex-col">
         <div className="flex items-center justify-between px-6 pt-4 pb-2 border-b border-[#DDD4C0] shrink-0">
           <div className="flex items-center gap-3">
             <span className="text-sm font-bold text-[#1C1410]">{activeDoc.docCode}</span>
@@ -749,28 +978,28 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate }
             onDone={() => { setStage(null); setActiveDoc(null); }}
             onStatusChange={handleStatusChange} />
         )}
-      </div>
+      </div></Portal>
     );
   }
 
   // Timing setup screen
   if (activeDoc && stage === 'setup') {
     return (
-      <div className="fixed inset-0 z-50 bg-[#F6F1E9] flex flex-col">
+      <Portal><div className="fixed inset-0 z-50 bg-[#F6F1E9] flex flex-col">
         <div className="flex items-center justify-between px-6 pt-4 pb-2 border-b border-[#DDD4C0] shrink-0">
           <span className="text-sm font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{t('documents_introduce_header')}</span>
           <button onClick={() => { setStage(null); setActiveDoc(null); }} className="text-[#9A8A78] hover:text-[#1C1410] transition-colors text-xl">✕</button>
         </div>
         <TimingSetup doc={activeDoc} onStart={handleTimingConfirmed} onSkip={handleSkipToVote} />
-      </div>
+      </div></Portal>
     );
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+    <Portal><div className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background: 'rgba(5, 8, 20, 0.88)', backdropFilter: 'blur(4px)' }}
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
+      <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden max-h-[92%] flex flex-col">
         <div className="flex items-center justify-between px-7 pt-6 pb-4 shrink-0 border-b border-[#DDD4C0]">
           <h2 className="text-2xl font-black text-[#1C1410]">{t('documents_title')}</h2>
           <button onClick={onClose} className="text-[#9A8A78] hover:text-[#1C1410] transition-colors text-xl leading-none">✕</button>
@@ -785,7 +1014,7 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate }
                   className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-colors relative ${tab === tabItem ? 'bg-[#1B3828] text-white' : 'bg-[#EDE7D8] border border-[#DDD4C0] text-[#6A5A4A] hover:border-[#1B3828]'}`}>
                   {tabItem === 'working-paper' ? t('documents_working_papers_tab') : t('documents_draft_resolutions_tab')}
                   {count > 0 && (
-                    <span className={`ml-1.5 inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-black ${tab === tabItem ? 'bg-white/30 text-white' : 'bg-[#1B3828] text-white'}`}>{count}</span>
+                    <span className={`ms-1.5 inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-black ${tab === tabItem ? 'bg-white/30 text-white' : 'bg-[#1B3828] text-white'}`}>{count}</span>
                   )}
                 </button>
               );
@@ -793,7 +1022,7 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate }
           </div>
         )}
 
-        <div className="overflow-y-auto flex-1 pt-4">
+        <div className="overflow-y-auto flex-1 min-h-0 pt-4">
           {showForm ? (
             <SubmitForm committee={committee} type={tab} onDone={() => setShowForm(false)} onDocumentAdded={handleDocumentAdded} />
           ) : (
@@ -817,17 +1046,20 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate }
                 docs.map((doc) => (
                   <DocCard key={doc.id} doc={doc} committee={committee}
                     onStatusChange={handleStatusChange} onRemove={handleRemove}
-                    onStartPresentation={handleStartPresentation} />
+                    onStartPresentation={handleStartPresentation}
+                    requireApproval={requireDocApproval} onApprovalChange={handleApprovalChange} />
                 ))
               )}
-              <button onClick={() => setShowForm(true)}
-                className="w-full bg-[#EDE7D8] hover:bg-[#DDD4C0] border border-[#DDD4C0] hover:border-[#1B3828] text-[#1C1410] py-3.5 rounded-2xl font-bold transition-all mt-2 text-center focus:outline-none" style={{ fontFamily: "'Outfit', sans-serif" }}>
-                + {tab === 'working-paper' ? t('documents_submit_new_wp').replace('+ ', '') : t('documents_submit_new_dr').replace('+ ', '')}
-              </button>
+              {!isViewOnly && (
+                <button onClick={() => setShowForm(true)}
+                  className="w-full bg-[#EDE7D8] hover:bg-[#DDD4C0] border border-[#DDD4C0] hover:border-[#1B3828] text-[#1C1410] py-3.5 rounded-2xl font-bold transition-all mt-2 text-center focus:outline-none" style={{ fontFamily: "'Outfit', sans-serif" }}>
+                  + {tab === 'working-paper' ? t('documents_submit_new_wp').replace('+ ', '') : t('documents_submit_new_dr').replace('+ ', '')}
+                </button>
+              )}
             </div>
           )}
         </div>
       </div>
-    </div>
+    </div></Portal>
   );
 }

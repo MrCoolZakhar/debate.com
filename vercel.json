@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/frenchtest/:path*",
+      "destination": "https://debate-ne80kipw3-mrcoolzakhars-projects.vercel.app/:path*"
+    }
+  ]
+}
