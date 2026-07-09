@@ -9,12 +9,11 @@
 //
 // Composition, top to bottom:
 //   1. Hero — headline left, "up next" card rail right          — DARK (theatre photo)
-//   2. "Opportunities beyond delegating" job board              — CREAM (no panel)
-//   3. "Happening near you" regional auto-scroll rail (IP geo)  — IVORY
-//   4. mymun-inspired "What is MUN / Why Gavelling" pair         — CREAM
-//   5. Organiser tools — photo backdrop, 2×2 grid + gold CTA    — PHOTO
-//   6. The production globe section, verbatim                   — FOREST
-//   7. Ivory footer (design rule)
+//   2. "Find your seat" role carousel + circuit-in-numbers strip — CREAM
+//   3. "Opportunities beyond delegating" job board              — CREAM (no panel)
+//   4. "Happening near you" regional auto-scroll rail (IP geo)  — IVORY
+//   5. The production globe section, verbatim                   — FOREST
+//   6. Ivory footer (design rule)
 //
 // The hero rail + the regional rail reuse the SHARED ConferenceCard
 // (../ConferenceCard) — the same definition the explore directory renders;
@@ -25,16 +24,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowRight, ArrowUpRight, CreditCard, FileText, MapPin, Users, Zap } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, MapPin } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { supabase } from '@/lib/supabase';
 import { UN_COUNTRIES } from '@/lib/countries';
+import { Carousel, type CarouselSlide } from '@/components/ui/carousel';
 import { ConferenceCard } from '../ConferenceCard';
 import {
   LabConference, RatingSummary,
-  CREAM, FOREST, GOLD, IVORY, PALE_GOLD, SANS, HAIRLINE, GRAIN,
+  CREAM, FOREST, GOLD, IVORY, PALE_GOLD, SANS, GRAIN,
   isConcluded, pickHeadliner,
   LabFooter,
 } from './shared';
@@ -77,6 +77,56 @@ const CHIP_FAN = [
   { left: '96px', bottom: '46px', rot: '3.5deg', delay: '260ms', z: 2 },
   { left: '176px', bottom: '0px', rot: '-2deg', delay: '440ms', z: 1 },
 ] as const;
+
+// "Find your seat" role carousel — one slide per way to be on the circuit.
+// Reuses the two conference-crowd photos already shipped on this page.
+const roleSlides: CarouselSlide[] = [
+  {
+    kicker: 'Organizers',
+    title: 'Run the whole show.',
+    description: 'Registration, allocation, delegations, live committees — one platform, zero fees.',
+    image: '/landing/organiser-desk.jpg',
+    imageAlt: 'A delegation working together on Gavelling at a laptop',
+    primaryButton: { label: 'List your conference', href: '/conferences/new' },
+    secondaryButton: { label: 'View your conferences', href: '/my-conferences?tab=organizer' },
+  },
+  {
+    kicker: 'Chairs',
+    title: 'Gavel in hand.',
+    description: 'Run committees live — scoring, motions and the speakers list, all from one dashboard.',
+    image: '/landing/podium-speaker.jpg',
+    imageAlt: 'A full committee room mid-debate, chair at the podium',
+    primaryButton: { label: 'Explore chairing opportunities', href: '/conferences/roles' },
+    secondaryButton: { label: 'View your conferences', href: '/my-conferences?tab=chair' },
+  },
+  {
+    kicker: 'Delegates',
+    title: 'Find your committee.',
+    description: 'Browse the circuit, apply once with your Gavelling profile, and build a MUN CV that writes itself.',
+    image: '/landing/podium-speaker.jpg',
+    imageAlt: 'A full committee room mid-debate, chair at the podium',
+    primaryButton: { label: 'Explore conferences', href: '/conferences' },
+    secondaryButton: { label: 'View your conferences', href: '/my-conferences?tab=delegate' },
+  },
+  {
+    kicker: 'Advisors',
+    title: 'Bring your delegation.',
+    description: 'Pledge spots, manage payments and keep your delegation organised — all in one place.',
+    image: '/landing/organiser-desk.jpg',
+    imageAlt: 'A delegation working together on Gavelling at a laptop',
+    primaryButton: { label: 'Explore conferences', href: '/conferences' },
+    secondaryButton: { label: 'View your conferences', href: '/my-conferences?tab=advisor' },
+  },
+  {
+    kicker: 'Observers',
+    title: 'Watch the debate.',
+    description: 'Follow committees live and see how the room moves — no placard required.',
+    image: '/landing/podium-speaker.jpg',
+    imageAlt: 'A full committee room mid-debate, chair at the podium',
+    primaryButton: { label: 'Explore conferences', href: '/conferences' },
+    secondaryButton: { label: 'View your conferences', href: '/my-conferences?tab=observer' },
+  },
+];
 
 // Resolve a Vercel ISO-3166 alpha-2 code (e.g. "GB") to a full country name
 // so it can be matched against conference.country ("United Kingdom").
@@ -391,6 +441,67 @@ export default function VariantStagefront({
           </div>
         </section>
 
+        {/* ── Find your seat — role carousel, cream ──────────────────────────── */}
+        <section
+          className="px-6 md:px-14"
+          style={{ backgroundColor: CREAM, paddingTop: '72px', paddingBottom: '8px' }}
+        >
+          <p style={{ fontFamily: SANS, fontWeight: 700, fontSize: '12px', letterSpacing: '0.14em', textTransform: 'uppercase', color: GOLD, margin: '0 0 8px 0', textAlign: 'center' }}>
+            Find your seat
+          </p>
+          <h2
+            style={{
+              fontFamily: SANS,
+              fontWeight: 900,
+              fontSize: 'clamp(26px, 3vw, 38px)',
+              letterSpacing: '-0.015em',
+              color: INK,
+              margin: '0 0 34px 0',
+              textAlign: 'center',
+            }}
+          >
+            One platform, every role.
+          </h2>
+          <Carousel slides={roleSlides} />
+        </section>
+
+        {/* ── The circuit in numbers — slim worlddiplomats-style impact strip:
+            three plain figures, no cards, no chrome. Real data from the board. */}
+        <section
+          className="px-6 md:px-14"
+          style={{ backgroundColor: CREAM, paddingTop: '56px', paddingBottom: '64px' }}
+        >
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-10 sm:gap-0">
+            {[
+              { n: conferences.length, label: 'Conferences on the board' },
+              { n: conferences.reduce((s, c) => s + (c.expected_delegates || 0), 0), label: 'Delegates expected' },
+              { n: new Set(conferences.map(c => c.country)).size, label: 'Countries' },
+            ].map((stat, i) => (
+              <div
+                key={stat.label}
+                className={`flex flex-col items-center text-center sm:px-14 md:px-20 ${i > 0 ? 'sm:border-l sm:border-[#DDD4C0]' : ''}`}
+              >
+                <span
+                  style={{
+                    fontFamily: SANS, fontWeight: 800, fontVariantNumeric: 'tabular-nums',
+                    fontSize: 'clamp(38px, 4.5vw, 56px)', lineHeight: 1, color: FOREST, letterSpacing: '-0.01em',
+                  }}
+                >
+                  {stat.n.toLocaleString()}
+                </span>
+                <span
+                  style={{
+                    fontFamily: SANS, fontWeight: 700, fontSize: '11.5px', letterSpacing: '0.14em',
+                    textTransform: 'uppercase', color: GOLD, marginTop: '10px',
+                  }}
+                >
+                  {stat.label}
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+
         {/* ── Opportunities beyond delegating — job board, cream, no panel ──── */}
         <section
           className="relative px-6 md:px-14"
@@ -562,230 +673,6 @@ export default function VariantStagefront({
           </section>
         )}
 
-        {/* ── mymun-inspired pair — cream backdrop, ink-on-cream cards ──────── */}
-        <section
-          className="px-6 md:px-14"
-          style={{ backgroundColor: CREAM, paddingTop: '72px', paddingBottom: '80px' }}
-        >
-          <p style={{ fontFamily: SANS, fontWeight: 700, fontSize: '12px', letterSpacing: '0.14em', textTransform: 'uppercase', color: GOLD, margin: '0 0 8px 0' }}>
-            New to the circuit?
-          </p>
-          <h2
-            style={{
-              fontFamily: SANS,
-              fontWeight: 900,
-              fontSize: 'clamp(26px, 3vw, 38px)',
-              letterSpacing: '-0.015em',
-              color: INK,
-              margin: '0 0 30px 0',
-            }}
-          >
-            Start here.
-          </h2>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
-            <ExplainerCard photo="/landing/podium-speaker.jpg" photoAlt="A full committee room mid-debate, chair at the podium">
-              <p style={{ fontFamily: SANS, fontWeight: 700, fontSize: '11.5px', letterSpacing: '0.14em', textTransform: 'uppercase', color: GOLD, margin: 0 }}>
-                The game
-              </p>
-              <h3 style={{ fontFamily: SANS, fontWeight: 800, fontSize: 'clamp(22px, 2.4vw, 28px)', letterSpacing: '-0.01em', color: INK, margin: '12px 0 0 0' }}>
-                What is Model UN, exactly?
-              </h3>
-              <p style={{ fontFamily: SANS, fontSize: '14.5px', lineHeight: 1.7, color: INK_70, margin: '14px 0 0 0' }}>
-                Model United Nations is diplomacy as a competitive sport. You represent a country
-                you probably disagree with, in a committee debating a crisis that is very real,
-                against delegates who came to win. Over a weekend you speak, caucus, draft and
-                vote — and walk out better at arguing than most adults you know.{' '}
-                <BodyLink href="/conferences/explore">Browse the circuit</BodyLink> to find your
-                first committee room, or see how chairs{' '}
-                <BodyLink href="/">run sessions live on Gavelling</BodyLink>.
-              </p>
-              <p style={{ fontFamily: SANS, fontSize: '14.5px', lineHeight: 1.7, color: INK_70, margin: '12px 0 0 0' }}>
-                No experience needed. Every great delegate started by mispronouncing
-                &ldquo;moderated caucus&rdquo;.
-              </p>
-            </ExplainerCard>
-
-            <ExplainerCard photo="/landing/organiser-desk.jpg" photoAlt="A delegation working together on Gavelling at a laptop" photoPosition="center 42%">
-              <p style={{ fontFamily: SANS, fontWeight: 700, fontSize: '11.5px', letterSpacing: '0.14em', textTransform: 'uppercase', color: GOLD, margin: 0 }}>
-                Why Gavelling
-              </p>
-              <h3 style={{ fontFamily: SANS, fontWeight: 800, fontSize: 'clamp(22px, 2.4vw, 28px)', letterSpacing: '-0.01em', color: INK, margin: '12px 0 0 0' }}>
-                Why participate through Gavelling?
-              </h3>
-              <ol style={{ listStyle: 'none', margin: '18px 0 0 0', padding: 0 }}>
-                {[
-                  ['One directory, honest facts.', 'Every listed conference with real dates, fees and cities — no chasing Instagram bios for a registration link.'],
-                  ['One profile, every application.', 'Apply to any conference with the same Gavelling account. Fill your details once, ever.'],
-                  ['A MUN CV that writes itself.', 'Allocations, committees and awards land on your record automatically as you attend.'],
-                  ['Verified history.', 'Organisers see conferences you actually attended — your record is proof, not claims.'],
-                  ['Reviews from the room.', 'Rate conferences you attended and read delegates who were really there before you commit a weekend.'],
-                ].map(([title, body], i) => (
-                  <li key={title} className="flex gap-4" style={{ marginTop: i === 0 ? 0 : '14px' }}>
-                    <span
-                      style={{
-                        fontFamily: SANS,
-                        fontSize: '13px',
-                        fontWeight: 700,
-                        fontVariantNumeric: 'tabular-nums',
-                        color: PALE_GOLD,
-                        backgroundColor: FOREST,
-                        width: '26px',
-                        height: '26px',
-                        borderRadius: '9999px',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexShrink: 0,
-                        marginTop: '1px',
-                      }}
-                    >
-                      {i + 1}
-                    </span>
-                    <span style={{ fontFamily: SANS, fontSize: '14px', lineHeight: 1.6, color: INK_70 }}>
-                      <strong style={{ color: INK, fontWeight: 700 }}>{title}</strong>{' '}
-                      {body}
-                    </span>
-                  </li>
-                ))}
-              </ol>
-            </ExplainerCard>
-          </div>
-        </section>
-
-        {/* ── Organiser tools — calm cream band, ivory tiles + forest CTA ────
-            Deliberately quiet (worlddiplomats-style): the hero and the globe
-            finale are the only two dark photographic moments on the page. */}
-        <section className="relative overflow-hidden" style={{ backgroundColor: CREAM, paddingTop: '72px', paddingBottom: '80px' }}>
-
-          {/* Slim horizontal split: 2×2 highlight tiles LEFT, heading + copy +
-              gold CTA RIGHT (vertically centered) — total height ≈ the job
-              board band. On mobile the text+CTA column stacks ABOVE the grid
-              (flex-col-reverse keeps the pitch before the feature detail). */}
-          <div className="relative z-10 px-6 md:px-14">
-            <div className="flex flex-col-reverse lg:flex-row lg:items-center gap-9 lg:gap-16">
-              {/* LEFT — 2×2 square tiles */}
-              <div
-                className="grid grid-cols-2 gap-3 md:gap-4 w-full max-w-[440px] mx-auto lg:mx-0 lg:w-[440px] flex-shrink-0"
-              >
-                {[
-                  { icon: Users, title: 'Smart Assignment', desc: 'Preferences + experience scores. One-click auto-assign.' },
-                  { icon: FileText, title: 'Document Portal', desc: 'Study guides, position papers, feedback — all in one place.' },
-                  { icon: CreditCard, title: 'Transparent Fees', desc: '5% delegate surcharge, waived with Gavelling Unlimited. You keep 100%.' },
-                  { icon: Zap, title: 'Automated Comms', desc: 'Acceptance emails, allocation codes, reminders — sent automatically.' },
-                ].map(card => {
-                  const Icon = card.icon;
-                  return (
-                    <div
-                      key={card.title}
-                      className="rounded-2xl flex flex-col items-center text-center"
-                      style={{
-                        backgroundColor: '#EDE7D8',
-                        border: '1.5px solid #D8CDB6',
-                        boxShadow: '0 1px 3px rgba(27,56,40,0.05)',
-                        aspectRatio: '1 / 1',
-                        padding: '16px 14px',
-                        justifyContent: 'center',
-                        gap: '2px',
-                      }}
-                    >
-                      <Icon size={46} color={FOREST} strokeWidth={1.6} />
-                      <h3 style={{ fontFamily: SANS, fontWeight: 700, fontSize: '13.5px', color: INK, margin: '12px 0 0 0' }}>
-                        {card.title}
-                      </h3>
-                      <p style={{ fontFamily: SANS, fontSize: '10.5px', lineHeight: 1.45, color: INK_70, margin: '5px 0 0 0' }}>
-                        {card.desc}
-                      </p>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* RIGHT — heading, copy, forest CTA — vertically centered */}
-              <div className="flex-1 flex flex-col justify-center">
-                <p style={{ fontFamily: SANS, fontWeight: 700, fontSize: '12px', letterSpacing: '0.14em', textTransform: 'uppercase', color: GOLD, margin: '0 0 8px 0' }}>
-                  Organiser tools
-                </p>
-                <h2
-                  style={{
-                    fontFamily: SANS,
-                    fontWeight: 900,
-                    fontSize: 'clamp(26px, 3vw, 38px)',
-                    letterSpacing: '-0.015em',
-                    color: INK,
-                    margin: 0,
-                  }}
-                >
-                  Built for the people running the show.
-                </h2>
-                <p style={{ fontFamily: SANS, fontSize: '15px', lineHeight: 1.6, color: INK_70, margin: '12px 0 0 0', maxWidth: '520px' }}>
-                  Registration, allocation, documents and live committee sessions — one platform,
-                  zero fees for organisers.
-                </p>
-                <Link
-                  href="/conferences/new"
-                  className="inline-flex items-center gap-3"
-                  style={{
-                    marginTop: '28px',
-                    alignSelf: 'flex-start',
-                    fontFamily: SANS,
-                    fontSize: '15px',
-                    fontWeight: 800,
-                    letterSpacing: '0.04em',
-                    color: PALE_GOLD,
-                    backgroundColor: FOREST,
-                    padding: '16px 32px',
-                    borderRadius: '9999px',
-                    textDecoration: 'none',
-                    boxShadow: '0 10px 26px rgba(27,56,40,0.25)',
-                    transition: 'transform 180ms ease, background-color 180ms ease',
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.backgroundColor = '#2A5A3C'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.backgroundColor = FOREST; }}
-                >
-                  List your conference <ArrowRight size={18} strokeWidth={2.5} />
-                </Link>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* ── The circuit in numbers — slim worlddiplomats-style impact strip:
-            three plain figures, no cards, no chrome. Real data from the board. */}
-        <section
-          className="px-6 md:px-14"
-          style={{ backgroundColor: CREAM, borderTop: '1px solid rgba(221,212,192,0.6)', paddingTop: '56px', paddingBottom: '64px' }}
-        >
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-10 sm:gap-0">
-            {[
-              { n: conferences.length, label: 'Conferences on the board' },
-              { n: conferences.reduce((s, c) => s + (c.expected_delegates || 0), 0), label: 'Delegates expected' },
-              { n: new Set(conferences.map(c => c.country)).size, label: 'Countries' },
-            ].map((stat, i) => (
-              <div
-                key={stat.label}
-                className={`flex flex-col items-center text-center sm:px-14 md:px-20 ${i > 0 ? 'sm:border-l sm:border-[#DDD4C0]' : ''}`}
-              >
-                <span
-                  style={{
-                    fontFamily: SANS, fontWeight: 800, fontVariantNumeric: 'tabular-nums',
-                    fontSize: 'clamp(38px, 4.5vw, 56px)', lineHeight: 1, color: FOREST, letterSpacing: '-0.01em',
-                  }}
-                >
-                  {stat.n.toLocaleString()}
-                </span>
-                <span
-                  style={{
-                    fontFamily: SANS, fontWeight: 700, fontSize: '11.5px', letterSpacing: '0.14em',
-                    textTransform: 'uppercase', color: GOLD, marginTop: '10px',
-                  }}
-                >
-                  {stat.label}
-                </span>
-              </div>
-            ))}
-          </div>
-        </section>
-
         {/* ── Section: MUN Across the Globe — copied verbatim from production ── */}
         <section
           className="relative"
@@ -944,25 +831,6 @@ function HeroTextLink({ href, label }: { href: string; label: string }) {
   );
 }
 
-/** Inline link inside body copy (ink-on-cream, gold underline). */
-function BodyLink({ href, children }: { href: string; children: React.ReactNode }) {
-  return (
-    <Link
-      href={href}
-      style={{
-        color: GOLD,
-        textDecoration: 'none',
-        borderBottom: `1px solid ${GOLD}`,
-        transition: 'color 150ms ease',
-      }}
-      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#8A6614'; }}
-      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = GOLD; }}
-    >
-      {children}
-    </Link>
-  );
-}
-
 /**
  * Regional auto-scrolling rail. Duplicates the card list once so the CSS
  * translateX(-50%) loop is seamless. Pauses on hover. Under prefers-reduced-
@@ -1013,44 +881,6 @@ function RegionalRail({
             </div>
           );
         })}
-      </div>
-    </div>
-  );
-}
-
-/** mymun-style rounded card: large photo on top (bottom-fading into the card),
- *  editorial text below — cream. Photos are the real 1400px shots in
- *  /public/landing/, cover-cropped so they never stretch blurry. */
-function ExplainerCard({
-  photo, photoAlt, photoPosition = 'center 30%', children,
-}: {
-  photo: string; photoAlt: string; photoPosition?: string; children: React.ReactNode;
-}) {
-  return (
-    <div
-      className="overflow-hidden rounded-3xl flex flex-col"
-      style={{
-        backgroundColor: CREAM,
-        border: `1px solid ${HAIRLINE}`,
-        boxShadow: '0 20px 44px rgba(27,56,40,0.12)',
-      }}
-    >
-      <div style={{ position: 'relative' }}>
-        <img
-          src={photo}
-          alt={photoAlt}
-          className="w-full"
-          style={{ display: 'block', height: 'clamp(280px, 24vw, 320px)', objectFit: 'cover', objectPosition: photoPosition }}
-        />
-        {/* Bottom fade into the card body */}
-        <div
-          aria-hidden="true"
-          className="absolute inset-x-0 bottom-0"
-          style={{ height: '96px', background: `linear-gradient(to bottom, rgba(250,248,243,0) 0%, ${CREAM} 100%)` }}
-        />
-      </div>
-      <div style={{ padding: '10px 28px 30px' }}>
-        {children}
       </div>
     </div>
   );
