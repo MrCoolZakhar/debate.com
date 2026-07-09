@@ -9,8 +9,50 @@ import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { supabase as anonSupabase } from '@/lib/supabase';
 import { getFlagUrl, getCountryByName } from '@/lib/countries';
+import { OrganizerPencil } from '@/components/OrganizerPencil';
+import { uploadConferenceAsset } from '@/lib/conferenceAssets';
+import {
+  CommitteeEditorModal,
+  MonogramMedallion,
+  ModalOverlay,
+  type EditableCommittee,
+} from '@/components/CommitteeEditorModal';
 
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
+
+const EASE = 'cubic-bezier(0.22,1,0.36,1)';
+
+// Bundled banner presets — same list as manage/[slug]/settings BANNER_PRESETS.
+const BANNER_PRESETS = [
+  '/banners/preset-1.jpg',
+  '/banners/preset-2.jpg',
+  '/banners/preset-3.jpg',
+  '/banners/preset-4.jpg',
+  '/banners/preset-5.jpg',
+];
+
+// House modal form styles — same recipe as CommitteeEditorModal.
+const modalInputStyle: React.CSSProperties = {
+  width: '100%',
+  border: '1px solid #DDD4C0',
+  borderRadius: 8,
+  padding: '8px 12px',
+  fontSize: 14,
+  color: '#1C1410',
+  backgroundColor: '#FAF8F3',
+  outline: 'none',
+  fontFamily: "'Outfit', sans-serif",
+};
+
+const modalLabelStyle: React.CSSProperties = {
+  display: 'block',
+  fontSize: 11,
+  fontWeight: 700,
+  color: '#6E5F4E',
+  fontFamily: "'Outfit', sans-serif",
+  letterSpacing: '0.01em',
+  marginBottom: 4,
+};
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -41,6 +83,24 @@ interface Conference {
   contact_email: string | null;
   organizer_id: string;
   min_age: number | null;
+  display_secretariat: SecretariatMember[] | null;
+}
+
+interface SecretariatMember {
+  name: string;
+  avatar_url: string | null;
+  title: string | null;
+}
+
+interface PartnerConference {
+  id: string;
+  slug: string;
+  full_name: string;
+  acronym: string;
+  logo_url: string | null;
+  city: string | null;
+  country: string | null;
+  start_date: string | null;
 }
 
 interface DisplayChair {
@@ -317,6 +377,19 @@ export default function ConferenceDetailClient() {
   const [reviewText, setReviewText] = useState('');
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
   const [reviewError, setReviewError] = useState('');
+  // Partner conferences (public, mutually approved)
+  const [partners, setPartners] = useState<PartnerConference[]>([]);
+  // Organizer in-place editing (only reachable when isOrganizerViewer)
+  const [editModal, setEditModal] = useState<null | 'banner' | 'logo' | 'description' | 'about'>(null);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState('');
+  const [assetUploading, setAssetUploading] = useState(false);
+  const [descDraft, setDescDraft] = useState('');
+  const [aboutDraft, setAboutDraft] = useState({
+    contact_email: '', instagram_url: '', facebook_url: '', tiktok_url: '', whatsapp_url: '', website_url: '',
+  });
+  // Committee editor — { committee: null } = create flow, set = edit flow
+  const [committeeEditor, setCommitteeEditor] = useState<{ committee: EditableCommittee | null } | null>(null);
 
   useEffect(() => {
     if (authLoading) return;
@@ -324,8 +397,8 @@ export default function ConferenceDetailClient() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug, authLoading, user?.id]);
 
-  async function fetchAll() {
-    setLoading(true);
+  async function fetchAll(opts?: { silent?: boolean }) {
+    if (!opts?.silent) setLoading(true);
     const supabase = anonSupabase;
 
     let { data: confData } = await supabase
@@ -335,7 +408,7 @@ export default function ConferenceDetailClient() {
         start_date, end_date, fee_amount, fee_currency, expected_delegates,
         description, logo_url, banner_url, is_public, status,
         instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url,
-        contact_email, organizer_id, min_age
+        contact_email, organizer_id, min_age, display_secretariat
       `)
       .eq('slug', slug)
       .single();
@@ -351,7 +424,7 @@ export default function ConferenceDetailClient() {
             start_date, end_date, fee_amount, fee_currency, expected_delegates,
             description, logo_url, banner_url, is_public, status,
             instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url,
-            contact_email, organizer_id, min_age
+            contact_email, organizer_id, min_age, display_secretariat
           `)
           .eq('slug', slug)
           .single();
@@ -394,6 +467,30 @@ export default function ConferenceDetailClient() {
 
     setCommittees((committeesRes.data as Committee[]) ?? []);
     setRoleConfigs((roleConfigsRes.data as RoleConfig[]) ?? []);
+
+    // Partner conferences — anon reads; RLS only exposes approved links on
+    // public conferences, and private partners drop out of the details select.
+    const { data: partnerLinks } = await supabase
+      .from('conference_partners')
+      .select('partner_conference_id, sort_order')
+      .eq('conference_id', conf.id)
+      .eq('approved', true)
+      .order('sort_order', { ascending: true });
+    const partnerIds = ((partnerLinks ?? []) as { partner_conference_id: string }[]).map(r => r.partner_conference_id);
+    if (partnerIds.length > 0) {
+      const { data: partnerConfs } = await supabase
+        .from('conferences')
+        .select('id, slug, full_name, acronym, logo_url, city, country, start_date')
+        .in('id', partnerIds);
+      const orderOf = new Map(partnerIds.map((id, i) => [id, i]));
+      setPartners(
+        (((partnerConfs ?? []) as PartnerConference[])).sort(
+          (a, b) => (orderOf.get(a.id) ?? 0) - (orderOf.get(b.id) ?? 0)
+        )
+      );
+    } else {
+      setPartners([]);
+    }
 
     // Reviews — public content, anon client
     const { data: reviewsData } = await supabase
@@ -633,6 +730,95 @@ export default function ConferenceDetailClient() {
     await loadMyPositionPaper();
   }
 
+  // ── Organizer in-place editing ────────────────────────────────────────────
+  // Every save: authed conferences.update(...) then a silent fetchAll() so the
+  // page re-renders with fresh data without flashing the loading spinner.
+
+  function openEdit(modal: 'banner' | 'logo' | 'description' | 'about') {
+    if (!conference) return;
+    setEditError('');
+    if (modal === 'description') setDescDraft(conference.description ?? '');
+    if (modal === 'about') {
+      setAboutDraft({
+        contact_email: conference.contact_email ?? '',
+        instagram_url: conference.instagram_url ?? '',
+        facebook_url: conference.facebook_url ?? '',
+        tiktok_url: conference.tiktok_url ?? '',
+        whatsapp_url: conference.whatsapp_url ?? '',
+        website_url: conference.website_url ?? '',
+      });
+    }
+    setEditModal(modal);
+  }
+
+  async function saveConferenceFields(fields: Record<string, string | null>): Promise<boolean> {
+    if (!session || !conference) return false;
+    setEditSaving(true);
+    setEditError('');
+    const authed = getAuthedClient(session.access_token);
+    const { error } = await authed.from('conferences').update(fields).eq('id', conference.id);
+    if (error) {
+      setEditError('Could not save: ' + error.message);
+      setEditSaving(false);
+      return false;
+    }
+    await fetchAll({ silent: true });
+    setEditSaving(false);
+    return true;
+  }
+
+  async function handleSaveDescription() {
+    const ok = await saveConferenceFields({ description: descDraft.trim() || null });
+    if (ok) setEditModal(null);
+  }
+
+  async function handleSaveAbout() {
+    const ok = await saveConferenceFields({
+      contact_email: aboutDraft.contact_email.trim() || null,
+      instagram_url: aboutDraft.instagram_url.trim() || null,
+      facebook_url: aboutDraft.facebook_url.trim() || null,
+      tiktok_url: aboutDraft.tiktok_url.trim() || null,
+      whatsapp_url: aboutDraft.whatsapp_url.trim() || null,
+      website_url: aboutDraft.website_url.trim() || null,
+    });
+    if (ok) setEditModal(null);
+  }
+
+  async function handleAssetSelect(folder: 'banners' | 'logos', file: File) {
+    if (!session || !conference || assetUploading) return;
+    setEditError('');
+    setAssetUploading(true);
+    const authed = getAuthedClient(session.access_token);
+    const res = await uploadConferenceAsset(authed, folder, conference.id, file);
+    if (res.error !== undefined) {
+      setEditError(res.error);
+      setAssetUploading(false);
+      return;
+    }
+    const ok = await saveConferenceFields(folder === 'banners' ? { banner_url: res.url } : { logo_url: res.url });
+    setAssetUploading(false);
+    if (ok) setEditModal(null);
+  }
+
+  async function handleBannerPreset(path: string) {
+    if (assetUploading || editSaving) return;
+    const ok = await saveConferenceFields({ banner_url: path });
+    if (ok) setEditModal(null);
+  }
+
+  // Committee pencil — the public select lacks session_id, so fetch the full
+  // editable row with the authed client before opening the shared editor.
+  async function openCommitteeEditor(committeeId: string) {
+    if (!session) return;
+    const authed = getAuthedClient(session.access_token);
+    const { data } = await authed
+      .from('conference_committees')
+      .select('id, name, abbreviation, topics, difficulty, committee_type, session_id, logo_url')
+      .eq('id', committeeId)
+      .single();
+    if (data) setCommitteeEditor({ committee: data as EditableCommittee });
+  }
+
   // Loading
   if (authLoading || loading) {
     return (
@@ -803,17 +989,46 @@ export default function ConferenceDetailClient() {
           {/* Bottom-left content */}
           <div className="absolute bottom-0 left-0 right-0 px-6 md:px-14 z-10" style={{ paddingBottom: '68px' }}>
             <div className="flex items-end gap-5">
-              {conference.logo_url && (
-                <img
-                  src={conference.logo_url}
-                  alt={conference.acronym}
-                  className="hidden sm:block flex-shrink-0"
+              {conference.logo_url ? (
+                <div className="hidden sm:block relative flex-shrink-0" style={{ width: '150px', height: '150px' }}>
+                  <img
+                    src={conference.logo_url}
+                    alt={conference.acronym}
+                    style={{
+                      width: '150px', height: '150px', objectFit: 'contain',
+                      filter: 'drop-shadow(0 14px 28px rgba(0,0,0,0.5))',
+                    }}
+                  />
+                  {isOrganizerViewer && (
+                    <OrganizerPencil
+                      variant="cover"
+                      ariaLabel="Edit logo"
+                      onClick={() => openEdit('logo')}
+                      style={{ zIndex: 30, borderRadius: '20px' }}
+                    />
+                  )}
+                </div>
+              ) : isOrganizerViewer ? (
+                <button
+                  type="button"
+                  onClick={() => openEdit('logo')}
+                  className="hidden sm:flex relative flex-col items-center justify-center gap-2 flex-shrink-0 focus:outline-none"
                   style={{
-                    width: '150px', height: '150px', objectFit: 'contain',
-                    filter: 'drop-shadow(0 14px 28px rgba(0,0,0,0.5))',
+                    width: '150px', height: '150px', borderRadius: '20px',
+                    border: '1.5px dashed rgba(255,255,255,0.55)',
+                    backgroundColor: 'rgba(16,28,21,0.28)',
+                    color: '#FFFFFF', cursor: 'pointer', zIndex: 30,
+                    transition: `background-color 250ms ${EASE}, border-color 250ms ${EASE}`,
                   }}
-                />
-              )}
+                  onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = 'rgba(16,28,21,0.5)'; el.style.borderColor = 'rgba(255,255,255,0.85)'; }}
+                  onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = 'rgba(16,28,21,0.28)'; el.style.borderColor = 'rgba(255,255,255,0.55)'; }}
+                >
+                  <Plus size={20} strokeWidth={2.2} />
+                  <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '10px', letterSpacing: '0.16em' }}>
+                    ADD LOGO
+                  </span>
+                </button>
+              ) : null}
               <div className="min-w-0">
                 <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '11px', color: '#EED98A', letterSpacing: '0.14em', marginBottom: '6px' }}>
                   {conference.acronym}
@@ -842,6 +1057,19 @@ export default function ConferenceDetailClient() {
               </div>
             </div>
           </div>
+
+          {/* Organizer: hover grey-out + pencil over the banner. Sits below the
+              z-10 hero content so the title, pills and logo stay crisp and the
+              logo keeps its own cover pencil. */}
+          {isOrganizerViewer && (
+            <OrganizerPencil
+              variant="cover"
+              label="EDIT BANNER"
+              ariaLabel="Edit banner"
+              onClick={() => openEdit('banner')}
+              style={{ zIndex: 5 }}
+            />
+          )}
         </div>
 
         {/* ── Glass stat strip — overlaps the hero ───────────────────── */}
@@ -996,18 +1224,53 @@ export default function ConferenceDetailClient() {
               </div>
 
               {/* About */}
-              {activeTab === 'overview' && conference.description && (
-                <SectionCard className="mb-6">
-                  <p className="text-[15px]" style={{ color: '#3B342C', fontFamily: "'Outfit', sans-serif", whiteSpace: 'pre-wrap', lineHeight: 1.9 }}>
-                    {conference.description}
-                  </p>
+              {activeTab === 'overview' && (conference.description || isOrganizerViewer) && (
+                <SectionCard className="mb-6 relative">
+                  {isOrganizerViewer && conference.description && (
+                    <OrganizerPencil
+                      variant="corner"
+                      ariaLabel="Edit description"
+                      onClick={() => openEdit('description')}
+                      style={{ position: 'absolute', top: 12, right: 12 }}
+                    />
+                  )}
+                  {conference.description ? (
+                    <p className="text-[15px]" style={{ color: '#3B342C', fontFamily: "'Outfit', sans-serif", whiteSpace: 'pre-wrap', lineHeight: 1.9 }}>
+                      {conference.description}
+                    </p>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => openEdit('description')}
+                      className="w-full rounded-2xl py-6 text-[13.5px] font-semibold focus:outline-none transition-colors"
+                      style={{
+                        border: '1.5px dashed rgba(154,138,120,0.6)',
+                        backgroundColor: 'rgba(237,231,216,0.25)',
+                        color: '#9A8A78',
+                        fontFamily: "'Outfit', sans-serif",
+                        cursor: 'pointer',
+                      }}
+                      onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.borderColor = '#1B3828'; el.style.color = '#1B3828'; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
+                      onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.borderColor = 'rgba(154,138,120,0.6)'; el.style.color = '#9A8A78'; el.style.backgroundColor = 'rgba(237,231,216,0.25)'; }}
+                    >
+                      Add a description — tell delegates what your conference is about
+                    </button>
+                  )}
                 </SectionCard>
               )}
 
 
               {/* Organiser */}
               {activeTab === 'overview' && (
-                <SectionCard className="mb-6">
+                <SectionCard className="mb-6 relative">
+                  {isOrganizerViewer && (
+                    <OrganizerPencil
+                      variant="corner"
+                      ariaLabel="Edit contact and social links"
+                      onClick={() => openEdit('about')}
+                      style={{ position: 'absolute', top: 12, right: 12 }}
+                    />
+                  )}
                   <p className="mb-3" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#B6871F', margin: '0 0 12px 0' }}>
                     ORGANISED BY
                   </p>
@@ -1109,6 +1372,52 @@ export default function ConferenceDetailClient() {
                       )}
                     </div>
                   )}
+                </SectionCard>
+              )}
+
+              {/* The Secretariat — trigger-maintained public roster */}
+              {activeTab === 'overview' && (conference.display_secretariat?.length ?? 0) > 0 && (
+                <SectionCard className="mb-6">
+                  <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#B6871F', margin: '0 0 18px 0' }}>
+                    THE SECRETARIAT
+                  </p>
+                  <div className="flex flex-wrap justify-center gap-x-7 gap-y-6">
+                    {(conference.display_secretariat ?? []).map((m, i) => (
+                      <div key={`${m.name}-${i}`} className="flex flex-col items-center text-center" style={{ width: '108px' }}>
+                        {m.avatar_url ? (
+                          <img
+                            src={m.avatar_url}
+                            alt={m.name}
+                            style={{
+                              width: '72px', height: '72px', borderRadius: '9999px', objectFit: 'cover',
+                              boxShadow: '0 6px 16px rgba(27,56,40,0.22)',
+                              backgroundColor: '#EDE7D8',
+                            }}
+                          />
+                        ) : (
+                          <span
+                            className="flex items-center justify-center"
+                            style={{
+                              width: '72px', height: '72px', borderRadius: '9999px',
+                              backgroundColor: '#1B3828', color: '#EED98A',
+                              fontSize: '22px', fontWeight: 700, fontFamily: "'Outfit', sans-serif",
+                              boxShadow: '0 6px 16px rgba(27,56,40,0.22)',
+                            }}
+                          >
+                            {m.name.charAt(0).toUpperCase()}
+                          </span>
+                        )}
+                        <span className="text-[13.5px] font-semibold mt-2.5 leading-tight" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                          {m.name}
+                        </span>
+                        {m.title && (
+                          <span className="mt-1" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '10px', letterSpacing: '0.1em', color: '#B6871F', textTransform: 'uppercase' }}>
+                            {m.title}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </SectionCard>
               )}
 
@@ -1841,7 +2150,7 @@ export default function ConferenceDetailClient() {
                       </div>
                     )}
 
-                    {committees.length === 0 ? (
+                    {committees.length === 0 && !isOrganizerViewer ? (
                       <SectionCard>
                         <p className="text-sm" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
                           Committees will be announced soon.
@@ -1911,7 +2220,7 @@ export default function ConferenceDetailClient() {
                             return (
                               <article
                                 key={c.id}
-                                className="flex-shrink-0 flex flex-col rounded-[24px]"
+                                className="relative flex-shrink-0 flex flex-col rounded-[24px]"
                                 style={{
                                   width: '298px',
                                   scrollSnapAlign: 'start',
@@ -1922,6 +2231,14 @@ export default function ConferenceDetailClient() {
                                   boxShadow: '0 10px 30px rgba(27,56,40,0.08)',
                                 }}
                               >
+                                {isOrganizerViewer && (
+                                  <OrganizerPencil
+                                    variant="corner"
+                                    ariaLabel={`Edit ${c.abbreviation ?? c.name}`}
+                                    onClick={() => openCommitteeEditor(c.id)}
+                                    style={{ position: 'absolute', top: 12, right: 12, zIndex: 10 }}
+                                  />
+                                )}
                                 <div className="flex flex-col items-center px-5 pt-7 flex-1">
                                   {/* Emblem — free-floating */}
                                   {c.logo_url ? (
@@ -2107,6 +2424,41 @@ export default function ConferenceDetailClient() {
                               </article>
                             );
                           })}
+
+                          {/* Organizer: add a committee straight from the public page */}
+                          {isOrganizerViewer && (
+                            <button
+                              type="button"
+                              onClick={() => setCommitteeEditor({ committee: null })}
+                              className="flex-shrink-0 flex flex-col items-center justify-center gap-3 rounded-[24px] focus:outline-none"
+                              style={{
+                                width: '298px',
+                                minHeight: '320px',
+                                scrollSnapAlign: 'start',
+                                border: '1.5px dashed rgba(27,56,40,0.4)',
+                                backgroundColor: 'rgba(27,56,40,0.03)',
+                                color: '#1B3828',
+                                cursor: 'pointer',
+                                transition: `background-color 250ms ${EASE}, border-color 250ms ${EASE}`,
+                              }}
+                              onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = 'rgba(27,56,40,0.07)'; el.style.borderColor = 'rgba(27,56,40,0.6)'; }}
+                              onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = 'rgba(27,56,40,0.03)'; el.style.borderColor = 'rgba(27,56,40,0.4)'; }}
+                            >
+                              <span
+                                className="flex items-center justify-center"
+                                style={{
+                                  width: '52px', height: '52px', borderRadius: '9999px',
+                                  border: '1.5px dashed rgba(27,56,40,0.4)',
+                                  backgroundColor: 'rgba(27,56,40,0.04)',
+                                }}
+                              >
+                                <Plus size={20} strokeWidth={2.2} />
+                              </span>
+                              <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '11px', letterSpacing: '0.14em' }}>
+                                ADD COMMITTEE
+                              </span>
+                            </button>
+                          )}
                         </div>
                       </div>
                     )}
@@ -2217,7 +2569,258 @@ export default function ConferenceDetailClient() {
                   </div>
                 );
               })()}
+
+              {/* Partner conferences — mutually approved, prestige gold cards */}
+              {activeTab === 'overview' && partners.length > 0 && (
+                <div className="mb-6">
+                  <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#B6871F', margin: '0 0 14px 0' }}>
+                    PARTNER CONFERENCES
+                  </p>
+                  <div
+                    className="flex gap-4 overflow-x-auto"
+                    style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', padding: '4px', margin: '-4px' }}
+                  >
+                    {partners.map(p => {
+                      const pCountry = p.country ? getCountryByName(p.country) : null;
+                      const pYear = p.start_date ? new Date(p.start_date + 'T00:00:00').getFullYear() : null;
+                      const pLocation = [p.city, pCountry?.code].filter(Boolean).join(' · ');
+                      return (
+                        <Link
+                          key={p.id}
+                          href={`/conferences/${p.slug}`}
+                          className="flex-shrink-0 flex items-center gap-4 rounded-[20px] px-5 py-4"
+                          style={{
+                            minWidth: '260px',
+                            backgroundColor: '#FAF8F3',
+                            backgroundImage: 'linear-gradient(135deg, rgba(238,217,138,0.16) 0%, rgba(238,217,138,0) 60%)',
+                            border: '1px solid rgba(238,217,138,0.9)',
+                            boxShadow: '0 10px 30px rgba(182,135,31,0.16)',
+                            textDecoration: 'none',
+                            transition: `transform 300ms ${EASE}, box-shadow 300ms ${EASE}`,
+                          }}
+                          onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.transform = 'translateY(-3px)'; el.style.boxShadow = '0 16px 40px rgba(182,135,31,0.28)'; }}
+                          onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.transform = 'translateY(0)'; el.style.boxShadow = '0 10px 30px rgba(182,135,31,0.16)'; }}
+                        >
+                          {p.logo_url ? (
+                            <img
+                              src={p.logo_url}
+                              alt={p.acronym}
+                              style={{ width: '56px', height: '56px', objectFit: 'contain', flexShrink: 0, filter: 'drop-shadow(0 6px 12px rgba(27,56,40,0.22))' }}
+                            />
+                          ) : (
+                            <MonogramMedallion text={p.acronym} isCrisis={false} size={56} />
+                          )}
+                          <div className="min-w-0">
+                            <p
+                              className="truncate"
+                              style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontVariantNumeric: 'tabular-nums', fontSize: '15px', color: '#1C1410', margin: 0, letterSpacing: '0.01em' }}
+                            >
+                              {p.acronym.toUpperCase()}{pYear ? ` ${pYear}` : ''}
+                            </p>
+                            {pLocation && (
+                              <p className="truncate mt-0.5" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontSize: '11px', color: '#9A8A78', margin: '2px 0 0 0', letterSpacing: '0.03em' }}>
+                                {pLocation}
+                              </p>
+                            )}
+                          </div>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
         </div>
+
+        {/* ── Organizer edit modals ──────────────────────────────────── */}
+        {isOrganizerViewer && editModal === 'banner' && (
+          <ModalOverlay onClose={() => { if (!assetUploading && !editSaving) setEditModal(null); }}>
+            <div className="rounded-2xl p-6" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 'min(520px, 92vw)', maxHeight: '85vh', overflowY: 'auto' }}>
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-base font-bold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", margin: 0 }}>Conference Banner</p>
+                <button onClick={() => { if (!assetUploading && !editSaving) setEditModal(null); }} className="focus:outline-none" style={{ color: '#9A8A78', background: 'none', border: 'none', cursor: 'pointer' }} aria-label="Close"><X size={18} /></button>
+              </div>
+              <div
+                onClick={() => { if (!assetUploading && !editSaving) document.getElementById('public-banner-upload')?.click(); }}
+                className="rounded-2xl"
+                style={{
+                  border: '1.5px dashed rgba(154,138,120,0.6)', padding: '26px 12px', textAlign: 'center',
+                  cursor: assetUploading || editSaving ? 'wait' : 'pointer', backgroundColor: 'rgba(237,231,216,0.25)',
+                  transition: `border-color 200ms ${EASE}, background-color 200ms ${EASE}`,
+                }}
+                onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.borderColor = '#1B3828'; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
+                onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.borderColor = 'rgba(154,138,120,0.6)'; el.style.backgroundColor = 'rgba(237,231,216,0.25)'; }}
+              >
+                {assetUploading ? (
+                  <div className="flex justify-center py-2">
+                    <div className="w-5 h-5 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
+                  </div>
+                ) : (
+                  <>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: '#1C1410', fontFamily: "'Outfit', sans-serif", marginBottom: 4 }}>Click to upload a banner</p>
+                    <p style={{ fontSize: 11, color: '#9A8A78', fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}>Recommended 1200x630px · max 5MB</p>
+                  </>
+                )}
+              </div>
+              <input
+                id="public-banner-upload"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                style={{ display: 'none' }}
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleAssetSelect('banners', f); e.target.value = ''; }}
+              />
+              <p style={{ fontFamily: "'Outfit', sans-serif", fontSize: 12, fontWeight: 600, color: '#7A6E5E', margin: '16px 0 8px 0' }}>
+                Or pick a preset
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {BANNER_PRESETS.map(p => {
+                  const selected = conference.banner_url === p;
+                  return (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => handleBannerPreset(p)}
+                      disabled={assetUploading || editSaving}
+                      aria-label={'Use preset banner ' + p}
+                      style={{
+                        width: 84, height: 48, padding: 0, borderRadius: 10, overflow: 'hidden',
+                        cursor: assetUploading || editSaving ? 'wait' : 'pointer',
+                        border: selected ? '2px solid #B6871F' : '1.5px solid #DDD4C0',
+                        boxShadow: selected ? '0 0 0 3px rgba(238,217,138,0.55)' : 'none',
+                        opacity: (assetUploading || editSaving) && !selected ? 0.6 : 1,
+                        transition: 'border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease',
+                        backgroundColor: '#EDE7D8',
+                      }}
+                      onMouseEnter={(e) => { if (!selected) (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; }}
+                    >
+                      <img src={p} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                    </button>
+                  );
+                })}
+              </div>
+              {editError && <p className="text-xs mt-3" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif", margin: '12px 0 0 0' }}>{editError}</p>}
+            </div>
+          </ModalOverlay>
+        )}
+
+        {isOrganizerViewer && editModal === 'logo' && (
+          <ModalOverlay onClose={() => { if (!assetUploading && !editSaving) setEditModal(null); }}>
+            <div className="rounded-2xl p-6" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 'min(420px, 92vw)' }}>
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-base font-bold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", margin: 0 }}>Conference Logo</p>
+                <button onClick={() => { if (!assetUploading && !editSaving) setEditModal(null); }} className="focus:outline-none" style={{ color: '#9A8A78', background: 'none', border: 'none', cursor: 'pointer' }} aria-label="Close"><X size={18} /></button>
+              </div>
+              <div className="flex items-center gap-4">
+                <div
+                  onClick={() => { if (!assetUploading && !editSaving) document.getElementById('public-logo-upload')?.click(); }}
+                  className="flex items-center justify-center flex-shrink-0"
+                  style={{
+                    width: 96, height: 96, borderRadius: 20,
+                    border: '1.5px dashed #DDD4C0', backgroundColor: '#FFFFFF',
+                    overflow: 'hidden', cursor: assetUploading || editSaving ? 'wait' : 'pointer',
+                    transition: `border-color 200ms ${EASE}`,
+                  }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
+                >
+                  {assetUploading ? (
+                    <div className="w-5 h-5 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
+                  ) : conference.logo_url ? (
+                    <img src={conference.logo_url} alt={conference.acronym} style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 8 }} />
+                  ) : (
+                    <Plus size={20} strokeWidth={2.2} style={{ color: '#9A8A78' }} />
+                  )}
+                </div>
+                <p className="text-[12px]" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", lineHeight: 1.6, margin: 0 }}>
+                  Click the box to upload a new logo. Square, transparent PNG works best. Max 5MB.
+                </p>
+              </div>
+              <input
+                id="public-logo-upload"
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/svg+xml"
+                style={{ display: 'none' }}
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleAssetSelect('logos', f); e.target.value = ''; }}
+              />
+              {editError && <p className="text-xs mt-3" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif", margin: '12px 0 0 0' }}>{editError}</p>}
+            </div>
+          </ModalOverlay>
+        )}
+
+        {isOrganizerViewer && editModal === 'description' && (
+          <ModalOverlay onClose={() => { if (!editSaving) setEditModal(null); }}>
+            <div className="rounded-2xl p-6" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 'min(560px, 92vw)' }}>
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-base font-bold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", margin: 0 }}>About the Conference</p>
+                <button onClick={() => { if (!editSaving) setEditModal(null); }} className="focus:outline-none" style={{ color: '#9A8A78', background: 'none', border: 'none', cursor: 'pointer' }} aria-label="Close"><X size={18} /></button>
+              </div>
+              <textarea
+                value={descDraft}
+                onChange={(e) => setDescDraft(e.target.value)}
+                rows={9}
+                placeholder="Tell delegates what your conference is about — history, venue, what makes it special..."
+                className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none resize-none"
+                style={{ border: '1px solid #DDD4C0', backgroundColor: 'rgba(237,231,216,0.25)', color: '#1C1410', fontFamily: "'Outfit', sans-serif", lineHeight: 1.7 }}
+                onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
+              />
+              {editError && <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif", margin: '8px 0 0 0' }}>{editError}</p>}
+              <div className="flex gap-3 mt-5">
+                <button onClick={() => { if (!editSaving) setEditModal(null); }} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ border: '1.5px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif", cursor: 'pointer' }}>CANCEL</button>
+                <button onClick={handleSaveDescription} disabled={editSaving} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ backgroundColor: editSaving ? '#DDD4C0' : '#1B3828', color: editSaving ? '#9A8A78' : '#EED98A', fontFamily: "'Outfit', sans-serif", border: 'none', cursor: editSaving ? 'default' : 'pointer' }}>{editSaving ? 'SAVING...' : 'SAVE'}</button>
+              </div>
+            </div>
+          </ModalOverlay>
+        )}
+
+        {isOrganizerViewer && editModal === 'about' && (
+          <ModalOverlay onClose={() => { if (!editSaving) setEditModal(null); }}>
+            <div className="rounded-2xl p-6" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 'min(480px, 92vw)', maxHeight: '85vh', overflowY: 'auto' }}>
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-base font-bold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", margin: 0 }}>Contact &amp; Social Links</p>
+                <button onClick={() => { if (!editSaving) setEditModal(null); }} className="focus:outline-none" style={{ color: '#9A8A78', background: 'none', border: 'none', cursor: 'pointer' }} aria-label="Close"><X size={18} /></button>
+              </div>
+              <div className="flex flex-col gap-3.5">
+                {([
+                  { key: 'contact_email' as const, label: 'Contact Email', placeholder: 'hello@yourmun.org', type: 'email' },
+                  { key: 'instagram_url' as const, label: 'Instagram URL', placeholder: 'https://instagram.com/...', type: 'url' },
+                  { key: 'facebook_url' as const, label: 'Facebook URL', placeholder: 'https://facebook.com/...', type: 'url' },
+                  { key: 'tiktok_url' as const, label: 'TikTok URL', placeholder: 'https://tiktok.com/@...', type: 'url' },
+                  { key: 'whatsapp_url' as const, label: 'WhatsApp URL', placeholder: 'https://chat.whatsapp.com/...', type: 'url' },
+                  { key: 'website_url' as const, label: 'Website URL', placeholder: 'https://yourmun.org', type: 'url' },
+                ]).map(f => (
+                  <div key={f.key}>
+                    <label style={modalLabelStyle}>{f.label}</label>
+                    <input
+                      type={f.type}
+                      value={aboutDraft[f.key]}
+                      onChange={(e) => setAboutDraft(d => ({ ...d, [f.key]: e.target.value }))}
+                      placeholder={f.placeholder}
+                      style={modalInputStyle}
+                      onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
+                      onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
+                    />
+                  </div>
+                ))}
+              </div>
+              {editError && <p className="text-xs mt-3" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif", margin: '12px 0 0 0' }}>{editError}</p>}
+              <div className="flex gap-3 mt-5">
+                <button onClick={() => { if (!editSaving) setEditModal(null); }} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ border: '1.5px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif", cursor: 'pointer' }}>CANCEL</button>
+                <button onClick={handleSaveAbout} disabled={editSaving} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ backgroundColor: editSaving ? '#DDD4C0' : '#1B3828', color: editSaving ? '#9A8A78' : '#EED98A', fontFamily: "'Outfit', sans-serif", border: 'none', cursor: editSaving ? 'default' : 'pointer' }}>{editSaving ? 'SAVING...' : 'SAVE'}</button>
+              </div>
+            </div>
+          </ModalOverlay>
+        )}
+
+        {/* Shared committee editor — create (committee: null) and edit flows */}
+        {isOrganizerViewer && committeeEditor && (
+          <CommitteeEditorModal
+            conference={{ id: conference.id }}
+            committee={committeeEditor.committee}
+            onSaved={() => { fetchAll({ silent: true }); }}
+            onClose={() => setCommitteeEditor(null)}
+          />
+        )}
 
         {/* ── Footer ─────────────────────────────────────────────────── */}
         <footer

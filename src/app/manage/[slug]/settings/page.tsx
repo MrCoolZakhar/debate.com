@@ -42,6 +42,9 @@ interface Organizer {
   role: string;
   user_id: string;
   permissions?: Record<string, boolean>;
+  public_title: string | null;
+  show_on_public: boolean;
+  sort_order: number;
   profiles: { display_name: string; email: string; avatar_url: string | null } | null;
 }
 
@@ -59,6 +62,40 @@ interface PredecessorSummary {
   id: string;
   full_name: string;
   acronym: string;
+}
+
+interface PartnerConf {
+  id: string;
+  slug: string;
+  full_name: string;
+  acronym: string;
+  logo_url: string | null;
+  city: string | null;
+  country: string | null;
+  start_date: string | null;
+}
+
+interface PartnerLink {
+  id: string;
+  sort_order: number;
+  approved: boolean;
+  partner_conference_id: string;
+  conf: PartnerConf | null;
+}
+
+interface IncomingPartnerClaim {
+  link_id: string;
+  requester_conference_id: string;
+  requester_slug: string;
+  requester_acronym: string;
+  requester_full_name: string;
+  requester_logo_url: string | null;
+  requester_city: string | null;
+  requester_country: string | null;
+  requester_start_date: string | null;
+  my_conference_id: string;
+  my_acronym: string;
+  created_at: string;
 }
 
 type BooleanRoleKey = 'must_pay_before_allocation';
@@ -147,6 +184,41 @@ function PillToggle({ value, onChange, size = 'md' }: {
         }}
       />
     </button>
+  );
+}
+
+// ── PartnerDisc ────────────────────────────────────────────────────────────
+// Logo when the partner has one; otherwise a forest disc with a gold initial
+// (same monogram language as the public-page medallions).
+
+function PartnerDisc({ logoUrl, acronym, size = 40 }: {
+  logoUrl: string | null;
+  acronym: string;
+  size?: number;
+}) {
+  if (logoUrl) {
+    return (
+      <img
+        src={logoUrl}
+        alt={acronym}
+        className="rounded-full object-cover flex-shrink-0"
+        style={{ width: `${size}px`, height: `${size}px`, border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3' }}
+      />
+    );
+  }
+  return (
+    <div
+      className="flex items-center justify-center rounded-full flex-shrink-0 font-black"
+      style={{
+        width: `${size}px`, height: `${size}px`,
+        background: 'linear-gradient(140deg, #16301F, #2A5A3C)',
+        color: '#EED98A',
+        fontFamily: "'Outfit', sans-serif",
+        fontSize: `${Math.round(size * 0.38)}px`,
+      }}
+    >
+      {(acronym?.[0] ?? '?').toUpperCase()}
+    </div>
   );
 }
 
@@ -330,6 +402,14 @@ export default function SettingsPage() {
   const [lineageBusy, setLineageBusy] = useState<string | null>(null);
   const [lineageError, setLineageError] = useState('');
 
+  // Partner conferences
+  const [partners, setPartners] = useState<PartnerLink[]>([]);
+  const [incomingPartnerClaims, setIncomingPartnerClaims] = useState<IncomingPartnerClaim[]>([]);
+  const [partnerQuery, setPartnerQuery] = useState('');
+  const [partnerResults, setPartnerResults] = useState<PartnerConf[]>([]);
+  const [partnerBusy, setPartnerBusy] = useState<string | null>(null);
+  const [partnerError, setPartnerError] = useState('');
+
   // ── Data loaders ────────────────────────────────────────────────────────
 
   const loadRoleConfigs = useCallback(async () => {
@@ -352,8 +432,10 @@ export default function SettingsPage() {
     const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase
       .from('conference_organizers')
-      .select('id, role, user_id, permissions, profiles(display_name, email, avatar_url)')
-      .eq('conference_id', conference.id);
+      .select('id, role, user_id, permissions, public_title, show_on_public, sort_order, profiles(display_name, email, avatar_url)')
+      .eq('conference_id', conference.id)
+      .order('sort_order', { ascending: true })
+      .order('created_at', { ascending: true });
     if (data) setOrganizers(data as unknown as Organizer[]);
   }, [conference]);
 
@@ -379,6 +461,36 @@ export default function SettingsPage() {
     } else {
       setPredecessorInfo(null);
     }
+  }, [conference, session]);
+
+  const loadPartners = useCallback(async () => {
+    if (!conference || !session) return;
+    const supabase = getAuthedClient(session.access_token);
+    const { data: links } = await supabase
+      .from('conference_partners')
+      .select('id, sort_order, approved, partner_conference_id')
+      .eq('conference_id', conference.id)
+      .order('sort_order', { ascending: true });
+    const rows = (links as Omit<PartnerLink, 'conf'>[] | null) ?? [];
+
+    const details: Record<string, PartnerConf> = {};
+    if (rows.length > 0) {
+      const { data: confs } = await supabase
+        .from('conferences')
+        .select('id, slug, full_name, acronym, logo_url, city, country, start_date')
+        .in('id', rows.map(r => r.partner_conference_id));
+      for (const c of (confs as PartnerConf[] | null) ?? []) details[c.id] = c;
+    }
+    setPartners(rows.map(r => ({ ...r, conf: details[r.partner_conference_id] ?? null })));
+  }, [conference, session]);
+
+  const loadIncomingPartnerClaims = useCallback(async () => {
+    if (!conference || !session) return;
+    const supabase = getAuthedClient(session.access_token);
+    const { data } = await supabase.rpc('list_incoming_partner_claims');
+    setIncomingPartnerClaims(
+      ((data as IncomingPartnerClaim[] | null) ?? []).filter(c => c.my_conference_id === conference.id)
+    );
   }, [conference, session]);
 
   const ensureRoleConfigs = useCallback(async () => {
@@ -411,6 +523,8 @@ export default function SettingsPage() {
     loadRoleConfigs();
     loadOrganizers();
     loadLineage();
+    loadPartners();
+    loadIncomingPartnerClaims();
     setDescription(conference.description ?? '');
     setInstagramUrl(conference.instagram_url ?? '');
     setFacebookUrl(conference.facebook_url ?? '');
@@ -431,7 +545,28 @@ export default function SettingsPage() {
     setCity(conference.city ?? '');
     setFormat((conference.format as 'in-person' | 'online' | 'hybrid' | '') ?? '');
     setExpectedDelegates(conference.expected_delegates != null ? String(conference.expected_delegates) : '');
-  }, [conference?.id, loadRoleConfigs, loadOrganizers, loadLineage]);
+  }, [conference?.id, loadRoleConfigs, loadOrganizers, loadLineage, loadPartners, loadIncomingPartnerClaims]);
+
+  // Partner typeahead: debounced authed search over public conferences,
+  // excluding this conference and anything already linked.
+  useEffect(() => {
+    if (!conference || !session) return;
+    const q = partnerQuery.trim();
+    if (q.length < 2) { setPartnerResults([]); return; }
+    const timer = setTimeout(async () => {
+      const supabase = getAuthedClient(session.access_token);
+      const { data } = await supabase
+        .from('conferences')
+        .select('id, slug, full_name, acronym, logo_url, city, country, start_date')
+        .eq('is_public', true)
+        .neq('id', conference.id)
+        .or(`acronym.ilike.%${q}%,full_name.ilike.%${q}%`)
+        .limit(8);
+      const linkedIds = new Set(partners.map(p => p.partner_conference_id));
+      setPartnerResults(((data as PartnerConf[] | null) ?? []).filter(c => !linkedIds.has(c.id)));
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [partnerQuery, conference?.id, session, partners]);
 
   useEffect(() => {
     if (!conference || roleConfigs.length > 0) return;
@@ -516,6 +651,32 @@ export default function SettingsPage() {
     await loadOrganizers();
   }
 
+  // Public-page curation (owner only — enforced by RLS as well as the UI gate).
+  // The DB trigger recomputes conferences.display_secretariat on every write.
+  async function updateOrganizerPublic(orgId: string, updates: { public_title?: string | null; show_on_public?: boolean }) {
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
+    await supabase.from('conference_organizers').update(updates).eq('id', orgId);
+    await loadOrganizers();
+  }
+
+  async function handleMoveOrganizer(idx: number, dir: -1 | 1) {
+    if (!session) return;
+    const j = idx + dir;
+    if (j < 0 || j >= organizers.length) return;
+    const order = [...organizers];
+    [order[idx], order[j]] = [order[j], order[idx]];
+    const supabase = getAuthedClient(session.access_token);
+    // Persist the displayed index as sort_order for every row that drifted —
+    // a plain neighbour swap is a no-op while rows still share the default 0.
+    await Promise.all(
+      order
+        .map((o, i) => (o.sort_order === i ? null : supabase.from('conference_organizers').update({ sort_order: i }).eq('id', o.id)))
+        .filter(Boolean)
+    );
+    await loadOrganizers();
+  }
+
   // ── Privacy actions ─────────────────────────────────────────────────────
 
   async function handlePublicToggle(next: boolean) {
@@ -576,6 +737,67 @@ export default function SettingsPage() {
     // re-runs loadLineage with the fresh predecessor_conference_id.
     await refreshConference();
     setLineageBusy(null);
+  }
+
+  // ── Partner conference actions ──────────────────────────────────────────
+
+  async function handleAddPartner(conf: PartnerConf) {
+    if (!conference || !session) return;
+    setPartnerBusy(conf.id);
+    setPartnerError('');
+    const supabase = getAuthedClient(session.access_token);
+    const { error } = await supabase.from('conference_partners').insert({
+      conference_id: conference.id,
+      partner_conference_id: conf.id,
+      sort_order: partners.length,
+    });
+    if (error) setPartnerError(error.message);
+    setPartnerQuery('');
+    setPartnerResults([]);
+    await loadPartners();
+    setPartnerBusy(null);
+  }
+
+  async function handleMovePartner(idx: number, dir: -1 | 1) {
+    if (!session) return;
+    const j = idx + dir;
+    if (j < 0 || j >= partners.length) return;
+    const order = [...partners];
+    [order[idx], order[j]] = [order[j], order[idx]];
+    const supabase = getAuthedClient(session.access_token);
+    await Promise.all(
+      order
+        .map((p, i) => (p.sort_order === i ? null : supabase.from('conference_partners').update({ sort_order: i }).eq('id', p.id)))
+        .filter(Boolean)
+    );
+    await loadPartners();
+  }
+
+  async function handleRemovePartner(link: PartnerLink) {
+    if (!session) return;
+    const label = link.conf?.acronym ?? 'this conference';
+    if (!window.confirm(`Remove the partner link with ${label}?`)) return;
+    setPartnerBusy(link.id);
+    setPartnerError('');
+    const supabase = getAuthedClient(session.access_token);
+    const { error } = await supabase.from('conference_partners').delete().eq('id', link.id);
+    if (error) setPartnerError(error.message);
+    await loadPartners();
+    setPartnerBusy(null);
+  }
+
+  async function handlePartnerClaimDecision(linkId: string, approve: boolean) {
+    if (!session) return;
+    setPartnerBusy(linkId);
+    setPartnerError('');
+    const supabase = getAuthedClient(session.access_token);
+    const { error } = await supabase.rpc('approve_partner_link', {
+      p_link_id: linkId,
+      p_approve: approve,
+    });
+    if (error) setPartnerError(error.message);
+    await Promise.all([loadPartners(), loadIncomingPartnerClaims()]);
+    setPartnerBusy(null);
   }
 
   // ── Custom questions ────────────────────────────────────────────────────
@@ -1674,6 +1896,7 @@ export default function SettingsPage() {
         </p>
         <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
           Add co-organizers who can manage this conference.
+          {isOwner && ' Members marked public are shown on your public page with photo, name and title.'}
         </p>
 
         {/* Members list */}
@@ -1746,6 +1969,58 @@ export default function SettingsPage() {
                         </button>
                       );
                     })}
+                  </div>
+                )}
+                {isOwner && (
+                  <div className="flex flex-wrap items-center gap-1.5 mt-2" style={{ marginLeft: 48 }}>
+                    <button
+                      onClick={() => updateOrganizerPublic(org.id, { show_on_public: !org.show_on_public })}
+                      className="text-[11px] font-semibold px-2.5 py-1 rounded-lg focus:outline-none transition-colors flex-shrink-0"
+                      style={{ fontFamily: "'Outfit', sans-serif", letterSpacing: '0.01em', border: org.show_on_public ? '1.5px solid rgba(27,56,40,0.32)' : '1.5px solid #DDD4C0', backgroundColor: org.show_on_public ? 'rgba(27,56,40,0.10)' : 'transparent', color: org.show_on_public ? '#1B3828' : '#9A8A78' }}
+                    >
+                      {org.show_on_public ? 'On public page' : 'Show on public page'}
+                    </button>
+                    {org.show_on_public && (
+                      <>
+                        <input
+                          type="text"
+                          defaultValue={org.public_title ?? ''}
+                          placeholder="e.g. Secretary-General"
+                          onFocus={fgInput}
+                          onBlur={(e) => {
+                            e.currentTarget.style.borderColor = '#DDD4C0';
+                            const next = e.target.value.trim() || null;
+                            if (next !== (org.public_title ?? null)) updateOrganizerPublic(org.id, { public_title: next });
+                          }}
+                          onKeyDown={(e) => { if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur(); }}
+                          style={{ ...inputStyle, width: '190px', padding: '5px 10px', fontSize: '12px' }}
+                        />
+                        <div className="flex items-center flex-shrink-0">
+                          <button
+                            onClick={() => handleMoveOrganizer(idx, -1)}
+                            disabled={idx === 0}
+                            aria-label={`Move ${name} up`}
+                            className="text-xs focus:outline-none px-1 transition-colors"
+                            style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", background: 'transparent', border: 'none', cursor: idx === 0 ? 'default' : 'pointer', opacity: idx === 0 ? 0.3 : 1 }}
+                            onMouseEnter={(e) => { if (idx !== 0) (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
+                            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
+                          >
+                            ▲
+                          </button>
+                          <button
+                            onClick={() => handleMoveOrganizer(idx, 1)}
+                            disabled={idx === organizers.length - 1}
+                            aria-label={`Move ${name} down`}
+                            className="text-xs focus:outline-none px-1 transition-colors"
+                            style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", background: 'transparent', border: 'none', cursor: idx === organizers.length - 1 ? 'default' : 'pointer', opacity: idx === organizers.length - 1 ? 0.3 : 1 }}
+                            onMouseEnter={(e) => { if (idx !== organizers.length - 1) (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
+                            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
+                          >
+                            ▼
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 )}
                 </div>
@@ -2023,6 +2298,233 @@ export default function SettingsPage() {
         {lineageError && (
           <p className="text-xs mt-3" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>
             {lineageError}
+          </p>
+        )}
+      </div>
+
+      {/* ── Partner conferences card ── */}
+      <div style={cardStyle}>
+        <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+          Partner conferences
+        </p>
+        <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+          Showcase partner conferences on your public page. Links only appear once the partner conference&apos;s team approves them.
+        </p>
+
+        {/* Typeahead add */}
+        <div className="relative mb-6">
+          <input
+            type="text"
+            value={partnerQuery}
+            onChange={(e) => setPartnerQuery(e.target.value)}
+            placeholder="Search public conferences by acronym or name"
+            style={inputStyle}
+            onFocus={fgInput}
+            onBlur={bgInput}
+          />
+          {partnerResults.length > 0 && (
+            <div
+              className="absolute left-0 right-0 z-20 mt-1 rounded-xl overflow-hidden"
+              style={{ backgroundColor: '#FFFDF9', border: '1.5px solid #DDD4C0', boxShadow: '0 12px 32px rgba(27,56,40,0.14)' }}
+            >
+              {partnerResults.map((c, idx) => (
+                <button
+                  key={c.id}
+                  onClick={() => handleAddPartner(c)}
+                  disabled={partnerBusy === c.id}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-left focus:outline-none transition-colors"
+                  style={{
+                    backgroundColor: 'transparent',
+                    border: 'none',
+                    borderTop: idx === 0 ? 'none' : '1px solid #F0EDE6',
+                    cursor: 'pointer',
+                  }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                >
+                  <PartnerDisc logoUrl={c.logo_url} acronym={c.acronym} size={32} />
+                  <span className="min-w-0">
+                    <span className="block font-bold text-sm truncate" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                      {c.acronym}
+                    </span>
+                    <span className="block text-xs truncate" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                      {[c.city, c.country].filter(Boolean).join(', ') || c.full_name}
+                    </span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Linked partners */}
+        <p
+          className="text-xs font-bold mb-2"
+          style={{ color: '#6E5F4E', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.02em' }}
+        >
+          Linked partners
+        </p>
+        {partners.length === 0 ? (
+          <p className="text-sm" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+            No partner conferences linked yet.
+          </p>
+        ) : (
+          <div className="flex flex-col">
+            {partners.map((link, idx) => {
+              const isLast = idx === partners.length - 1;
+              const conf = link.conf;
+              const year = conf?.start_date ? new Date(conf.start_date + 'T00:00:00').getFullYear() : null;
+              const cityLine = conf ? [conf.city, conf.country].filter(Boolean).join(', ') : '';
+              return (
+                <div
+                  key={link.id}
+                  className="flex items-center gap-3 py-3"
+                  style={{ borderBottom: isLast ? 'none' : '1px solid #F0EDE6' }}
+                >
+                  <PartnerDisc logoUrl={conf?.logo_url ?? null} acronym={conf?.acronym ?? '?'} />
+                  <div className="flex-1 min-w-0">
+                    <p
+                      className="truncate"
+                      style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '14px', fontVariantNumeric: 'tabular-nums' }}
+                    >
+                      {conf?.acronym ?? 'Unknown conference'}{year ? ` ${year}` : ''}
+                    </p>
+                    {cityLine && (
+                      <p className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                        {cityLine}
+                      </p>
+                    )}
+                  </div>
+
+                  <span
+                    className="flex-shrink-0 rounded-full px-2.5 py-1 font-bold"
+                    style={{
+                      fontSize: '10px',
+                      letterSpacing: '0.08em',
+                      fontFamily: "'Outfit', sans-serif",
+                      backgroundColor: link.approved ? 'rgba(61,122,82,0.13)' : 'rgba(238,217,138,0.35)',
+                      color: link.approved ? '#2A5A3C' : '#8A6614',
+                    }}
+                  >
+                    {link.approved ? 'APPROVED' : 'PENDING APPROVAL'}
+                  </span>
+
+                  <div className="flex items-center flex-shrink-0">
+                    <button
+                      onClick={() => handleMovePartner(idx, -1)}
+                      disabled={idx === 0}
+                      aria-label="Move partner up"
+                      className="text-xs focus:outline-none px-1 transition-colors"
+                      style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", background: 'transparent', border: 'none', cursor: idx === 0 ? 'default' : 'pointer', opacity: idx === 0 ? 0.3 : 1 }}
+                      onMouseEnter={(e) => { if (idx !== 0) (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
+                    >
+                      ▲
+                    </button>
+                    <button
+                      onClick={() => handleMovePartner(idx, 1)}
+                      disabled={idx === partners.length - 1}
+                      aria-label="Move partner down"
+                      className="text-xs focus:outline-none px-1 transition-colors"
+                      style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", background: 'transparent', border: 'none', cursor: idx === partners.length - 1 ? 'default' : 'pointer', opacity: idx === partners.length - 1 ? 0.3 : 1 }}
+                      onMouseEnter={(e) => { if (idx !== partners.length - 1) (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
+                    >
+                      ▼
+                    </button>
+                  </div>
+
+                  <button
+                    onClick={() => handleRemovePartner(link)}
+                    disabled={partnerBusy === link.id}
+                    aria-label={`Remove ${conf?.acronym ?? 'partner'}`}
+                    className="text-sm font-semibold focus:outline-none flex-shrink-0 px-1 transition-colors"
+                    style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif", background: 'transparent', border: 'none', cursor: 'pointer', opacity: partnerBusy === link.id ? 0.4 : 1 }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Incoming partner requests */}
+        {incomingPartnerClaims.length > 0 && (
+          <div className="mt-6 pt-6" style={{ borderTop: '1px solid #F0EDE6' }}>
+            <p
+              className="text-xs font-bold mb-2"
+              style={{ color: '#6E5F4E', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.02em' }}
+            >
+              Incoming partner requests
+            </p>
+            <div className="flex flex-col">
+              {incomingPartnerClaims.map((claim, idx) => {
+                const isLast = idx === incomingPartnerClaims.length - 1;
+                const year = claim.requester_start_date ? new Date(claim.requester_start_date + 'T00:00:00').getFullYear() : null;
+                const cityLine = [claim.requester_city, claim.requester_country].filter(Boolean).join(', ');
+                const busy = partnerBusy === claim.link_id;
+                return (
+                  <div
+                    key={claim.link_id}
+                    className="flex items-center gap-3 py-3"
+                    style={{ borderBottom: isLast ? 'none' : '1px solid #F0EDE6' }}
+                  >
+                    <PartnerDisc logoUrl={claim.requester_logo_url} acronym={claim.requester_acronym} />
+                    <div className="flex-1 min-w-0">
+                      <p style={{ fontSize: 10, color: '#B6871F', fontFamily: "'Outfit', sans-serif", fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', fontVariantNumeric: 'tabular-nums' }}>
+                        {claim.requester_acronym}{year ? ' · ' + year : ''}
+                      </p>
+                      <p className="font-semibold text-sm truncate" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                        {claim.requester_full_name}
+                      </p>
+                      <p className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                        {cityLine ? cityLine + ' — ' : ''}wants to list {conference.acronym} as a partner conference
+                      </p>
+                    </div>
+                    <div className="flex gap-2 flex-shrink-0">
+                      <button
+                        onClick={() => handlePartnerClaimDecision(claim.link_id, true)}
+                        disabled={busy}
+                        className="rounded-lg py-1.5 px-3 font-bold text-[11px] focus:outline-none transition-colors"
+                        style={{
+                          backgroundColor: busy ? '#DDD4C0' : '#1B3828',
+                          color: busy ? '#9A8A78' : '#EED98A',
+                          fontFamily: "'Outfit', sans-serif",
+                          letterSpacing: '0.06em',
+                        }}
+                        onMouseEnter={(e) => { if (!busy) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+                        onMouseLeave={(e) => { if (!busy) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+                      >
+                        APPROVE
+                      </button>
+                      <button
+                        onClick={() => handlePartnerClaimDecision(claim.link_id, false)}
+                        disabled={busy}
+                        className="rounded-lg py-1.5 px-3 font-bold text-[11px] focus:outline-none transition-colors"
+                        style={{
+                          backgroundColor: 'transparent',
+                          color: '#8B2020',
+                          border: '1px solid rgba(139,32,32,0.3)',
+                          fontFamily: "'Outfit', sans-serif",
+                          letterSpacing: '0.06em',
+                        }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.05)'; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                      >
+                        DECLINE
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {partnerError && (
+          <p className="text-xs mt-3" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>
+            {partnerError}
           </p>
         )}
       </div>
