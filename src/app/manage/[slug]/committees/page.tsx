@@ -1,14 +1,13 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, X, Copy, Check, Building2, Globe, CalendarClock, Trash2, Users } from 'lucide-react';
+import { Plus, X, Copy, Check, Building2, Globe, CalendarClock, Trash2, Users, ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
 import { getCountryByName } from '@/lib/countries';
 import { CountryMatrixPicker } from '@/components/CountryMatrixPicker';
 import { CommitteeNameInput } from '@/components/CommitteeNameInput';
-import { Pill, type PillTone } from '@/app/account/accountUi';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -25,6 +24,7 @@ interface CommitteeRow {
   pp_submissions_enabled: boolean;
   position_paper_deadline: string | null;
   notification_email: string | null;
+  logo_url: string | null;
 }
 
 // Mint a real, joinable session for a conference committee and link it back.
@@ -86,20 +86,71 @@ interface Committee extends CommitteeRow {
 
 // ── Design constants ──────────────────────────────────────────────────────────
 
-const DIFF_COLOR: Record<string, string> = {
-  BEGINNER: '#3D7A52',
-  INTERMEDIATE: '#B6871F',
-  ADVANCED: '#8B2020',
-  EXPERT: '#8B2020',
+// Same recipe as the public conference detail page committee cards.
+const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
+
+const DIFFICULTY_STYLES: Record<string, { backgroundColor: string; color: string }> = {
+  beginner:     { backgroundColor: 'rgba(61,122,82,0.13)',   color: '#2A5A3C' },
+  intermediate: { backgroundColor: 'rgba(238,217,138,0.35)', color: '#8A6614' },
+  advanced:     { backgroundColor: 'rgba(184,132,74,0.16)',  color: '#B8844A' },
+  expert:       { backgroundColor: 'rgba(139,32,32,0.1)',    color: '#8B2020' },
 };
 
-// Difficulty → warm crafted Pill tone (matches the /account level ramp).
-const DIFF_TONE: Record<string, PillTone> = {
-  BEGINNER: 'forest',
-  INTERMEDIATE: 'gold',
-  ADVANCED: 'rose',
-  EXPERT: 'rose',
-};
+const DIFF_ORDER: Record<string, number> = { beginner: 0, intermediate: 1, advanced: 2, expert: 3 };
+
+const ROMAN = ['I', 'II', 'III'];
+
+const EASE = 'cubic-bezier(0.22,1,0.36,1)';
+
+// Fallback emblem — gradient monogram disc with grain, matching the public card.
+function MonogramMedallion({ text, isCrisis, size }: { text: string; isCrisis: boolean; size: number }) {
+  const monogram = text.replace(/[^A-Za-z0-9]/g, '').slice(0, 6).toUpperCase() || '—';
+  return (
+    <div
+      className="relative flex items-center justify-center overflow-hidden flex-shrink-0"
+      style={{
+        width: size, height: size, borderRadius: '9999px',
+        background: isCrisis
+          ? 'linear-gradient(135deg, #3C1414 0%, #6E1E1E 100%)'
+          : 'linear-gradient(135deg, #16301F 0%, #2A5A3C 100%)',
+        boxShadow: '0 10px 24px rgba(27,56,40,0.26)',
+      }}
+    >
+      <div className="pointer-events-none absolute inset-0" style={{ backgroundImage: GRAIN, backgroundSize: '300px', mixBlendMode: 'overlay', opacity: 0.12 }} />
+      <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: monogram.length > 4 ? Math.round(size * 0.135) : Math.round(size * 0.167), fontWeight: 700, color: '#EED98A', letterSpacing: '0.06em', fontVariantNumeric: 'tabular-nums' }}>
+        {monogram}
+      </span>
+    </div>
+  );
+}
+
+function SortButton({ label, dir, onClick }: { label: string; dir: 'asc' | 'desc' | null; onClick: () => void }) {
+  const active = dir !== null;
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[10.5px] font-bold transition-all focus:outline-none"
+      style={{
+        backgroundColor: active ? '#1B3828' : 'rgba(237,231,216,0.5)',
+        color: active ? '#EED98A' : '#6B5F52',
+        border: active ? '1px solid #1B3828' : '1px solid rgba(221,212,192,0.9)',
+        fontFamily: "'Outfit', sans-serif",
+        letterSpacing: '0.09em',
+        whiteSpace: 'nowrap',
+        cursor: 'pointer',
+      }}
+    >
+      {label}
+      {dir === 'asc' ? (
+        <ArrowDown size={12} strokeWidth={2.4} />
+      ) : dir === 'desc' ? (
+        <ArrowUp size={12} strokeWidth={2.4} />
+      ) : (
+        <ArrowUpDown size={12} strokeWidth={2} style={{ opacity: 0.5 }} />
+      )}
+    </button>
+  );
+}
 
 const inputStyle: React.CSSProperties = {
   width: '100%',
@@ -158,8 +209,25 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialCountri
   const [countries, setCountries] = useState<string[]>(initialCountries ?? []);
   const [baselineCountries] = useState<string[]>(initialCountries ?? []);
   const [pendingRemovalCount, setPendingRemovalCount] = useState<number | null>(null);
+  const [logoUrl, setLogoUrl] = useState<string | null>(existing?.logo_url ?? null);
+  const [logoUploading, setLogoUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  // Mirrors the conference logo upload in manage/[slug]/settings — same bucket, own folder.
+  async function handleEmblemUpload(file: File) {
+    if (!session) return;
+    if (file.size > 5 * 1024 * 1024) { setError('Emblem must be under 5MB.'); return; }
+    setLogoUploading(true); setError('');
+    const supabase = getAuthedClient(session.access_token);
+    const ext = file.name.split('.').pop();
+    const path = 'committee-emblems/' + conferenceId + '-' + Date.now() + '.' + ext;
+    const { error: upErr } = await supabase.storage.from('conference-assets').upload(path, file, { contentType: file.type, upsert: true });
+    if (upErr) { setError('Upload failed: ' + upErr.message); setLogoUploading(false); return; }
+    const { data: urlData } = supabase.storage.from('conference-assets').getPublicUrl(path);
+    setLogoUrl(urlData.publicUrl);
+    setLogoUploading(false);
+  }
 
   function addTopic() {
     const t = topicInput.trim();
@@ -178,6 +246,7 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialCountri
       committee_type: committeeType,
       total_slots: countries.length,
       notification_email: null,
+      logo_url: logoUrl,
     }).select('id').single();
     if (err || !created) { setError(err?.message ?? 'Failed to create committee.'); return false; }
     await supabase.from('committee_country_slots').insert(
@@ -237,6 +306,7 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialCountri
       topics,
       difficulty,
       total_slots: countries.length,
+      logo_url: logoUrl,
     }).eq('id', ex.id);
     if (ex.session_id) {
       await supabase.from('committees').update({ name: name.trim(), topic: topics[0] ?? 'TBD' }).eq('id', ex.session_id);
@@ -293,6 +363,58 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialCountri
               <option value="advanced">Advanced</option>
               <option value="expert">Expert</option>
             </select>
+          </div>
+          <div>
+            <label style={labelStyle}>Committee Emblem</label>
+            <div className="flex items-center gap-4 rounded-xl p-3" style={{ border: '1px solid #EDE7D8', backgroundColor: 'rgba(237,231,216,0.35)' }}>
+              {logoUploading ? (
+                <div className="flex items-center justify-center flex-shrink-0" style={{ width: 72, height: 72 }}>
+                  <div className="w-5 h-5 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
+                </div>
+              ) : logoUrl ? (
+                <img
+                  src={logoUrl}
+                  alt="Committee emblem"
+                  style={{ width: 72, height: 72, objectFit: 'contain', flexShrink: 0, filter: 'drop-shadow(0 6px 12px rgba(27,56,40,0.24))' }}
+                />
+              ) : (
+                <MonogramMedallion text={abbreviation || name} isCrisis={isCrisis} size={72} />
+              )}
+              <div className="flex flex-col gap-2 min-w-0">
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => { if (!logoUploading) document.getElementById('committee-emblem-upload')?.click(); }}
+                    className="rounded-lg py-1.5 px-3.5 font-bold text-[11px] focus:outline-none"
+                    style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.07em', cursor: 'pointer', transition: `background-color 250ms ${EASE}` }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+                  >
+                    {logoUploading ? 'UPLOADING...' : logoUrl ? 'REPLACE ART' : 'UPLOAD ART'}
+                  </button>
+                  {logoUrl && !logoUploading && (
+                    <button
+                      onClick={() => setLogoUrl(null)}
+                      className="rounded-lg py-1.5 px-3.5 font-bold text-[11px] focus:outline-none"
+                      style={{ border: '1.5px solid #DDD4C0', color: '#6E5F4E', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.07em', cursor: 'pointer', transition: `background-color 250ms ${EASE}` }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                    >
+                      USE MONOGRAM
+                    </button>
+                  )}
+                </div>
+                <p className="text-[11px]" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", lineHeight: 1.45 }}>
+                  Square transparent PNG works best, max 5MB. Without art, the committee wears its monogram medallion.
+                </p>
+              </div>
+              <input
+                id="committee-emblem-upload"
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/svg+xml"
+                style={{ display: 'none' }}
+                onChange={e => { const f = e.target.files?.[0]; if (f) handleEmblemUpload(f); e.target.value = ''; }}
+              />
+            </div>
           </div>
           <div>
             <label style={labelStyle}>Topics * (at least one, up to 3)</label>
@@ -357,6 +479,8 @@ export default function CommitteesPage() {
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<CommitteeRow | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [sortKey, setSortKey] = useState<'' | 'difficulty' | 'name' | 'type'>('');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
   const loadCommittees = useCallback(async () => {
     if (!conference) return;
@@ -365,7 +489,7 @@ export default function CommitteesPage() {
     const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase
       .from('conference_committees')
-      .select('id, name, abbreviation, topics, difficulty, committee_type, total_slots, session_code, session_id, position_paper_deadline, notification_email, pp_submissions_enabled')
+      .select('id, name, abbreviation, topics, difficulty, committee_type, total_slots, session_code, session_id, position_paper_deadline, notification_email, pp_submissions_enabled, logo_url')
       .eq('conference_id', conference.id)
       .order('name', { ascending: true });
 
@@ -417,6 +541,30 @@ export default function CommitteesPage() {
   }
 
   if (!conference) return null;
+
+  let sortedCommittees = committees;
+  if (sortKey) {
+    sortedCommittees = [...committees].sort((a, b) => {
+      if (sortKey === 'name') {
+        const cmp = a.name.localeCompare(b.name);
+        return sortDir === 'asc' ? cmp : -cmp;
+      }
+      let va = 0, vb = 0;
+      if (sortKey === 'difficulty') {
+        va = DIFF_ORDER[(a.difficulty ?? '').toLowerCase()] ?? 99;
+        vb = DIFF_ORDER[(b.difficulty ?? '').toLowerCase()] ?? 99;
+      } else {
+        va = a.committee_type === 'crisis' ? 1 : 0;
+        vb = b.committee_type === 'crisis' ? 1 : 0;
+      }
+      return sortDir === 'asc' ? va - vb : vb - va;
+    });
+  }
+  const cycleSort = (key: 'difficulty' | 'name' | 'type') => {
+    if (sortKey !== key) { setSortKey(key); setSortDir('asc'); }
+    else if (sortDir === 'asc') { setSortDir('desc'); }
+    else { setSortKey(''); setSortDir('asc'); }
+  };
 
   return (
     <div className="px-6 md:px-10 py-8">
@@ -484,86 +632,192 @@ export default function CommitteesPage() {
       )}
 
       {!loading && committees.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {committees.map(c => {
-            const diffKey = c.difficulty.toUpperCase();
-            const diffColor = DIFF_COLOR[diffKey] ?? '#9A8A78';
-            const diffTone = DIFF_TONE[diffKey] ?? 'neutral';
-            const diffLabel = c.difficulty.charAt(0).toUpperCase() + c.difficulty.slice(1).toLowerCase();
-            const isCrisis = c.committee_type === 'crisis';
-            const topics = c.topics ?? [];
-            const ghostBtn: React.CSSProperties = { border: '1.5px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" };
-            return (
+        <>
+          {/* Sort bar — glass pill, same recipe as the public conference page */}
+          {committees.length > 1 && (
+            <div className="mb-5">
               <div
-                key={c.id}
-                className="rounded-2xl overflow-hidden transition-all"
+                className="inline-flex flex-wrap items-center gap-1.5 rounded-full px-2 py-1.5"
                 style={{
-                  backgroundColor: '#FAF8F3',
-                  border: '1.5px solid #D8CDB6',
-                  boxShadow: '0 1px 3px rgba(27,56,40,0.05), 0 8px 22px rgba(27,56,40,0.05)',
+                  backgroundColor: 'rgba(250,248,243,0.72)',
+                  backdropFilter: 'blur(16px) saturate(1.4)',
+                  WebkitBackdropFilter: 'blur(16px) saturate(1.4)',
+                  border: '1px solid rgba(221,212,192,0.85)',
+                  boxShadow: '0 6px 20px rgba(27,56,40,0.07)',
                 }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = '#D8CDB6'; (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; }}
               >
-                {/* Difficulty strip */}
-                <div style={{ height: 5, backgroundColor: diffColor }} />
+                <SortButton label="DIFFICULTY" dir={sortKey === 'difficulty' ? sortDir : null} onClick={() => cycleSort('difficulty')} />
+                <SortButton label="NAME" dir={sortKey === 'name' ? sortDir : null} onClick={() => cycleSort('name')} />
+                <SortButton label="GA / CRISIS" dir={sortKey === 'type' ? sortDir : null} onClick={() => cycleSort('type')} />
+              </div>
+            </div>
+          )}
 
-                <div className="p-5">
-                  {/* Row 1: name + difficulty badge */}
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="font-semibold text-base" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>{c.name}</p>
-                    <span className="flex-shrink-0" style={{ marginTop: 1 }}>
-                      <Pill tone={diffTone} size="sm" dot>{diffLabel}</Pill>
-                    </span>
-                  </div>
-
-                  {topics.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 mt-2.5">
-                      {topics.map((t, i) => (
-                        <Pill key={i} tone="neutral" size="sm">{t}</Pill>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Stats row */}
-                  <div className="flex flex-wrap items-center gap-2 mt-3 pt-3" style={{ borderTop: '1px solid #F0EDE6' }}>
-                    <Pill tone="forest" size="sm" icon={isCrisis ? <Users size={11} /> : <Globe size={11} />}>
-                      {c.slotCount} {isCrisis ? (c.slotCount === 1 ? 'character' : 'characters') : (c.slotCount === 1 ? 'country' : 'countries')}
-                    </Pill>
-                    {c.session_code && (
-                      <button
-                        onClick={() => handleCopyCode(c.session_code!)}
-                        className="inline-flex items-center gap-1.5 focus:outline-none"
-                        title="Copy session code"
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 items-stretch">
+            {sortedCommittees.map(c => {
+              const diff = (c.difficulty ?? '').toLowerCase();
+              const diffStyle = DIFFICULTY_STYLES[diff] ?? DIFFICULTY_STYLES.intermediate;
+              const diffLabel = diff ? diff.charAt(0).toUpperCase() + diff.slice(1) : '';
+              const isCrisis = c.committee_type === 'crisis';
+              const topics = c.topics ?? [];
+              const seats = c.slotCount || c.total_slots;
+              const copied = copiedCode === c.session_code && !!c.session_code;
+              return (
+                <article
+                  key={c.id}
+                  className="flex flex-col rounded-[24px]"
+                  style={{
+                    backgroundColor: 'rgba(250,248,243,0.82)',
+                    backdropFilter: 'blur(12px)',
+                    WebkitBackdropFilter: 'blur(12px)',
+                    border: '1px solid rgba(221,212,192,0.95)',
+                    boxShadow: '0 10px 30px rgba(27,56,40,0.08)',
+                    transition: `transform 350ms ${EASE}, box-shadow 350ms ${EASE}`,
+                  }}
+                  onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.transform = 'translateY(-3px)'; el.style.boxShadow = '0 16px 40px rgba(27,56,40,0.13)'; }}
+                  onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.transform = 'translateY(0)'; el.style.boxShadow = '0 10px 30px rgba(27,56,40,0.08)'; }}
+                >
+                  <div className="flex flex-col items-center px-5 pt-7 flex-1">
+                    {/* Emblem — uploaded art or monogram medallion */}
+                    {c.logo_url ? (
+                      <img
+                        src={c.logo_url}
+                        alt={c.abbreviation ?? c.name}
                         style={{
-                          padding: '2px 9px', borderRadius: 7,
-                          backgroundColor: 'rgba(221,212,192,0.30)', border: '1px solid rgba(154,138,120,0.42)',
-                          cursor: 'pointer',
+                          width: '104px', height: '104px', objectFit: 'contain', flexShrink: 0,
+                          filter: 'drop-shadow(0 10px 18px rgba(27,56,40,0.28))',
                         }}
-                      >
-                        {copiedCode === c.session_code ? (
-                          <>
-                            <Check size={11} style={{ color: '#3D7A52' }} />
-                            <span style={{ color: '#3D7A52', fontFamily: "'Outfit', sans-serif", fontSize: 11, fontWeight: 600 }}>Copied!</span>
-                          </>
+                      />
+                    ) : (
+                      <MonogramMedallion text={c.abbreviation || c.name} isCrisis={isCrisis} size={96} />
+                    )}
+
+                    {/* Abbreviation eyebrow (when art carries the emblem, the monogram moves up here) */}
+                    {c.abbreviation && (
+                      <p style={{ margin: '16px 0 0 0', fontFamily: "'Outfit', sans-serif", fontSize: '10px', fontWeight: 700, letterSpacing: '0.18em', color: '#B6871F', fontVariantNumeric: 'tabular-nums' }}>
+                        {c.abbreviation.toUpperCase()}
+                      </p>
+                    )}
+
+                    {/* Name */}
+                    <h3
+                      className="text-center font-bold text-[15.5px] leading-snug"
+                      style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", margin: c.abbreviation ? '4px 0 0 0' : '18px 0 0 0', minHeight: '2.6em' }}
+                    >
+                      {c.name}
+                    </h3>
+
+                    {/* Meta row */}
+                    <div className="flex items-center gap-2 mt-1.5">
+                      {diffLabel && (
+                        <span
+                          className="px-2.5 py-0.5 rounded-full"
+                          style={{ ...diffStyle, fontSize: '10px', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.06em', fontWeight: 700 }}
+                        >
+                          {diffLabel}
+                        </span>
+                      )}
+                      <span aria-hidden style={{ color: 'rgba(182,135,31,0.55)', fontSize: '7px' }}>◆</span>
+                      <span className="text-[12px] font-semibold" style={{ color: '#6B5F52', fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}>
+                        {seats} {isCrisis ? (seats === 1 ? 'role' : 'roles') : (seats === 1 ? 'seat' : 'seats')}
+                      </span>
+                      {isCrisis && (
+                        <>
+                          <span aria-hidden style={{ color: 'rgba(182,135,31,0.55)', fontSize: '7px' }}>◆</span>
+                          <span className="text-[10px] font-bold" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.12em' }}>
+                            CRISIS
+                          </span>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Topics — roman numerals */}
+                    {topics.length > 0 && (
+                      <div className="w-full mt-5 pt-4" style={{ borderTop: '1px solid rgba(221,212,192,0.55)' }}>
+                        {topics.map((topic, ti) => (
+                          <div key={topic} className="flex items-start gap-2.5 py-1">
+                            <span
+                              className="flex-shrink-0 text-right"
+                              style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '11px', color: '#B6871F', width: '18px', lineHeight: '19px' }}
+                            >
+                              {ROMAN[ti] ?? String(ti + 1)}.
+                            </span>
+                            <span className="text-[12.5px] font-medium" style={{ color: '#2E2820', fontFamily: "'Outfit', sans-serif", lineHeight: 1.55 }}>
+                              {topic}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Session code ticket + PP deadline — pinned to the card bottom */}
+                    <div className="w-full mt-auto">
+                      <div className="w-full mt-5 pt-4" style={{ borderTop: '1px solid rgba(221,212,192,0.55)' }}>
+                        {c.session_code ? (
+                          <button
+                            onClick={() => handleCopyCode(c.session_code!)}
+                            title="Copy session code"
+                            className="w-full flex items-stretch overflow-hidden rounded-xl focus:outline-none"
+                            style={{
+                              border: copied ? '1px solid rgba(61,122,82,0.45)' : '1px solid rgba(27,56,40,0.22)',
+                              backgroundColor: copied ? 'rgba(61,122,82,0.10)' : 'rgba(27,56,40,0.045)',
+                              cursor: 'pointer',
+                              transition: `background-color 300ms ${EASE}, border-color 300ms ${EASE}`,
+                            }}
+                          >
+                            <span className="flex items-center justify-center py-2.5 px-3" style={{ width: '45%' }}>
+                              <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: '9px', fontWeight: 700, letterSpacing: '0.16em', color: '#6B5F52' }}>
+                                SESSION CODE
+                              </span>
+                            </span>
+                            {/* Ticket perforation seam */}
+                            <span aria-hidden style={{ borderLeft: '1px dashed rgba(27,56,40,0.35)', margin: '5px 0' }} />
+                            <span className="flex-1 flex items-center justify-center gap-1.5 py-2.5">
+                              {copied ? (
+                                <>
+                                  <Check size={12} style={{ color: '#3D7A52' }} />
+                                  <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: '11px', fontWeight: 700, letterSpacing: '0.1em', color: '#3D7A52' }}>COPIED</span>
+                                </>
+                              ) : (
+                                <>
+                                  <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: '13px', fontWeight: 700, letterSpacing: '0.14em', color: '#1B3828', fontVariantNumeric: 'tabular-nums' }}>
+                                    {c.session_code}
+                                  </span>
+                                  <Copy size={11} style={{ color: 'rgba(27,56,40,0.55)' }} />
+                                </>
+                              )}
+                            </span>
+                          </button>
                         ) : (
-                          <>
-                            <Copy size={11} style={{ color: '#6E5F4E' }} />
-                            {/* Session code is a genuine 6-char micro-stamp — Outfit stamp per typography rule. */}
-                            <span style={{ color: '#6E5F4E', fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 11.5, letterSpacing: '0.06em', fontVariantNumeric: 'tabular-nums' }}>{c.session_code}</span>
-                          </>
+                          <button
+                            onClick={() => generateSessionCode(c)}
+                            className="w-full rounded-xl py-2.5 text-[11px] font-bold focus:outline-none"
+                            style={{
+                              border: '1.5px dashed rgba(27,56,40,0.35)', color: '#1B3828', backgroundColor: 'transparent',
+                              fontFamily: "'Outfit', sans-serif", letterSpacing: '0.1em', cursor: 'pointer',
+                              transition: `background-color 300ms ${EASE}, color 300ms ${EASE}, border-color 300ms ${EASE}`,
+                            }}
+                            onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = '#1B3828'; el.style.color = '#EED98A'; el.style.borderStyle = 'solid'; }}
+                            onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = 'transparent'; el.style.color = '#1B3828'; el.style.borderStyle = 'dashed'; }}
+                          >
+                            GENERATE SESSION CODE
+                          </button>
                         )}
-                      </button>
-                    )}
-                    {c.position_paper_deadline && (
-                      <Pill tone="amber" size="sm" icon={<CalendarClock size={11} />}>
-                        PP {new Date(c.position_paper_deadline).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                      </Pill>
-                    )}
+
+                        {c.position_paper_deadline && (
+                          <div className="flex items-center justify-center gap-1.5 mt-3">
+                            <CalendarClock size={11} style={{ color: '#B6871F', flexShrink: 0 }} />
+                            <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: '11px', fontWeight: 600, color: '#6B5F52', fontVariantNumeric: 'tabular-nums' }}>
+                              Position papers due {new Date(c.position_paper_deadline).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
 
                   {/* Actions */}
-                  <div className="flex flex-wrap gap-2 mt-3">
+                  <div className="px-5 pb-5 pt-4 flex gap-2">
                     <button
                       onClick={async () => {
                         if (!session) return;
@@ -574,40 +828,38 @@ export default function CommitteesPage() {
                         setEditLoadingId(null);
                       }}
                       disabled={editLoadingId === c.id}
-                      className="rounded-lg py-1.5 px-4 text-xs font-semibold focus:outline-none transition-colors"
-                      style={ghostBtn}
-                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
-                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                      className="flex-1 rounded-xl py-2.5 text-[11px] font-bold focus:outline-none"
+                      style={{
+                        backgroundColor: 'transparent', color: '#1B3828',
+                        border: '1.5px solid rgba(27,56,40,0.35)',
+                        fontFamily: "'Outfit', sans-serif", letterSpacing: '0.1em', cursor: 'pointer',
+                        transition: `background-color 300ms ${EASE}, color 300ms ${EASE}`,
+                      }}
+                      onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = '#1B3828'; el.style.color = '#EED98A'; }}
+                      onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = 'transparent'; el.style.color = '#1B3828'; }}
                     >
                       {editLoadingId === c.id ? 'LOADING…' : 'EDIT'}
                     </button>
                     <button
                       onClick={() => setDeleteTarget(c)}
-                      className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-3.5 font-semibold text-xs focus:outline-none transition-colors"
-                      style={{ border: '1.5px solid rgba(139,32,32,0.32)', color: '#8B2020', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}
-                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.06)'; }}
-                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                      title="Delete committee"
+                      className="flex items-center justify-center rounded-xl px-3.5 focus:outline-none"
+                      style={{
+                        border: '1.5px solid rgba(139,32,32,0.32)', color: '#8B2020', backgroundColor: 'transparent',
+                        cursor: 'pointer',
+                        transition: `background-color 300ms ${EASE}, color 300ms ${EASE}`,
+                      }}
+                      onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = '#8B2020'; el.style.color = '#FFFFFF'; }}
+                      onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = 'transparent'; el.style.color = '#8B2020'; }}
                     >
-                      <Trash2 size={13} />
-                      Delete
+                      <Trash2 size={14} />
                     </button>
-                    {!c.session_code && (
-                      <button
-                        onClick={() => generateSessionCode(c)}
-                        className="rounded-lg py-1.5 px-4 text-xs font-semibold focus:outline-none transition-colors"
-                        style={ghostBtn}
-                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
-                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                      >
-                        GENERATE CODE
-                      </button>
-                    )}
                   </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+                </article>
+              );
+            })}
+          </div>
+        </>
       )}
 
       {showAdd && !pendingType && (

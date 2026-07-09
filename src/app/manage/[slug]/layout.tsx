@@ -5,7 +5,7 @@ import { useRouter, usePathname, useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   LayoutDashboard, Globe, Building2, Users, MapPin, FileText,
-  Mail, CreditCard, Settings, Briefcase, Menu, X,
+  Mail, CreditCard, Settings, Briefcase, Menu, X, Radio,
 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -65,8 +65,9 @@ const NAV_SECTIONS = (slug: string) => [
   {
     header: null,
     items: [
-      { icon: LayoutDashboard, label: 'Dashboard',  href: `/manage/${slug}`,                    external: false },
-      { icon: Globe,           label: 'View Page',  href: `/conferences/${slug}`,               external: true  },
+      { icon: LayoutDashboard, label: 'Dashboard',   href: `/manage/${slug}`,        external: false },
+      { icon: Radio,           label: 'Live Status', href: `/manage/${slug}/live`,   external: false },
+      { icon: Globe,           label: 'View Page',   href: `/conferences/${slug}`,   external: true  },
     ],
   },
   {
