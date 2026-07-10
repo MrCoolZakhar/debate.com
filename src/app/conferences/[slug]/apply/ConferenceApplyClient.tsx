@@ -463,9 +463,12 @@ function ConferenceApplyInner() {
       }
 
       // Auto-cover: if the society already has a purchased spot free, mark this
-      // application paid immediately instead of leaving it unpaid.
+      // application paid immediately instead of leaving it unpaid. Only runs
+      // when the role auto-accepts (the app lands accepted immediately) —
+      // manual-review roles are always inserted unpaid; coverage happens at
+      // acceptance time instead (see applications page handleAccept).
       let paymentStatus: 'unpaid' | 'paid' = 'unpaid';
-      if (societyId) {
+      if (societyId && roleConfig?.auto_accept) {
         if (role === 'delegate' || role === 'head-delegate') {
           const [{ count: occupancy }, { data: socData }] = await Promise.all([
             supabase
@@ -473,6 +476,7 @@ function ConferenceApplyInner() {
               .select('id', { count: 'exact', head: true })
               .eq('society_id', societyId)
               .in('role', ['delegate', 'head-delegate'])
+              .in('status', ['accepted', 'assigned'])
               .eq('attending', true)
               .eq('payment_status', 'paid'),
             supabase.from('societies').select('spots_purchased').eq('id', societyId).single(),
@@ -486,6 +490,7 @@ function ConferenceApplyInner() {
               .select('id', { count: 'exact', head: true })
               .eq('society_id', societyId)
               .eq('role', 'faculty-advisor')
+              .in('status', ['accepted', 'assigned'])
               .eq('attending', true)
               .eq('payment_status', 'paid'),
             supabase.from('societies').select('advisor_spots_purchased').eq('id', societyId).single(),

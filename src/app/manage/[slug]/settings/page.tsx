@@ -11,6 +11,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { createClient } from '@supabase/supabase-js';
 import { UN_COUNTRIES } from '@/lib/countries';
 import { Pill } from '@/app/account/accountUi';
+import { useConfirmModal } from '@/components/ConfirmModal';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -33,7 +34,6 @@ interface RoleConfig {
   fee_currency: string;
   auto_accept: boolean;
   payment_timing: 'after_application' | 'after_acceptance' | 'anytime';
-  must_pay_before_allocation: boolean;
   custom_questions: CustomQuestion[];
 }
 
@@ -97,8 +97,6 @@ interface IncomingPartnerClaim {
   my_acronym: string;
   created_at: string;
 }
-
-type BooleanRoleKey = 'must_pay_before_allocation';
 
 const PAYMENT_TIMING_OPTIONS: { value: RoleConfig['payment_timing']; label: string; desc: string }[] = [
   { value: 'after_application', label: 'AFTER APPLICATION', desc: 'Payment opens as soon as the application is submitted.' },
@@ -389,6 +387,8 @@ export default function SettingsPage() {
 
   const [roleConfigs, setRoleConfigs] = useState<RoleConfig[]>([]);
   const [configVersion, setConfigVersion] = useState(0);
+  const [roleConfigError, setRoleConfigError] = useState('');
+  const { confirm, modal: confirmModal } = useConfirmModal();
   const [organizers, setOrganizers] = useState<Organizer[]>([]);
   const [selectedRole, setSelectedRole] = useState<string>('delegate');
   const [questionModal, setQuestionModal] = useState<{ open: boolean; existing: CustomQuestion | null }>({ open: false, existing: null });
@@ -511,7 +511,6 @@ export default function SettingsPage() {
       fee_currency: conference.fee_currency ?? 'GBP',
       auto_accept: false,
       payment_timing: 'anytime' as const,
-      must_pay_before_allocation: false,
       custom_questions: [],
     }));
     await supabase.from('application_role_configs').insert(defaults);
@@ -579,12 +578,26 @@ export default function SettingsPage() {
     if (!conference) return;
     if (!session) return;
     const supabase = getAuthedClient(session.access_token);
-    await supabase
+
+    // Optimistic: patch local state immediately so the control reflects the
+    // click at once, independent of any other save's in-flight DB round trip.
+    const previous = roleConfigs;
+    setRoleConfigs(prev => prev.map(rc => (rc.role === role ? { ...rc, ...updates } : rc)));
+    setRoleConfigError('');
+
+    const { data, error } = await supabase
       .from('application_role_configs')
       .update(updates)
       .eq('conference_id', conference.id)
-      .eq('role', role);
-    await loadRoleConfigs();
+      .eq('role', role)
+      .select('id');
+
+    if (error || !data || data.length === 0) {
+      // Revert the optimistic patch and surface the failure — a silent
+      // no-op update (0 rows matched, no error) is treated as a failure too.
+      setRoleConfigs(previous);
+      setRoleConfigError(error ? error.message : "Couldn't save — that role config wasn't found.");
+    }
   }
 
   // ── Organizer actions ───────────────────────────────────────────────────
@@ -692,7 +705,13 @@ export default function SettingsPage() {
 
   async function handleArchive() {
     if (!conference) return;
-    if (!window.confirm('Archive this conference? It will be hidden from all listings.')) return;
+    const { confirmed } = await confirm({
+      title: 'Archive this conference?',
+      body: 'It will be hidden from all listings.',
+      confirmLabel: 'Archive',
+      danger: true,
+    });
+    if (!confirmed) return;
     if (!session) return;
     const supabase = getAuthedClient(session.access_token);
     await supabase.from('conferences').update({
@@ -723,7 +742,13 @@ export default function SettingsPage() {
 
   async function handleWithdrawClaim() {
     if (!conference || !session) return;
-    if (!window.confirm('Withdraw the previous-edition claim? The link (and any approval) will be removed.')) return;
+    const { confirmed } = await confirm({
+      title: 'Withdraw the previous-edition claim?',
+      body: 'The link (and any approval) will be removed.',
+      confirmLabel: 'Withdraw',
+      danger: true,
+    });
+    if (!confirmed) return;
     setLineageBusy('withdraw');
     setLineageError('');
     const supabase = getAuthedClient(session.access_token);
@@ -776,7 +801,12 @@ export default function SettingsPage() {
   async function handleRemovePartner(link: PartnerLink) {
     if (!session) return;
     const label = link.conf?.acronym ?? 'this conference';
-    if (!window.confirm(`Remove the partner link with ${label}?`)) return;
+    const { confirmed } = await confirm({
+      title: `Remove the partner link with ${label}?`,
+      confirmLabel: 'Remove',
+      danger: true,
+    });
+    if (!confirmed) return;
     setPartnerBusy(link.id);
     setPartnerError('');
     const supabase = getAuthedClient(session.access_token);
@@ -984,10 +1014,6 @@ export default function SettingsPage() {
   ];
   const activeSection = SECTIONS.find(s => s.key === activeTab) ?? SECTIONS[0];
 
-  const TOGGLE_ROWS: { key: BooleanRoleKey; label: string; desc: string }[] = [
-    { key: 'must_pay_before_allocation', label: 'Must pay before allocation', desc: 'Block country assignment until paid' },
-  ];
-
   return (
     <div className="px-4 sm:px-6 md:px-10 py-8" style={{ maxWidth: '1080px' }}>
       {/* Header */}
@@ -1112,6 +1138,12 @@ export default function SettingsPage() {
         <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
           Configure which roles can apply, their fees, and application windows.
         </p>
+
+        {roleConfigError && (
+          <p className="text-xs mb-4 rounded-lg px-3 py-2" style={{ color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.06)', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "'Outfit', sans-serif" }}>
+            {roleConfigError}
+          </p>
+        )}
 
         {ROLES.map((role, idx) => {
           const config = roleConfigs.find(rc => rc.role === role);
@@ -1280,27 +1312,6 @@ export default function SettingsPage() {
                     <p className="text-xs mt-1.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
                       {PAYMENT_TIMING_OPTIONS.find(o => o.value === (config.payment_timing ?? 'anytime'))?.desc}
                     </p>
-                  </div>
-
-                  {/* Boolean toggles */}
-                  <div className="flex flex-col gap-2 mt-4">
-                    {TOGGLE_ROWS.map(({ key, label, desc }) => (
-                      <div
-                        key={key}
-                        className="flex items-center justify-between py-2.5 px-4 rounded-xl"
-                        style={{ backgroundColor: 'rgba(27,56,40,0.03)', border: '1px solid rgba(27,56,40,0.08)' }}
-                      >
-                        <div>
-                          <p className="text-sm font-medium" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>{label}</p>
-                          <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>{desc}</p>
-                        </div>
-                        <PillToggle
-                          value={config[key]}
-                          onChange={(v) => saveRoleConfig(role, { [key]: v } as Partial<RoleConfig>)}
-                          size="sm"
-                        />
-                      </div>
-                    ))}
                   </div>
                 </>
               )}
@@ -2541,6 +2552,8 @@ export default function SettingsPage() {
           onClose={() => setQuestionModal({ open: false, existing: null })}
         />
       )}
+
+      {confirmModal}
     </div>
   );
 }

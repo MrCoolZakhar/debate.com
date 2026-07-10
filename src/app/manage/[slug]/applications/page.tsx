@@ -8,6 +8,7 @@ import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
 import { queueEventEmail } from '@/lib/emailEvents';
 import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
+import { useConfirmModal } from '@/components/ConfirmModal';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -28,7 +29,6 @@ interface CustomQuestion {
 
 interface RoleConfigLite {
   role: string;
-  must_pay_before_allocation: boolean;
   payment_timing: 'after_application' | 'after_acceptance' | 'anytime' | string;
   custom_questions: CustomQuestion[];
 }
@@ -52,7 +52,7 @@ interface Application {
   profiles: { display_name: string; email: string; avatar_url: string | null; nationality: string | null } | null;
   societies: { name: string } | null;
   application_preferences: AppPreference[];
-  allocation_override: boolean;
+  self_paid: boolean;
   attending: boolean;
   pledge_type: 'own' | 'delegation' | 'both' | null;
   spots_pledged: number | null;
@@ -101,6 +101,7 @@ export async function fillFreeSpots(
       .select('id', { count: 'exact', head: true })
       .eq('society_id', societyId)
       .in('role', roles)
+      .in('status', ['accepted', 'assigned'])
       .eq('attending', true)
       .eq('payment_status', 'paid'),
   ]);
@@ -109,11 +110,13 @@ export async function fillFreeSpots(
   const freeSpots = spotsPurchased - (occupancy ?? 0);
   if (freeSpots <= 0) return;
 
+  // Unpaid only — waived members are already covered and skipped.
   const { data: candidates } = await supabase
     .from('applications')
     .select('id')
     .eq('society_id', societyId)
     .in('role', roles)
+    .in('status', ['accepted', 'assigned'])
     .eq('attending', true)
     .eq('payment_status', 'unpaid')
     .order('submitted_at', { ascending: true })
@@ -159,6 +162,7 @@ const ROLE_FILTERS = [
 const PAYMENT_FILTERS = [
   { label: 'ALL', value: 'all' },
   { label: 'PAID', value: 'paid' },
+  { label: 'WAIVED', value: 'waived' },
   { label: 'UNPAID', value: 'unpaid' },
 ];
 
@@ -202,6 +206,7 @@ export default function ApplicationsPage() {
   const [roleConfigs, setRoleConfigs] = useState<RoleConfigLite[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const { draftNotices, pushDraftNotice, dismissDraftNotice } = useDraftNotices();
+  const { confirm, modal: confirmModal } = useConfirmModal();
 
   const loadApplications = useCallback(async () => {
     if (!conference) return;
@@ -215,7 +220,7 @@ export default function ApplicationsPage() {
           id, user_id, role, status, is_independent, is_head_delegate, experience_level,
           payment_status, submitted_at, organizer_note, custom_answers,
           assigned_committee_id, assigned_country_code, assigned_country_name,
-          allocation_override, attending, pledge_type, spots_pledged, pledge_confirmed_at, society_id,
+          self_paid, attending, pledge_type, spots_pledged, pledge_confirmed_at, society_id,
           assigned_committee:conference_committees!assigned_committee_id (name, topics),
           profiles (display_name, email, avatar_url, nationality),
           societies (name),
@@ -228,7 +233,7 @@ export default function ApplicationsPage() {
         .order('submitted_at', { ascending: false }),
       supabase
         .from('application_role_configs')
-        .select('role, must_pay_before_allocation, payment_timing, custom_questions')
+        .select('role, payment_timing, custom_questions')
         .eq('conference_id', conference.id),
     ]);
 
@@ -254,13 +259,32 @@ export default function ApplicationsPage() {
       if (!payResult.drafted) pushDraftNotice('payment_available');
     }
 
+    // F13: acceptance is when auto-cover runs — newly accepted pool members
+    // absorb any free delegation-purchased spots, oldest-first.
+    const pool = app ? poolForRole(app.role) : null;
+    if (app?.society_id && pool) {
+      await fillFreeSpots(supabase, app.society_id, pool);
+    }
+
     await loadApplications();
   }
 
   async function handleReject(appId: string) {
     if (!session || !conference) return;
+    const app = applications.find(a => a.id === appId);
+    const pool = app ? poolForRole(app.role) : null;
+    // F13: rejecting a pool-covered (not self-paid) paid member releases
+    // their spot back to the delegation — it stays purchased, just open again.
+    const releasesSpot = !!app && app.payment_status === 'paid' && !app.self_paid && !!app.society_id && !!pool;
+
     const supabase = getAuthedClient(session.access_token);
-    await supabase.from('applications').update({ status: 'rejected', organizer_note: rejectNote.trim() || null }).eq('id', appId);
+    const updates: { status: string; organizer_note: string | null; payment_status?: string } = {
+      status: 'rejected',
+      organizer_note: rejectNote.trim() || null,
+    };
+    if (releasesSpot) updates.payment_status = 'unpaid';
+
+    await supabase.from('applications').update(updates).eq('id', appId);
     setRejectingId(null);
     setRejectNote('');
 
@@ -268,6 +292,21 @@ export default function ApplicationsPage() {
     if (!result.drafted) pushDraftNotice('application_rejected');
 
     await loadApplications();
+  }
+
+  async function openRejectConfirm(app: Application) {
+    const pool = poolForRole(app.role);
+    const releasesSpot = app.payment_status === 'paid' && !app.self_paid && !!app.society_id && !!pool;
+    const { confirmed } = await confirm({
+      title: 'Reject this application?',
+      body: releasesSpot
+        ? "Their payment used a delegation-purchased spot — rejecting will release that spot back to the delegation as open."
+        : "This rejects the application. You can reinstate it later if needed.",
+      confirmLabel: 'Reject',
+      danger: true,
+    });
+    if (!confirmed) return;
+    await handleReject(app.id);
   }
 
   async function handleReinstate(appId: string) {
@@ -280,7 +319,7 @@ export default function ApplicationsPage() {
   async function handleMarkPaid(app: Application) {
     if (!session || !conference) return;
     const supabase = getAuthedClient(session.access_token);
-    await supabase.from('applications').update({ payment_status: 'paid' }).eq('id', app.id);
+    await supabase.from('applications').update({ payment_status: 'paid', self_paid: true }).eq('id', app.id);
 
     const pool = poolForRole(app.role);
     if (app.society_id && pool) {
@@ -299,9 +338,15 @@ export default function ApplicationsPage() {
 
   async function handleMarkUnpaid(app: Application) {
     if (!session) return;
-    if (!window.confirm('Mark this application unpaid? If their payment opened a delegation spot, one spot will be removed.')) return;
+    const { confirmed } = await confirm({
+      title: 'Mark this application unpaid?',
+      body: 'If their payment opened a delegation spot, one spot will be removed.',
+      confirmLabel: 'Mark Unpaid',
+      danger: true,
+    });
+    if (!confirmed) return;
     const supabase = getAuthedClient(session.access_token);
-    await supabase.from('applications').update({ payment_status: 'unpaid' }).eq('id', app.id);
+    await supabase.from('applications').update({ payment_status: 'unpaid', self_paid: false }).eq('id', app.id);
 
     const pool = poolForRole(app.role);
     if (app.society_id && pool) {
@@ -324,18 +369,17 @@ export default function ApplicationsPage() {
     await loadApplications();
   }
 
-  async function handleEnableAllocation(app: Application) {
+  async function handleUndoWaive(app: Application) {
     if (!session) return;
-    if (!window.confirm('This delegate has not paid. Are you sure you want to enable allocation for them?')) return;
+    const { confirmed } = await confirm({
+      title: 'Remove this fee waiver?',
+      body: 'They will owe payment again.',
+      confirmLabel: 'Remove Waiver',
+      danger: true,
+    });
+    if (!confirmed) return;
     const supabase = getAuthedClient(session.access_token);
-    await supabase.from('applications').update({ allocation_override: true }).eq('id', app.id);
-    await loadApplications();
-  }
-
-  async function handleDisableAllocation(app: Application) {
-    if (!session) return;
-    const supabase = getAuthedClient(session.access_token);
-    await supabase.from('applications').update({ allocation_override: false }).eq('id', app.id);
+    await supabase.from('applications').update({ payment_status: 'unpaid' }).eq('id', app.id);
     await loadApplications();
   }
 
@@ -369,8 +413,9 @@ export default function ApplicationsPage() {
   const filtered = applications.filter(a => {
     if (statusFilter !== 'all' && a.status !== statusFilter) return false;
     if (roleFilter !== 'all' && a.role !== roleFilter) return false;
-    if (paymentFilter === 'paid' && a.payment_status !== 'paid') return false;
-    if (paymentFilter === 'unpaid' && a.payment_status === 'paid') return false;
+    if (paymentFilter === 'paid' && a.payment_status !== 'paid' && a.payment_status !== 'waived') return false;
+    if (paymentFilter === 'waived' && a.payment_status !== 'waived') return false;
+    if (paymentFilter === 'unpaid' && a.payment_status !== 'unpaid') return false;
     return true;
   });
 
@@ -494,9 +539,6 @@ export default function ApplicationsPage() {
             const paid = app.payment_status === 'paid';
             const waived = app.payment_status === 'waived';
             const roleConfig = roleConfigs.find(rc => rc.role === app.role);
-            const isPaidOrWaived = app.payment_status === 'paid' || app.payment_status === 'waived';
-            const paymentRequiredForAllocation = !!roleConfig?.must_pay_before_allocation && !isPaidOrWaived;
-            const mustPayBlocked = paymentRequiredForAllocation && !app.allocation_override;
             const questions = roleConfig?.custom_questions ?? [];
             const answers = app.custom_answers ?? {};
             const isExpanded = expandedId === app.id;
@@ -540,24 +582,15 @@ export default function ApplicationsPage() {
                     WAIVE
                   </button>
                 )}
-                {paymentRequiredForAllocation && !app.allocation_override && (
+                {waived && (
                   <button
-                    onClick={() => handleEnableAllocation(app)}
+                    onClick={() => handleUndoWaive(app)}
                     className="rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
-                    style={{ backgroundColor: 'rgba(238,217,138,0.16)', color: '#8A6614', border: '1px solid rgba(182,135,31,0.4)', fontFamily: "'Outfit', sans-serif" }}
+                    style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                   >
-                    ENABLE ALLOCATION
-                  </button>
-                )}
-                {app.allocation_override && (
-                  <button
-                    onClick={() => handleDisableAllocation(app)}
-                    title="Click to revert"
-                    className="rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none inline-flex items-center gap-1.5"
-                    style={{ backgroundColor: 'rgba(238,217,138,0.35)', color: '#7A5A10', border: '1px solid rgba(182,135,31,0.45)', fontFamily: "'Outfit', sans-serif" }}
-                  >
-                    <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#B6871F', display: 'inline-block' }} />
-                    ALLOCATION ENABLED
+                    UNDO WAIVE
                   </button>
                 )}
               </>
@@ -675,7 +708,7 @@ export default function ApplicationsPage() {
                             style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: '#FAF8F3', fontFamily: "'Outfit', sans-serif" }}
                           />
                           <button
-                            onClick={() => handleReject(app.id)}
+                            onClick={() => openRejectConfirm(app)}
                             className="rounded-lg py-1.5 px-3 text-xs font-bold focus:outline-none"
                             style={{ backgroundColor: 'rgba(139,32,32,0.1)', color: '#8B2020', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "'Outfit', sans-serif" }}
                           >
@@ -703,17 +736,7 @@ export default function ApplicationsPage() {
 
                   {app.status === 'accepted' && (
                     <>
-                      {isDelegate && mustPayBlocked && (
-                        <span
-                          title="This role must pay before allocation. Assignment is blocked until payment is marked paid or waived."
-                          className="rounded-lg py-1.5 px-4 text-xs font-bold inline-flex items-center gap-1.5"
-                          style={{ backgroundColor: 'rgba(184,132,74,0.12)', color: '#B8844A', border: '1px solid rgba(184,132,74,0.3)', fontFamily: "'Outfit', sans-serif", cursor: 'not-allowed' }}
-                        >
-                          <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#B8844A', display: 'inline-block' }} />
-                          PENDING PAYMENT
-                        </span>
-                      )}
-                      {isDelegate && !mustPayBlocked && (
+                      {isDelegate && (
                         <Link
                           href={`/manage/${conference.slug}/assignment`}
                           className="rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none"
@@ -734,7 +757,7 @@ export default function ApplicationsPage() {
                             style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: '#FAF8F3', fontFamily: "'Outfit', sans-serif" }}
                           />
                           <button
-                            onClick={() => handleReject(app.id)}
+                            onClick={() => openRejectConfirm(app)}
                             className="rounded-lg py-1.5 px-3 text-xs font-bold focus:outline-none"
                             style={{ backgroundColor: 'rgba(139,32,32,0.1)', color: '#8B2020', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "'Outfit', sans-serif" }}
                           >
@@ -826,6 +849,8 @@ export default function ApplicationsPage() {
           })}
         </div>
       )}
+
+      {confirmModal}
     </div>
   );
 }

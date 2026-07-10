@@ -30,7 +30,6 @@ interface AcceptedApp {
   is_independent: boolean;
   payment_status: string | null;
   attending: boolean;
-  allocation_override: boolean;
   profiles: {
     id: string;
     display_name: string;
@@ -41,18 +40,6 @@ interface AcceptedApp {
   } | null;
   societies: { name: string } | null;
   application_preferences: AppPref[];
-}
-
-interface RoleConfigLite {
-  role: string;
-  must_pay_before_allocation: boolean;
-}
-
-function isAllocationBlocked(app: AcceptedApp, roleConfigs: RoleConfigLite[]): boolean {
-  const cfg = roleConfigs.find(rc => rc.role === app.role);
-  if (!cfg?.must_pay_before_allocation) return false;
-  if (app.allocation_override) return false;
-  return app.payment_status !== 'paid' && app.payment_status !== 'waived';
 }
 
 interface AllocationRow {
@@ -377,12 +364,11 @@ function DelegateDetail({ app, history }: { app: AcceptedApp; history: UserHisto
 interface DropAllocateModalProps {
   committee: CommitteeData;
   app: AcceptedApp;
-  roleConfigs: RoleConfigLite[];
   onClose: () => void;
   onAssigned: (msg: string) => void;
 }
 
-function DropAllocateModal({ committee, app, roleConfigs, onClose, onAssigned }: DropAllocateModalProps) {
+function DropAllocateModal({ committee, app, onClose, onAssigned }: DropAllocateModalProps) {
   const { session } = useAuth();
   const { conference } = useManage();
   const [busySlotId, setBusySlotId] = useState<string | null>(null);
@@ -400,10 +386,6 @@ function DropAllocateModal({ committee, app, roleConfigs, onClose, onAssigned }:
   async function handleAllocate(slot: SlotRow) {
     if (!session) return;
     if (!conference) { setError('Conference not loaded. Please refresh.'); return; }
-    if (isAllocationBlocked(app, roleConfigs)) {
-      setError('This delegate must pay before allocation. Mark them paid or waived first.');
-      return;
-    }
     setBusySlotId(slot.id);
     setError('');
     const supabase = getAuthedClient(session.access_token);
@@ -515,14 +497,13 @@ function DropAllocateModal({ committee, app, roleConfigs, onClose, onAssigned }:
 interface AssignModalProps {
   committee: CommitteeData;
   unassigned: AcceptedApp[];
-  roleConfigs: RoleConfigLite[];
   preSelectedSlot?: SlotRow;
   preSelectedApp?: AcceptedApp;
   onClose: () => void;
   onAssigned: () => void;
 }
 
-function AssignModal({ committee, unassigned, roleConfigs, preSelectedSlot, preSelectedApp, onClose, onAssigned }: AssignModalProps) {
+function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedApp, onClose, onAssigned }: AssignModalProps) {
   const { session } = useAuth();
   const { conference } = useManage();
   const [selectedApp, setSelectedApp] = useState<AcceptedApp | null>(preSelectedApp ?? null);
@@ -547,10 +528,6 @@ function AssignModal({ committee, unassigned, roleConfigs, preSelectedSlot, preS
 
   async function handleAssign() {
     if (!selectedApp || !selectedSlot) { setError('Select an applicant and a country.'); return; }
-    if (isAllocationBlocked(selectedApp, roleConfigs)) {
-      setError('This delegate must pay before allocation. Mark them paid or waived first.');
-      return;
-    }
     const userId = selectedApp.profiles?.id;
     if (!userId) { setError('Applicant profile not found.'); return; }
     setSaving(true);
@@ -615,7 +592,6 @@ function AssignModal({ committee, unassigned, roleConfigs, preSelectedSlot, preS
                 <p className="text-sm p-3" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>No unassigned applicants.</p>
               ) : scored.map(({ app, score }, idx) => {
                 const selected = selectedApp?.id === app.id;
-                const blocked = isAllocationBlocked(app, roleConfigs);
                 return (
                   <div
                     key={app.id}
@@ -623,28 +599,21 @@ function AssignModal({ committee, unassigned, roleConfigs, preSelectedSlot, preS
                     style={{
                       backgroundColor: selected ? 'rgba(27,56,40,0.08)' : 'transparent',
                       borderBottom: '1px solid #F0EDE6',
-                      cursor: blocked ? 'not-allowed' : 'pointer',
-                      opacity: blocked ? 0.55 : 1,
+                      cursor: 'pointer',
                     }}
-                    onClick={() => { if (!blocked) setSelectedApp(app); }}
-                    onMouseEnter={e => { if (!selected && !blocked) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
-                    onMouseLeave={e => { if (!selected && !blocked) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                    onClick={() => setSelectedApp(app)}
+                    onMouseEnter={e => { if (!selected) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
+                    onMouseLeave={e => { if (!selected) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                   >
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{app.profiles?.display_name}</p>
                       <p className="text-xs" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>{app.role} · {app.experience_level ?? 'n/a'}</p>
                     </div>
                     <div className="flex items-center gap-1 flex-shrink-0">
-                      {blocked ? (
-                        <span style={{ fontSize: 9, color: '#B8844A', fontFamily: MONO, fontWeight: 700 }}>PENDING PAYMENT</span>
-                      ) : (
-                        <>
-                          {idx === 0 && score >= 20 && (
-                            <span style={{ fontSize: 9, color: '#B6871F', fontFamily: MONO }}>BEST</span>
-                          )}
-                          <span style={{ fontSize: 10, fontWeight: 700, color: fitColor(score), fontFamily: MONO }}>{score}</span>
-                        </>
+                      {idx === 0 && score >= 20 && (
+                        <span style={{ fontSize: 9, color: '#B6871F', fontFamily: MONO }}>BEST</span>
                       )}
+                      <span style={{ fontSize: 10, fontWeight: 700, color: fitColor(score), fontFamily: MONO }}>{score}</span>
                     </div>
                   </div>
                 );
@@ -939,7 +908,6 @@ export default function AssignmentPage() {
   const { session, loading: authLoading } = useAuth();
   const [accepted, setAccepted] = useState<AcceptedApp[]>([]);
   const [committees, setCommittees] = useState<CommitteeData[]>([]);
-  const [roleConfigs, setRoleConfigs] = useState<RoleConfigLite[]>([]);
   const [chairApps, setChairApps] = useState<ChairApp[]>([]);
   const [history, setHistory] = useState<Record<string, UserHistory>>({});
   const [mode, setMode] = useState<'delegates' | 'chairs' | 'delegations' | 'independents'>('delegates');
@@ -972,12 +940,12 @@ export default function AssignmentPage() {
     setLoading(true);
     const supabase = getAuthedClient(session.access_token);
 
-    const [appRes, commRes, cfgRes, chairRes] = await Promise.all([
+    const [appRes, commRes, chairRes] = await Promise.all([
       supabase
         .from('applications')
         .select(`
           id, role, experience_level, is_head_delegate, is_independent, payment_status,
-          attending, allocation_override,
+          attending,
           profiles (id, display_name, email, nationality, mun_experience_level, avatar_url),
           societies (name),
           application_preferences (
@@ -998,10 +966,6 @@ export default function AssignmentPage() {
         .eq('conference_id', conference.id)
         .order('name', { ascending: true }),
       supabase
-        .from('application_role_configs')
-        .select('role, must_pay_before_allocation')
-        .eq('conference_id', conference.id),
-      supabase
         .from('applications')
         .select(`
           id, user_id, status, assigned_committee_id, experience_level,
@@ -1017,7 +981,6 @@ export default function AssignmentPage() {
 
     setAccepted(apps);
     setCommittees(comms);
-    setRoleConfigs((cfgRes.data ?? []) as unknown as RoleConfigLite[]);
     setChairApps((chairRes.data ?? []) as unknown as ChairApp[]);
     if (comms.length > 0 && !selectedCommitteeId) {
       setSelectedCommitteeId(comms[0].id);
@@ -1081,10 +1044,6 @@ export default function AssignmentPage() {
   // ── One-click assign (used by suggestion cards) ─────────────────────────────
   async function quickAssign(sug: Suggestion) {
     if (!session || !conference) return;
-    if (isAllocationBlocked(sug.app, roleConfigs)) {
-      showFlash('err', 'This delegate must pay before allocation.');
-      return;
-    }
     const key = `${sug.app.id}-${sug.slot.id}`;
     setQuickAssigning(key);
     const supabase = getAuthedClient(session.access_token);
@@ -1211,7 +1170,6 @@ export default function AssignmentPage() {
   const suggestions = useMemo<Suggestion[]>(() => {
     const candidates: Suggestion[] = [];
     for (const app of accepted) {
-      if (isAllocationBlocked(app, roleConfigs)) continue;
       let best: Suggestion | null = null;
       for (const c of committees) {
         const allocatedCodes = new Set(c.conference_allocations.map(a => a.country_code));
@@ -1237,7 +1195,7 @@ export default function AssignmentPage() {
       if (out.length >= 6) break;
     }
     return out;
-  }, [accepted, committees, roleConfigs]);
+  }, [accepted, committees]);
 
   if (!conference) return null;
 
@@ -1250,10 +1208,6 @@ export default function AssignmentPage() {
   function openDropModal(committeeId: string, appId: string) {
     const app = accepted.find(a => a.id === appId);
     if (!app) return;
-    if (isAllocationBlocked(app, roleConfigs)) {
-      showFlash('err', 'This delegate must pay before allocation. Mark them paid or waived first.');
-      return;
-    }
     setDropModal({ committeeId, appId });
   }
 
@@ -1265,15 +1219,10 @@ export default function AssignmentPage() {
     openDropModal(committeeId, appId);
   }
 
-  // Left rail: search + blocked-last, alphabetical
+  // Left rail: search, alphabetical
   const filteredApps = [...accepted]
     .filter(app => (app.profiles?.display_name ?? '').toLowerCase().includes(search.toLowerCase()))
-    .sort((a, b) => {
-      const ab = isAllocationBlocked(a, roleConfigs) ? 1 : 0;
-      const bb = isAllocationBlocked(b, roleConfigs) ? 1 : 0;
-      if (ab !== bb) return ab - bb;
-      return (a.profiles?.display_name ?? '').localeCompare(b.profiles?.display_name ?? '');
-    });
+    .sort((a, b) => (a.profiles?.display_name ?? '').localeCompare(b.profiles?.display_name ?? ''));
 
   // Chairs mode
   const selectedCommittee = committees.find(c => c.id === selectedCommitteeId) ?? null;
@@ -1508,7 +1457,6 @@ export default function AssignmentPage() {
                 ) : (
                   <div className="flex flex-col gap-2">
                     {filteredApps.map(app => {
-                      const blocked = isAllocationBlocked(app, roleConfigs);
                       const expanded = expandedAppId === app.id;
                       const selected = selectedAppId === app.id;
                       const beingDragged = dragAppId === app.id;
@@ -1520,26 +1468,26 @@ export default function AssignmentPage() {
                       return (
                         <div
                           key={app.id}
-                          draggable={!blocked}
+                          draggable
                           onDragStart={e => {
                             e.dataTransfer.setData('text/plain', app.id);
                             e.dataTransfer.effectAllowed = 'move';
                             setDragAppId(app.id);
                           }}
                           onDragEnd={() => { setDragAppId(null); setDropTargetId(null); }}
-                          onClick={() => { if (!blocked) setSelectedAppId(prev => (prev === app.id ? null : app.id)); }}
+                          onClick={() => setSelectedAppId(prev => (prev === app.id ? null : app.id))}
                           className="rounded-xl p-3 transition-colors"
                           style={{
                             backgroundColor: selected ? 'rgba(27,56,40,0.06)' : '#FAF8F3',
                             border: `1.5px solid ${selected ? '#1B3828' : expanded ? 'rgba(27,56,40,0.45)' : '#DDD4C0'}`,
-                            opacity: blocked ? 0.6 : beingDragged ? 0.45 : 1,
-                            cursor: blocked ? 'not-allowed' : 'grab',
+                            opacity: beingDragged ? 0.45 : 1,
+                            cursor: 'grab',
                           }}
-                          onMouseEnter={e => { if (!selected && !expanded && !blocked) (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
+                          onMouseEnter={e => { if (!selected && !expanded) (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
                           onMouseLeave={e => { if (!selected && !expanded) (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
                         >
                           <div className="flex items-start gap-2">
-                            {!blocked && <GripVertical size={13} style={{ color: '#DDD4C0', flexShrink: 0, marginTop: 3 }} />}
+                            <GripVertical size={13} style={{ color: '#DDD4C0', flexShrink: 0, marginTop: 3 }} />
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-1.5">
                                 {natCountry && (
@@ -1571,9 +1519,6 @@ export default function AssignmentPage() {
 
                           <div className="flex items-center gap-1.5 mt-2 flex-wrap">
                             <DelegationChip app={app} />
-                            {blocked && (
-                              <span style={{ fontSize: 9, color: '#B8844A', fontFamily: MONO, fontWeight: 700, marginLeft: 'auto' }}>PENDING PAYMENT</span>
-                            )}
                           </div>
 
                           {firstPref && (
@@ -1756,7 +1701,6 @@ export default function AssignmentPage() {
         <DropAllocateModal
           committee={dropModalCommittee}
           app={dropModalApp}
-          roleConfigs={roleConfigs}
           onClose={() => setDropModal(null)}
           onAssigned={msg => {
             showFlash('ok', msg);
@@ -1780,7 +1724,6 @@ export default function AssignmentPage() {
         <AssignModal
           committee={assignModalCommittee}
           unassigned={accepted}
-          roleConfigs={roleConfigs}
           preSelectedSlot={assignModal.preSlot}
           onClose={() => setAssignModal(null)}
           onAssigned={loadData}
