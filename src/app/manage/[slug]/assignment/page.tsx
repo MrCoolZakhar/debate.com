@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { X, Check, Sparkles, ChevronDown, ChevronUp, Award, Globe2, ArrowRight, GripVertical, MousePointerClick } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -11,6 +11,7 @@ import DelegationsView from '@/app/manage/[slug]/assignment/DelegationsView';
 import IndependentsView from '@/app/manage/[slug]/assignment/IndependentsView';
 import { queueEventEmail } from '@/lib/emailEvents';
 import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
+import { useConfirmModal } from '@/components/ConfirmModal';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -928,6 +929,7 @@ export default function AssignmentPage() {
   const [chairInviteEmail, setChairInviteEmail] = useState('');
   const [chairInviting, setChairInviting] = useState(false);
   const { draftNotices, pushDraftNotice, dismissDraftNotice } = useDraftNotices();
+  const { confirm, modal: confirmModal } = useConfirmModal();
 
   function showFlash(kind: 'ok' | 'err', msg: string) {
     setFlash({ kind, msg });
@@ -1020,6 +1022,20 @@ export default function AssignmentPage() {
     loadData();
   }, [authLoading, loadData]);
 
+  // F1: the delegates/chairs board lives inline in this component (unlike
+  // DelegationsView/IndependentsView, which remount and refetch on every
+  // switch into them) — so without this it keeps rendering data loaded at
+  // page mount even after mutations made in the other two modes. Refetch
+  // whenever a switch lands on delegates or chairs; the effect above already
+  // covers the very first render.
+  const modeMounted = useRef(false);
+  useEffect(() => {
+    if (!modeMounted.current) { modeMounted.current = true; return; }
+    if (authLoading) return;
+    if (mode === 'delegates' || mode === 'chairs') loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode]);
+
   // ── Importance tier cycling (optimistic + fire-and-forget DB write) ────────
   function handleCycleTier(slot: SlotRow) {
     if (!session) return;
@@ -1106,7 +1122,12 @@ export default function AssignmentPage() {
       showFlash('err', 'No assigned delegates to email.');
       return;
     }
-    if (!window.confirm(`Queue allocation emails for ${applicationIds.length} assigned delegate${applicationIds.length === 1 ? '' : 's'}?`)) return;
+    const { confirmed } = await confirm({
+      title: 'Queue allocation emails?',
+      body: `Queue allocation emails for ${applicationIds.length} assigned delegate${applicationIds.length === 1 ? '' : 's'}?`,
+      confirmLabel: 'Queue Emails',
+    });
+    if (!confirmed) return;
 
     setSendingAllocationEmails(true);
     const supabase = getAuthedClient(session.access_token);
@@ -1729,6 +1750,8 @@ export default function AssignmentPage() {
           onAssigned={loadData}
         />
       )}
+
+      {confirmModal}
     </div>
   );
 }

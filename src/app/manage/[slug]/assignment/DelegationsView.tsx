@@ -7,12 +7,18 @@ import { useAuth } from '@/components/AuthProvider';
 import type { Conference } from '@/app/manage/[slug]/layout';
 import { queueEventEmail } from '@/lib/emailEvents';
 import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
+import { useConfirmModal } from '@/components/ConfirmModal';
 import {
   OUTFIT, MONO, POOL_MEMBER_SELECT, POOL_SPOTS_COLUMN,
-  poolForRole, fillFreeSpots, fetchSearchPool, performSwap, markApplicationPaid, markNotAttending, undoNotAttending,
-  SectionLabel, MemberAvatar, DraggableChip, WaivedChip, NotAttendingChip, PaidSlotChip, OpenSlot, SwapConfirmModal, pledgeText,
+  poolForRole, fillFreeSpots, fetchSearchPool, fetchAdvisorPool, performSwap, markApplicationPaid,
+  markNotAttending, undoNotAttending, removeFromDelegation, pledgeSatisfied,
+  SectionLabel, MemberAvatar, DraggableChip, WaivedChip, NotAttendingChip, PaidSlotChip, OpenSlot, SwapConfirmModal, ModalOverlay, pledgeText,
   type PoolMember, type SearchApp,
 } from '@/app/manage/[slug]/assignment/delegationShared';
+
+function isHeadDelegate(m: PoolMember): boolean {
+  return m.is_head_delegate || m.role === 'head-delegate';
+}
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -29,7 +35,7 @@ function DelegationCard({ society, members, onClick }: { society: Society; membe
   const advisorCount = members.filter(m => m.role === 'faculty-advisor').length;
   const headDelCount = members.filter(m => m.is_head_delegate || m.role === 'head-delegate').length;
   const totalDelegates = members.filter(m => (m.role === 'delegate' || m.role === 'head-delegate') && m.attending).length;
-  const pledgePending = members.some(m => (m.pledge_type === 'delegation' || m.pledge_type === 'both') && !m.pledge_confirmed_at);
+  const pledgePending = members.some(m => !!m.pledge_type && !pledgeSatisfied(m));
 
   return (
     <button
@@ -67,6 +73,71 @@ function DelegationCard({ society, members, onClick }: { society: Society; membe
   );
 }
 
+// ── Advisor transfer picker (F18) ───────────────────────────────────────────
+// ConfirmModal-based flow: this picker narrows down to a recipient, then the
+// caller runs a second ConfirmModal (useConfirmModal) to finalize the swap.
+
+function AdvisorTransferModal({
+  advisor, pool, onClose, onPick,
+}: {
+  advisor: PoolMember; pool: SearchApp[]; onClose: () => void; onPick: (recipient: SearchApp) => void;
+}) {
+  const [query, setQuery] = useState('');
+  const results = pool
+    .filter(a => a.id !== advisor.id)
+    .filter(a => (a.profiles?.display_name ?? '').toLowerCase().includes(query.trim().toLowerCase()));
+
+  return (
+    <ModalOverlay onClose={onClose}>
+      <div
+        className="rounded-2xl p-6"
+        style={{ width: 'min(92vw, 440px)', backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', maxHeight: '80vh', overflowY: 'auto', boxShadow: '0 20px 50px rgba(27,56,40,0.25)' }}
+      >
+        <h3 className="font-black text-base mb-1" style={{ color: '#1C1410', fontFamily: OUTFIT }}>Transfer spot</h3>
+        <p className="text-xs mb-4" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+          Pick another accepted faculty advisor to receive {advisor.profiles?.display_name ?? 'this advisor'}&apos;s paid spot.
+        </p>
+        <input
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          placeholder="Search advisors..."
+          autoFocus
+          className="w-full rounded-xl px-3 py-2 text-sm outline-none mb-3"
+          style={{ border: '1px solid #DDD4C0', backgroundColor: '#FFFFFF', color: '#1C1410', fontFamily: OUTFIT }}
+        />
+        <div className="flex flex-col gap-1.5" style={{ maxHeight: 260, overflowY: 'auto' }}>
+          {results.length === 0 ? (
+            <p className="text-xs py-2" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>No matches.</p>
+          ) : results.map(a => (
+            <div key={a.id} className="flex items-center justify-between gap-2 rounded-lg px-3 py-2" style={{ backgroundColor: '#FFFFFF', border: '1px solid #F0EDE6' }}>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{a.profiles?.display_name ?? 'Unknown'}</p>
+                <p className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>{a.societies?.name ?? 'Independent'}</p>
+              </div>
+              <button
+                onClick={() => onPick(a)}
+                className="flex-shrink-0 rounded-lg py-1 px-3 text-xs font-bold focus:outline-none transition-colors"
+                style={{ backgroundColor: '#1B3828', color: '#EED98A', border: 'none', fontFamily: OUTFIT }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+              >
+                TRANSFER
+              </button>
+            </div>
+          ))}
+        </div>
+        <button
+          onClick={onClose}
+          className="w-full mt-4 rounded-xl py-2 font-bold text-sm focus:outline-none transition-colors"
+          style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: OUTFIT }}
+        >
+          CANCEL
+        </button>
+      </div>
+    </ModalOverlay>
+  );
+}
+
 // ── DelegationsView ──────────────────────────────────────────────────────────
 
 interface DelegationsViewProps {
@@ -79,6 +150,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
   const [societies, setSocieties] = useState<Society[]>([]);
   const [members, setMembers] = useState<PoolMember[]>([]);
   const [searchPool, setSearchPool] = useState<SearchApp[]>([]);
+  const [advisorPool, setAdvisorPool] = useState<SearchApp[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -86,14 +158,16 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
   const [dragMemberId, setDragMemberId] = useState<string | null>(null);
   const [dropTargetKey, setDropTargetKey] = useState<string | null>(null);
   const [swapConfirm, setSwapConfirm] = useState<{ sourceId: string; targetId: string } | null>(null);
+  const [advisorTransferPicker, setAdvisorTransferPicker] = useState<PoolMember | null>(null);
   const { draftNotices, pushDraftNotice, dismissDraftNotice } = useDraftNotices();
+  const { confirm, modal: confirmModal } = useConfirmModal();
 
   const loadData = useCallback(async () => {
     if (!conference || !session) return;
     setLoading(true);
     const supabase = getAuthedClient(session.access_token);
 
-    const [socRes, memberRes, search] = await Promise.all([
+    const [socRes, memberRes, search, advisors] = await Promise.all([
       supabase
         .from('societies')
         .select('id, name, spots_purchased, advisor_spots_purchased')
@@ -106,11 +180,13 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
         .in('status', ['accepted', 'assigned'])
         .not('society_id', 'is', null),
       fetchSearchPool(supabase, conference.id),
+      fetchAdvisorPool(supabase, conference.id),
     ]);
 
     setSocieties((socRes.data ?? []) as unknown as Society[]);
     setMembers((memberRes.data ?? []) as unknown as PoolMember[]);
     setSearchPool(search);
+    setAdvisorPool(advisors);
     setLoading(false);
   }, [conference, session?.access_token]);
 
@@ -135,7 +211,12 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
     if (!session) return;
     if (app.society_id && app.society_id !== society.id) {
       const fromName = app.societies?.name ?? 'their delegation';
-      if (!window.confirm(`Move ${app.profiles?.display_name ?? 'this delegate'} from ${fromName} to ${society.name}?`)) return;
+      const { confirmed } = await confirm({
+        title: `Move ${app.profiles?.display_name ?? 'this delegate'}?`,
+        body: `Move them from ${fromName} to ${society.name}?`,
+        confirmLabel: 'Move',
+      });
+      if (!confirmed) return;
     }
     const supabase = getAuthedClient(session.access_token);
     await supabase.from('applications').update({ society_id: society.id }).eq('id', app.id);
@@ -149,17 +230,29 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
 
   async function handleMarkPledgeReceived(member: PoolMember, societyId: string) {
     if (!session) return;
-    if (!window.confirm('Confirm this pledge as paid? Spots will be added to the delegation.')) return;
+    // F21: fully idempotent — nothing left to do once the pledge is satisfied.
+    if (pledgeSatisfied(member)) return;
+    const { confirmed } = await confirm({
+      title: 'Confirm this pledge as paid?',
+      body: 'Spots will be added to the delegation.',
+      confirmLabel: 'Confirm',
+    });
+    if (!confirmed) return;
     const supabase = getAuthedClient(session.access_token);
 
-    if (member.pledge_type === 'delegation' || member.pledge_type === 'both') {
+    // Guard each half independently so re-clicking (or a race) never
+    // double-grants delegation spots or re-funds an already-paid pledger.
+    const delegationAlreadyConfirmed = !!member.pledge_confirmed_at;
+    const pledgerAlreadyPaid = member.payment_status === 'paid';
+
+    if ((member.pledge_type === 'delegation' || member.pledge_type === 'both') && !delegationAlreadyConfirmed) {
       const { data: soc } = await supabase.from('societies').select('spots_purchased').eq('id', societyId).single();
       const current = (soc as { spots_purchased: number } | null)?.spots_purchased ?? 0;
       await supabase.from('societies').update({ spots_purchased: current + (member.spots_pledged ?? 0) }).eq('id', societyId);
     }
 
-    if (member.pledge_type === 'own' || member.pledge_type === 'both') {
-      await supabase.from('applications').update({ payment_status: 'paid' }).eq('id', member.id);
+    if ((member.pledge_type === 'own' || member.pledge_type === 'both') && !pledgerAlreadyPaid) {
+      await supabase.from('applications').update({ payment_status: 'paid', self_paid: true }).eq('id', member.id);
       const pool = poolForRole(member.role);
       if (pool) {
         const spotsColumn = POOL_SPOTS_COLUMN[pool];
@@ -169,16 +262,18 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
       }
     }
 
-    await supabase.from('applications').update({ pledge_confirmed_at: new Date().toISOString() }).eq('id', member.id);
+    if (!delegationAlreadyConfirmed) {
+      await supabase.from('applications').update({ pledge_confirmed_at: new Date().toISOString() }).eq('id', member.id);
+    }
 
     await fillFreeSpots(supabase, societyId, 'delegate');
     const pool = poolForRole(member.role);
-    if (pool === 'advisor' && (member.pledge_type === 'own' || member.pledge_type === 'both')) {
+    if (pool === 'advisor' && (member.pledge_type === 'own' || member.pledge_type === 'both') && !pledgerAlreadyPaid) {
       await fillFreeSpots(supabase, societyId, 'advisor');
     }
 
     const headDelegateIds = members
-      .filter(m => m.society_id === societyId && (m.role === 'head-delegate' || m.is_head_delegate))
+      .filter(m => m.society_id === societyId && isHeadDelegate(m))
       .map(m => m.id);
     const pledgeRecipientIds = Array.from(new Set([member.id, ...headDelegateIds]));
     const result = await queueEventEmail(supabase, conference.id, 'pledge_received', pledgeRecipientIds);
@@ -192,9 +287,15 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
     if (!session) return;
     const name = member.profiles?.display_name ?? 'this delegate';
     const hasAllocation = !!member.assigned_committee_id;
-    let msg = `Mark ${name} as not attending? Their delegation spot stays with the delegation.`;
-    if (hasAllocation) msg += ' Their committee assignment will be removed.';
-    if (!window.confirm(msg)) return;
+    const { confirmed } = await confirm({
+      title: `Mark ${name} as not attending?`,
+      body: hasAllocation
+        ? 'Their delegation spot stays with the delegation. Their committee assignment will be removed.'
+        : 'Their delegation spot stays with the delegation.',
+      confirmLabel: 'Mark Not Attending',
+      danger: true,
+    });
+    if (!confirmed) return;
 
     const supabase = getAuthedClient(session.access_token);
     const result = await markNotAttending(supabase, conference.id, member);
@@ -207,6 +308,54 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
     const supabase = getAuthedClient(session.access_token);
     const result = await undoNotAttending(supabase, conference.id, member);
     if (!result.drafted) pushDraftNotice('attendance_restored');
+    await loadData();
+  }
+
+  async function handleRemove(member: PoolMember, societyName: string) {
+    if (!session) return;
+    const name = member.profiles?.display_name ?? 'this delegate';
+    const hasAllocation = !!member.assigned_committee_id;
+    const selfFundedPaidSpot = member.payment_status === 'paid' && !!member.self_paid;
+    const outcome = member.payment_status === 'waived'
+      ? 'Their fee waiver is personal and stays with them.'
+      : selfFundedPaidSpot
+      ? 'Their paid spot was self-funded, so it leaves with them — they become a paid independent.'
+      : member.payment_status === 'paid'
+      ? "Their spot was covered by the delegation's purchased spots, so it stays behind — it will show as open."
+      : 'They leave unpaid.';
+
+    const { confirmed, checked } = await confirm({
+      title: `Remove ${name} from ${societyName}?`,
+      body: outcome,
+      confirmLabel: 'Remove',
+      danger: true,
+      checkbox: hasAllocation ? { label: 'Keep their committee allocation', defaultChecked: true } : undefined,
+    });
+    if (!confirmed) return;
+
+    const supabase = getAuthedClient(session.access_token);
+    const result = await removeFromDelegation(supabase, conference.id, member, hasAllocation ? checked : false);
+    if (!result.drafted) pushDraftNotice('removed_from_delegation');
+    showFlash('ok', `${name} removed from the delegation.`);
+    await loadData();
+  }
+
+  async function handleAdvisorTransfer(paidAdvisor: PoolMember, recipient: SearchApp) {
+    setAdvisorTransferPicker(null);
+    if (!session) return;
+    const { confirmed } = await confirm({
+      title: 'Transfer this spot?',
+      body: `Transfer ${paidAdvisor.profiles?.display_name ?? 'this advisor'}'s paid spot to ${recipient.profiles?.display_name ?? 'this advisor'}?`,
+      confirmLabel: 'Transfer',
+    });
+    if (!confirmed) return;
+
+    const supabase = getAuthedClient(session.access_token);
+    // Advisors never hold committee allocations, so transfer=false always.
+    const emailResult = await performSwap(supabase, conference.id, recipient, paidAdvisor, false);
+    if (!emailResult.incomingDrafted) pushDraftNotice('spot_received');
+    if (!emailResult.outgoingDrafted) pushDraftNotice('spot_lost');
+    showFlash('ok', 'Advisor spot transferred.');
     await loadData();
   }
 
@@ -245,16 +394,19 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
     setSwapConfirm({ sourceId, targetId: target.id });
   }
 
-  function interactWithOpenSlot(draggedId?: string) {
+  async function interactWithOpenSlot(draggedId?: string) {
     const sourceId = draggedId || selectedMemberId;
     setDropTargetKey(null);
     setDragMemberId(null);
     setSelectedMemberId(null);
     if (!sourceId) return;
     const source = members.find(m => m.id === sourceId);
-    if (window.confirm(`Give this open paid spot to ${source?.profiles?.display_name ?? 'this delegate'}?`)) {
-      handleGiveOpenSpot(sourceId);
-    }
+    const { confirmed } = await confirm({
+      title: 'Give this open paid spot?',
+      body: `Give this open paid spot to ${source?.profiles?.display_name ?? 'this delegate'}?`,
+      confirmLabel: 'Give Spot',
+    });
+    if (confirmed) handleGiveOpenSpot(sourceId);
   }
 
   if (loading) {
@@ -298,14 +450,20 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
   const society = expandedSociety;
   const advisors = [...expandedMembers.filter(m => m.role === 'faculty-advisor')]
     .sort((a, b) => a.submitted_at.localeCompare(b.submitted_at));
+  const advisorPaidCount = advisors.filter(a => a.attending && a.payment_status === 'paid').length;
   const delegatePool = expandedMembers.filter(m => m.role === 'delegate' || m.role === 'head-delegate');
+  // Head delegates keep counting toward every fill/accounting figure below, but
+  // their own row is their home in the UI (F17) — pulled out of the generic lists.
+  const headDelegates = [...delegatePool.filter(isHeadDelegate)]
+    .sort((a, b) => a.submitted_at.localeCompare(b.submitted_at));
+  const nonHDPool = delegatePool.filter(m => !isHeadDelegate(m));
   const paidAttending = [...delegatePool.filter(m => m.attending && m.payment_status === 'paid')]
     .sort((a, b) => a.submitted_at.localeCompare(b.submitted_at));
-  const unpaidAttending = [...delegatePool.filter(m => m.attending && m.payment_status === 'unpaid')]
+  const unpaidAttending = [...nonHDPool.filter(m => m.attending && m.payment_status === 'unpaid')]
     .sort((a, b) => a.submitted_at.localeCompare(b.submitted_at));
-  const waivedMembers = [...delegatePool.filter(m => m.payment_status === 'waived')]
+  const waivedMembers = [...nonHDPool.filter(m => m.payment_status === 'waived')]
     .sort((a, b) => a.submitted_at.localeCompare(b.submitted_at));
-  const notAttendingMembers = [...delegatePool.filter(m => !m.attending && m.payment_status !== 'waived')]
+  const notAttendingMembers = [...nonHDPool.filter(m => !m.attending && m.payment_status !== 'waived')]
     .sort((a, b) => a.submitted_at.localeCompare(b.submitted_at));
   const pledgingMembers = expandedMembers.filter(m => m.pledge_type);
   const openCount = Math.max(0, society.spots_purchased - paidAttending.length);
@@ -336,27 +494,148 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
         <h2 className="font-black text-xl truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{society.name}</h2>
       </div>
 
-      {/* Advisors */}
+      {/* Advisors (F18) */}
       {advisors.length > 0 && (
         <div className="mb-6">
-          <SectionLabel>ADVISORS</SectionLabel>
-          <div className="flex flex-wrap gap-2 mt-2">
+          <div className="flex items-center gap-2">
+            <SectionLabel>ADVISORS</SectionLabel>
+            <span style={{ fontSize: 9, color: '#9A8A78', fontFamily: MONO, letterSpacing: '0.04em' }}>
+              {advisorPaidCount}/{society.advisor_spots_purchased} SPOTS
+            </span>
+          </div>
+          <div className="mt-2">
             {advisors.map(a => {
+              if (a.payment_status === 'waived') {
+                return <WaivedChip key={a.id} member={a} onRemove={() => handleRemove(a, society.name)} />;
+              }
+              if (!a.attending) {
+                return (
+                  <NotAttendingChip
+                    key={a.id}
+                    member={a}
+                    onUndo={() => handleUndoNotAttending(a)}
+                    onRemove={() => handleRemove(a, society.name)}
+                  />
+                );
+              }
               const paid = a.payment_status === 'paid';
               const name = a.profiles?.display_name ?? 'Unknown';
               return (
                 <div
                   key={a.id}
-                  className="flex items-center gap-2 rounded-full pl-1.5 pr-3 py-1"
-                  style={{
-                    backgroundColor: paid ? '#1B3828' : 'transparent',
-                    border: `1px solid ${paid ? '#1B3828' : '#DDD4C0'}`,
-                  }}
+                  className="flex items-center gap-2 rounded-xl px-3 py-2 mb-1.5"
+                  style={{ backgroundColor: paid ? '#1B3828' : '#FAF8F3', border: `1.5px solid ${paid ? '#1B3828' : '#DDD4C0'}` }}
                 >
-                  <MemberAvatar name={name} url={a.profiles?.avatar_url ?? null} size={20} />
-                  <span style={{ fontSize: 13, fontWeight: 600, fontFamily: OUTFIT, color: paid ? '#EED98A' : '#1C1410' }}>
+                  <MemberAvatar name={name} url={a.profiles?.avatar_url ?? null} />
+                  <span className="flex-1 min-w-0 text-sm font-semibold truncate" style={{ fontFamily: OUTFIT, color: paid ? '#EED98A' : '#1C1410' }}>
                     {name}
                   </span>
+                  <span style={{ fontSize: 9, fontWeight: 700, color: paid ? '#EED98A' : '#9A6B2F', fontFamily: MONO, letterSpacing: '0.06em', flexShrink: 0, opacity: paid ? 0.9 : 1 }}>
+                    {paid ? 'PAID' : 'UNPAID'}
+                  </span>
+                  <div className="flex items-center gap-2.5 flex-shrink-0">
+                    {paid && (
+                      <button
+                        onClick={() => setAdvisorTransferPicker(a)}
+                        className="focus:outline-none"
+                        style={{ fontSize: 9, fontWeight: 700, color: '#EED98A', fontFamily: MONO, letterSpacing: '0.04em', opacity: 0.85 }}
+                      >
+                        TRANSFER SPOT
+                      </button>
+                    )}
+                    <button
+                      onClick={() => handleNotAttending(a)}
+                      className="focus:outline-none"
+                      style={{ fontSize: 9, fontWeight: 700, color: paid ? '#EED98A' : '#9A8A78', fontFamily: MONO, letterSpacing: '0.04em', opacity: paid ? 0.85 : 1 }}
+                    >
+                      NOT ATTENDING
+                    </button>
+                    <button
+                      onClick={() => handleRemove(a, society.name)}
+                      className="focus:outline-none"
+                      style={{ fontSize: 9, fontWeight: 700, color: paid ? '#EED98A' : '#9A8A78', fontFamily: MONO, letterSpacing: '0.04em', opacity: paid ? 0.85 : 1 }}
+                    >
+                      REMOVE
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Head delegates (F17) — full delegate-pool members, own row */}
+      {headDelegates.length > 0 && (
+        <div className="mb-6">
+          <SectionLabel>HEAD DELEGATES</SectionLabel>
+          <div className="mt-2">
+            {headDelegates.map(m => {
+              if (m.payment_status === 'waived') {
+                return <WaivedChip key={m.id} member={m} onRemove={() => handleRemove(m, society.name)} />;
+              }
+              if (!m.attending) {
+                return (
+                  <NotAttendingChip
+                    key={m.id}
+                    member={m}
+                    onUndo={() => handleUndoNotAttending(m)}
+                    onRemove={() => handleRemove(m, society.name)}
+                  />
+                );
+              }
+              if (m.payment_status === 'unpaid') {
+                return (
+                  <DraggableChip
+                    key={m.id}
+                    dataId={m.id}
+                    name={m.profiles?.display_name ?? 'Unknown'}
+                    avatarUrl={m.profiles?.avatar_url ?? null}
+                    subtitle="Head delegate"
+                    selected={selectedMemberId === m.id}
+                    onSelect={() => setSelectedMemberId(prev => (prev === m.id ? null : m.id))}
+                    onNotAttending={() => handleNotAttending(m)}
+                    onRemove={() => handleRemove(m, society.name)}
+                    onDragStart={() => setDragMemberId(m.id)}
+                    onDragEnd={() => { setDragMemberId(null); setDropTargetKey(null); }}
+                  />
+                );
+              }
+              // Paid — this card is informational; the actual paid slot they
+              // occupy is the tagged HD entry in the right-hand ledger below.
+              const name = m.profiles?.display_name ?? 'Unknown';
+              return (
+                <div
+                  key={m.id}
+                  className="flex items-center gap-2 rounded-xl px-3 py-2.5 mb-1.5"
+                  style={{ backgroundColor: '#1B3828', border: '1.5px solid #1B3828' }}
+                >
+                  <MemberAvatar name={name} url={m.profiles?.avatar_url ?? null} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold truncate" style={{ color: '#EED98A', fontFamily: OUTFIT }}>{name}</p>
+                    {m.assigned_committee_id && (
+                      <p className="text-xs truncate" style={{ color: 'rgba(238,217,138,0.7)', fontFamily: OUTFIT }}>
+                        {m.assigned_committee?.abbreviation ?? m.assigned_committee?.name} — {m.assigned_country_name}
+                      </p>
+                    )}
+                  </div>
+                  <span style={{ fontSize: 9, fontWeight: 700, color: '#EED98A', fontFamily: MONO, letterSpacing: '0.06em', flexShrink: 0, opacity: 0.9 }}>PAID</span>
+                  <div className="flex items-center gap-2.5 flex-shrink-0">
+                    <button
+                      onClick={() => handleNotAttending(m)}
+                      className="focus:outline-none"
+                      style={{ fontSize: 9, fontWeight: 700, color: '#EED98A', fontFamily: MONO, letterSpacing: '0.04em', opacity: 0.85 }}
+                    >
+                      NOT ATTENDING
+                    </button>
+                    <button
+                      onClick={() => handleRemove(m, society.name)}
+                      className="focus:outline-none"
+                      style={{ fontSize: 9, fontWeight: 700, color: '#EED98A', fontFamily: MONO, letterSpacing: '0.04em', opacity: 0.85 }}
+                    >
+                      REMOVE
+                    </button>
+                  </div>
                 </div>
               );
             })}
@@ -374,9 +653,9 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
                 <p className="text-sm min-w-0 truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
                   <span style={{ fontWeight: 700 }}>{m.profiles?.display_name ?? 'Unknown'}</span> pledged: {pledgeText(m)}
                 </p>
-                {m.pledge_confirmed_at ? (
+                {pledgeSatisfied(m) ? (
                   <span className="flex items-center gap-1 flex-shrink-0" style={{ fontSize: 11, fontWeight: 700, color: '#3D7A52', fontFamily: MONO }}>
-                    <Check size={12} /> RECEIVED
+                    <Check size={12} /> COVERED
                   </span>
                 ) : (
                   <button
@@ -448,6 +727,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
                   selected={selectedMemberId === m.id}
                   onSelect={() => setSelectedMemberId(prev => (prev === m.id ? null : m.id))}
                   onNotAttending={() => handleNotAttending(m)}
+                  onRemove={() => handleRemove(m, society.name)}
                   onDragStart={() => setDragMemberId(m.id)}
                   onDragEnd={() => { setDragMemberId(null); setDropTargetKey(null); }}
                 />
@@ -459,7 +739,9 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
             <>
               <SectionLabel>WAIVED</SectionLabel>
               <div className="mt-2">
-                {waivedMembers.map(m => <WaivedChip key={m.id} member={m} />)}
+                {waivedMembers.map(m => (
+                  <WaivedChip key={m.id} member={m} onRemove={() => handleRemove(m, society.name)} />
+                ))}
               </div>
             </>
           )}
@@ -469,7 +751,12 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
               <SectionLabel>NOT ATTENDING</SectionLabel>
               <div className="mt-2">
                 {notAttendingMembers.map(m => (
-                  <NotAttendingChip key={m.id} member={m} onUndo={() => handleUndoNotAttending(m)} />
+                  <NotAttendingChip
+                    key={m.id}
+                    member={m}
+                    onUndo={() => handleUndoNotAttending(m)}
+                    onRemove={() => handleRemove(m, society.name)}
+                  />
                 ))}
               </div>
             </div>
@@ -484,6 +771,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
               <PaidSlotChip
                 key={m.id}
                 member={m}
+                hdTag={isHeadDelegate(m)}
                 isDropTarget={dropTargetKey === `paid-${m.id}`}
                 clickable={selectedMemberId !== null}
                 onDragOver={() => { if (dragMemberId) setDropTargetKey(`paid-${m.id}`); }}
@@ -491,6 +779,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
                 onDrop={sourceId => interactWithPaidSlot(m, sourceId)}
                 onClickTarget={() => interactWithPaidSlot(m)}
                 onNotAttending={() => handleNotAttending(m)}
+                onRemove={() => handleRemove(m, society.name)}
               />
             ))}
             {Array.from({ length: openCount }).map((_, i) => (
@@ -519,6 +808,17 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
           onConfirm={transfer => handleSwap(swapConfirm.sourceId, swapConfirm.targetId, transfer)}
         />
       )}
+
+      {advisorTransferPicker && (
+        <AdvisorTransferModal
+          advisor={advisorTransferPicker}
+          pool={advisorPool}
+          onClose={() => setAdvisorTransferPicker(null)}
+          onPick={recipient => handleAdvisorTransfer(advisorTransferPicker, recipient)}
+        />
+      )}
+
+      {confirmModal}
     </div>
   );
 }
