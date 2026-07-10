@@ -45,9 +45,9 @@ const TABS: { key: TabKey; label: string }[] = [
 ];
 
 const EXPLORE_CONFIG: Record<TabKey, { label: string; href: string }> = {
-  delegate:  { label: 'EXPLORE CONFERENCES', href: '/conferences' },
-  advisor:   { label: 'EXPLORE CONFERENCES', href: '/conferences' },
-  observer:  { label: 'EXPLORE CONFERENCES', href: '/conferences' },
+  delegate:  { label: 'EXPLORE CONFERENCES', href: '/conferences/explore' },
+  advisor:   { label: 'EXPLORE CONFERENCES', href: '/conferences/explore' },
+  observer:  { label: 'EXPLORE CONFERENCES', href: '/conferences/explore' },
   chair:     { label: 'EXPLORE CHAIRING OPPORTUNITIES', href: '/conferences/roles' },
   organizer: { label: 'LIST YOUR CONFERENCE', href: '/conferences/new' },
 };

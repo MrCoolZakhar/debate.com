@@ -105,7 +105,7 @@ const roleSlides: CarouselSlide[] = [
     description: 'Browse the circuit, apply once with your Gavelling profile, and build a MUN CV that writes itself.',
     image: '/landing/podium-speaker.jpg',
     imageAlt: 'A full committee room mid-debate, chair at the podium',
-    primaryButton: { label: 'Explore conferences', href: '/conferences' },
+    primaryButton: { label: 'Explore conferences', href: '/conferences/explore' },
     secondaryButton: { label: 'View your conferences', href: '/my-conferences?tab=delegate' },
   },
   {
@@ -114,7 +114,7 @@ const roleSlides: CarouselSlide[] = [
     description: 'Pledge spots, manage payments and keep your delegation organised — all in one place.',
     image: '/landing/organiser-desk.jpg',
     imageAlt: 'A delegation working together on Gavelling at a laptop',
-    primaryButton: { label: 'Explore conferences', href: '/conferences' },
+    primaryButton: { label: 'Explore conferences', href: '/conferences/explore' },
     secondaryButton: { label: 'View your conferences', href: '/my-conferences?tab=advisor' },
   },
   {
@@ -123,7 +123,7 @@ const roleSlides: CarouselSlide[] = [
     description: 'Follow committees live and see how the room moves — no placard required.',
     image: '/landing/podium-speaker.jpg',
     imageAlt: 'A full committee room mid-debate, chair at the podium',
-    primaryButton: { label: 'Explore conferences', href: '/conferences' },
+    primaryButton: { label: 'Explore conferences', href: '/conferences/explore' },
     secondaryButton: { label: 'View your conferences', href: '/my-conferences?tab=observer' },
   },
 ];

@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { formatFeeAmount } from '@/lib/utils';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Landing lab · shared primitives
@@ -115,7 +116,7 @@ export function isConcluded(c: LabConference): boolean {
 }
 
 export function feeLabel(c: LabConference): string {
-  return c.fee_amount === 0 ? 'Free' : `${c.fee_currency} ${c.fee_amount.toFixed(0)}`;
+  return c.fee_amount === 0 ? 'Free' : `${c.fee_currency} ${formatFeeAmount(c.fee_amount)}`;
 }
 
 /** "In 231 days" / "Happening now" / "Concluded" — honest urgency (RA/Meetup register). */

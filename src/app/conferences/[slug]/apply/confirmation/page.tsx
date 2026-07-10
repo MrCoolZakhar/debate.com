@@ -8,6 +8,19 @@ import SiteNav from '@/components/SiteNav';
 
 const OUTFIT = "'Outfit', sans-serif";
 
+// F12: human role names with the correct article — "a delegate", "an observer".
+const ROLE_WITH_ARTICLE: Record<string, string> = {
+  delegate: 'a delegate',
+  'head-delegate': 'a head delegate',
+  'faculty-advisor': 'a faculty advisor',
+  observer: 'an observer',
+  chair: 'a chair',
+};
+
+function roleWithArticle(role: string): string {
+  return ROLE_WITH_ARTICLE[role] ?? `a ${role.replace(/-/g, ' ')}`;
+}
+
 function ConfirmationInner() {
   const { slug } = useParams() as { slug: string };
   const searchParams = useSearchParams();
@@ -83,7 +96,7 @@ function ConfirmationInner() {
           className={`text-sm leading-relaxed max-w-sm ${timingNote ? 'mb-3' : 'mb-9'}`}
           style={{ color: '#9A8A78', fontFamily: OUTFIT }}
         >
-          Your application as {role.replace(/-/g, ' ')} has been submitted. The conference team will review it and you&apos;ll hear back soon.
+          Your application as {roleWithArticle(role)} has been submitted. The conference team will review it and you&apos;ll hear back soon.
         </p>
         {timingNote && (
           <p

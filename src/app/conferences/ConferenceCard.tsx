@@ -41,6 +41,7 @@
 import { useState } from 'react';
 import { ArrowRight, Check, Users, CalendarDays, Gavel, MapPin } from 'lucide-react';
 import { getCountryByName } from '@/lib/countries';
+import { currencySymbol, formatFeeAmount } from '@/lib/utils';
 
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
 
@@ -82,20 +83,6 @@ export function gradientFor(acronym: string): [string, string] {
   let h = 0;
   for (let i = 0; i < acronym.length; i++) h = (h * 31 + acronym.charCodeAt(i)) >>> 0;
   return CARD_GRADIENTS[h % CARD_GRADIENTS.length];
-}
-
-// Real currency symbols for the fee bubble — falls back to the ISO code for
-// anything unmapped so the amount always stays readable.
-const CURRENCY_SYMBOLS: Record<string, string> = {
-  GBP: '£', USD: '$', EUR: '€', JPY: '¥', CNY: '¥', INR: '₹', KRW: '₩',
-  CHF: 'Fr', CAD: 'C$', AUD: 'A$', NZD: 'NZ$', SGD: 'S$', HKD: 'HK$',
-  TRY: '₺', SEK: 'kr', NOK: 'kr', DKK: 'kr', PLN: 'zł', CZK: 'Kč',
-  MXN: 'MX$', BRL: 'R$', ZAR: 'R', THB: '฿', PHP: '₱', VND: '₫',
-  RUB: '₽', ILS: '₪', AED: 'AED',
-};
-
-export function currencySymbol(code: string): string {
-  return CURRENCY_SYMBOLS[code.toUpperCase()] ?? code;
 }
 
 function formatDateRange(start: string, end: string): string {
@@ -293,7 +280,7 @@ export function ConferenceCard({
                   border: '1px solid rgba(238,217,138,0.32)', padding: '2px 9px', borderRadius: '9999px', whiteSpace: 'nowrap',
                 }}
               >
-                {currencySymbol(conf.fee_currency)}{conf.fee_amount.toFixed(0)}
+                {currencySymbol(conf.fee_currency)}{formatFeeAmount(conf.fee_amount)}
               </span>
             )}
             <span className="flex items-center gap-1">
@@ -418,7 +405,7 @@ export function ConferenceCard({
               {currencySymbol(conf.fee_currency)}
             </span>
             <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontVariantNumeric: 'tabular-nums', fontSize: '16.5px', color: '#1C1410' }}>
-              {conf.fee_amount.toFixed(0)}
+              {formatFeeAmount(conf.fee_amount)}
             </span>
           </>
         )}

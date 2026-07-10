@@ -4,6 +4,7 @@
 
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { resolveTokens, type EmailTokenContext } from '@/lib/emailTokens';
+import { formatFee } from '@/lib/utils';
 
 // ── Event registry ────────────────────────────────────────────────────────────
 // Single source of truth for platform email events, shared by this lib
@@ -63,14 +64,6 @@ function paymentStatusLabel(status: string | null): string | null {
   if (!status) return null;
   const map: Record<string, string> = { paid: 'Paid', unpaid: 'Unpaid', waived: 'Waived' };
   return map[status] ?? status;
-}
-
-function currencySymbol(currency: string): string {
-  const map: Record<string, string> = {
-    GBP: '£', USD: '$', EUR: '€', CAD: 'CA$', AUD: 'A$',
-    CHF: 'CHF ', JPY: '¥', CNY: '¥', INR: '₹', BRL: 'R$', MXN: 'MX$',
-  };
-  return map[currency?.toUpperCase()] ?? (currency + ' ');
 }
 
 function formatDate(d: string): string {
@@ -169,7 +162,7 @@ export async function queueEventEmail(
       payment_status: paymentStatusLabel(app.payment_status),
       conference_name: conference?.full_name ?? null,
       conference_dates: conference ? formatDateRange(conference.start_date, conference.end_date) : null,
-      fee: conference?.fee_amount ? `${currencySymbol(conference.fee_currency)}${conference.fee_amount}` : null,
+      fee: conference?.fee_amount ? formatFee(conference.fee_amount, conference.fee_currency) : null,
     };
     return {
       conference_id: conferenceId,

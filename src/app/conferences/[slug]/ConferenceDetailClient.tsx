@@ -11,6 +11,7 @@ import { supabase as anonSupabase } from '@/lib/supabase';
 import { getFlagUrl, getCountryByName } from '@/lib/countries';
 import { OrganizerPencil } from '@/components/OrganizerPencil';
 import { uploadConferenceAsset } from '@/lib/conferenceAssets';
+import { formatFee } from '@/lib/utils';
 import {
   CommitteeEditorModal,
   MonogramMedallion,
@@ -161,14 +162,6 @@ function formatDateRange(start: string, end: string): string {
     return `${s.getDate()} – ${e.getDate()} ${months[s.getMonth()]} ${s.getFullYear()}`;
   }
   return `${s.getDate()} ${months[s.getMonth()]} – ${e.getDate()} ${months[e.getMonth()]} ${e.getFullYear()}`;
-}
-
-function currencySymbol(currency: string): string {
-  const map: Record<string, string> = {
-    GBP: '£', USD: '$', EUR: '€', CAD: 'CA$', AUD: 'A$',
-    CHF: 'CHF ', JPY: '¥', CNY: '¥', INR: '₹', BRL: 'R$', MXN: 'MX$',
-  };
-  return map[currency?.toUpperCase()] ?? (currency + ' ');
 }
 
 function capitalize(s: string): string {
@@ -1956,7 +1949,7 @@ export default function ConferenceDetailClient() {
                               const windowStatus = getRoleWindowStatus(r);
                               const open = windowStatus === 'open' || windowStatus === 'open-always';
                               const fee = r.fee_amount != null && r.fee_amount > 0
-                                ? `${currencySymbol(r.fee_currency ?? conference.fee_currency)}${r.fee_amount.toFixed(0)}`
+                                ? formatFee(r.fee_amount, r.fee_currency ?? conference.fee_currency)
                                 : 'Free';
                               const reason = windowStatus === 'closed'
                                 ? 'Applications closed'
@@ -2016,7 +2009,7 @@ export default function ConferenceDetailClient() {
                         <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: '30px', color: '#1B3828', lineHeight: 1 }}>FREE</span>
                       ) : (
                         <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: '38px', color: '#1C1410', lineHeight: 1 }}>
-                          {currencySymbol(conference.fee_currency)}{conference.fee_amount.toFixed(0)}
+                          {formatFee(conference.fee_amount, conference.fee_currency)}
                         </span>
                       )}
                       <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '8.5px', letterSpacing: '0.14em', color: '#9A8A78', marginTop: '7px' }}>
@@ -2051,7 +2044,7 @@ export default function ConferenceDetailClient() {
                             </span>
                             <span className="text-[13px] font-bold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}>
                               {r.fee_amount != null && r.fee_amount > 0
-                                ? `${currencySymbol(r.fee_currency ?? conference.fee_currency)}${r.fee_amount.toFixed(0)}`
+                                ? formatFee(r.fee_amount, r.fee_currency ?? conference.fee_currency)
                                 : 'Free'}
                             </span>
                           </div>

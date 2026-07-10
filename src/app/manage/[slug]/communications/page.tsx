@@ -11,6 +11,7 @@ import {
   type EmailTokenContext,
 } from '@/lib/emailTokens';
 import { EVENT_REGISTRY, type EventDef } from '@/lib/emailEvents';
+import { formatFee } from '@/lib/utils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -101,13 +102,6 @@ function paymentStatusLabel(status: string | null): string | null {
   return map[status] ?? status;
 }
 
-function currencySymbol(currency: string): string {
-  const map: Record<string, string> = {
-    GBP: '£', USD: '$', EUR: '€', CAD: 'CA$', AUD: 'A$',
-    CHF: 'CHF ', JPY: '¥', CNY: '¥', INR: '₹', BRL: 'R$', MXN: 'MX$',
-  };
-  return map[currency?.toUpperCase()] ?? (currency + ' ');
-}
 
 function formatFilter(filter: Record<string, string> | null, committees: Committee[], societies: Society[]): string {
   if (!filter || !filter.audience || filter.audience === 'all') return 'All participants';
@@ -400,7 +394,7 @@ function CommunicationsPageInner() {
       payment_status: paymentStatusLabel(app.payment_status),
       conference_name: conference.full_name,
       conference_dates: formatDateRange(conference.start_date, conference.end_date),
-      fee: conference.fee_amount ? `${currencySymbol(conference.fee_currency)}${conference.fee_amount}` : null,
+      fee: conference.fee_amount ? formatFee(conference.fee_amount, conference.fee_currency) : null,
     };
   }
 

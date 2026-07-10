@@ -8,6 +8,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { getFlagUrl } from '@/lib/countries';
 import { ageAt } from '@/lib/age';
+import { formatFee } from '@/lib/utils';
 import { Pill } from '@/app/account/accountUi';
 import {
   Gavel, Mic, Users, Eye, Building2, User, ListOrdered, Sprout,
@@ -75,14 +76,6 @@ interface Preference {
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
-
-function currencySymbol(currency: string): string {
-  const map: Record<string, string> = {
-    GBP: '£', USD: '$', EUR: '€', CAD: 'CA$', AUD: 'A$',
-    CHF: 'CHF ', JPY: '¥', CNY: '¥', INR: '₹', BRL: 'R$', MXN: 'MX$',
-  };
-  return map[currency?.toUpperCase()] ?? (currency + ' ');
-}
 
 type IconType = typeof Gavel;
 
@@ -208,7 +201,6 @@ function ConferenceApplyInner() {
   const [societyInput, setSocietyInput] = useState('');
   const [societySuggestions, setSocietySuggestions] = useState<Society[]>([]);
   const [selectedSocietyId, setSelectedSocietyId] = useState<string | null>(null);
-  const [isHeadDelegate, setIsHeadDelegate] = useState(false);
   const [societyDropdownOpen, setSocietyDropdownOpen] = useState(false);
   const [societyError, setSocietyError] = useState('');
 
@@ -237,12 +229,16 @@ function ConferenceApplyInner() {
   const isObserver = role === 'observer';
   const isInvoicingRole = role === 'head-delegate' || role === 'faculty-advisor';
 
+  // F15: faculty advisors skip Experience entirely — MUN experience level
+  // doesn't apply to them, so experience_level submits null for this role.
+  const skipExperience = role === 'faculty-advisor';
+
   const stepSequence = [
     'role',
     'society',
     ...(isInvoicingRole ? ['invoicing'] : []),
     ...(isPreferenceRole ? ['preferences'] : []),
-    'experience',
+    ...(skipExperience ? [] : ['experience']),
   ] as const;
   type StepKind = (typeof stepSequence)[number];
   const totalSteps = stepSequence.length;
@@ -377,6 +373,17 @@ function ConferenceApplyInner() {
     setMyDob(dobInput);
   }
 
+  // Advisors skip Experience (F15), so 'invoicing' can now be the final step
+  // in their sequence — advance to it normally, but submit instead of
+  // stepping past the end when there's nothing left.
+  function advanceStep() {
+    if (step >= totalSteps) {
+      handleSubmit();
+      return;
+    }
+    setStep(s => s + 1);
+  }
+
   function handleContinue() {
     if (currentStepKind === 'society') {
       if (!isObserver && !isIndependent && !societyInput.trim()) {
@@ -388,7 +395,7 @@ function ConferenceApplyInner() {
         return;
       }
       setSocietyError('');
-      setStep(s => s + 1);
+      advanceStep();
       return;
     }
     if (currentStepKind === 'invoicing') {
@@ -401,7 +408,7 @@ function ConferenceApplyInner() {
         return;
       }
       setInvoicingError('');
-      setStep(s => s + 1);
+      advanceStep();
       return;
     }
     if (currentStepKind === 'preferences') {
@@ -415,10 +422,10 @@ function ConferenceApplyInner() {
         return;
       }
       setPrefError('');
-      setStep(s => s + 1);
+      advanceStep();
       return;
     }
-    setStep(s => s + 1);
+    advanceStep();
   }
 
   async function handleSubmit() {
@@ -507,7 +514,7 @@ function ConferenceApplyInner() {
         status: roleConfig?.auto_accept ? 'accepted' : 'submitted',
         is_independent: isIndependent,
         society_id: societyId,
-        is_head_delegate: isHeadDelegate && !isIndependent,
+        is_head_delegate: role === 'head-delegate',
         experience_level: experienceLevel || null,
         custom_answers: customAnswers,
         payment_status: paymentStatus,
@@ -601,7 +608,7 @@ function ConferenceApplyInner() {
               <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: '22px', color: '#1B3828', lineHeight: 1 }}>FREE</span>
             ) : (
               <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: '27px', color: '#1C1410', lineHeight: 1 }}>
-                {currencySymbol(rc.fee_currency)}{rc.fee_amount}
+                {formatFee(rc.fee_amount, rc.fee_currency)}
               </span>
             )}
             <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '7.5px', letterSpacing: '0.15em', color: '#9A8A78', marginTop: '6px' }}>
@@ -774,38 +781,6 @@ function ConferenceApplyInner() {
                     {societyError}
                   </p>
                 )}
-
-                {/* Head delegate */}
-                {isPreferenceRole && (
-                  <button
-                    onClick={() => setIsHeadDelegate(v => !v)}
-                    className="flex items-start gap-3 mt-4 p-4 rounded-xl w-full text-left focus:outline-none"
-                    style={{ backgroundColor: 'rgba(27,56,40,0.04)', border: '1px solid rgba(27,56,40,0.1)' }}
-                  >
-                    <div
-                      className="flex-shrink-0 flex items-center justify-center rounded"
-                      style={{
-                        width: 18, height: 18, marginTop: 2,
-                        border: isHeadDelegate ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
-                        backgroundColor: isHeadDelegate ? '#1B3828' : 'transparent',
-                      }}
-                    >
-                      {isHeadDelegate && (
-                        <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                          <polyline points="1.5 5 4 7.5 8.5 2.5" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      )}
-                    </div>
-                    <div>
-                      <p className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-                        Apply as Head Delegate for my society
-                      </p>
-                      <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                        Head delegates represent their society and help coordinate the delegation.
-                      </p>
-                    </div>
-                  </button>
-                )}
               </>
             )}
           </>
@@ -926,12 +901,16 @@ function ConferenceApplyInner() {
           </button>
           <button
             onClick={handleContinue}
+            disabled={submitting}
             className="rounded-xl py-2.5 px-6 text-sm font-bold focus:outline-none transition-colors"
-            style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em' }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+            style={{
+              backgroundColor: submitting ? 'rgba(27,56,40,0.5)' : '#1B3828', color: '#EED98A',
+              fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', cursor: submitting ? 'not-allowed' : 'pointer',
+            }}
+            onMouseEnter={(e) => { if (!submitting) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+            onMouseLeave={(e) => { if (!submitting) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
           >
-            CONTINUE →
+            {step >= totalSteps ? (submitting ? 'SUBMITTING...' : 'SUBMIT APPLICATION') : 'CONTINUE →'}
           </button>
         </div>
       </>
