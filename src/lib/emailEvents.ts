@@ -5,9 +5,50 @@
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { resolveTokens, type EmailTokenContext } from '@/lib/emailTokens';
 
+// ── Event registry ────────────────────────────────────────────────────────────
+// Single source of truth for platform email events, shared by this lib
+// (queueEventEmail) and the UI (communications page, DraftNotice).
+
+export interface EventDef {
+  key: string;
+  label: string;
+  description: string;
+  defaultDelivery: 'immediate' | 'manual';
+}
+
+export const EVENT_REGISTRY: EventDef[] = [
+  { key: 'application_received', label: 'Application Received', description: 'Sent to a delegate when their application is submitted.', defaultDelivery: 'immediate' },
+  { key: 'application_accepted', label: 'Application Accepted', description: 'Sent when an application is accepted.', defaultDelivery: 'immediate' },
+  { key: 'application_rejected', label: 'Application Rejected', description: 'Sent when an application is rejected.', defaultDelivery: 'immediate' },
+  { key: 'payment_available', label: 'Payment Available', description: 'Sent when payment opens up for a delegate.', defaultDelivery: 'immediate' },
+  { key: 'payment_received', label: 'Payment Received', description: "Sent when a delegate is marked paid.", defaultDelivery: 'immediate' },
+  { key: 'fee_waived', label: 'Fee Waived', description: "Sent when a delegate's fee is waived.", defaultDelivery: 'immediate' },
+  { key: 'allocation_assigned', label: 'Allocation Assigned', description: 'Sent when a delegate is allocated a committee and country.', defaultDelivery: 'immediate' },
+  { key: 'allocation_changed', label: 'Allocation Changed', description: "Sent when a delegate's allocation changes.", defaultDelivery: 'immediate' },
+  { key: 'allocation_removed', label: 'Allocation Removed', description: "Sent when a delegate's allocation is removed.", defaultDelivery: 'manual' },
+  { key: 'pledge_received', label: 'Pledge Received', description: 'Sent when a pledge is marked received.', defaultDelivery: 'immediate' },
+  { key: 'added_to_delegation', label: 'Added to Delegation', description: 'Sent when a delegate joins a delegation.', defaultDelivery: 'immediate' },
+  { key: 'removed_from_delegation', label: 'Removed from Delegation', description: 'Sent when a delegate leaves a delegation.', defaultDelivery: 'manual' },
+  { key: 'spot_received', label: 'Spot Received', description: 'Sent when a delegate is given a paid spot.', defaultDelivery: 'immediate' },
+  { key: 'spot_lost', label: 'Spot Lost', description: 'Sent when a delegate loses their paid spot.', defaultDelivery: 'manual' },
+  { key: 'not_attending', label: 'Marked Not Attending', description: 'Sent when a delegate is marked not attending.', defaultDelivery: 'manual' },
+  { key: 'attendance_restored', label: 'Attendance Restored', description: "Sent when a delegate's attendance is restored.", defaultDelivery: 'immediate' },
+  { key: 'documents_published', label: 'Documents Published', description: 'Sent when working papers or resolutions are published.', defaultDelivery: 'manual' },
+  { key: 'chair_assigned', label: 'Chair Assigned', description: 'Sent when someone is assigned as a committee chair.', defaultDelivery: 'immediate' },
+  { key: 'session_chair_invite', label: 'Session Chair Invite', description: 'Sent to committee chairs with their session code and chair password.', defaultDelivery: 'manual' },
+  { key: 'session_join_invite', label: 'Session Join Invite', description: 'Sent to committee participants inviting them to join the live session.', defaultDelivery: 'manual' },
+];
+
+/** Looks up a registry event's display label, falling back to the raw key if unknown. */
+export function getEventLabel(eventKey: string): string {
+  return EVENT_REGISTRY.find(e => e.key === eventKey)?.label ?? eventKey;
+}
+
 export interface QueueEventEmailResult {
   drafted: boolean;
   queued?: number;
+  eventKey?: string;
+  eventLabel?: string;
 }
 
 function roleLabel(role: string): string {
@@ -84,7 +125,7 @@ export async function queueEventEmail(
   eventKey: string,
   applicationIds: string[]
 ): Promise<QueueEventEmailResult> {
-  if (applicationIds.length === 0) return { drafted: false };
+  if (applicationIds.length === 0) return { drafted: false, eventKey, eventLabel: getEventLabel(eventKey) };
 
   const { data: templateData } = await supabase
     .from('email_templates')
@@ -94,7 +135,7 @@ export async function queueEventEmail(
     .maybeSingle();
 
   const template = templateData as TemplateRow | null;
-  if (!template || !template.enabled) return { drafted: false };
+  if (!template || !template.enabled) return { drafted: false, eventKey, eventLabel: getEventLabel(eventKey) };
 
   const [{ data: confData }, { data: recipientsData }] = await Promise.all([
     supabase
