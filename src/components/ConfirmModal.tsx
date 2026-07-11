@@ -45,6 +45,8 @@ export interface ConfirmModalProps {
   checked?: boolean;
   onCheckedChange?: (checked: boolean) => void;
   loading?: boolean;
+  /** Disables the confirm button (e.g. a type-to-confirm gate) without disabling the whole modal. */
+  confirmDisabled?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -53,21 +55,22 @@ export interface ConfirmModalProps {
 
 export function ConfirmModal({
   title, body, confirmLabel = 'Confirm', cancelLabel = 'Cancel', danger = false,
-  checkbox, checked = false, onCheckedChange, loading = false, onConfirm, onCancel,
+  checkbox, checked = false, onCheckedChange, loading = false, confirmDisabled = false, onConfirm, onCancel,
 }: ConfirmModalProps) {
   // Esc cancels, Enter confirms — scoped to this modal's lifetime.
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (loading) return;
       if (e.key === 'Escape') { e.preventDefault(); onCancel(); }
-      if (e.key === 'Enter') { e.preventDefault(); onConfirm(); }
+      if (e.key === 'Enter') { if (confirmDisabled) return; e.preventDefault(); onConfirm(); }
     }
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [loading, onConfirm, onCancel]);
+  }, [loading, confirmDisabled, onConfirm, onCancel]);
 
-  const confirmBg = loading ? '#DDD4C0' : danger ? '#8B2020' : '#1B3828';
-  const confirmColor = loading ? '#9A8A78' : danger ? '#FFFFFF' : '#EED98A';
+  const disabled = loading || confirmDisabled;
+  const confirmBg = disabled ? '#DDD4C0' : danger ? '#8B2020' : '#1B3828';
+  const confirmColor = disabled ? '#9A8A78' : danger ? '#FFFFFF' : '#EED98A';
   const spinnerColor = danger ? '#FFFFFF' : '#EED98A';
 
   return (
@@ -124,11 +127,11 @@ export function ConfirmModal({
           </button>
           <button
             onClick={onConfirm}
-            disabled={loading}
+            disabled={disabled}
             className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none inline-flex items-center justify-center gap-2"
             style={{
               backgroundColor: confirmBg, color: confirmColor, fontFamily: OUTFIT,
-              cursor: loading ? 'not-allowed' : 'pointer',
+              cursor: disabled ? 'not-allowed' : 'pointer',
             }}
           >
             {loading && (

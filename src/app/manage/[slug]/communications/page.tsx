@@ -2,10 +2,11 @@
 
 import { Suspense, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Mail, AlertTriangle, Send, Bell, Inbox } from 'lucide-react';
+import { Mail, AlertTriangle, Send, Bell, Inbox, Copy, X } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
+import { ConfirmModal } from '@/components/ConfirmModal';
 import { resolveTokens, type EmailTokenContext } from '@/lib/emailTokens';
 import { EVENT_REGISTRY, type EventDef } from '@/lib/emailEvents';
 import { type EmailBlock, normalizeBlocks, flattenBlocksToPlainText } from '@/lib/emailBlocks';
@@ -25,6 +26,7 @@ interface EmailTemplate {
   body_blocks: unknown;
   enabled: boolean;
   delivery: 'immediate' | 'manual';
+  lifecycle: 'draft' | 'ready';
   updated_at: string;
 }
 
@@ -57,7 +59,7 @@ interface Society {
 interface EmailSend {
   id: string;
   subject: string;
-  recipient_filter: Record<string, string>;
+  recipient_filter: Record<string, unknown> | null;
   recipient_count: number;
   scheduled_at: string | null;
   sent_at: string | null;
@@ -66,12 +68,41 @@ interface EmailSend {
   body_html: string | null;
 }
 
-type AudienceType = 'all' | 'role' | 'committee' | 'status' | 'unpaid' | 'unallocated' | 'not_attending' | 'delegation';
+const INDEPENDENT_KEY = '__independent__';
+
+// ── Audience filter option sets ──────────────────────────────────────────────
+
+const ROLE_OPTIONS = [
+  { value: 'delegate', label: 'Delegates' },
+  { value: 'chair', label: 'Chairs' },
+  { value: 'head-delegate', label: 'Head Delegates' },
+  { value: 'faculty-advisor', label: 'Faculty Advisors' },
+  { value: 'observer', label: 'Observers' },
+];
+
+const PAYMENT_OPTIONS = [
+  { value: 'paid', label: 'Paid' },
+  { value: 'unpaid', label: 'Unpaid' },
+  { value: 'waived', label: 'Waived' },
+];
+
+const ATTENDANCE_OPTIONS = [
+  { value: 'attending', label: 'Attending' },
+  { value: 'not_attending', label: 'Not attending' },
+];
+
+const APP_STATUS_OPTIONS = [
+  { value: 'accepted', label: 'Accepted' },
+  { value: 'assigned', label: 'Assigned' },
+  { value: 'submitted', label: 'Submitted' },
+];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const OUTFIT = "'Outfit', sans-serif";
 const CARD_SHADOW = '0 2px 8px rgba(27,56,40,0.05), 0 12px 32px rgba(27,56,40,0.06)';
+const BORDER = '#DDD4C0';
+const CARD_STYLE = { backgroundColor: '#FAF8F3', border: `1.5px solid #D8CDB6`, boxShadow: CARD_SHADOW };
 
 function formatDate(d: string) {
   return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -103,35 +134,73 @@ function paymentStatusLabel(status: string | null): string | null {
   return map[status] ?? status;
 }
 
+/** Summarizes recipient_filter for a History row. Handles both the old single-select shape and the new combinable-filters shape. */
+function formatFilter(filter: Record<string, unknown> | null, societies: Society[], committees: Committee[]): string {
+  if (!filter) return 'All participants';
 
-function formatFilter(filter: Record<string, string> | null, committees: Committee[], societies: Society[]): string {
-  if (!filter || !filter.audience || filter.audience === 'all') return 'All participants';
-  if (filter.audience === 'role' && filter.role) {
-    const labels: Record<string, string> = {
-      delegate: 'Delegates', chair: 'Chairs', 'head-delegate': 'Head Delegates',
-      'faculty-advisor': 'Faculty Advisors', observer: 'Observers',
-    };
-    return labels[filter.role] ?? filter.role;
+  // Legacy single-select shape (audience: 'all' | 'role' | 'committee' | 'status' | 'unpaid' | 'unallocated' | 'not_attending' | 'delegation').
+  if (typeof filter.audience === 'string') {
+    const audience = filter.audience as string;
+    if (audience === 'all') return 'All participants';
+    if (audience === 'role' && filter.role) {
+      const labels: Record<string, string> = {
+        delegate: 'Delegates', chair: 'Chairs', 'head-delegate': 'Head Delegates',
+        'faculty-advisor': 'Faculty Advisors', observer: 'Observers',
+      };
+      return labels[filter.role as string] ?? String(filter.role);
+    }
+    if (audience === 'committee' && filter.committee_id) {
+      const c = committees.find(cm => cm.id === filter.committee_id);
+      return c ? c.name : 'Committee';
+    }
+    if (audience === 'status' && filter.status) {
+      const labels: Record<string, string> = { submitted: 'Submitted', accepted: 'Accepted', assigned: 'Assigned', paid: 'Paid', unpaid: 'Unpaid' };
+      return `${labels[filter.status as string] ?? filter.status} applicants`;
+    }
+    if (audience === 'unpaid') return 'Unpaid';
+    if (audience === 'unallocated') return 'Unallocated';
+    if (audience === 'not_attending') return 'Not attending';
+    if (audience === 'delegation' && filter.society_id) {
+      const s = societies.find(so => so.id === filter.society_id);
+      return s ? s.name : 'Delegation';
+    }
+    return 'All participants';
   }
-  if (filter.audience === 'committee' && filter.committee_id) {
-    const c = committees.find(cm => cm.id === filter.committee_id);
-    return c ? c.name : 'Committee';
+
+  // New combinable-filters shape.
+  const parts: string[] = [];
+  const roles = (filter.roles as string[] | undefined) ?? [];
+  if (roles.length) parts.push(roles.map(r => ROLE_OPTIONS.find(o => o.value === r)?.label ?? r).join('/'));
+  const pay = (filter.paymentStatuses as string[] | undefined) ?? [];
+  if (pay.length) parts.push(pay.map(p => PAYMENT_OPTIONS.find(o => o.value === p)?.label ?? p).join('/'));
+  const delegationIds = (filter.delegationIds as string[] | undefined) ?? [];
+  const includeIndependents = !!filter.includeIndependents;
+  if (delegationIds.length || includeIndependents) {
+    const names = delegationIds.map(id => societies.find(s => s.id === id)?.name ?? 'Delegation');
+    if (includeIndependents) names.push('Independents');
+    parts.push(names.join(', '));
   }
-  if (filter.audience === 'status' && filter.status) {
-    const labels: Record<string, string> = {
-      submitted: 'Submitted', accepted: 'Accepted', assigned: 'Assigned',
-      paid: 'Paid', unpaid: 'Unpaid',
-    };
-    return `${labels[filter.status] ?? filter.status} applicants`;
-  }
-  if (filter.audience === 'unpaid') return 'Unpaid';
-  if (filter.audience === 'unallocated') return 'Unallocated';
-  if (filter.audience === 'not_attending') return 'Not attending';
-  if (filter.audience === 'delegation' && filter.society_id) {
-    const s = societies.find(so => so.id === filter.society_id);
-    return s ? s.name : 'Delegation';
-  }
-  return 'All participants';
+  const attendance = (filter.attendance as string[] | undefined) ?? [];
+  if (attendance.length) parts.push(attendance.map(a => (a === 'attending' ? 'Attending' : 'Not attending')).join('/'));
+  const appStatus = (filter.applicationStatuses as string[] | undefined) ?? [];
+  if (appStatus.length) parts.push(appStatus.map(s => APP_STATUS_OPTIONS.find(o => o.value === s)?.label ?? s).join('/'));
+
+  let base = parts.length ? parts.join(' · ') : 'All participants';
+  const manualCount = Number(filter.manualCount ?? 0);
+  const excludedCount = Number(filter.excludedCount ?? 0);
+  if (manualCount) base += ` +${manualCount} manual`;
+  if (excludedCount) base += ` −${excludedCount} excluded`;
+  return base;
+}
+
+function looksLikeHtmlDoc(s: string | null): boolean {
+  return !!s && /<!doctype html|<html[\s>]/i.test(s);
+}
+
+function toggleInSet<T>(set: Set<T>, value: T): Set<T> {
+  const next = new Set(set);
+  if (next.has(value)) next.delete(value); else next.add(value);
+  return next;
 }
 
 const STATUS_COLORS: Record<string, { dot: string; text: string; bg: string }> = {
@@ -142,31 +211,6 @@ const STATUS_COLORS: Record<string, { dot: string; text: string; bg: string }> =
 };
 
 // ── Small shared bits ─────────────────────────────────────────────────────────
-
-function RadioRow({ selected, onClick, children }: { selected: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <div
-      onClick={onClick}
-      className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer mb-1 transition-colors"
-      style={{
-        backgroundColor: selected ? 'rgba(27,56,40,0.06)' : 'transparent',
-        border: selected ? '1px solid rgba(27,56,40,0.15)' : '1px solid transparent',
-      }}
-    >
-      <div
-        className="flex-shrink-0 flex items-center justify-center rounded-full"
-        style={{
-          width: 16, height: 16,
-          border: selected ? 'none' : '1.5px solid #DDD4C0',
-          backgroundColor: selected ? '#1B3828' : 'transparent',
-        }}
-      >
-        {selected && <div className="rounded-full" style={{ width: 6, height: 6, backgroundColor: 'white' }} />}
-      </div>
-      <span className="text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{children}</span>
-    </div>
-  );
-}
 
 function PillToggle({ value, onChange }: { value: boolean; onChange: () => void }) {
   return (
@@ -189,6 +233,59 @@ function PillToggle({ value, onChange }: { value: boolean; onChange: () => void 
   );
 }
 
+function TabPill({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      className="focus:outline-none transition-colors"
+      style={{
+        padding: '7px 20px', borderRadius: 8, fontSize: 11, fontFamily: OUTFIT, fontWeight: 700,
+        letterSpacing: '0.06em', border: 'none',
+        backgroundColor: active ? '#1B3828' : 'transparent',
+        color: active ? '#EED98A' : '#9A8A78',
+        cursor: 'pointer',
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function MultiChipGroup({
+  label, options, selected, onToggle,
+}: {
+  label: string; options: { value: string; label: string }[]; selected: Set<string>; onToggle: (v: string) => void;
+}) {
+  return (
+    <div className="mb-3">
+      <p className="text-xs font-bold mb-1.5" style={{ color: '#9A8A78', fontFamily: OUTFIT, letterSpacing: '0.06em' }}>
+        {label.toUpperCase()}
+      </p>
+      <div className="flex flex-wrap gap-1.5">
+        {options.map(o => {
+          const active = selected.has(o.value);
+          return (
+            <button
+              key={o.value}
+              type="button"
+              onClick={() => onToggle(o.value)}
+              className="rounded-full px-2.5 py-1 text-xs font-semibold focus:outline-none transition-colors"
+              style={{
+                border: active ? '1px solid #1B3828' : `1px solid ${BORDER}`,
+                backgroundColor: active ? '#1B3828' : 'transparent',
+                color: active ? '#EED98A' : '#4A4238',
+                fontFamily: OUTFIT,
+              }}
+            >
+              {o.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ── CommunicationsPage ────────────────────────────────────────────────────────
 
 function CommunicationsPageInner() {
@@ -207,6 +304,7 @@ function CommunicationsPageInner() {
   const [deepLinkHandled, setDeepLinkHandled] = useState(false);
 
   // ── View state ──
+  const [activeTab, setActiveTab] = useState<'emails' | 'notifications'>('emails');
   const [flash, setFlash] = useState<{ kind: 'ok' | 'err'; msg: string } | null>(null);
   const [historyExpandedId, setHistoryExpandedId] = useState<string | null>(null);
 
@@ -218,16 +316,24 @@ function CommunicationsPageInner() {
   const [builderSubject, setBuilderSubject] = useState('');
   const [builderBlocks, setBuilderBlocks] = useState<EmailBlock[]>([]);
   const [builderDelivery, setBuilderDelivery] = useState<'immediate' | 'manual'>('manual');
+  const [builderLifecycle, setBuilderLifecycle] = useState<'draft' | 'ready'>('draft');
   const [builderError, setBuilderError] = useState('');
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [sending, setSending] = useState(false);
 
   // ── Audience state (ad-hoc only) ──
-  const [audienceType, setAudienceType] = useState<AudienceType>('all');
-  const [audienceRole, setAudienceRole] = useState('');
-  const [audienceCommitteeId, setAudienceCommitteeId] = useState('');
-  const [audienceStatus, setAudienceStatus] = useState('');
-  const [audienceSocietyId, setAudienceSocietyId] = useState('');
+  const [selRoles, setSelRoles] = useState<Set<string>>(new Set());
+  const [selPayment, setSelPayment] = useState<Set<string>>(new Set());
+  const [selDelegations, setSelDelegations] = useState<Set<string>>(new Set());
+  const [selAttendance, setSelAttendance] = useState<Set<string>>(new Set());
+  const [selStatus, setSelStatus] = useState<Set<string>>(new Set());
+  const [excludedIds, setExcludedIds] = useState<Set<string>>(new Set());
+  const [manuallyAddedIds, setManuallyAddedIds] = useState<Set<string>>(new Set());
+  const [manualSearch, setManualSearch] = useState('');
+
+  // ── Send confirmation ──
+  const [sendConfirmOpen, setSendConfirmOpen] = useState(false);
+  const [sendConfirmText, setSendConfirmText] = useState('');
 
   const builderJustOpenedRef = useRef(false);
 
@@ -243,7 +349,7 @@ function CommunicationsPageInner() {
     const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase
       .from('email_templates')
-      .select('id, conference_id, event_key, name, subject, body, body_blocks, enabled, delivery, updated_at')
+      .select('id, conference_id, event_key, name, subject, body, body_blocks, enabled, delivery, lifecycle, updated_at')
       .eq('conference_id', conference.id);
     setTemplates((data ?? []) as EmailTemplate[]);
   }, [conference, session?.access_token]);
@@ -328,30 +434,78 @@ function CommunicationsPageInner() {
     () => templates.filter(t => !t.event_key).sort((a, b) => b.updated_at.localeCompare(a.updated_at)),
     [templates]
   );
+  const draftTemplates = useMemo(() => adhocTemplates.filter(t => (t.lifecycle ?? 'draft') !== 'ready'), [adhocTemplates]);
+  const readyTemplates = useMemo(() => adhocTemplates.filter(t => t.lifecycle === 'ready'), [adhocTemplates]);
 
   const eligibleApplications = useMemo(
     () => applications.filter(a => a.status !== 'rejected' && a.status !== 'withdrawn'),
     [applications]
   );
 
-  const audienceRecipients = useMemo(() => {
-    let filtered = eligibleApplications;
-    switch (audienceType) {
-      case 'all': break;
-      case 'role': if (audienceRole) filtered = filtered.filter(a => a.role === audienceRole); break;
-      case 'committee': if (audienceCommitteeId) filtered = filtered.filter(a => a.assigned_committee_id === audienceCommitteeId); break;
-      case 'status':
-        if (audienceStatus === 'paid') filtered = filtered.filter(a => a.payment_status === 'paid');
-        else if (audienceStatus === 'unpaid') filtered = filtered.filter(a => a.payment_status === 'unpaid' && (a.status === 'accepted' || a.status === 'assigned'));
-        else if (audienceStatus) filtered = filtered.filter(a => a.status === audienceStatus);
-        break;
-      case 'unpaid': filtered = filtered.filter(a => a.payment_status === 'unpaid'); break;
-      case 'unallocated': filtered = filtered.filter(a => !a.assigned_committee_id && (a.role === 'delegate' || a.role === 'head-delegate')); break;
-      case 'not_attending': filtered = filtered.filter(a => a.attending === false); break;
-      case 'delegation': if (audienceSocietyId) filtered = filtered.filter(a => a.society_id === audienceSocietyId); break;
+  const delegationOptions = useMemo(
+    () => [...societies.map(s => ({ value: s.id, label: s.name })), { value: INDEPENDENT_KEY, label: 'Independents' }],
+    [societies]
+  );
+
+  function matchesAudienceFilters(a: AppRow): boolean {
+    if (selRoles.size > 0 && !selRoles.has(a.role)) return false;
+    if (selPayment.size > 0) {
+      const ok = [...selPayment].some(p => {
+        if (p === 'paid') return a.payment_status === 'paid' || a.payment_status === 'waived';
+        if (p === 'unpaid') return a.payment_status === 'unpaid';
+        if (p === 'waived') return a.payment_status === 'waived';
+        return false;
+      });
+      if (!ok) return false;
     }
-    return filtered;
-  }, [eligibleApplications, audienceType, audienceRole, audienceCommitteeId, audienceStatus, audienceSocietyId]);
+    if (selDelegations.size > 0) {
+      const wantsIndependent = selDelegations.has(INDEPENDENT_KEY);
+      const societyIds = [...selDelegations].filter(id => id !== INDEPENDENT_KEY);
+      const ok = (wantsIndependent && a.is_independent) || (a.society_id != null && societyIds.includes(a.society_id));
+      if (!ok) return false;
+    }
+    if (selAttendance.size > 0) {
+      const ok = [...selAttendance].some(v => (v === 'attending' ? a.attending !== false : a.attending === false));
+      if (!ok) return false;
+    }
+    if (selStatus.size > 0 && !selStatus.has(a.status)) return false;
+    return true;
+  }
+
+  const filterMatched = useMemo(
+    () => eligibleApplications.filter(matchesAudienceFilters),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [eligibleApplications, selRoles, selPayment, selDelegations, selAttendance, selStatus]
+  );
+
+  const finalRecipients = useMemo(() => {
+    const byId = new Map(applications.map(a => [a.id, a]));
+    const result: AppRow[] = [];
+    const seen = new Set<string>();
+    for (const a of filterMatched) {
+      if (excludedIds.has(a.id)) continue;
+      result.push(a);
+      seen.add(a.id);
+    }
+    for (const id of manuallyAddedIds) {
+      if (seen.has(id)) continue;
+      const a = byId.get(id);
+      if (a) { result.push(a); seen.add(id); }
+    }
+    return result;
+  }, [filterMatched, excludedIds, manuallyAddedIds, applications]);
+
+  const manualMatches = useMemo(() => {
+    if (!manualSearch.trim()) return [];
+    const q = manualSearch.trim().toLowerCase();
+    const alreadyIn = new Set(finalRecipients.map(a => a.id));
+    return applications
+      .filter(a => !alreadyIn.has(a.id) && (
+        (a.profiles?.display_name ?? '').toLowerCase().includes(q) ||
+        (a.profiles?.email ?? '').toLowerCase().includes(q)
+      ))
+      .slice(0, 8);
+  }, [applications, manualSearch, finalRecipients]);
 
   function buildContext(app: AppRow): EmailTokenContext {
     if (!conference) return {};
@@ -373,14 +527,30 @@ function CommunicationsPageInner() {
     [applications, conference] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
+  function buildRecipientFilterPayload() {
+    return {
+      roles: [...selRoles],
+      paymentStatuses: [...selPayment],
+      delegationIds: [...selDelegations].filter(id => id !== INDEPENDENT_KEY),
+      includeIndependents: selDelegations.has(INDEPENDENT_KEY),
+      attendance: [...selAttendance],
+      applicationStatuses: [...selStatus],
+      manualCount: manuallyAddedIds.size,
+      excludedCount: excludedIds.size,
+    };
+  }
+
   // ── Builder open/close ────────────────────────────────────────────────────
 
   function resetAudience() {
-    setAudienceType('all');
-    setAudienceRole('');
-    setAudienceCommitteeId('');
-    setAudienceStatus('');
-    setAudienceSocietyId('');
+    setSelRoles(new Set());
+    setSelPayment(new Set());
+    setSelDelegations(new Set());
+    setSelAttendance(new Set());
+    setSelStatus(new Set());
+    setExcludedIds(new Set());
+    setManuallyAddedIds(new Set());
+    setManualSearch('');
   }
 
   const openBuilderForEvent = useCallback((ev: EventDef) => {
@@ -391,6 +561,7 @@ function CommunicationsPageInner() {
     setBuilderSubject(existing?.subject ?? '');
     setBuilderBlocks(normalizeBlocks(existing?.body_blocks, existing?.body ?? ''));
     setBuilderDelivery(existing?.delivery ?? ev.defaultDelivery);
+    setBuilderLifecycle(existing?.lifecycle ?? 'draft');
     resetAudience();
     setBuilderError('');
     builderJustOpenedRef.current = true;
@@ -404,6 +575,7 @@ function CommunicationsPageInner() {
     setBuilderSubject(template?.subject ?? '');
     setBuilderBlocks(normalizeBlocks(template?.body_blocks, template?.body ?? ''));
     setBuilderDelivery('manual');
+    setBuilderLifecycle(template?.lifecycle ?? 'draft');
     resetAudience();
     setBuilderError('');
     builderJustOpenedRef.current = true;
@@ -414,14 +586,17 @@ function CommunicationsPageInner() {
     setBuilderOpen(false);
   }
 
-  // Deep link: ?event=<key> opens the builder bound to that event on load.
+  // Deep link: ?event=<key> opens the Notifications tab with that event's composer.
   useEffect(() => {
     if (loading || deepLinkHandled) return;
     setDeepLinkHandled(true);
     const ev = searchParams.get('event');
     if (!ev) return;
     const def = EVENT_REGISTRY.find(e => e.key === ev);
-    if (def) openBuilderForEvent(def);
+    if (def) {
+      setActiveTab('notifications');
+      openBuilderForEvent(def);
+    }
   }, [loading, deepLinkHandled, searchParams, openBuilderForEvent]);
 
   // ── Builder mutations ─────────────────────────────────────────────────────
@@ -488,21 +663,78 @@ function CommunicationsPageInner() {
     }
   }
 
-  async function handleQueueSend() {
+  async function handleToggleLifecycle() {
+    const next: 'draft' | 'ready' = builderLifecycle === 'ready' ? 'draft' : 'ready';
+    let id = builderTemplateId;
+    if (!id) {
+      id = await persistTemplate(builderSubject, builderBlocks, { silent: false });
+      if (!id) return;
+    }
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
+    const { error } = await supabase.from('email_templates').update({ lifecycle: next }).eq('id', id);
+    if (error) { setBuilderError(error.message); return; }
+    setBuilderLifecycle(next);
+    await loadTemplates();
+  }
+
+  async function handleToggleEnabled(template: EmailTemplate) {
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
+    await supabase.from('email_templates').update({ enabled: !template.enabled }).eq('id', template.id);
+    await loadTemplates();
+  }
+
+  async function handleDuplicateTemplate(t: EmailTemplate) {
+    if (!conference || !session) return;
+    const supabase = getAuthedClient(session.access_token);
+    const { error } = await supabase.from('email_templates').insert({
+      conference_id: conference.id,
+      event_key: null,
+      name: `Copy of ${t.name}`,
+      subject: t.subject,
+      body: t.body,
+      body_blocks: t.body_blocks,
+      delivery: 'manual',
+      lifecycle: 'draft',
+      enabled: false,
+      updated_at: new Date().toISOString(),
+    });
+    if (error) { showFlash('err', error.message); return; }
+    showFlash('ok', 'Duplicated as a new draft.');
+    await loadTemplates();
+  }
+
+  function handleExcludeRecipient(id: string) {
+    if (manuallyAddedIds.has(id)) {
+      setManuallyAddedIds(prev => { const next = new Set(prev); next.delete(id); return next; });
+    } else {
+      setExcludedIds(prev => new Set(prev).add(id));
+    }
+  }
+
+  async function handleOpenSendConfirm() {
     if (!conference || !session) return;
     setBuilderError('');
-    if (audienceRecipients.length === 0) { setBuilderError('No recipients match this audience.'); return; }
-    setSending(true);
+    if (finalRecipients.length === 0) { setBuilderError('No recipients selected.'); return; }
     const id = await persistTemplate(builderSubject, builderBlocks, { silent: false });
-    if (!id) { setSending(false); return; }
+    if (!id) return;
+    setSendConfirmText('');
+    setSendConfirmOpen(true);
+  }
+
+  async function handleConfirmSend() {
+    if (!conference || !session || !builderTemplateId) return;
+    setSending(true);
     const supabase = getAuthedClient(session.access_token);
     const flatBody = flattenBlocksToPlainText(builderBlocks, conference);
+    const recipients = finalRecipients;
 
-    const rows = audienceRecipients.map(app => {
+    const rows = recipients.map(app => {
       const ctx = buildContext(app);
       return {
         conference_id: conference.id,
-        template_id: id,
+        template_id: builderTemplateId,
         recipient_application_id: app.id,
         recipient_email: app.profiles?.email ?? null,
         subject: resolveTokens(builderSubject, ctx),
@@ -512,20 +744,16 @@ function CommunicationsPageInner() {
       };
     });
     const { error: outboxError } = await supabase.from('email_outbox').insert(rows);
-    if (outboxError) { setBuilderError(outboxError.message); setSending(false); return; }
+    if (outboxError) { setBuilderError(outboxError.message); setSending(false); setSendConfirmOpen(false); return; }
 
-    const recipientFilter: Record<string, string> = { audience: audienceType };
-    if (audienceType === 'role') recipientFilter.role = audienceRole;
-    if (audienceType === 'committee') recipientFilter.committee_id = audienceCommitteeId;
-    if (audienceType === 'status') recipientFilter.status = audienceStatus;
-    if (audienceType === 'delegation') recipientFilter.society_id = audienceSocietyId;
+    const snapshotHtml = renderEmailHtml({ blocks: builderBlocks, conference, ctx: {} });
 
     await supabase.from('email_sends').insert({
       conference_id: conference.id,
       sent_by: user?.id ?? null,
       subject: builderSubject,
-      body_html: flatBody,
-      recipient_filter: recipientFilter,
+      body_html: snapshotHtml,
+      recipient_filter: buildRecipientFilterPayload(),
       recipient_count: rows.length,
       scheduled_at: null,
       status: 'sent',
@@ -533,16 +761,11 @@ function CommunicationsPageInner() {
     });
 
     setSending(false);
+    setSendConfirmOpen(false);
+    setSendConfirmText('');
     closeBuilder();
     showFlash('ok', `Queued ${rows.length} email${rows.length === 1 ? '' : 's'} — delivery engine coming next.`);
     await Promise.all([loadTemplates(), loadEmailSends(), loadOutboxPending()]);
-  }
-
-  async function handleToggleEnabled(template: EmailTemplate) {
-    if (!session) return;
-    const supabase = getAuthedClient(session.access_token);
-    await supabase.from('email_templates').update({ enabled: !template.enabled }).eq('id', template.id);
-    await loadTemplates();
   }
 
   if (!conference) return null;
@@ -553,6 +776,70 @@ function CommunicationsPageInner() {
   const enabledCount = templates.filter(t => t.event_key && t.enabled).length;
 
   const eventDef = builderEventKey ? EVENT_REGISTRY.find(e => e.key === builderEventKey) ?? null : null;
+  const requireTypedConfirm = finalRecipients.length > 200;
+  const confirmDisabled = requireTypedConfirm && sendConfirmText.trim().toUpperCase() !== 'SEND';
+  const namesPreview = finalRecipients.slice(0, 5).map(a => a.profiles?.display_name ?? 'Unknown').join(', ');
+
+  // ── Row renderer for ad-hoc templates (drafts + ready) ───────────────────
+
+  function renderAdHocRow(t: EmailTemplate, ready: boolean) {
+    return (
+      <div
+        key={t.id}
+        className="flex items-center justify-between gap-4 rounded-2xl p-4"
+        style={CARD_STYLE}
+      >
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            {!ready && (
+              <span
+                className="rounded-md px-2 py-0.5 flex-shrink-0"
+                style={{ fontSize: 10, fontWeight: 700, fontFamily: OUTFIT, backgroundColor: 'rgba(182,135,31,0.12)', color: '#B6871F', border: '1px solid rgba(182,135,31,0.35)' }}
+              >
+                DRAFT
+              </span>
+            )}
+            <p className="font-semibold text-sm truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{t.name}</p>
+          </div>
+          <p className="text-xs truncate mt-0.5" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+            {t.subject || '(No subject)'} · Edited {formatDate(t.updated_at)}
+          </p>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button
+            onClick={() => handleDuplicateTemplate(t)}
+            title="Duplicate"
+            className="rounded-lg p-1.5 focus:outline-none transition-colors"
+            style={{ border: `1px solid ${BORDER}`, color: '#1C1410', backgroundColor: 'transparent' }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+          >
+            <Copy size={13} />
+          </button>
+          <button
+            onClick={() => openBuilderForAdHoc(t)}
+            className="rounded-lg py-1.5 px-3 text-xs font-bold focus:outline-none transition-colors"
+            style={{ border: `1px solid ${BORDER}`, color: '#1C1410', backgroundColor: 'transparent', fontFamily: OUTFIT }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+          >
+            EDIT
+          </button>
+          {ready && (
+            <button
+              onClick={() => openBuilderForAdHoc(t)}
+              className="rounded-lg py-1.5 px-3 text-xs font-bold focus:outline-none transition-colors"
+              style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+            >
+              SEND
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -588,7 +875,7 @@ function CommunicationsPageInner() {
               onClick={handleSaveAndClose}
               disabled={savingTemplate}
               className="rounded-xl py-2 px-4 text-sm font-bold focus:outline-none transition-colors disabled:opacity-60"
-              style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: OUTFIT }}
+              style={{ border: `1px solid ${BORDER}`, color: '#1C1410', backgroundColor: 'transparent', fontFamily: OUTFIT }}
               onMouseEnter={e => { if (!savingTemplate) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
               onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
             >
@@ -596,7 +883,18 @@ function CommunicationsPageInner() {
             </button>
             {builderEventKey === null && (
               <button
-                onClick={handleQueueSend}
+                onClick={handleToggleLifecycle}
+                className="rounded-xl py-2 px-4 text-sm font-bold focus:outline-none transition-colors"
+                style={{ border: `1px solid ${BORDER}`, color: '#1C1410', backgroundColor: 'transparent', fontFamily: OUTFIT }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+              >
+                {builderLifecycle === 'ready' ? 'BACK TO DRAFT' : 'MARK READY'}
+              </button>
+            )}
+            {builderEventKey === null && builderLifecycle === 'ready' && (
+              <button
+                onClick={handleOpenSendConfirm}
                 disabled={sending}
                 className="rounded-xl py-2 px-4 text-sm font-bold focus:outline-none transition-colors disabled:opacity-60"
                 style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT }}
@@ -626,12 +924,12 @@ function CommunicationsPageInner() {
       )}
 
       {/* ═══════════════════════════════════════════════════════════════════════
-          MAIN VIEW — registry, ad-hoc list, history
+          MAIN VIEW — tabs
       ════════════════════════════════════════════════════════════════════════ */}
       {!builderOpen && (
         <>
           {/* Stat medallions */}
-          <div className="grid grid-cols-3 gap-4 mb-8">
+          <div className="grid grid-cols-3 gap-4 mb-6">
             {[
               { label: 'Emails Sent', value: sentCount, Icon: Send, accent: '#1B3828', primary: true },
               { label: 'Notifications On', value: enabledCount, Icon: Bell, accent: '#B6871F', primary: false },
@@ -669,78 +967,25 @@ function CommunicationsPageInner() {
             ))}
           </div>
 
+          {/* Tab switcher */}
+          <div className="inline-flex rounded-xl p-1 mb-6" style={{ border: `1px solid ${BORDER}`, backgroundColor: '#FAF8F3' }}>
+            <TabPill active={activeTab === 'emails'} onClick={() => setActiveTab('emails')}>EMAILS</TabPill>
+            <TabPill active={activeTab === 'notifications'} onClick={() => setActiveTab('notifications')}>NOTIFICATIONS</TabPill>
+          </div>
+
           {loading && (
             <div className="flex justify-center py-16">
               <div className="w-6 h-6 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
             </div>
           )}
 
-          {!loading && (
+          {/* ═══ EMAILS TAB ═══ */}
+          {!loading && activeTab === 'emails' && (
             <>
-              {/* ── Section 1: Conference Notifications ── */}
-              <section className="mb-10">
-                <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                  Conference Notifications
-                </p>
-                <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-                  Automatic emails triggered by application events. Draft one, then switch it on when you&apos;re ready.
-                </p>
-                <div className="flex flex-col gap-2">
-                  {EVENT_REGISTRY.map(ev => {
-                    const template = templatesByEvent.get(ev.key);
-                    return (
-                      <div
-                        key={ev.key}
-                        className="flex items-center justify-between gap-4 rounded-2xl p-4"
-                        style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #D8CDB6', boxShadow: CARD_SHADOW }}
-                      >
-                        <div className="min-w-0 flex-1">
-                          <p className="font-semibold text-sm truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{ev.label}</p>
-                          <p className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>{ev.description}</p>
-                        </div>
-                        <div className="flex items-center gap-3 flex-shrink-0">
-                          {!template ? (
-                            <span
-                              className="rounded-md px-2.5 py-0.5"
-                              style={{ fontSize: 11, fontWeight: 700, fontFamily: OUTFIT, backgroundColor: STATUS_COLORS.draft.bg, color: STATUS_COLORS.draft.text, border: `1px solid ${STATUS_COLORS.draft.dot}55` }}
-                            >
-                              NOT DRAFTED
-                            </span>
-                          ) : (
-                            <div className="flex items-center gap-2">
-                              <span
-                                className="rounded-md px-2.5 py-0.5"
-                                style={{ fontSize: 11, fontWeight: 700, fontFamily: OUTFIT, backgroundColor: 'rgba(61,122,82,0.1)', color: '#3D7A52', border: '1px solid rgba(61,122,82,0.35)' }}
-                              >
-                                DRAFTED
-                              </span>
-                              <PillToggle value={template.enabled} onChange={() => handleToggleEnabled(template)} />
-                              <span style={{ fontSize: 10, color: '#9A8A78', fontFamily: OUTFIT, fontWeight: 700, letterSpacing: '0.06em' }}>
-                                {template.enabled ? 'ON' : 'OFF'}
-                              </span>
-                            </div>
-                          )}
-                          <button
-                            onClick={() => openBuilderForEvent(ev)}
-                            className="rounded-lg py-1.5 px-3 text-xs font-bold focus:outline-none transition-colors"
-                            style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: OUTFIT }}
-                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
-                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                          >
-                            {template ? 'EDIT' : 'DRAFT'}
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </section>
-
-              {/* ── Section 2: Your Emails ── */}
               <section className="mb-10">
                 <div className="flex items-center justify-between mb-1">
                   <p className="font-semibold text-base" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                    Your Emails
+                    Drafts
                   </p>
                   <button
                     onClick={() => openBuilderForAdHoc()}
@@ -753,49 +998,29 @@ function CommunicationsPageInner() {
                   </button>
                 </div>
                 <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-                  One-off emails you compose and send to a chosen audience.
+                  Being written. Mark one ready when it&apos;s good to send.
                 </p>
-                {adhocTemplates.length === 0 ? (
-                  <p className="text-sm py-4" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>No ad-hoc emails yet.</p>
+                {draftTemplates.length === 0 ? (
+                  <p className="text-sm py-4" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>No drafts yet.</p>
                 ) : (
-                  <div className="flex flex-col gap-2">
-                    {adhocTemplates.map(t => (
-                      <div
-                        key={t.id}
-                        className="flex items-center justify-between gap-4 rounded-2xl p-4"
-                        style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #D8CDB6', boxShadow: CARD_SHADOW }}
-                      >
-                        <div className="min-w-0 flex-1">
-                          <p className="font-semibold text-sm truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{t.name}</p>
-                          <p className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>{t.subject || '(No subject)'}</p>
-                        </div>
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          <button
-                            onClick={() => openBuilderForAdHoc(t)}
-                            className="rounded-lg py-1.5 px-3 text-xs font-bold focus:outline-none transition-colors"
-                            style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: OUTFIT }}
-                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
-                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                          >
-                            EDIT
-                          </button>
-                          <button
-                            onClick={() => openBuilderForAdHoc(t)}
-                            className="rounded-lg py-1.5 px-3 text-xs font-bold focus:outline-none transition-colors"
-                            style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT }}
-                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-                          >
-                            SEND
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  <div className="flex flex-col gap-2">{draftTemplates.map(t => renderAdHocRow(t, false))}</div>
                 )}
               </section>
 
-              {/* ── Section 3: History ── */}
+              <section className="mb-10">
+                <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                  Ready to Send
+                </p>
+                <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+                  Approved and waiting for you to pick an audience.
+                </p>
+                {readyTemplates.length === 0 ? (
+                  <p className="text-sm py-4" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>Nothing ready yet.</p>
+                ) : (
+                  <div className="flex flex-col gap-2">{readyTemplates.map(t => renderAdHocRow(t, true))}</div>
+                )}
+              </section>
+
               <section>
                 <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
                   History
@@ -819,13 +1044,14 @@ function CommunicationsPageInner() {
                     {emailSends.map(email => {
                       const sc = STATUS_COLORS[email.status] ?? STATUS_COLORS.draft;
                       const isExpanded = historyExpandedId === email.id;
-                      const filterText = formatFilter(email.recipient_filter, committees, societies);
+                      const filterText = formatFilter(email.recipient_filter, societies, committees);
+                      const isHtml = looksLikeHtmlDoc(email.body_html);
 
                       return (
                         <div
                           key={email.id}
                           className="rounded-2xl p-5 transition-colors"
-                          style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #D8CDB6', boxShadow: CARD_SHADOW }}
+                          style={CARD_STYLE}
                           onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
                           onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = '#D8CDB6'; }}
                         >
@@ -859,15 +1085,25 @@ function CommunicationsPageInner() {
                                 className="text-xs font-bold focus:outline-none"
                                 style={{ color: '#1B3828', backgroundColor: 'transparent', border: 'none', fontFamily: OUTFIT }}
                               >
-                                {isExpanded ? 'HIDE MESSAGE' : 'VIEW MESSAGE'}
+                                {isExpanded ? 'HIDE' : 'VIEW'}
                               </button>
                               {isExpanded && (
-                                <p
-                                  className="mt-2 text-sm leading-relaxed"
-                                  style={{ color: '#1C1410', fontFamily: OUTFIT, whiteSpace: 'pre-wrap' }}
-                                >
-                                  {email.body_html}
-                                </p>
+                                isHtml ? (
+                                  <iframe
+                                    srcDoc={email.body_html}
+                                    sandbox="allow-same-origin"
+                                    title="Sent email"
+                                    className="mt-2"
+                                    style={{ width: '100%', height: 480, border: `1px solid ${BORDER}`, borderRadius: 8, backgroundColor: '#FFFFFF' }}
+                                  />
+                                ) : (
+                                  <p
+                                    className="mt-2 text-sm leading-relaxed"
+                                    style={{ color: '#1C1410', fontFamily: OUTFIT, whiteSpace: 'pre-wrap' }}
+                                  >
+                                    {email.body_html}
+                                  </p>
+                                )
                               )}
                             </div>
                           )}
@@ -878,6 +1114,70 @@ function CommunicationsPageInner() {
                 )}
               </section>
             </>
+          )}
+
+          {/* ═══ NOTIFICATIONS TAB ═══ */}
+          {!loading && activeTab === 'notifications' && (
+            <section>
+              <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                Conference Notifications
+              </p>
+              <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+                Automatic emails triggered by application events. Draft one, then switch it on when you&apos;re ready.
+              </p>
+              <div className="flex flex-col gap-2">
+                {EVENT_REGISTRY.map(ev => {
+                  const template = templatesByEvent.get(ev.key);
+                  return (
+                    <div
+                      key={ev.key}
+                      className="flex items-center justify-between gap-4 rounded-2xl p-4"
+                      style={CARD_STYLE}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold text-sm truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{ev.label}</p>
+                        <p className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>{ev.description}</p>
+                      </div>
+                      <div className="flex items-center gap-3 flex-shrink-0">
+                        {!template ? (
+                          <span
+                            className="rounded-md px-2.5 py-0.5"
+                            style={{ fontSize: 11, fontWeight: 700, fontFamily: OUTFIT, backgroundColor: STATUS_COLORS.draft.bg, color: STATUS_COLORS.draft.text, border: `1px solid ${STATUS_COLORS.draft.dot}55` }}
+                          >
+                            NOT DRAFTED
+                          </span>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <span style={{ fontSize: 10, color: '#9A8A78', fontFamily: OUTFIT, fontWeight: 700, letterSpacing: '0.06em' }}>
+                              {template.delivery === 'immediate' ? 'AUTO-SEND' : 'MANUAL'}
+                            </span>
+                            <span
+                              className="rounded-md px-2.5 py-0.5"
+                              style={{ fontSize: 11, fontWeight: 700, fontFamily: OUTFIT, backgroundColor: 'rgba(61,122,82,0.1)', color: '#3D7A52', border: '1px solid rgba(61,122,82,0.35)' }}
+                            >
+                              DRAFTED
+                            </span>
+                            <PillToggle value={template.enabled} onChange={() => handleToggleEnabled(template)} />
+                            <span style={{ fontSize: 10, color: '#9A8A78', fontFamily: OUTFIT, fontWeight: 700, letterSpacing: '0.06em' }}>
+                              {template.enabled ? 'ON' : 'OFF'}
+                            </span>
+                          </div>
+                        )}
+                        <button
+                          onClick={() => openBuilderForEvent(ev)}
+                          className="rounded-lg py-1.5 px-3 text-xs font-bold focus:outline-none transition-colors"
+                          style={{ border: `1px solid ${BORDER}`, color: '#1C1410', backgroundColor: 'transparent', fontFamily: OUTFIT }}
+                          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
+                          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                        >
+                          {template ? 'EDIT' : 'DRAFT'}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
           )}
         </>
       )}
@@ -901,7 +1201,7 @@ function CommunicationsPageInner() {
                   onChange={e => setBuilderName(e.target.value)}
                   placeholder="e.g. Welcome pack reminder"
                   className="w-full rounded-xl px-4 py-2.5 text-sm focus:outline-none"
-                  style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: '#FAF8F3', fontFamily: OUTFIT }}
+                  style={{ border: `1px solid ${BORDER}`, color: '#1C1410', backgroundColor: '#FAF8F3', fontFamily: OUTFIT }}
                 />
               </div>
             )}
@@ -917,7 +1217,7 @@ function CommunicationsPageInner() {
           </div>
 
           {/* ── Right sidebar ── */}
-          <div className="md:w-[300px] flex-shrink-0">
+          <div className={builderEventKey === null ? 'md:w-[380px] flex-shrink-0' : 'md:w-[300px] flex-shrink-0'}>
             {builderError && (
               <div
                 className="flex items-center gap-2 rounded-xl px-4 py-3 mb-4 text-sm"
@@ -930,89 +1230,125 @@ function CommunicationsPageInner() {
 
             {builderEventKey === null ? (
               <>
-                {/* Audience card */}
-                <div className="rounded-2xl p-5 mb-4" style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #D8CDB6', boxShadow: CARD_SHADOW }}>
-                  <p className="font-semibold text-sm mb-4" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                {/* Audience filters */}
+                <div className="rounded-2xl p-5 mb-4" style={CARD_STYLE}>
+                  <p className="font-semibold text-sm mb-3" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
                     Recipients
                   </p>
+                  <MultiChipGroup label="Roles" options={ROLE_OPTIONS} selected={selRoles} onToggle={v => setSelRoles(s => toggleInSet(s, v))} />
+                  <MultiChipGroup label="Payment status" options={PAYMENT_OPTIONS} selected={selPayment} onToggle={v => setSelPayment(s => toggleInSet(s, v))} />
+                  <div className="mb-3">
+                    <p className="text-xs font-bold mb-1.5" style={{ color: '#9A8A78', fontFamily: OUTFIT, letterSpacing: '0.06em' }}>DELEGATIONS</p>
+                    <div className="flex flex-wrap gap-1.5" style={{ maxHeight: 140, overflowY: 'auto' }}>
+                      {delegationOptions.map(o => {
+                        const active = selDelegations.has(o.value);
+                        return (
+                          <button
+                            key={o.value}
+                            type="button"
+                            onClick={() => setSelDelegations(s => toggleInSet(s, o.value))}
+                            className="rounded-full px-2.5 py-1 text-xs font-semibold focus:outline-none transition-colors"
+                            style={{
+                              border: active ? '1px solid #1B3828' : `1px solid ${BORDER}`,
+                              backgroundColor: active ? '#1B3828' : 'transparent',
+                              color: active ? '#EED98A' : '#4A4238',
+                              fontFamily: OUTFIT,
+                            }}
+                          >
+                            {o.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <MultiChipGroup label="Attendance" options={ATTENDANCE_OPTIONS} selected={selAttendance} onToggle={v => setSelAttendance(s => toggleInSet(s, v))} />
+                  <MultiChipGroup label="Application status" options={APP_STATUS_OPTIONS} selected={selStatus} onToggle={v => setSelStatus(s => toggleInSet(s, v))} />
+                </div>
 
-                  <RadioRow selected={audienceType === 'all'} onClick={() => setAudienceType('all')}>All participants</RadioRow>
-
-                  <RadioRow selected={audienceType === 'role'} onClick={() => setAudienceType('role')}>By role</RadioRow>
-                  {audienceType === 'role' && (
-                    <select
-                      value={audienceRole}
-                      onChange={e => setAudienceRole(e.target.value)}
-                      className="w-full mt-1 mb-1 rounded-xl px-3 py-2 text-sm focus:outline-none"
-                      style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: '#FAF8F3', fontFamily: OUTFIT }}
-                    >
-                      <option value="">Select role...</option>
-                      <option value="delegate">Delegates</option>
-                      <option value="chair">Chairs</option>
-                      <option value="head-delegate">Head Delegates</option>
-                      <option value="faculty-advisor">Faculty Advisors</option>
-                      <option value="observer">Observers</option>
-                    </select>
-                  )}
-
-                  <RadioRow selected={audienceType === 'committee'} onClick={() => setAudienceType('committee')}>By committee</RadioRow>
-                  {audienceType === 'committee' && (
-                    <select
-                      value={audienceCommitteeId}
-                      onChange={e => setAudienceCommitteeId(e.target.value)}
-                      className="w-full mt-1 mb-1 rounded-xl px-3 py-2 text-sm focus:outline-none"
-                      style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: '#FAF8F3', fontFamily: OUTFIT }}
-                    >
-                      <option value="">Select committee...</option>
-                      {committees.map(c => (
-                        <option key={c.id} value={c.id}>{c.name}{c.abbreviation ? ` (${c.abbreviation})` : ''}</option>
-                      ))}
-                    </select>
-                  )}
-
-                  <RadioRow selected={audienceType === 'status'} onClick={() => setAudienceType('status')}>By status</RadioRow>
-                  {audienceType === 'status' && (
-                    <select
-                      value={audienceStatus}
-                      onChange={e => setAudienceStatus(e.target.value)}
-                      className="w-full mt-1 mb-1 rounded-xl px-3 py-2 text-sm focus:outline-none"
-                      style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: '#FAF8F3', fontFamily: OUTFIT }}
-                    >
-                      <option value="">Select status...</option>
-                      <option value="submitted">Submitted (pending)</option>
-                      <option value="accepted">Accepted</option>
-                      <option value="assigned">Assigned</option>
-                      <option value="paid">Paid</option>
-                      <option value="unpaid">Unpaid (accepted/assigned)</option>
-                    </select>
-                  )}
-
-                  <p className="text-xs font-bold mt-3 mb-1" style={{ color: '#B6871F', fontFamily: OUTFIT, letterSpacing: '0.1em' }}>
-                    SMART AUDIENCES
-                  </p>
-
-                  <RadioRow selected={audienceType === 'unpaid'} onClick={() => setAudienceType('unpaid')}>Unpaid</RadioRow>
-                  <RadioRow selected={audienceType === 'unallocated'} onClick={() => setAudienceType('unallocated')}>Unallocated</RadioRow>
-                  <RadioRow selected={audienceType === 'not_attending'} onClick={() => setAudienceType('not_attending')}>Not attending</RadioRow>
-                  <RadioRow selected={audienceType === 'delegation'} onClick={() => setAudienceType('delegation')}>Specific delegation</RadioRow>
-                  {audienceType === 'delegation' && (
-                    <select
-                      value={audienceSocietyId}
-                      onChange={e => setAudienceSocietyId(e.target.value)}
-                      className="w-full mt-1 mb-1 rounded-xl px-3 py-2 text-sm focus:outline-none"
-                      style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: '#FAF8F3', fontFamily: OUTFIT }}
-                    >
-                      <option value="">Select delegation...</option>
-                      {societies.map(s => (
-                        <option key={s.id} value={s.id}>{s.name}</option>
-                      ))}
-                    </select>
-                  )}
-
-                  <div className="mt-3 pt-3" style={{ borderTop: '1px solid #F0EDE6' }}>
-                    <p style={{ fontSize: 11, color: audienceRecipients.length === 0 ? '#B6871F' : '#9A8A78', fontFamily: OUTFIT, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
-                      {audienceRecipients.length} recipient{audienceRecipients.length !== 1 ? 's' : ''}
+                {/* Live recipients */}
+                <div className="rounded-2xl p-5 mb-4" style={CARD_STYLE}>
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                      Live Recipients
                     </p>
+                    <p
+                      className="text-xs font-bold"
+                      style={{ color: finalRecipients.length === 0 ? '#B6871F' : '#3D7A52', fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}
+                    >
+                      Sending to {finalRecipients.length}
+                    </p>
+                  </div>
+
+                  <div className="relative mb-2">
+                    <input
+                      value={manualSearch}
+                      onChange={e => setManualSearch(e.target.value)}
+                      placeholder="Add anyone by name or email..."
+                      className="w-full rounded-xl px-3 py-2 text-xs focus:outline-none"
+                      style={{ border: `1px solid ${BORDER}`, color: '#1C1410', backgroundColor: '#FFFFFF', fontFamily: OUTFIT }}
+                    />
+                    {manualMatches.length > 0 && (
+                      <div
+                        className="absolute left-0 right-0 rounded-xl shadow-lg overflow-y-auto"
+                        style={{ top: 'calc(100% + 4px)', maxHeight: 200, backgroundColor: '#FFFFFF', border: `1px solid ${BORDER}`, zIndex: 10 }}
+                      >
+                        {manualMatches.map(a => (
+                          <button
+                            key={a.id}
+                            onClick={() => {
+                              setManuallyAddedIds(prev => new Set(prev).add(a.id));
+                              setManualSearch('');
+                            }}
+                            className="w-full text-left px-3 py-2 text-xs focus:outline-none"
+                            style={{ color: '#1C1410', fontFamily: OUTFIT }}
+                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                          >
+                            {a.profiles?.display_name ?? 'Unknown'}
+                            <span style={{ color: '#9A8A78' }}> · {a.profiles?.email ?? '—'}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex flex-col gap-1" style={{ maxHeight: 280, overflowY: 'auto' }}>
+                    {finalRecipients.length === 0 && (
+                      <p className="text-xs py-2" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+                        No recipients match yet — adjust filters or add someone manually.
+                      </p>
+                    )}
+                    {finalRecipients.map(a => (
+                      <div
+                        key={a.id}
+                        className="flex items-center justify-between gap-2 rounded-lg px-2.5 py-1.5"
+                        style={{ backgroundColor: '#FFFFFF', border: '1px solid #F0EDE6' }}
+                      >
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                            {a.profiles?.display_name ?? 'Unknown'}
+                            {manuallyAddedIds.has(a.id) && (
+                              <span
+                                className="ml-1.5 rounded px-1.5 py-0.5"
+                                style={{ fontSize: 9, fontWeight: 700, backgroundColor: 'rgba(182,135,31,0.12)', color: '#B6871F' }}
+                              >
+                                MANUAL
+                              </span>
+                            )}
+                          </p>
+                          <p className="truncate" style={{ fontSize: 11, color: '#9A8A78', fontFamily: OUTFIT }}>
+                            {a.profiles?.email ?? '—'}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => handleExcludeRecipient(a.id)}
+                          className="flex-shrink-0 rounded-md p-1 focus:outline-none"
+                          style={{ border: '1px solid rgba(139,32,32,0.25)', backgroundColor: 'transparent' }}
+                        >
+                          <X size={11} style={{ color: '#8B2020' }} />
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 </div>
 
@@ -1030,7 +1366,7 @@ function CommunicationsPageInner() {
               </>
             ) : (
               <>
-                <div className="rounded-2xl p-5 mb-4" style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #D8CDB6', boxShadow: CARD_SHADOW }}>
+                <div className="rounded-2xl p-5 mb-4" style={CARD_STYLE}>
                   <p className="font-semibold text-sm mb-2" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
                     About this notification
                   </p>
@@ -1040,12 +1376,33 @@ function CommunicationsPageInner() {
                   <p className="font-semibold text-sm mb-2" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
                     Delivery
                   </p>
-                  <RadioRow selected={builderDelivery === 'immediate'} onClick={() => setBuilderDelivery('immediate')}>
-                    Send automatically
-                  </RadioRow>
-                  <RadioRow selected={builderDelivery === 'manual'} onClick={() => setBuilderDelivery('manual')}>
-                    Manual trigger only
-                  </RadioRow>
+                  <div className="flex flex-col gap-1">
+                    {(['immediate', 'manual'] as const).map(d => (
+                      <div
+                        key={d}
+                        onClick={() => setBuilderDelivery(d)}
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer mb-1 transition-colors"
+                        style={{
+                          backgroundColor: builderDelivery === d ? 'rgba(27,56,40,0.06)' : 'transparent',
+                          border: builderDelivery === d ? '1px solid rgba(27,56,40,0.15)' : '1px solid transparent',
+                        }}
+                      >
+                        <div
+                          className="flex-shrink-0 flex items-center justify-center rounded-full"
+                          style={{
+                            width: 16, height: 16,
+                            border: builderDelivery === d ? 'none' : '1.5px solid #DDD4C0',
+                            backgroundColor: builderDelivery === d ? '#1B3828' : 'transparent',
+                          }}
+                        >
+                          {builderDelivery === d && <div className="rounded-full" style={{ width: 6, height: 6, backgroundColor: 'white' }} />}
+                        </div>
+                        <span className="text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                          {d === 'immediate' ? 'Send automatically' : 'Manual trigger only'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
                 <div
@@ -1063,6 +1420,40 @@ function CommunicationsPageInner() {
             )}
           </div>
         </div>
+      )}
+
+      {/* Send confirmation */}
+      {sendConfirmOpen && (
+        <ConfirmModal
+          title="Send this email?"
+          body={
+            <div className="flex flex-col gap-2">
+              <p><strong>{builderName || eventDef?.label || '(untitled)'}</strong></p>
+              <p>{finalRecipients.length} recipient{finalRecipients.length !== 1 ? 's' : ''}{namesPreview ? `: ${namesPreview}${finalRecipients.length > 5 ? `, +${finalRecipients.length - 5} more` : ''}` : ''}</p>
+              {requireTypedConfirm && (
+                <div className="mt-1">
+                  <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410' }}>
+                    Type SEND to confirm sending to {finalRecipients.length} people
+                  </label>
+                  <input
+                    autoFocus
+                    value={sendConfirmText}
+                    onChange={e => setSendConfirmText(e.target.value)}
+                    placeholder="SEND"
+                    className="w-full rounded-xl px-3 py-2 text-sm focus:outline-none"
+                    style={{ border: `1px solid ${BORDER}`, color: '#1C1410', backgroundColor: '#FFFFFF', fontFamily: OUTFIT }}
+                  />
+                </div>
+              )}
+            </div>
+          }
+          confirmLabel={sending ? 'Sending' : 'Send'}
+          cancelLabel="Cancel"
+          loading={sending}
+          confirmDisabled={confirmDisabled}
+          onConfirm={handleConfirmSend}
+          onCancel={() => { if (!sending) setSendConfirmOpen(false); }}
+        />
       )}
     </div>
   );

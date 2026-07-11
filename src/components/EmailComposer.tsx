@@ -12,7 +12,7 @@
 // being edited.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Plus, Trash2, ChevronUp, ChevronDown, Monitor, Smartphone } from 'lucide-react';
+import { Plus, Trash2, ChevronUp, ChevronDown, Monitor, Smartphone, Send } from 'lucide-react';
 import {
   EMAIL_TOKEN_KEYS, EMAIL_TOKEN_LABELS, resolveTokens, splitResolvedText,
   type EmailTokenContext, type EmailTokenKey,
@@ -355,7 +355,8 @@ export default function EmailComposer({ conference, initialSubject, initialBlock
   const blockRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const subjectRef = useRef<HTMLInputElement | null>(null);
   const onChangeRef = useRef(onChange);
-  onChangeRef.current = onChange;
+
+  useEffect(() => { onChangeRef.current = onChange; });
 
   useEffect(() => {
     onChangeRef.current({ subject, blocks: stripIds(blocks) });
@@ -444,6 +445,22 @@ export default function EmailComposer({ conference, initialSubject, initialBlock
 
   return (
     <div>
+      {/* Composer-level actions */}
+      <div className="flex items-center justify-end mb-3">
+        <button
+          type="button"
+          disabled
+          title="Available once email delivery is connected."
+          className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold"
+          style={{
+            border: `1px solid ${BORDER}`, color: '#9A8A78', backgroundColor: 'transparent',
+            fontFamily: OUTFIT, opacity: 0.55, cursor: 'not-allowed',
+          }}
+        >
+          <Send size={12} /> SEND TEST TO ME
+        </button>
+      </div>
+
       {/* Subject */}
       <div className="mb-4">
         <label className="block font-semibold text-sm mb-1.5" style={{ color: INK, fontFamily: OUTFIT }}>
