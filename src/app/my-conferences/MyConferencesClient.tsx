@@ -3,7 +3,7 @@
 import { Suspense, useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Compass } from 'lucide-react';
+import { Compass, Check, X, Mail } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import SiteNav from '@/components/SiteNav';
@@ -35,6 +35,14 @@ interface LoadedData {
 }
 
 const EMPTY_DATA: LoadedData = { delegate: [], chair: [], advisor: [], observer: [], organizer: [] };
+
+interface ChairInvite {
+  id: string;
+  token: string;
+  conferenceName: string;
+  acronym: string;
+  committeeName: string;
+}
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: 'delegate', label: 'DELEGATE' },
@@ -174,6 +182,75 @@ function NoMatchesCard({ onClear }: { onClear: () => void }) {
   );
 }
 
+// ── Chair invites (pending, awaiting the signed-in user's response) ────────
+
+function ChairInviteCard({ invite, onRespond }: { invite: ChairInvite; onRespond: (invite: ChairInvite, accept: boolean) => void }) {
+  const [responding, setResponding] = useState<'accept' | 'decline' | null>(null);
+
+  async function handle(accept: boolean) {
+    setResponding(accept ? 'accept' : 'decline');
+    await onRespond(invite, accept);
+    setResponding(null);
+  }
+
+  return (
+    <div
+      className="flex items-center gap-3 rounded-2xl px-4 py-3"
+      style={{ backgroundColor: 'rgba(238,217,138,0.14)', border: '1px solid rgba(182,135,31,0.35)' }}
+    >
+      <span
+        className="flex items-center justify-center flex-shrink-0"
+        style={{ width: 38, height: 38, borderRadius: '9999px', backgroundColor: 'rgba(182,135,31,0.16)', border: '1px solid rgba(182,135,31,0.35)' }}
+      >
+        <Mail size={16} style={{ color: '#B6871F' }} />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="font-bold text-sm truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+          Chair {invite.committeeName}
+        </p>
+        <p className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+          {invite.conferenceName} · {invite.acronym}
+        </p>
+      </div>
+      <div className="flex gap-2 flex-shrink-0">
+        <button
+          onClick={() => handle(false)}
+          disabled={responding !== null}
+          className="rounded-lg py-1.5 px-3 text-xs font-bold focus:outline-none flex items-center gap-1.5"
+          style={{ border: '1px solid #DDD4C0', color: responding ? '#C8BEA8' : '#1C1410', backgroundColor: 'transparent', fontFamily: OUTFIT, cursor: responding ? 'not-allowed' : 'pointer' }}
+        >
+          <X size={12} /> {responding === 'decline' ? '...' : 'DECLINE'}
+        </button>
+        <button
+          onClick={() => handle(true)}
+          disabled={responding !== null}
+          className="rounded-lg py-1.5 px-3 text-xs font-bold focus:outline-none flex items-center gap-1.5"
+          style={{ backgroundColor: responding ? '#DDD4C0' : '#1B3828', color: responding ? '#9A8A78' : '#EED98A', border: 'none', fontFamily: OUTFIT, cursor: responding ? 'not-allowed' : 'pointer' }}
+        >
+          <Check size={12} /> {responding === 'accept' ? '...' : 'ACCEPT'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ChairInvitesSection({ invites, onRespond }: { invites: ChairInvite[]; onRespond: (invite: ChairInvite, accept: boolean) => void }) {
+  if (invites.length === 0) return null;
+  return (
+    <div className="mb-8">
+      <div className="flex items-center gap-2.5 mb-3">
+        <Eyebrow>Conference Invites</Eyebrow>
+        <span style={{ fontFamily: MONO, fontSize: '10px', color: '#B6871F' }}>{invites.length}</span>
+      </div>
+      <div className="flex flex-col gap-2.5">
+        {invites.map(inv => (
+          <ChairInviteCard key={inv.id} invite={inv} onRespond={onRespond} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── Grid ─────────────────────────────────────────────────────────────────────
 
 function CardGrid({ entries, tab, muted }: { entries: TabEntry[]; tab: TabKey; muted: boolean }) {
@@ -204,6 +281,8 @@ function MyConferencesInner() {
   const [loading, setLoading] = useState(true);
   const [timeframe, setTimeframe] = useState<'upcoming' | 'past'>('upcoming');
   const [continent, setContinent] = useState<'all' | Continent>('all');
+  const [chairInvites, setChairInvites] = useState<ChairInvite[]>([]);
+  const [acceptedToast, setAcceptedToast] = useState(false);
 
   const tabParam = searchParams.get('tab');
   const activeTab: TabKey = (['delegate', 'chair', 'advisor', 'observer', 'organizer'] as const).includes(tabParam as TabKey)
@@ -225,6 +304,53 @@ function MyConferencesInner() {
     const params = new URLSearchParams(searchParams.toString());
     params.set('tab', tab);
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  }
+
+  // ── Success toast for a redirect from /invites/chair/[token] after accepting.
+  useEffect(() => {
+    if (searchParams.get('chairInvite') !== 'accepted') return;
+    setAcceptedToast(true);
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('chairInvite');
+    router.replace(params.toString() ? `${pathname}?${params.toString()}` : pathname, { scroll: false });
+    const t = setTimeout(() => setAcceptedToast(false), 5000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const loadChairInvites = useCallback(async () => {
+    if (!user || !session) return;
+    const supabase = getAuthedClient(session.access_token);
+    const { data: rows } = await supabase
+      .from('conference_chair_invites')
+      .select('id, token, conferences (full_name, acronym), conference_committees (name)')
+      .eq('invited_user_id', user.id)
+      .eq('status', 'pending');
+    const invites = ((rows ?? []) as unknown as {
+      id: string; token: string;
+      conferences: { full_name: string; acronym: string } | { full_name: string; acronym: string }[] | null;
+      conference_committees: { name: string } | { name: string }[] | null;
+    }[]).map(r => {
+      const conf = first(r.conferences);
+      const committee = first(r.conference_committees);
+      return {
+        id: r.id, token: r.token,
+        conferenceName: conf?.full_name ?? 'Unknown conference',
+        acronym: conf?.acronym ?? '',
+        committeeName: committee?.name ?? 'Unknown committee',
+      };
+    });
+    setChairInvites(invites);
+  }, [user, session]);
+
+  async function handleRespondInvite(invite: ChairInvite, accept: boolean) {
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
+    const { data } = await supabase.rpc('respond_chair_invite', { p_token: invite.token, p_accept: accept });
+    const result = data as { ok: boolean } | null;
+    if (!result?.ok) return;
+    setChairInvites(prev => prev.filter(i => i.id !== invite.id));
+    if (accept) await loadAll();
   }
 
   // ── Data loading — same overall shape as /account/calendar: parallel
@@ -360,7 +486,8 @@ function MyConferencesInner() {
   useEffect(() => {
     if (authLoading || !user) return;
     loadAll();
-  }, [authLoading, user, loadAll]);
+    loadChairInvites();
+  }, [authLoading, user, loadAll, loadChairInvites]);
 
   // ── Filtering (timeframe → continent) within the active tab ────────────────
 
@@ -421,6 +548,18 @@ function MyConferencesInner() {
           Every conference you&apos;re part of, sorted by the role you hold there.
         </p>
 
+        {acceptedToast && (
+          <div
+            className="flex items-center gap-2.5 rounded-xl px-4 py-2.5 mb-5"
+            style={{ backgroundColor: 'rgba(61,122,82,0.10)', border: '1px solid rgba(61,122,82,0.35)' }}
+          >
+            <Check size={14} style={{ color: '#3D7A52', flexShrink: 0 }} />
+            <p className="text-sm" style={{ color: '#1B3828', fontFamily: OUTFIT, fontWeight: 600 }}>
+              Invite accepted — you&apos;re now chairing this committee.
+            </p>
+          </div>
+        )}
+
         {/* Tabs */}
         <div className="mb-5 overflow-x-auto">
           <div className="inline-flex rounded-xl p-1" style={{ border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3' }}>
@@ -471,6 +610,8 @@ function MyConferencesInner() {
             ))}
           </select>
         </div>
+
+        {activeTab === 'chair' && <ChairInvitesSection invites={chairInvites} onRespond={handleRespondInvite} />}
 
         {loading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

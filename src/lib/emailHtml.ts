@@ -19,6 +19,8 @@ export interface RenderEmailHtmlArgs {
   blocks: EmailBlock[];
   conference: EmailRenderConference;
   ctx: EmailTokenContext;
+  /** Per-invite token for a 'chair_invite_accept' button block, if one is present. */
+  chairInviteToken?: string;
 }
 
 const FONT_STACK = "Georgia, 'Times New Roman', Arial, sans-serif";
@@ -74,14 +76,14 @@ function renderHeader(conference: EmailRenderConference): string {
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>${mainCell}${logoCell}</tr></table>`;
 }
 
-function renderBlock(block: EmailBlock, conference: EmailRenderConference, ctx: EmailTokenContext): string {
+function renderBlock(block: EmailBlock, conference: EmailRenderConference, ctx: EmailTokenContext, chairInviteToken?: string): string {
   if (block.type === 'paragraph') {
     if (!block.content.trim()) return '';
     return `<tr><td class="email-padding" style="padding:0 0 20px 0;font-family:${FONT_STACK};font-size:16px;line-height:1.65;color:${INK};">
       ${renderTokenizedHtml(block.content, ctx)}
     </td></tr>`;
   }
-  const url = resolveButtonUrl(block, conference);
+  const url = resolveButtonUrl(block, conference, { chairInviteToken });
   return `<tr><td align="center" style="padding:8px 0 24px 0;">
     <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
       <td align="center" bgcolor="${GOLD}" style="border-radius:8px;">
@@ -95,9 +97,9 @@ function renderBlock(block: EmailBlock, conference: EmailRenderConference, ctx: 
 }
 
 /** Renders a complete, standalone HTML email document from the block model. */
-export function renderEmailHtml({ blocks, conference, ctx }: RenderEmailHtmlArgs): string {
+export function renderEmailHtml({ blocks, conference, ctx, chairInviteToken }: RenderEmailHtmlArgs): string {
   const siteUrl = getSiteUrl();
-  const bodyRows = blocks.map(b => renderBlock(b, conference, ctx)).join('');
+  const bodyRows = blocks.map(b => renderBlock(b, conference, ctx, chairInviteToken)).join('');
 
   return `<!doctype html>
 <html lang="en" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">

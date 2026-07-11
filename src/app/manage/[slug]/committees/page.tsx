@@ -5,6 +5,7 @@ import { Plus, X, Copy, Check, Building2, CalendarClock, Trash2, ArrowDown, Arro
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
+import { sendChairInvite } from '@/lib/chairInvites';
 import {
   CommitteeEditorModal,
   MonogramMedallion,
@@ -95,12 +96,13 @@ function SortButton({ label, dir, onClick }: { label: string; dir: 'asc' | 'desc
 
 // ── AddChairModal — assign an accepted chair applicant, or invite by email ────
 
-function AddChairModal({ conferenceId, committee, committees, onClose, onDone }: {
+function AddChairModal({ conferenceId, committee, committees, onClose, onDone, onInvited }: {
   conferenceId: string;
   committee: Committee;
   committees: Committee[];
   onClose: () => void;
   onDone: () => void;
+  onInvited: (name: string) => void;
 }) {
   const { session } = useAuth();
   const [applicants, setApplicants] = useState<ChairApplicant[] | null>(null);
@@ -153,18 +155,19 @@ function AddChairModal({ conferenceId, committee, committees, onClose, onDone }:
     if (!em || !session) return;
     setInviting(true); setError('');
     const supabase = getAuthedClient(session.access_token);
-    const { error: rpcErr } = await supabase.rpc('invite_chair_by_email', {
-      p_conference_id: conferenceId,
-      p_committee_id: committee.id,
-      p_email: em,
+    const result = await sendChairInvite(supabase, {
+      conferenceId,
+      committeeId: committee.id,
+      committeeName: committee.name,
+      email: em,
     });
     setInviting(false);
-    if (rpcErr) {
-      setError(/no gavelling account/i.test(rpcErr.message)
-        ? `No Gavelling account found for ${em}. They need to sign up first.`
-        : (rpcErr.message || 'Could not invite that chair.'));
+    if (!result.ok) {
+      setError(result.error ?? 'Could not invite that chair.');
       return;
     }
+    onInvited(result.invitedName ?? em);
+    setEmail('');
     onDone();
   }
 
@@ -284,7 +287,7 @@ function AddChairModal({ conferenceId, committee, committees, onClose, onDone }:
             </button>
           </div>
           <p className="text-[11px] mt-2" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", lineHeight: 1.45 }}>
-            They must already have a Gavelling account. Invited chairs are added straight to this dais.
+            They must already have a Gavelling account. They&apos;ll get an email to accept before joining this dais.
           </p>
           {error && <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{error}</p>}
         </div>
@@ -308,6 +311,12 @@ export default function CommitteesPage() {
   const [deleting, setDeleting] = useState(false);
   const [sortKey, setSortKey] = useState<'' | 'difficulty' | 'name' | 'type'>('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [flash, setFlash] = useState<string | null>(null);
+
+  function showFlash(msg: string) {
+    setFlash(msg);
+    setTimeout(() => setFlash(f => (f === msg ? null : f)), 4500);
+  }
 
   const loadCommittees = useCallback(async () => {
     if (!conference) return;
@@ -448,6 +457,21 @@ export default function CommitteesPage() {
           ADD COMMITTEE
         </button>
       </div>
+
+      {flash && (
+        <div
+          className="rounded-xl px-4 py-2.5 mb-5 text-sm"
+          style={{
+            backgroundColor: 'rgba(61,122,82,0.10)',
+            border: '1px solid rgba(61,122,82,0.35)',
+            color: '#3D7A52',
+            fontFamily: "'Outfit', sans-serif",
+            fontWeight: 600,
+          }}
+        >
+          {flash}
+        </div>
+      )}
 
       {loading && (
         <div className="flex justify-center py-16">
@@ -813,6 +837,7 @@ export default function CommitteesPage() {
           committees={committees}
           onClose={() => setAddChairTarget(null)}
           onDone={() => { setAddChairTarget(null); loadCommittees(); }}
+          onInvited={name => showFlash(`Invite sent to ${name}`)}
         />
       )}
       {deleteTarget && (

@@ -4,7 +4,7 @@
 
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { resolveTokens, type EmailTokenContext } from '@/lib/emailTokens';
-import { normalizeBlocks, flattenBlocksToPlainText } from '@/lib/emailBlocks';
+import { normalizeBlocks, flattenBlocksToPlainText, type EmailBlock } from '@/lib/emailBlocks';
 import { renderEmailHtml, type EmailRenderConference } from '@/lib/emailHtml';
 import { formatFee } from '@/lib/utils';
 import { triggerEmailDelivery } from '@/lib/emailDelivery';
@@ -39,6 +39,7 @@ export const EVENT_REGISTRY: EventDef[] = [
   { key: 'attendance_restored', label: 'Attendance Restored', description: "Sent when a delegate's attendance is restored.", defaultDelivery: 'immediate' },
   { key: 'documents_published', label: 'Documents Published', description: 'Sent when working papers or resolutions are published.', defaultDelivery: 'manual' },
   { key: 'chair_assigned', label: 'Chair Assigned', description: 'Sent when someone is assigned as a committee chair.', defaultDelivery: 'immediate' },
+  { key: 'committee_chair_invite', label: 'Chair invite', description: 'Sent when an organizer invites someone to chair a committee.', defaultDelivery: 'immediate' },
   { key: 'session_chair_invite', label: 'Session Chair Invite', description: 'Sent to committee chairs with their session code and chair password.', defaultDelivery: 'manual' },
   { key: 'session_join_invite', label: 'Session Join Invite', description: 'Sent to committee participants inviting them to join the live session.', defaultDelivery: 'manual' },
 ];
@@ -202,4 +203,84 @@ export async function queueEventEmail(
   triggerEmailDelivery(supabase);
 
   return { drafted: true, queued: rows.length };
+}
+
+// ── Chair invite email ──────────────────────────────────────────────────────
+// Unlike queueEventEmail, the recipient here has no application row yet (they
+// may not even have applied) — so this queues a single outbox row directly
+// against recipient_email rather than resolving applicationIds. Organizers can
+// customize the 'committee_chair_invite' template like any other event; a
+// missing/disabled template falls back to a built-in default so the invite
+// email is never blocked on template setup.
+
+export interface QueueChairInviteEmailArgs {
+  conferenceId: string;
+  committeeName: string;
+  token: string;
+  invitedEmail: string;
+  invitedName: string;
+}
+
+export async function queueChairInviteEmail(
+  supabase: ReturnType<typeof getAuthedClient>,
+  args: QueueChairInviteEmailArgs
+): Promise<void> {
+  const { conferenceId, committeeName, token, invitedEmail, invitedName } = args;
+
+  const [{ data: confData }, { data: templateData }] = await Promise.all([
+    supabase
+      .from('conferences')
+      .select('slug, acronym, full_name, banner_url, logo_url, contact_email')
+      .eq('id', conferenceId)
+      .single(),
+    supabase
+      .from('email_templates')
+      .select('id, subject, body, body_blocks, enabled')
+      .eq('conference_id', conferenceId)
+      .eq('event_key', 'committee_chair_invite')
+      .maybeSingle(),
+  ]);
+
+  const conference = confData as ConferenceRow | null;
+  const template = templateData as TemplateRow | null;
+  const renderConf: EmailRenderConference = {
+    slug: conference?.slug ?? '',
+    acronym: conference?.acronym ?? '',
+    full_name: conference?.full_name ?? '',
+    banner_url: conference?.banner_url ?? null,
+    logo_url: conference?.logo_url ?? null,
+    contact_email: conference?.contact_email ?? '',
+  };
+
+  const ctx: EmailTokenContext = {
+    delegate_name: invitedName,
+    committee: committeeName,
+    conference_name: conference?.full_name ?? null,
+  };
+
+  const useTemplate = !!template && template.enabled;
+  const blocks: EmailBlock[] = useTemplate
+    ? normalizeBlocks(template!.body_blocks, template!.body)
+    : [
+        { type: 'paragraph', content: `You've been invited to chair ${committeeName} at ${renderConf.acronym}.` },
+        { type: 'paragraph', content: 'Accepting adds this conference to your Gavelling account.' },
+        { type: 'button', label: 'ACCEPT INVITATION', destination: 'chair_invite_accept' },
+      ];
+
+  const subjectSource = useTemplate ? template!.subject : `You're invited to chair ${committeeName} at ${renderConf.acronym}`;
+  const flatBody = flattenBlocksToPlainText(blocks, renderConf, { chairInviteToken: token });
+
+  const { error } = await supabase.from('email_outbox').insert({
+    conference_id: conferenceId,
+    template_id: useTemplate ? template!.id : null,
+    recipient_application_id: null,
+    recipient_email: invitedEmail,
+    subject: resolveTokens(subjectSource, ctx),
+    body: resolveTokens(flatBody, ctx),
+    body_html: renderEmailHtml({ blocks, conference: renderConf, ctx, chairInviteToken: token }),
+    status: 'pending',
+  });
+  if (error) return;
+
+  triggerEmailDelivery(supabase);
 }
