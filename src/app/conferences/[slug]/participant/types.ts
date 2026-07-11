@@ -11,6 +11,9 @@ export interface ParticipantApplication {
   is_independent: boolean;
   society_id: string | null;
   self_paid: boolean;
+  pledge_type: 'own' | 'delegation' | 'both' | null;
+  spots_pledged: number | null;
+  pledge_confirmed_at: string | null;
 }
 
 export interface ParticipantRoleConfig {

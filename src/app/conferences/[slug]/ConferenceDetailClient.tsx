@@ -86,6 +86,7 @@ interface Conference {
   contact_email: string | null;
   organizer_id: string;
   min_age: number | null;
+  allocation_swap_mode: string;
   display_secretariat: SecretariatMember[] | null;
 }
 
@@ -149,6 +150,9 @@ interface MyApplication {
   is_independent: boolean;
   society_id: string | null;
   self_paid: boolean;
+  pledge_type: 'own' | 'delegation' | 'both' | null;
+  spots_pledged: number | null;
+  pledge_confirmed_at: string | null;
 }
 
 interface ConferenceReview {
@@ -425,7 +429,7 @@ export default function ConferenceDetailClient() {
         start_date, end_date, fee_amount, fee_currency, expected_delegates,
         description, logo_url, banner_url, is_public, status,
         instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url,
-        contact_email, organizer_id, min_age, display_secretariat
+        contact_email, organizer_id, min_age, allocation_swap_mode, display_secretariat
       `)
       .eq('slug', slug)
       .single();
@@ -441,7 +445,7 @@ export default function ConferenceDetailClient() {
             start_date, end_date, fee_amount, fee_currency, expected_delegates,
             description, logo_url, banner_url, is_public, status,
             instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url,
-            contact_email, organizer_id, min_age, display_secretariat
+            contact_email, organizer_id, min_age, allocation_swap_mode, display_secretariat
           `)
           .eq('slug', slug)
           .single();
@@ -603,7 +607,7 @@ export default function ConferenceDetailClient() {
 
       const { data: appsData } = await authedSupabase
         .from('applications')
-        .select('id, role, status, payment_status, is_independent, society_id, self_paid')
+        .select('id, role, status, payment_status, is_independent, society_id, self_paid, pledge_type, spots_pledged, pledge_confirmed_at')
         .eq('conference_id', conf.id)
         .eq('user_id', user.id);
 
@@ -1376,6 +1380,7 @@ export default function ConferenceDetailClient() {
                   roleConfigs={roleConfigs}
                   myAllocation={myAllocation}
                   committees={committees}
+                  allocationSwapMode={conference.allocation_swap_mode}
                 />
               )}
 

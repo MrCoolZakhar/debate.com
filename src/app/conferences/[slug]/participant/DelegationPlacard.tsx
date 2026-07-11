@@ -16,25 +16,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Users2 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
-import { SectionCard, OUTFIT } from './shared';
-
-type Chip = 'PAID' | 'COVERED' | 'WAIVED' | 'PARTIAL' | 'UNPAID' | 'REFUNDED';
-
-const CHIP_STYLES: Record<Chip, { bg: string; color: string }> = {
-  PAID: { bg: 'rgba(61,122,82,0.13)', color: '#2A5A3C' },
-  COVERED: { bg: 'rgba(61,122,82,0.13)', color: '#2A6858' },
-  WAIVED: { bg: 'rgba(154,138,120,0.16)', color: '#6B5F52' },
-  PARTIAL: { bg: 'rgba(238,217,138,0.35)', color: '#8A6614' },
-  UNPAID: { bg: 'rgba(139,32,32,0.1)', color: '#8B2020' },
-  REFUNDED: { bg: 'rgba(154,138,120,0.16)', color: '#6B5F52' },
-};
-
-function deriveChip(paymentStatus: string, selfPaid: boolean, amountPaid: number): Chip {
-  if (paymentStatus === 'paid') return selfPaid ? 'PAID' : 'COVERED';
-  if (paymentStatus === 'waived') return 'WAIVED';
-  if (paymentStatus === 'refunded') return 'REFUNDED';
-  return amountPaid > 0 ? 'PARTIAL' : 'UNPAID';
-}
+import { SectionCard, OUTFIT, CHIP_STYLES, derivePaymentChip } from './shared';
 
 export interface DelegationPlacardProps {
   isIndependent: boolean;
@@ -71,7 +53,7 @@ export default function DelegationPlacard({ isIndependent, societyId, paymentSta
 
   useEffect(() => { load(); }, [load]);
 
-  const chip = deriveChip(paymentStatus, selfPaid, amountPaid);
+  const chip = derivePaymentChip(paymentStatus, selfPaid, amountPaid);
 
   if (isIndependent) {
     return (

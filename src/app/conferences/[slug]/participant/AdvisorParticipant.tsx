@@ -1,0 +1,52 @@
+'use client';
+
+// Advisor participant view — panel + invoicing + spine only. Advisors never
+// hold a committee allocation themselves, so there's no delegate-style
+// content here beyond the delegation roster and their own pledge.
+
+import DelegationPanel from './DelegationPanel';
+import PledgeInvoicingCard from './PledgeInvoicingCard';
+import { SectionCard, OUTFIT } from './shared';
+import type { ParticipantApplication, ParticipantRoleConfig } from './types';
+
+export default function AdvisorParticipant({ conferenceId, application, allocationSwapMode, roleConfigs, contactEmail }: {
+  conferenceId: string;
+  application: ParticipantApplication;
+  allocationSwapMode: string;
+  roleConfigs: ParticipantRoleConfig[];
+  contactEmail: string | null;
+}) {
+  if (!application.society_id) {
+    return (
+      <SectionCard>
+        <p className="text-sm" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+          No delegation on file for this application.
+        </p>
+      </SectionCard>
+    );
+  }
+
+  const advisorConfig = roleConfigs.find(rc => rc.role === 'faculty-advisor') ?? null;
+  const delegateConfig = roleConfigs.find(rc => rc.role === 'delegate') ?? null;
+
+  return (
+    <div className="flex flex-col gap-6">
+      <DelegationPanel
+        conferenceId={conferenceId}
+        societyId={application.society_id}
+        allocationSwapMode={allocationSwapMode}
+      />
+      <PledgeInvoicingCard
+        applicationId={application.id}
+        pledgeType={application.pledge_type}
+        spotsPledged={application.spots_pledged}
+        paymentStatus={application.payment_status}
+        pledgeConfirmedAt={application.pledge_confirmed_at}
+        advisorFeeAmount={advisorConfig?.fee_amount ?? null}
+        advisorFeeCurrency={advisorConfig?.fee_currency ?? null}
+        delegateFeeAmount={delegateConfig?.fee_amount ?? null}
+        contactEmail={contactEmail}
+      />
+    </div>
+  );
+}

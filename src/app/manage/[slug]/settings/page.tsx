@@ -104,6 +104,12 @@ const PAYMENT_TIMING_OPTIONS: { value: RoleConfig['payment_timing']; label: stri
   { value: 'anytime', label: 'PAY AT ANY TIME', desc: 'Applicants can view everything and pay whenever.' },
 ];
 
+const SWAP_MODE_OPTIONS: { value: string; label: string; desc: string }[] = [
+  { value: 'off', label: 'OFF', desc: 'Only organizers manage allocations.' },
+  { value: 'request', label: 'REQUEST', desc: 'Advisors and head delegates can request swaps; you approve them.' },
+  { value: 'self_serve', label: 'SELF-SERVE', desc: "Advisors and head delegates can swap within their delegation; you're notified." },
+];
+
 // ── Constants & helpers ────────────────────────────────────────────────────
 
 const ROLES = ['delegate', 'chair', 'head-delegate', 'faculty-advisor', 'observer'] as const;
@@ -385,6 +391,10 @@ export default function SettingsPage() {
   const [minAgeSaved, setMinAgeSaved] = useState(false);
   const [minAgeError, setMinAgeError] = useState('');
 
+  // Delegation allocation swaps (Applications tab)
+  const [swapMode, setSwapMode] = useState('request');
+  const [swapModeError, setSwapModeError] = useState('');
+
   const [roleConfigs, setRoleConfigs] = useState<RoleConfig[]>([]);
   const [configVersion, setConfigVersion] = useState(0);
   const [roleConfigError, setRoleConfigError] = useState('');
@@ -533,6 +543,8 @@ export default function SettingsPage() {
     setFeeAmount(conference.fee_amount != null ? String(conference.fee_amount) : '');
     setFeeCurrency(conference.fee_currency ?? 'GBP');
     setMinAge(conference.min_age != null ? String(conference.min_age) : '');
+    setSwapMode(conference.allocation_swap_mode ?? 'request');
+    setSwapModeError('');
     setFullName(conference.full_name ?? '');
     setAcronym(conference.acronym ?? '');
     setAcronymError('');
@@ -598,6 +610,31 @@ export default function SettingsPage() {
       setRoleConfigs(previous);
       setRoleConfigError(error ? error.message : "Couldn't save — that role config wasn't found.");
     }
+  }
+
+  // Same optimistic + error-capture pattern as saveRoleConfig, for the
+  // single conference-level allocation_swap_mode field.
+  async function saveSwapMode(mode: string) {
+    if (!conference) return;
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
+
+    const previous = swapMode;
+    setSwapMode(mode);
+    setSwapModeError('');
+
+    const { data, error } = await supabase
+      .from('conferences')
+      .update({ allocation_swap_mode: mode })
+      .eq('id', conference.id)
+      .select('id');
+
+    if (error || !data || data.length === 0) {
+      setSwapMode(previous);
+      setSwapModeError(error ? error.message : "Couldn't save — please try again.");
+      return;
+    }
+    await refreshConference();
   }
 
   // ── Organizer actions ───────────────────────────────────────────────────
@@ -1318,6 +1355,44 @@ export default function SettingsPage() {
             </div>
           );
         })}
+      </div>}
+
+      {/* ── Delegation allocation swaps card ── */}
+      {activeTab === 'applications' && <div style={cardStyle}>
+        <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+          Delegation Allocation Swaps
+        </p>
+        <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+          Control whether delegation leaders can trade committee allocations within their own delegation.
+        </p>
+        <div className="flex gap-2">
+          {SWAP_MODE_OPTIONS.map(opt => {
+            const active = swapMode === opt.value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => saveSwapMode(opt.value)}
+                className="flex-1 py-2.5 rounded-[10px] font-bold text-sm focus:outline-none transition-all"
+                style={{
+                  backgroundColor: active ? '#1B3828' : 'transparent',
+                  color: active ? '#EED98A' : '#1C1410',
+                  border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
+                  fontFamily: "'Outfit', sans-serif",
+                  letterSpacing: '0.06em',
+                }}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-xs mt-2" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+          {SWAP_MODE_OPTIONS.find(o => o.value === swapMode)?.desc}
+        </p>
+        {swapModeError && (
+          <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{swapModeError}</p>
+        )}
       </div>}
 
       {/* ── VISUAL TAB ── */}

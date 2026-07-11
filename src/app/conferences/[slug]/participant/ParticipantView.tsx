@@ -11,6 +11,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { SectionCard, OUTFIT, getGateState, roleLabel, statusPriority } from './shared';
 import { PayGate } from './PayGate';
 import DelegateParticipant from './DelegateParticipant';
+import AdvisorParticipant from './AdvisorParticipant';
 import PaymentPanel from './PaymentPanel';
 import RequestsPanel from './RequestsPanel';
 import ApplyPointer from './ApplyPointer';
@@ -51,10 +52,11 @@ export interface ParticipantViewProps {
   roleConfigs: ParticipantRoleConfig[];
   myAllocation: ParticipantAllocation | null;
   committees: ParticipantCommittee[];
+  allocationSwapMode: string;
 }
 
 export default function ParticipantView({
-  conferenceId, conferenceSlug, contactEmail, defaultFeeCurrency, myApplications, roleConfigs, myAllocation, committees,
+  conferenceId, conferenceSlug, contactEmail, defaultFeeCurrency, myApplications, roleConfigs, myAllocation, committees, allocationSwapMode,
 }: ParticipantViewProps) {
   const { user } = useAuth();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -119,6 +121,15 @@ export default function ParticipantView({
             application={selected}
             myAllocation={myAllocation}
             committees={committees}
+            allocationSwapMode={allocationSwapMode}
+          />
+        ) : selected.role === 'faculty-advisor' ? (
+          <AdvisorParticipant
+            conferenceId={conferenceId}
+            application={selected}
+            allocationSwapMode={allocationSwapMode}
+            roleConfigs={roleConfigs}
+            contactEmail={contactEmail}
           />
         ) : (
           <RolePlaceholder role={selected.role} />

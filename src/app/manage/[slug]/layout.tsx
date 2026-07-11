@@ -41,6 +41,7 @@ export interface Conference {
   predecessor_conference_id: string | null;
   predecessor_approved: boolean;
   min_age: number | null;
+  allocation_swap_mode: string;
 }
 
 // ── Context ────────────────────────────────────────────────────────────────
@@ -552,6 +553,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
         'instagram_url', 'facebook_url', 'tiktok_url', 'whatsapp_url', 'website_url',
         'stripe_account_id', 'organizer_id',
         'predecessor_conference_id', 'predecessor_approved', 'min_age',
+        'allocation_swap_mode',
       ].join(', '))
       .eq('slug', slug)
       .single();

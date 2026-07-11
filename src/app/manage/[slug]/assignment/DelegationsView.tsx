@@ -31,7 +31,7 @@ interface Society {
 
 // ── Card grid ────────────────────────────────────────────────────────────────
 
-function DelegationCard({ society, members, onClick }: { society: Society; members: PoolMember[]; onClick: () => void }) {
+function DelegationCard({ society, members, hasUnseenSwap, onClick }: { society: Society; members: PoolMember[]; hasUnseenSwap: boolean; onClick: () => void }) {
   const advisorCount = members.filter(m => m.role === 'faculty-advisor').length;
   const headDelCount = members.filter(m => m.is_head_delegate || m.role === 'head-delegate').length;
   const totalDelegates = members.filter(m => (m.role === 'delegate' || m.role === 'head-delegate') && m.attending).length;
@@ -46,7 +46,16 @@ function DelegationCard({ society, members, onClick }: { society: Society; membe
       onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
     >
       <div className="flex items-start justify-between gap-2 mb-3">
-        <p className="font-black text-base truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{society.name}</p>
+        <div className="flex items-center gap-1.5 min-w-0">
+          {hasUnseenSwap && (
+            <span
+              title="New allocation swap activity"
+              className="flex-shrink-0"
+              style={{ width: 7, height: 7, borderRadius: '9999px', backgroundColor: '#B6871F' }}
+            />
+          )}
+          <p className="font-black text-base truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{society.name}</p>
+        </div>
         {pledgePending && (
           <span
             className="flex-shrink-0 px-2 py-0.5 rounded-full"
@@ -159,6 +168,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
   const [dropTargetKey, setDropTargetKey] = useState<string | null>(null);
   const [swapConfirm, setSwapConfirm] = useState<{ sourceId: string; targetId: string } | null>(null);
   const [advisorTransferPicker, setAdvisorTransferPicker] = useState<PoolMember | null>(null);
+  const [unseenSwapSocietyIds, setUnseenSwapSocietyIds] = useState<Set<string>>(new Set());
   const { draftNotices, pushDraftNotice, dismissDraftNotice } = useDraftNotices();
   const { confirm, modal: confirmModal } = useConfirmModal();
 
@@ -167,7 +177,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
     setLoading(true);
     const supabase = getAuthedClient(session.access_token);
 
-    const [socRes, memberRes, search, advisors] = await Promise.all([
+    const [socRes, memberRes, search, advisors, swapReqRes] = await Promise.all([
       supabase
         .from('societies')
         .select('id, name, spots_purchased, advisor_spots_purchased')
@@ -181,16 +191,44 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
         .not('society_id', 'is', null),
       fetchSearchPool(supabase, conference.id),
       fetchAdvisorPool(supabase, conference.id),
+      supabase
+        .from('conference_requests')
+        .select('metadata')
+        .eq('conference_id', conference.id)
+        .in('kind', ['swap_request', 'swap_notice'])
+        .eq('seen_by_organizer', false),
     ]);
 
     setSocieties((socRes.data ?? []) as unknown as Society[]);
     setMembers((memberRes.data ?? []) as unknown as PoolMember[]);
+    setUnseenSwapSocietyIds(new Set(
+      ((swapReqRes.data ?? []) as { metadata: { society_id?: string } }[])
+        .map(r => r.metadata?.society_id)
+        .filter((id): id is string => !!id)
+    ));
     setSearchPool(search);
     setAdvisorPool(advisors);
     setLoading(false);
   }, [conference, session?.access_token]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Opening a delegation marks its pending swap_request/swap_notice rows
+  // seen — optimistic locally, fire-and-forget on the DB.
+  function handleExpandSociety(societyId: string) {
+    setExpandedId(societyId);
+    if (!unseenSwapSocietyIds.has(societyId) || !session) return;
+    setUnseenSwapSocietyIds(prev => { const next = new Set(prev); next.delete(societyId); return next; });
+    const supabase = getAuthedClient(session.access_token);
+    supabase
+      .from('conference_requests')
+      .update({ seen_by_organizer: true })
+      .eq('conference_id', conference.id)
+      .in('kind', ['swap_request', 'swap_notice'])
+      .eq('seen_by_organizer', false)
+      .eq('metadata->>society_id', societyId)
+      .then();
+  }
 
   const membersBySociety = useMemo(() => {
     const map = new Map<string, PoolMember[]>();
@@ -436,7 +474,8 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
                 key={s.id}
                 society={s}
                 members={membersBySociety.get(s.id) ?? []}
-                onClick={() => setExpandedId(s.id)}
+                hasUnseenSwap={unseenSwapSocietyIds.has(s.id)}
+                onClick={() => handleExpandSociety(s.id)}
               />
             ))}
           </div>

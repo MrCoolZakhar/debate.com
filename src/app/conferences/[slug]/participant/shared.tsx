@@ -67,3 +67,26 @@ const STATUS_PRIORITY: Record<string, number> = {
 export function statusPriority(status: string): number {
   return STATUS_PRIORITY[status] ?? 9;
 }
+
+// ── Payment chip ─────────────────────────────────────────────────────────────
+// PAID/WAIVED/UNPAID/PARTIAL plus the delegation-aware COVERED variant
+// (paid, but not self-funded — the delegation's pool covered it). Shared by
+// DelegationPlacard (viewer's own status) and DelegationPanel (every member).
+
+export type PaymentChip = 'PAID' | 'COVERED' | 'WAIVED' | 'PARTIAL' | 'UNPAID' | 'REFUNDED';
+
+export const CHIP_STYLES: Record<PaymentChip, { bg: string; color: string }> = {
+  PAID: { bg: 'rgba(61,122,82,0.13)', color: '#2A5A3C' },
+  COVERED: { bg: 'rgba(61,122,82,0.13)', color: '#2A6858' },
+  WAIVED: { bg: 'rgba(154,138,120,0.16)', color: '#6B5F52' },
+  PARTIAL: { bg: 'rgba(238,217,138,0.35)', color: '#8A6614' },
+  UNPAID: { bg: 'rgba(139,32,32,0.1)', color: '#8B2020' },
+  REFUNDED: { bg: 'rgba(154,138,120,0.16)', color: '#6B5F52' },
+};
+
+export function derivePaymentChip(paymentStatus: string, selfPaid: boolean, amountPaid: number): PaymentChip {
+  if (paymentStatus === 'paid') return selfPaid ? 'PAID' : 'COVERED';
+  if (paymentStatus === 'waived') return 'WAIVED';
+  if (paymentStatus === 'refunded') return 'REFUNDED';
+  return amountPaid > 0 ? 'PARTIAL' : 'UNPAID';
+}

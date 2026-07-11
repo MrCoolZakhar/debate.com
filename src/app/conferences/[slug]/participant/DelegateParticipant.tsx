@@ -7,13 +7,15 @@ import AllocationCard from './AllocationCard';
 import StudyGuideCard from './StudyGuideCard';
 import PositionPaperCard from './PositionPaperCard';
 import DelegationPlacard from './DelegationPlacard';
+import DelegationPanel from './DelegationPanel';
 import type { ParticipantApplication, ParticipantAllocation, ParticipantCommittee } from './types';
 
-export default function DelegateParticipant({ conferenceId, application, myAllocation, committees }: {
+export default function DelegateParticipant({ conferenceId, application, myAllocation, committees, allocationSwapMode }: {
   conferenceId: string;
   application: ParticipantApplication;
   myAllocation: ParticipantAllocation | null;
   committees: ParticipantCommittee[];
+  allocationSwapMode: string;
 }) {
   const committee = myAllocation ? committees.find(c => c.id === myAllocation.conference_committee_id) ?? null : null;
 
@@ -37,6 +39,15 @@ export default function DelegateParticipant({ conferenceId, application, myAlloc
         selfPaid={application.self_paid}
         amountPaid={application.amount_paid}
       />
+
+      {/* Head delegates additionally get the full delegation panel below their own view */}
+      {application.role === 'head-delegate' && application.society_id && (
+        <DelegationPanel
+          conferenceId={conferenceId}
+          societyId={application.society_id}
+          allocationSwapMode={allocationSwapMode}
+        />
+      )}
     </div>
   );
 }
