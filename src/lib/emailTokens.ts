@@ -12,6 +12,7 @@ export const EMAIL_TOKEN_KEYS = [
   'conference_name',
   'conference_dates',
   'fee',
+  'request_subject',
 ] as const;
 
 export type EmailTokenKey = (typeof EMAIL_TOKEN_KEYS)[number];
@@ -26,6 +27,7 @@ export const EMAIL_TOKEN_LABELS: Record<EmailTokenKey, string> = {
   conference_name: 'Conference Name',
   conference_dates: 'Conference Dates',
   fee: 'Fee',
+  request_subject: 'Request Subject',
 };
 
 export type EmailTokenContext = Partial<Record<EmailTokenKey, string | null>>;

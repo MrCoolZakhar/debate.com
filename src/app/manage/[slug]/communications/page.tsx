@@ -11,7 +11,8 @@ import {
   resolveTokens, EMAIL_TOKEN_KEYS, EMAIL_TOKEN_LABELS,
   type EmailTokenContext, type EmailTokenKey,
 } from '@/lib/emailTokens';
-import { EVENT_REGISTRY, type EventDef } from '@/lib/emailEvents';
+import { EVENT_REGISTRY, queueEventEmail, type EventDef } from '@/lib/emailEvents';
+import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
 import { type EmailBlock, normalizeBlocks, flattenBlocksToPlainText } from '@/lib/emailBlocks';
 import { renderEmailHtml } from '@/lib/emailHtml';
 import { triggerEmailDelivery } from '@/lib/emailDelivery';
@@ -78,6 +79,51 @@ interface OutboxDetailRow {
   status: string;
   error: string | null;
 }
+
+// ── Inbox (Q&R threads) ──────────────────────────────────────────────────────
+
+interface SwapMetadata {
+  society_id?: string;
+  app_a?: string;
+  app_b?: string;
+  member_a?: string;
+  member_b?: string;
+  before?: { a?: string; b?: string };
+  after?: { a?: string; b?: string };
+}
+
+interface InboxRequest {
+  id: string;
+  user_id: string;
+  application_id: string | null;
+  subject: string;
+  status: string;
+  kind: string;
+  metadata: SwapMetadata;
+  seen_by_organizer: boolean;
+  created_at: string;
+  last_message_at: string;
+}
+
+interface InboxMessage {
+  id: string;
+  request_id: string;
+  sender_user_id: string;
+  is_organizer: boolean;
+  body: string;
+  created_at: string;
+}
+
+interface InboxProfile {
+  display_name: string;
+  avatar_url: string | null;
+}
+
+const KIND_CHIP: Record<string, { label: string; bg: string; color: string }> = {
+  question: { label: 'QUESTION', bg: 'rgba(27,56,40,0.08)', color: '#1B3828' },
+  swap_request: { label: 'SWAP REQUEST', bg: 'rgba(182,135,31,0.16)', color: '#8A6614' },
+  swap_notice: { label: 'SWAP', bg: 'rgba(154,138,120,0.16)', color: '#6B5F52' },
+};
 
 const INDEPENDENT_KEY = '__independent__';
 
@@ -320,11 +366,28 @@ function CommunicationsPageInner() {
   const [deepLinkHandled, setDeepLinkHandled] = useState(false);
 
   // ── View state ──
-  const [activeTab, setActiveTab] = useState<'emails' | 'notifications'>('emails');
+  const [activeTab, setActiveTab] = useState<'emails' | 'notifications' | 'inbox'>('emails');
   const [flash, setFlash] = useState<{ kind: 'ok' | 'err'; msg: string } | null>(null);
   const [historyExpandedId, setHistoryExpandedId] = useState<string | null>(null);
   const [recipientsExpandedId, setRecipientsExpandedId] = useState<string | null>(null);
   const [outboxBySend, setOutboxBySend] = useState<Record<string, OutboxDetailRow[] | 'loading'>>({});
+
+  // ── Inbox state ──
+  const [inboxRequests, setInboxRequests] = useState<InboxRequest[]>([]);
+  const [inboxMessages, setInboxMessages] = useState<InboxMessage[]>([]);
+  const [inboxProfiles, setInboxProfiles] = useState<Map<string, InboxProfile>>(new Map());
+  const [inboxRoles, setInboxRoles] = useState<Map<string, string>>(new Map());
+  const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
+  const [inboxStatusFilter, setInboxStatusFilter] = useState<'open' | 'closed' | 'all'>('open');
+  const [inboxKindFilter, setInboxKindFilter] = useState<'all' | 'question' | 'swap_request' | 'swap_notice'>('all');
+  const [inboxSearch, setInboxSearch] = useState('');
+  const [replyText, setReplyText] = useState('');
+  const [replying, setReplying] = useState(false);
+  const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
+  const [closingOrReopening, setClosingOrReopening] = useState(false);
+  const [swapActing, setSwapActing] = useState(false);
+  const [swapError, setSwapError] = useState('');
+  const { draftNotices, pushDraftNotice, dismissDraftNotice } = useDraftNotices();
 
   // ── Builder state ──
   const [builderOpen, setBuilderOpen] = useState(false);
@@ -433,12 +496,53 @@ function CommunicationsPageInner() {
     setOutboxPending(count ?? 0);
   }, [conference, session?.access_token]);
 
+  // All requests + all their messages in two queries — modest for a single
+  // conference's Q&R volume, and lets the list snippet / unread rule compute
+  // "last message from participant" client-side without an N+1.
+  const loadInbox = useCallback(async () => {
+    if (!conference || !session) return;
+    const supabase = getAuthedClient(session.access_token);
+    const { data: reqData } = await supabase
+      .from('conference_requests')
+      .select('id, user_id, application_id, subject, status, kind, metadata, seen_by_organizer, created_at, last_message_at')
+      .eq('conference_id', conference.id)
+      .order('last_message_at', { ascending: false });
+    const requests = (reqData ?? []) as InboxRequest[];
+    setInboxRequests(requests);
+
+    const requestIds = requests.map(r => r.id);
+    const userIds = Array.from(new Set(requests.map(r => r.user_id)));
+    if (requestIds.length === 0) {
+      setInboxMessages([]);
+      setInboxProfiles(new Map());
+      setInboxRoles(new Map());
+      return;
+    }
+
+    const [msgRes, profileRes, appRes] = await Promise.all([
+      supabase
+        .from('conference_request_messages')
+        .select('id, request_id, sender_user_id, is_organizer, body, created_at')
+        .in('request_id', requestIds)
+        .order('created_at', { ascending: true }),
+      supabase.from('profiles').select('id, display_name, avatar_url').in('id', userIds),
+      supabase.from('applications').select('user_id, role').eq('conference_id', conference.id).in('user_id', userIds),
+    ]);
+    setInboxMessages((msgRes.data ?? []) as InboxMessage[]);
+    setInboxProfiles(new Map(((profileRes.data ?? []) as ({ id: string } & InboxProfile)[]).map(p => [p.id, p])));
+    const roleMap = new Map<string, string>();
+    for (const a of ((appRes.data ?? []) as { user_id: string; role: string }[])) {
+      if (!roleMap.has(a.user_id)) roleMap.set(a.user_id, a.role);
+    }
+    setInboxRoles(roleMap);
+  }, [conference, session?.access_token]);
+
   useEffect(() => {
     if (!conference) return;
     setLoading(true);
-    Promise.all([loadTemplates(), loadApplications(), loadCommittees(), loadSocieties(), loadEmailSends(), loadOutboxPending()])
+    Promise.all([loadTemplates(), loadApplications(), loadCommittees(), loadSocieties(), loadEmailSends(), loadOutboxPending(), loadInbox()])
       .finally(() => setLoading(false));
-  }, [conference, loadTemplates, loadApplications, loadCommittees, loadSocieties, loadEmailSends, loadOutboxPending]);
+  }, [conference, loadTemplates, loadApplications, loadCommittees, loadSocieties, loadEmailSends, loadOutboxPending, loadInbox]);
 
   // Sweep the outbox once on mount: retries anything still pending from an
   // earlier session (a page that closed before delivery fired, a prior sweep
@@ -452,6 +556,48 @@ function CommunicationsPageInner() {
       loadEmailSends();
     });
   }, [conference, session, loadOutboxPending, loadEmailSends]);
+
+  // ── Inbox derived data ───────────────────────────────────────────────────
+
+  const inboxMessagesByRequest = useMemo(() => {
+    const map = new Map<string, InboxMessage[]>();
+    for (const m of inboxMessages) {
+      const list = map.get(m.request_id) ?? [];
+      list.push(m);
+      map.set(m.request_id, list);
+    }
+    return map;
+  }, [inboxMessages]);
+
+  function lastMessageOf(requestId: string): InboxMessage | null {
+    const list = inboxMessagesByRequest.get(requestId);
+    return list && list.length > 0 ? list[list.length - 1] : null;
+  }
+
+  function needsAttention(r: InboxRequest): boolean {
+    if (r.status !== 'open') return false;
+    if (!r.seen_by_organizer) return true;
+    const last = lastMessageOf(r.id);
+    return !!last && !last.is_organizer;
+  }
+
+  const filteredInboxRequests = useMemo(() => {
+    const q = inboxSearch.trim().toLowerCase();
+    return inboxRequests
+      .filter(r => (inboxStatusFilter === 'all' ? true : r.status === inboxStatusFilter))
+      .filter(r => (inboxKindFilter === 'all' ? true : r.kind === inboxKindFilter))
+      .filter(r => (q ? r.subject.toLowerCase().includes(q) : true))
+      .sort((a, b) => {
+        // Open first, each group by last_message_at desc (already the query order).
+        if (a.status === 'open' && b.status !== 'open') return -1;
+        if (a.status !== 'open' && b.status === 'open') return 1;
+        return b.last_message_at.localeCompare(a.last_message_at);
+      });
+  }, [inboxRequests, inboxStatusFilter, inboxKindFilter, inboxSearch]);
+
+  const selectedRequest = inboxRequests.find(r => r.id === selectedRequestId) ?? null;
+  const selectedMessages = selectedRequestId ? inboxMessagesByRequest.get(selectedRequestId) ?? [] : [];
+  const selectedKindChip = selectedRequest ? (KIND_CHIP[selectedRequest.kind] ?? KIND_CHIP.question) : null;
 
   // ── Derived data ──────────────────────────────────────────────────────────
 
@@ -919,6 +1065,98 @@ function CommunicationsPageInner() {
     );
   }
 
+  // ── Inbox actions ────────────────────────────────────────────────────────
+
+  async function handleOpenThread(id: string) {
+    setSelectedRequestId(id);
+    setReplyText('');
+    setSwapError('');
+    const req = inboxRequests.find(r => r.id === id);
+    if (!req || req.seen_by_organizer || !session) return;
+    setInboxRequests(prev => prev.map(r => (r.id === id ? { ...r, seen_by_organizer: true } : r)));
+    const supabase = getAuthedClient(session.access_token);
+    await supabase.from('conference_requests').update({ seen_by_organizer: true }).eq('id', id);
+  }
+
+  // Reply posts regardless of whether the notification email drafts — a
+  // missing/disabled 'request_reply' template just nudges via DraftNotice.
+  async function handleInboxReply() {
+    if (!session || !conference || !selectedRequest || !replyText.trim() || replying) return;
+    setReplying(true);
+    const supabase = getAuthedClient(session.access_token);
+    const body = replyText.trim();
+    await supabase.from('conference_request_messages').insert({
+      request_id: selectedRequest.id,
+      sender_user_id: user!.id,
+      is_organizer: true,
+      body,
+    });
+    await supabase.from('conference_requests').update({
+      last_message_at: new Date().toISOString(),
+      seen_by_organizer: true,
+    }).eq('id', selectedRequest.id);
+
+    if (selectedRequest.application_id) {
+      const result = await queueEventEmail(supabase, conference.id, 'request_reply', [selectedRequest.application_id], {
+        request_subject: selectedRequest.subject,
+      });
+      if (!result.drafted) pushDraftNotice('request_reply');
+    }
+
+    setReplyText('');
+    setReplying(false);
+    await loadInbox();
+  }
+
+  async function handleCloseReopen(close: boolean) {
+    if (!session || !selectedRequest || closingOrReopening) return;
+    setClosingOrReopening(true);
+    const supabase = getAuthedClient(session.access_token);
+    await supabase.from('conference_requests').update({
+      status: close ? 'closed' : 'open',
+      seen_by_organizer: true,
+    }).eq('id', selectedRequest.id);
+    setClosingOrReopening(false);
+    setCloseConfirmOpen(false);
+    await loadInbox();
+  }
+
+  async function handleSwapDecision(approve: boolean) {
+    if (!session || !conference || !selectedRequest || swapActing) return;
+    const { app_a, app_b } = selectedRequest.metadata;
+    setSwapActing(true);
+    setSwapError('');
+    const supabase = getAuthedClient(session.access_token);
+
+    if (approve) {
+      if (!app_a || !app_b) { setSwapError('This request is missing the application ids to swap.'); setSwapActing(false); return; }
+      const { data, error } = await supabase.rpc('perform_delegation_swap', { p_app_a: app_a, p_app_b: app_b });
+      if (error) { setSwapError(error.message || 'Could not perform the swap.'); setSwapActing(false); return; }
+      const result = data as { ok: boolean; error?: string };
+      if (!result.ok) { setSwapError(result.error ?? 'Could not perform the swap.'); setSwapActing(false); return; }
+    }
+
+    await supabase.from('conference_request_messages').insert({
+      request_id: selectedRequest.id,
+      sender_user_id: user!.id,
+      is_organizer: true,
+      body: approve ? 'Swap approved and applied.' : 'Swap declined.',
+    });
+    await supabase.from('conference_requests').update({
+      status: 'closed',
+      last_message_at: new Date().toISOString(),
+      seen_by_organizer: true,
+    }).eq('id', selectedRequest.id);
+
+    if (app_a && app_b) {
+      const result = await queueEventEmail(supabase, conference.id, 'delegation_swap', [app_a, app_b]);
+      if (!result.drafted) pushDraftNotice('delegation_swap');
+    }
+
+    setSwapActing(false);
+    await loadInbox();
+  }
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -986,6 +1224,8 @@ function CommunicationsPageInner() {
         </div>
       )}
 
+      {!builderOpen && <DraftNoticeList notices={draftNotices} conferenceSlug={conference.slug} onDismiss={dismissDraftNotice} />}
+
       {/* Flash */}
       {flash && (
         <div
@@ -1049,6 +1289,9 @@ function CommunicationsPageInner() {
           <div className="inline-flex rounded-xl p-1 mb-6" style={{ border: `1px solid ${BORDER}`, backgroundColor: '#FAF8F3' }}>
             <TabPill active={activeTab === 'emails'} onClick={() => setActiveTab('emails')}>EMAILS</TabPill>
             <TabPill active={activeTab === 'notifications'} onClick={() => setActiveTab('notifications')}>NOTIFICATIONS</TabPill>
+            <TabPill active={activeTab === 'inbox'} onClick={() => setActiveTab('inbox')}>
+              INBOX{inboxRequests.filter(needsAttention).length > 0 ? ` (${inboxRequests.filter(needsAttention).length})` : ''}
+            </TabPill>
           </div>
 
           {loading && (
@@ -1310,6 +1553,276 @@ function CommunicationsPageInner() {
                 })}
               </div>
             </section>
+          )}
+
+          {/* ═══ INBOX TAB ═══ */}
+          {!loading && activeTab === 'inbox' && (
+            !selectedRequest ? (
+              <section>
+                <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                  Inbox
+                </p>
+                <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+                  Questions and allocation swap requests from advisors, head delegates, and delegates.
+                </p>
+
+                <div className="flex flex-wrap items-center gap-3 mb-4">
+                  <div className="inline-flex rounded-xl p-1" style={{ border: `1px solid ${BORDER}`, backgroundColor: '#FAF8F3' }}>
+                    {(['open', 'closed', 'all'] as const).map(s => (
+                      <TabPill key={s} active={inboxStatusFilter === s} onClick={() => setInboxStatusFilter(s)}>
+                        {s.toUpperCase()}
+                      </TabPill>
+                    ))}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {([
+                      { value: 'all', label: 'All kinds' },
+                      { value: 'question', label: 'Question' },
+                      { value: 'swap_request', label: 'Swap request' },
+                      { value: 'swap_notice', label: 'Swap' },
+                    ] as const).map(o => {
+                      const active = inboxKindFilter === o.value;
+                      return (
+                        <button
+                          key={o.value}
+                          type="button"
+                          onClick={() => setInboxKindFilter(o.value)}
+                          className="rounded-full px-2.5 py-1 text-xs font-semibold focus:outline-none transition-colors"
+                          style={{
+                            border: active ? '1px solid #1B3828' : `1px solid ${BORDER}`,
+                            backgroundColor: active ? '#1B3828' : 'transparent',
+                            color: active ? '#EED98A' : '#4A4238',
+                            fontFamily: OUTFIT,
+                          }}
+                        >
+                          {o.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <input
+                    value={inboxSearch}
+                    onChange={e => setInboxSearch(e.target.value)}
+                    placeholder="Search subjects..."
+                    className="rounded-xl px-3.5 py-2 text-sm focus:outline-none"
+                    style={{ border: `1px solid ${BORDER}`, backgroundColor: '#FAF8F3', color: '#1C1410', fontFamily: OUTFIT, minWidth: 200 }}
+                  />
+                </div>
+
+                {filteredInboxRequests.length === 0 ? (
+                  <p className="text-sm py-6 text-center" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+                    No threads match these filters.
+                  </p>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    {filteredInboxRequests.map(r => {
+                      const profile = inboxProfiles.get(r.user_id);
+                      const role = inboxRoles.get(r.user_id);
+                      const last = lastMessageOf(r.id);
+                      const attention = needsAttention(r);
+                      const kindChip = KIND_CHIP[r.kind] ?? KIND_CHIP.question;
+                      const name = profile?.display_name ?? 'Unknown';
+                      return (
+                        <button
+                          key={r.id}
+                          onClick={() => handleOpenThread(r.id)}
+                          className="w-full flex items-center gap-3 rounded-2xl p-4 text-left transition-colors focus:outline-none"
+                          style={{
+                            ...CARD_STYLE,
+                            border: attention ? '1.5px solid rgba(182,135,31,0.45)' : CARD_STYLE.border,
+                            backgroundColor: attention ? 'rgba(238,217,138,0.08)' : CARD_STYLE.backgroundColor,
+                          }}
+                        >
+                          {profile?.avatar_url ? (
+                            <img src={profile.avatar_url} alt={name} className="rounded-full object-cover flex-shrink-0" style={{ width: 36, height: 36 }} />
+                          ) : (
+                            <span className="flex items-center justify-center rounded-full flex-shrink-0" style={{ width: 36, height: 36, backgroundColor: '#1B3828', color: '#EED98A', fontSize: 14, fontWeight: 700, fontFamily: OUTFIT }}>
+                              {name.charAt(0)}
+                            </span>
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm truncate" style={{ color: '#1C1410', fontFamily: OUTFIT, fontWeight: attention ? 800 : 600 }}>
+                                {name}
+                              </p>
+                              {role && (
+                                <span className="text-xs flex-shrink-0" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>{roleLabel(role)}</span>
+                              )}
+                              {attention && <span className="flex-shrink-0 rounded-full" style={{ width: 6, height: 6, backgroundColor: '#B6871F' }} />}
+                            </div>
+                            <p className="text-sm truncate" style={{ color: '#1C1410', fontFamily: OUTFIT, fontWeight: attention ? 700 : 500 }}>
+                              {r.subject}
+                            </p>
+                            {last && (
+                              <p className="text-xs truncate mt-0.5" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+                                {last.is_organizer ? 'You: ' : ''}{last.body}
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                            <span
+                              className="rounded-full px-2 py-0.5"
+                              style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', fontFamily: OUTFIT, backgroundColor: kindChip.bg, color: kindChip.color }}
+                            >
+                              {kindChip.label}
+                            </span>
+                            <span style={{ fontSize: 11, color: '#9A8A78', fontFamily: OUTFIT }}>
+                              {formatDate(r.last_message_at)}
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
+            ) : (
+              <section>
+                <button
+                  onClick={() => setSelectedRequestId(null)}
+                  className="text-xs font-bold mb-4 focus:outline-none"
+                  style={{ color: '#9A8A78', fontFamily: OUTFIT, letterSpacing: '0.06em', background: 'none', border: 'none', cursor: 'pointer' }}
+                >
+                  ← BACK TO INBOX
+                </button>
+
+                <div className="flex items-start justify-between gap-3 mb-1">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span
+                        className="rounded-full px-2 py-0.5 flex-shrink-0"
+                        style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', fontFamily: OUTFIT, backgroundColor: selectedKindChip!.bg, color: selectedKindChip!.color }}
+                      >
+                        {selectedKindChip!.label}
+                      </span>
+                      <span
+                        className="rounded-full px-2 py-0.5 flex-shrink-0"
+                        style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', fontFamily: OUTFIT, backgroundColor: selectedRequest.status === 'open' ? 'rgba(61,122,82,0.13)' : 'rgba(154,138,120,0.16)', color: selectedRequest.status === 'open' ? '#2A5A3C' : '#6B5F52' }}
+                      >
+                        {selectedRequest.status.toUpperCase()}
+                      </span>
+                    </div>
+                    <p className="font-black text-lg truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{selectedRequest.subject}</p>
+                    <p className="text-xs" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+                      {inboxProfiles.get(selectedRequest.user_id)?.display_name ?? 'Unknown'}
+                      {inboxRoles.get(selectedRequest.user_id) ? ` · ${roleLabel(inboxRoles.get(selectedRequest.user_id)!)}` : ''}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => (selectedRequest.status === 'open' ? setCloseConfirmOpen(true) : handleCloseReopen(false))}
+                    disabled={closingOrReopening}
+                    className="rounded-xl py-2 px-4 text-xs font-bold focus:outline-none flex-shrink-0"
+                    style={{ border: `1px solid ${BORDER}`, color: '#1C1410', backgroundColor: 'transparent', fontFamily: OUTFIT, letterSpacing: '0.05em' }}
+                  >
+                    {selectedRequest.status === 'open' ? 'CLOSE' : 'REOPEN'}
+                  </button>
+                </div>
+
+                {/* Swap details */}
+                {(selectedRequest.kind === 'swap_request' || selectedRequest.kind === 'swap_notice') && (
+                  <div className="rounded-2xl p-4 mt-4" style={CARD_STYLE}>
+                    <p className="text-xs font-bold mb-1.5" style={{ color: '#B6871F', fontFamily: OUTFIT, letterSpacing: '0.08em' }}>
+                      SWAP DETAILS
+                    </p>
+                    <p className="text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                      {selectedRequest.metadata.member_a ?? 'Member A'}: {selectedRequest.metadata.before?.a ?? '—'} → {selectedRequest.metadata.after?.a ?? '—'}
+                    </p>
+                    <p className="text-sm mt-1" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                      {selectedRequest.metadata.member_b ?? 'Member B'}: {selectedRequest.metadata.before?.b ?? '—'} → {selectedRequest.metadata.after?.b ?? '—'}
+                    </p>
+                    {selectedRequest.kind === 'swap_request' && selectedRequest.status === 'open' && (
+                      <>
+                        {swapError && (
+                          <p className="text-xs mt-3" style={{ color: '#8B2020', fontFamily: OUTFIT }}>{swapError}</p>
+                        )}
+                        <div className="flex gap-2 mt-3">
+                          <button
+                            onClick={() => handleSwapDecision(false)}
+                            disabled={swapActing}
+                            className="rounded-lg py-2 px-4 text-xs font-bold focus:outline-none"
+                            style={{ border: '1px solid rgba(139,32,32,0.35)', color: '#8B2020', backgroundColor: 'transparent', fontFamily: OUTFIT, letterSpacing: '0.05em' }}
+                          >
+                            DECLINE
+                          </button>
+                          <button
+                            onClick={() => handleSwapDecision(true)}
+                            disabled={swapActing}
+                            className="rounded-lg py-2 px-4 text-xs font-bold focus:outline-none"
+                            style={{ backgroundColor: swapActing ? '#DDD4C0' : '#1B3828', color: swapActing ? '#9A8A78' : '#EED98A', border: 'none', fontFamily: OUTFIT, letterSpacing: '0.05em' }}
+                          >
+                            {swapActing ? 'PROCESSING...' : 'APPROVE'}
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* Messages */}
+                <div className="flex flex-col gap-3 mt-5" style={{ maxHeight: 440, overflowY: 'auto' }}>
+                  {selectedMessages.map(m => {
+                    const mine = m.is_organizer;
+                    const senderName = mine ? 'You' : (inboxProfiles.get(m.sender_user_id)?.display_name ?? 'Participant');
+                    return (
+                      <div key={m.id} className={`flex flex-col ${mine ? 'items-end' : 'items-start'}`}>
+                        {!mine && (
+                          <span className="mb-1" style={{ fontSize: 10, fontWeight: 700, color: '#B6871F', fontFamily: OUTFIT, letterSpacing: '0.06em' }}>
+                            {senderName.toUpperCase()}
+                          </span>
+                        )}
+                        <div
+                          className="rounded-2xl px-4 py-2.5"
+                          style={{ maxWidth: '78%', backgroundColor: mine ? '#1B3828' : '#FAF8F3', border: mine ? 'none' : `1px solid ${BORDER}`, color: mine ? '#EED98A' : '#1C1410' }}
+                        >
+                          <p className="text-sm" style={{ fontFamily: OUTFIT, whiteSpace: 'pre-wrap', lineHeight: 1.55, margin: 0 }}>{m.body}</p>
+                        </div>
+                        <span className="mt-1" style={{ fontSize: 10, color: '#9A8A78', fontFamily: OUTFIT }}>
+                          {formatDate(m.created_at)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Reply */}
+                {selectedRequest.status === 'open' && (
+                  <div className="flex gap-2 mt-4">
+                    <input
+                      value={replyText}
+                      onChange={e => setReplyText(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter' && !replying) handleInboxReply(); }}
+                      placeholder="Write a reply..."
+                      className="flex-1 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none"
+                      style={{ border: `1px solid ${BORDER}`, backgroundColor: '#FFFFFF', color: '#1C1410', fontFamily: OUTFIT }}
+                    />
+                    <button
+                      onClick={handleInboxReply}
+                      disabled={replying || !replyText.trim()}
+                      className="rounded-xl px-4 text-xs font-bold focus:outline-none flex-shrink-0"
+                      style={{
+                        backgroundColor: replying || !replyText.trim() ? '#DDD4C0' : '#1B3828',
+                        color: replying || !replyText.trim() ? '#9A8A78' : '#EED98A',
+                        border: 'none', fontFamily: OUTFIT, letterSpacing: '0.05em',
+                      }}
+                    >
+                      {replying ? '...' : 'SEND'}
+                    </button>
+                  </div>
+                )}
+
+                {closeConfirmOpen && (
+                  <ConfirmModal
+                    title="Close this thread?"
+                    body="The participant will see it as closed. You can reopen it later."
+                    confirmLabel="Close Thread"
+                    danger
+                    loading={closingOrReopening}
+                    onConfirm={() => handleCloseReopen(true)}
+                    onCancel={() => setCloseConfirmOpen(false)}
+                  />
+                )}
+              </section>
+            )
           )}
         </>
       )}

@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { useRouter, usePathname, useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -62,40 +62,40 @@ export function useManage() {
 
 // ── Nav definition ─────────────────────────────────────────────────────────
 
-const NAV_SECTIONS = (slug: string) => [
+const NAV_SECTIONS = (slug: string, communicationsBadge = 0) => [
   {
     header: null,
     items: [
-      { icon: LayoutDashboard, label: 'Dashboard',   href: `/manage/${slug}`,        external: false },
-      { icon: Radio,           label: 'Live Status', href: `/manage/${slug}/live`,   external: false },
+      { icon: LayoutDashboard, label: 'Dashboard',   href: `/manage/${slug}`,        external: false, badge: 0 },
+      { icon: Radio,           label: 'Live Status', href: `/manage/${slug}/live`,   external: false, badge: 0 },
     ],
   },
   {
     header: 'MANAGE',
     items: [
-      { icon: Building2, label: 'Committees',   href: `/manage/${slug}/committees`,   external: false },
-      { icon: Users,     label: 'Applications', href: `/manage/${slug}/applications`, external: false },
-      { icon: MapPin,    label: 'Assignment',   href: `/manage/${slug}/assignment`,   external: false },
-      { icon: FileText,  label: 'Documents',    href: `/manage/${slug}/documents`,    external: false },
+      { icon: Building2, label: 'Committees',   href: `/manage/${slug}/committees`,   external: false, badge: 0 },
+      { icon: Users,     label: 'Applications', href: `/manage/${slug}/applications`, external: false, badge: 0 },
+      { icon: MapPin,    label: 'Assignment',   href: `/manage/${slug}/assignment`,   external: false, badge: 0 },
+      { icon: FileText,  label: 'Documents',    href: `/manage/${slug}/documents`,    external: false, badge: 0 },
     ],
   },
   {
     header: 'COMMUNICATE',
     items: [
-      { icon: Mail, label: 'Email Builder', href: `/manage/${slug}/communications`, external: false },
+      { icon: Mail, label: 'Email Builder', href: `/manage/${slug}/communications`, external: false, badge: communicationsBadge },
     ],
   },
   {
     header: 'FINANCIAL',
     items: [
-      { icon: CreditCard, label: 'Financials', href: `/manage/${slug}/financials`, external: false },
+      { icon: CreditCard, label: 'Financials', href: `/manage/${slug}/financials`, external: false, badge: 0 },
     ],
   },
   {
     header: 'SETTINGS',
     items: [
-      { icon: Settings,  label: 'Settings',  href: `/manage/${slug}/settings`, external: false },
-      { icon: Briefcase, label: 'Job Board', href: `/manage/${slug}/jobs`,     external: false },
+      { icon: Settings,  label: 'Settings',  href: `/manage/${slug}/settings`, external: false, badge: 0 },
+      { icon: Briefcase, label: 'Job Board', href: `/manage/${slug}/jobs`,     external: false, badge: 0 },
     ],
   },
 ];
@@ -138,13 +138,15 @@ function SideRail({
   slug,
   conference,
   pathname,
+  communicationsBadge = 0,
 }: {
   slug: string;
   conference: Conference | null;
   pathname: string;
+  communicationsBadge?: number;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const sections = NAV_SECTIONS(slug);
+  const sections = NAV_SECTIONS(slug, communicationsBadge);
   const statusStyle = STATUS_STYLES[conference?.status ?? 'private'] ?? STATUS_STYLES.private;
   const year = conference ? new Date(conference.start_date + 'T00:00:00').getFullYear() : null;
 
@@ -296,7 +298,16 @@ function SideRail({
                     }
                   }}
                 >
-                  <Icon size={17} strokeWidth={2} style={{ flexShrink: 0 }} />
+                  <span className="relative flex-shrink-0" style={{ lineHeight: 0 }}>
+                    <Icon size={17} strokeWidth={2} />
+                    {item.badge > 0 && (
+                      <span
+                        aria-label={`${item.badge} needing attention`}
+                        className="absolute rounded-full"
+                        style={{ top: -3, right: -4, width: 8, height: 8, backgroundColor: '#B6871F', border: '1.5px solid #FAF8F3' }}
+                      />
+                    )}
+                  </span>
                   <span
                     style={{
                       fontFamily: "'Outfit', sans-serif",
@@ -310,6 +321,19 @@ function SideRail({
                   >
                     {item.label}
                   </span>
+                  {expanded && item.badge > 0 && (
+                    <span
+                      className="flex-shrink-0 flex items-center justify-center rounded-full"
+                      style={{
+                        minWidth: 18, height: 18, padding: '0 5px', fontSize: 10, fontWeight: 700,
+                        fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums',
+                        backgroundColor: active ? '#EED98A' : 'rgba(182,135,31,0.16)',
+                        color: active ? '#1B3828' : '#8A6614',
+                      }}
+                    >
+                      {item.badge}
+                    </span>
+                  )}
                 </Link>
               );
             })}
@@ -367,13 +391,15 @@ function SidebarContent({
   conference,
   pathname,
   onNavClick,
+  communicationsBadge = 0,
 }: {
   slug: string;
   conference: Conference | null;
   pathname: string;
   onNavClick?: () => void;
+  communicationsBadge?: number;
 }) {
-  const sections = NAV_SECTIONS(slug);
+  const sections = NAV_SECTIONS(slug, communicationsBadge);
 
   const statusStyle = STATUS_STYLES[conference?.status ?? 'private'] ?? STATUS_STYLES.private;
   const year = conference ? new Date(conference.start_date + 'T00:00:00').getFullYear() : null;
@@ -471,7 +497,19 @@ function SidebarContent({
                   }}
                 >
                   <Icon size={16} style={{ flexShrink: 0 }} />
-                  {item.label}
+                  <span className="flex-1">{item.label}</span>
+                  {item.badge > 0 && (
+                    <span
+                      className="flex-shrink-0 flex items-center justify-center rounded-full"
+                      style={{
+                        minWidth: 18, height: 18, padding: '0 5px', fontSize: 10, fontWeight: 700,
+                        fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums',
+                        backgroundColor: 'rgba(182,135,31,0.16)', color: '#8A6614',
+                      }}
+                    >
+                      {item.badge}
+                    </span>
+                  )}
                 </Link>
               );
             })}
@@ -522,6 +560,25 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
   const [isOwner, setIsOwner] = useState(false);
   const [permissions, setPermissions] = useState<Record<string, boolean>>({});
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [inboxBadge, setInboxBadge] = useState(0);
+
+  // Nav badge — cheap count-only query. seen_by_organizer flips to false on
+  // every participant-side write (new request, reply, swap request/notice)
+  // and back to true on every organizer-side write, so this alone already
+  // captures "unseen or last message from the participant" for open threads.
+  const loadInboxBadge = useCallback(async () => {
+    if (!conference || !session) return;
+    const supabase = getAuthedClient(session.access_token);
+    const { count } = await supabase
+      .from('conference_requests')
+      .select('id', { count: 'exact', head: true })
+      .eq('conference_id', conference.id)
+      .eq('status', 'open')
+      .eq('seen_by_organizer', false);
+    setInboxBadge(count ?? 0);
+  }, [conference?.id, session?.access_token]);
+
+  useEffect(() => { loadInboxBadge(); }, [loadInboxBadge]);
 
   // Auth gate
   useEffect(() => {
@@ -745,7 +802,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
       </header>
 
       {/* Desktop floating rail — icons only, expands on hover */}
-      <SideRail slug={slug} conference={conference} pathname={pathname} />
+      <SideRail slug={slug} conference={conference} pathname={pathname} communicationsBadge={inboxBadge} />
 
       {/* Mobile drawer overlay */}
       {mobileMenuOpen && (
@@ -765,6 +822,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
                 conference={conference}
                 pathname={pathname}
                 onNavClick={() => setMobileMenuOpen(false)}
+                communicationsBadge={inboxBadge}
               />
             </div>
           </div>

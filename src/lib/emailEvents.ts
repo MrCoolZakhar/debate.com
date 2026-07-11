@@ -129,7 +129,8 @@ export async function queueEventEmail(
   supabase: ReturnType<typeof getAuthedClient>,
   conferenceId: string,
   eventKey: string,
-  applicationIds: string[]
+  applicationIds: string[],
+  extraCtx?: EmailTokenContext
 ): Promise<QueueEventEmailResult> {
   if (applicationIds.length === 0) return { drafted: false, eventKey, eventLabel: getEventLabel(eventKey) };
 
@@ -187,6 +188,7 @@ export async function queueEventEmail(
       conference_name: conference?.full_name ?? null,
       conference_dates: conference ? formatDateRange(conference.start_date, conference.end_date) : null,
       fee: conference?.fee_amount ? formatFee(conference.fee_amount, conference.fee_currency) : null,
+      ...extraCtx,
     };
     return {
       conference_id: conferenceId,
