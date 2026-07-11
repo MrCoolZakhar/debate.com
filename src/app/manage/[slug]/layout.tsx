@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import { useRouter, usePathname, useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
-  LayoutDashboard, Globe, Building2, Users, MapPin, FileText,
+  LayoutDashboard, Building2, Users, MapPin, FileText,
   Mail, CreditCard, Settings, Briefcase, Menu, X, Radio,
 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
@@ -67,7 +67,6 @@ const NAV_SECTIONS = (slug: string) => [
     items: [
       { icon: LayoutDashboard, label: 'Dashboard',   href: `/manage/${slug}`,        external: false },
       { icon: Radio,           label: 'Live Status', href: `/manage/${slug}/live`,   external: false },
-      { icon: Globe,           label: 'View Page',   href: `/conferences/${slug}`,   external: true  },
     ],
   },
   {
@@ -99,6 +98,24 @@ const NAV_SECTIONS = (slug: string) => [
     ],
   },
 ];
+
+// ── Date range helper (mirrors communications page formatDateRange) ───────
+
+function formatConfDate(d: string) {
+  return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function formatConfDateRange(start: string, end: string): string {
+  if (!start || !end) return '';
+  if (start === end) return formatConfDate(start);
+  const s = new Date(start);
+  const e = new Date(end);
+  const sameMonth = s.getMonth() === e.getMonth() && s.getFullYear() === e.getFullYear();
+  if (sameMonth) {
+    return `${s.toLocaleDateString('en-GB', { day: 'numeric' })} – ${formatConfDate(end)}`;
+  }
+  return `${formatConfDate(start)} – ${formatConfDate(end)}`;
+}
 
 // ── Status pill styles (shared by rail + mobile drawer) ───────────────────
 // More vibrant than the old muted greys: saturated tints on translucent bases
@@ -149,49 +166,74 @@ function SideRail({
         overflow: 'hidden',
       }}
     >
-      {/* Conference identity */}
+      {/* Conference identity — links to the public conference page */}
       <div
-        className="flex-shrink-0 flex items-center"
+        className="flex-shrink-0"
         style={{
-          gap: expanded ? '12px' : '0px',
           padding: expanded ? '16px 16px 14px' : '14px 0',
-          justifyContent: expanded ? 'flex-start' : 'center',
           borderBottom: '1px solid rgba(221,212,192,0.65)',
-          transition: 'padding 280ms cubic-bezier(0.22,1,0.36,1), gap 280ms cubic-bezier(0.22,1,0.36,1)',
+          transition: 'padding 280ms cubic-bezier(0.22,1,0.36,1)',
         }}
       >
-        {conference?.logo_url ? (
-          <img
-            src={conference.logo_url}
-            alt={conference.acronym}
-            style={{ width: '40px', height: '40px', objectFit: 'contain', flexShrink: 0, filter: 'drop-shadow(0 3px 8px rgba(27,56,40,0.25))' }}
-          />
-        ) : (
-          <span
-            className="flex items-center justify-center flex-shrink-0"
+        <Link
+          href={`/conferences/${slug}`}
+          title="View public page"
+          className="flex items-center"
+          style={{
+            gap: expanded ? '12px' : '0px',
+            justifyContent: expanded ? 'flex-start' : 'center',
+            textDecoration: 'none',
+            transition: 'gap 280ms cubic-bezier(0.22,1,0.36,1), opacity 150ms ease',
+          }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.opacity = '0.72'; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}
+        >
+          {conference?.logo_url ? (
+            <img
+              src={conference.logo_url}
+              alt={conference.acronym}
+              style={{ width: '40px', height: '40px', objectFit: 'contain', flexShrink: 0, filter: 'drop-shadow(0 3px 8px rgba(27,56,40,0.25))' }}
+            />
+          ) : (
+            <span
+              className="flex items-center justify-center flex-shrink-0"
+              style={{
+                width: '40px', height: '40px', borderRadius: '13px',
+                background: 'linear-gradient(135deg, #16301F, #2A5A3C)',
+                color: '#EED98A', fontSize: '13px', fontWeight: 800, fontFamily: "'Outfit', sans-serif",
+              }}
+            >
+              {(conference?.acronym ?? '?').slice(0, 2)}
+            </span>
+          )}
+          <div
+            className="min-w-0"
             style={{
-              width: '40px', height: '40px', borderRadius: '13px',
-              background: 'linear-gradient(135deg, #16301F, #2A5A3C)',
-              color: '#EED98A', fontSize: '13px', fontWeight: 800, fontFamily: "'Outfit', sans-serif",
+              maxWidth: expanded ? '170px' : '0px',
+              opacity: expanded ? 1 : 0,
+              overflow: 'hidden',
+              transition: 'max-width 280ms cubic-bezier(0.22,1,0.36,1), opacity 200ms ease 60ms',
+              whiteSpace: 'nowrap',
             }}
           >
-            {(conference?.acronym ?? '?').slice(0, 2)}
-          </span>
-        )}
-        <div
-          className="min-w-0"
-          style={{
-            maxWidth: expanded ? '170px' : '0px',
-            opacity: expanded ? 1 : 0,
-            overflow: 'hidden',
-            transition: 'max-width 280ms cubic-bezier(0.22,1,0.36,1), opacity 200ms ease 60ms',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          <span className="text-[15px] font-extrabold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-            {conference?.acronym ?? '…'}{year ? ` ${year}` : ''}
-          </span>
-        </div>
+            <span className="block text-[15px] font-extrabold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", lineHeight: 1.2 }}>
+              {conference?.acronym ?? '…'}{year ? ` ${year}` : ''}
+            </span>
+            {conference && (
+              <span
+                className="block"
+                style={{
+                  fontSize: '10.5px', fontWeight: 600, color: '#9A8A78',
+                  fontFamily: "'Outfit', sans-serif",
+                  fontVariantNumeric: 'tabular-nums',
+                  lineHeight: 1.3, marginTop: '1px',
+                }}
+              >
+                {formatConfDateRange(conference.start_date, conference.end_date)}
+              </span>
+            )}
+          </div>
+        </Link>
       </div>
 
       {/* Nav */}
@@ -333,9 +375,58 @@ function SidebarContent({
   const sections = NAV_SECTIONS(slug);
 
   const statusStyle = STATUS_STYLES[conference?.status ?? 'private'] ?? STATUS_STYLES.private;
+  const year = conference ? new Date(conference.start_date + 'T00:00:00').getFullYear() : null;
 
   return (
     <div className="flex flex-col h-full">
+      {/* Conference identity — links to the public conference page */}
+      <Link
+        href={`/conferences/${slug}`}
+        title="View public page"
+        onClick={onNavClick}
+        className="flex items-center gap-3 px-4 py-3.5 flex-shrink-0 transition-opacity"
+        style={{ borderBottom: '1px solid #DDD4C0', textDecoration: 'none' }}
+        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.opacity = '0.72'; }}
+        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}
+      >
+        {conference?.logo_url ? (
+          <img
+            src={conference.logo_url}
+            alt={conference.acronym}
+            style={{ width: '36px', height: '36px', objectFit: 'contain', flexShrink: 0, filter: 'drop-shadow(0 3px 8px rgba(27,56,40,0.25))' }}
+          />
+        ) : (
+          <span
+            className="flex items-center justify-center flex-shrink-0"
+            style={{
+              width: '36px', height: '36px', borderRadius: '12px',
+              background: 'linear-gradient(135deg, #16301F, #2A5A3C)',
+              color: '#EED98A', fontSize: '12px', fontWeight: 800, fontFamily: "'Outfit', sans-serif",
+            }}
+          >
+            {(conference?.acronym ?? '?').slice(0, 2)}
+          </span>
+        )}
+        <div className="min-w-0">
+          <span className="block text-sm font-extrabold truncate" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", lineHeight: 1.2 }}>
+            {conference?.acronym ?? '…'}{year ? ` ${year}` : ''}
+          </span>
+          {conference && (
+            <span
+              className="block"
+              style={{
+                fontSize: '10.5px', fontWeight: 600, color: '#9A8A78',
+                fontFamily: "'Outfit', sans-serif",
+                fontVariantNumeric: 'tabular-nums',
+                lineHeight: 1.3, marginTop: '1px',
+              }}
+            >
+              {formatConfDateRange(conference.start_date, conference.end_date)}
+            </span>
+          )}
+        </div>
+      </Link>
+
       <div className="flex-1 overflow-y-auto py-2">
         {sections.map((section, si) => (
           <div key={si}>
@@ -595,12 +686,15 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
             <img src="/GavellingLogo.png" alt="Gavelling" className="h-6 w-auto object-contain brightness-200 saturate-0" />
           </Link>
           <span style={{ color: 'rgba(238,217,138,0.3)', fontSize: '16px' }}>/</span>
-          <span
-            className="text-sm font-bold"
-            style={{ color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.03em' }}
+          <Link
+            href={`/manage/${slug}`}
+            className="text-sm font-bold transition-opacity focus:outline-none"
+            style={{ color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.03em', textDecoration: 'none' }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.opacity = '0.75'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}
           >
             {conference?.acronym ?? '...'}
-          </span>
+          </Link>
         </div>
 
         {/* Right: status pill + view page + avatar */}
@@ -663,9 +757,6 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
             style={{ width: '280px', backgroundColor: '#FAF8F3', borderRight: '1px solid #DDD4C0' }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="h-14 flex items-center px-4" style={{ borderBottom: '1px solid #DDD4C0' }}>
-              <span className="text-sm font-semibold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Menu</span>
-            </div>
             <div className="flex-1 overflow-y-auto">
               <SidebarContent
                 slug={slug}

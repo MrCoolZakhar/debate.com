@@ -305,6 +305,33 @@ function SortButton({ label, dir, onClick }: { label: string; dir: 'asc' | 'desc
   );
 }
 
+/** Cycling committee-type filter pill: all → GA only → crisis only → all. Shares the SortButton pill styling. */
+function TypeFilterButton({ mode, onClick }: { mode: 'ga' | 'crisis' | null; onClick: () => void }) {
+  const active = mode !== null;
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[10.5px] font-bold transition-all focus:outline-none"
+      style={{
+        backgroundColor: active ? '#1B3828' : 'rgba(237,231,216,0.5)',
+        color: active ? '#EED98A' : '#6B5F52',
+        border: active ? '1px solid #1B3828' : '1px solid rgba(221,212,192,0.9)',
+        fontFamily: "'Outfit', sans-serif",
+        letterSpacing: '0.09em',
+        whiteSpace: 'nowrap',
+        cursor: 'pointer',
+      }}
+    >
+      {mode === 'ga' ? 'GA ONLY' : mode === 'crisis' ? 'CRISIS ONLY' : 'GA / CRISIS'}
+      {active ? (
+        <Check size={12} strokeWidth={2.4} />
+      ) : (
+        <ArrowUpDown size={12} strokeWidth={2} style={{ opacity: 0.5 }} />
+      )}
+    </button>
+  );
+}
+
 function SectionCard({ children, className = '' }: { children: React.ReactNode; className?: string }) {
   return (
     <div
@@ -2086,19 +2113,24 @@ export default function ConferenceDetailClient() {
                   return { slots, capacity, taken, pct: capacity > 0 ? Math.min(100, Math.round((taken / capacity) * 100)) : 0 };
                 };
                 const DIFF_ORDER: Record<string, number> = { beginner: 0, intermediate: 1, advanced: 2, expert: 3 };
-                const sortedCommittees = [...committees];
-                if (sortKey) {
+                let sortedCommittees = [...committees];
+                if (sortKey === 'type') {
+                  // Filter, not sort: first click shows GA-style committees only,
+                  // second click shows crisis only, third click resets.
+                  const wantCrisis = sortDir === 'desc';
+                  sortedCommittees = sortedCommittees.filter(c => (c.committee_type === 'crisis') === wantCrisis);
+                } else if (sortKey) {
                   sortedCommittees.sort((a, b) => {
                     let va = 0, vb = 0;
                     if (sortKey === 'difficulty') {
                       va = DIFF_ORDER[(a.difficulty ?? '').toLowerCase()] ?? 99;
                       vb = DIFF_ORDER[(b.difficulty ?? '').toLowerCase()] ?? 99;
-                    } else if (sortKey === 'availability') {
-                      va = committeeStats(a).pct;
-                      vb = committeeStats(b).pct;
                     } else {
-                      va = a.committee_type === 'crisis' ? 1 : 0;
-                      vb = b.committee_type === 'crisis' ? 1 : 0;
+                      // Availability = open seats (capacity minus taken).
+                      const sa = committeeStats(a);
+                      const sb = committeeStats(b);
+                      va = sa.capacity - sa.taken;
+                      vb = sb.capacity - sb.taken;
                     }
                     return sortDir === 'asc' ? va - vb : vb - va;
                   });
@@ -2135,9 +2167,8 @@ export default function ConferenceDetailClient() {
                           dir={sortKey === 'availability' ? sortDir : null}
                           onClick={() => cycleSort('availability')}
                         />
-                        <SortButton
-                          label="GA / CRISIS"
-                          dir={sortKey === 'type' ? sortDir : null}
+                        <TypeFilterButton
+                          mode={sortKey === 'type' ? (sortDir === 'asc' ? 'ga' : 'crisis') : null}
                           onClick={() => cycleSort('type')}
                         />
                       </div>
@@ -2147,6 +2178,12 @@ export default function ConferenceDetailClient() {
                       <SectionCard>
                         <p className="text-sm" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
                           Committees will be announced soon.
+                        </p>
+                      </SectionCard>
+                    ) : sortedCommittees.length === 0 && !isOrganizerViewer ? (
+                      <SectionCard>
+                        <p className="text-sm" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                          No {sortDir === 'desc' ? 'crisis' : 'General Assembly'} committees at this conference.
                         </p>
                       </SectionCard>
                     ) : (

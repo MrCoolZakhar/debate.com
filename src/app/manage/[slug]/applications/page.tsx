@@ -1,7 +1,11 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Building2, Download, User } from 'lucide-react';
+import {
+  ArrowRight, BadgeCheck, Building2, Check, CircleCheck, Clock, Download, Eye,
+  Gavel, Globe, GraduationCap, HandCoins, Inbox, MapPin, MessageSquareText,
+  RotateCcw, User, Users, X,
+} from 'lucide-react';
 import Link from 'next/link';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -9,6 +13,8 @@ import { useAuth } from '@/components/AuthProvider';
 import { queueEventEmail } from '@/lib/emailEvents';
 import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
 import { useConfirmModal } from '@/components/ConfirmModal';
+import { FlagImg } from '@/components/FlagImg';
+import { getCountryByName } from '@/lib/countries';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -48,8 +54,8 @@ interface Application {
   assigned_committee_id: string | null;
   assigned_country_code: string | null;
   assigned_country_name: string | null;
-  assigned_committee: { name: string; topics: string[] | null } | null;
-  profiles: { display_name: string; email: string; avatar_url: string | null; nationality: string | null } | null;
+  assigned_committee: { name: string; abbreviation: string | null; topics: string[] | null } | null;
+  profiles: { display_name: string; email: string; avatar_url: string | null; nationality: string | null; mun_experience_level: string | null } | null;
   societies: { name: string } | null;
   application_preferences: AppPreference[];
   self_paid: boolean;
@@ -142,6 +148,50 @@ function roleLabel(role: string) {
   return map[role] ?? role;
 }
 
+function RoleIcon({ role, size = 10 }: { role: string; size?: number }) {
+  const Icon = role === 'chair' ? Gavel
+    : role === 'head-delegate' ? Users
+    : role === 'faculty-advisor' ? GraduationCap
+    : role === 'observer' ? Eye
+    : User;
+  return <Icon size={size} strokeWidth={2.5} />;
+}
+
+function StatusIcon({ status, size = 10 }: { status: string; size?: number }) {
+  const Icon = status === 'submitted' ? Inbox
+    : status === 'accepted' ? Check
+    : status === 'assigned' ? BadgeCheck
+    : status === 'rejected' ? X
+    : Clock;
+  return <Icon size={size} strokeWidth={2.5} />;
+}
+
+/** Committee shorthand — abbreviation when set, else a monogram of the name. */
+function committeeAbbr(c: { name: string; abbreviation: string | null } | null | undefined): string {
+  if (!c) return '—';
+  if (c.abbreviation) return c.abbreviation;
+  const mono = c.name
+    .split(/\s+/)
+    .filter(w => /^[A-Za-z0-9]/.test(w))
+    .map(w => w[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 4);
+  return mono || c.name.slice(0, 4).toUpperCase();
+}
+
+/** Country rendered as a flag with the name kept as a tooltip. Falls back to
+ *  plain text when no ISO code can be resolved from the name. */
+function CountryFlag({ name, code, size = 14 }: { name: string | null | undefined; code?: string | null; size?: number }) {
+  const resolved = code || (name ? getCountryByName(name)?.code : undefined);
+  if (!resolved) return name ? <span>{name}</span> : null;
+  return (
+    <span title={name ?? resolved} className="inline-flex items-center" style={{ lineHeight: 0 }}>
+      <FlagImg code={resolved} size={size} />
+    </span>
+  );
+}
+
 const STATUS_FILTERS = [
   { label: 'ALL', value: 'all' },
   { label: 'SUBMITTED', value: 'submitted' },
@@ -204,7 +254,10 @@ export default function ApplicationsPage() {
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectNote, setRejectNote] = useState('');
   const [roleConfigs, setRoleConfigs] = useState<RoleConfigLite[]>([]);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [reviewId, setReviewId] = useState<string | null>(null);
+  // Conferences done in any capacity, per user — count of their mun_cv_entries
+  // rows (the same source profiles.mun_experience_level is derived from).
+  const [cvCounts, setCvCounts] = useState<Record<string, number>>({});
   const { draftNotices, pushDraftNotice, dismissDraftNotice } = useDraftNotices();
   const { confirm, modal: confirmModal } = useConfirmModal();
 
@@ -221,8 +274,8 @@ export default function ApplicationsPage() {
           payment_status, submitted_at, organizer_note, custom_answers,
           assigned_committee_id, assigned_country_code, assigned_country_name,
           self_paid, attending, pledge_type, spots_pledged, pledge_confirmed_at, society_id,
-          assigned_committee:conference_committees!assigned_committee_id (name, topics),
-          profiles (display_name, email, avatar_url, nationality),
+          assigned_committee:conference_committees!assigned_committee_id (name, abbreviation, topics),
+          profiles (display_name, email, avatar_url, nationality, mun_experience_level),
           societies (name),
           application_preferences (
             preference_order, conference_committee_id, country_code, country_name,
@@ -237,9 +290,26 @@ export default function ApplicationsPage() {
         .eq('conference_id', conference.id),
     ]);
 
-    setApplications((appRes.data ?? []) as unknown as Application[]);
+    const apps = (appRes.data ?? []) as unknown as Application[];
+    setApplications(apps);
     setRoleConfigs((cfgRes.data ?? []) as unknown as RoleConfigLite[]);
     setLoading(false);
+
+    // Batched MUN-history counts — ONE query for every visible applicant.
+    const userIds = Array.from(new Set(apps.map(a => a.user_id).filter(Boolean)));
+    if (userIds.length > 0) {
+      const { data: cvRows } = await supabase
+        .from('mun_cv_entries')
+        .select('user_id')
+        .in('user_id', userIds);
+      const counts: Record<string, number> = {};
+      for (const row of (cvRows ?? []) as { user_id: string }[]) {
+        counts[row.user_id] = (counts[row.user_id] ?? 0) + 1;
+      }
+      setCvCounts(counts);
+    } else {
+      setCvCounts({});
+    }
   }, [conference, session?.access_token]);
 
   useEffect(() => { loadApplications(); }, [loadApplications]);
@@ -476,7 +546,7 @@ export default function ApplicationsPage() {
       <div className="flex flex-wrap gap-3 mb-6">
         {statItems.map(s => (
           <div key={s.label} className="rounded-xl px-4 py-2 text-center" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
-            <p className="font-black text-lg" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>{s.value}</p>
+            <p className="font-black text-lg" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}>{s.value}</p>
             <p style={{ fontSize: 10, color: '#9A8A78', fontFamily: "'Outfit', sans-serif", fontWeight: 700, letterSpacing: '0.12em' }}>{s.label.toUpperCase()}</p>
           </div>
         ))}
@@ -509,7 +579,6 @@ export default function ApplicationsPage() {
             const email = app.profiles?.email ?? '';
             const isDelegate = app.role === 'delegate' || app.role === 'head-delegate';
             const prefs = [...(app.application_preferences ?? [])].sort((a, b) => a.preference_order - b.preference_order);
-            const isRejecting = rejectingId === app.id;
 
             const roleTone = app.role === 'delegate' || app.role === 'head-delegate'
               ? { bg: 'rgba(42,90,60,0.14)',   color: '#2A5A3C', border: 'rgba(42,90,60,0.38)' }
@@ -538,10 +607,8 @@ export default function ApplicationsPage() {
 
             const paid = app.payment_status === 'paid';
             const waived = app.payment_status === 'waived';
-            const roleConfig = roleConfigs.find(rc => rc.role === app.role);
-            const questions = roleConfig?.custom_questions ?? [];
-            const answers = app.custom_answers ?? {};
-            const isExpanded = expandedId === app.id;
+            const expLabel = app.experience_level ?? app.profiles?.mun_experience_level ?? null;
+            const confCount = cvCounts[app.user_id];
 
             const pledgeLine = app.pledge_type === 'own'
               ? 'Pledged: own fee'
@@ -551,84 +618,52 @@ export default function ApplicationsPage() {
               ? `Pledged: own fee + ${app.spots_pledged ?? 0} delegation spots`
               : null;
 
-            const showPaymentControls = app.status === 'accepted' || app.status === 'assigned' || app.status === 'submitted';
-            const paymentControls = showPaymentControls ? (
-              <>
-                {!paid ? (
-                  <button
-                    onClick={() => handleMarkPaid(app)}
-                    className="rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
-                    style={{ backgroundColor: 'rgba(61,122,82,0.12)', color: '#3D7A52', border: '1px solid rgba(61,122,82,0.3)', fontFamily: "'Outfit', sans-serif" }}
-                  >
-                    MARK PAID
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => handleMarkUnpaid(app)}
-                    className="rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
-                    style={{ backgroundColor: 'rgba(184,132,74,0.12)', color: '#B8844A', border: '1px solid rgba(184,132,74,0.3)', fontFamily: "'Outfit', sans-serif" }}
-                  >
-                    MARK UNPAID
-                  </button>
-                )}
-                {app.payment_status === 'unpaid' && (
-                  <button
-                    onClick={() => handleWaive(app)}
-                    className="rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
-                    style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}
-                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
-                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                  >
-                    WAIVE
-                  </button>
-                )}
-                {waived && (
-                  <button
-                    onClick={() => handleUndoWaive(app)}
-                    className="rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
-                    style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}
-                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
-                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                  >
-                    UNDO WAIVE
-                  </button>
-                )}
-              </>
-            ) : null;
-
             return (
               <div
                 key={app.id}
-                className="rounded-2xl p-5 transition-colors"
+                className="rounded-2xl flex overflow-hidden transition-colors"
                 style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}
                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
               >
-                {/* Row 1: avatar + name/email + badges */}
-                <div className="flex items-center gap-3">
+                {/* Photo band — fills the full height of the card's left edge */}
+                <div className="flex-shrink-0 relative" style={{ width: 80, minHeight: 96 }}>
                   {app.profiles?.avatar_url ? (
-                    <img src={app.profiles.avatar_url} alt={name} className="rounded-full object-cover flex-shrink-0" style={{ width: 36, height: 36 }} />
+                    <img src={app.profiles.avatar_url} alt={name} className="absolute inset-0 w-full h-full object-cover" />
                   ) : (
-                    <div className="flex-shrink-0 flex items-center justify-center rounded-full" style={{ width: 36, height: 36, backgroundColor: 'rgba(154,138,120,0.16)', border: '1px solid rgba(221,212,192,0.9)' }}>
-                      <User size={17} strokeWidth={2} style={{ color: '#9A8A78' }} />
+                    <div className="absolute inset-0 flex items-center justify-center" style={{ backgroundColor: '#1B3828' }}>
+                      <span className="font-black" style={{ color: '#EED98A', fontSize: 26, fontFamily: "'Outfit', sans-serif" }}>
+                        {name.trim().charAt(0).toUpperCase() || '?'}
+                      </span>
                     </div>
                   )}
+                </div>
+
+                {/* Card body */}
+                <div className="flex-1 min-w-0 p-5">
+                {/* Row 1: name/email + badges */}
+                <div className="flex items-center gap-3">
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-sm truncate" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>{name}</p>
                     <p className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>{email}</p>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    <span style={roleBadgeStyle}>{roleLabel(app.role).toUpperCase()}</span>
-                    <span style={{ ...roleBadgeStyle, backgroundColor: sc.bg, color: sc.color, border: `1px solid ${sc.border}` }}>
+                    <span className="inline-flex items-center gap-1" style={roleBadgeStyle}>
+                      <RoleIcon role={app.role} />
+                      {roleLabel(app.role).toUpperCase()}
+                    </span>
+                    <span className="inline-flex items-center gap-1" style={{ ...roleBadgeStyle, backgroundColor: sc.bg, color: sc.color, border: `1px solid ${sc.border}` }}>
+                      <StatusIcon status={app.status} />
                       {app.status.toUpperCase()}
                     </span>
                     {waived ? (
-                      <span className="px-2 py-0.5 rounded-full font-bold" style={{ backgroundColor: 'rgba(184,132,74,0.16)', color: '#9A6B2F', border: '1px solid rgba(184,132,74,0.42)', fontSize: 9, fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em' }}>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold" style={{ backgroundColor: 'rgba(184,132,74,0.16)', color: '#9A6B2F', border: '1px solid rgba(184,132,74,0.42)', fontSize: 9, fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em' }}>
+                        <HandCoins size={10} strokeWidth={2.5} />
                         WAIVED
                       </span>
                     ) : (
                       <span className="flex items-center gap-1 font-bold" style={{ fontSize: 10, fontFamily: "'Outfit', sans-serif", letterSpacing: '0.06em', color: paid ? '#2A5A3C' : '#9A6B2F' }}>
-                        <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: paid ? '#3D7A52' : '#B6871F', display: 'inline-block' }} />
+                        {paid ? <CircleCheck size={11} strokeWidth={2.5} /> : <Clock size={11} strokeWidth={2.5} />}
                         {paid ? 'PAID' : 'UNPAID'}
                       </span>
                     )}
@@ -644,211 +679,388 @@ export default function ApplicationsPage() {
                     </span>
                   )}
                   {app.is_head_delegate && (
-                    <span className="px-2 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(27,56,40,0.08)', color: '#1B3828', fontSize: 10, fontFamily: "'Outfit', sans-serif", fontWeight: 700, letterSpacing: '0.06em' }}>
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(27,56,40,0.08)', color: '#1B3828', fontSize: 10, fontFamily: "'Outfit', sans-serif", fontWeight: 700, letterSpacing: '0.06em' }}>
+                      <Users size={10} strokeWidth={2.5} />
                       HEAD DEL.
                     </span>
                   )}
-                  {app.experience_level && (
-                    <span style={{ textTransform: 'capitalize' }}>{app.experience_level}</span>
+                  {expLabel && (
+                    <span
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full"
+                      title={confCount !== undefined ? `${confCount} conference${confCount === 1 ? '' : 's'} on their MUN CV` : undefined}
+                      style={{ backgroundColor: 'rgba(238,217,138,0.28)', color: '#7A5A10', border: '1px solid rgba(182,135,31,0.35)', fontSize: 10, fontFamily: "'Outfit', sans-serif", fontWeight: 700, letterSpacing: '0.06em', textTransform: 'capitalize', fontVariantNumeric: 'tabular-nums' }}
+                    >
+                      <GraduationCap size={11} strokeWidth={2.5} />
+                      {expLabel}{confCount !== undefined ? ` (${confCount})` : ''}
+                    </span>
                   )}
                   {app.submitted_at && (
-                    <span>Applied {formatDate(app.submitted_at)}</span>
+                    <span className="flex items-center gap-1">
+                      <Clock size={12} />
+                      Applied {formatDate(app.submitted_at)}
+                    </span>
                   )}
                 </div>
 
                 {/* Row 2b: pledge */}
                 {pledgeLine && (
-                  <p className="text-xs mt-1" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                  <p className="flex items-center gap-1 text-xs mt-1" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}>
+                    <HandCoins size={12} />
                     {pledgeLine}{app.pledge_confirmed_at ? ' · received' : ''}
                   </p>
                 )}
 
-                {/* Row 3: preferences (delegates only) */}
+                {/* Row 3: preferences (delegates only) — committee acronym + country flag */}
                 {isDelegate && prefs.length > 0 && (
                   <div className="flex flex-wrap gap-2 mt-2">
                     {prefs.slice(0, 2).map(p => (
                       <span
                         key={p.preference_order}
-                        className="px-2 py-1 rounded-lg text-xs"
-                        style={{ backgroundColor: 'rgba(27,56,40,0.06)', border: '1px solid rgba(27,56,40,0.1)', color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}
+                        className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs"
+                        title={`${p.conference_committees?.name ?? 'Unknown'} — ${p.country_name}`}
+                        style={{ backgroundColor: 'rgba(27,56,40,0.06)', border: '1px solid rgba(27,56,40,0.1)', color: '#1C1410', fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}
                       >
-                        {p.preference_order}. {p.conference_committees?.name ?? 'Unknown'} — {p.country_name}
+                        {p.preference_order}. <span className="font-semibold">{committeeAbbr(p.conference_committees)}</span>
+                        <CountryFlag name={p.country_name} code={p.country_code} size={14} />
                       </span>
                     ))}
                   </div>
                 )}
 
-                {/* Row 4: actions */}
-                <div className="flex flex-wrap gap-2 mt-3 pt-3" style={{ borderTop: '1px solid #F0EDE6' }}>
-                  <button
-                    onClick={() => setExpandedId(isExpanded ? null : app.id)}
-                    className="rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
-                    style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: isExpanded ? 'rgba(27,56,40,0.06)' : 'transparent', fontFamily: "'Outfit', sans-serif" }}
-                  >
-                    {isExpanded ? 'HIDE REVIEW' : 'REVIEW'}
-                  </button>
-                  {app.status === 'submitted' && (
-                    <>
-                      <button
-                        onClick={() => handleAccept(app.id)}
-                        className="rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
-                        style={{ backgroundColor: 'rgba(61,122,82,0.12)', color: '#3D7A52', border: '1px solid rgba(61,122,82,0.3)', fontFamily: "'Outfit', sans-serif" }}
-                      >
-                        ACCEPT
-                      </button>
-                      {paymentControls}
-                      {isRejecting ? (
-                        <div className="flex items-start gap-2 flex-1">
-                          <textarea
-                            value={rejectNote}
-                            onChange={e => setRejectNote(e.target.value)}
-                            rows={2}
-                            placeholder="Optional note to delegate..."
-                            className="flex-1 rounded-lg px-3 py-2 text-xs outline-none resize-none"
-                            style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: '#FAF8F3', fontFamily: "'Outfit', sans-serif" }}
-                          />
-                          <button
-                            onClick={() => openRejectConfirm(app)}
-                            className="rounded-lg py-1.5 px-3 text-xs font-bold focus:outline-none"
-                            style={{ backgroundColor: 'rgba(139,32,32,0.1)', color: '#8B2020', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "'Outfit', sans-serif" }}
-                          >
-                            CONFIRM
-                          </button>
-                          <button
-                            onClick={() => { setRejectingId(null); setRejectNote(''); }}
-                            className="rounded-lg py-1.5 px-3 text-xs font-bold focus:outline-none"
-                            style={{ border: '1px solid #DDD4C0', color: '#9A8A78', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}
-                          >
-                            CANCEL
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => setRejectingId(app.id)}
-                          className="rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
-                          style={{ backgroundColor: 'rgba(139,32,32,0.08)', color: '#8B2020', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "'Outfit', sans-serif" }}
-                        >
-                          REJECT
-                        </button>
-                      )}
-                    </>
-                  )}
-
-                  {app.status === 'accepted' && (
-                    <>
-                      {isDelegate && (
-                        <Link
-                          href={`/manage/${conference.slug}/assignment`}
-                          className="rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none"
-                          style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", textDecoration: 'none', display: 'inline-block' }}
-                        >
-                          ASSIGN →
-                        </Link>
-                      )}
-                      {paymentControls}
-                      {isRejecting ? (
-                        <div className="flex items-start gap-2 flex-1">
-                          <textarea
-                            value={rejectNote}
-                            onChange={e => setRejectNote(e.target.value)}
-                            rows={2}
-                            placeholder="Optional note to delegate..."
-                            className="flex-1 rounded-lg px-3 py-2 text-xs outline-none resize-none"
-                            style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: '#FAF8F3', fontFamily: "'Outfit', sans-serif" }}
-                          />
-                          <button
-                            onClick={() => openRejectConfirm(app)}
-                            className="rounded-lg py-1.5 px-3 text-xs font-bold focus:outline-none"
-                            style={{ backgroundColor: 'rgba(139,32,32,0.1)', color: '#8B2020', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "'Outfit', sans-serif" }}
-                          >
-                            CONFIRM
-                          </button>
-                          <button
-                            onClick={() => { setRejectingId(null); setRejectNote(''); }}
-                            className="rounded-lg py-1.5 px-3 text-xs font-bold focus:outline-none"
-                            style={{ border: '1px solid #DDD4C0', color: '#9A8A78', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}
-                          >
-                            CANCEL
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => setRejectingId(app.id)}
-                          className="rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
-                          style={{ backgroundColor: 'rgba(139,32,32,0.08)', color: '#8B2020', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "'Outfit', sans-serif" }}
-                        >
-                          REJECT
-                        </button>
-                      )}
-                    </>
-                  )}
-
-                  {app.status === 'assigned' && (
-                    <>
-                      {paymentControls}
-                      {app.assigned_country_name && (
-                        <span className="text-xs self-center" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                          {[app.assigned_committee?.name, (app.assigned_committee?.topics ?? []).join(', '), app.assigned_country_name].filter(Boolean).join('  ·  ')}
-                        </span>
-                      )}
-                    </>
-                  )}
-
-                  {app.status === 'rejected' && (
-                    <>
-                      {app.organizer_note && (
-                        <span className="text-xs italic self-center" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                          &ldquo;{app.organizer_note}&rdquo;
-                        </span>
-                      )}
-                      <button
-                        onClick={() => handleReinstate(app.id)}
-                        className="rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
-                        style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}
-                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
-                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                      >
-                        REINSTATE
-                      </button>
-                    </>
-                  )}
-                </div>
-
-                {/* Row 5: review panel */}
-                {isExpanded && (
-                  <div className="mt-3 pt-3" style={{ borderTop: '1px solid #F0EDE6' }}>
-                    {app.profiles?.nationality && (
-                      <p className="text-xs mb-3" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                        <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, letterSpacing: '0.12em' }}>NATIONALITY</span>{'  '}
-                        <span style={{ color: '#1C1410' }}>{app.profiles.nationality}</span>
-                      </p>
-                    )}
-                    {questions.length === 0 ? (
-                      <p className="text-xs italic" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                        No custom questions configured for this role.
-                      </p>
-                    ) : (
-                      <div className="flex flex-col gap-3">
-                        {questions.map(q => {
-                          const ans = (answers[q.id] ?? '').trim();
-                          return (
-                            <div key={q.id}>
-                              <p className="text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>{q.label}</p>
-                              <p className="text-sm whitespace-pre-wrap" style={{ color: ans ? '#1C1410' : '#9A8A78', fontFamily: "'Outfit', sans-serif", fontStyle: ans ? 'normal' : 'italic' }}>
-                                {ans || 'No answer provided.'}
-                              </p>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
+                {/* Row 3b: assignment (assigned only) — acronym + flag, full detail in tooltip */}
+                {app.status === 'assigned' && (app.assigned_committee || app.assigned_country_name) && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    <span
+                      className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-semibold"
+                      title={[app.assigned_committee?.name, (app.assigned_committee?.topics ?? []).join(', '), app.assigned_country_name].filter(Boolean).join('  ·  ')}
+                      style={{ backgroundColor: 'rgba(238,217,138,0.28)', border: '1px solid rgba(182,135,31,0.35)', color: '#7A5A10', fontFamily: "'Outfit', sans-serif" }}
+                    >
+                      <MapPin size={11} strokeWidth={2.5} />
+                      {committeeAbbr(app.assigned_committee)}
+                      <CountryFlag name={app.assigned_country_name} code={app.assigned_country_code} size={14} />
+                    </span>
                   </div>
                 )}
+
+                {/* Row 4: footer — review opens the modal with details + all actions */}
+                <div className="flex flex-wrap items-center gap-2 mt-3 pt-3" style={{ borderTop: '1px solid #F0EDE6' }}>
+                  <button
+                    onClick={() => setReviewId(app.id)}
+                    className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
+                    style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                  >
+                    <Eye size={13} />
+                    REVIEW
+                  </button>
+                  {app.status === 'rejected' && app.organizer_note && (
+                    <span className="text-xs italic self-center" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                      &ldquo;{app.organizer_note}&rdquo;
+                    </span>
+                  )}
+                </div>
+                </div>
               </div>
             );
           })}
         </div>
       )}
+
+      {/* Review modal — application details, custom answers and all actions.
+          Rendered before confirmModal so confirm dialogs (same z-50) stack on top. */}
+      {(() => {
+        const app = applications.find(a => a.id === reviewId);
+        if (!app) return null;
+        const name = app.profiles?.display_name ?? 'Unknown';
+        const email = app.profiles?.email ?? '';
+        const isDelegate = app.role === 'delegate' || app.role === 'head-delegate';
+        const prefs = [...(app.application_preferences ?? [])].sort((a, b) => a.preference_order - b.preference_order);
+        const isRejecting = rejectingId === app.id;
+        const paid = app.payment_status === 'paid';
+        const waived = app.payment_status === 'waived';
+        const expLabel = app.experience_level ?? app.profiles?.mun_experience_level ?? null;
+        const confCount = cvCounts[app.user_id];
+        const roleConfig = roleConfigs.find(rc => rc.role === app.role);
+        const questions = roleConfig?.custom_questions ?? [];
+        const answers = app.custom_answers ?? {};
+        const closeReview = () => { setReviewId(null); setRejectingId(null); setRejectNote(''); };
+
+        const showPaymentControls = app.status === 'accepted' || app.status === 'assigned' || app.status === 'submitted';
+        const paymentControls = showPaymentControls ? (
+          <>
+            {!paid ? (
+              <button
+                onClick={() => handleMarkPaid(app)}
+                className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
+                style={{ backgroundColor: 'rgba(61,122,82,0.12)', color: '#3D7A52', border: '1px solid rgba(61,122,82,0.3)', fontFamily: "'Outfit', sans-serif" }}
+              >
+                <CircleCheck size={13} />
+                MARK PAID
+              </button>
+            ) : (
+              <button
+                onClick={() => handleMarkUnpaid(app)}
+                className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
+                style={{ backgroundColor: 'rgba(184,132,74,0.12)', color: '#B8844A', border: '1px solid rgba(184,132,74,0.3)', fontFamily: "'Outfit', sans-serif" }}
+              >
+                <RotateCcw size={13} />
+                MARK UNPAID
+              </button>
+            )}
+            {app.payment_status === 'unpaid' && (
+              <button
+                onClick={() => handleWaive(app)}
+                className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
+                style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+              >
+                <HandCoins size={13} />
+                WAIVE
+              </button>
+            )}
+            {waived && (
+              <button
+                onClick={() => handleUndoWaive(app)}
+                className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
+                style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+              >
+                <RotateCcw size={13} />
+                UNDO WAIVE
+              </button>
+            )}
+          </>
+        ) : null;
+
+        const rejectControls = isRejecting ? (
+          <div className="flex items-start gap-2 flex-1" style={{ minWidth: 260 }}>
+            <textarea
+              value={rejectNote}
+              onChange={e => setRejectNote(e.target.value)}
+              rows={2}
+              placeholder="Optional note to delegate..."
+              className="flex-1 rounded-lg px-3 py-2 text-xs outline-none resize-none"
+              style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: '#FAF8F3', fontFamily: "'Outfit', sans-serif" }}
+            />
+            <button
+              onClick={() => openRejectConfirm(app)}
+              className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-3 text-xs font-bold focus:outline-none"
+              style={{ backgroundColor: 'rgba(139,32,32,0.1)', color: '#8B2020', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "'Outfit', sans-serif" }}
+            >
+              <Check size={13} />
+              CONFIRM
+            </button>
+            <button
+              onClick={() => { setRejectingId(null); setRejectNote(''); }}
+              className="rounded-lg py-1.5 px-3 text-xs font-bold focus:outline-none"
+              style={{ border: '1px solid #DDD4C0', color: '#9A8A78', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}
+            >
+              CANCEL
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setRejectingId(app.id)}
+            className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
+            style={{ backgroundColor: 'rgba(139,32,32,0.08)', color: '#8B2020', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "'Outfit', sans-serif" }}
+          >
+            <X size={13} />
+            REJECT
+          </button>
+        );
+
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center px-4 py-10"
+            style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
+            onClick={closeReview}
+          >
+            <div
+              className="w-full max-w-2xl rounded-2xl p-8 overflow-y-auto"
+              style={{ maxHeight: '85vh', backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-start gap-4 mb-5">
+                {app.profiles?.avatar_url ? (
+                  <img src={app.profiles.avatar_url} alt={name} className="rounded-xl object-cover flex-shrink-0" style={{ width: 56, height: 56 }} />
+                ) : (
+                  <div className="flex-shrink-0 flex items-center justify-center rounded-xl" style={{ width: 56, height: 56, backgroundColor: '#1B3828' }}>
+                    <span className="font-black" style={{ color: '#EED98A', fontSize: 22, fontFamily: "'Outfit', sans-serif" }}>
+                      {name.trim().charAt(0).toUpperCase() || '?'}
+                    </span>
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <h2 className="font-black text-lg truncate" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>{name}</h2>
+                  <p className="text-xs truncate mb-1.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>{email}</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold" style={{ fontSize: 9, fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', backgroundColor: 'rgba(27,56,40,0.08)', color: '#1B3828', border: '1px solid rgba(27,56,40,0.18)' }}>
+                      <RoleIcon role={app.role} />
+                      {roleLabel(app.role).toUpperCase()}
+                    </span>
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold" style={{ fontSize: 9, fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', backgroundColor: 'rgba(154,138,120,0.12)', color: '#6B5F52', border: '1px solid rgba(154,138,120,0.35)' }}>
+                      <StatusIcon status={app.status} />
+                      {app.status.toUpperCase()}
+                    </span>
+                    {expLabel && (
+                      <span
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold"
+                        title={confCount !== undefined ? `${confCount} conference${confCount === 1 ? '' : 's'} on their MUN CV` : undefined}
+                        style={{ fontSize: 9, fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', backgroundColor: 'rgba(238,217,138,0.28)', color: '#7A5A10', border: '1px solid rgba(182,135,31,0.35)', textTransform: 'uppercase', fontVariantNumeric: 'tabular-nums' }}
+                      >
+                        <GraduationCap size={10} strokeWidth={2.5} />
+                        {expLabel}{confCount !== undefined ? ` (${confCount})` : ''}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <button
+                  onClick={closeReview}
+                  aria-label="Close review"
+                  className="flex-shrink-0 flex items-center justify-center rounded-lg focus:outline-none transition-colors"
+                  style={{ width: 30, height: 30, border: '1px solid #DDD4C0', color: '#9A8A78', backgroundColor: 'transparent' }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                >
+                  <X size={15} />
+                </button>
+              </div>
+
+              {/* Nationality */}
+              {app.profiles?.nationality && (
+                <p className="flex items-center gap-2 text-xs mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                  <Globe size={12} />
+                  <span style={{ fontWeight: 700, letterSpacing: '0.12em' }}>NATIONALITY</span>
+                  <CountryFlag name={app.profiles.nationality} size={16} />
+                </p>
+              )}
+
+              {/* Preferences (delegates) — full list */}
+              {isDelegate && prefs.length > 0 && (
+                <div className="mb-4">
+                  <p className="flex items-center gap-2 text-xs mb-2" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", fontWeight: 700, letterSpacing: '0.12em' }}>
+                    <MapPin size={12} />
+                    PREFERENCES
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {prefs.map(p => (
+                      <span
+                        key={p.preference_order}
+                        className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs"
+                        title={`${p.conference_committees?.name ?? 'Unknown'} — ${p.country_name}`}
+                        style={{ backgroundColor: 'rgba(27,56,40,0.06)', border: '1px solid rgba(27,56,40,0.1)', color: '#1C1410', fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}
+                      >
+                        {p.preference_order}. <span className="font-semibold">{committeeAbbr(p.conference_committees)}</span>
+                        <CountryFlag name={p.country_name} code={p.country_code} size={14} />
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Assignment (assigned) */}
+              {app.status === 'assigned' && app.assigned_country_name && (
+                <p className="flex items-center gap-2 text-xs mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                  <BadgeCheck size={12} />
+                  <span style={{ fontWeight: 700, letterSpacing: '0.12em' }}>ASSIGNED</span>
+                  <span style={{ color: '#1C1410' }}>
+                    {[app.assigned_committee?.name, (app.assigned_committee?.topics ?? []).join(', ')].filter(Boolean).join('  ·  ')}
+                  </span>
+                  <CountryFlag name={app.assigned_country_name} code={app.assigned_country_code} size={14} />
+                </p>
+              )}
+
+              {/* Rejection note (rejected) */}
+              {app.status === 'rejected' && app.organizer_note && (
+                <p className="text-xs italic mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                  &ldquo;{app.organizer_note}&rdquo;
+                </p>
+              )}
+
+              {/* Custom answers */}
+              <div className="pt-4" style={{ borderTop: '1px solid #F0EDE6' }}>
+                <p className="flex items-center gap-2 text-xs mb-3" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", fontWeight: 700, letterSpacing: '0.12em' }}>
+                  <MessageSquareText size={12} />
+                  APPLICATION ANSWERS
+                </p>
+                {questions.length === 0 ? (
+                  <p className="text-xs italic" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                    No custom questions configured for this role.
+                  </p>
+                ) : (
+                  <div className="flex flex-col gap-3">
+                    {questions.map(q => {
+                      const ans = (answers[q.id] ?? '').trim();
+                      return (
+                        <div key={q.id}>
+                          <p className="text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>{q.label}</p>
+                          <p className="text-sm whitespace-pre-wrap" style={{ color: ans ? '#1C1410' : '#9A8A78', fontFamily: "'Outfit', sans-serif", fontStyle: ans ? 'normal' : 'italic' }}>
+                            {ans || 'No answer provided.'}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Actions */}
+              <div className="flex flex-wrap gap-2 mt-4 pt-4" style={{ borderTop: '1px solid #F0EDE6' }}>
+                {app.status === 'submitted' && (
+                  <>
+                    <button
+                      onClick={() => handleAccept(app.id)}
+                      className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
+                      style={{ backgroundColor: 'rgba(61,122,82,0.12)', color: '#3D7A52', border: '1px solid rgba(61,122,82,0.3)', fontFamily: "'Outfit', sans-serif" }}
+                    >
+                      <Check size={13} />
+                      ACCEPT
+                    </button>
+                    {paymentControls}
+                    {rejectControls}
+                  </>
+                )}
+
+                {app.status === 'accepted' && (
+                  <>
+                    {isDelegate && (
+                      <Link
+                        href={`/manage/${conference.slug}/assignment`}
+                        className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none"
+                        style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", textDecoration: 'none' }}
+                      >
+                        ASSIGN
+                        <ArrowRight size={13} />
+                      </Link>
+                    )}
+                    {paymentControls}
+                    {rejectControls}
+                  </>
+                )}
+
+                {app.status === 'assigned' && paymentControls}
+
+                {app.status === 'rejected' && (
+                  <button
+                    onClick={() => handleReinstate(app.id)}
+                    className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
+                    style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                  >
+                    <RotateCcw size={13} />
+                    REINSTATE
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {confirmModal}
     </div>
