@@ -4,6 +4,8 @@
 
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { resolveTokens, type EmailTokenContext } from '@/lib/emailTokens';
+import { normalizeBlocks, flattenBlocksToPlainText } from '@/lib/emailBlocks';
+import { renderEmailHtml, type EmailRenderConference } from '@/lib/emailHtml';
 import { formatFee } from '@/lib/utils';
 
 // ── Event registry ────────────────────────────────────────────────────────────
@@ -84,6 +86,7 @@ interface TemplateRow {
   id: string;
   subject: string;
   body: string;
+  body_blocks: unknown;
   enabled: boolean;
 }
 
@@ -95,15 +98,20 @@ interface RecipientRow {
   societies: { name: string } | null;
   assigned_committee: { abbreviation: string | null; name: string } | null;
   assigned_country_name: string | null;
-  profiles: { display_name: string } | null;
+  profiles: { display_name: string; email: string | null } | null;
 }
 
 interface ConferenceRow {
+  slug: string;
+  acronym: string;
   full_name: string;
   start_date: string;
   end_date: string;
   fee_amount: number;
   fee_currency: string;
+  banner_url: string | null;
+  logo_url: string | null;
+  contact_email: string;
 }
 
 /**
@@ -122,7 +130,7 @@ export async function queueEventEmail(
 
   const { data: templateData } = await supabase
     .from('email_templates')
-    .select('id, subject, body, enabled')
+    .select('id, subject, body, body_blocks, enabled')
     .eq('conference_id', conferenceId)
     .eq('event_key', eventKey)
     .maybeSingle();
@@ -133,7 +141,7 @@ export async function queueEventEmail(
   const [{ data: confData }, { data: recipientsData }] = await Promise.all([
     supabase
       .from('conferences')
-      .select('full_name, start_date, end_date, fee_amount, fee_currency')
+      .select('slug, acronym, full_name, start_date, end_date, fee_amount, fee_currency, banner_url, logo_url, contact_email')
       .eq('id', conferenceId)
       .single(),
     supabase
@@ -143,7 +151,7 @@ export async function queueEventEmail(
         societies (name),
         assigned_committee:conference_committees!assigned_committee_id (abbreviation, name),
         assigned_country_name,
-        profiles (display_name)
+        profiles (display_name, email)
       `)
       .in('id', applicationIds),
   ]);
@@ -151,6 +159,17 @@ export async function queueEventEmail(
   const conference = confData as ConferenceRow | null;
   const recipients = (recipientsData ?? []) as unknown as RecipientRow[];
   if (recipients.length === 0) return { drafted: true, queued: 0 };
+
+  const renderConf: EmailRenderConference = {
+    slug: conference?.slug ?? '',
+    acronym: conference?.acronym ?? '',
+    full_name: conference?.full_name ?? '',
+    banner_url: conference?.banner_url ?? null,
+    logo_url: conference?.logo_url ?? null,
+    contact_email: conference?.contact_email ?? '',
+  };
+  const blocks = normalizeBlocks(template.body_blocks, template.body);
+  const flatBody = flattenBlocksToPlainText(blocks, renderConf);
 
   const rows = recipients.map(app => {
     const ctx: EmailTokenContext = {
@@ -168,8 +187,10 @@ export async function queueEventEmail(
       conference_id: conferenceId,
       template_id: template.id,
       recipient_application_id: app.id,
+      recipient_email: app.profiles?.email ?? null,
       subject: resolveTokens(template.subject, ctx),
-      body: resolveTokens(template.body, ctx),
+      body: resolveTokens(flatBody, ctx),
+      body_html: renderEmailHtml({ blocks, conference: renderConf, ctx }),
       status: 'pending' as const,
     };
   });

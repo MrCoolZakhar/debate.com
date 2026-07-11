@@ -17,14 +17,14 @@ export const EMAIL_TOKEN_KEYS = [
 export type EmailTokenKey = (typeof EMAIL_TOKEN_KEYS)[number];
 
 export const EMAIL_TOKEN_LABELS: Record<EmailTokenKey, string> = {
-  delegate_name: 'Delegate name',
+  delegate_name: 'Delegate Name',
   role: 'Role',
-  delegation_name: 'Delegation name',
+  delegation_name: 'Delegation',
   committee: 'Committee',
-  country: 'Country',
-  payment_status: 'Payment status',
-  conference_name: 'Conference name',
-  conference_dates: 'Conference dates',
+  country: 'Allocation Country',
+  payment_status: 'Payment Status',
+  conference_name: 'Conference Name',
+  conference_dates: 'Conference Dates',
   fee: 'Fee',
 };
 

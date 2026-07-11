@@ -6,11 +6,11 @@ import { Mail, AlertTriangle, Send, Bell, Inbox } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
-import {
-  EMAIL_TOKEN_KEYS, EMAIL_TOKEN_LABELS, resolveTokens, splitResolvedText,
-  type EmailTokenContext,
-} from '@/lib/emailTokens';
+import { resolveTokens, type EmailTokenContext } from '@/lib/emailTokens';
 import { EVENT_REGISTRY, type EventDef } from '@/lib/emailEvents';
+import { type EmailBlock, normalizeBlocks, flattenBlocksToPlainText } from '@/lib/emailBlocks';
+import { renderEmailHtml } from '@/lib/emailHtml';
+import EmailComposer, { type PreviewCandidate } from '@/components/EmailComposer';
 import { formatFee } from '@/lib/utils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -22,6 +22,7 @@ interface EmailTemplate {
   name: string;
   subject: string;
   body: string;
+  body_blocks: unknown;
   enabled: boolean;
   delivery: 'immediate' | 'manual';
   updated_at: string;
@@ -39,7 +40,7 @@ interface AppRow {
   assigned_committee_id: string | null;
   assigned_committee: { abbreviation: string | null; name: string } | null;
   assigned_country_name: string | null;
-  profiles: { display_name: string } | null;
+  profiles: { display_name: string; email: string | null } | null;
 }
 
 interface Committee {
@@ -188,26 +189,6 @@ function PillToggle({ value, onChange }: { value: boolean; onChange: () => void 
   );
 }
 
-function HighlightedText({ text }: { text: string }) {
-  const segments = splitResolvedText(text);
-  return (
-    <>
-      {segments.map((seg, i) =>
-        seg.unresolved ? (
-          <span
-            key={i}
-            style={{ backgroundColor: 'rgba(182,135,31,0.18)', color: '#8A6614', padding: '0 3px', borderRadius: 3, fontWeight: 600 }}
-          >
-            {seg.text}
-          </span>
-        ) : (
-          <span key={i}>{seg.text}</span>
-        )
-      )}
-    </>
-  );
-}
-
 // ── CommunicationsPage ────────────────────────────────────────────────────────
 
 function CommunicationsPageInner() {
@@ -235,11 +216,8 @@ function CommunicationsPageInner() {
   const [builderTemplateId, setBuilderTemplateId] = useState<string | null>(null);
   const [builderName, setBuilderName] = useState('');
   const [builderSubject, setBuilderSubject] = useState('');
-  const [builderBody, setBuilderBody] = useState('');
+  const [builderBlocks, setBuilderBlocks] = useState<EmailBlock[]>([]);
   const [builderDelivery, setBuilderDelivery] = useState<'immediate' | 'manual'>('manual');
-  const [builderPreviewing, setBuilderPreviewing] = useState(false);
-  const [previewSearch, setPreviewSearch] = useState('');
-  const [previewAppId, setPreviewAppId] = useState<string | null>(null);
   const [builderError, setBuilderError] = useState('');
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [sending, setSending] = useState(false);
@@ -251,7 +229,7 @@ function CommunicationsPageInner() {
   const [audienceStatus, setAudienceStatus] = useState('');
   const [audienceSocietyId, setAudienceSocietyId] = useState('');
 
-  const bodyRef = useRef<HTMLTextAreaElement>(null);
+  const builderJustOpenedRef = useRef(false);
 
   function showFlash(kind: 'ok' | 'err', msg: string) {
     setFlash({ kind, msg });
@@ -265,7 +243,7 @@ function CommunicationsPageInner() {
     const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase
       .from('email_templates')
-      .select('id, conference_id, event_key, name, subject, body, enabled, delivery, updated_at')
+      .select('id, conference_id, event_key, name, subject, body, body_blocks, enabled, delivery, updated_at')
       .eq('conference_id', conference.id);
     setTemplates((data ?? []) as EmailTemplate[]);
   }, [conference, session?.access_token]);
@@ -281,7 +259,7 @@ function CommunicationsPageInner() {
         assigned_committee_id,
         assigned_committee:conference_committees!assigned_committee_id (abbreviation, name),
         assigned_country_name,
-        profiles (display_name)
+        profiles (display_name, email)
       `)
       .eq('conference_id', conference.id);
     setApplications((data ?? []) as unknown as AppRow[]);
@@ -375,14 +353,6 @@ function CommunicationsPageInner() {
     return filtered;
   }, [eligibleApplications, audienceType, audienceRole, audienceCommitteeId, audienceStatus, audienceSocietyId]);
 
-  const previewResults = useMemo(() => {
-    if (!previewSearch.trim()) return [];
-    const q = previewSearch.trim().toLowerCase();
-    return applications.filter(a => (a.profiles?.display_name ?? '').toLowerCase().includes(q)).slice(0, 6);
-  }, [applications, previewSearch]);
-
-  const previewApp = previewAppId ? applications.find(a => a.id === previewAppId) ?? null : null;
-
   function buildContext(app: AppRow): EmailTokenContext {
     if (!conference) return {};
     return {
@@ -397,6 +367,11 @@ function CommunicationsPageInner() {
       fee: conference.fee_amount ? formatFee(conference.fee_amount, conference.fee_currency) : null,
     };
   }
+
+  const previewCandidates: PreviewCandidate[] = useMemo(
+    () => applications.map(a => ({ id: a.id, label: a.profiles?.display_name ?? 'Unknown', ctx: buildContext(a) })),
+    [applications, conference] // eslint-disable-line react-hooks/exhaustive-deps
+  );
 
   // ── Builder open/close ────────────────────────────────────────────────────
 
@@ -414,13 +389,11 @@ function CommunicationsPageInner() {
     setBuilderTemplateId(existing?.id ?? null);
     setBuilderName(ev.label);
     setBuilderSubject(existing?.subject ?? '');
-    setBuilderBody(existing?.body ?? '');
+    setBuilderBlocks(normalizeBlocks(existing?.body_blocks, existing?.body ?? ''));
     setBuilderDelivery(existing?.delivery ?? ev.defaultDelivery);
     resetAudience();
-    setBuilderPreviewing(false);
-    setPreviewAppId(null);
-    setPreviewSearch('');
     setBuilderError('');
+    builderJustOpenedRef.current = true;
     setBuilderOpen(true);
   }, [templatesByEvent]);
 
@@ -429,13 +402,11 @@ function CommunicationsPageInner() {
     setBuilderTemplateId(template?.id ?? null);
     setBuilderName(template?.name ?? '');
     setBuilderSubject(template?.subject ?? '');
-    setBuilderBody(template?.body ?? '');
+    setBuilderBlocks(normalizeBlocks(template?.body_blocks, template?.body ?? ''));
     setBuilderDelivery('manual');
     resetAudience();
-    setBuilderPreviewing(false);
-    setPreviewAppId(null);
-    setPreviewSearch('');
     setBuilderError('');
+    builderJustOpenedRef.current = true;
     setBuilderOpen(true);
   }
 
@@ -455,40 +426,32 @@ function CommunicationsPageInner() {
 
   // ── Builder mutations ─────────────────────────────────────────────────────
 
-  function insertToken(key: string) {
-    const ta = bodyRef.current;
-    const token = `{{${key}}}`;
-    if (!ta) { setBuilderBody(b => b + token); return; }
-    const s = ta.selectionStart ?? builderBody.length;
-    const e = ta.selectionEnd ?? builderBody.length;
-    const newText = builderBody.substring(0, s) + token + builderBody.substring(e);
-    setBuilderBody(newText);
-    setTimeout(() => {
-      ta.focus();
-      const cursor = s + token.length;
-      ta.setSelectionRange(cursor, cursor);
-    }, 0);
+  function handleComposerChange(value: { subject: string; blocks: EmailBlock[] }) {
+    setBuilderSubject(value.subject);
+    setBuilderBlocks(value.blocks);
   }
 
-  async function handleSaveTemplate(): Promise<string | null> {
+  async function persistTemplate(subject: string, blocks: EmailBlock[], opts: { silent: boolean }): Promise<string | null> {
     if (!conference || !session) return null;
     const isAdHoc = builderEventKey === null;
-    if (isAdHoc && !builderName.trim()) { setBuilderError('Name is required.'); return null; }
-    if (!builderSubject.trim() || !builderBody.trim()) { setBuilderError('Subject and message are required.'); return null; }
+    const eventDef = builderEventKey ? EVENT_REGISTRY.find(e => e.key === builderEventKey) : null;
+    const name = isAdHoc ? builderName.trim() : (eventDef?.label ?? builderEventKey ?? '');
+    if (isAdHoc && !name) { if (!opts.silent) setBuilderError('Name is required.'); return null; }
+    if (!subject.trim() || blocks.length === 0) { if (!opts.silent) setBuilderError('Subject and message are required.'); return null; }
 
     const supabase = getAuthedClient(session.access_token);
-    const eventDef = builderEventKey ? EVENT_REGISTRY.find(e => e.key === builderEventKey) : null;
     const payload = {
-      subject: builderSubject,
-      body: builderBody,
+      subject,
+      body: flattenBlocksToPlainText(blocks, conference),
+      body_blocks: blocks,
       delivery: builderDelivery,
-      name: isAdHoc ? builderName.trim() : (eventDef?.label ?? builderEventKey ?? ''),
+      name,
       updated_at: new Date().toISOString(),
     };
 
     if (builderTemplateId) {
       const { error } = await supabase.from('email_templates').update(payload).eq('id', builderTemplateId);
-      if (error) { setBuilderError(error.message); return null; }
+      if (error) { if (!opts.silent) setBuilderError(error.message); return null; }
       await loadTemplates();
       return builderTemplateId;
     }
@@ -498,17 +461,26 @@ function CommunicationsPageInner() {
       event_key: builderEventKey,
       ...payload,
     }).select('id').single();
-    if (error) { setBuilderError(error.message); return null; }
+    if (error) { if (!opts.silent) setBuilderError(error.message); return null; }
     const newId = (data as { id: string }).id;
     setBuilderTemplateId(newId);
     await loadTemplates();
     return newId;
   }
 
+  // Debounced autosave: silently persists body_blocks + the flattened body as the chair edits.
+  useEffect(() => {
+    if (!builderOpen) return;
+    if (builderJustOpenedRef.current) { builderJustOpenedRef.current = false; return; }
+    const t = setTimeout(() => { persistTemplate(builderSubject, builderBlocks, { silent: true }); }, 800);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [builderSubject, builderBlocks, builderOpen]);
+
   async function handleSaveAndClose() {
     setSavingTemplate(true);
     setBuilderError('');
-    const id = await handleSaveTemplate();
+    const id = await persistTemplate(builderSubject, builderBlocks, { silent: false });
     setSavingTemplate(false);
     if (id) {
       showFlash('ok', 'Template saved.');
@@ -521,9 +493,10 @@ function CommunicationsPageInner() {
     setBuilderError('');
     if (audienceRecipients.length === 0) { setBuilderError('No recipients match this audience.'); return; }
     setSending(true);
-    const id = await handleSaveTemplate();
+    const id = await persistTemplate(builderSubject, builderBlocks, { silent: false });
     if (!id) { setSending(false); return; }
     const supabase = getAuthedClient(session.access_token);
+    const flatBody = flattenBlocksToPlainText(builderBlocks, conference);
 
     const rows = audienceRecipients.map(app => {
       const ctx = buildContext(app);
@@ -531,8 +504,10 @@ function CommunicationsPageInner() {
         conference_id: conference.id,
         template_id: id,
         recipient_application_id: app.id,
+        recipient_email: app.profiles?.email ?? null,
         subject: resolveTokens(builderSubject, ctx),
-        body: resolveTokens(builderBody, ctx),
+        body: resolveTokens(flatBody, ctx),
+        body_html: renderEmailHtml({ blocks: builderBlocks, conference, ctx }),
         status: 'pending',
       };
     });
@@ -549,7 +524,7 @@ function CommunicationsPageInner() {
       conference_id: conference.id,
       sent_by: user?.id ?? null,
       subject: builderSubject,
-      body_html: builderBody,
+      body_html: flatBody,
       recipient_filter: recipientFilter,
       recipient_count: rows.length,
       scheduled_at: null,
@@ -931,114 +906,14 @@ function CommunicationsPageInner() {
               </div>
             )}
 
-            <div className="mb-4">
-              <label className="block font-semibold text-sm mb-1.5" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                Subject
-              </label>
-              <input
-                type="text"
-                value={builderSubject}
-                onChange={e => setBuilderSubject(e.target.value)}
-                placeholder="e.g. Your allocation for TEIMUN 2026 is confirmed"
-                className="w-full rounded-xl px-4 py-2.5 text-sm focus:outline-none"
-                style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: '#FAF8F3', fontFamily: OUTFIT }}
-              />
-            </div>
-
-            <div className="mb-4">
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="block font-semibold text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                  Message
-                </label>
-                <select
-                  value=""
-                  onChange={e => { if (e.target.value) insertToken(e.target.value); }}
-                  className="rounded-lg px-2.5 py-1.5 text-xs font-bold focus:outline-none"
-                  style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: '#FAF8F3', fontFamily: OUTFIT, cursor: 'pointer' }}
-                >
-                  <option value="">INSERT FIELD...</option>
-                  {EMAIL_TOKEN_KEYS.map(k => (
-                    <option key={k} value={k}>{EMAIL_TOKEN_LABELS[k]}</option>
-                  ))}
-                </select>
-              </div>
-
-              {!builderPreviewing ? (
-                <>
-                  <textarea
-                    ref={bodyRef}
-                    value={builderBody}
-                    onChange={e => setBuilderBody(e.target.value)}
-                    placeholder="Write your message here..."
-                    rows={12}
-                    className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none resize-y"
-                    style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: '#FAF8F3', fontFamily: OUTFIT, minHeight: 260 }}
-                  />
-                  <p className="mt-2 text-xs leading-relaxed" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-                    Available fields: {EMAIL_TOKEN_KEYS.map(k => `{{${k}}}`).join('  ')}
-                  </p>
-                </>
-              ) : (
-                <div
-                  className="rounded-xl px-4 py-4"
-                  style={{ border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3', minHeight: 260 }}
-                >
-                  <div className="relative mb-3">
-                    <input
-                      value={previewSearch}
-                      onChange={e => { setPreviewSearch(e.target.value); setPreviewAppId(null); }}
-                      placeholder="Search applicants to preview as..."
-                      className="w-full rounded-xl px-4 py-2.5 text-sm focus:outline-none"
-                      style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: '#FFFFFF', fontFamily: OUTFIT }}
-                    />
-                    {previewSearch.trim() && !previewApp && previewResults.length > 0 && (
-                      <div
-                        className="absolute left-0 right-0 rounded-xl shadow-lg overflow-y-auto"
-                        style={{ top: 'calc(100% + 4px)', maxHeight: 200, backgroundColor: '#FFFFFF', border: '1px solid #DDD4C0', zIndex: 10 }}
-                      >
-                        {previewResults.map(a => (
-                          <button
-                            key={a.id}
-                            onClick={() => { setPreviewAppId(a.id); setPreviewSearch(a.profiles?.display_name ?? ''); }}
-                            className="w-full text-left px-4 py-2.5 text-sm focus:outline-none"
-                            style={{ color: '#1C1410', fontFamily: OUTFIT }}
-                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
-                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                          >
-                            {a.profiles?.display_name ?? 'Unknown'}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {previewApp ? (
-                    <div className="rounded-xl p-4" style={{ backgroundColor: '#FFFFFF', border: '1px solid #F0EDE6' }}>
-                      <p className="font-semibold text-sm mb-2" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                        <HighlightedText text={resolveTokens(builderSubject, buildContext(previewApp))} />
-                      </p>
-                      <p className="text-sm leading-relaxed" style={{ color: '#1C1410', fontFamily: OUTFIT, whiteSpace: 'pre-wrap' }}>
-                        <HighlightedText text={resolveTokens(builderBody, buildContext(previewApp))} />
-                      </p>
-                    </div>
-                  ) : (
-                    <p className="text-sm" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-                      Search and select an applicant above to preview with resolved fields.
-                    </p>
-                  )}
-                </div>
-              )}
-
-              <button
-                onClick={() => setBuilderPreviewing(v => !v)}
-                className="mt-2 text-xs font-semibold focus:outline-none"
-                style={{ color: '#1B3828', backgroundColor: 'transparent', border: 'none', fontFamily: OUTFIT }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.textDecoration = 'underline'; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.textDecoration = 'none'; }}
-              >
-                {builderPreviewing ? '← EDIT' : 'PREVIEW →'}
-              </button>
-            </div>
+            <EmailComposer
+              key={builderTemplateId ?? builderEventKey ?? 'new-adhoc'}
+              conference={conference}
+              initialSubject={builderSubject}
+              initialBlocks={builderBlocks}
+              previewCandidates={previewCandidates}
+              onChange={handleComposerChange}
+            />
           </div>
 
           {/* ── Right sidebar ── */}
