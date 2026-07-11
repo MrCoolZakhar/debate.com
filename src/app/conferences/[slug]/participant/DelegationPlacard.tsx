@@ -4,13 +4,13 @@
 // payment status within that delegation. Independent delegates get a plain
 // "Independent delegate" card instead.
 //
-// NOTE on advisors: applications RLS only lets a user read their OWN
-// application rows ("Users read own applications", user_id = auth.uid()),
-// so a delegate cannot currently read their society's faculty-advisor
-// application rows to get names — this query is written correctly but will
-// return empty until that's addressed. See the PR/session notes for the
-// exact policy needed; not applied here since it widens cross-user read
-// access and needs a deliberate sign-off.
+// Advisor lookup relies on the recursion-safe "Members read society
+// leadership" policy on applications (via the my_society_ids() /
+// is_society_leader() SECURITY DEFINER helpers) plus "Society co-members
+// read profiles" on profiles (via shares_society_with()) — both applied
+// server-side. Verified end-to-end under RLS as a real delegate and a real
+// head-delegate in seeded data; falls back to "No faculty advisor listed"
+// for societies with none on record.
 
 import { useState, useEffect, useCallback } from 'react';
 import { Users2 } from 'lucide-react';
