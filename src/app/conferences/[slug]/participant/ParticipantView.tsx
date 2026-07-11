@@ -1,0 +1,104 @@
+'use client';
+
+// Participant view — the person tab. Orchestrates: role pill switcher (when
+// the viewer has more than one application here), the pay-gated content for
+// the selected application, the payment panel, and Q&R — the latter two are
+// never gated. Deliberately has no conference summary card: the page around
+// this tab already is one.
+
+import { useState } from 'react';
+import { useAuth } from '@/components/AuthProvider';
+import { SectionCard, OUTFIT, getGateState, roleLabel, statusPriority } from './shared';
+import { PayGate } from './PayGate';
+import DocumentsSection from './DocumentsSection';
+import PaymentPanel from './PaymentPanel';
+import RequestsPanel from './RequestsPanel';
+import ApplyPointer from './ApplyPointer';
+import type { ParticipantApplication, ParticipantRoleConfig, ParticipantAllocation } from './types';
+
+const STATUS_DOT: Record<string, string> = {
+  assigned: '#3D7A52', 'checked-in': '#3D7A52', accepted: '#B6871F', submitted: '#9A8A78',
+  rejected: '#8B2020', withdrawn: '#9A8A78',
+};
+
+function pickDefault(apps: ParticipantApplication[]): ParticipantApplication {
+  return [...apps].sort((a, b) => statusPriority(a.status) - statusPriority(b.status))[0];
+}
+
+export interface ParticipantViewProps {
+  conferenceId: string;
+  conferenceSlug: string;
+  contactEmail: string | null;
+  defaultFeeCurrency: string;
+  myApplications: ParticipantApplication[];
+  roleConfigs: ParticipantRoleConfig[];
+  myAllocation: ParticipantAllocation | null;
+}
+
+export default function ParticipantView({
+  conferenceId, conferenceSlug, contactEmail, defaultFeeCurrency, myApplications, roleConfigs, myAllocation,
+}: ParticipantViewProps) {
+  const { user } = useAuth();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  if (!user) {
+    return <ApplyPointer conferenceSlug={conferenceSlug} signedOut />;
+  }
+  if (myApplications.length === 0) {
+    return <ApplyPointer conferenceSlug={conferenceSlug} signedOut={false} />;
+  }
+
+  const selected = myApplications.find(a => a.id === selectedId) ?? pickDefault(myApplications);
+  const roleConfig = roleConfigs.find(rc => rc.role === selected.role) ?? null;
+  const paymentTiming = roleConfig?.payment_timing ?? 'anytime';
+  const gateState = getGateState(paymentTiming, selected.status, selected.payment_status);
+  const payableNow = gateState !== 'under_review';
+
+  return (
+    <div className="flex flex-col gap-6">
+      {myApplications.length > 1 && (
+        <SectionCard className="!p-3">
+          <div className="flex flex-wrap gap-1.5">
+            {myApplications.map(app => {
+              const active = app.id === selected.id;
+              return (
+                <button
+                  key={app.id}
+                  onClick={() => setSelectedId(app.id)}
+                  className="flex items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-bold focus:outline-none transition-colors"
+                  style={{
+                    backgroundColor: active ? '#1B3828' : 'transparent',
+                    color: active ? '#EED98A' : '#6B5F52',
+                    border: active ? 'none' : '1px solid #DDD4C0',
+                    fontFamily: OUTFIT, letterSpacing: '0.04em', cursor: 'pointer',
+                  }}
+                >
+                  <span style={{ width: 6, height: 6, borderRadius: 999, backgroundColor: STATUS_DOT[app.status] ?? '#9A8A78', flexShrink: 0 }} />
+                  {roleLabel(app.role)}
+                </button>
+              );
+            })}
+          </div>
+        </SectionCard>
+      )}
+
+      <PaymentPanel
+        key={selected.id}
+        applicationId={selected.id}
+        feeAmount={roleConfig?.fee_amount ?? 0}
+        feeCurrency={roleConfig?.fee_currency ?? defaultFeeCurrency}
+        allowPartial={roleConfig?.allow_partial_payments ?? false}
+        paymentStatus={selected.payment_status}
+        amountPaid={selected.amount_paid}
+        payableNow={payableNow}
+        contactEmail={contactEmail}
+      />
+
+      <PayGate gateState={gateState}>
+        <DocumentsSection conferenceId={conferenceId} myAllocation={myAllocation} />
+      </PayGate>
+
+      <RequestsPanel conferenceId={conferenceId} applicationId={selected.id} />
+    </div>
+  );
+}
