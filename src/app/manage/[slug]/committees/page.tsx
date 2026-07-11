@@ -1,11 +1,14 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, X, Copy, Check, Building2, CalendarClock, Trash2, ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react';
+import { Plus, X, Copy, Check, Building2, CalendarClock, Trash2, ArrowDown, ArrowUp, ArrowUpDown, Send } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
 import { sendChairInvite } from '@/lib/chairInvites';
+import { queueEventEmail } from '@/lib/emailEvents';
+import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
+import { useConfirmModal } from '@/components/ConfirmModal';
 import {
   CommitteeEditorModal,
   MonogramMedallion,
@@ -36,6 +39,7 @@ interface CommitteeRow {
   logo_url: string | null;
   chair_user_ids: string[] | null;
   display_chairs: DisplayChair[] | null;
+  released_to_chairs_at: string | null;
 }
 
 interface Committee extends CommitteeRow {
@@ -312,6 +316,9 @@ export default function CommitteesPage() {
   const [sortKey, setSortKey] = useState<'' | 'difficulty' | 'name' | 'type'>('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [flash, setFlash] = useState<string | null>(null);
+  const [sendingToChairs, setSendingToChairs] = useState<string | null>(null);
+  const { draftNotices, pushDraftNotice, dismissDraftNotice } = useDraftNotices();
+  const { confirm, modal: confirmModal } = useConfirmModal();
 
   function showFlash(msg: string) {
     setFlash(msg);
@@ -325,7 +332,7 @@ export default function CommitteesPage() {
     const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase
       .from('conference_committees')
-      .select('id, name, abbreviation, topics, difficulty, committee_type, total_slots, session_code, session_id, position_paper_deadline, notification_email, pp_submissions_enabled, logo_url, chair_user_ids, display_chairs')
+      .select('id, name, abbreviation, topics, difficulty, committee_type, total_slots, session_code, session_id, position_paper_deadline, notification_email, pp_submissions_enabled, logo_url, chair_user_ids, display_chairs, released_to_chairs_at')
       .eq('conference_id', conference.id)
       .order('name', { ascending: true });
 
@@ -408,6 +415,45 @@ export default function CommitteesPage() {
     await loadCommittees();
   }
 
+  // Release the committee to its dais — always happens regardless of whether
+  // the invite email drafts successfully (a missing template just nudges the
+  // organizer via DraftNotice, it never blocks the release).
+  async function handleSendToChairs(c: Committee) {
+    if (!session || !conference) return;
+    const dais = c.display_chairs ?? [];
+    const { confirmed } = await confirm({
+      title: c.released_to_chairs_at ? 'Resend to chairs?' : 'Send to chairs?',
+      body: dais.length > 0
+        ? `This notifies: ${dais.map(d => d.name).join(', ')}.`
+        : 'This committee has no chairs on its dais yet.',
+      confirmLabel: c.released_to_chairs_at ? 'Resend' : 'Send',
+    });
+    if (!confirmed) return;
+
+    setSendingToChairs(c.id);
+    const supabase = getAuthedClient(session.access_token);
+    await supabase.from('conference_committees').update({ released_to_chairs_at: new Date().toISOString() }).eq('id', c.id);
+
+    const chairIds = c.chair_user_ids ?? [];
+    if (chairIds.length > 0) {
+      const { data: chairApps } = await supabase
+        .from('applications')
+        .select('id')
+        .eq('conference_id', conference.id)
+        .eq('role', 'chair')
+        .in('user_id', chairIds);
+      const appIds = ((chairApps ?? []) as { id: string }[]).map(a => a.id);
+      if (appIds.length > 0) {
+        const result = await queueEventEmail(supabase, conference.id, 'session_chair_invite', appIds);
+        if (!result.drafted) pushDraftNotice('session_chair_invite');
+      }
+    }
+
+    setSendingToChairs(null);
+    showFlash(`Sent to ${dais.length} chair${dais.length === 1 ? '' : 's'}.`);
+    await loadCommittees();
+  }
+
   if (!conference) return null;
 
   let sortedCommittees = committees;
@@ -457,6 +503,8 @@ export default function CommitteesPage() {
           ADD COMMITTEE
         </button>
       </div>
+
+      <DraftNoticeList notices={draftNotices} conferenceSlug={conference.slug} onDismiss={dismissDraftNotice} />
 
       {flash && (
         <div
@@ -712,6 +760,47 @@ export default function CommitteesPage() {
                         </div>
                       </div>
 
+                      {/* Send to chairs — release the roster/session/study-guide cards on their person tab */}
+                      {(c.chair_user_ids?.length ?? 0) > 0 && (
+                        <div className="w-full mt-5 pt-4" style={{ borderTop: '1px solid rgba(221,212,192,0.55)' }}>
+                          {c.released_to_chairs_at ? (
+                            <div className="flex items-center justify-between gap-2">
+                              <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: '10px', fontWeight: 700, letterSpacing: '0.06em', color: '#3D7A52' }}>
+                                SENT TO CHAIRS {new Date(c.released_to_chairs_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                              </span>
+                              <button
+                                onClick={() => handleSendToChairs(c)}
+                                disabled={sendingToChairs === c.id}
+                                className="flex-shrink-0 rounded-lg py-1.5 px-3 font-bold text-[10px] focus:outline-none"
+                                style={{
+                                  border: '1px solid rgba(27,56,40,0.3)', color: '#1B3828', backgroundColor: 'transparent',
+                                  fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', cursor: 'pointer',
+                                }}
+                              >
+                                {sendingToChairs === c.id ? '...' : 'RESEND'}
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => handleSendToChairs(c)}
+                              disabled={sendingToChairs === c.id}
+                              className="w-full flex items-center justify-center gap-2 rounded-xl py-2.5 text-[11px] font-bold focus:outline-none"
+                              style={{
+                                backgroundColor: sendingToChairs === c.id ? '#DDD4C0' : '#1B3828',
+                                color: sendingToChairs === c.id ? '#9A8A78' : '#EED98A',
+                                fontFamily: "'Outfit', sans-serif", letterSpacing: '0.1em', cursor: 'pointer',
+                                transition: `background-color 300ms ${EASE}`,
+                              }}
+                              onMouseEnter={e => { if (sendingToChairs !== c.id) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+                              onMouseLeave={e => { if (sendingToChairs !== c.id) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+                            >
+                              <Send size={12} />
+                              {sendingToChairs === c.id ? 'SENDING...' : 'SEND TO CHAIRS'}
+                            </button>
+                          )}
+                        </div>
+                      )}
+
                       <div className="w-full mt-5 pt-4" style={{ borderTop: '1px solid rgba(221,212,192,0.55)' }}>
                         {c.session_code ? (
                           <button
@@ -854,6 +943,7 @@ export default function CommitteesPage() {
           </div>
         </ModalOverlay>
       )}
+      {confirmModal}
     </div>
   );
 }

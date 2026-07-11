@@ -12,6 +12,8 @@ import { SectionCard, OUTFIT, getGateState, roleLabel, statusPriority } from './
 import { PayGate } from './PayGate';
 import DelegateParticipant from './DelegateParticipant';
 import AdvisorParticipant from './AdvisorParticipant';
+import ChairParticipant from './ChairParticipant';
+import ObserverParticipant from './ObserverParticipant';
 import PaymentPanel from './PaymentPanel';
 import RequestsPanel from './RequestsPanel';
 import ApplyPointer from './ApplyPointer';
@@ -131,6 +133,10 @@ export default function ParticipantView({
             roleConfigs={roleConfigs}
             contactEmail={contactEmail}
           />
+        ) : selected.role === 'chair' ? (
+          <ChairParticipant conferenceId={conferenceId} />
+        ) : selected.role === 'observer' ? (
+          <ObserverParticipant />
         ) : (
           <RolePlaceholder role={selected.role} />
         )}
