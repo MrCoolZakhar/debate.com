@@ -146,6 +146,9 @@ interface MyApplication {
   status: string;
   payment_status: string;
   amount_paid: number;
+  is_independent: boolean;
+  society_id: string | null;
+  self_paid: boolean;
 }
 
 interface ConferenceReview {
@@ -600,7 +603,7 @@ export default function ConferenceDetailClient() {
 
       const { data: appsData } = await authedSupabase
         .from('applications')
-        .select('id, role, status, payment_status')
+        .select('id, role, status, payment_status, is_independent, society_id, self_paid')
         .eq('conference_id', conf.id)
         .eq('user_id', user.id);
 
@@ -679,8 +682,9 @@ export default function ConferenceDetailClient() {
     }
   }
 
-  // Study guides / position paper submission now live entirely in
-  // participant/DocumentsSection.tsx, driven only by myAllocation above.
+  // Study guides / position paper submission now live entirely in the
+  // participant/ tree (StudyGuideCard, PositionPaperCard), driven only by
+  // myAllocation above.
 
   // ── Organizer in-place editing ────────────────────────────────────────────
   // Every save: authed conferences.update(...) then a silent fetchAll() so the
@@ -1371,6 +1375,7 @@ export default function ConferenceDetailClient() {
                   myApplications={myApplications}
                   roleConfigs={roleConfigs}
                   myAllocation={myAllocation}
+                  committees={committees}
                 />
               )}
 

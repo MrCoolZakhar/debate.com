@@ -8,6 +8,9 @@ export interface ParticipantApplication {
   status: string;
   payment_status: string;
   amount_paid: number;
+  is_independent: boolean;
+  society_id: string | null;
+  self_paid: boolean;
 }
 
 export interface ParticipantRoleConfig {
@@ -24,4 +27,14 @@ export interface ParticipantAllocation {
   country_name: string;
   conference_committee_id: string;
   conference_committees: { name: string; position_paper_deadline: string | null } | null;
+}
+
+export interface ParticipantCommittee {
+  id: string;
+  name: string;
+  abbreviation: string | null;
+  topics: string[] | null;
+  difficulty: string;
+  committee_type: string;
+  logo_url: string | null;
 }

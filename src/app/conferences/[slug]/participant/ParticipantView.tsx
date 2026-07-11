@@ -10,11 +10,28 @@ import { useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { SectionCard, OUTFIT, getGateState, roleLabel, statusPriority } from './shared';
 import { PayGate } from './PayGate';
-import DocumentsSection from './DocumentsSection';
+import DelegateParticipant from './DelegateParticipant';
 import PaymentPanel from './PaymentPanel';
 import RequestsPanel from './RequestsPanel';
 import ApplyPointer from './ApplyPointer';
-import type { ParticipantApplication, ParticipantRoleConfig, ParticipantAllocation } from './types';
+import type { ParticipantApplication, ParticipantRoleConfig, ParticipantAllocation, ParticipantCommittee } from './types';
+
+const DELEGATE_ROLES = new Set(['delegate', 'head-delegate']);
+
+function RolePlaceholder({ role }: { role: string }) {
+  return (
+    <SectionCard>
+      <div className="flex flex-col items-center text-center py-10">
+        <p className="text-[15px] font-semibold mb-1.5" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+          Your {roleLabel(role).toLowerCase()} dashboard is coming soon
+        </p>
+        <p className="text-[13px] max-w-[340px]" style={{ color: '#9A8A78', fontFamily: OUTFIT, lineHeight: 1.7 }}>
+          Role-specific tools for {roleLabel(role).toLowerCase()}s are on the way.
+        </p>
+      </div>
+    </SectionCard>
+  );
+}
 
 const STATUS_DOT: Record<string, string> = {
   assigned: '#3D7A52', 'checked-in': '#3D7A52', accepted: '#B6871F', submitted: '#9A8A78',
@@ -33,10 +50,11 @@ export interface ParticipantViewProps {
   myApplications: ParticipantApplication[];
   roleConfigs: ParticipantRoleConfig[];
   myAllocation: ParticipantAllocation | null;
+  committees: ParticipantCommittee[];
 }
 
 export default function ParticipantView({
-  conferenceId, conferenceSlug, contactEmail, defaultFeeCurrency, myApplications, roleConfigs, myAllocation,
+  conferenceId, conferenceSlug, contactEmail, defaultFeeCurrency, myApplications, roleConfigs, myAllocation, committees,
 }: ParticipantViewProps) {
   const { user } = useAuth();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -95,7 +113,16 @@ export default function ParticipantView({
       />
 
       <PayGate gateState={gateState}>
-        <DocumentsSection conferenceId={conferenceId} myAllocation={myAllocation} />
+        {DELEGATE_ROLES.has(selected.role) ? (
+          <DelegateParticipant
+            conferenceId={conferenceId}
+            application={selected}
+            myAllocation={myAllocation}
+            committees={committees}
+          />
+        ) : (
+          <RolePlaceholder role={selected.role} />
+        )}
       </PayGate>
 
       <RequestsPanel conferenceId={conferenceId} applicationId={selected.id} />

@@ -48,7 +48,7 @@ const ROLE_LABELS: Record<string, string> = {
   staff: 'Staff',
 };
 
-function capitalize(s: string): string {
+export function capitalize(s: string): string {
   if (!s) return '';
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
