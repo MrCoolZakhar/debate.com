@@ -19,9 +19,11 @@ import {
 } from '@/lib/emailTokens';
 import {
   type EmailBlock, type ButtonBlock, type ButtonDestination,
-  BUTTON_DESTINATION_LABELS,
+  BUTTON_DESTINATION_LABELS, flattenBlocksToPlainText,
 } from '@/lib/emailBlocks';
 import { renderEmailHtml, type EmailRenderConference } from '@/lib/emailHtml';
+import { getAuthedClient } from '@/lib/supabase-auth';
+import { triggerEmailDelivery } from '@/lib/emailDelivery';
 
 const OUTFIT = "'Outfit', sans-serif";
 const FOREST = '#1B3828';
@@ -43,10 +45,15 @@ export interface EmailComposerValue {
 
 interface EmailComposerProps {
   conference: EmailRenderConference;
+  conferenceId: string;
   initialSubject: string;
   initialBlocks: EmailBlock[];
   previewCandidates: PreviewCandidate[];
   onChange: (value: EmailComposerValue) => void;
+  /** Token context for "Send test to me": real organizer-derived values where known, `[Label]` for the rest. */
+  testSendContext: EmailTokenContext;
+  accessToken: string | null;
+  organizerEmail: string | null;
 }
 
 type LocalBlock = EmailBlock & { _id: string };
@@ -343,7 +350,10 @@ function ButtonBlockEditor({ block, onPatch }: { block: ButtonBlock; onPatch: (p
 
 // ── EmailComposer ─────────────────────────────────────────────────────────────
 
-export default function EmailComposer({ conference, initialSubject, initialBlocks, previewCandidates, onChange }: EmailComposerProps) {
+export default function EmailComposer({
+  conference, conferenceId, initialSubject, initialBlocks, previewCandidates, onChange,
+  testSendContext, accessToken, organizerEmail,
+}: EmailComposerProps) {
   const [subject, setSubject] = useState(initialSubject);
   const [blocks, setBlocks] = useState<LocalBlock[]>(() => withIds(initialBlocks));
   const [activeTarget, setActiveTarget] = useState<string>('subject');
@@ -351,6 +361,8 @@ export default function EmailComposer({ conference, initialSubject, initialBlock
   const [previewWidth, setPreviewWidth] = useState<'desktop' | 'mobile'>('desktop');
   const [previewSearch, setPreviewSearch] = useState('');
   const [previewId, setPreviewId] = useState<string | null>(null);
+  const [sendingTest, setSendingTest] = useState(false);
+  const [testSentMessage, setTestSentMessage] = useState<string | null>(null);
 
   const blockRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const subjectRef = useRef<HTMLInputElement | null>(null);
@@ -430,6 +442,32 @@ export default function EmailComposer({ conference, initialSubject, initialBlock
     updateParagraphContent(activeTarget, serializeParagraphDom(el));
   }
 
+  async function handleSendTest() {
+    if (!accessToken || !organizerEmail || sendingTest) return;
+    setSendingTest(true);
+    setTestSentMessage(null);
+
+    const liveBlocks = stripIds(blocks);
+    const supabase = getAuthedClient(accessToken);
+    const { error } = await supabase.from('email_outbox').insert({
+      conference_id: conferenceId,
+      template_id: null,
+      recipient_application_id: null,
+      recipient_email: organizerEmail,
+      subject: '[TEST] ' + resolveTokens(subject, testSendContext),
+      body: resolveTokens(flattenBlocksToPlainText(liveBlocks, conference), testSendContext),
+      body_html: renderEmailHtml({ blocks: liveBlocks, conference, ctx: testSendContext }),
+      status: 'pending',
+    });
+
+    setSendingTest(false);
+    if (error) { setTestSentMessage(`Failed to send test: ${error.message}`); return; }
+
+    triggerEmailDelivery(supabase);
+    setTestSentMessage(`Test sent to ${organizerEmail}`);
+    setTimeout(() => setTestSentMessage(m => (m?.startsWith('Test sent') ? null : m)), 4500);
+  }
+
   const previewMatches = useMemo(() => {
     if (!previewSearch.trim()) return [];
     const q = previewSearch.trim().toLowerCase();
@@ -446,18 +484,25 @@ export default function EmailComposer({ conference, initialSubject, initialBlock
   return (
     <div>
       {/* Composer-level actions */}
-      <div className="flex items-center justify-end mb-3">
+      <div className="flex items-center justify-end gap-3 mb-3">
+        {testSentMessage && (
+          <span
+            className="text-xs font-semibold"
+            style={{ color: testSentMessage.startsWith('Failed') ? '#8B2020' : '#3D7A52', fontFamily: OUTFIT }}
+          >
+            {testSentMessage}
+          </span>
+        )}
         <button
           type="button"
-          disabled
-          title="Available once email delivery is connected."
-          className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold"
-          style={{
-            border: `1px solid ${BORDER}`, color: '#9A8A78', backgroundColor: 'transparent',
-            fontFamily: OUTFIT, opacity: 0.55, cursor: 'not-allowed',
-          }}
+          onClick={handleSendTest}
+          disabled={sendingTest || !accessToken || !organizerEmail}
+          className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold focus:outline-none transition-colors disabled:opacity-55 disabled:cursor-not-allowed"
+          style={{ border: `1px solid ${BORDER}`, color: INK, backgroundColor: 'transparent', fontFamily: OUTFIT }}
+          onMouseEnter={e => { if (!sendingTest) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
         >
-          <Send size={12} /> SEND TEST TO ME
+          <Send size={12} /> {sendingTest ? 'SENDING...' : 'SEND TEST TO ME'}
         </button>
       </div>
 

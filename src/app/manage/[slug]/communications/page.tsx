@@ -7,10 +7,14 @@ import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
 import { ConfirmModal } from '@/components/ConfirmModal';
-import { resolveTokens, type EmailTokenContext } from '@/lib/emailTokens';
+import {
+  resolveTokens, EMAIL_TOKEN_KEYS, EMAIL_TOKEN_LABELS,
+  type EmailTokenContext, type EmailTokenKey,
+} from '@/lib/emailTokens';
 import { EVENT_REGISTRY, type EventDef } from '@/lib/emailEvents';
 import { type EmailBlock, normalizeBlocks, flattenBlocksToPlainText } from '@/lib/emailBlocks';
 import { renderEmailHtml } from '@/lib/emailHtml';
+import { triggerEmailDelivery } from '@/lib/emailDelivery';
 import EmailComposer, { type PreviewCandidate } from '@/components/EmailComposer';
 import { formatFee } from '@/lib/utils';
 
@@ -66,6 +70,13 @@ interface EmailSend {
   status: 'draft' | 'scheduled' | 'sent' | 'failed';
   created_at: string;
   body_html: string | null;
+}
+
+interface OutboxDetailRow {
+  id: string;
+  recipient_email: string | null;
+  status: string;
+  error: string | null;
 }
 
 const INDEPENDENT_KEY = '__independent__';
@@ -208,7 +219,12 @@ const STATUS_COLORS: Record<string, { dot: string; text: string; bg: string }> =
   scheduled: { dot: '#B6871F', text: '#B6871F', bg: 'rgba(182,135,31,0.1)' },
   draft:     { dot: '#DDD4C0', text: '#9A8A78', bg: 'rgba(154,138,120,0.1)' },
   failed:    { dot: '#8B2020', text: '#8B2020', bg: 'rgba(139,32,32,0.1)' },
+  pending:   { dot: '#B6871F', text: '#B6871F', bg: 'rgba(182,135,31,0.1)' },
 };
+
+function outboxStatusColor(status: string) {
+  return STATUS_COLORS[status] ?? STATUS_COLORS.draft;
+}
 
 // ── Small shared bits ─────────────────────────────────────────────────────────
 
@@ -290,7 +306,7 @@ function MultiChipGroup({
 
 function CommunicationsPageInner() {
   const { conference } = useManage();
-  const { user, session } = useAuth();
+  const { user, session, profile } = useAuth();
   const searchParams = useSearchParams();
 
   // ── Data state ──
@@ -307,6 +323,8 @@ function CommunicationsPageInner() {
   const [activeTab, setActiveTab] = useState<'emails' | 'notifications'>('emails');
   const [flash, setFlash] = useState<{ kind: 'ok' | 'err'; msg: string } | null>(null);
   const [historyExpandedId, setHistoryExpandedId] = useState<string | null>(null);
+  const [recipientsExpandedId, setRecipientsExpandedId] = useState<string | null>(null);
+  const [outboxBySend, setOutboxBySend] = useState<Record<string, OutboxDetailRow[] | 'loading'>>({});
 
   // ── Builder state ──
   const [builderOpen, setBuilderOpen] = useState(false);
@@ -422,6 +440,19 @@ function CommunicationsPageInner() {
       .finally(() => setLoading(false));
   }, [conference, loadTemplates, loadApplications, loadCommittees, loadSocieties, loadEmailSends, loadOutboxPending]);
 
+  // Sweep the outbox once on mount: retries anything still pending from an
+  // earlier session (a page that closed before delivery fired, a prior sweep
+  // that hit the edge function's per-invocation batch cap, etc).
+  const sweptRef = useRef(false);
+  useEffect(() => {
+    if (sweptRef.current || !conference || !session) return;
+    sweptRef.current = true;
+    triggerEmailDelivery(getAuthedClient(session.access_token)).then(() => {
+      loadOutboxPending();
+      loadEmailSends();
+    });
+  }, [conference, session, loadOutboxPending, loadEmailSends]);
+
   // ── Derived data ──────────────────────────────────────────────────────────
 
   const templatesByEvent = useMemo(() => {
@@ -526,6 +557,25 @@ function CommunicationsPageInner() {
     () => applications.map(a => ({ id: a.id, label: a.profiles?.display_name ?? 'Unknown', ctx: buildContext(a) })),
     [applications, conference] // eslint-disable-line react-hooks/exhaustive-deps
   );
+
+  // Sample context for "Send test to me": organizer-derived values where we
+  // have them (name, conference details), `[Label]` placeholders for tokens
+  // that only make sense against a real applicant (role, committee, etc).
+  const testSendContext: EmailTokenContext = useMemo(() => {
+    if (!conference) return {};
+    const known: Partial<Record<EmailTokenKey, string | null>> = {
+      delegate_name: profile?.display_name ?? null,
+      conference_name: conference.full_name,
+      conference_dates: formatDateRange(conference.start_date, conference.end_date),
+      fee: conference.fee_amount ? formatFee(conference.fee_amount, conference.fee_currency) : null,
+    };
+    const ctx: EmailTokenContext = {};
+    for (const key of EMAIL_TOKEN_KEYS) {
+      const v = known[key];
+      ctx[key] = v && v.trim() ? v : `[${EMAIL_TOKEN_LABELS[key]}]`;
+    }
+    return ctx;
+  }, [conference, profile]);
 
   function buildRecipientFilterPayload() {
     return {
@@ -729,12 +779,39 @@ function CommunicationsPageInner() {
     const supabase = getAuthedClient(session.access_token);
     const flatBody = flattenBlocksToPlainText(builderBlocks, conference);
     const recipients = finalRecipients;
+    const snapshotHtml = renderEmailHtml({ blocks: builderBlocks, conference, ctx: {} });
+
+    // Insert the send summary first so each outbox row can be tagged with
+    // its real id, letting History show a per-recipient delivery breakdown.
+    const { data: sendData, error: sendError } = await supabase
+      .from('email_sends')
+      .insert({
+        conference_id: conference.id,
+        sent_by: user?.id ?? null,
+        subject: builderSubject,
+        body_html: snapshotHtml,
+        recipient_filter: buildRecipientFilterPayload(),
+        recipient_count: recipients.length,
+        scheduled_at: null,
+        status: 'sent',
+        sent_at: new Date().toISOString(),
+      })
+      .select('id')
+      .single();
+    if (sendError || !sendData) {
+      setBuilderError(sendError?.message ?? 'Failed to record this send.');
+      setSending(false);
+      setSendConfirmOpen(false);
+      return;
+    }
+    const emailSendId = (sendData as { id: string }).id;
 
     const rows = recipients.map(app => {
       const ctx = buildContext(app);
       return {
         conference_id: conference.id,
         template_id: builderTemplateId,
+        email_send_id: emailSendId,
         recipient_application_id: app.id,
         recipient_email: app.profiles?.email ?? null,
         subject: resolveTokens(builderSubject, ctx),
@@ -746,26 +823,27 @@ function CommunicationsPageInner() {
     const { error: outboxError } = await supabase.from('email_outbox').insert(rows);
     if (outboxError) { setBuilderError(outboxError.message); setSending(false); setSendConfirmOpen(false); return; }
 
-    const snapshotHtml = renderEmailHtml({ blocks: builderBlocks, conference, ctx: {} });
-
-    await supabase.from('email_sends').insert({
-      conference_id: conference.id,
-      sent_by: user?.id ?? null,
-      subject: builderSubject,
-      body_html: snapshotHtml,
-      recipient_filter: buildRecipientFilterPayload(),
-      recipient_count: rows.length,
-      scheduled_at: null,
-      status: 'sent',
-      sent_at: new Date().toISOString(),
-    });
+    triggerEmailDelivery(supabase);
 
     setSending(false);
     setSendConfirmOpen(false);
     setSendConfirmText('');
     closeBuilder();
-    showFlash('ok', `Queued ${rows.length} email${rows.length === 1 ? '' : 's'} — delivery engine coming next.`);
+    showFlash('ok', `Queued ${rows.length} email${rows.length === 1 ? '' : 's'} — sending now.`);
     await Promise.all([loadTemplates(), loadEmailSends(), loadOutboxPending()]);
+  }
+
+  async function toggleRecipientsExpanded(sendId: string) {
+    if (recipientsExpandedId === sendId) { setRecipientsExpandedId(null); return; }
+    setRecipientsExpandedId(sendId);
+    if (outboxBySend[sendId] || !session) return;
+    setOutboxBySend(prev => ({ ...prev, [sendId]: 'loading' }));
+    const supabase = getAuthedClient(session.access_token);
+    const { data } = await supabase
+      .from('email_outbox')
+      .select('id, recipient_email, status, error')
+      .eq('email_send_id', sendId);
+    setOutboxBySend(prev => ({ ...prev, [sendId]: (data ?? []) as OutboxDetailRow[] }));
   }
 
   if (!conference) return null;
@@ -1078,35 +1156,89 @@ function CommunicationsPageInner() {
                             </span>
                           </div>
 
-                          {email.body_html && (
-                            <div className="mt-3 pt-3" style={{ borderTop: '1px solid #F0EDE6' }}>
+                          <div className="mt-3 pt-3 flex flex-col gap-2" style={{ borderTop: '1px solid #F0EDE6' }}>
+                            <div className="flex items-center gap-4">
+                              {email.body_html && (
+                                <button
+                                  onClick={() => setHistoryExpandedId(isExpanded ? null : email.id)}
+                                  className="text-xs font-bold focus:outline-none"
+                                  style={{ color: '#1B3828', backgroundColor: 'transparent', border: 'none', fontFamily: OUTFIT }}
+                                >
+                                  {isExpanded ? 'HIDE' : 'VIEW'}
+                                </button>
+                              )}
                               <button
-                                onClick={() => setHistoryExpandedId(isExpanded ? null : email.id)}
+                                onClick={() => toggleRecipientsExpanded(email.id)}
                                 className="text-xs font-bold focus:outline-none"
                                 style={{ color: '#1B3828', backgroundColor: 'transparent', border: 'none', fontFamily: OUTFIT }}
                               >
-                                {isExpanded ? 'HIDE' : 'VIEW'}
+                                {recipientsExpandedId === email.id ? 'HIDE RECIPIENTS' : 'RECIPIENTS'}
                               </button>
-                              {isExpanded && (
-                                isHtml ? (
-                                  <iframe
-                                    srcDoc={email.body_html}
-                                    sandbox="allow-same-origin"
-                                    title="Sent email"
-                                    className="mt-2"
-                                    style={{ width: '100%', height: 480, border: `1px solid ${BORDER}`, borderRadius: 8, backgroundColor: '#FFFFFF' }}
-                                  />
-                                ) : (
-                                  <p
-                                    className="mt-2 text-sm leading-relaxed"
-                                    style={{ color: '#1C1410', fontFamily: OUTFIT, whiteSpace: 'pre-wrap' }}
-                                  >
-                                    {email.body_html}
-                                  </p>
-                                )
-                              )}
                             </div>
-                          )}
+
+                            {isExpanded && email.body_html && (
+                              isHtml ? (
+                                <iframe
+                                  srcDoc={email.body_html}
+                                  sandbox="allow-same-origin"
+                                  title="Sent email"
+                                  style={{ width: '100%', height: 480, border: `1px solid ${BORDER}`, borderRadius: 8, backgroundColor: '#FFFFFF' }}
+                                />
+                              ) : (
+                                <p
+                                  className="text-sm leading-relaxed"
+                                  style={{ color: '#1C1410', fontFamily: OUTFIT, whiteSpace: 'pre-wrap' }}
+                                >
+                                  {email.body_html}
+                                </p>
+                              )
+                            )}
+
+                            {recipientsExpandedId === email.id && (() => {
+                              const detail = outboxBySend[email.id];
+                              if (detail === 'loading') {
+                                return <p className="text-xs" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>Loading…</p>;
+                              }
+                              if (!detail || detail.length === 0) {
+                                return (
+                                  <p className="text-xs" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+                                    No per-recipient delivery data recorded for this send.
+                                  </p>
+                                );
+                              }
+                              return (
+                                <div className="flex flex-col gap-1" style={{ maxHeight: 280, overflowY: 'auto' }}>
+                                  {detail.map(r => {
+                                    const rc = outboxStatusColor(r.status);
+                                    return (
+                                      <div
+                                        key={r.id}
+                                        className="flex items-center justify-between gap-2 rounded-lg px-2.5 py-1.5"
+                                        style={{ backgroundColor: '#FFFFFF', border: '1px solid #F0EDE6' }}
+                                      >
+                                        <span className="text-xs truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                                          {r.recipient_email ?? '—'}
+                                        </span>
+                                        <div className="flex items-center gap-2 flex-shrink-0">
+                                          {r.status === 'failed' && r.error && (
+                                            <span className="text-xs truncate" style={{ color: '#8B2020', fontFamily: OUTFIT, maxWidth: 260 }} title={r.error}>
+                                              {r.error}
+                                            </span>
+                                          )}
+                                          <span
+                                            className="rounded-md px-2 py-0.5 flex-shrink-0"
+                                            style={{ fontSize: 10, fontWeight: 700, fontFamily: OUTFIT, backgroundColor: rc.bg, color: rc.text, border: `1px solid ${rc.dot}55` }}
+                                          >
+                                            {r.status}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              );
+                            })()}
+                          </div>
                         </div>
                       );
                     })}
@@ -1209,10 +1341,14 @@ function CommunicationsPageInner() {
             <EmailComposer
               key={builderTemplateId ?? builderEventKey ?? 'new-adhoc'}
               conference={conference}
+              conferenceId={conference.id}
               initialSubject={builderSubject}
               initialBlocks={builderBlocks}
               previewCandidates={previewCandidates}
               onChange={handleComposerChange}
+              testSendContext={testSendContext}
+              accessToken={session?.access_token ?? null}
+              organizerEmail={profile?.email ?? null}
             />
           </div>
 
@@ -1359,7 +1495,7 @@ function CommunicationsPageInner() {
                   <div className="flex items-start gap-2">
                     <AlertTriangle size={14} style={{ color: '#B6871F', flexShrink: 0, marginTop: 1 }} />
                     <p className="text-xs leading-relaxed" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                      Sending queues one email per recipient in the outbox. The delivery engine that actually dispatches them is coming next.
+                      Sending queues one email per recipient and starts delivery immediately. Large sends may take a few minutes to fully drain.
                     </p>
                   </div>
                 </div>

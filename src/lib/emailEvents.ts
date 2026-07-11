@@ -7,6 +7,7 @@ import { resolveTokens, type EmailTokenContext } from '@/lib/emailTokens';
 import { normalizeBlocks, flattenBlocksToPlainText } from '@/lib/emailBlocks';
 import { renderEmailHtml, type EmailRenderConference } from '@/lib/emailHtml';
 import { formatFee } from '@/lib/utils';
+import { triggerEmailDelivery } from '@/lib/emailDelivery';
 
 // ── Event registry ────────────────────────────────────────────────────────────
 // Single source of truth for platform email events, shared by this lib
@@ -197,6 +198,8 @@ export async function queueEventEmail(
 
   const { error } = await supabase.from('email_outbox').insert(rows);
   if (error) return { drafted: true, queued: 0 };
+
+  triggerEmailDelivery(supabase);
 
   return { drafted: true, queued: rows.length };
 }
