@@ -3,6 +3,7 @@ import './globals.css';
 import { AuthProvider } from '@/components/AuthProvider';
 import { LanguageProvider } from '@/contexts/LanguageContext';
 import PreRegisterGate from '@/components/PreRegisterGate';
+import DemoGate from '@/components/DemoGate';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://gavelling.com'),
@@ -109,6 +110,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <LanguageProvider>
             {children}
             <PreRegisterGate />
+            <DemoGate />
           </LanguageProvider>
         </AuthProvider>
       </body>
