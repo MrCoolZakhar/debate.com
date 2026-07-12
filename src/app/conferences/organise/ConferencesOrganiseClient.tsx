@@ -8,6 +8,7 @@ import SiteNav from '@/components/SiteNav';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { gradientFor } from '@/app/conferences/ConferenceCard';
+import { LogoDisc } from '@/components/LogoDisc';
 
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
 
@@ -108,32 +109,9 @@ function ConferenceManageCard({ conf }: { conf: OrgConference }) {
         </div>
       </div>
 
-      {/* Floating logo tile overlapping the band */}
+      {/* Floating logo disc overlapping the band */}
       <div className="px-5" style={{ marginTop: '-26px', position: 'relative' }}>
-        {conf.logo_url ? (
-          <div
-            style={{
-              width: '52px', height: '52px', borderRadius: '13px', overflow: 'hidden',
-              backgroundColor: '#FAF8F3', border: '3px solid #FAF8F3',
-              boxShadow: '0 4px 12px rgba(27,56,40,0.18)',
-            }}
-          >
-            <img src={conf.logo_url} alt={conf.acronym} style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
-          </div>
-        ) : (
-          <div
-            style={{
-              width: '52px', height: '52px', borderRadius: '13px',
-              background: `linear-gradient(135deg, ${g0} 0%, ${g1} 100%)`, border: '3px solid #FAF8F3',
-              boxShadow: '0 4px 12px rgba(27,56,40,0.18)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}
-          >
-            <span style={{ fontSize: '13px', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.06em', color: '#EED98A', fontWeight: 700 }}>
-              {initials}
-            </span>
-          </div>
-        )}
+        <LogoDisc src={conf.logo_url} alt={conf.acronym} size={52} fallbackText={initials} />
       </div>
 
       <div className="px-5 pt-2.5 pb-5">

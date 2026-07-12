@@ -42,6 +42,7 @@ import { useState } from 'react';
 import { ArrowRight, Check, Users, CalendarDays, Gavel, MapPin } from 'lucide-react';
 import { getCountryByName } from '@/lib/countries';
 import { currencySymbol, formatFeeAmount } from '@/lib/utils';
+import { LogoDisc } from '@/components/LogoDisc';
 
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
 
@@ -96,7 +97,7 @@ function formatDateRange(start: string, end: string): string {
 }
 
 export function ConferenceCard({
-  conf, hovered, onHover, onLeave, onClick, compact = false, heroCompact = false, goldGlow = false, applied = false,
+  conf, hovered, onHover, onLeave, onClick, compact = false, heroCompact = false, goldGlow = false, applied = false, member = false,
 }: {
   conf: CardConference;
   hovered: boolean;
@@ -111,6 +112,9 @@ export function ConferenceCard({
   goldGlow?: boolean;
   /** The signed-in viewer already has an application for this conference. */
   applied?: boolean;
+  /** The signed-in viewer is already PART of this conference (organiser, chair
+   *  or accepted/assigned delegate) — the CTA becomes VIEW →. Wins over applied. */
+  member?: boolean;
 }) {
   const countryObj = getCountryByName(conf.country);
   // "Oxford, GB" — ISO country code instead of the full country name (or flag)
@@ -210,31 +214,15 @@ export function ConferenceCard({
         </span>
       </span>
 
-      {/* Free-floating logo — top-left over the photo */}
+      {/* Floating logo disc — top-left over the photo */}
       <div style={{ position: 'absolute', top: '12px', left: '14px' }}>
-        {conf.logo_url ? (
-          <img
-            src={conf.logo_url}
-            alt={conf.acronym}
-            style={{
-              width: '40px', height: '40px', objectFit: 'contain', display: 'block',
-              filter: 'drop-shadow(0 6px 14px rgba(6,14,10,0.6))',
-            }}
-          />
-        ) : (
-          <div
-            style={{
-              width: '34px', height: '34px', borderRadius: '10px',
-              backgroundColor: 'rgba(237,231,216,0.92)', border: '1px solid rgba(238,217,138,0.5)',
-              boxShadow: '0 4px 12px rgba(6,14,10,0.45)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}
-          >
-            <span style={{ fontSize: '9px', fontFamily: "'Outfit', sans-serif", color: '#1B3828', fontWeight: 700, letterSpacing: '0.06em', fontVariantNumeric: 'tabular-nums' }}>
-              {initials}
-            </span>
-          </div>
-        )}
+        <LogoDisc
+          src={conf.logo_url}
+          alt={conf.acronym}
+          size={40}
+          fallbackText={initials}
+          style={{ boxShadow: '0 6px 14px rgba(6,14,10,0.45)' }}
+        />
       </div>
 
       {/* Lower zone: BIG acronym + edition year · facts row + APPLY */}
@@ -290,7 +278,7 @@ export function ConferenceCard({
               </span>
             </span>
           </div>
-          <div className="flex-shrink-0"><ApplyButton applied={applied} /></div>
+          <div className="flex-shrink-0"><ApplyButton applied={applied} member={member} /></div>
         </div>
       </div>
     </article>
@@ -411,31 +399,15 @@ export function ConferenceCard({
         )}
       </div>
 
-      {/* Logo overlapping the band — free-floating */}
+      {/* Logo disc overlapping the band */}
       <div className={padX} style={{ marginTop: heroCompact ? '-22px' : compact ? '-24px' : '-36px', position: 'relative' }}>
-        {conf.logo_url ? (
-          <img
-            src={conf.logo_url}
-            alt={conf.acronym}
-            style={{
-              width: heroCompact ? '44px' : compact ? '52px' : '72px', height: heroCompact ? '44px' : compact ? '52px' : '72px', objectFit: 'contain', display: 'block',
-              filter: 'drop-shadow(0 8px 16px rgba(16,28,21,0.35))',
-            }}
-          />
-        ) : (
-          <div
-            style={{
-              width: heroCompact ? '40px' : compact ? '44px' : '56px', height: heroCompact ? '40px' : compact ? '44px' : '56px', borderRadius: dense ? '12px' : '15px',
-              backgroundColor: '#EDE7D8', border: '3px solid #FAF8F3',
-              boxShadow: '0 4px 12px rgba(27,56,40,0.15)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}
-          >
-            <span style={{ fontSize: dense ? '10px' : '12px', fontFamily: "'Outfit', sans-serif", color: '#1B3828', fontWeight: 700, letterSpacing: '0.06em', fontVariantNumeric: 'tabular-nums' }}>
-              {initials}
-            </span>
-          </div>
-        )}
+        <LogoDisc
+          src={conf.logo_url}
+          alt={conf.acronym}
+          size={heroCompact ? 44 : compact ? 52 : 72}
+          fallbackText={initials}
+          style={{ boxShadow: '0 8px 16px rgba(16,28,21,0.28)' }}
+        />
       </div>
 
       <div className={`${padX} ${heroCompact ? 'pt-1 pb-2.5' : compact ? 'pt-2 pb-4' : 'pt-3 pb-5'}`}>
@@ -471,7 +443,7 @@ export function ConferenceCard({
             <Users size={13} style={{ color: '#9A8A78' }} />
             {conf.expected_delegates.toLocaleString()}
           </span>
-          <ApplyButton applied={applied} />
+          <ApplyButton applied={applied} member={member} />
         </div>
       </div>
     </article>
@@ -519,11 +491,42 @@ export function ConferenceCard({
   );
 }
 
-/** Gold pill APPLY button for the card foot row — or a solid forest APPLIED ✓
- *  badge when the viewer already has an application. The whole card is the
- *  click target (routing to /conferences/[slug]); the button just bubbles. */
-function ApplyButton({ applied = false }: { applied?: boolean }) {
+/** Gold pill APPLY button for the card foot row — a solid forest APPLIED ✓
+ *  badge when the viewer already has an application, or a solid forest VIEW →
+ *  pill when the viewer is already part of the conference (member wins over
+ *  applied). The whole card is the click target (routing to
+ *  /conferences/[slug]); the button just bubbles. */
+function ApplyButton({ applied = false, member = false }: { applied?: boolean; member?: boolean }) {
   const [hover, setHover] = useState(false);
+  if (member) {
+    return (
+      <button
+        type="button"
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        className="inline-flex items-center gap-1.5 cursor-pointer"
+        style={{
+          fontFamily: "'Outfit', sans-serif",
+          fontWeight: 800,
+          fontSize: '10.5px',
+          letterSpacing: '0.08em',
+          color: '#EAF5EE',
+          backgroundColor: hover ? '#356744' : '#2A5A3C',
+          border: '1px solid rgba(127,214,160,0.45)',
+          padding: '6px 13px',
+          borderRadius: '9999px',
+          transform: hover ? 'translateY(-1.5px)' : 'translateY(0)',
+          boxShadow: hover
+            ? '0 6px 14px rgba(27,56,40,0.35)'
+            : '0 3px 8px rgba(27,56,40,0.25)',
+          transition: 'background-color 180ms ease, transform 180ms ease, box-shadow 180ms ease',
+        }}
+      >
+        VIEW
+        <ArrowRight size={12} strokeWidth={2.75} />
+      </button>
+    );
+  }
   if (applied) {
     return (
       <span

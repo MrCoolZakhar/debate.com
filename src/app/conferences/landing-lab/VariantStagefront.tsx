@@ -32,6 +32,7 @@ import { supabase } from '@/lib/supabase';
 import { UN_COUNTRIES } from '@/lib/countries';
 import { Carousel, type CarouselSlide } from '@/components/ui/carousel';
 import { ConferenceCard } from '../ConferenceCard';
+import { LogoDisc } from '@/components/LogoDisc';
 import {
   LabConference, RatingSummary,
   CREAM, FOREST, GOLD, IVORY, PALE_GOLD, SANS, GRAIN,
@@ -153,20 +154,34 @@ export default function VariantStagefront({
 
   // Conference ids the signed-in viewer already applied to — cards show
   // APPLIED instead of the APPLY pill. RLS returns only the viewer's own rows.
+  // memberIds: conferences the viewer is already PART of (organiser via
+  // conferences.organizer_id or a conference_organizers row, or an application
+  // that reached accepted/assigned/checked-in) — those cards show VIEW →
+  // instead. Three batched queries total, no per-card work; anonymous viewers
+  // skip all of it.
   const { user, session, loading: authLoading } = useAuth();
   const [appliedIds, setAppliedIds] = useState<Set<string>>(new Set());
+  const [memberIds, setMemberIds] = useState<Set<string>>(new Set());
   useEffect(() => {
     if (authLoading) return;
-    if (!user || !session) { setAppliedIds(new Set()); return; }
+    if (!user || !session) { setAppliedIds(new Set()); setMemberIds(new Set()); return; }
     let cancelled = false;
     (async () => {
-      const { data } = await getAuthedClient(session.access_token)
-        .from('applications')
-        .select('conference_id')
-        .eq('user_id', user.id);
-      if (!cancelled) {
-        setAppliedIds(new Set(((data as { conference_id: string }[]) ?? []).map(a => a.conference_id)));
-      }
+      const authed = getAuthedClient(session.access_token);
+      const [appsRes, orgRes, ownedRes] = await Promise.all([
+        authed.from('applications').select('conference_id, status').eq('user_id', user.id),
+        authed.from('conference_organizers').select('conference_id').eq('user_id', user.id),
+        authed.from('conferences').select('id').eq('organizer_id', user.id),
+      ]);
+      if (cancelled) return;
+      const apps = (appsRes.data as { conference_id: string; status: string | null }[]) ?? [];
+      setAppliedIds(new Set(apps.map(a => a.conference_id)));
+      const MEMBER_STATUSES = new Set(['accepted', 'assigned', 'checked-in']);
+      const member = new Set<string>();
+      for (const a of apps) if (a.status && MEMBER_STATUSES.has(a.status)) member.add(a.conference_id);
+      for (const o of ((orgRes.data as { conference_id: string }[]) ?? [])) member.add(o.conference_id);
+      for (const c of ((ownedRes.data as { id: string }[]) ?? [])) member.add(c.id);
+      setMemberIds(member);
     })();
     return () => { cancelled = true; };
   }, [authLoading, user, session]);
@@ -428,6 +443,7 @@ export default function VariantStagefront({
                         heroCompact
                         goldGlow
                         applied={appliedIds.has(c.id)}
+                        member={memberIds.has(c.id)}
                         hovered={hoveredId === c.id}
                         onHover={() => setHoveredId(c.id)}
                         onLeave={() => setHoveredId(null)}
@@ -666,6 +682,7 @@ export default function VariantStagefront({
             <RegionalRail
               conferences={regional.list}
               appliedIds={appliedIds}
+              memberIds={memberIds}
               hoveredId={hoveredId}
               onHover={setHoveredId}
               onClick={goTo}
@@ -837,10 +854,11 @@ function HeroTextLink({ href, label }: { href: string; label: string }) {
  * motion the track becomes a plain scroll-snap rail (the duplicate is hidden).
  */
 function RegionalRail({
-  conferences, appliedIds, hoveredId, onHover, onClick,
+  conferences, appliedIds, memberIds, hoveredId, onHover, onClick,
 }: {
   conferences: LabConference[];
   appliedIds: Set<string>;
+  memberIds: Set<string>;
   hoveredId: string | null;
   onHover: (id: string | null) => void;
   onClick: (slug: string) => void;
@@ -873,6 +891,7 @@ function RegionalRail({
               <ConferenceCard
                 conf={c}
                 applied={appliedIds.has(c.id)}
+                member={memberIds.has(c.id)}
                 hovered={!isDupe && hoveredId === c.id}
                 onHover={() => onHover(c.id)}
                 onLeave={() => onHover(null)}
@@ -921,26 +940,7 @@ function RolePopChip({
         whiteSpace: 'nowrap',
       }}
     >
-      {chip.logoUrl ? (
-        <img
-          src={chip.logoUrl}
-          alt=""
-          style={{ width: '24px', height: '24px', objectFit: 'contain', flexShrink: 0 }}
-        />
-      ) : (
-        <span
-          aria-hidden="true"
-          style={{
-            width: '24px', height: '24px', borderRadius: '7px', flexShrink: 0,
-            backgroundColor: FOREST, color: PALE_GOLD,
-            fontFamily: SANS, fontSize: '8.5px', fontWeight: 700, letterSpacing: '0.06em',
-            fontVariantNumeric: 'tabular-nums',
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-          }}
-        >
-          {chip.acronym.slice(0, 2).toUpperCase()}
-        </span>
-      )}
+      <LogoDisc src={chip.logoUrl} size={24} fallbackText={chip.acronym.slice(0, 2)} />
       <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         <span style={{ fontFamily: SANS, fontSize: '12px', fontWeight: 700, color: INK, lineHeight: 1.2, maxWidth: '170px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {chip.role}

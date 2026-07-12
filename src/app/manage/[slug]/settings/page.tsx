@@ -12,6 +12,8 @@ import { createClient } from '@supabase/supabase-js';
 import { UN_COUNTRIES } from '@/lib/countries';
 import { Pill } from '@/app/account/accountUi';
 import { useConfirmModal } from '@/components/ConfirmModal';
+import { LogoDisc } from '@/components/LogoDisc';
+import { LogoCropModal } from '@/components/LogoCropModal';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -192,38 +194,16 @@ function PillToggle({ value, onChange, size = 'md' }: {
 }
 
 // ── PartnerDisc ────────────────────────────────────────────────────────────
-// Logo when the partner has one; otherwise a forest disc with a gold initial
-// (same monogram language as the public-page medallions).
+// The universal LogoDisc treatment: logo inside a near-white circular
+// backdrop when the partner has one; otherwise a forest disc with a gold
+// initial (same monogram language as the public-page medallions).
 
 function PartnerDisc({ logoUrl, acronym, size = 40 }: {
   logoUrl: string | null;
   acronym: string;
   size?: number;
 }) {
-  if (logoUrl) {
-    return (
-      <img
-        src={logoUrl}
-        alt={acronym}
-        className="rounded-full object-cover flex-shrink-0"
-        style={{ width: `${size}px`, height: `${size}px`, border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3' }}
-      />
-    );
-  }
-  return (
-    <div
-      className="flex items-center justify-center rounded-full flex-shrink-0 font-black"
-      style={{
-        width: `${size}px`, height: `${size}px`,
-        background: 'linear-gradient(140deg, #16301F, #2A5A3C)',
-        color: '#EED98A',
-        fontFamily: "'Outfit', sans-serif",
-        fontSize: `${Math.round(size * 0.38)}px`,
-      }}
-    >
-      {(acronym?.[0] ?? '?').toUpperCase()}
-    </div>
-  );
+  return <LogoDisc src={logoUrl} alt={acronym} size={size} fallbackText={acronym?.[0] ?? '?'} />;
 }
 
 // ── QuestionModal ──────────────────────────────────────────────────────────
@@ -365,6 +345,8 @@ export default function SettingsPage() {
   const [visualSaving, setVisualSaving] = useState(false);
   const [visualSaved, setVisualSaved] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
+  // Logo picked but not yet uploaded — the drag-to-fit crop modal is open.
+  const [logoCropFile, setLogoCropFile] = useState<File | null>(null);
   const [feeAmount, setFeeAmount] = useState('');
   const [feeCurrency, setFeeCurrency] = useState('GBP');
   const [feeSaving, setFeeSaving] = useState(false);
@@ -1698,7 +1680,7 @@ export default function SettingsPage() {
                 {logoUploading ? (
                   <div className="w-5 h-5 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
                 ) : conference.logo_url ? (
-                  <img src={conference.logo_url} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 6 }} />
+                  <LogoDisc src={conference.logo_url} alt="Logo" size={80} fallbackText={conference.acronym?.slice(0, 3)} />
                 ) : (
                   <span style={{ fontSize: 11, color: '#9A8A78', fontFamily: "'Outfit', sans-serif", textAlign: 'center', padding: '0 8px' }}>Click to upload</span>
                 )}
@@ -1719,7 +1701,13 @@ export default function SettingsPage() {
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
                 style={{ display: 'none' }}
-                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleLogoUpload(f); e.target.value = ''; }}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = '';
+                  if (!f) return;
+                  if (f.size > 5 * 1024 * 1024) { alert('Logo must be under 5MB.'); return; }
+                  setLogoCropFile(f);
+                }}
               />
             </div>
           </div>
@@ -2625,6 +2613,19 @@ export default function SettingsPage() {
           existing={questionModal.existing}
           onSave={handleSaveQuestion}
           onClose={() => setQuestionModal({ open: false, existing: null })}
+        />
+      )}
+
+      {/* Drag-to-fit crop step — flattens the chosen framing into a square
+          transparent PNG, then hands off to the existing upload path. */}
+      {logoCropFile && (
+        <LogoCropModal
+          file={logoCropFile}
+          onCancel={() => setLogoCropFile(null)}
+          onSave={(blob) => {
+            setLogoCropFile(null);
+            handleLogoUpload(new File([blob], 'logo.png', { type: 'image/png' }));
+          }}
         />
       )}
 

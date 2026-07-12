@@ -8,6 +8,7 @@ import { supabase as anonClient } from '@/lib/supabase';
 import { UN_COUNTRIES, getCountryByName, getFlagUrl } from '@/lib/countries';
 import { experienceProgress, syncExperienceLevel } from '@/lib/munExperience';
 import { COMMITTEE_PRESETS } from '@/components/CommitteeNameInput';
+import { LogoDisc } from '@/components/LogoDisc';
 import {
   Eyebrow, GlassCard, Pill, LevelBadge, LEVEL_TONE, AwardChip, AwardArtwork, AWARD_LIST,
   ExperienceInfo, getCommitteeLogo, monogramFor, OUTFIT, MONO,
@@ -85,51 +86,16 @@ const inputStyle: React.CSSProperties = {
 
 // ── Logo tiles ─────────────────────────────────────────────────────────────
 
-/** Large PRIMARY tile — the conference's own logo (logo_url), monogram fallback. */
+/** Large PRIMARY tile — the conference's own logo (logo_url) inside the
+ *  universal LogoDisc treatment, monogram fallback. */
 function ConferenceLogo({ entry, size = 64 }: { entry: Pick<CVEntry, 'logo_url' | 'conference_name'>; size?: number }) {
-  const [failed, setFailed] = useState(false);
-  const src = entry.logo_url;
-
-  if (src && !failed) {
-    return (
-      <div
-        className="flex items-center justify-center flex-shrink-0"
-        style={{
-          width: `${size}px`,
-          height: `${size}px`,
-          borderRadius: '16px',
-          backgroundColor: 'rgba(250,248,243,0.9)',
-          border: '1px solid rgba(221,212,192,0.9)',
-          boxShadow: '0 3px 12px rgba(27,56,40,0.08)',
-          padding: '8px',
-        }}
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={src}
-          alt={entry.conference_name}
-          onError={() => setFailed(true)}
-          style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-        />
-      </div>
-    );
-  }
-
   return (
-    <div
-      className="flex items-center justify-center flex-shrink-0"
-      style={{
-        width: `${size}px`,
-        height: `${size}px`,
-        borderRadius: '16px',
-        background: 'linear-gradient(135deg, #1B3828, #2A5A3C)',
-        boxShadow: '0 3px 12px rgba(27,56,40,0.2)',
-      }}
-    >
-      <span style={{ color: '#EED98A', fontFamily: OUTFIT, fontWeight: 800, fontSize: `${Math.round(size * 0.3)}px`, letterSpacing: '0.04em' }}>
-        {monogramFor(entry.conference_name)}
-      </span>
-    </div>
+    <LogoDisc
+      src={entry.logo_url}
+      alt={entry.conference_name}
+      size={size}
+      fallbackText={monogramFor(entry.conference_name)}
+    />
   );
 }
 
@@ -729,13 +695,7 @@ function CVEntryModal({
             </label>
             <div className="flex items-center gap-2.5">
               {logoUrl && (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img
-                  src={logoUrl}
-                  alt=""
-                  className="flex-shrink-0"
-                  style={{ width: '34px', height: '34px', objectFit: 'contain', borderRadius: '9px', border: '1px solid rgba(221,212,192,0.9)', backgroundColor: '#FAF8F3', padding: '3px' }}
-                />
+                <LogoDisc src={logoUrl} size={34} fallbackText={monogramFor(conferenceName)} />
               )}
               <input
                 type="text"
@@ -775,8 +735,7 @@ function CVEntryModal({
                     onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                   >
                     {s.logoUrl ? (
-                      /* eslint-disable-next-line @next/next/no-img-element */
-                      <img src={s.logoUrl} alt="" style={{ width: '26px', height: '26px', objectFit: 'contain', borderRadius: '7px', flexShrink: 0 }} />
+                      <LogoDisc src={s.logoUrl} size={26} fallbackText={monogramFor(s.name)} />
                     ) : (
                       <span
                         className="flex items-center justify-center flex-shrink-0"

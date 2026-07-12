@@ -9,6 +9,7 @@ import Link from 'next/link';
 import { CalendarClock, MapPin, ArrowUpRight, Sparkles } from 'lucide-react';
 import { getCountryByName, getFlagUrl } from '@/lib/countries';
 import { Pill, type PillTone, OUTFIT, MONO } from '@/app/account/accountUi';
+import { LogoDisc } from '@/components/LogoDisc';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -206,35 +207,13 @@ export function PersonalConferenceCard({
       <div className="px-5" style={{ marginTop: '-30px' }}>
         <div className="flex items-end gap-3.5">
           <div className="relative flex-shrink-0">
-            {conf.logo_url ? (
-              /* eslint-disable-next-line @next/next/no-img-element */
-              <img
-                src={conf.logo_url}
-                alt={conf.acronym}
-                style={{
-                  width: '58px',
-                  height: '58px',
-                  objectFit: 'contain',
-                  filter: 'drop-shadow(0 10px 20px rgba(27,56,40,0.30))',
-                }}
-              />
-            ) : (
-              <div
-                className="flex items-center justify-center font-black rounded-2xl"
-                style={{
-                  width: '58px',
-                  height: '58px',
-                  backgroundColor: '#FAF8F3',
-                  border: '1px solid rgba(221,212,192,0.95)',
-                  color: '#1B3828',
-                  fontFamily: OUTFIT,
-                  fontSize: '18px',
-                  boxShadow: '0 8px 18px rgba(27,56,40,0.16)',
-                }}
-              >
-                {conf.acronym?.slice(0, 3).toUpperCase()}
-              </div>
-            )}
+            <LogoDisc
+              src={conf.logo_url}
+              alt={conf.acronym}
+              size={58}
+              fallbackText={conf.acronym?.slice(0, 3)}
+              style={{ boxShadow: '0 8px 18px rgba(27,56,40,0.16)' }}
+            />
           </div>
           <div className="min-w-0 pb-1">
             <p className="text-xs" style={{ color: '#B6871F', fontFamily: MONO, letterSpacing: '0.12em', margin: 0 }}>
@@ -328,7 +307,7 @@ export function ConferenceCardSkeleton() {
     >
       <div style={{ height: '76px', background: 'linear-gradient(135deg, rgba(27,56,40,0.14), rgba(42,90,60,0.1))' }} />
       <div className="px-5 pb-5" style={{ marginTop: '-30px' }}>
-        <div className="rounded-2xl shimmer" style={{ width: '58px', height: '58px' }} />
+        <div className="rounded-full shimmer" style={{ width: '58px', height: '58px' }} />
         <div className="rounded-md shimmer mt-4" style={{ height: '15px', width: '70%' }} />
         <div className="rounded-md shimmer mt-2.5" style={{ height: '11px', width: '45%' }} />
         <div className="flex gap-2 mt-4">

@@ -13,6 +13,7 @@ import { getAuthedClient } from '@/lib/supabase-auth';
 import { supabase as anonSupabase } from '@/lib/supabase';
 import { useAuth } from '@/components/AuthProvider';
 import { getFlagUrl, getCountryByName } from '@/lib/countries';
+import { LogoDisc } from '@/components/LogoDisc';
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -314,32 +315,16 @@ function PostingCard({
         <div className="flex items-start gap-3">
           <Link
             href={conf ? `/conferences/${conf.slug}` : '#'}
-            className="flex-shrink-0 flex items-center justify-center focus:outline-none"
-            style={{
-              width: '56px', height: '56px',
-              borderRadius: '14px',
-              backgroundColor: '#FFFFFF',
-              border: `1px solid ${BORDER}`,
-              boxShadow: '0 2px 8px rgba(27,56,40,0.08)',
-              overflow: 'hidden',
-            }}
+            className="flex-shrink-0 focus:outline-none"
+            style={{ textDecoration: 'none' }}
             aria-label={conf?.full_name ?? 'Conference'}
           >
-            {conf?.logo_url ? (
-              <img
-                src={conf.logo_url}
-                alt={conf.acronym}
-                style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '5px' }}
-                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-              />
-            ) : (
-              <span
-                className="font-bold text-[13px]"
-                style={{ color: FOREST, fontFamily: "'Outfit', sans-serif" }}
-              >
-                {(conf?.acronym ?? '?').slice(0, 4)}
-              </span>
-            )}
+            <LogoDisc
+              src={conf?.logo_url}
+              alt={conf?.acronym}
+              size={56}
+              fallbackText={(conf?.acronym ?? '?').slice(0, 3)}
+            />
           </Link>
 
           <div className="min-w-0 flex-1">

@@ -7,6 +7,7 @@ import { MapPin } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import { supabase } from '@/lib/supabase';
 import { getFlagUrl, getCountryByName } from '@/lib/countries';
+import { LogoDisc } from '@/components/LogoDisc';
 
 type ContinentKey =
   | 'north-america'
@@ -788,26 +789,11 @@ export default function ConferencesMapPage() {
                       onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#B6871F'; (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'; }}
                       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; }}
                     >
-                      {detail.highlighted.logo_url ? (
-                        <img
-                          src={detail.highlighted.logo_url}
-                          alt=""
-                          style={{ width: 34, height: 34, borderRadius: 8, objectFit: 'contain', flexShrink: 0, backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}
-                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                        />
-                      ) : (
-                        <span
-                          aria-hidden="true"
-                          style={{
-                            width: 34, height: 34, borderRadius: 8, flexShrink: 0,
-                            backgroundColor: '#1B3828', color: '#EED98A',
-                            fontFamily: "'Outfit', sans-serif", fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', fontVariantNumeric: 'tabular-nums',
-                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                          }}
-                        >
-                          {(detail.highlighted.acronym ?? detail.highlighted.full_name).slice(0, 2).toUpperCase()}
-                        </span>
-                      )}
+                      <LogoDisc
+                        src={detail.highlighted.logo_url}
+                        size={34}
+                        fallbackText={(detail.highlighted.acronym ?? detail.highlighted.full_name).slice(0, 2)}
+                      />
                       <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
                         <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: 12, fontWeight: 500, color: '#B6871F', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
                           Spotlight

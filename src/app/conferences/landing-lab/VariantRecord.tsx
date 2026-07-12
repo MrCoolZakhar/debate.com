@@ -15,6 +15,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowRight, ArrowUpRight, Search } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
+import { LogoDisc } from '@/components/LogoDisc';
 import {
   LabConference, LabReview, RatingSummary,
   CREAM, FOREST, GOLD, HAIRLINE, INK, IVORY, MONO, PALE_GOLD, SANS, TAUPE, GRAIN,
@@ -412,11 +413,7 @@ function IndexRow({
         </div>
         <div className="flex items-center gap-4" style={{ minWidth: 0 }}>
           {c.logo_url && (
-            <img
-              src={c.logo_url}
-              alt=""
-              style={{ width: '42px', height: '42px', objectFit: 'contain', filter: 'drop-shadow(0 4px 10px rgba(27,56,40,0.25))', flexShrink: 0 }}
-            />
+            <LogoDisc src={c.logo_url} size={42} fallbackText={c.acronym.slice(0, 2)} />
           )}
           <div style={{ minWidth: 0 }}>
             <p style={{ fontFamily: SANS, fontSize: '19px', fontWeight: 700, letterSpacing: '-0.01em', color: INK, margin: 0 }}>
@@ -482,10 +479,12 @@ function ProofColumn({
         ALREADY ON THE RECORD
       </p>
       {flagship.logo_url && (
-        <img
+        <LogoDisc
           src={flagship.logo_url}
           alt={`${flagship.acronym} logo`}
-          style={{ width: '64px', height: '64px', objectFit: 'contain', filter: 'drop-shadow(0 6px 16px rgba(0,0,0,0.4))', marginTop: '18px' }}
+          size={64}
+          fallbackText={flagship.acronym.slice(0, 2)}
+          style={{ marginTop: '18px', boxShadow: '0 6px 16px rgba(0,0,0,0.4)' }}
         />
       )}
       <p style={{ fontFamily: SANS, fontSize: '19px', fontWeight: 700, color: IVORY, margin: '14px 0 0 0' }}>

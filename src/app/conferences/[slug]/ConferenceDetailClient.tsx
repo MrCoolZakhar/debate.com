@@ -10,6 +10,8 @@ import { getAuthedClient } from '@/lib/supabase-auth';
 import { supabase as anonSupabase } from '@/lib/supabase';
 import { getFlagUrl, getCountryByName } from '@/lib/countries';
 import { OrganizerPencil } from '@/components/OrganizerPencil';
+import { LogoDisc } from '@/components/LogoDisc';
+import { LogoCropModal } from '@/components/LogoCropModal';
 import { uploadConferenceAsset } from '@/lib/conferenceAssets';
 import { formatFee } from '@/lib/utils';
 import ParticipantView from '@/app/conferences/[slug]/participant/ParticipantView';
@@ -405,6 +407,8 @@ export default function ConferenceDetailClient() {
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState('');
   const [assetUploading, setAssetUploading] = useState(false);
+  // Logo picked but not yet uploaded — the drag-to-fit crop modal is open.
+  const [logoCropFile, setLogoCropFile] = useState<File | null>(null);
   const [descDraft, setDescDraft] = useState('');
   const [aboutDraft, setAboutDraft] = useState({
     contact_email: '', instagram_url: '', facebook_url: '', tiktok_url: '', whatsapp_url: '', website_url: '',
@@ -951,20 +955,19 @@ export default function ConferenceDetailClient() {
             <div className="flex items-end gap-5">
               {conference.logo_url ? (
                 <div className="hidden sm:block relative flex-shrink-0" style={{ width: '150px', height: '150px' }}>
-                  <img
+                  <LogoDisc
                     src={conference.logo_url}
                     alt={conference.acronym}
-                    style={{
-                      width: '150px', height: '150px', objectFit: 'contain',
-                      filter: 'drop-shadow(0 14px 28px rgba(0,0,0,0.5))',
-                    }}
+                    size={150}
+                    fallbackText={conference.acronym.slice(0, 3)}
+                    style={{ boxShadow: '0 14px 28px rgba(0,0,0,0.45)' }}
                   />
                   {isOrganizerViewer && (
                     <OrganizerPencil
                       variant="cover"
                       ariaLabel="Edit logo"
                       onClick={() => openEdit('logo')}
-                      style={{ zIndex: 30, borderRadius: '20px' }}
+                      style={{ zIndex: 30, borderRadius: '9999px' }}
                     />
                   )}
                 </div>
@@ -1224,10 +1227,11 @@ export default function ConferenceDetailClient() {
                   </p>
                   <div className="flex items-center gap-4">
                     {conference.logo_url && (
-                      <img
+                      <LogoDisc
                         src={conference.logo_url}
                         alt={conference.acronym}
-                        style={{ width: '80px', height: '80px', objectFit: 'contain', filter: 'drop-shadow(0 8px 16px rgba(27,56,40,0.28))', flexShrink: 0 }}
+                        size={80}
+                        fallbackText={conference.acronym.slice(0, 3)}
                       />
                     )}
                     <div className="min-w-0">
@@ -2355,11 +2359,7 @@ export default function ConferenceDetailClient() {
                           onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.transform = 'translateY(0)'; el.style.boxShadow = '0 10px 30px rgba(182,135,31,0.16)'; }}
                         >
                           {p.logo_url ? (
-                            <img
-                              src={p.logo_url}
-                              alt={p.acronym}
-                              style={{ width: '56px', height: '56px', objectFit: 'contain', flexShrink: 0, filter: 'drop-shadow(0 6px 12px rgba(27,56,40,0.22))' }}
-                            />
+                            <LogoDisc src={p.logo_url} alt={p.acronym} size={56} fallbackText={p.acronym.slice(0, 3)} />
                           ) : (
                             <MonogramMedallion text={p.acronym} isCrisis={false} size={56} />
                           )}
@@ -2479,7 +2479,7 @@ export default function ConferenceDetailClient() {
                   {assetUploading ? (
                     <div className="w-5 h-5 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
                   ) : conference.logo_url ? (
-                    <img src={conference.logo_url} alt={conference.acronym} style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 8 }} />
+                    <LogoDisc src={conference.logo_url} alt={conference.acronym} size={80} fallbackText={conference.acronym.slice(0, 3)} />
                   ) : (
                     <Plus size={20} strokeWidth={2.2} style={{ color: '#9A8A78' }} />
                   )}
@@ -2493,11 +2493,31 @@ export default function ConferenceDetailClient() {
                 type="file"
                 accept="image/jpeg,image/png,image/webp,image/svg+xml"
                 style={{ display: 'none' }}
-                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleAssetSelect('logos', f); e.target.value = ''; }}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = '';
+                  if (!f) return;
+                  if (f.size > 5 * 1024 * 1024) { setEditError('Image must be under 5MB.'); return; }
+                  setEditError('');
+                  setLogoCropFile(f);
+                }}
               />
               {editError && <p className="text-xs mt-3" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif", margin: '12px 0 0 0' }}>{editError}</p>}
             </div>
           </ModalOverlay>
+        )}
+
+        {/* Drag-to-fit crop step — flattens the chosen framing into a square
+            transparent PNG, then hands off to the existing upload path. */}
+        {isOrganizerViewer && logoCropFile && (
+          <LogoCropModal
+            file={logoCropFile}
+            onCancel={() => setLogoCropFile(null)}
+            onSave={(blob) => {
+              setLogoCropFile(null);
+              handleAssetSelect('logos', new File([blob], 'logo.png', { type: 'image/png' }));
+            }}
+          />
         )}
 
         {isOrganizerViewer && editModal === 'description' && (

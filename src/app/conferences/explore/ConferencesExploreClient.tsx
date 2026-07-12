@@ -3,11 +3,13 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Search, SlidersHorizontal, ArrowLeft } from 'lucide-react';
+import { Search, SlidersHorizontal, ArrowLeft, LayoutGrid, Rows3, Users, ArrowRight, Check } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { supabase } from '@/lib/supabase';
+import { getCountryByName } from '@/lib/countries';
+import { currencySymbol, formatFeeAmount } from '@/lib/utils';
 import { ConferenceCard } from '../ConferenceCard';
 
 // ── Continent maps ─────────────────────────────────────────────────────────────
@@ -53,6 +55,7 @@ interface Conference {
   logo_url: string | null;
   banner_url: string | null;
   is_public: boolean;
+  organizer_id: string | null;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -90,6 +93,262 @@ function FilterPill({
   );
 }
 
+// ── View toggle (grid / list) ─────────────────────────────────────────────
+
+const VIEW_STORAGE_KEY = 'gavelling-explore-view';
+type ExploreView = 'grid' | 'list';
+
+function ViewToggle({ view, onChange }: { view: ExploreView; onChange: (v: ExploreView) => void }) {
+  const options: { key: ExploreView; icon: typeof LayoutGrid; label: string }[] = [
+    { key: 'grid', icon: LayoutGrid, label: 'Grid view' },
+    { key: 'list', icon: Rows3, label: 'List view' },
+  ];
+  return (
+    <div
+      className="flex items-center flex-shrink-0"
+      role="group"
+      aria-label="View"
+      style={{
+        backgroundColor: 'rgba(237,231,216,0.5)',
+        border: '1px solid rgba(221,212,192,0.9)',
+        borderRadius: 9999,
+        padding: '3px',
+        gap: '2px',
+      }}
+    >
+      {options.map(({ key, icon: Icon, label }) => {
+        const active = view === key;
+        return (
+          <button
+            key={key}
+            type="button"
+            aria-label={label}
+            aria-pressed={active}
+            title={label}
+            onClick={() => onChange(key)}
+            className="flex items-center justify-center rounded-full transition-colors focus:outline-none"
+            style={{
+              width: '30px', height: '26px',
+              backgroundColor: active ? '#1B3828' : 'transparent',
+              color: active ? '#EED98A' : '#4A4238',
+              boxShadow: active ? '0 2px 6px rgba(27,56,40,0.25)' : 'none',
+            }}
+            onMouseEnter={(e) => {
+              if (active) return;
+              (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.08)';
+              (e.currentTarget as HTMLElement).style.color = '#1B3828';
+            }}
+            onMouseLeave={(e) => {
+              if (active) return;
+              (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
+              (e.currentTarget as HTMLElement).style.color = '#4A4238';
+            }}
+          >
+            <Icon size={14} strokeWidth={2.25} />
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── List row (compact list view) ──────────────────────────────────────────
+
+function listDateRange(start: string, end: string): string {
+  const s = new Date(start + 'T00:00:00');
+  const e = new Date(end + 'T00:00:00');
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  if (s.getMonth() === e.getMonth() && s.getFullYear() === e.getFullYear()) {
+    return `${s.getDate()}–${e.getDate()} ${months[s.getMonth()]} ${s.getFullYear()}`;
+  }
+  return `${s.getDate()} ${months[s.getMonth()]} – ${e.getDate()} ${months[e.getMonth()]} ${e.getFullYear()}`;
+}
+
+function ConferenceListRow({
+  conf, applied, member, hovered, onHover, onLeave,
+}: {
+  conf: Conference;
+  applied: boolean;
+  /** Viewer is already part of this conference (organizer / chair / delegate) — takes precedence over `applied`. */
+  member: boolean;
+  hovered: boolean;
+  onHover: () => void;
+  onLeave: () => void;
+}) {
+  const countryObj = getCountryByName(conf.country);
+  const countryCode = countryObj ? countryObj.code.toUpperCase() : conf.country;
+  const editionYear = conf.start_date.slice(0, 4);
+  const initials = conf.acronym.slice(0, 3).toUpperCase();
+
+  return (
+    <Link
+      href={`/conferences/${conf.slug}`}
+      onMouseEnter={onHover}
+      onMouseLeave={onLeave}
+      className="flex items-center gap-3 md:gap-4 px-3 py-2.5 md:px-4"
+      style={{
+        backgroundColor: '#FAF8F3',
+        border: hovered ? '1px solid rgba(27,56,40,0.55)' : '1px solid #DDD4C0',
+        borderRadius: '13px',
+        textDecoration: 'none',
+        transform: hovered ? 'translateY(-2px)' : 'translateY(0)',
+        boxShadow: hovered
+          ? '0 10px 26px rgba(27,56,40,0.13), 0 2px 6px rgba(27,56,40,0.07)'
+          : '0 1px 3px rgba(27,56,40,0.05)',
+        transition: 'transform 200ms cubic-bezier(0.22,1,0.36,1), box-shadow 200ms ease, border-color 200ms ease',
+      }}
+    >
+      {/* Logo disc — near-white disc, ~12% inner padding, forest fallback */}
+      <div
+        className="flex-shrink-0 flex items-center justify-center overflow-hidden"
+        style={{
+          width: '44px', height: '44px', borderRadius: '9999px',
+          backgroundColor: conf.logo_url ? '#FDFCF9' : '#1B3828',
+          border: '1px solid rgba(221,212,192,0.8)',
+          boxShadow: '0 3px 8px rgba(27,56,40,0.12)',
+          padding: conf.logo_url ? '5px' : 0,
+        }}
+      >
+        {conf.logo_url ? (
+          <img
+            src={conf.logo_url}
+            alt={conf.acronym}
+            style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+          />
+        ) : (
+          <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '11px', letterSpacing: '0.06em', color: '#EED98A', fontVariantNumeric: 'tabular-nums' }}>
+            {initials}
+          </span>
+        )}
+      </div>
+
+      {/* Name + location/dates */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-baseline gap-2 min-w-0">
+          <span
+            className="flex-shrink-0"
+            style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontVariantNumeric: 'tabular-nums', fontSize: '15px', letterSpacing: '0.01em', color: '#1C1410', whiteSpace: 'nowrap' }}
+          >
+            {conf.acronym} {editionYear}
+          </span>
+          <span
+            className="hidden sm:block truncate"
+            style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 500, fontSize: '12.5px', color: '#9A8A78' }}
+          >
+            {conf.full_name}
+          </span>
+        </div>
+        <div
+          className="truncate"
+          style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 500, fontVariantNumeric: 'tabular-nums', fontSize: '12px', color: '#6B5F52', marginTop: '2px' }}
+        >
+          {conf.city}, {countryCode}
+          <span style={{ color: '#C8BFB0', margin: '0 6px' }}>·</span>
+          {listDateRange(conf.start_date, conf.end_date)}
+        </div>
+      </div>
+
+      {/* Right cluster: fee · delegates · format · apply */}
+      <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
+        {/* Fee bubble */}
+        <span
+          className="inline-flex items-baseline gap-0.5 flex-shrink-0"
+          style={{
+            backgroundColor: '#FDFCF9',
+            border: conf.fee_amount === 0 ? '1.5px solid rgba(61,122,82,0.5)' : '1.5px solid rgba(182,135,31,0.4)',
+            borderRadius: 9999, padding: '3px 10px',
+          }}
+        >
+          {conf.fee_amount === 0 ? (
+            <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '11px', letterSpacing: '0.08em', color: '#2A5A3C' }}>
+              FREE
+            </span>
+          ) : (
+            <>
+              <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '11.5px', color: '#B6871F' }}>
+                {currencySymbol(conf.fee_currency)}
+              </span>
+              <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontVariantNumeric: 'tabular-nums', fontSize: '12.5px', color: '#1C1410' }}>
+                {formatFeeAmount(conf.fee_amount)}
+              </span>
+            </>
+          )}
+        </span>
+
+        {/* Delegates */}
+        <span
+          className="hidden sm:inline-flex items-center gap-1 flex-shrink-0"
+          style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '12px', color: '#4A4238' }}
+        >
+          <Users size={13} style={{ color: '#9A8A78' }} />
+          {conf.expected_delegates.toLocaleString()}
+        </span>
+
+        {/* Format chip — hidden on mobile */}
+        {conf.format && (
+          <span
+            className="hidden md:inline-flex flex-shrink-0"
+            style={{
+              fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.12em',
+              color: '#1B3828', backgroundColor: 'rgba(27,56,40,0.07)',
+              border: '1px solid rgba(27,56,40,0.18)',
+              padding: '3px 9px', borderRadius: 9999, whiteSpace: 'nowrap',
+            }}
+          >
+            {conf.format.toUpperCase().replace('-', ' ')}
+          </span>
+        )}
+
+        {/* Apply affordance — same navigation as the grid card (bubbles to the row link).
+            member (already part of the conference) > applied > apply. */}
+        {member ? (
+          <span
+            className="hidden sm:inline-flex items-center gap-1 flex-shrink-0"
+            style={{
+              fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '10px', letterSpacing: '0.08em',
+              color: '#EAF5EE', backgroundColor: '#2A5A3C',
+              border: '1px solid rgba(127,214,160,0.45)',
+              padding: '5px 12px', borderRadius: 9999,
+              boxShadow: '0 3px 8px rgba(27,56,40,0.25)',
+            }}
+          >
+            VIEW
+            <ArrowRight size={11} strokeWidth={2.75} />
+          </span>
+        ) : applied ? (
+          <span
+            className="hidden sm:inline-flex items-center gap-1 flex-shrink-0"
+            style={{
+              fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '9.5px', letterSpacing: '0.08em',
+              color: '#EAF5EE', backgroundColor: '#2A5A3C',
+              border: '1px solid rgba(127,214,160,0.45)',
+              padding: '5px 11px', borderRadius: 9999,
+              boxShadow: '0 3px 8px rgba(27,56,40,0.25)',
+            }}
+          >
+            APPLIED
+            <Check size={11} strokeWidth={3} />
+          </span>
+        ) : (
+          <span
+            className="hidden sm:inline-flex items-center gap-1 flex-shrink-0"
+            style={{
+              fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '10px', letterSpacing: '0.08em',
+              color: '#1B3828', backgroundColor: hovered ? '#F3E3A1' : '#EED98A',
+              padding: '5px 12px', borderRadius: 9999,
+              boxShadow: '0 3px 8px rgba(182,135,31,0.28), 0 0 0 1px rgba(182,135,31,0.22)',
+              transition: 'background-color 180ms ease',
+            }}
+          >
+            APPLY
+            <ArrowRight size={11} strokeWidth={2.75} />
+          </span>
+        )}
+      </div>
+    </Link>
+  );
+}
+
 // ── Empty state SVG ────────────────────────────────────────────────────────
 
 function EmptySVG() {
@@ -121,12 +380,25 @@ export default function ConferencesExploreClient() {
   const [continentFilter, setContinentFilter] = useState<string>(() => searchParams.get('continent') ?? '');
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
+  // Grid / list view — restored from localStorage after mount (SSR-safe).
+  const [view, setView] = useState<ExploreView>('grid');
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(VIEW_STORAGE_KEY);
+      if (stored === 'grid' || stored === 'list') setView(stored);
+    } catch { /* private mode etc. — keep default */ }
+  }, []);
+  function changeView(v: ExploreView) {
+    setView(v);
+    try { window.localStorage.setItem(VIEW_STORAGE_KEY, v); } catch { /* ignore */ }
+  }
+
   useEffect(() => {
     async function fetchConferences() {
       setLoading(true);
       const { data } = await supabase
         .from('conferences')
-        .select('id, slug, full_name, acronym, country, city, start_date, end_date, expected_delegates, fee_amount, fee_currency, format, student_level, logo_url, banner_url, is_public')
+        .select('id, slug, full_name, acronym, country, city, start_date, end_date, expected_delegates, fee_amount, fee_currency, format, student_level, logo_url, banner_url, is_public, organizer_id')
         .eq('is_public', true)
         .order('start_date', { ascending: true });
       setConferences((data as Conference[]) ?? []);
@@ -136,24 +408,38 @@ export default function ConferencesExploreClient() {
   }, []);
 
   // Conference ids the signed-in viewer already applied to — cards show
-  // APPLIED instead of the APPLY pill. RLS returns only the viewer's own rows.
+  // APPLIED instead of the APPLY pill. Conference ids the viewer is already
+  // PART of (organizer, chair, or delegate with an accepted/assigned/checked-in
+  // application) show VIEW instead. RLS returns only the viewer's own rows.
+  // Two batched queries — never per-row lookups. Anonymous viewer → empty sets.
   const { user, session, loading: authLoading } = useAuth();
   const [appliedIds, setAppliedIds] = useState<Set<string>>(new Set());
+  const [memberIds, setMemberIds] = useState<Set<string>>(new Set());
   useEffect(() => {
     if (authLoading) return;
-    if (!user || !session) { setAppliedIds(new Set()); return; }
+    if (!user || !session) { setAppliedIds(new Set()); setMemberIds(new Set()); return; }
     let cancelled = false;
     (async () => {
-      const { data } = await getAuthedClient(session.access_token)
-        .from('applications')
-        .select('conference_id')
-        .eq('user_id', user.id);
-      if (!cancelled) {
-        setAppliedIds(new Set(((data as { conference_id: string }[]) ?? []).map(a => a.conference_id)));
-      }
+      const authed = getAuthedClient(session.access_token);
+      const [appsRes, orgRes] = await Promise.all([
+        authed.from('applications').select('conference_id, status').eq('user_id', user.id),
+        authed.from('conference_organizers').select('conference_id').eq('user_id', user.id),
+      ]);
+      if (cancelled) return;
+      const apps = (appsRes.data as { conference_id: string; status: string }[]) ?? [];
+      setAppliedIds(new Set(apps.map(a => a.conference_id)));
+      const MEMBER_STATUSES = new Set(['accepted', 'assigned', 'checked-in']);
+      const members = new Set<string>();
+      for (const a of apps) if (MEMBER_STATUSES.has(a.status)) members.add(a.conference_id);
+      for (const o of ((orgRes.data as { conference_id: string }[]) ?? [])) members.add(o.conference_id);
+      setMemberIds(members);
     })();
     return () => { cancelled = true; };
   }, [authLoading, user, session]);
+
+  // Owner check rides on the conference rows themselves (organizer_id).
+  const isMember = (c: Conference) =>
+    memberIds.has(c.id) || (!!user && c.organizer_id === user.id);
 
   const filtered = conferences.filter(c => {
     if (searchQuery) {
@@ -350,10 +636,18 @@ export default function ConferencesExploreClient() {
                 </span>
               )}
 
+              {/* View toggle (grid / list) */}
+              <div className="ml-auto flex-shrink-0">
+                <ViewToggle view={view} onChange={changeView} />
+              </div>
+
+              {/* Hairline divider */}
+              <div className="hidden md:block w-px h-6 flex-shrink-0" style={{ backgroundColor: 'rgba(221,212,192,0.9)' }} />
+
               {/* Filters toggle */}
               <button
                 onClick={() => setFiltersOpen(v => !v)}
-                className="flex items-center gap-2 rounded-full py-2 px-4 font-bold text-[11px] transition-colors focus:outline-none flex-shrink-0 ml-auto"
+                className="flex items-center gap-2 rounded-full py-2 px-4 font-bold text-[11px] transition-colors focus:outline-none flex-shrink-0"
                 style={{
                   backgroundColor: filtersOpen ? '#1B3828' : 'rgba(237,231,216,0.5)',
                   color: filtersOpen ? '#EED98A' : '#4A4238',
@@ -470,6 +764,20 @@ export default function ConferencesExploreClient() {
                 ORGANISE A CONFERENCE →
               </button>
             </div>
+          ) : view === 'list' ? (
+            <div className="flex flex-col gap-2">
+              {filtered.map(conf => (
+                <ConferenceListRow
+                  key={conf.id}
+                  conf={conf}
+                  applied={appliedIds.has(conf.id)}
+                  member={isMember(conf)}
+                  hovered={hoveredId === conf.id}
+                  onHover={() => setHoveredId(conf.id)}
+                  onLeave={() => setHoveredId(null)}
+                />
+              ))}
+            </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filtered.map(conf => (
@@ -477,6 +785,7 @@ export default function ConferencesExploreClient() {
                   key={conf.id}
                   conf={conf}
                   applied={appliedIds.has(conf.id)}
+                  member={isMember(conf)}
                   hovered={hoveredId === conf.id}
                   onHover={() => setHoveredId(conf.id)}
                   onLeave={() => setHoveredId(null)}

@@ -16,6 +16,7 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, ArrowUpRight } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
+import { LogoDisc } from '@/components/LogoDisc';
 import {
   LabConference, LabReview, RatingSummary,
   CREAM, FOREST, GOLD, HAIRLINE, INK, IVORY, MONO, PALE_GOLD, SANS, TAUPE, GRAIN,
@@ -178,10 +179,12 @@ export default function VariantFirstGavel({
               </p>
               <div className="flex items-end gap-4" style={{ marginTop: '14px' }}>
                 {flagship.logo_url && (
-                  <img
+                  <LogoDisc
                     src={flagship.logo_url}
                     alt={`${flagship.acronym} logo`}
-                    style={{ width: '58px', height: '58px', objectFit: 'contain', filter: 'drop-shadow(0 6px 16px rgba(0,0,0,0.5))', flexShrink: 0 }}
+                    size={58}
+                    fallbackText={flagship.acronym.slice(0, 2)}
+                    style={{ boxShadow: '0 6px 16px rgba(0,0,0,0.45)' }}
                   />
                 )}
                 <div>
