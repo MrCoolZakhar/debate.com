@@ -13,6 +13,7 @@ import { queueEventEmail } from '@/lib/emailEvents';
 import { sendChairInvite } from '@/lib/chairInvites';
 import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
 import { useConfirmModal } from '@/components/ConfirmModal';
+import { NotRegisteredChip } from '@/app/manage/[slug]/assignment/delegationShared';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -32,6 +33,8 @@ interface AcceptedApp {
   is_independent: boolean;
   payment_status: string | null;
   attending: boolean;
+  invited_email: string | null;
+  invited_name: string | null;
   profiles: {
     id: string;
     display_name: string;
@@ -46,12 +49,13 @@ interface AcceptedApp {
 
 interface AllocationRow {
   id: string;
-  user_id: string;
+  user_id: string | null;
   country_code: string;
   country_name: string;
   allocation_sent: boolean;
   application_id: string | null;
   profiles: { display_name: string } | null;
+  applications: { invited_name: string | null } | null;
 }
 
 // Importance tiers. Mapping: green = HIGH importance to the committee,
@@ -409,7 +413,7 @@ function DropAllocateModal({ committee, app, onClose, onAssigned }: DropAllocate
     const err = await insertAllocation(supabase, conference.id, committee, app, slot);
     setBusySlotId(null);
     if (err) { setError(err); return; }
-    onAssigned(`${app.profiles?.display_name} allocated to ${slot.country_name} in ${committee.abbreviation ?? committee.name}.`);
+    onAssigned(`${app.profiles?.display_name ?? app.invited_name} allocated to ${slot.country_name} in ${committee.abbreviation ?? committee.name}.`);
     onClose();
   }
 
@@ -433,7 +437,7 @@ function DropAllocateModal({ committee, app, onClose, onAssigned }: DropAllocate
               ALLOCATE
             </p>
             <h2 className="font-black text-base flex items-center gap-2 flex-wrap" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-              <span>{app.profiles?.display_name}</span>
+              <span>{app.profiles?.display_name ?? app.invited_name}</span>
               <ArrowRight size={14} style={{ color: '#9A8A78' }} />
               <span>{committee.abbreviation ?? committee.name}</span>
             </h2>
@@ -600,7 +604,7 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedApp, o
           <p className="text-xs font-semibold mb-2" style={{ color: '#B6871F', fontFamily: MONO, letterSpacing: '0.12em', fontSize: 9 }}>APPLICANT</p>
           {preSelectedApp ? (
             <div className="rounded-xl p-3" style={{ backgroundColor: 'rgba(27,56,40,0.05)', border: '1px solid rgba(27,56,40,0.15)' }}>
-              <p className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{preSelectedApp.profiles?.display_name}</p>
+              <p className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{preSelectedApp.profiles?.display_name ?? preSelectedApp.invited_name}</p>
               <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>{preSelectedApp.role} · {preSelectedApp.experience_level ?? 'n/a'}</p>
             </div>
           ) : (
@@ -623,7 +627,7 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedApp, o
                     onMouseLeave={e => { if (!selected) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                   >
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{app.profiles?.display_name}</p>
+                      <p className="text-sm font-semibold truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{app.profiles?.display_name ?? app.invited_name}</p>
                       <p className="text-xs" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>{app.role} · {app.experience_level ?? 'n/a'}</p>
                     </div>
                     <div className="flex items-center gap-1 flex-shrink-0">
@@ -861,7 +865,7 @@ function CommitteeBoardPanel({
                   {a.country_name}
                 </span>
                 <span className="truncate" style={{ fontSize: 10, color: '#9A8A78', fontFamily: OUTFIT, marginLeft: 'auto' }}>
-                  {a.profiles?.display_name ?? 'Assigned'}
+                  {a.profiles?.display_name ?? a.applications?.invited_name ?? 'Assigned'}
                 </span>
                 <button
                   onClick={e => { e.stopPropagation(); onRemoveAllocation(a); }}
@@ -1220,7 +1224,7 @@ export default function AssignmentPage() {
         .from('applications')
         .select(`
           id, role, experience_level, is_head_delegate, is_independent, payment_status,
-          attending,
+          attending, invited_email, invited_name,
           profiles (id, display_name, email, nationality, mun_experience_level, avatar_url),
           societies (name),
           application_preferences (
@@ -1236,7 +1240,7 @@ export default function AssignmentPage() {
         .select(`
           id, name, abbreviation, difficulty, total_slots, logo_url, chair_user_ids, display_chairs,
           committee_country_slots (id, country_code, country_name, delegation_size, importance),
-          conference_allocations (id, user_id, country_code, country_name, allocation_sent, application_id, profiles (display_name))
+          conference_allocations (id, user_id, country_code, country_name, allocation_sent, application_id, profiles (display_name), applications:application_id (invited_name))
         `)
         .eq('conference_id', conference.id)
         .order('name', { ascending: true }),
@@ -1348,7 +1352,7 @@ export default function AssignmentPage() {
       return;
     }
 
-    showFlash('ok', `${sug.app.profiles?.display_name} assigned to ${sug.slot.country_name} in ${sug.committee.abbreviation ?? sug.committee.name}.`);
+    showFlash('ok', `${sug.app.profiles?.display_name ?? sug.app.invited_name} assigned to ${sug.slot.country_name} in ${sug.committee.abbreviation ?? sug.committee.name}.`);
     await loadData();
   }
 
@@ -1554,8 +1558,8 @@ export default function AssignmentPage() {
 
   // Left rail: search, alphabetical
   const filteredApps = [...accepted]
-    .filter(app => (app.profiles?.display_name ?? '').toLowerCase().includes(search.toLowerCase()))
-    .sort((a, b) => (a.profiles?.display_name ?? '').localeCompare(b.profiles?.display_name ?? ''));
+    .filter(app => (app.profiles?.display_name ?? app.invited_name ?? '').toLowerCase().includes(search.toLowerCase()))
+    .sort((a, b) => (a.profiles?.display_name ?? a.invited_name ?? '').localeCompare(b.profiles?.display_name ?? b.invited_name ?? ''));
 
   // Chairs mode — unassigned pool is anyone not currently on any committee's
   // dais (chair_user_ids), mirroring how the delegates pool is everyone not
@@ -1700,7 +1704,7 @@ export default function AssignmentPage() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
                           <p className="text-sm font-semibold truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                            {sug.app.profiles?.display_name}
+                            {sug.app.profiles?.display_name ?? sug.app.invited_name}
                           </p>
                           <ArrowRight size={11} style={{ color: '#9A8A78', flexShrink: 0 }} />
                           <img src={getFlagUrl(sug.slot.country_code)} style={{ width: 17, height: 12, borderRadius: 2, objectFit: 'cover', flexShrink: 0 }} alt={sug.slot.country_name} />
@@ -1745,7 +1749,7 @@ export default function AssignmentPage() {
             >
               <MousePointerClick size={14} style={{ color: '#3D7A52', flexShrink: 0 }} />
               <p className="text-sm min-w-0 truncate" style={{ color: '#1B3828', fontFamily: OUTFIT }}>
-                <span style={{ fontWeight: 700 }}>{selectedApp.profiles?.display_name}</span> selected — click a committee panel to pick their country, or drag their card.
+                <span style={{ fontWeight: 700 }}>{selectedApp.profiles?.display_name ?? selectedApp.invited_name}</span> selected — click a committee panel to pick their country, or drag their card.
               </p>
               <button
                 onClick={() => setSelectedAppId(null)}
@@ -1837,8 +1841,9 @@ export default function AssignmentPage() {
                                   />
                                 )}
                                 <p className="font-semibold text-sm truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                                  {app.profiles?.display_name ?? 'Unknown'}
+                                  {app.profiles?.display_name ?? app.invited_name ?? 'Unknown'}
                                 </p>
+                                {!app.profiles && <NotRegisteredChip />}
                                 {selected && <Check size={12} style={{ color: '#3D7A52', flexShrink: 0 }} />}
                               </div>
                               <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>

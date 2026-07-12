@@ -38,7 +38,7 @@ function TransferSpotModal({
   const [query, setQuery] = useState('');
   const results = pool
     .filter(a => a.id !== holder.id)
-    .filter(a => (a.profiles?.display_name ?? '').toLowerCase().includes(query.trim().toLowerCase()));
+    .filter(a => (a.profiles?.display_name ?? a.invited_name ?? '').toLowerCase().includes(query.trim().toLowerCase()));
 
   return (
     <ModalOverlay onClose={onClose}>
@@ -48,7 +48,7 @@ function TransferSpotModal({
       >
         <h3 className="font-black text-base mb-1" style={{ color: '#1C1410', fontFamily: OUTFIT }}>Transfer spot</h3>
         <p className="text-xs mb-4" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-          Pick another accepted delegate or head delegate to receive {holder.profiles?.display_name ?? 'this delegate'}&apos;s paid spot.
+          Pick another accepted delegate or head delegate to receive {holder.profiles?.display_name ?? holder.invited_name ?? 'this delegate'}&apos;s paid spot.
         </p>
         <input
           value={query}
@@ -64,7 +64,7 @@ function TransferSpotModal({
           ) : results.map(a => (
             <div key={a.id} className="flex items-center justify-between gap-2 rounded-lg px-3 py-2" style={{ backgroundColor: '#FFFFFF', border: '1px solid #F0EDE6' }}>
               <div className="min-w-0">
-                <p className="text-sm font-semibold truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{a.profiles?.display_name ?? 'Unknown'}</p>
+                <p className="text-sm font-semibold truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{a.profiles?.display_name ?? a.invited_name ?? 'Unknown'}</p>
                 <p className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>{a.societies?.name ?? 'Independent'}</p>
               </div>
               <button
@@ -121,7 +121,7 @@ function IndependentCard({
   onNotAttending: () => void;
   onUndo: () => void;
 }) {
-  const name = app.profiles?.display_name ?? 'Unknown';
+  const name = app.profiles?.display_name ?? app.invited_name ?? 'Unknown';
   const waived = app.payment_status === 'waived';
   const paid = app.payment_status === 'paid';
   const notAttending = !app.attending;
@@ -225,8 +225,8 @@ export default function IndependentsView({ conference, showFlash }: Independents
   async function handleTransferPicked(holder: PoolMember, recipient: SearchApp) {
     setTransferTarget(null);
     if (!session) return;
-    const holderName = holder.profiles?.display_name ?? 'this delegate';
-    const recipientName = recipient.profiles?.display_name ?? 'this delegate';
+    const holderName = holder.profiles?.display_name ?? holder.invited_name ?? 'this delegate';
+    const recipientName = recipient.profiles?.display_name ?? recipient.invited_name ?? 'this delegate';
     const { confirmed } = await confirm({
       title: 'Transfer this spot?',
       body: `Transfer ${holderName}'s paid spot to ${recipientName}? ${holderName} will become unpaid.`,
@@ -246,7 +246,7 @@ export default function IndependentsView({ conference, showFlash }: Independents
 
   async function handleNotAttending(app: PoolMember) {
     if (!session) return;
-    const name = app.profiles?.display_name ?? 'this delegate';
+    const name = app.profiles?.display_name ?? app.invited_name ?? 'this delegate';
     const hasAllocation = !!app.assigned_committee_id;
     const isPaid = app.payment_status === 'paid';
     const bodyParts: string[] = [];

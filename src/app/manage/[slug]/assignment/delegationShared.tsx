@@ -89,6 +89,8 @@ export async function fillFreeSpots(
 export interface PoolMember {
   id: string;
   user_id: string;
+  invited_email: string | null;
+  invited_name: string | null;
   role: string;
   status: string;
   is_head_delegate: boolean;
@@ -109,7 +111,7 @@ export interface PoolMember {
 
 // The select() used to load a PoolMember-shaped application row.
 export const POOL_MEMBER_SELECT = `
-  id, user_id, role, status, is_head_delegate, payment_status, self_paid, attending,
+  id, user_id, invited_email, invited_name, role, status, is_head_delegate, payment_status, self_paid, attending,
   pledge_type, spots_pledged, pledge_confirmed_at, submitted_at,
   assigned_committee_id, assigned_country_code, assigned_country_name, society_id,
   assigned_committee:conference_committees!assigned_committee_id (abbreviation, name),
@@ -127,6 +129,8 @@ export interface SearchApp {
   assigned_committee_id: string | null;
   societies: { name: string } | null;
   profiles: { display_name: string } | null;
+  invited_email: string | null;
+  invited_name: string | null;
 }
 
 // Anything with just enough shape to be a swap source / named party.
@@ -135,6 +139,8 @@ export interface NamedApp {
   user_id: string;
   assigned_committee_id: string | null;
   profiles: { display_name: string } | null;
+  invited_email?: string | null;
+  invited_name?: string | null;
 }
 
 /** All accepted/assigned delegates and head delegates across the conference — the shared search pool. */
@@ -147,7 +153,8 @@ export async function fetchSearchPool(
     .select(`
       id, user_id, role, society_id, status, assigned_committee_id,
       societies (name),
-      profiles (display_name)
+      profiles (display_name),
+      invited_email, invited_name
     `)
     .eq('conference_id', conferenceId)
     .in('status', ['accepted', 'assigned'])
@@ -165,7 +172,8 @@ export async function fetchAdvisorPool(
     .select(`
       id, user_id, role, society_id, status, assigned_committee_id,
       societies (name),
-      profiles (display_name)
+      profiles (display_name),
+      invited_email, invited_name
     `)
     .eq('conference_id', conferenceId)
     .in('status', ['accepted', 'assigned'])
@@ -340,6 +348,26 @@ export function pledgeSatisfied(m: PoolMember): boolean {
 
 // ── Small shared bits ────────────────────────────────────────────────────────
 
+// ── Unregistered (imported, unclaimed) applicant helpers ────────────────────
+// Shared across every view that joins applications -> profiles: an imported
+// row has user_id null until the invitee signs up (claim_imported_applications
+// trigger), so profiles is null and invited_name/invited_email carry the data.
+
+export function memberDisplayName(m: { profiles?: { display_name: string } | null; invited_name?: string | null }): string {
+  return m.profiles?.display_name ?? m.invited_name ?? 'Unknown';
+}
+
+export function NotRegisteredChip() {
+  return (
+    <span
+      className="inline-flex items-center px-2 py-0.5 rounded-full font-bold flex-shrink-0"
+      style={{ fontSize: 9, fontFamily: OUTFIT, letterSpacing: '0.08em', backgroundColor: 'rgba(154,138,120,0.12)', color: '#9A8A78', border: '1px solid rgba(154,138,120,0.3)' }}
+    >
+      NOT REGISTERED
+    </span>
+  );
+}
+
 export function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <p style={{ fontSize: 10, color: '#B6871F', fontFamily: MONO, letterSpacing: '0.16em', fontWeight: 500 }}>
@@ -451,7 +479,7 @@ export function DraggableChip({
 }
 
 export function WaivedChip({ member, onRemove }: { member: PoolMember; onRemove?: () => void }) {
-  const name = member.profiles?.display_name ?? 'Unknown';
+  const name = memberDisplayName(member);
   return (
     <div
       className="flex items-center gap-2 rounded-xl px-3 py-2 mb-1.5"
@@ -460,6 +488,7 @@ export function WaivedChip({ member, onRemove }: { member: PoolMember; onRemove?
       <Lock size={12} style={{ color: '#9A6B2F', flexShrink: 0 }} />
       <MemberAvatar name={name} url={member.profiles?.avatar_url ?? null} />
       <span className="flex-1 min-w-0 text-sm font-semibold truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{name}</span>
+      {!member.user_id && <NotRegisteredChip />}
       <span style={{ fontSize: 9, fontWeight: 700, color: '#9A6B2F', fontFamily: MONO, letterSpacing: '0.06em', flexShrink: 0 }}>WAIVED</span>
       {onRemove && <RemoveButton onRemove={onRemove} />}
     </div>
@@ -467,7 +496,7 @@ export function WaivedChip({ member, onRemove }: { member: PoolMember; onRemove?
 }
 
 export function NotAttendingChip({ member, onUndo, onRemove }: { member: PoolMember; onUndo: () => void; onRemove?: () => void }) {
-  const name = member.profiles?.display_name ?? 'Unknown';
+  const name = memberDisplayName(member);
   return (
     <div
       className="flex items-center gap-2 rounded-xl px-3 py-2 mb-1.5"
@@ -475,6 +504,7 @@ export function NotAttendingChip({ member, onUndo, onRemove }: { member: PoolMem
     >
       <MemberAvatar name={name} url={member.profiles?.avatar_url ?? null} />
       <span className="flex-1 min-w-0 text-sm font-semibold truncate" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>{name}</span>
+      {!member.user_id && <NotRegisteredChip />}
       <div className="flex items-center gap-2.5 flex-shrink-0">
         <button
           onClick={onUndo}
@@ -497,7 +527,7 @@ export function PaidSlotChip({
   onDragOver: () => void; onDragLeave: () => void; onDrop: (sourceId: string) => void;
   onClickTarget: () => void; onNotAttending: () => void; onRemove?: () => void;
 }) {
-  const name = member.profiles?.display_name ?? 'Unknown';
+  const name = memberDisplayName(member);
   return (
     <div
       onDragOver={e => { e.preventDefault(); onDragOver(); }}
@@ -515,6 +545,7 @@ export function PaidSlotChip({
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
           <p className="text-sm font-semibold truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{name}</p>
+          {!member.user_id && <NotRegisteredChip />}
           {hdTag && (
             <span
               className="flex-shrink-0 px-1.5 py-0.5 rounded-full"

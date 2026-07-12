@@ -48,6 +48,8 @@ interface AppRow {
   assigned_committee: { abbreviation: string | null; name: string } | null;
   assigned_country_name: string | null;
   profiles: { display_name: string; email: string | null } | null;
+  invited_email: string | null;
+  invited_name: string | null;
 }
 
 interface Committee {
@@ -446,7 +448,8 @@ function CommunicationsPageInner() {
         assigned_committee_id,
         assigned_committee:conference_committees!assigned_committee_id (abbreviation, name),
         assigned_country_name,
-        profiles (display_name, email)
+        profiles (display_name, email),
+        invited_email, invited_name
       `)
       .eq('conference_id', conference.id);
     setApplications((data ?? []) as unknown as AppRow[]);
@@ -678,8 +681,8 @@ function CommunicationsPageInner() {
     const alreadyIn = new Set(finalRecipients.map(a => a.id));
     return applications
       .filter(a => !alreadyIn.has(a.id) && (
-        (a.profiles?.display_name ?? '').toLowerCase().includes(q) ||
-        (a.profiles?.email ?? '').toLowerCase().includes(q)
+        (a.profiles?.display_name ?? a.invited_name ?? '').toLowerCase().includes(q) ||
+        (a.profiles?.email ?? a.invited_email ?? '').toLowerCase().includes(q)
       ))
       .slice(0, 8);
   }, [applications, manualSearch, finalRecipients]);
@@ -687,7 +690,7 @@ function CommunicationsPageInner() {
   function buildContext(app: AppRow): EmailTokenContext {
     if (!conference) return {};
     return {
-      delegate_name: app.profiles?.display_name ?? null,
+      delegate_name: app.profiles?.display_name ?? app.invited_name ?? null,
       role: roleLabel(app.role),
       delegation_name: app.societies?.name ?? (app.is_independent ? 'Independent' : null),
       committee: app.assigned_committee?.abbreviation ?? app.assigned_committee?.name ?? null,
@@ -700,7 +703,7 @@ function CommunicationsPageInner() {
   }
 
   const previewCandidates: PreviewCandidate[] = useMemo(
-    () => applications.map(a => ({ id: a.id, label: a.profiles?.display_name ?? 'Unknown', ctx: buildContext(a) })),
+    () => applications.map(a => ({ id: a.id, label: a.profiles?.display_name ?? a.invited_name ?? 'Unknown', ctx: buildContext(a) })),
     [applications, conference] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
@@ -959,7 +962,7 @@ function CommunicationsPageInner() {
         template_id: builderTemplateId,
         email_send_id: emailSendId,
         recipient_application_id: app.id,
-        recipient_email: app.profiles?.email ?? null,
+        recipient_email: app.profiles?.email ?? app.invited_email ?? null,
         subject: resolveTokens(builderSubject, ctx),
         body: resolveTokens(flatBody, ctx),
         body_html: renderEmailHtml({ blocks: builderBlocks, conference, ctx }),
@@ -1002,7 +1005,7 @@ function CommunicationsPageInner() {
   const eventDef = builderEventKey ? EVENT_REGISTRY.find(e => e.key === builderEventKey) ?? null : null;
   const requireTypedConfirm = finalRecipients.length > 200;
   const confirmDisabled = requireTypedConfirm && sendConfirmText.trim().toUpperCase() !== 'SEND';
-  const namesPreview = finalRecipients.slice(0, 5).map(a => a.profiles?.display_name ?? 'Unknown').join(', ');
+  const namesPreview = finalRecipients.slice(0, 5).map(a => a.profiles?.display_name ?? a.invited_name ?? 'Unknown').join(', ');
 
   // ── Row renderer for ad-hoc templates (drafts + ready) ───────────────────
 
@@ -1953,8 +1956,8 @@ function CommunicationsPageInner() {
                             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
                             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                           >
-                            {a.profiles?.display_name ?? 'Unknown'}
-                            <span style={{ color: '#9A8A78' }}> · {a.profiles?.email ?? '—'}</span>
+                            {a.profiles?.display_name ?? a.invited_name ?? 'Unknown'}
+                            <span style={{ color: '#9A8A78' }}> · {a.profiles?.email ?? a.invited_email ?? '—'}</span>
                           </button>
                         ))}
                       </div>
@@ -1975,7 +1978,15 @@ function CommunicationsPageInner() {
                       >
                         <div className="min-w-0">
                           <p className="text-xs font-semibold truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                            {a.profiles?.display_name ?? 'Unknown'}
+                            {a.profiles?.display_name ?? a.invited_name ?? 'Unknown'}
+                            {!a.profiles && (
+                              <span
+                                className="ml-1.5 rounded px-1.5 py-0.5"
+                                style={{ fontSize: 9, fontWeight: 700, backgroundColor: 'rgba(154,138,120,0.12)', color: '#9A8A78' }}
+                              >
+                                NOT REGISTERED
+                              </span>
+                            )}
                             {manuallyAddedIds.has(a.id) && (
                               <span
                                 className="ml-1.5 rounded px-1.5 py-0.5"
@@ -1986,7 +1997,7 @@ function CommunicationsPageInner() {
                             )}
                           </p>
                           <p className="truncate" style={{ fontSize: 11, color: '#9A8A78', fontFamily: OUTFIT }}>
-                            {a.profiles?.email ?? '—'}
+                            {a.profiles?.email ?? a.invited_email ?? '—'}
                           </p>
                         </div>
                         <button

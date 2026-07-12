@@ -94,7 +94,7 @@ function AdvisorTransferModal({
   const [query, setQuery] = useState('');
   const results = pool
     .filter(a => a.id !== advisor.id)
-    .filter(a => (a.profiles?.display_name ?? '').toLowerCase().includes(query.trim().toLowerCase()));
+    .filter(a => (a.profiles?.display_name ?? a.invited_name ?? '').toLowerCase().includes(query.trim().toLowerCase()));
 
   return (
     <ModalOverlay onClose={onClose}>
@@ -104,7 +104,7 @@ function AdvisorTransferModal({
       >
         <h3 className="font-black text-base mb-1" style={{ color: '#1C1410', fontFamily: OUTFIT }}>Transfer spot</h3>
         <p className="text-xs mb-4" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-          Pick another accepted faculty advisor to receive {advisor.profiles?.display_name ?? 'this advisor'}&apos;s paid spot.
+          Pick another accepted faculty advisor to receive {advisor.profiles?.display_name ?? advisor.invited_name ?? 'this advisor'}&apos;s paid spot.
         </p>
         <input
           value={query}
@@ -120,7 +120,7 @@ function AdvisorTransferModal({
           ) : results.map(a => (
             <div key={a.id} className="flex items-center justify-between gap-2 rounded-lg px-3 py-2" style={{ backgroundColor: '#FFFFFF', border: '1px solid #F0EDE6' }}>
               <div className="min-w-0">
-                <p className="text-sm font-semibold truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{a.profiles?.display_name ?? 'Unknown'}</p>
+                <p className="text-sm font-semibold truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{a.profiles?.display_name ?? a.invited_name ?? 'Unknown'}</p>
                 <p className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>{a.societies?.name ?? 'Independent'}</p>
               </div>
               <button
@@ -250,7 +250,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
     if (app.society_id && app.society_id !== society.id) {
       const fromName = app.societies?.name ?? 'their delegation';
       const { confirmed } = await confirm({
-        title: `Move ${app.profiles?.display_name ?? 'this delegate'}?`,
+        title: `Move ${app.profiles?.display_name ?? app.invited_name ?? 'this delegate'}?`,
         body: `Move them from ${fromName} to ${society.name}?`,
         confirmLabel: 'Move',
       });
@@ -323,7 +323,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
 
   async function handleNotAttending(member: PoolMember) {
     if (!session) return;
-    const name = member.profiles?.display_name ?? 'this delegate';
+    const name = member.profiles?.display_name ?? member.invited_name ?? 'this delegate';
     const hasAllocation = !!member.assigned_committee_id;
     const { confirmed } = await confirm({
       title: `Mark ${name} as not attending?`,
@@ -351,7 +351,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
 
   async function handleRemove(member: PoolMember, societyName: string) {
     if (!session) return;
-    const name = member.profiles?.display_name ?? 'this delegate';
+    const name = member.profiles?.display_name ?? member.invited_name ?? 'this delegate';
     const hasAllocation = !!member.assigned_committee_id;
     const selfFundedPaidSpot = member.payment_status === 'paid' && !!member.self_paid;
     const outcome = member.payment_status === 'waived'
@@ -383,7 +383,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
     if (!session) return;
     const { confirmed } = await confirm({
       title: 'Transfer this spot?',
-      body: `Transfer ${paidAdvisor.profiles?.display_name ?? 'this advisor'}'s paid spot to ${recipient.profiles?.display_name ?? 'this advisor'}?`,
+      body: `Transfer ${paidAdvisor.profiles?.display_name ?? paidAdvisor.invited_name ?? 'this advisor'}'s paid spot to ${recipient.profiles?.display_name ?? recipient.invited_name ?? 'this advisor'}?`,
       confirmLabel: 'Transfer',
     });
     if (!confirmed) return;
@@ -441,7 +441,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
     const source = members.find(m => m.id === sourceId);
     const { confirmed } = await confirm({
       title: 'Give this open paid spot?',
-      body: `Give this open paid spot to ${source?.profiles?.display_name ?? 'this delegate'}?`,
+      body: `Give this open paid spot to ${source?.profiles?.display_name ?? source?.invited_name ?? 'this delegate'}?`,
       confirmLabel: 'Give Spot',
     });
     if (confirmed) handleGiveOpenSpot(sourceId);
@@ -510,7 +510,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
   const searchResults = searchQuery.trim()
     ? searchPool
         .filter(a => a.society_id !== society.id)
-        .filter(a => (a.profiles?.display_name ?? '').toLowerCase().includes(searchQuery.trim().toLowerCase()))
+        .filter(a => (a.profiles?.display_name ?? a.invited_name ?? '').toLowerCase().includes(searchQuery.trim().toLowerCase()))
         .slice(0, 6)
     : [];
 
@@ -558,7 +558,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
                 );
               }
               const paid = a.payment_status === 'paid';
-              const name = a.profiles?.display_name ?? 'Unknown';
+              const name = a.profiles?.display_name ?? a.invited_name ?? 'Unknown';
               return (
                 <div
                   key={a.id}
@@ -628,7 +628,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
                   <DraggableChip
                     key={m.id}
                     dataId={m.id}
-                    name={m.profiles?.display_name ?? 'Unknown'}
+                    name={m.profiles?.display_name ?? m.invited_name ?? 'Unknown'}
                     avatarUrl={m.profiles?.avatar_url ?? null}
                     subtitle="Head delegate"
                     selected={selectedMemberId === m.id}
@@ -642,7 +642,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
               }
               // Paid — this card is informational; the actual paid slot they
               // occupy is the tagged HD entry in the right-hand ledger below.
-              const name = m.profiles?.display_name ?? 'Unknown';
+              const name = m.profiles?.display_name ?? m.invited_name ?? 'Unknown';
               return (
                 <div
                   key={m.id}
@@ -690,7 +690,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
             {pledgingMembers.map(m => (
               <div key={m.id} className="flex items-center justify-between gap-3">
                 <p className="text-sm min-w-0 truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                  <span style={{ fontWeight: 700 }}>{m.profiles?.display_name ?? 'Unknown'}</span> pledged: {pledgeText(m)}
+                  <span style={{ fontWeight: 700 }}>{m.profiles?.display_name ?? m.invited_name ?? 'Unknown'}</span> pledged: {pledgeText(m)}
                 </p>
                 {pledgeSatisfied(m) ? (
                   <span className="flex items-center gap-1 flex-shrink-0" style={{ fontSize: 11, fontWeight: 700, color: '#3D7A52', fontFamily: MONO }}>
@@ -730,7 +730,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
               {searchResults.map(a => (
                 <div key={a.id} className="flex items-center justify-between gap-2 rounded-lg px-3 py-2" style={{ backgroundColor: '#FAF8F3', border: '1px solid #F0EDE6' }}>
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{a.profiles?.display_name ?? 'Unknown'}</p>
+                    <p className="text-sm font-semibold truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{a.profiles?.display_name ?? a.invited_name ?? 'Unknown'}</p>
                     <p className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>{a.societies?.name ?? 'Independent'}</p>
                   </div>
                   <button
@@ -761,7 +761,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
                 <DraggableChip
                   key={m.id}
                   dataId={m.id}
-                  name={m.profiles?.display_name ?? 'Unknown'}
+                  name={m.profiles?.display_name ?? m.invited_name ?? 'Unknown'}
                   avatarUrl={m.profiles?.avatar_url ?? null}
                   selected={selectedMemberId === m.id}
                   onSelect={() => setSelectedMemberId(prev => (prev === m.id ? null : m.id))}

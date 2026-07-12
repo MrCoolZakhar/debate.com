@@ -660,6 +660,7 @@ export default function SettingsPage() {
   const SECTION_KEYS: { key: string; label: string }[] = [
     { key: 'committees', label: 'Committees' },
     { key: 'applications', label: 'Applications' },
+    { key: 'import', label: 'Import' },
     { key: 'assignment', label: 'Assignment' },
     { key: 'documents', label: 'Documents' },
     { key: 'email_builder', label: 'Email' },

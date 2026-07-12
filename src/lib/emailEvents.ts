@@ -45,6 +45,7 @@ export const EVENT_REGISTRY: EventDef[] = [
   { key: 'request_reply', label: 'Request reply', description: 'Sent to a participant when the organizing team replies to their question.', defaultDelivery: 'immediate' },
   { key: 'delegation_swap', label: 'Delegation swap', description: 'Sent to both delegates when their committee allocations are swapped within a delegation.', defaultDelivery: 'immediate' },
   { key: 'position_paper_feedback', label: 'Position Paper Feedback', description: 'Sent to a delegate when their chair leaves feedback on their position paper.', defaultDelivery: 'immediate' },
+  { key: 'import_join_invite', label: 'Import: join Gavelling', description: 'Sent to imported applicants asking them to create a Gavelling account so their registration attaches automatically.', defaultDelivery: 'immediate' },
 ];
 
 /** Looks up a registry event's display label, falling back to the raw key if unknown. */
@@ -104,6 +105,8 @@ interface RecipientRow {
   assigned_committee: { abbreviation: string | null; name: string } | null;
   assigned_country_name: string | null;
   profiles: { display_name: string; email: string | null } | null;
+  invited_email: string | null;
+  invited_name: string | null;
 }
 
 interface ConferenceRow {
@@ -157,7 +160,8 @@ export async function queueEventEmail(
         societies (name),
         assigned_committee:conference_committees!assigned_committee_id (abbreviation, name),
         assigned_country_name,
-        profiles (display_name, email)
+        profiles (display_name, email),
+        invited_email, invited_name
       `)
       .in('id', applicationIds),
   ]);
@@ -179,7 +183,7 @@ export async function queueEventEmail(
 
   const rows = recipients.map(app => {
     const ctx: EmailTokenContext = {
-      delegate_name: app.profiles?.display_name ?? null,
+      delegate_name: app.profiles?.display_name ?? app.invited_name ?? null,
       role: roleLabel(app.role),
       delegation_name: app.societies?.name ?? (app.is_independent ? 'Independent' : null),
       committee: app.assigned_committee?.abbreviation ?? app.assigned_committee?.name ?? null,
@@ -194,7 +198,7 @@ export async function queueEventEmail(
       conference_id: conferenceId,
       template_id: template.id,
       recipient_application_id: app.id,
-      recipient_email: app.profiles?.email ?? null,
+      recipient_email: app.profiles?.email ?? app.invited_email ?? null,
       subject: resolveTokens(template.subject, ctx),
       body: resolveTokens(flatBody, ctx),
       body_html: renderEmailHtml({ blocks, conference: renderConf, ctx }),
@@ -288,4 +292,82 @@ export async function queueChairInviteEmail(
   if (error) return;
 
   triggerEmailDelivery(supabase);
+}
+
+// ── Import "join Gavelling" invite emails ───────────────────────────────────
+// Bulk variant of the chair-invite pattern: recipients are unclaimed imported
+// applications (user_id null, invited_email set). One template lookup, one
+// outbox insert per still-unclaimed application, one delivery trigger.
+
+export interface ImportJoinInviteRecipient {
+  applicationId: string;
+  invitedEmail: string;
+  invitedName: string;
+}
+
+export async function queueImportJoinInviteEmails(
+  supabase: ReturnType<typeof getAuthedClient>,
+  conferenceId: string,
+  recipients: ImportJoinInviteRecipient[]
+): Promise<{ queued: number }> {
+  if (recipients.length === 0) return { queued: 0 };
+
+  const [{ data: confData }, { data: templateData }] = await Promise.all([
+    supabase
+      .from('conferences')
+      .select('slug, acronym, full_name, banner_url, logo_url, contact_email')
+      .eq('id', conferenceId)
+      .single(),
+    supabase
+      .from('email_templates')
+      .select('id, subject, body, body_blocks, enabled')
+      .eq('conference_id', conferenceId)
+      .eq('event_key', 'import_join_invite')
+      .maybeSingle(),
+  ]);
+
+  const conference = confData as ConferenceRow | null;
+  const template = templateData as TemplateRow | null;
+  const renderConf: EmailRenderConference = {
+    slug: conference?.slug ?? '',
+    acronym: conference?.acronym ?? '',
+    full_name: conference?.full_name ?? '',
+    banner_url: conference?.banner_url ?? null,
+    logo_url: conference?.logo_url ?? null,
+    contact_email: conference?.contact_email ?? '',
+  };
+
+  const useTemplate = !!template && template.enabled;
+  const blocks: EmailBlock[] = useTemplate
+    ? normalizeBlocks(template!.body_blocks, template!.body)
+    : [
+        { type: 'paragraph', content: `${renderConf.full_name || renderConf.acronym} now runs on Gavelling — create your account with this email address and your registration will be attached automatically.` },
+        { type: 'button', label: 'CREATE YOUR ACCOUNT', destination: 'signup_page' },
+      ];
+  const subjectSource = useTemplate ? template!.subject : `${renderConf.acronym} now runs on Gavelling`;
+  const flatBody = flattenBlocksToPlainText(blocks, renderConf);
+
+  const rows = recipients.map(r => {
+    const ctx: EmailTokenContext = {
+      delegate_name: r.invitedName,
+      conference_name: conference?.full_name ?? null,
+    };
+    return {
+      conference_id: conferenceId,
+      template_id: useTemplate ? template!.id : null,
+      recipient_application_id: r.applicationId,
+      recipient_email: r.invitedEmail,
+      subject: resolveTokens(subjectSource, ctx),
+      body: resolveTokens(flatBody, ctx),
+      body_html: renderEmailHtml({ blocks, conference: renderConf, ctx }),
+      status: 'pending' as const,
+    };
+  });
+
+  const { error } = await supabase.from('email_outbox').insert(rows);
+  if (error) return { queued: 0 };
+
+  triggerEmailDelivery(supabase);
+
+  return { queued: rows.length };
 }

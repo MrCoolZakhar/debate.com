@@ -3,7 +3,7 @@
 // mirror so the older resolver/preview/history code paths (which only know
 // about plain text) keep working unchanged.
 
-export type ButtonDestination = 'conference_page' | 'apply_page' | 'documents' | 'custom' | 'chair_invite_accept';
+export type ButtonDestination = 'conference_page' | 'apply_page' | 'documents' | 'custom' | 'chair_invite_accept' | 'signup_page';
 
 export interface ParagraphBlock {
   type: 'paragraph';
@@ -26,6 +26,7 @@ export const BUTTON_DESTINATION_LABELS: Record<ButtonDestination, string> = {
   documents: 'Documents',
   custom: 'Custom URL',
   chair_invite_accept: 'Accept chair invite link',
+  signup_page: 'Gavelling sign-up page',
 };
 
 export interface ButtonUrlConference {
@@ -52,6 +53,8 @@ export function resolveButtonUrl(block: ButtonBlock, conference: ButtonUrlConfer
       return `${siteUrl}/conferences/${conference.slug}/apply${block.role ? `?role=${encodeURIComponent(block.role)}` : ''}`;
     case 'chair_invite_accept':
       return extra?.chairInviteToken ? `${siteUrl}/invites/chair/${extra.chairInviteToken}` : '#';
+    case 'signup_page':
+      return `${siteUrl}/auth/signup`;
     case 'custom':
       return block.url?.trim() || '#';
   }

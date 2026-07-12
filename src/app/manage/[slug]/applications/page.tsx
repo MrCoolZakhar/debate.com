@@ -41,7 +41,9 @@ interface RoleConfigLite {
 
 interface Application {
   id: string;
-  user_id: string;
+  user_id: string | null;
+  invited_email: string | null;
+  invited_name: string | null;
   role: string;
   status: string;
   is_independent: boolean;
@@ -157,6 +159,18 @@ function RoleIcon({ role, size = 10 }: { role: string; size?: number }) {
   return <Icon size={size} strokeWidth={2.5} />;
 }
 
+/** Small muted chip for applications with no linked profile (user_id null) — imported, unclaimed. */
+function NotRegisteredChip() {
+  return (
+    <span
+      className="inline-flex items-center px-2 py-0.5 rounded-full font-bold flex-shrink-0"
+      style={{ fontSize: 9, fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', backgroundColor: 'rgba(154,138,120,0.12)', color: '#9A8A78', border: '1px solid rgba(154,138,120,0.3)' }}
+    >
+      NOT REGISTERED
+    </span>
+  );
+}
+
 function StatusIcon({ status, size = 10 }: { status: string; size?: number }) {
   const Icon = status === 'submitted' ? Inbox
     : status === 'accepted' ? Check
@@ -270,7 +284,7 @@ export default function ApplicationsPage() {
       supabase
         .from('applications')
         .select(`
-          id, user_id, role, status, is_independent, is_head_delegate, experience_level,
+          id, user_id, invited_email, invited_name, role, status, is_independent, is_head_delegate, experience_level,
           payment_status, submitted_at, organizer_note, custom_answers,
           assigned_committee_id, assigned_country_code, assigned_country_name,
           self_paid, attending, pledge_type, spots_pledged, pledge_confirmed_at, society_id,
@@ -296,7 +310,7 @@ export default function ApplicationsPage() {
     setLoading(false);
 
     // Batched MUN-history counts — ONE query for every visible applicant.
-    const userIds = Array.from(new Set(apps.map(a => a.user_id).filter(Boolean)));
+    const userIds = Array.from(new Set(apps.map(a => a.user_id).filter((id): id is string => !!id)));
     if (userIds.length > 0) {
       const { data: cvRows } = await supabase
         .from('mun_cv_entries')
@@ -456,8 +470,8 @@ export default function ApplicationsPage() {
   function handleExportCSV() {
     const headers = ['Name', 'Email', 'Role', 'Status', 'Payment', 'Experience', 'Society', 'Head Delegate', 'Submitted', 'Assigned Committee', 'Assigned Country'];
     const rows = applications.map(a => [
-      a.profiles?.display_name ?? '',
-      a.profiles?.email ?? '',
+      a.profiles?.display_name ?? a.invited_name ?? '',
+      a.profiles?.email ?? a.invited_email ?? '',
       roleLabel(a.role),
       a.status,
       a.payment_status ?? '',
@@ -575,8 +589,8 @@ export default function ApplicationsPage() {
       {!loading && filtered.length > 0 && (
         <div className="flex flex-col gap-3">
           {filtered.map(app => {
-            const name = app.profiles?.display_name ?? 'Unknown';
-            const email = app.profiles?.email ?? '';
+            const name = app.profiles?.display_name ?? app.invited_name ?? 'Unknown';
+            const email = app.profiles?.email ?? app.invited_email ?? '';
             const isDelegate = app.role === 'delegate' || app.role === 'head-delegate';
             const prefs = [...(app.application_preferences ?? [])].sort((a, b) => a.preference_order - b.preference_order);
 
@@ -608,7 +622,7 @@ export default function ApplicationsPage() {
             const paid = app.payment_status === 'paid';
             const waived = app.payment_status === 'waived';
             const expLabel = app.experience_level ?? app.profiles?.mun_experience_level ?? null;
-            const confCount = cvCounts[app.user_id];
+            const confCount = app.user_id ? cvCounts[app.user_id] : undefined;
 
             const pledgeLine = app.pledge_type === 'own'
               ? 'Pledged: own fee'
@@ -648,6 +662,7 @@ export default function ApplicationsPage() {
                     <p className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>{email}</p>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
+                    {!app.user_id && <NotRegisteredChip />}
                     <span className="inline-flex items-center gap-1" style={roleBadgeStyle}>
                       <RoleIcon role={app.role} />
                       {roleLabel(app.role).toUpperCase()}
@@ -772,15 +787,15 @@ export default function ApplicationsPage() {
       {(() => {
         const app = applications.find(a => a.id === reviewId);
         if (!app) return null;
-        const name = app.profiles?.display_name ?? 'Unknown';
-        const email = app.profiles?.email ?? '';
+        const name = app.profiles?.display_name ?? app.invited_name ?? 'Unknown';
+        const email = app.profiles?.email ?? app.invited_email ?? '';
         const isDelegate = app.role === 'delegate' || app.role === 'head-delegate';
         const prefs = [...(app.application_preferences ?? [])].sort((a, b) => a.preference_order - b.preference_order);
         const isRejecting = rejectingId === app.id;
         const paid = app.payment_status === 'paid';
         const waived = app.payment_status === 'waived';
         const expLabel = app.experience_level ?? app.profiles?.mun_experience_level ?? null;
-        const confCount = cvCounts[app.user_id];
+        const confCount = app.user_id ? cvCounts[app.user_id] : undefined;
         const roleConfig = roleConfigs.find(rc => rc.role === app.role);
         const questions = roleConfig?.custom_questions ?? [];
         const answers = app.custom_answers ?? {};
@@ -898,6 +913,7 @@ export default function ApplicationsPage() {
                   <h2 className="font-black text-lg truncate" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>{name}</h2>
                   <p className="text-xs truncate mb-1.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>{email}</p>
                   <div className="flex flex-wrap items-center gap-2">
+                    {!app.user_id && <NotRegisteredChip />}
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold" style={{ fontSize: 9, fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', backgroundColor: 'rgba(27,56,40,0.08)', color: '#1B3828', border: '1px solid rgba(27,56,40,0.18)' }}>
                       <RoleIcon role={app.role} />
                       {roleLabel(app.role).toUpperCase()}
