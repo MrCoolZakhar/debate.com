@@ -10,10 +10,13 @@ import { getFlagUrl } from '@/lib/countries';
 import { ageAt } from '@/lib/age';
 import { formatFee } from '@/lib/utils';
 import { Pill } from '@/app/account/accountUi';
+import { computeCheckout, localizedApproxSavings, type VoucherInput } from '@/lib/finance';
+import { NEU, NeuInset, OUTFIT } from '@/components/neu';
 import {
   Gavel, Mic, Users, Eye, Building2, User, ListOrdered, Sprout,
   GraduationCap, Trophy, Crown, ClipboardList, BadgeCheck, Sparkles,
   MapPin, Landmark, Check, X, Plus, ArrowLeft, ArrowRight, CalendarClock,
+  Ticket, Infinity as InfinityIcon,
 } from 'lucide-react';
 
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
@@ -219,6 +222,68 @@ function ConferenceApplyInner() {
   const [experienceLevel, setExperienceLevel] = useState('');
   const [customAnswers, setCustomAnswers] = useState<Record<string, string>>({});
 
+  // ── Checkout: vouchers + fee waivers (finance.ts is the single math source)
+  const [financeProfile, setFinanceProfile] = useState({ is_ambassador: false, unlimited_conferences_remaining: 0 });
+  const [voucherCode, setVoucherCode] = useState('');
+  const [voucherChecking, setVoucherChecking] = useState(false);
+  const [voucherError, setVoucherError] = useState('');
+  const [appliedVoucher, setAppliedVoucher] = useState<VoucherInput | null>(null);
+  // Gavin upsell — geo country for the localized "~$10/mo" figure, plus a
+  // localStorage dismiss so the banner never nags. Never blocks checkout.
+  const [geoCountry, setGeoCountry] = useState<string | null>(null);
+  const [upsellDismissed, setUpsellDismissed] = useState(true); // true until localStorage read
+
+  useEffect(() => {
+    try {
+      setUpsellDismissed(localStorage.getItem('gavin-unlimited-upsell-dismissed') === '1');
+    } catch { setUpsellDismissed(false); }
+    fetch('/api/geo')
+      .then(r => r.json())
+      .then(g => setGeoCountry((g?.countryCode as string | null) ?? null))
+      .catch(() => {});
+  }, []);
+
+  function dismissUpsell() {
+    setUpsellDismissed(true);
+    try { localStorage.setItem('gavin-unlimited-upsell-dismissed', '1'); } catch { /* ignore */ }
+  }
+
+  /** Human copy for validate_voucher's machine reasons. */
+  function voucherReasonText(reason: string): string {
+    switch (reason) {
+      case 'not_found': return 'That code doesn’t match any voucher for this conference.';
+      case 'inactive': return 'This voucher is no longer active.';
+      case 'expired': return 'This voucher has expired.';
+      case 'limit_reached': return 'This voucher has reached its redemption limit.';
+      case 'already_redeemed': return 'You’ve already used this voucher.';
+      default: return 'That code could not be applied. Please check it and try again.';
+    }
+  }
+
+  async function handleApplyVoucher() {
+    const code = voucherCode.trim().toUpperCase();
+    if (!code || !session || !conference) return;
+    setVoucherChecking(true);
+    setVoucherError('');
+    const supabase = getAuthedClient(session.access_token);
+    const { data, error } = await supabase.rpc('validate_voucher', {
+      p_code: code,
+      p_conference_id: conference.id,
+      p_context: 'conference_signup',
+    });
+    setVoucherChecking(false);
+    const res = data as { valid: boolean; reason: string | null; voucher_id: string; kind: 'percent' | 'flat'; amount: number; currency: string | null } | null;
+    if (error || !res) {
+      setVoucherError('Could not check that code right now. Please try again.');
+      return;
+    }
+    if (!res.valid) {
+      setVoucherError(voucherReasonText(res.reason ?? ''));
+      return;
+    }
+    setAppliedVoucher({ voucherId: res.voucher_id, code, kind: res.kind, amount: Number(res.amount), currency: res.currency });
+  }
+
   // ── Age gate derivations — age is computed at the conference START DATE
   const minAgeLimit = conference?.min_age ?? null;
   const ageAtStart = minAgeLimit != null && myDob && conference ? ageAt(myDob, conference.start_date) : null;
@@ -309,7 +374,7 @@ function ConferenceApplyInner() {
         .maybeSingle(),
       supabase
         .from('profiles')
-        .select('date_of_birth')
+        .select('date_of_birth, is_ambassador, unlimited_conferences_remaining')
         .eq('id', user!.id)
         .maybeSingle(),
     ]);
@@ -318,7 +383,12 @@ function ConferenceApplyInner() {
     setCommittees((committeesRes.data as CommitteeOption[]) ?? []);
     setSocieties((societiesRes.data as Society[]) ?? []);
     setExistingApp((appRes.data as { id: string; status: string }) ?? null);
-    setMyDob((profileRes.data as { date_of_birth: string | null } | null)?.date_of_birth ?? null);
+    const prof = profileRes.data as { date_of_birth: string | null; is_ambassador: boolean; unlimited_conferences_remaining: number } | null;
+    setMyDob(prof?.date_of_birth ?? null);
+    setFinanceProfile({
+      is_ambassador: prof?.is_ambassador ?? false,
+      unlimited_conferences_remaining: prof?.unlimited_conferences_remaining ?? 0,
+    });
     setLoading(false);
   }
 
@@ -507,6 +577,17 @@ function ConferenceApplyInner() {
         }
       }
 
+      // Checkout breakdown — the SAME pure math the order summary rendered.
+      // fee_waiver_source is recorded at submit; the unlimited counter itself
+      // is only decremented by the DB trigger when payment_status flips to
+      // 'paid' (server-side, so it can't be gamed from the client).
+      const breakdown = computeCheckout({
+        feeAmount: roleConfig?.fee_amount ?? 0,
+        feeCurrency: roleConfig?.fee_currency ?? conference!.fee_currency,
+        voucher: appliedVoucher,
+        profile: financeProfile,
+      });
+
       const insertPayload: Record<string, unknown> = {
         conference_id: conference!.id,
         user_id: user!.id,
@@ -519,6 +600,13 @@ function ConferenceApplyInner() {
         custom_answers: customAnswers,
         payment_status: paymentStatus,
       };
+      if (breakdown.baseFee > 0 && breakdown.waiverSource) {
+        insertPayload.fee_waiver_source = breakdown.waiverSource;
+      }
+      if (appliedVoucher && breakdown.voucherDiscount > 0) {
+        insertPayload.voucher_id = appliedVoucher.voucherId;
+        insertPayload.voucher_discount = breakdown.voucherDiscount;
+      }
       if (isInvoicingRole) {
         insertPayload.pledge_type = pledgeType;
         insertPayload.spots_pledged = pledgeType === 'own' ? 0 : (spotsPledged || 0);
@@ -531,6 +619,18 @@ function ConferenceApplyInner() {
         .single();
 
       if (appError) throw appError;
+
+      // Record the voucher redemption atomically (BEFORE INSERT trigger locks
+      // the voucher row, enforces active/expiry/limit, bumps redeemed_count).
+      // Non-fatal: the application is already in — a failed redemption just
+      // means the organizer sees the voucher columns without a redemption row.
+      if (appliedVoucher && breakdown.voucherDiscount > 0) {
+        await supabase.rpc('redeem_voucher', {
+          p_voucher_id: appliedVoucher.voucherId,
+          p_context: 'conference_signup',
+          p_application_id: (app as { id: string }).id,
+        });
+      }
 
       if (isPreferenceRole && preferences.length > 0) {
         const prefRows = preferences.map((p, i) => ({
@@ -558,6 +658,18 @@ function ConferenceApplyInner() {
     const rc = roleConfig!;
     const RoleIcon = roleIcon(role);
     const isFree = !(rc.fee_amount > 0);
+    const breakdown = computeCheckout({
+      feeAmount: rc.fee_amount,
+      feeCurrency: rc.fee_currency,
+      voucher: appliedVoucher,
+      profile: financeProfile,
+    });
+    const showUpsell = !isFree && !breakdown.platformFeeWaived && !upsellDismissed;
+    const summaryRow: React.CSSProperties = {
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      fontFamily: OUTFIT, fontSize: 13.5, color: NEU.ink,
+    };
+    const amountStyle: React.CSSProperties = { fontVariantNumeric: 'tabular-nums', fontWeight: 700 };
     return (
       <>
         <StepHeading icon={BadgeCheck} title="Applying as" subtitle="Confirm your role and the registration fee." />
@@ -617,6 +729,161 @@ function ConferenceApplyInner() {
           </div>
         </div>
 
+        {/* ── ORDER SUMMARY — neumorphic well; all math from finance.computeCheckout ── */}
+        {!isFree && (
+          <NeuInset className="p-5 mb-4">
+            <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.22em', color: NEU.muted, marginBottom: 14 }}>
+              ORDER SUMMARY
+            </p>
+
+            {/* Fee line */}
+            <div style={{ ...summaryRow, marginBottom: 10 }}>
+              <span style={{ color: 'rgba(28,20,16,0.75)' }}>Registration fee</span>
+              <span style={amountStyle}>{formatFee(breakdown.baseFee, breakdown.currency)}</span>
+            </div>
+
+            {/* Voucher — single field + APPLY chip, or the applied green line */}
+            {appliedVoucher ? (
+              <div style={{ ...summaryRow, marginBottom: 10 }}>
+                <span className="inline-flex items-center gap-1.5" style={{ color: NEU.green, fontWeight: 600 }}>
+                  <Ticket size={14} strokeWidth={2.2} />
+                  Voucher {appliedVoucher.code}
+                  <button
+                    onClick={() => { setAppliedVoucher(null); setVoucherCode(''); }}
+                    aria-label="Remove voucher"
+                    className="focus:outline-none"
+                    style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: NEU.muted, display: 'inline-flex', padding: 2 }}
+                  >
+                    <X size={13} strokeWidth={2.4} />
+                  </button>
+                </span>
+                <span style={{ ...amountStyle, color: NEU.green }}>
+                  −{formatFee(breakdown.voucherDiscount, breakdown.currency)}
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-stretch gap-2" style={{ marginBottom: voucherError ? 4 : 10 }}>
+                <input
+                  type="text"
+                  value={voucherCode}
+                  onChange={(e) => { setVoucherCode(e.target.value.toUpperCase()); setVoucherError(''); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleApplyVoucher(); }}
+                  placeholder="Voucher code"
+                  aria-label="Voucher code"
+                  className="flex-1 min-w-0 rounded-xl px-3.5 py-2 text-sm focus:outline-none"
+                  style={{
+                    border: voucherError ? '1.5px solid #8B2020' : '1.5px solid #DDD4C0',
+                    backgroundColor: '#FAF8F3', color: NEU.ink, fontFamily: OUTFIT,
+                    letterSpacing: '0.08em', textTransform: 'uppercase',
+                  }}
+                />
+                <button
+                  onClick={handleApplyVoucher}
+                  disabled={voucherChecking || !voucherCode.trim()}
+                  className="rounded-full px-4 text-xs font-extrabold focus:outline-none"
+                  style={{
+                    border: 'none', fontFamily: OUTFIT, letterSpacing: '0.1em',
+                    background: voucherChecking || !voucherCode.trim() ? 'rgba(27,56,40,0.14)' : NEU.forest,
+                    color: voucherChecking || !voucherCode.trim() ? NEU.muted : NEU.gold,
+                    cursor: voucherChecking || !voucherCode.trim() ? 'default' : 'pointer',
+                    boxShadow: NEU.outSm,
+                  }}
+                >
+                  {voucherChecking ? 'CHECKING…' : 'APPLY'}
+                </button>
+              </div>
+            )}
+            {voucherError && !appliedVoucher && (
+              <p className="text-xs" style={{ color: '#8B2020', fontFamily: OUTFIT, marginBottom: 10 }}>
+                {voucherError}
+              </p>
+            )}
+
+            {/* Platform fee — 5% of post-discount, or the waived states */}
+            {breakdown.waiverSource === 'ambassador' ? (
+              <div
+                className="rounded-xl px-3.5 py-2.5"
+                style={{
+                  marginBottom: 12,
+                  background: 'linear-gradient(150deg, rgba(238,217,138,0.32), rgba(182,135,31,0.14))',
+                  border: '1.5px solid rgba(182,135,31,0.5)',
+                }}
+              >
+                <span className="inline-flex items-center gap-2" style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 11.5, letterSpacing: '0.06em', color: '#7A5A20' }}>
+                  <Crown size={14} strokeWidth={2.3} style={{ color: NEU.deepGold }} />
+                  AMBASSADOR — Gavelling fee waived, always
+                </span>
+              </div>
+            ) : breakdown.waiverSource === 'unlimited' ? (
+              <div
+                className="rounded-xl px-3.5 py-2.5"
+                style={{ marginBottom: 12, backgroundColor: 'rgba(27,56,40,0.07)', border: '1.5px solid rgba(27,56,40,0.28)' }}
+              >
+                <span className="inline-flex items-center gap-2" style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 12, color: NEU.forest }}>
+                  <InfinityIcon size={14} strokeWidth={2.4} />
+                  Gavelling Unlimited — fee waived ({financeProfile.unlimited_conferences_remaining} left)
+                </span>
+              </div>
+            ) : (
+              <div style={{ ...summaryRow, marginBottom: 12 }}>
+                <span style={{ color: 'rgba(28,20,16,0.75)' }}>Gavelling fee (5%)</span>
+                <span style={amountStyle}>{formatFee(breakdown.platformFee, breakdown.currency)}</span>
+              </div>
+            )}
+
+            {/* Total — big tabular-nums */}
+            <div style={{ borderTop: '1.5px solid rgba(27,56,40,0.14)', paddingTop: 12, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+              <span style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 11, letterSpacing: '0.18em', color: NEU.muted }}>TOTAL</span>
+              <span style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 28, color: NEU.ink, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+                {formatFee(breakdown.total, breakdown.currency)}
+              </span>
+            </div>
+          </NeuInset>
+        )}
+
+        {/* ── Gavin upsell — only when no waiver is active; dismissable; never blocks ── */}
+        {showUpsell && (
+          <div
+            className="relative rounded-2xl mb-4 flex items-center gap-4 overflow-hidden"
+            style={{
+              padding: '16px 18px',
+              backgroundColor: NEU.surface,
+              boxShadow: NEU.out,
+            }}
+          >
+            <button
+              onClick={dismissUpsell}
+              aria-label="Dismiss"
+              className="absolute top-2.5 right-2.5 flex items-center justify-center rounded-full focus:outline-none"
+              style={{ width: 24, height: 24, border: 'none', background: 'transparent', cursor: 'pointer', color: NEU.muted }}
+            >
+              <X size={14} strokeWidth={2.4} />
+            </button>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/Otter.Tutorial.Intro.webp"
+              alt="Gavin the otter"
+              className="flex-shrink-0"
+              style={{ width: 76, height: 76, objectFit: 'contain', filter: 'drop-shadow(0 4px 8px rgba(27,56,40,0.25))' }}
+            />
+            <div className="min-w-0 flex-1">
+              <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 14, color: NEU.ink, lineHeight: 1.35 }}>
+                You could be saving {localizedApproxSavings(10, geoCountry)}/month with Gavelling Unlimited
+              </p>
+              <p className="mt-1" style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.muted, lineHeight: 1.6 }}>
+                5% off every conference · Gavelling Points for merchandise · Full Premium features
+              </p>
+              <Link
+                href="/account/points"
+                className="inline-flex items-center gap-1 mt-2 text-xs font-extrabold"
+                style={{ color: NEU.forest, fontFamily: OUTFIT, letterSpacing: '0.06em', textDecoration: 'none' }}
+              >
+                MEET GAVELLING UNLIMITED <ArrowRight size={13} strokeWidth={2.6} />
+              </Link>
+            </div>
+          </div>
+        )}
+
         <div className="rounded-xl p-4 mb-6" style={{ backgroundColor: 'rgba(238,217,138,0.08)', border: '1.5px solid rgba(238,217,138,0.28)' }}>
           <p className="text-xs leading-relaxed" style={{ color: 'rgba(28,20,16,0.7)', fontFamily: "'Outfit', sans-serif" }}>
             By applying you confirm you meet the requirements for this role. Your application will be reviewed by the conference organizing team.
@@ -647,8 +914,8 @@ function ConferenceApplyInner() {
             !showSociety
               ? 'As an observer, no delegation information is required.'
               : isInvoicingRole
-              ? 'Which society or school are you representing?'
-              : 'Are you applying independently or as part of a school/society?'
+              ? 'Which society or high school are you representing?'
+              : 'Are you applying independently or as part of a high school/society?'
           }
         />
 
@@ -706,7 +973,7 @@ function ConferenceApplyInner() {
               <>
                 <div className="relative">
                   <label className="block font-semibold text-sm mb-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-                    Society / School Name
+                    Society / High School Name
                   </label>
                   <input
                     type="text"
