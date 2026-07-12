@@ -49,6 +49,19 @@ interface ResultRow {
   note: string | null;
 }
 
+// ── Pre-amendment repair ─────────────────────────────────────────────────────
+// Imports run before conference_allocations.user_id became nullable could only
+// set the application's assigned_* fields — no allocation row exists for them.
+// This detects and backfills those orphans; the claim trigger (which now also
+// attaches conference_allocations.user_id on signup) still owns claim behavior.
+
+interface OrphanAllocationRow {
+  id: string; // application id
+  assigned_committee_id: string;
+  assigned_country_code: string;
+  assigned_country_name: string;
+}
+
 // ── DB context for the dry-run ──────────────────────────────────────────────
 
 interface DbContext {
@@ -116,6 +129,8 @@ export default function ImportPage() {
   const [unclaimedCount, setUnclaimedCount] = useState(0);
   const [sendingInvites, setSendingInvites] = useState(false);
   const [lastInviteQueued, setLastInviteQueued] = useState<number | null>(null);
+  const [orphanRows, setOrphanRows] = useState<OrphanAllocationRow[]>([]);
+  const [repairing, setRepairing] = useState(false);
   const importingRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -132,6 +147,66 @@ export default function ImportPage() {
   }, [conference?.id, session?.access_token]);
 
   useEffect(() => { loadUnclaimedCount(); }, [loadUnclaimedCount]);
+
+  // Detects applications that carry an assignment but have no matching
+  // conference_allocations row — the state pre-amendment imports could leave
+  // behind. Re-checked after every repair run so the banner clears itself.
+  const loadOrphanAllocations = useCallback(async () => {
+    if (!conference || !session) return;
+    const supabase = getAuthedClient(session.access_token);
+    const { data: candidates } = await supabase
+      .from('applications')
+      .select('id, assigned_committee_id, assigned_country_code, assigned_country_name')
+      .eq('conference_id', conference.id)
+      .is('user_id', null)
+      .not('assigned_committee_id', 'is', null);
+    const rows = (candidates ?? []) as OrphanAllocationRow[];
+    if (rows.length === 0) { setOrphanRows([]); return; }
+    const { data: allocs } = await supabase
+      .from('conference_allocations')
+      .select('application_id')
+      .eq('conference_id', conference.id)
+      .in('application_id', rows.map(r => r.id));
+    const covered = new Set(((allocs ?? []) as { application_id: string | null }[]).map(a => a.application_id));
+    setOrphanRows(rows.filter(r => !covered.has(r.id)));
+  }, [conference?.id, session?.access_token]);
+
+  useEffect(() => { loadOrphanAllocations(); }, [loadOrphanAllocations]);
+
+  async function handleRepairAllocations() {
+    if (!conference || !session || repairing || orphanRows.length === 0) return;
+    const { confirmed } = await confirm({
+      title: `Repair ${orphanRows.length} allocation${orphanRows.length === 1 ? '' : 's'}?`,
+      body: 'These applications were assigned a committee and country before allocation rows existed. This creates the missing allocation rows now — any that conflict with an existing allocation are downgraded back to accepted with no allocation.',
+      confirmLabel: 'Repair',
+    });
+    if (!confirmed) return;
+    setRepairing(true);
+    try {
+      const supabase = getAuthedClient(session.access_token);
+      for (const row of orphanRows) {
+        const { error } = await supabase.from('conference_allocations').insert({
+          conference_id: conference.id,
+          conference_committee_id: row.assigned_committee_id,
+          user_id: null,
+          country_code: row.assigned_country_code,
+          country_name: row.assigned_country_name,
+          application_id: row.id,
+        });
+        if (error) {
+          await supabase.from('applications').update({
+            status: 'accepted',
+            assigned_committee_id: null,
+            assigned_country_code: null,
+            assigned_country_name: null,
+          }).eq('id', row.id);
+        }
+      }
+      await loadOrphanAllocations();
+    } finally {
+      setRepairing(false);
+    }
+  }
 
   function handleDownloadTemplate() {
     const csv = buildImportTemplateCSV();
@@ -408,6 +483,28 @@ export default function ImportPage() {
           </button>
         )}
       </div>
+
+      {/* Repair banner — pre-amendment imports with no allocation row */}
+      {orphanRows.length > 0 && (
+        <div
+          className="flex items-center gap-3 rounded-xl px-4 py-3 mb-6"
+          style={{ backgroundColor: 'rgba(139,32,32,0.06)', border: '1px solid rgba(139,32,32,0.25)' }}
+        >
+          <AlertTriangle size={15} style={{ color: '#8B2020', flexShrink: 0 }} />
+          <p className="flex-1 text-sm" style={{ color: '#8B2020', fontFamily: OUTFIT }}>
+            {orphanRows.length} imported application{orphanRows.length === 1 ? '' : 's'} {orphanRows.length === 1 ? 'is' : 'are'} assigned a committee and country with no allocation row.
+          </p>
+          <button
+            onClick={handleRepairAllocations}
+            disabled={repairing}
+            className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none flex-shrink-0"
+            style={{ backgroundColor: repairing ? '#DDD4C0' : '#8B2020', color: repairing ? '#9A8A78' : '#FFFFFF', fontFamily: OUTFIT, cursor: repairing ? 'not-allowed' : 'pointer' }}
+          >
+            {repairing ? <Loader2 size={13} className="animate-spin" /> : <AlertTriangle size={13} />}
+            REPAIR {orphanRows.length} ALLOCATION{orphanRows.length === 1 ? '' : 'S'}
+          </button>
+        </div>
+      )}
 
       {/* Persistent unclaimed-invites banner */}
       {unclaimedCount > 0 && phase !== 'results' && (
