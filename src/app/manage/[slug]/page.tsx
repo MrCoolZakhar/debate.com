@@ -452,7 +452,8 @@ function UnallocatedTile({ count, href }: { count: number; href: string }) {
       style={{
         textDecoration: 'none',
         minWidth: 0,
-        padding: '12px 14px',
+        justifyContent: 'space-between',
+        padding: '13px 15px',
         borderRadius: 22,
         backgroundColor: NEU.surface,
         backgroundImage: ok
@@ -475,23 +476,23 @@ function UnallocatedTile({ count, href }: { count: number; href: string }) {
         <ArrowRight size={13} style={{ color: ok ? NEU.green : NEU.amber, opacity: hovered ? 1 : 0.6, transform: hovered ? 'translateX(2px)' : 'none', transition: `transform 200ms ${EASE}` }} />
       </div>
       {ok ? (
-        <>
-          <p style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: NEU.green, marginTop: 10, lineHeight: 1.2 }}>
+        <div>
+          <p style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: NEU.green, lineHeight: 1.2 }}>
             All delegates allocated
           </p>
           <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 600, color: NEU.muted, marginTop: 3 }}>
             Nothing waiting for assignment
           </p>
-        </>
+        </div>
       ) : (
-        <>
-          <p style={{ fontFamily: OUTFIT, fontSize: 22, fontWeight: 900, color: NEU.amber, fontVariantNumeric: 'tabular-nums', lineHeight: 1, marginTop: 9 }}>
+        <div>
+          <p style={{ fontFamily: OUTFIT, fontSize: 27, fontWeight: 900, color: NEU.amber, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
             {count}
           </p>
-          <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 700, color: '#8A5A2E', marginTop: 3 }}>
+          <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 700, color: '#8A5A2E', marginTop: 4 }}>
             Unallocated delegates
           </p>
-        </>
+        </div>
       )}
     </Link>
   );
@@ -589,16 +590,18 @@ export default function DashboardPage() {
   // ── Loading skeleton — mirrors the fixed one-viewport grid ───────────────
   if (!conference || !dash) {
     return (
-      <div className="flex flex-col" style={{ height: 'calc(100vh - 56px)', overflow: 'hidden', padding: '14px 20px 16px' }}>
+      <div className="flex flex-col" style={{ minHeight: 'calc(100vh - 56px)', padding: '14px 20px 20px' }}>
         <div className="rounded-[22px] animate-pulse flex-shrink-0" style={{ height: 48, backgroundColor: NEU.surface, boxShadow: NEU.out, marginBottom: 12 }} />
-        <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: 'minmax(320px, 34fr) minmax(0, 66fr)', gridTemplateRows: 'minmax(0, 11fr) minmax(0, 9fr)', gap: 14 }}>
-          <div className="rounded-[22px] animate-pulse" style={{ gridRow: '1 / 3', backgroundColor: NEU.surface, boxShadow: NEU.out }} />
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.15fr) minmax(0,1.7fr) repeat(3, minmax(0,1fr))', gap: 14, minHeight: 0 }}>
-            {[0, 1, 2, 3, 4].map(i => (
-              <div key={i} className="rounded-[22px] animate-pulse" style={{ backgroundColor: NEU.surface, boxShadow: NEU.out }} />
-            ))}
+        <div className="flex" style={{ alignItems: 'stretch', gap: 14 }}>
+          <div className="rounded-[22px] animate-pulse" style={{ flexBasis: '32%', flexShrink: 0, minWidth: 300, height: 450, backgroundColor: NEU.surface, boxShadow: NEU.out }} />
+          <div className="flex flex-col" style={{ flex: 1, minWidth: 0, gap: 14 }}>
+            <div className="flex-shrink-0" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.15fr) minmax(0,1.7fr) repeat(3, minmax(0,1fr))', gap: 14, height: 166 }}>
+              {[0, 1, 2, 3, 4].map(i => (
+                <div key={i} className="rounded-[22px] animate-pulse" style={{ backgroundColor: NEU.surface, boxShadow: NEU.out }} />
+              ))}
+            </div>
+            <div className="rounded-[22px] animate-pulse" style={{ flex: 1, minHeight: 270, backgroundColor: NEU.surface, boxShadow: NEU.out }} />
           </div>
-          <div className="rounded-[22px] animate-pulse" style={{ minHeight: 0, backgroundColor: NEU.surface, boxShadow: NEU.out }} />
         </div>
       </div>
     );
@@ -679,7 +682,9 @@ export default function DashboardPage() {
     {
       key: 'secretariat',
       icon: UsersRound,
-      emoji: 'Busts in silhouette',
+      // "Handshake" reads instantly as bringing co-organizers on board — the
+      // grey "Busts in silhouette" 3D asset was muddy on its tinted seat.
+      emoji: 'Handshake',
       gradient: NEU_GRADIENTS.sage,
       title: 'Add your secretariat',
       sub: 'Invite co-organizers and grant them access.',
@@ -741,7 +746,7 @@ export default function DashboardPage() {
   return (
     <div
       className="flex flex-col"
-      style={{ height: 'calc(100vh - 56px)', overflow: 'hidden', padding: '14px 20px 16px', fontFamily: OUTFIT }}
+      style={{ minHeight: 'calc(100vh - 56px)', padding: '14px 20px 20px', fontFamily: OUTFIT }}
     >
 
       {/* ── Header — compact single row ── */}
@@ -775,41 +780,34 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ── Main grid: priorities (left, full height) | alert + pipeline + tiles / revenue graph ── */}
-      <div
-        style={{
-          flex: 1,
-          minHeight: 0,
-          display: 'grid',
-          gridTemplateColumns: 'minmax(320px, 34fr) minmax(0, 66fr)',
-          // Right column: top row (alert/pipeline/tiles) gets the majority;
-          // the revenue graph is capped at ~45% so it stops dominating.
-          gridTemplateRows: 'minmax(0, 11fr) minmax(0, 9fr)',
-          gap: 14,
-        }}
-      >
+      {/* ── Main layout — flex, not a stretched grid: the priorities card
+          sizes to its (snug) content and drives the row height; the right
+          column stretches to match, so the revenue graph fills exactly the
+          remaining height with no void anywhere. A slightly shorter-than-
+          viewport page is intentional — snug beats stretched-with-holes. ── */}
+      <div className="flex" style={{ alignItems: 'stretch', gap: 14 }}>
 
-        {/* Set-up priorities — full left column, pending first */}
-        <NeuCard className="flex flex-col" style={{ gridRow: '1 / 3', minHeight: 0, padding: '16px 16px 12px' }}>
-          <div className="flex items-center justify-between gap-3 flex-shrink-0" style={{ marginBottom: 10 }}>
+        {/* Set-up priorities — left column, content-sized, pending first */}
+        <NeuCard className="flex flex-col" style={{ flexBasis: '32%', flexShrink: 0, minWidth: 300, padding: '14px 15px 11px' }}>
+          <div className="flex items-center justify-between gap-3 flex-shrink-0" style={{ marginBottom: 9 }}>
             <div className="min-w-0">
               <h2 style={{ fontFamily: OUTFIT, fontSize: 15, fontWeight: 900, color: NEU.ink }}>Set-up priorities</h2>
               <p style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.muted, marginTop: 1, fontVariantNumeric: 'tabular-nums' }}>
                 {doneCount} of {checklist.length} done{doneCount === checklist.length ? ' — you are all set.' : ''}
               </p>
             </div>
-            <NeuRing value={doneCount} max={checklist.length} size={56} strokeWidth={7} gradient={NEU_GRADIENTS.gold}>
-              <span style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 14, color: NEU.ink, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
-                {doneCount}<span style={{ fontSize: 9.5, color: NEU.muted }}>/{checklist.length}</span>
+            <NeuRing value={doneCount} max={checklist.length} size={50} strokeWidth={7} gradient={NEU_GRADIENTS.gold}>
+              <span style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 13, color: NEU.ink, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+                {doneCount}<span style={{ fontSize: 9, color: NEU.muted }}>/{checklist.length}</span>
               </span>
             </NeuRing>
           </div>
 
-          <NeuProgress value={doneCount} max={checklist.length} gradient={NEU_GRADIENTS.gold} thumb height={10} style={{ marginBottom: 12, flexShrink: 0 }} />
+          <NeuProgress value={doneCount} max={checklist.length} gradient={NEU_GRADIENTS.gold} thumb height={9} style={{ marginBottom: 10, flexShrink: 0 }} />
 
-          {/* Top-aligned stack with a FIXED gap — identical rhythm at every
-              viewport height; leftover card space simply stays empty below. */}
-          <div className="flex flex-col" style={{ flex: 1, minHeight: 0, gap: 7, justifyContent: 'flex-start', overflow: 'hidden' }}>
+          {/* Natural-height snug stack — the card ends exactly at the last row,
+              no leftover void below (rows sink done items to the bottom). */}
+          <div className="flex flex-col" style={{ gap: 5 }}>
             {sortedChecklist.map(item => (
               <NeuChecklistRow
                 key={item.key}
@@ -826,32 +824,37 @@ export default function DashboardPage() {
             ))}
           </div>
           {publishBlockMsg && (
-            <p className="flex-shrink-0" style={{ fontSize: 11, marginTop: 6, color: NEU.amber, fontFamily: OUTFIT, fontWeight: 700 }}>{publishBlockMsg}</p>
+            <p className="flex-shrink-0" style={{ fontSize: 11, marginTop: 7, color: NEU.amber, fontFamily: OUTFIT, fontWeight: 700 }}>{publishBlockMsg}</p>
           )}
         </NeuCard>
 
-        {/* Top-right row: unallocated alert + delegates pipeline + stat tiles */}
+        {/* Right column — stretches to the priorities card height */}
+        <div className="flex flex-col" style={{ flex: 1, minWidth: 0, gap: 14 }}>
+
+        {/* Top-right row: unallocated alert + delegates pipeline + stat tiles.
+            Firm height so the revenue graph below lands clearly shorter; each
+            card fills it via space-between rather than floating a void. */}
         <div
+          className="flex-shrink-0"
           style={{
             display: 'grid',
             gridTemplateColumns: 'minmax(0, 1.15fr) minmax(0, 1.7fr) repeat(3, minmax(0, 1fr))',
             gap: 14,
-            minHeight: 0,
+            height: 166,
           }}
         >
           <UnallocatedTile count={unallocated} href={`/manage/${slug}/assignment`} />
 
-          {/* Delegates pipeline — each stage links to its fix */}
-          <NeuCard className="flex flex-col" style={{ padding: '12px 14px', minWidth: 0 }}>
+          {/* Delegates pipeline — each stage links to its fix. Content spreads
+              top-to-bottom (space-between) so it fills the firm row height. */}
+          <NeuCard className="flex flex-col" style={{ padding: '13px 15px', minWidth: 0, justifyContent: 'space-between' }}>
             <div className="flex items-center justify-between gap-2 flex-shrink-0">
               <h2 className="truncate" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 900, color: NEU.ink }}>Delegates</h2>
               <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800, color: NEU.forest, fontVariantNumeric: 'tabular-nums' }}>
                 {dash.allocated}/{acceptedApps} <span style={{ fontWeight: 600, color: NEU.muted }}>allocated</span>
               </span>
             </div>
-            <NeuProgress value={dash.allocated} max={acceptedApps} gradient={NEU_GRADIENTS.forest} height={8} style={{ marginTop: 8, marginBottom: 9, flexShrink: 0 }} />
-            {/* Top-anchored (no flex:1 stretch) — extra card height stays empty
-                below rather than drifting the numbers toward the middle. */}
+            <NeuProgress value={dash.allocated} max={acceptedApps} gradient={NEU_GRADIENTS.forest} height={8} style={{ flexShrink: 0 }} />
             <div className="grid grid-cols-4">
               <PipelineCell n={totalApps} label="Submitted" href={`/manage/${slug}/applications`} first />
               <PipelineCell n={acceptedApps} label="Accepted" href={`/manage/${slug}/applications`} />
@@ -886,8 +889,9 @@ export default function DashboardPage() {
           />
         </div>
 
-        {/* Revenue graph — spans the full right width, fills remaining height */}
-        <NeuCard className="flex flex-col" style={{ minHeight: 0, padding: '14px 16px 12px' }}>
+        {/* Revenue graph — full right width, fills the height left over under
+            the tile row (shorter now that the priorities card is snug) */}
+        <NeuCard className="flex flex-col" style={{ flex: 1, minHeight: 210, padding: '13px 16px 11px' }}>
           <RevenueChart
             rows={dash.apps}
             fee={fee}
@@ -895,6 +899,8 @@ export default function DashboardPage() {
             financialsHref={`/manage/${slug}/financials`}
           />
         </NeuCard>
+
+        </div>
       </div>
 
       {showPublishModal && (

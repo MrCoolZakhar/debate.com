@@ -13,7 +13,7 @@ import { queueEventEmail } from '@/lib/emailEvents';
 import { sendChairInvite } from '@/lib/chairInvites';
 import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
 import { useConfirmModal } from '@/components/ConfirmModal';
-import { NotRegisteredChip } from '@/app/manage/[slug]/assignment/delegationShared';
+import { NotRegisteredChip, MemberAvatar } from '@/app/manage/[slug]/assignment/delegationShared';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -54,7 +54,7 @@ interface AllocationRow {
   country_name: string;
   allocation_sent: boolean;
   application_id: string | null;
-  profiles: { display_name: string } | null;
+  profiles: { display_name: string; avatar_url: string | null } | null;
   applications: { invited_name: string | null } | null;
 }
 
@@ -104,7 +104,7 @@ interface ChairApp {
   assigned_committee_id: string | null;
   experience_level: string | null;
   attending: boolean;
-  profiles: { id: string; display_name: string; email: string } | null;
+  profiles: { id: string; display_name: string; email: string; avatar_url: string | null } | null;
 }
 
 interface PendingChairInvite {
@@ -248,7 +248,7 @@ function TierBadge({ tier, onCycle }: { tier: ImportanceTier; onCycle?: () => vo
       }}
     >
       <span style={{ width: 6, height: 6, borderRadius: 999, backgroundColor: meta.color, display: 'inline-block' }} />
-      <span style={{ fontSize: 9, fontWeight: 700, color: meta.color, fontFamily: MONO, letterSpacing: '0.08em' }}>
+      <span style={{ fontSize: 10, fontWeight: 700, color: meta.color, fontFamily: MONO, letterSpacing: '0.06em' }}>
         {meta.label}
       </span>
     </button>
@@ -263,7 +263,7 @@ function DelegationChip({ app }: { app: AcceptedApp }) {
     <span
       className="px-2 py-0.5 rounded-full truncate inline-block"
       style={{
-        fontSize: 9,
+        fontSize: 10,
         fontFamily: MONO,
         letterSpacing: '0.04em',
         maxWidth: 150,
@@ -298,7 +298,7 @@ function DelegateDetail({ app, history }: { app: AcceptedApp; history: UserHisto
 
   const stat = (label: string, value: React.ReactNode) => (
     <div className="flex-1 min-w-0 rounded-lg px-2.5 py-2" style={{ backgroundColor: 'rgba(27,56,40,0.04)', border: '1px solid rgba(221,212,192,0.8)' }}>
-      <p style={{ fontSize: 8, color: '#B6871F', fontFamily: MONO, letterSpacing: '0.14em', fontWeight: 500 }}>{label}</p>
+      <p style={{ fontSize: 10, color: '#B6871F', fontFamily: MONO, letterSpacing: '0.12em', fontWeight: 600 }}>{label}</p>
       <p className="truncate" style={{ fontSize: 13, fontWeight: 700, color: '#1C1410', fontFamily: MONO, marginTop: 2 }}>{value}</p>
     </div>
   );
@@ -344,14 +344,14 @@ function DelegateDetail({ app, history }: { app: AcceptedApp; history: UserHisto
       {/* Award labels */}
       {history && history.awardLabels.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5 mb-2.5">
-          <Award size={11} style={{ color: '#B6871F', flexShrink: 0 }} />
+          <Award size={12} style={{ color: '#B6871F', flexShrink: 0 }} />
           {history.awardLabels.slice(0, 4).map((lbl, i) => (
-            <span key={i} className="px-2 py-0.5 rounded-full" style={{ fontSize: 9, backgroundColor: 'rgba(182,135,31,0.12)', color: '#B6871F', fontFamily: MONO, border: '1px solid rgba(182,135,31,0.25)' }}>
+            <span key={i} className="px-2 py-0.5 rounded-full" style={{ fontSize: 10, backgroundColor: 'rgba(182,135,31,0.12)', color: '#B6871F', fontFamily: MONO, border: '1px solid rgba(182,135,31,0.25)' }}>
               {lbl}
             </span>
           ))}
           {history.awardLabels.length > 4 && (
-            <span style={{ fontSize: 9, color: '#9A8A78', fontFamily: MONO }}>+{history.awardLabels.length - 4}</span>
+            <span style={{ fontSize: 10, color: '#9A8A78', fontFamily: MONO, fontVariantNumeric: 'tabular-nums' }}>+{history.awardLabels.length - 4}</span>
           )}
         </div>
       )}
@@ -359,14 +359,14 @@ function DelegateDetail({ app, history }: { app: AcceptedApp; history: UserHisto
       {/* Full preference list */}
       {(app.application_preferences ?? []).length > 0 && (
         <div>
-          <p style={{ fontSize: 8, color: '#B6871F', fontFamily: MONO, letterSpacing: '0.14em', fontWeight: 500, marginBottom: 4 }}>PREFERENCES</p>
+          <p style={{ fontSize: 10, color: '#B6871F', fontFamily: MONO, letterSpacing: '0.12em', fontWeight: 600, marginBottom: 4 }}>PREFERENCES</p>
           {[...(app.application_preferences ?? [])]
             .sort((a, b) => a.preference_order - b.preference_order)
             .map(p => (
               <div key={p.preference_order} className="flex items-center gap-2 py-0.5">
-                <span style={{ fontSize: 10, fontWeight: 700, color: '#9A8A78', fontFamily: MONO, width: 12 }}>{p.preference_order}</span>
-                <img src={getFlagUrl(p.country_code)} style={{ width: 16, height: 11, borderRadius: 2, objectFit: 'cover' }} alt={p.country_name} />
-                <span className="truncate" style={{ fontSize: 11, color: '#1C1410', fontFamily: OUTFIT }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#9A8A78', fontFamily: MONO, width: 12, fontVariantNumeric: 'tabular-nums' }}>{p.preference_order}</span>
+                <img src={getFlagUrl(p.country_code)} style={{ width: 18, height: 13, borderRadius: 2, objectFit: 'cover' }} alt={p.country_name} />
+                <span className="truncate" style={{ fontSize: 12, color: '#1C1410', fontFamily: OUTFIT }}>
                   {p.conference_committees?.name ?? 'Unknown'} · {p.country_name}
                 </span>
               </div>
@@ -437,6 +437,7 @@ function DropAllocateModal({ committee, app, onClose, onAssigned }: DropAllocate
               ALLOCATE
             </p>
             <h2 className="font-black text-base flex items-center gap-2 flex-wrap" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+              <MemberAvatar name={app.profiles?.display_name ?? app.invited_name ?? 'Unknown'} url={app.profiles?.avatar_url ?? null} size={28} />
               <span>{app.profiles?.display_name ?? app.invited_name}</span>
               <ArrowRight size={14} style={{ color: '#9A8A78' }} />
               <span>{committee.abbreviation ?? committee.name}</span>
@@ -477,14 +478,14 @@ function DropAllocateModal({ committee, app, onClose, onAssigned }: DropAllocate
                     {reasons.length > 0 && (
                       <div className="flex gap-1 mt-1 flex-wrap">
                         {reasons.slice(0, 3).map(r => (
-                          <span key={r} className="px-1.5 py-0.5 rounded-full" style={{ fontSize: 8, backgroundColor: 'rgba(61,122,82,0.10)', color: '#3D7A52', fontFamily: MONO, letterSpacing: '0.04em' }}>
+                          <span key={r} className="px-1.5 py-0.5 rounded-full" style={{ fontSize: 9, backgroundColor: 'rgba(61,122,82,0.10)', color: '#3D7A52', fontFamily: MONO, letterSpacing: '0.04em' }}>
                             {r}
                           </span>
                         ))}
                       </div>
                     )}
                   </div>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: fitColor(score), fontFamily: MONO, flexShrink: 0 }}>{score}</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: fitColor(score), fontFamily: MONO, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{score}</span>
                   <button
                     onClick={() => handleAllocate(slot)}
                     disabled={busySlotId !== null}
@@ -592,7 +593,7 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedApp, o
           <button onClick={onClose} className="focus:outline-none" style={{ color: '#9A8A78' }}><X size={18} /></button>
         </div>
 
-        <p className="text-xs font-semibold mb-2" style={{ color: '#B6871F', fontFamily: MONO, letterSpacing: '0.12em', fontSize: 9 }}>
+        <p className="text-xs font-semibold mb-2" style={{ color: '#B6871F', fontFamily: MONO, letterSpacing: '0.1em', fontSize: 10 }}>
           COMMITTEE
         </p>
         <p className="text-sm font-semibold mb-4" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
@@ -601,11 +602,14 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedApp, o
 
         {/* Applicant picker (if not pre-selected) */}
         <div className="mb-4">
-          <p className="text-xs font-semibold mb-2" style={{ color: '#B6871F', fontFamily: MONO, letterSpacing: '0.12em', fontSize: 9 }}>APPLICANT</p>
+          <p className="text-xs font-semibold mb-2" style={{ color: '#B6871F', fontFamily: MONO, letterSpacing: '0.1em', fontSize: 10 }}>APPLICANT</p>
           {preSelectedApp ? (
-            <div className="rounded-xl p-3" style={{ backgroundColor: 'rgba(27,56,40,0.05)', border: '1px solid rgba(27,56,40,0.15)' }}>
-              <p className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{preSelectedApp.profiles?.display_name ?? preSelectedApp.invited_name}</p>
-              <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>{preSelectedApp.role} · {preSelectedApp.experience_level ?? 'n/a'}</p>
+            <div className="flex items-center gap-3 rounded-xl p-3" style={{ backgroundColor: 'rgba(27,56,40,0.05)', border: '1px solid rgba(27,56,40,0.15)' }}>
+              <MemberAvatar name={preSelectedApp.profiles?.display_name ?? preSelectedApp.invited_name ?? 'Unknown'} url={preSelectedApp.profiles?.avatar_url ?? null} size={34} />
+              <div className="min-w-0">
+                <p className="font-semibold text-sm truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{preSelectedApp.profiles?.display_name ?? preSelectedApp.invited_name}</p>
+                <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>{preSelectedApp.role} · {preSelectedApp.experience_level ?? 'n/a'}</p>
+              </div>
             </div>
           ) : (
             <div style={{ maxHeight: 200, overflowY: 'auto', border: '1px solid #DDD4C0', borderRadius: 12 }}>
@@ -626,15 +630,16 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedApp, o
                     onMouseEnter={e => { if (!selected) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
                     onMouseLeave={e => { if (!selected) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                   >
+                    <MemberAvatar name={app.profiles?.display_name ?? app.invited_name ?? 'Unknown'} url={app.profiles?.avatar_url ?? null} size={30} />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{app.profiles?.display_name ?? app.invited_name}</p>
                       <p className="text-xs" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>{app.role} · {app.experience_level ?? 'n/a'}</p>
                     </div>
                     <div className="flex items-center gap-1 flex-shrink-0">
                       {idx === 0 && score >= 20 && (
-                        <span style={{ fontSize: 9, color: '#B6871F', fontFamily: MONO }}>BEST</span>
+                        <span style={{ fontSize: 10, fontWeight: 700, color: '#B6871F', fontFamily: MONO, letterSpacing: '0.04em' }}>BEST</span>
                       )}
-                      <span style={{ fontSize: 10, fontWeight: 700, color: fitColor(score), fontFamily: MONO }}>{score}</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: fitColor(score), fontFamily: MONO, fontVariantNumeric: 'tabular-nums' }}>{score}</span>
                     </div>
                   </div>
                 );
@@ -646,7 +651,7 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedApp, o
         {/* Show selected applicant preferences */}
         {selectedApp && appPrefs.length > 0 && (
           <div className="mb-4">
-            <p className="text-xs font-semibold mb-1" style={{ color: '#B6871F', fontFamily: MONO, letterSpacing: '0.12em', fontSize: 9 }}>PREFERENCES</p>
+            <p className="text-xs font-semibold mb-1" style={{ color: '#B6871F', fontFamily: MONO, letterSpacing: '0.1em', fontSize: 10 }}>PREFERENCES</p>
             <div className="flex flex-col gap-1">
               {appPrefs.slice(0, 3).map(p => (
                 <p key={p.preference_order} className="text-xs" style={{ color: p.conference_committee_id === committee.id ? '#1B3828' : '#9A8A78', fontFamily: OUTFIT }}>
@@ -664,7 +669,7 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedApp, o
 
         {/* Country picker */}
         <div className="mb-5">
-          <p className="text-xs font-semibold mb-2" style={{ color: '#B6871F', fontFamily: MONO, letterSpacing: '0.12em', fontSize: 9 }}>COUNTRY</p>
+          <p className="text-xs font-semibold mb-2" style={{ color: '#B6871F', fontFamily: MONO, letterSpacing: '0.1em', fontSize: 10 }}>COUNTRY</p>
           {preSelectedSlot ? (
             <div className="flex items-center gap-3 rounded-xl p-3" style={{ backgroundColor: 'rgba(27,56,40,0.05)', border: '1px solid rgba(27,56,40,0.15)' }}>
               <img src={getFlagUrl(preSelectedSlot.country_code)} style={{ width: 24, height: 17, borderRadius: 3, objectFit: 'cover' }} alt={preSelectedSlot.country_name} />
@@ -816,9 +821,9 @@ function CommitteeBoardPanel({
           <p style={{ fontSize: 14, fontWeight: 700, color: '#1B3828', fontFamily: MONO, letterSpacing: '0.02em' }}>
             {committee.abbreviation ?? committee.name}
           </p>
-          <p className="truncate" style={{ fontSize: 10, color: '#9A8A78', fontFamily: OUTFIT }}>{committee.name}</p>
+          <p className="truncate" style={{ fontSize: 11, color: '#9A8A78', fontFamily: OUTFIT }}>{committee.name}</p>
         </div>
-        <p style={{ fontSize: 12, fontWeight: 700, color: '#1C1410', fontFamily: MONO, flexShrink: 0 }}>
+        <p style={{ fontSize: 13, fontWeight: 700, color: '#1C1410', fontFamily: MONO, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
           {filled}<span style={{ color: '#9A8A78', fontWeight: 500 }}>/{total}</span>
         </p>
       </div>
@@ -831,7 +836,7 @@ function CommitteeBoardPanel({
       {/* Tier-colored open-slot summary */}
       <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
         {openSlots.length === 0 ? (
-          <span style={{ fontSize: 9, fontWeight: 700, color: '#3D7A52', fontFamily: MONO, letterSpacing: '0.08em' }}>FULLY ALLOCATED</span>
+          <span style={{ fontSize: 10, fontWeight: 700, color: '#3D7A52', fontFamily: MONO, letterSpacing: '0.06em' }}>FULLY ALLOCATED</span>
         ) : (
           (['high', 'medium', 'low', 'standard'] as ImportanceTier[]).map(t => {
             const n = openTierCounts[t];
@@ -844,7 +849,7 @@ function CommitteeBoardPanel({
                 style={{ backgroundColor: meta.bg, border: `1px solid ${meta.color}30` }}
               >
                 <span style={{ width: 5, height: 5, borderRadius: 999, backgroundColor: meta.color, display: 'inline-block' }} />
-                <span style={{ fontSize: 8.5, fontFamily: MONO, fontWeight: 700, color: meta.color, letterSpacing: '0.05em' }}>
+                <span style={{ fontSize: 10, fontFamily: MONO, fontWeight: 700, color: meta.color, letterSpacing: '0.04em', fontVariantNumeric: 'tabular-nums' }}>
                   {n} {meta.label} OPEN
                 </span>
               </span>
@@ -856,17 +861,20 @@ function CommitteeBoardPanel({
       {/* Allocated delegates */}
       {committee.conference_allocations.length > 0 && (
         <div className="mt-3">
-          <p style={{ fontSize: 8, color: '#B6871F', fontFamily: MONO, letterSpacing: '0.14em', fontWeight: 500, marginBottom: 4 }}>ALLOCATED</p>
+          <p style={{ fontSize: 10, color: '#B6871F', fontFamily: MONO, letterSpacing: '0.12em', fontWeight: 600, marginBottom: 4 }}>ALLOCATED</p>
           <div style={{ maxHeight: 136, overflowY: 'auto' }} className="flex flex-col gap-1 pr-0.5">
             {committee.conference_allocations.map(a => (
-              <div key={a.id} className="flex items-center gap-2 rounded-lg px-2 py-1" style={{ backgroundColor: 'rgba(27,56,40,0.04)' }}>
-                <img src={getFlagUrl(a.country_code)} style={{ width: 16, height: 11, borderRadius: 2, objectFit: 'cover', flexShrink: 0 }} alt={a.country_name} />
-                <span className="truncate" style={{ fontSize: 11, color: '#1C1410', fontFamily: OUTFIT, fontWeight: 600 }}>
+              <div key={a.id} className="flex items-center gap-2 rounded-lg px-2 py-1.5" style={{ backgroundColor: 'rgba(27,56,40,0.04)' }}>
+                <img src={getFlagUrl(a.country_code)} style={{ width: 20, height: 14, borderRadius: 2, objectFit: 'cover', flexShrink: 0, boxShadow: '0 1px 2px rgba(27,56,40,0.15)' }} alt={a.country_name} />
+                <span className="truncate" style={{ fontSize: 12, color: '#1C1410', fontFamily: OUTFIT, fontWeight: 600 }}>
                   {a.country_name}
                 </span>
-                <span className="truncate" style={{ fontSize: 10, color: '#9A8A78', fontFamily: OUTFIT, marginLeft: 'auto' }}>
-                  {a.profiles?.display_name ?? a.applications?.invited_name ?? 'Assigned'}
-                </span>
+                <div className="flex items-center gap-1.5 min-w-0" style={{ marginLeft: 'auto' }}>
+                  <MemberAvatar name={a.profiles?.display_name ?? a.applications?.invited_name ?? 'Assigned'} url={a.profiles?.avatar_url ?? null} size={22} />
+                  <span className="truncate" style={{ fontSize: 11, color: '#6B5D4A', fontFamily: OUTFIT }}>
+                    {a.profiles?.display_name ?? a.applications?.invited_name ?? 'Assigned'}
+                  </span>
+                </div>
                 <button
                   onClick={e => { e.stopPropagation(); onRemoveAllocation(a); }}
                   title="Remove allocation"
@@ -888,11 +896,11 @@ function CommitteeBoardPanel({
         <button
           onClick={e => { e.stopPropagation(); setShowSlots(v => !v); }}
           className="mt-3 flex items-center gap-1 focus:outline-none self-start"
-          style={{ fontSize: 9, fontWeight: 700, color: '#9A8A78', fontFamily: MONO, letterSpacing: '0.1em', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+          style={{ fontSize: 10, fontWeight: 700, color: '#9A8A78', fontFamily: MONO, letterSpacing: '0.08em', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontVariantNumeric: 'tabular-nums' }}
           onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
           onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
         >
-          {showSlots ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+          {showSlots ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
           OPEN SLOTS ({openSlots.length})
         </button>
       )}
@@ -901,14 +909,14 @@ function CommitteeBoardPanel({
           {[...openSlots]
             .sort((a, b) => TIER_RANK[a.importance] - TIER_RANK[b.importance] || a.country_name.localeCompare(b.country_name))
             .map(slot => (
-              <div key={slot.id} className="flex items-center gap-2 rounded-lg px-2 py-1" style={{ border: '1px solid #F0EDE6' }}>
-                <img src={getFlagUrl(slot.country_code)} style={{ width: 16, height: 11, borderRadius: 2, objectFit: 'cover', flexShrink: 0 }} alt={slot.country_name} />
-                <span className="truncate flex-1" style={{ fontSize: 11, color: '#1C1410', fontFamily: OUTFIT }}>{slot.country_name}</span>
+              <div key={slot.id} className="flex items-center gap-2 rounded-lg px-2 py-1.5" style={{ border: '1px solid #F0EDE6' }}>
+                <img src={getFlagUrl(slot.country_code)} style={{ width: 18, height: 13, borderRadius: 2, objectFit: 'cover', flexShrink: 0 }} alt={slot.country_name} />
+                <span className="truncate flex-1" style={{ fontSize: 12, color: '#1C1410', fontFamily: OUTFIT }}>{slot.country_name}</span>
                 <TierBadge tier={slot.importance} onCycle={() => onCycleTier(slot)} />
                 <button
                   onClick={e => { e.stopPropagation(); onAssignSlot(slot); }}
                   className="rounded-md py-0.5 px-2 focus:outline-none transition-colors flex-shrink-0"
-                  style={{ fontSize: 9, fontWeight: 700, backgroundColor: 'rgba(27,56,40,0.07)', color: '#1B3828', border: 'none', fontFamily: OUTFIT, letterSpacing: '0.04em', cursor: 'pointer' }}
+                  style={{ fontSize: 10, fontWeight: 700, backgroundColor: 'rgba(27,56,40,0.07)', color: '#1B3828', border: 'none', fontFamily: OUTFIT, letterSpacing: '0.04em', cursor: 'pointer' }}
                   onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.14)'; }}
                   onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.07)'; }}
                 >
@@ -1080,16 +1088,16 @@ function ChairBoardPanel({
           <p style={{ fontSize: 14, fontWeight: 700, color: '#1B3828', fontFamily: MONO, letterSpacing: '0.02em' }}>
             {committee.abbreviation ?? committee.name}
           </p>
-          <p className="truncate" style={{ fontSize: 10, color: '#9A8A78', fontFamily: OUTFIT }}>{committee.name}</p>
+          <p className="truncate" style={{ fontSize: 11, color: '#9A8A78', fontFamily: OUTFIT }}>{committee.name}</p>
         </div>
-        <p style={{ fontSize: 12, fontWeight: 700, color: '#1C1410', fontFamily: MONO, flexShrink: 0 }}>
+        <p style={{ fontSize: 13, fontWeight: 700, color: '#1C1410', fontFamily: MONO, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
           {chairIds.length}<span style={{ color: '#9A8A78', fontWeight: 500 }}> chair{chairIds.length === 1 ? '' : 's'}</span>
         </p>
       </div>
 
       {/* Dais */}
       <div className="mt-3">
-        <p style={{ fontSize: 8, color: '#B6871F', fontFamily: MONO, letterSpacing: '0.14em', fontWeight: 500, marginBottom: 4 }}>DAIS</p>
+        <p style={{ fontSize: 10, color: '#B6871F', fontFamily: MONO, letterSpacing: '0.12em', fontWeight: 600, marginBottom: 4 }}>DAIS</p>
         {dais.length === 0 ? (
           <p style={{ fontSize: 11, color: '#9A8A78', fontFamily: OUTFIT }}>No chairs assigned yet.</p>
         ) : (
@@ -1097,18 +1105,9 @@ function ChairBoardPanel({
             {dais.map((ch, i) => {
               const userId = idAligned ? chairIds[i] : undefined;
               return (
-                <div key={`${ch.name}-${i}`} className="flex items-center gap-2 rounded-lg px-2 py-1" style={{ backgroundColor: 'rgba(27,56,40,0.04)' }}>
-                  {ch.avatar_url ? (
-                    <img src={ch.avatar_url} alt={ch.name} style={{ width: 20, height: 20, borderRadius: '9999px', objectFit: 'cover', flexShrink: 0 }} />
-                  ) : (
-                    <span
-                      className="flex items-center justify-center flex-shrink-0"
-                      style={{ width: 20, height: 20, borderRadius: '9999px', backgroundColor: '#1B3828', color: '#EED98A', fontSize: 9, fontWeight: 700, fontFamily: OUTFIT }}
-                    >
-                      {ch.name.charAt(0)}
-                    </span>
-                  )}
-                  <span className="truncate flex-1" style={{ fontSize: 11, color: '#1C1410', fontFamily: OUTFIT, fontWeight: 600 }}>
+                <div key={`${ch.name}-${i}`} className="flex items-center gap-2 rounded-lg px-2 py-1.5" style={{ backgroundColor: 'rgba(27,56,40,0.04)' }}>
+                  <MemberAvatar name={ch.name} url={ch.avatar_url} size={24} />
+                  <span className="truncate flex-1" style={{ fontSize: 12, color: '#1C1410', fontFamily: OUTFIT, fontWeight: 600 }}>
                     {ch.name}
                   </span>
                   {userId && (
@@ -1133,17 +1132,17 @@ function ChairBoardPanel({
       {/* Pending invites */}
       {invites.length > 0 && (
         <div className="mt-3">
-          <p style={{ fontSize: 8, color: '#B6871F', fontFamily: MONO, letterSpacing: '0.14em', fontWeight: 500, marginBottom: 4 }}>PENDING</p>
+          <p style={{ fontSize: 10, color: '#B6871F', fontFamily: MONO, letterSpacing: '0.12em', fontWeight: 600, marginBottom: 4 }}>PENDING</p>
           <div className="flex flex-col gap-1">
             {invites.map(inv => (
               <div key={inv.id} className="flex items-center gap-2 rounded-lg px-2 py-1" style={{ backgroundColor: 'rgba(238,217,138,0.16)', border: '1px solid rgba(182,135,31,0.3)' }}>
                 <span
                   className="px-1.5 py-0.5 rounded-full flex-shrink-0"
-                  style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.06em', fontFamily: MONO, backgroundColor: 'rgba(182,135,31,0.18)', color: '#8A6614' }}
+                  style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', fontFamily: MONO, backgroundColor: 'rgba(182,135,31,0.18)', color: '#8A6614' }}
                 >
                   INVITED
                 </span>
-                <span className="truncate flex-1" style={{ fontSize: 11, color: '#1C1410', fontFamily: OUTFIT }}>
+                <span className="truncate flex-1" style={{ fontSize: 12, color: '#1C1410', fontFamily: OUTFIT }}>
                   {inv.profiles?.display_name ?? inv.email}
                 </span>
                 <button
@@ -1248,7 +1247,7 @@ export default function AssignmentPage() {
         .select(`
           id, name, abbreviation, difficulty, total_slots, logo_url, chair_user_ids, display_chairs,
           committee_country_slots (id, country_code, country_name, delegation_size, importance),
-          conference_allocations (id, user_id, country_code, country_name, allocation_sent, application_id, profiles (display_name), applications:application_id (invited_name))
+          conference_allocations (id, user_id, country_code, country_name, allocation_sent, application_id, profiles (display_name, avatar_url), applications:application_id (invited_name))
         `)
         .eq('conference_id', conference.id)
         .order('name', { ascending: true }),
@@ -1256,7 +1255,7 @@ export default function AssignmentPage() {
         .from('applications')
         .select(`
           id, user_id, status, assigned_committee_id, experience_level, attending,
-          profiles (id, display_name, email)
+          profiles (id, display_name, email, avatar_url)
         `)
         .eq('conference_id', conference.id)
         .eq('role', 'chair')
@@ -1362,7 +1361,7 @@ export default function AssignmentPage() {
       country_name: slot.country_name,
       allocation_sent: sent,
       application_id: app.id,
-      profiles: app.profiles ? { display_name: app.profiles.display_name } : null,
+      profiles: app.profiles ? { display_name: app.profiles.display_name, avatar_url: app.profiles.avatar_url } : null,
       applications: { invited_name: app.invited_name ?? null },
     };
     setCommittees(prev => prev.map(c =>
@@ -1901,7 +1900,7 @@ export default function AssignmentPage() {
             >
               <div className="flex items-center gap-2 mb-3">
                 <Sparkles size={13} style={{ color: '#B6871F' }} />
-                <p style={{ fontSize: 10, color: '#B6871F', fontFamily: MONO, letterSpacing: '0.16em', fontWeight: 500 }}>
+                <p style={{ fontSize: 11, color: '#B6871F', fontFamily: MONO, letterSpacing: '0.14em', fontWeight: 600 }}>
                   SUGGESTED ASSIGNMENTS
                 </p>
                 <p style={{ fontSize: 10, color: '#9A8A78', fontFamily: OUTFIT, marginLeft: 'auto' }}>
@@ -1918,25 +1917,26 @@ export default function AssignmentPage() {
                       className="flex items-center gap-3 rounded-xl px-3 py-2.5"
                       style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}
                     >
+                      <MemberAvatar name={sug.app.profiles?.display_name ?? sug.app.invited_name ?? 'Unknown'} url={sug.app.profiles?.avatar_url ?? null} size={30} />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
                           <p className="text-sm font-semibold truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
                             {sug.app.profiles?.display_name ?? sug.app.invited_name}
                           </p>
-                          <ArrowRight size={11} style={{ color: '#9A8A78', flexShrink: 0 }} />
-                          <img src={getFlagUrl(sug.slot.country_code)} style={{ width: 17, height: 12, borderRadius: 2, objectFit: 'cover', flexShrink: 0 }} alt={sug.slot.country_name} />
+                          <ArrowRight size={12} style={{ color: '#9A8A78', flexShrink: 0 }} />
+                          <img src={getFlagUrl(sug.slot.country_code)} style={{ width: 19, height: 13, borderRadius: 2, objectFit: 'cover', flexShrink: 0 }} alt={sug.slot.country_name} />
                           <p className="text-sm truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{sug.slot.country_name}</p>
                         </div>
                         <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                          <span style={{ fontSize: 9, fontWeight: 700, color: '#1B3828', fontFamily: MONO }}>
+                          <span style={{ fontSize: 10, fontWeight: 700, color: '#1B3828', fontFamily: MONO }}>
                             {sug.committee.abbreviation ?? sug.committee.name}
                           </span>
                           {sug.reasons.slice(0, 2).map(r => (
-                            <span key={r} className="px-1.5 py-0.5 rounded-full" style={{ fontSize: 8, backgroundColor: 'rgba(61,122,82,0.10)', color: '#3D7A52', fontFamily: MONO, letterSpacing: '0.04em' }}>
+                            <span key={r} className="px-1.5 py-0.5 rounded-full" style={{ fontSize: 9, backgroundColor: 'rgba(61,122,82,0.10)', color: '#3D7A52', fontFamily: MONO, letterSpacing: '0.04em' }}>
                               {r}
                             </span>
                           ))}
-                          <span style={{ fontSize: 9, fontWeight: 700, color: fitColor(sug.score), fontFamily: MONO, marginLeft: 'auto' }}>
+                          <span style={{ fontSize: 10, fontWeight: 700, color: fitColor(sug.score), fontFamily: MONO, marginLeft: 'auto', fontVariantNumeric: 'tabular-nums' }}>
                             {sug.score}
                           </span>
                         </div>
@@ -1984,16 +1984,16 @@ export default function AssignmentPage() {
               {/* Left rail — unassigned applicants */}
               <div className="w-full xl:w-[320px] flex-shrink-0">
                 <div className="flex items-center gap-2 mb-3">
-                  <p style={{ fontSize: 10, color: '#B6871F', fontFamily: MONO, letterSpacing: '0.16em', fontWeight: 500 }}>
+                  <p style={{ fontSize: 11, color: '#B6871F', fontFamily: MONO, letterSpacing: '0.14em', fontWeight: 600 }}>
                     UNASSIGNED
                   </p>
                   <span
                     className="px-2 py-0.5 rounded-full text-xs font-bold"
-                    style={{ backgroundColor: 'rgba(27,56,40,0.1)', color: '#1B3828', fontFamily: MONO, fontSize: 10 }}
+                    style={{ backgroundColor: 'rgba(27,56,40,0.1)', color: '#1B3828', fontFamily: MONO, fontSize: 11, fontVariantNumeric: 'tabular-nums' }}
                   >
                     {filteredApps.length}
                   </span>
-                  <span style={{ fontSize: 9, color: '#9A8A78', fontFamily: MONO, marginLeft: 'auto', letterSpacing: '0.06em' }}>
+                  <span style={{ fontSize: 10, color: '#9A8A78', fontFamily: MONO, marginLeft: 'auto', letterSpacing: '0.06em' }}>
                     DRAG ONTO A COMMITTEE
                   </span>
                 </div>
@@ -2046,13 +2046,14 @@ export default function AssignmentPage() {
                           onMouseLeave={e => { if (!selected && !expanded) (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
                         >
                           <div className="flex items-start gap-2">
-                            <GripVertical size={13} style={{ color: '#DDD4C0', flexShrink: 0, marginTop: 3 }} />
+                            <GripVertical size={13} style={{ color: '#DDD4C0', flexShrink: 0, marginTop: 6 }} />
+                            <MemberAvatar name={app.profiles?.display_name ?? app.invited_name ?? 'Unknown'} url={app.profiles?.avatar_url ?? null} size={34} />
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-1.5">
                                 {natCountry && (
                                   <img
                                     src={getFlagUrl(natCountry.code)}
-                                    style={{ width: 18, height: 12.5, borderRadius: 2, objectFit: 'cover', flexShrink: 0, boxShadow: '0 1px 2px rgba(27,56,40,0.2)' }}
+                                    style={{ width: 20, height: 14, borderRadius: 2, objectFit: 'cover', flexShrink: 0, boxShadow: '0 1px 2px rgba(27,56,40,0.2)' }}
                                     alt={nationality ?? ''}
                                     title={nationality ?? ''}
                                   />
@@ -2061,7 +2062,7 @@ export default function AssignmentPage() {
                                   {app.profiles?.display_name ?? app.invited_name ?? 'Unknown'}
                                 </p>
                                 {!app.profiles && <NotRegisteredChip />}
-                                {selected && <Check size={12} style={{ color: '#3D7A52', flexShrink: 0 }} />}
+                                {selected && <Check size={13} style={{ color: '#3D7A52', flexShrink: 0 }} />}
                               </div>
                               <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
                                 {app.role} · {app.experience_level ?? 'n/a'}
@@ -2083,9 +2084,9 @@ export default function AssignmentPage() {
 
                           {firstPref && (
                             <div className="flex items-center gap-1.5 mt-1.5">
-                              <span style={{ fontSize: 8.5, fontWeight: 700, color: '#B6871F', fontFamily: MONO, letterSpacing: '0.08em', flexShrink: 0 }}>1ST PREF</span>
-                              <img src={getFlagUrl(firstPref.country_code)} style={{ width: 14, height: 10, borderRadius: 2, objectFit: 'cover', flexShrink: 0 }} alt={firstPref.country_name} />
-                              <span className="truncate" style={{ fontSize: 10, color: '#9A8A78', fontFamily: OUTFIT }}>
+                              <span style={{ fontSize: 10, fontWeight: 700, color: '#B6871F', fontFamily: MONO, letterSpacing: '0.06em', flexShrink: 0 }}>1ST PREF</span>
+                              <img src={getFlagUrl(firstPref.country_code)} style={{ width: 17, height: 12, borderRadius: 2, objectFit: 'cover', flexShrink: 0 }} alt={firstPref.country_name} />
+                              <span className="truncate" style={{ fontSize: 11, color: '#9A8A78', fontFamily: OUTFIT }}>
                                 {firstPref.conference_committees?.name ?? 'Unknown'} · {firstPref.country_name}
                               </span>
                             </div>
@@ -2131,16 +2132,16 @@ export default function AssignmentPage() {
               {/* Left rail — unassigned chair applicants */}
               <div className="w-full xl:w-[320px] flex-shrink-0">
                 <div className="flex items-center gap-2 mb-3">
-                  <p style={{ fontSize: 10, color: '#B6871F', fontFamily: MONO, letterSpacing: '0.16em', fontWeight: 500 }}>
+                  <p style={{ fontSize: 11, color: '#B6871F', fontFamily: MONO, letterSpacing: '0.14em', fontWeight: 600 }}>
                     UNASSIGNED
                   </p>
                   <span
                     className="px-2 py-0.5 rounded-full text-xs font-bold"
-                    style={{ backgroundColor: 'rgba(27,56,40,0.1)', color: '#1B3828', fontFamily: MONO, fontSize: 10 }}
+                    style={{ backgroundColor: 'rgba(27,56,40,0.1)', color: '#1B3828', fontFamily: MONO, fontSize: 11, fontVariantNumeric: 'tabular-nums' }}
                   >
                     {unassignedChairs.length}
                   </span>
-                  <span style={{ fontSize: 9, color: '#9A8A78', fontFamily: MONO, marginLeft: 'auto', letterSpacing: '0.06em' }}>
+                  <span style={{ fontSize: 10, color: '#9A8A78', fontFamily: MONO, marginLeft: 'auto', letterSpacing: '0.06em' }}>
                     DRAG ONTO A COMMITTEE
                   </span>
                 </div>
@@ -2187,13 +2188,14 @@ export default function AssignmentPage() {
                           onMouseLeave={e => { if (!selected) (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
                         >
                           <div className="flex items-start gap-2">
-                            <GripVertical size={13} style={{ color: '#DDD4C0', flexShrink: 0, marginTop: 3 }} />
+                            <GripVertical size={13} style={{ color: '#DDD4C0', flexShrink: 0, marginTop: 6 }} />
+                            <MemberAvatar name={ca.profiles?.display_name ?? 'Unknown'} url={ca.profiles?.avatar_url ?? null} size={34} />
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-1.5">
                                 <p className="font-semibold text-sm truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
                                   {ca.profiles?.display_name ?? 'Unknown'}
                                 </p>
-                                {selected && <Check size={12} style={{ color: '#3D7A52', flexShrink: 0 }} />}
+                                {selected && <Check size={13} style={{ color: '#3D7A52', flexShrink: 0 }} />}
                               </div>
                               <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
                                 chair · {ca.experience_level ?? 'n/a'}

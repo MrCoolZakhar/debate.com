@@ -37,7 +37,6 @@ export interface LiveCommittee {
     phase: string;
     caucus: CaucusJson | null;
     chairNames: string[];
-    chairJoinSuffix: string | null;
     suspendedAt: string | null;
     endedAt: string | null;
   } | null;

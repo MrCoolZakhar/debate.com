@@ -63,9 +63,12 @@ function TransferSpotModal({
             <p className="text-xs py-2" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>No matches.</p>
           ) : results.map(a => (
             <div key={a.id} className="flex items-center justify-between gap-2 rounded-lg px-3 py-2" style={{ backgroundColor: '#FFFFFF', border: '1px solid #F0EDE6' }}>
-              <div className="min-w-0">
-                <p className="text-sm font-semibold truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{a.profiles?.display_name ?? a.invited_name ?? 'Unknown'}</p>
-                <p className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>{a.societies?.name ?? 'Independent'}</p>
+              <div className="flex items-center gap-2.5 min-w-0">
+                <MemberAvatar name={a.profiles?.display_name ?? a.invited_name ?? 'Unknown'} url={a.profiles?.avatar_url ?? null} size={30} />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{a.profiles?.display_name ?? a.invited_name ?? 'Unknown'}</p>
+                  <p className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>{a.societies?.name ?? 'Independent'}</p>
+                </div>
               </div>
               <button
                 onClick={() => onPick(a)}
@@ -104,7 +107,7 @@ function ActionButton({ label, onClick, danger }: { label: string; onClick: () =
     <button
       onClick={onClick}
       className="focus:outline-none"
-      style={{ fontSize: 9, fontWeight: 700, color: danger ? '#9A8A78' : '#1B3828', fontFamily: MONO, letterSpacing: '0.06em' }}
+      style={{ fontSize: 10, fontWeight: 700, color: danger ? '#9A8A78' : '#1B3828', fontFamily: MONO, letterSpacing: '0.06em' }}
       onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = danger ? '#8B2020' : '#2A5A3C'; }}
       onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = danger ? '#9A8A78' : '#1B3828'; }}
     >
@@ -139,17 +142,17 @@ function IndependentCard({
       }}
     >
       <div className="flex items-center gap-2.5">
-        <MemberAvatar name={name} url={app.profiles?.avatar_url ?? null} size={30} />
+        <MemberAvatar name={name} url={app.profiles?.avatar_url ?? null} size={38} />
         <div className="min-w-0 flex-1">
           <p className="font-black text-sm truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{name}</p>
           {notAttending && (
-            <span style={{ fontSize: 9, fontWeight: 700, color: '#9A8A78', fontFamily: MONO, letterSpacing: '0.06em' }}>NOT ATTENDING</span>
+            <span style={{ fontSize: 10, fontWeight: 700, color: '#9A8A78', fontFamily: MONO, letterSpacing: '0.06em' }}>NOT ATTENDING</span>
           )}
         </div>
-        {waived && <Lock size={13} style={{ color: '#9A6B2F', flexShrink: 0 }} />}
+        {waived && <Lock size={14} style={{ color: '#9A6B2F', flexShrink: 0 }} />}
         <span
           className="flex-shrink-0 px-2 py-0.5 rounded-full"
-          style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', fontFamily: OUTFIT, ...badgeStyle(waived ? 'waived' : paid ? 'paid' : 'unpaid') }}
+          style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', fontFamily: OUTFIT, ...badgeStyle(waived ? 'waived' : paid ? 'paid' : 'unpaid') }}
         >
           {waived ? 'WAIVED' : paid ? 'PAID' : 'UNPAID'}
         </span>
@@ -161,7 +164,7 @@ function IndependentCard({
 
       {openSpot && (
         <div className="mt-3 rounded-xl px-3 py-2" style={{ border: '1.5px dashed #DDD4C0' }}>
-          <p style={{ fontSize: 9, fontWeight: 700, color: '#9A8A78', fontFamily: MONO, letterSpacing: '0.06em' }}>
+          <p style={{ fontSize: 10, fontWeight: 700, color: '#9A8A78', fontFamily: MONO, letterSpacing: '0.06em' }}>
             OPEN SPOT — held by {name}
           </p>
         </div>

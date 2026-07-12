@@ -3,15 +3,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import {
-  RefreshCw, Copy, Check, Mail, Send, Gavel, Users, Mic, MicOff,
+  RefreshCw, Copy, Check, Gavel, Users, Mic, MicOff,
   FileText, ScrollText, FileCheck, Trophy, Radio, PauseCircle, Flag,
 } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { supabase as anonSupabase } from '@/lib/supabase';
-import { queueEventEmail } from '@/lib/emailEvents';
-import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
 import { FlagImg } from '@/components/FlagImg';
 import {
   type LiveCommittee, type CaucusJson, cardStatus, PHASE_LABELS, fmtClock, flagCodeFor,
@@ -24,19 +22,6 @@ const OUTFIT = "'Outfit', sans-serif";
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
 
 const EASE = 'cubic-bezier(0.22,1,0.36,1)';
-
-// Outcome of queueing a session invite via the event-email system.
-type InviteResult =
-  | { kind: 'queued'; count: number }
-  | { kind: 'empty'; message: string }
-  | { kind: 'not-drafted' } // DraftNoticeList at the top of the page surfaces the nudge
-  | { kind: 'error' };
-
-const INVITE_MSG_COLORS: Record<string, string> = {
-  queued: '#2A5A3C',
-  empty: '#9A8A78',
-  error: '#B8844A',
-};
 
 // ── Small shared bits ───────────────────────────────────────────────────────
 
@@ -89,31 +74,11 @@ function FlagDot({ country }: { country: string }) {
 function NotStartedCard({
   data,
   committeesHref,
-  onQueueEmail,
 }: {
   data: LiveCommittee;
   committeesHref: string;
-  onQueueEmail: (data: LiveCommittee, audience: 'chairs' | 'participants') => Promise<InviteResult>;
 }) {
-  const [queuedMsg, setQueuedMsg] = useState<{ text: string; color: string } | null>(null);
-  const [queueing, setQueueing] = useState(false);
   const session = data.session;
-  const chairCode = session?.chairJoinSuffix ? `${session.code}-${session.chairJoinSuffix}` : null;
-
-  async function handleQueue(audience: 'chairs' | 'participants') {
-    if (queueing) return;
-    setQueueing(true);
-    const result = await onQueueEmail(data, audience);
-    setQueueing(false);
-    if (result.kind === 'not-drafted') return; // nudge shown at the top of the page
-    const text = result.kind === 'queued'
-      ? `Queued ${result.count} email${result.count === 1 ? '' : 's'} to outbox`
-      : result.kind === 'empty'
-      ? result.message
-      : 'Could not queue — try again';
-    setQueuedMsg({ text, color: INVITE_MSG_COLORS[result.kind] });
-    setTimeout(() => setQueuedMsg(null), 4000);
-  }
 
   return (
     <div
@@ -137,68 +102,31 @@ function NotStartedCard({
             Not started
           </span>
         </div>
-        <p className="text-sm truncate mb-4" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>{data.conf.name}</p>
+        <p className="text-sm truncate" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>{data.conf.name}</p>
       </div>
 
-      {/* Crisp overlay block — codes + invite actions */}
+      {/* Centered overlay — session code, ready to share */}
       <div
-        className="rounded-2xl p-4 mb-4"
+        className="rounded-2xl px-5 py-7 my-4 flex flex-col items-center text-center"
         style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', boxShadow: '0 8px 24px rgba(27,56,40,0.1)' }}
       >
         {session ? (
           <>
-            <div className="mb-3">
-              <Eyebrow>Session code</Eyebrow>
-              <div className="flex items-center gap-2 mt-1">
-                <span style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 24, color: '#1C1410', letterSpacing: '0.14em', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
-                  {session.code}
-                </span>
-                <CopyButton value={session.code} />
-              </div>
+            <Eyebrow style={{ letterSpacing: '0.12em' }}>Session not in progress yet</Eyebrow>
+            <div className="flex items-center gap-2.5 mt-3">
+              <span style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 30, color: '#1C1410', letterSpacing: '0.14em', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+                {session.code}
+              </span>
+              <CopyButton value={session.code} />
             </div>
-            {chairCode && (
-              <div className="mb-4">
-                <Eyebrow>Chair password</Eyebrow>
-                <div className="flex items-center gap-2 mt-1">
-                  <span style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 16, color: '#1B3828', letterSpacing: '0.1em', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
-                    {chairCode}
-                  </span>
-                  <CopyButton value={chairCode} />
-                </div>
-              </div>
-            )}
-            <div className="flex gap-2">
-              <button
-                onClick={() => handleQueue('chairs')}
-                disabled={queueing}
-                className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl py-2 text-[11px] font-bold uppercase transition-colors focus:outline-none"
-                style={{ border: '1.5px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: OUTFIT, letterSpacing: '0.06em', opacity: queueing ? 0.6 : 1 }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
-              >
-                <Mail size={13} />
-                Email chairs
-              </button>
-              <button
-                onClick={() => handleQueue('participants')}
-                disabled={queueing}
-                className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl py-2 text-[11px] font-bold uppercase transition-colors focus:outline-none"
-                style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, letterSpacing: '0.06em', opacity: queueing ? 0.7 : 1 }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-              >
-                <Send size={13} />
-                Invite all to join
-              </button>
-            </div>
-            {queuedMsg && (
-              <p className="text-[11px] mt-2 text-center" style={{ color: queuedMsg.color, fontFamily: OUTFIT }}>{queuedMsg.text}</p>
-            )}
+            <p className="text-[11px] mt-3" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+              Session code — share with your chairs
+            </p>
           </>
         ) : (
           <>
-            <Eyebrow>Session code</Eyebrow>
-            <p className="text-sm font-bold mt-1" style={{ color: '#1C1410', fontFamily: OUTFIT }}>No session code yet</p>
+            <Eyebrow style={{ letterSpacing: '0.12em' }}>Session not in progress yet</Eyebrow>
+            <p className="text-sm font-bold mt-3" style={{ color: '#1C1410', fontFamily: OUTFIT }}>No session code yet</p>
             <Link
               href={committeesHref}
               className="text-sm font-bold inline-block mt-1 transition-colors"
@@ -466,7 +394,6 @@ function LiveCard({
 export default function LiveStatusPage() {
   const { conference } = useManage();
   const { session: authSession } = useAuth();
-  const { draftNotices, pushDraftNotice, dismissDraftNotice } = useDraftNotices();
 
   const [rows, setRows] = useState<LiveCommittee[] | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -505,7 +432,7 @@ export default function LiveStatusPage() {
       if (sessionIds.length > 0) {
         const [sRes, csRes, dRes, qRes, mRes, docRes, msgRes, fbRes] = await Promise.all([
           anonSupabase.from('committees')
-            .select('id, code, name, phase, caucus, chair_names, settings, suspended_at, ended_at')
+            .select('id, code, name, phase, caucus, chair_names, suspended_at, ended_at')
             .in('id', sessionIds),
           anonSupabase.from('current_speaker')
             .select('committee_id, country, time_remaining, started_at')
@@ -578,7 +505,6 @@ export default function LiveStatusPage() {
                 phase: sRow.phase as string,
                 caucus: (sRow.caucus as CaucusJson | null) ?? null,
                 chairNames: (sRow.chair_names as string[] | null) ?? [],
-                chairJoinSuffix: ((sRow.settings as { chairJoinSuffix?: string } | null)?.chairJoinSuffix) ?? null,
                 suspendedAt: (sRow.suspended_at as string | null) ?? null,
                 endedAt: (sRow.ended_at as string | null) ?? null,
               }
@@ -639,54 +565,6 @@ export default function LiveStatusPage() {
     return () => clearInterval(t);
   }, []);
 
-  // Queue session invites through the event-email system: resolve the
-  // committee's recipient application ids, then let queueEventEmail insert
-  // email_outbox rows (status 'pending') from the conference's template.
-  // No enabled template → { drafted: false } → DRAFT IT nudge at the top.
-  const queueEmail = useCallback(async (data: LiveCommittee, audience: 'chairs' | 'participants'): Promise<InviteResult> => {
-    if (!conference || !authSession || !data.session) return { kind: 'error' };
-    const authed = getAuthedClient(authSession.access_token);
-
-    // Chair application ids: role='chair' apps whose user is in the committee's
-    // chair_user_ids, or assigned to the committee (assignment sets both).
-    const { data: chairApps, error: chairErr } = await authed
-      .from('applications')
-      .select('id, user_id, assigned_committee_id')
-      .eq('conference_id', conference.id)
-      .eq('role', 'chair')
-      .in('status', ['accepted', 'assigned']);
-    if (chairErr) return { kind: 'error' };
-    const chairIds = (chairApps ?? [])
-      .filter((a) => data.conf.chairUserIds.includes(a.user_id as string) || a.assigned_committee_id === data.conf.id)
-      .map((a) => a.id as string);
-
-    let applicationIds: string[];
-    let eventKey: string;
-    if (audience === 'chairs') {
-      if (chairIds.length === 0) return { kind: 'empty', message: 'No chairs assigned yet' };
-      applicationIds = chairIds;
-      eventKey = 'session_chair_invite';
-    } else {
-      const { data: allocs, error: allocErr } = await authed
-        .from('conference_allocations')
-        .select('application_id')
-        .eq('conference_committee_id', data.conf.id);
-      if (allocErr) return { kind: 'error' };
-      const delegateIds = (allocs ?? []).map((a) => a.application_id as string).filter(Boolean);
-      applicationIds = Array.from(new Set([...delegateIds, ...chairIds]));
-      if (applicationIds.length === 0) return { kind: 'empty', message: 'No participants allocated yet' };
-      eventKey = 'session_join_invite';
-    }
-
-    const result = await queueEventEmail(authed, conference.id, eventKey, applicationIds);
-    if (!result.drafted) {
-      pushDraftNotice(eventKey);
-      return { kind: 'not-drafted' };
-    }
-    if ((result.queued ?? 0) === 0) return { kind: 'error' };
-    return { kind: 'queued', count: result.queued! };
-  }, [conference?.id, authSession?.access_token]); // eslint-disable-line react-hooks/exhaustive-deps
-
   // ── Derived ──
   const recapData = recapFor ? rows?.find((r) => r.conf.id === recapFor) ?? null : null;
   const awardsData = awardsFor ? rows?.find((r) => r.conf.id === awardsFor) ?? null : null;
@@ -725,10 +603,6 @@ export default function LiveStatusPage() {
           </button>
         </div>
       </div>
-
-      {conference && (
-        <DraftNoticeList notices={draftNotices} conferenceSlug={conference.slug} onDismiss={dismissDraftNotice} />
-      )}
 
       {/* Summary hero strip */}
       <div
@@ -800,7 +674,6 @@ export default function LiveStatusPage() {
                 key={r.conf.id}
                 data={r}
                 committeesHref={conference ? `/manage/${conference.slug}/committees` : '#'}
-                onQueueEmail={queueEmail}
               />
             ) : (
               <LiveCard

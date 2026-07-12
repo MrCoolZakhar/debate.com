@@ -6,7 +6,7 @@
 // render identical swap/not-attending/waived affordances.
 
 import { useState } from 'react';
-import { GripVertical, Lock, User, Check } from 'lucide-react';
+import { GripVertical, Lock, Check } from 'lucide-react';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { queueEventEmail } from '@/lib/emailEvents';
 import { ConfirmModal } from '@/components/ConfirmModal';
@@ -128,7 +128,7 @@ export interface SearchApp {
   society_id: string | null;
   assigned_committee_id: string | null;
   societies: { name: string } | null;
-  profiles: { display_name: string } | null;
+  profiles: { display_name: string; avatar_url: string | null } | null;
   invited_email: string | null;
   invited_name: string | null;
 }
@@ -153,7 +153,7 @@ export async function fetchSearchPool(
     .select(`
       id, user_id, role, society_id, status, assigned_committee_id,
       societies (name),
-      profiles (display_name),
+      profiles (display_name, avatar_url),
       invited_email, invited_name
     `)
     .eq('conference_id', conferenceId)
@@ -172,7 +172,7 @@ export async function fetchAdvisorPool(
     .select(`
       id, user_id, role, society_id, status, assigned_committee_id,
       societies (name),
-      profiles (display_name),
+      profiles (display_name, avatar_url),
       invited_email, invited_name
     `)
     .eq('conference_id', conferenceId)
@@ -382,7 +382,7 @@ export function NotRegisteredChip() {
   return (
     <span
       className="inline-flex items-center px-2 py-0.5 rounded-full font-bold flex-shrink-0"
-      style={{ fontSize: 9, fontFamily: OUTFIT, letterSpacing: '0.08em', backgroundColor: 'rgba(154,138,120,0.12)', color: '#9A8A78', border: '1px solid rgba(154,138,120,0.3)' }}
+      style={{ fontSize: 10, fontFamily: OUTFIT, letterSpacing: '0.06em', backgroundColor: 'rgba(154,138,120,0.12)', color: '#9A8A78', border: '1px solid rgba(154,138,120,0.3)' }}
     >
       NOT REGISTERED
     </span>
@@ -391,22 +391,37 @@ export function NotRegisteredChip() {
 
 export function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p style={{ fontSize: 10, color: '#B6871F', fontFamily: MONO, letterSpacing: '0.16em', fontWeight: 500 }}>
+    <p style={{ fontSize: 11, color: '#B6871F', fontFamily: MONO, letterSpacing: '0.14em', fontWeight: 600 }}>
       {children}
     </p>
   );
 }
 
-export function MemberAvatar({ name, url, size = 22 }: { name: string; url: string | null; size?: number }) {
+// Single avatar primitive for every person listed across the assignment page.
+// Renders profiles.avatar_url when present; otherwise an initial-disc built
+// from the (display or invited) name — forest disc, ivory letter — so imported,
+// account-less applicants still get a recognisable, legible avatar.
+export function MemberAvatar({ name, url, size = 28 }: { name: string; url: string | null; size?: number }) {
+  const initial = (name?.trim()?.charAt(0) ?? '?').toUpperCase();
   return url ? (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={url} alt={name} className="rounded-full object-cover flex-shrink-0" style={{ width: size, height: size }} />
+    <img
+      src={url}
+      alt={name}
+      className="rounded-full object-cover flex-shrink-0"
+      style={{ width: size, height: size, border: '1px solid rgba(221,212,192,0.9)' }}
+    />
   ) : (
     <div
       className="flex items-center justify-center rounded-full flex-shrink-0"
-      style={{ width: size, height: size, backgroundColor: 'rgba(154,138,120,0.16)', border: '1px solid rgba(221,212,192,0.9)' }}
+      style={{
+        width: size, height: size,
+        backgroundColor: '#1B3828', color: '#EED98A',
+        border: '1px solid rgba(221,212,192,0.9)',
+        fontFamily: OUTFIT, fontWeight: 700, fontSize: Math.round(size * 0.42), lineHeight: 1,
+      }}
     >
-      <User size={Math.round(size * 0.55)} strokeWidth={2} style={{ color: '#9A8A78' }} />
+      {initial}
     </div>
   );
 }
@@ -439,7 +454,7 @@ function RemoveButton({ onRemove }: { onRemove: () => void }) {
     <button
       onClick={e => { e.stopPropagation(); onRemove(); }}
       className="flex-shrink-0 focus:outline-none"
-      style={{ fontSize: 9, fontWeight: 700, color: '#9A8A78', fontFamily: MONO, letterSpacing: '0.04em' }}
+      style={{ fontSize: 10, fontWeight: 700, color: '#9A8A78', fontFamily: MONO, letterSpacing: '0.04em' }}
       onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#8B2020'; }}
       onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
     >
@@ -486,7 +501,7 @@ export function DraggableChip({
           <button
             onClick={e => { e.stopPropagation(); onNotAttending(); }}
             className="focus:outline-none"
-            style={{ fontSize: 9, fontWeight: 700, color: '#9A8A78', fontFamily: MONO, letterSpacing: '0.04em' }}
+            style={{ fontSize: 10, fontWeight: 700, color: '#9A8A78', fontFamily: MONO, letterSpacing: '0.04em' }}
             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#8B2020'; }}
             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
           >
@@ -506,11 +521,11 @@ export function WaivedChip({ member, onRemove }: { member: PoolMember; onRemove?
       className="flex items-center gap-2 rounded-xl px-3 py-2 mb-1.5"
       style={{ backgroundColor: 'rgba(184,132,74,0.06)', border: '1px solid rgba(184,132,74,0.3)' }}
     >
-      <Lock size={12} style={{ color: '#9A6B2F', flexShrink: 0 }} />
+      <Lock size={13} style={{ color: '#9A6B2F', flexShrink: 0 }} />
       <MemberAvatar name={name} url={member.profiles?.avatar_url ?? null} />
       <span className="flex-1 min-w-0 text-sm font-semibold truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{name}</span>
       {!member.user_id && <NotRegisteredChip />}
-      <span style={{ fontSize: 9, fontWeight: 700, color: '#9A6B2F', fontFamily: MONO, letterSpacing: '0.06em', flexShrink: 0 }}>WAIVED</span>
+      <span style={{ fontSize: 10, fontWeight: 700, color: '#9A6B2F', fontFamily: MONO, letterSpacing: '0.06em', flexShrink: 0 }}>WAIVED</span>
       {onRemove && <RemoveButton onRemove={onRemove} />}
     </div>
   );
@@ -530,7 +545,7 @@ export function NotAttendingChip({ member, onUndo, onRemove }: { member: PoolMem
         <button
           onClick={onUndo}
           className="focus:outline-none"
-          style={{ fontSize: 9, fontWeight: 700, color: '#1B3828', fontFamily: MONO, letterSpacing: '0.04em' }}
+          style={{ fontSize: 10, fontWeight: 700, color: '#1B3828', fontFamily: MONO, letterSpacing: '0.04em' }}
         >
           UNDO
         </button>
@@ -570,7 +585,7 @@ export function PaidSlotChip({
           {hdTag && (
             <span
               className="flex-shrink-0 px-1.5 py-0.5 rounded-full"
-              style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.06em', backgroundColor: 'rgba(27,56,40,0.1)', color: '#1B3828', fontFamily: MONO }}
+              style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', backgroundColor: 'rgba(27,56,40,0.1)', color: '#1B3828', fontFamily: MONO }}
             >
               HD
             </span>
@@ -586,7 +601,7 @@ export function PaidSlotChip({
         <button
           onClick={e => { e.stopPropagation(); onNotAttending(); }}
           className="focus:outline-none"
-          style={{ fontSize: 9, fontWeight: 700, color: '#9A8A78', fontFamily: MONO, letterSpacing: '0.04em' }}
+          style={{ fontSize: 10, fontWeight: 700, color: '#9A8A78', fontFamily: MONO, letterSpacing: '0.04em' }}
           onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#8B2020'; }}
           onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
         >
@@ -617,7 +632,7 @@ export function OpenSlot({
         cursor: clickable ? 'pointer' : 'default',
       }}
     >
-      <span style={{ fontSize: 10, fontWeight: 700, color: '#9A8A78', fontFamily: MONO, letterSpacing: '0.08em' }}>OPEN SPOT</span>
+      <span style={{ fontSize: 11, fontWeight: 700, color: '#9A8A78', fontFamily: MONO, letterSpacing: '0.08em' }}>OPEN SPOT</span>
     </div>
   );
 }

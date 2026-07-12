@@ -59,7 +59,7 @@ function DelegationCard({ society, members, hasUnseenSwap, onClick }: { society:
         {pledgePending && (
           <span
             className="flex-shrink-0 px-2 py-0.5 rounded-full"
-            style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: '0.06em', backgroundColor: 'rgba(184,132,74,0.16)', color: '#9A6B2F', border: '1px solid rgba(184,132,74,0.4)', fontFamily: OUTFIT }}
+            style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', backgroundColor: 'rgba(184,132,74,0.16)', color: '#9A6B2F', border: '1px solid rgba(184,132,74,0.4)', fontFamily: OUTFIT }}
           >
             PLEDGE PENDING
           </span>
@@ -119,9 +119,12 @@ function AdvisorTransferModal({
             <p className="text-xs py-2" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>No matches.</p>
           ) : results.map(a => (
             <div key={a.id} className="flex items-center justify-between gap-2 rounded-lg px-3 py-2" style={{ backgroundColor: '#FFFFFF', border: '1px solid #F0EDE6' }}>
-              <div className="min-w-0">
-                <p className="text-sm font-semibold truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{a.profiles?.display_name ?? a.invited_name ?? 'Unknown'}</p>
-                <p className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>{a.societies?.name ?? 'Independent'}</p>
+              <div className="flex items-center gap-2.5 min-w-0">
+                <MemberAvatar name={a.profiles?.display_name ?? a.invited_name ?? 'Unknown'} url={a.profiles?.avatar_url ?? null} size={30} />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{a.profiles?.display_name ?? a.invited_name ?? 'Unknown'}</p>
+                  <p className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>{a.societies?.name ?? 'Independent'}</p>
+                </div>
               </div>
               <button
                 onClick={() => onPick(a)}
@@ -789,7 +792,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
         <div className="mb-6">
           <div className="flex items-center gap-2">
             <SectionLabel>ADVISORS</SectionLabel>
-            <span style={{ fontSize: 9, color: '#9A8A78', fontFamily: MONO, letterSpacing: '0.04em' }}>
+            <span style={{ fontSize: 11, color: '#9A8A78', fontFamily: MONO, letterSpacing: '0.04em', fontVariantNumeric: 'tabular-nums' }}>
               {advisorPaidCount}/{society.advisor_spots_purchased} SPOTS
             </span>
           </div>
@@ -820,7 +823,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
                   <span className="flex-1 min-w-0 text-sm font-semibold truncate" style={{ fontFamily: OUTFIT, color: paid ? '#EED98A' : '#1C1410' }}>
                     {name}
                   </span>
-                  <span style={{ fontSize: 9, fontWeight: 700, color: paid ? '#EED98A' : '#9A6B2F', fontFamily: MONO, letterSpacing: '0.06em', flexShrink: 0, opacity: paid ? 0.9 : 1 }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: paid ? '#EED98A' : '#9A6B2F', fontFamily: MONO, letterSpacing: '0.06em', flexShrink: 0, opacity: paid ? 0.9 : 1 }}>
                     {paid ? 'PAID' : 'UNPAID'}
                   </span>
                   <div className="flex items-center gap-2.5 flex-shrink-0">
@@ -828,7 +831,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
                       <button
                         onClick={() => setAdvisorTransferPicker(a)}
                         className="focus:outline-none"
-                        style={{ fontSize: 9, fontWeight: 700, color: '#EED98A', fontFamily: MONO, letterSpacing: '0.04em', opacity: 0.85 }}
+                        style={{ fontSize: 10, fontWeight: 700, color: '#EED98A', fontFamily: MONO, letterSpacing: '0.04em', opacity: 0.85 }}
                       >
                         TRANSFER SPOT
                       </button>
@@ -836,14 +839,14 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
                     <button
                       onClick={() => handleNotAttending(a)}
                       className="focus:outline-none"
-                      style={{ fontSize: 9, fontWeight: 700, color: paid ? '#EED98A' : '#9A8A78', fontFamily: MONO, letterSpacing: '0.04em', opacity: paid ? 0.85 : 1 }}
+                      style={{ fontSize: 10, fontWeight: 700, color: paid ? '#EED98A' : '#9A8A78', fontFamily: MONO, letterSpacing: '0.04em', opacity: paid ? 0.85 : 1 }}
                     >
                       NOT ATTENDING
                     </button>
                     <button
                       onClick={() => handleRemove(a, society.name)}
                       className="focus:outline-none"
-                      style={{ fontSize: 9, fontWeight: 700, color: paid ? '#EED98A' : '#9A8A78', fontFamily: MONO, letterSpacing: '0.04em', opacity: paid ? 0.85 : 1 }}
+                      style={{ fontSize: 10, fontWeight: 700, color: paid ? '#EED98A' : '#9A8A78', fontFamily: MONO, letterSpacing: '0.04em', opacity: paid ? 0.85 : 1 }}
                     >
                       REMOVE
                     </button>
@@ -909,19 +912,19 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
                       </p>
                     )}
                   </div>
-                  <span style={{ fontSize: 9, fontWeight: 700, color: '#EED98A', fontFamily: MONO, letterSpacing: '0.06em', flexShrink: 0, opacity: 0.9 }}>PAID</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: '#EED98A', fontFamily: MONO, letterSpacing: '0.06em', flexShrink: 0, opacity: 0.9 }}>PAID</span>
                   <div className="flex items-center gap-2.5 flex-shrink-0">
                     <button
                       onClick={() => handleNotAttending(m)}
                       className="focus:outline-none"
-                      style={{ fontSize: 9, fontWeight: 700, color: '#EED98A', fontFamily: MONO, letterSpacing: '0.04em', opacity: 0.85 }}
+                      style={{ fontSize: 10, fontWeight: 700, color: '#EED98A', fontFamily: MONO, letterSpacing: '0.04em', opacity: 0.85 }}
                     >
                       NOT ATTENDING
                     </button>
                     <button
                       onClick={() => handleRemove(m, society.name)}
                       className="focus:outline-none"
-                      style={{ fontSize: 9, fontWeight: 700, color: '#EED98A', fontFamily: MONO, letterSpacing: '0.04em', opacity: 0.85 }}
+                      style={{ fontSize: 10, fontWeight: 700, color: '#EED98A', fontFamily: MONO, letterSpacing: '0.04em', opacity: 0.85 }}
                     >
                       REMOVE
                     </button>
@@ -940,12 +943,15 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
           <div className="flex flex-col gap-2 mt-2">
             {pledgingMembers.map(m => (
               <div key={m.id} className="flex items-center justify-between gap-3">
-                <p className="text-sm min-w-0 truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                  <span style={{ fontWeight: 700 }}>{m.profiles?.display_name ?? m.invited_name ?? 'Unknown'}</span> pledged: {pledgeText(m)}
-                </p>
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <MemberAvatar name={m.profiles?.display_name ?? m.invited_name ?? 'Unknown'} url={m.profiles?.avatar_url ?? null} size={26} />
+                  <p className="text-sm min-w-0 truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                    <span style={{ fontWeight: 700 }}>{m.profiles?.display_name ?? m.invited_name ?? 'Unknown'}</span> pledged: {pledgeText(m)}
+                  </p>
+                </div>
                 {pledgeSatisfied(m) ? (
                   <span className="flex items-center gap-1 flex-shrink-0" style={{ fontSize: 11, fontWeight: 700, color: '#3D7A52', fontFamily: MONO }}>
-                    <Check size={12} /> COVERED
+                    <Check size={13} /> COVERED
                   </span>
                 ) : (
                   <button
@@ -980,9 +986,12 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
             <div className="flex flex-col gap-1.5 mb-4">
               {searchResults.map(a => (
                 <div key={a.id} className="flex items-center justify-between gap-2 rounded-lg px-3 py-2" style={{ backgroundColor: '#FAF8F3', border: '1px solid #F0EDE6' }}>
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{a.profiles?.display_name ?? a.invited_name ?? 'Unknown'}</p>
-                    <p className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>{a.societies?.name ?? 'Independent'}</p>
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <MemberAvatar name={a.profiles?.display_name ?? a.invited_name ?? 'Unknown'} url={a.profiles?.avatar_url ?? null} size={30} />
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{a.profiles?.display_name ?? a.invited_name ?? 'Unknown'}</p>
+                      <p className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>{a.societies?.name ?? 'Independent'}</p>
+                    </div>
                   </div>
                   <button
                     onClick={() => handleAddToDelegation(a, society)}
@@ -1000,7 +1009,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
 
           <div className="flex items-center gap-2 mt-5">
             <SectionLabel>UNPAID ({unpaidAttending.length})</SectionLabel>
-            <span style={{ fontSize: 9, color: '#9A8A78', fontFamily: MONO, letterSpacing: '0.04em', marginLeft: 'auto' }}>
+            <span style={{ fontSize: 10, color: '#9A8A78', fontFamily: MONO, letterSpacing: '0.04em', marginLeft: 'auto' }}>
               DRAG OR CLICK, THEN CLICK A SPOT
             </span>
           </div>

@@ -113,7 +113,9 @@ export function Emoji3D({
         width: size,
         height: size,
         objectFit: 'contain',
-        filter: 'drop-shadow(0 2px 3px rgba(27,56,40,0.25))',
+        // Crisper seat shadow — lifts the glyph off its tinted disc so it
+        // reads at a glance rather than melting into the surface.
+        filter: 'drop-shadow(0 2px 4px rgba(27,56,40,0.30))',
         ...style,
       }}
     />
@@ -245,7 +247,7 @@ export function NeuIconDisc({
       }}
     >
       {emoji ? (
-        <Emoji3D name={emoji} size={Math.round(size * 0.74)} fallback={Icon} fallbackColor={darkStop(gradient)} />
+        <Emoji3D name={emoji} size={Math.round(size * 0.8)} fallback={Icon} fallbackColor={darkStop(gradient)} />
       ) : Icon ? (
         <Icon size={Math.round(size * 0.48)} strokeWidth={2.2} style={{ color: iconColor }} />
       ) : null}
@@ -320,27 +322,39 @@ export function NeuStatTile({
   style?: React.CSSProperties;
 }) {
   return (
-    <NeuCard href={href} style={{ padding: compact ? '12px 14px' : '16px 18px', minWidth: 0, ...style }}>
+    <NeuCard
+      href={href}
+      style={{
+        padding: compact ? '12px 14px' : '15px 17px',
+        minWidth: 0,
+        // Fill the tile-row height cleanly: disc anchored top, value+label
+        // sink to the bottom — no floating void when the row is tall.
+        display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+        ...style,
+      }}
+    >
       <div className="flex items-start justify-between gap-2">
-        <NeuIconDisc gradient={gradient} icon={icon} emoji={emoji} size={compact ? 34 : 40} />
+        <NeuIconDisc gradient={gradient} icon={icon} emoji={emoji} size={compact ? 34 : 42} />
         {spark && spark.length > 1 && <Sparkline data={spark} color={gradient[1]} />}
       </div>
-      <p
-        style={{
-          fontFamily: OUTFIT, fontWeight: 900, fontSize: compact ? 22 : 28, lineHeight: 1,
-          color: NEU.ink, fontVariantNumeric: 'tabular-nums', marginTop: compact ? 9 : 14,
-        }}
-      >
-        {value}
-      </p>
-      <p className="flex items-baseline gap-1.5" style={{ marginTop: compact ? 3 : 5 }}>
-        <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: compact ? 10.5 : 11, fontWeight: 600, color: NEU.muted }}>{label}</span>
-        {delta && (
-          <span style={{ fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, color: NEU.green, fontVariantNumeric: 'tabular-nums' }}>
-            {delta}
-          </span>
-        )}
-      </p>
+      <div style={{ marginTop: compact ? 8 : 12 }}>
+        <p
+          style={{
+            fontFamily: OUTFIT, fontWeight: 900, fontSize: compact ? 22 : 29, lineHeight: 1,
+            color: NEU.ink, fontVariantNumeric: 'tabular-nums',
+          }}
+        >
+          {value}
+        </p>
+        <p className="flex items-baseline gap-1.5" style={{ marginTop: compact ? 3 : 5 }}>
+          <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: compact ? 10.5 : 11, fontWeight: 600, color: NEU.muted }}>{label}</span>
+          {delta && (
+            <span style={{ fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, color: NEU.green, fontVariantNumeric: 'tabular-nums' }}>
+              {delta}
+            </span>
+          )}
+        </p>
+      </div>
     </NeuCard>
   );
 }
@@ -590,7 +604,7 @@ export function NeuChecklistRow({
 }) {
   const [hovered, setHovered] = useState(false);
   const clickable = !done && !!onClick;
-  const disc = dense ? 34 : 36;
+  const disc = dense ? 31 : 36;
   return (
     <div
       role={clickable ? 'button' : undefined}
@@ -601,8 +615,8 @@ export function NeuChecklistRow({
       onMouseLeave={() => setHovered(false)}
       className={`flex items-center focus:outline-none ${dense ? 'gap-2.5' : 'gap-3.5'}`}
       style={{
-        padding: dense ? '5px 10px' : '11px 14px',
-        borderRadius: dense ? 13 : 16,
+        padding: dense ? '4px 10px' : '11px 14px',
+        borderRadius: dense ? 12 : 16,
         backgroundColor: done ? NEU.base : NEU.surface,
         boxShadow: done ? NEU.inSm : clickable && hovered ? NEU.outSmHover : NEU.outSm,
         transform: clickable && hovered ? 'translateY(-2px)' : 'translateY(0)',

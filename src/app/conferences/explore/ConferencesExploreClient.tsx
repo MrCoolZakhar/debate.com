@@ -5,9 +5,10 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   Search, SlidersHorizontal, ArrowLeft, LayoutGrid, Rows3, Users, ArrowRight, Check,
-  Calendar, Banknote, Globe, ChevronDown, CalendarArrowUp, CalendarArrowDown,
+  CalendarDays, Ticket, Globe, ChevronDown, CalendarArrowUp, CalendarArrowDown,
 } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
+import { Emoji3D } from '@/components/neu';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { supabase } from '@/lib/supabase';
@@ -91,13 +92,13 @@ function FilterPill({
   return (
     <button
       onClick={onClick}
-      className="px-3 py-1.5 rounded-full text-[10px] font-bold transition-all focus:outline-none"
+      className="px-3.5 py-2 rounded-full text-[11.5px] font-bold transition-all focus:outline-none"
       style={{
         backgroundColor: active ? '#1B3828' : '#FAF8F3',
         color: active ? '#EED98A' : '#1C1410',
         border: active ? '1px solid #1B3828' : '1.5px solid #D8CDB6',
         fontFamily: "'Outfit', sans-serif",
-        letterSpacing: '0.08em',
+        letterSpacing: '0.07em',
         whiteSpace: 'nowrap',
       }}
       onMouseEnter={(e) => {
@@ -137,8 +138,8 @@ function ViewToggle({ view, onChange }: { view: ExploreView; onChange: (v: Explo
         backgroundColor: 'rgba(237,231,216,0.5)',
         border: '1px solid rgba(221,212,192,0.9)',
         borderRadius: 9999,
-        padding: '3px',
-        gap: '2px',
+        padding: '4px',
+        gap: '3px',
       }}
     >
       {options.map(({ key, icon: Icon, label }) => {
@@ -153,7 +154,7 @@ function ViewToggle({ view, onChange }: { view: ExploreView; onChange: (v: Explo
             onClick={() => onChange(key)}
             className="flex items-center justify-center rounded-full transition-colors focus:outline-none"
             style={{
-              width: '30px', height: '26px',
+              width: '38px', height: '32px',
               backgroundColor: active ? '#1B3828' : 'transparent',
               color: active ? '#EED98A' : '#4A4238',
               boxShadow: active ? '0 2px 6px rgba(27,56,40,0.25)' : 'none',
@@ -169,7 +170,7 @@ function ViewToggle({ view, onChange }: { view: ExploreView; onChange: (v: Explo
               (e.currentTarget as HTMLElement).style.color = '#4A4238';
             }}
           >
-            <Icon size={14} strokeWidth={2.25} />
+            <Icon size={17} strokeWidth={2.25} />
           </button>
         );
       })}
@@ -190,13 +191,13 @@ function DateSortChip({ sort, onToggle }: { sort: DateSort; onToggle: () => void
       onClick={onToggle}
       aria-label={soonest ? 'Sorted by date, soonest first — click for latest first' : 'Sorted by date, latest first — click for soonest first'}
       title={soonest ? 'Date · soonest first' : 'Date · latest first'}
-      className="flex items-center gap-1.5 rounded-full py-2 px-3.5 font-bold text-[11px] transition-colors focus:outline-none flex-shrink-0"
+      className="flex items-center gap-1.5 rounded-full py-2.5 px-4 font-bold text-[12.5px] transition-colors focus:outline-none flex-shrink-0"
       style={{
         backgroundColor: 'rgba(237,231,216,0.5)',
         color: '#4A4238',
         border: '1px solid rgba(221,212,192,0.9)',
         fontFamily: "'Outfit', sans-serif",
-        letterSpacing: '0.08em',
+        letterSpacing: '0.07em',
         fontVariantNumeric: 'tabular-nums',
       }}
       onMouseEnter={(e) => {
@@ -208,9 +209,9 @@ function DateSortChip({ sort, onToggle }: { sort: DateSort; onToggle: () => void
         (e.currentTarget as HTMLElement).style.color = '#4A4238';
       }}
     >
-      <Icon size={13} strokeWidth={2.25} />
+      <Icon size={15} strokeWidth={2.25} />
       DATE
-      <span aria-hidden style={{ fontSize: '11px', lineHeight: 1 }}>{soonest ? '↑' : '↓'}</span>
+      <span aria-hidden style={{ fontSize: '12.5px', lineHeight: 1 }}>{soonest ? '↑' : '↓'}</span>
     </button>
   );
 }
@@ -241,14 +242,14 @@ function RegionControl({
   const currentLabel =
     region === 'country' && userCountry ? (
       <>
-        {userCode && <FlagImg code={userCode} size={14} />}
+        {userCode && <FlagImg code={userCode} size={17} />}
         <span className="truncate">{userCountry.toUpperCase()}</span>
       </>
     ) : region && CONTINENT_LABELS[region] ? (
       <span className="truncate">{CONTINENT_LABELS[region].toUpperCase()}</span>
     ) : (
       <>
-        <Globe size={13} strokeWidth={2.25} />
+        <Emoji3D name="Globe with meridians" size={18} fallback={Globe} fallbackColor="#4A4238" style={{ filter: 'none' }} />
         <span className="truncate">ALL REGIONS</span>
       </>
     );
@@ -256,17 +257,17 @@ function RegionControl({
   const optionStyle = (active: boolean): React.CSSProperties => ({
     fontFamily: "'Outfit', sans-serif",
     fontWeight: 700,
-    fontSize: '11px',
-    letterSpacing: '0.07em',
+    fontSize: '12.5px',
+    letterSpacing: '0.06em',
     color: active ? '#EED98A' : '#1C1410',
     backgroundColor: active ? '#1B3828' : 'transparent',
     width: '100%',
     textAlign: 'left' as const,
-    padding: '8px 12px',
-    borderRadius: '10px',
+    padding: '10px 13px',
+    borderRadius: '11px',
     display: 'flex',
     alignItems: 'center',
-    gap: '8px',
+    gap: '9px',
     whiteSpace: 'nowrap',
   });
 
@@ -283,14 +284,14 @@ function RegionControl({
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-label="Region"
-        className="flex items-center gap-1.5 rounded-full py-2 px-3.5 font-bold text-[11px] transition-colors focus:outline-none"
+        className="flex items-center gap-2 rounded-full py-2.5 px-4 font-bold text-[12.5px] transition-colors focus:outline-none"
         style={{
           backgroundColor: region ? '#1B3828' : 'rgba(237,231,216,0.5)',
           color: region ? '#EED98A' : '#4A4238',
           border: region ? '1px solid #1B3828' : '1px solid rgba(221,212,192,0.9)',
           fontFamily: "'Outfit', sans-serif",
-          letterSpacing: '0.08em',
-          maxWidth: '180px',
+          letterSpacing: '0.07em',
+          maxWidth: '210px',
         }}
         onMouseEnter={(e) => {
           if (region) return;
@@ -304,16 +305,16 @@ function RegionControl({
         }}
       >
         {currentLabel}
-        <ChevronDown size={12} strokeWidth={2.5} style={{ flexShrink: 0, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 180ms ease' }} />
+        <ChevronDown size={14} strokeWidth={2.5} style={{ flexShrink: 0, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 180ms ease' }} />
       </button>
 
       {open && (
         <div
           role="listbox"
           aria-label="Region"
-          className="absolute right-0 z-50 mt-2 p-1.5"
+          className="absolute right-0 z-50 mt-2 p-2"
           style={{
-            minWidth: '208px',
+            minWidth: '236px',
             backgroundColor: '#FAF8F3',
             border: '1px solid rgba(221,212,192,0.95)',
             borderRadius: '16px',
@@ -326,9 +327,9 @@ function RegionControl({
                 onMouseEnter={(e) => { if (region !== 'country') (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
                 onMouseLeave={(e) => { if (region !== 'country') (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
               >
-                {userCode && <FlagImg code={userCode} size={14} />}
+                {userCode && <FlagImg code={userCode} size={17} />}
                 {userCountry.toUpperCase()}
-                <span style={{ marginLeft: 'auto', fontSize: '8.5px', letterSpacing: '0.12em', color: region === 'country' ? 'rgba(238,217,138,0.75)' : '#B6871F' }}>NEAR YOU</span>
+                <span style={{ marginLeft: 'auto', fontSize: '9.5px', letterSpacing: '0.12em', color: region === 'country' ? 'rgba(238,217,138,0.75)' : '#B6871F' }}>NEAR YOU</span>
               </button>
               <div className="my-1 h-px" style={{ backgroundColor: 'rgba(221,212,192,0.7)' }} />
             </>
@@ -337,7 +338,7 @@ function RegionControl({
             onMouseEnter={(e) => { if (region !== '') (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
             onMouseLeave={(e) => { if (region !== '') (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
           >
-            <Globe size={13} strokeWidth={2.25} />
+            <Emoji3D name="Globe with meridians" size={17} fallback={Globe} fallbackColor={region === '' ? '#EED98A' : '#1C1410'} style={{ filter: 'none' }} />
             ALL REGIONS
           </button>
           {CONTINENT_KEYS.map(key => (
@@ -373,10 +374,10 @@ function RowChip({ label }: { label: string }) {
     <span
       className="inline-flex flex-shrink-0"
       style={{
-        fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.1em',
+        fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '10.5px', letterSpacing: '0.09em',
         color: '#6B5F52', backgroundColor: 'transparent',
         border: '1px solid rgba(154,138,120,0.45)',
-        padding: '2.5px 8px', borderRadius: 9999, whiteSpace: 'nowrap',
+        padding: '3.5px 10px', borderRadius: 9999, whiteSpace: 'nowrap',
         textTransform: 'uppercase',
       }}
     >
@@ -412,8 +413,8 @@ function ConferenceListRow({
   }
 
   const ctaBase: React.CSSProperties = {
-    fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '10px', letterSpacing: '0.08em',
-    padding: '7px 14px', borderRadius: 9999, border: 'none', cursor: 'pointer',
+    fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '12px', letterSpacing: '0.07em',
+    padding: '9px 18px', borderRadius: 9999, border: 'none', cursor: 'pointer',
   };
 
   return (
@@ -421,11 +422,11 @@ function ConferenceListRow({
       href={href}
       onMouseEnter={onHover}
       onMouseLeave={onLeave}
-      className="flex items-center gap-3.5 md:gap-5 px-2 md:px-4"
+      className="flex items-center gap-4 md:gap-6 px-2 md:px-4"
       style={{
-        paddingTop: '18px',
-        paddingBottom: '18px',
-        backgroundColor: hovered ? 'rgba(27,56,40,0.03)' : 'transparent',
+        paddingTop: '22px',
+        paddingBottom: '22px',
+        backgroundColor: hovered ? 'rgba(27,56,40,0.035)' : 'transparent',
         borderBottom: '1px solid rgba(221,212,192,0.6)',
         textDecoration: 'none',
         transition: 'background-color 160ms ease',
@@ -435,11 +436,12 @@ function ConferenceListRow({
       <div
         className="flex-shrink-0 flex items-center justify-center overflow-hidden"
         style={{
-          width: '56px', height: '56px', borderRadius: '9999px',
+          width: '64px', height: '64px', borderRadius: '9999px',
           backgroundColor: conf.logo_url ? '#FDFCF9' : '#1B3828',
           border: '1px solid rgba(221,212,192,0.8)',
-          boxShadow: '0 3px 8px rgba(27,56,40,0.10)',
-          padding: conf.logo_url ? '7px' : 0,
+          boxShadow: hovered ? '0 6px 16px rgba(27,56,40,0.16)' : '0 3px 8px rgba(27,56,40,0.10)',
+          padding: conf.logo_url ? '8px' : 0,
+          transition: 'box-shadow 160ms ease',
         }}
       >
         {conf.logo_url ? (
@@ -449,86 +451,100 @@ function ConferenceListRow({
             style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
           />
         ) : (
-          <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '13px', letterSpacing: '0.06em', color: '#EED98A', fontVariantNumeric: 'tabular-nums' }}>
+          <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '15px', letterSpacing: '0.06em', color: '#EED98A', fontVariantNumeric: 'tabular-nums' }}>
             {initials}
           </span>
         )}
       </div>
 
       {/* Name · city/country with flag · badge chips */}
-      <div className="flex-1 min-w-0">
+      <div className="min-w-0" style={{ flex: '0 1 auto', maxWidth: '460px' }}>
         <div
           className="truncate"
           style={{
-            fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '15.5px',
-            letterSpacing: '0.005em', color: hovered ? '#1B3828' : '#1C1410',
-            transition: 'color 160ms ease',
+            fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '18px',
+            letterSpacing: '0.003em', color: hovered ? '#1B3828' : '#1C1410',
+            transition: 'color 160ms ease', lineHeight: 1.2,
           }}
         >
           {conf.full_name}
         </div>
         <div
-          className="flex items-center gap-1.5 truncate"
-          style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 500, fontSize: '12.5px', color: '#6B5F52', marginTop: '3px' }}
+          className="flex items-center gap-2 truncate"
+          style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 500, fontSize: '14px', color: '#6B5F52', marginTop: '5px' }}
         >
-          {countryObj && <FlagImg code={countryObj.code} size={14} className="flex-shrink-0" />}
+          {countryObj && <FlagImg code={countryObj.code} size={18} className="flex-shrink-0" />}
           <span className="truncate">{conf.city}, {conf.country}</span>
         </div>
-        <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+        <div className="flex flex-wrap items-center gap-2 mt-2.5">
           {conf.format && <RowChip label={formatLabel} />}
           {levelLabel && <RowChip label={levelLabel} />}
           {/* Mobile-only inline date (right columns hidden below sm) */}
           <span
-            className="sm:hidden inline-flex items-center gap-1 flex-shrink-0"
-            style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '10.5px', color: '#8A7D6C', whiteSpace: 'nowrap' }}
+            className="sm:hidden inline-flex items-center gap-1.5 flex-shrink-0"
+            style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '12px', color: '#8A7D6C', whiteSpace: 'nowrap' }}
           >
-            <Calendar size={11} style={{ color: '#9A8A78' }} />
+            <CalendarDays size={13} style={{ color: '#9A8A78' }} />
             {range} {year}
           </span>
         </div>
       </div>
 
-      {/* Right cluster — aligned columns: date · delegates · fee · CTA */}
+      {/* Right rail — the three metadata columns spread evenly across the free
+          space so the row reads full instead of leaving a wide empty gutter. */}
+      <div
+        className="hidden sm:flex items-center flex-1 min-w-0"
+        style={{ justifyContent: 'space-around', gap: '20px' }}
+      >
       {/* Date (two-line) */}
-      <div className="hidden sm:flex items-start gap-1.5 flex-shrink-0" style={{ width: '128px' }}>
-        <Calendar size={14} strokeWidth={2} style={{ color: '#9A8A78', marginTop: '2px', flexShrink: 0 }} />
+      <div className="flex items-start gap-2 flex-shrink-0" style={{ width: '152px' }}>
+        <CalendarDays size={18} strokeWidth={2} style={{ color: '#2A5A3C', marginTop: '2px', flexShrink: 0 }} />
         <div style={{ fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}>
-          <div style={{ fontWeight: 700, fontSize: '12.5px', color: '#1C1410', whiteSpace: 'nowrap' }}>{range}</div>
-          <div style={{ fontWeight: 500, fontSize: '11.5px', color: '#9A8A78', marginTop: '1px' }}>{year}</div>
+          <div style={{ fontWeight: 700, fontSize: '14.5px', color: '#1C1410', whiteSpace: 'nowrap' }}>{range}</div>
+          <div style={{ fontWeight: 500, fontSize: '13px', color: '#9A8A78', marginTop: '2px' }}>{year}</div>
         </div>
       </div>
 
       {/* Delegates */}
-      <div className="hidden lg:flex items-center gap-1.5 flex-shrink-0" style={{ width: '76px' }}>
-        <Users size={14} strokeWidth={2} style={{ color: '#9A8A78', flexShrink: 0 }} />
-        <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontVariantNumeric: 'tabular-nums', fontSize: '12.5px', color: '#1C1410' }}>
+      <div className="hidden lg:flex items-center gap-2 flex-shrink-0" style={{ width: '96px' }}>
+        <Users size={18} strokeWidth={2} style={{ color: '#9A8A78', flexShrink: 0 }} />
+        <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontVariantNumeric: 'tabular-nums', fontSize: '15px', color: '#1C1410' }}>
           {conf.expected_delegates.toLocaleString()}
         </span>
       </div>
 
-      {/* Fee */}
-      <div className="hidden md:flex items-center gap-1.5 flex-shrink-0" style={{ width: '92px' }}>
-        <Banknote size={15} strokeWidth={2} style={{ color: '#9A8A78', flexShrink: 0 }} />
+      {/* Fee — a gold 3D ticket for paid conferences, forest FREE pill otherwise */}
+      <div className="hidden md:flex items-center gap-2 flex-shrink-0" style={{ width: '118px' }}>
         {conf.fee_amount === 0 ? (
-          <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '11px', letterSpacing: '0.08em', color: '#2A5A3C' }}>
+          <span
+            style={{
+              fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '12px', letterSpacing: '0.08em',
+              color: '#2A5A3C', backgroundColor: 'rgba(42,90,60,0.10)',
+              border: '1px solid rgba(42,90,60,0.28)', padding: '4px 12px', borderRadius: 9999,
+            }}
+          >
             FREE
           </span>
         ) : (
-          <span className="inline-flex items-baseline gap-0.5">
-            <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '11.5px', color: '#B6871F' }}>
-              {currencySymbol(conf.fee_currency)}
+          <>
+            <Emoji3D name="Ticket" size={20} fallback={Ticket} fallbackColor="#B6871F" />
+            <span className="inline-flex items-baseline gap-0.5">
+              <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '13px', color: '#B6871F' }}>
+                {currencySymbol(conf.fee_currency)}
+              </span>
+              <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontVariantNumeric: 'tabular-nums', fontSize: '15px', color: '#1C1410' }}>
+                {formatFeeAmount(conf.fee_amount)}
+              </span>
             </span>
-            <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontVariantNumeric: 'tabular-nums', fontSize: '12.5px', color: '#1C1410' }}>
-              {formatFeeAmount(conf.fee_amount)}
-            </span>
-          </span>
+          </>
         )}
+      </div>
       </div>
 
       {/* CTA — member (part of the conference) > applied > apply */}
-      <div className="hidden sm:flex justify-end flex-shrink-0" style={{ width: '104px' }}>
+      <div className="hidden sm:flex justify-end flex-shrink-0" style={{ width: '124px' }}>
         {member ? (
-          <button type="button" onClick={onCta} className="inline-flex items-center gap-1 focus:outline-none"
+          <button type="button" onClick={onCta} className="inline-flex items-center gap-1.5 focus:outline-none"
             style={{
               ...ctaBase,
               color: '#EAF5EE', backgroundColor: '#2A5A3C',
@@ -536,21 +552,21 @@ function ConferenceListRow({
             }}
           >
             VIEW
-            <ArrowRight size={11} strokeWidth={2.75} />
+            <ArrowRight size={13} strokeWidth={2.75} />
           </button>
         ) : applied ? (
-          <button type="button" onClick={onCta} className="inline-flex items-center gap-1 focus:outline-none"
+          <button type="button" onClick={onCta} className="inline-flex items-center gap-1.5 focus:outline-none"
             style={{
-              ...ctaBase, fontSize: '9.5px',
+              ...ctaBase, fontSize: '11px',
               color: '#EAF5EE', backgroundColor: '#2A5A3C',
               boxShadow: '0 3px 8px rgba(27,56,40,0.25), 0 0 0 1px rgba(127,214,160,0.45)',
             }}
           >
             APPLIED
-            <Check size={11} strokeWidth={3} />
+            <Check size={13} strokeWidth={3} />
           </button>
         ) : (
-          <button type="button" onClick={onCta} className="inline-flex items-center gap-1 focus:outline-none"
+          <button type="button" onClick={onCta} className="inline-flex items-center gap-1.5 focus:outline-none"
             style={{
               ...ctaBase,
               color: '#1B3828', backgroundColor: hovered ? '#F3E3A1' : '#EED98A',
@@ -559,7 +575,7 @@ function ConferenceListRow({
             }}
           >
             APPLY
-            <ArrowRight size={11} strokeWidth={2.75} />
+            <ArrowRight size={13} strokeWidth={2.75} />
           </button>
         )}
       </div>
@@ -862,16 +878,16 @@ export default function ConferencesExploreClient() {
               transition: 'border-radius 260ms ease',
             }}
           >
-            <div className="flex items-center gap-2 px-2 py-2 md:px-3 flex-wrap md:flex-nowrap">
+            <div className="flex items-center gap-2.5 px-2.5 py-2.5 md:px-4 flex-wrap md:flex-nowrap">
               {/* Search */}
-              <div className="relative flex items-center flex-1" style={{ minWidth: '160px' }}>
-                <Search size={15} className="absolute left-3 pointer-events-none" style={{ color: '#9A8A78' }} />
+              <div className="relative flex items-center flex-1" style={{ minWidth: '190px' }}>
+                <Search size={18} className="absolute left-3.5 pointer-events-none" style={{ color: '#9A8A78' }} />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search name, city, country…"
-                  className="w-full py-2 pl-9 pr-3 text-sm focus:outline-none"
+                  className="w-full py-2.5 pl-11 pr-3 text-[15px] focus:outline-none"
                   style={{
                     border: 'none',
                     backgroundColor: 'transparent',
@@ -882,7 +898,7 @@ export default function ConferencesExploreClient() {
               </div>
 
               {/* Hairline divider */}
-              <div className="hidden md:block w-px h-6 flex-shrink-0" style={{ backgroundColor: 'rgba(221,212,192,0.9)' }} />
+              <div className="hidden md:block w-px h-7 flex-shrink-0" style={{ backgroundColor: 'rgba(221,212,192,0.9)' }} />
 
               {/* Region — visitor's country first, then all / continents */}
               <RegionControl region={region} userCountry={userCountry} onChange={changeRegion} />
@@ -894,21 +910,21 @@ export default function ConferencesExploreClient() {
               <ViewToggle view={view} onChange={changeView} />
 
               {/* Hairline divider */}
-              <div className="hidden md:block w-px h-6 flex-shrink-0" style={{ backgroundColor: 'rgba(221,212,192,0.9)' }} />
+              <div className="hidden md:block w-px h-7 flex-shrink-0" style={{ backgroundColor: 'rgba(221,212,192,0.9)' }} />
 
               {/* Filters toggle — format / level / applications live in the drawer */}
               <button
                 onClick={() => setFiltersOpen(v => !v)}
-                className="flex items-center gap-2 rounded-full py-2 px-4 font-bold text-[11px] transition-colors focus:outline-none flex-shrink-0"
+                className="flex items-center gap-2 rounded-full py-2.5 px-4 font-bold text-[12.5px] transition-colors focus:outline-none flex-shrink-0"
                 style={{
                   backgroundColor: filtersOpen ? '#1B3828' : 'rgba(237,231,216,0.5)',
                   color: filtersOpen ? '#EED98A' : '#4A4238',
                   border: filtersOpen ? '1px solid #1B3828' : '1px solid rgba(221,212,192,0.9)',
                   fontFamily: "'Outfit', sans-serif",
-                  letterSpacing: '0.08em',
+                  letterSpacing: '0.07em',
                 }}
               >
-                <SlidersHorizontal size={13} />
+                <SlidersHorizontal size={15} />
                 FILTERS
                 {hasActiveFilters && (
                   <span
@@ -959,17 +975,20 @@ export default function ConferencesExploreClient() {
         <main className="flex-1 px-6 md:px-14 pt-10 pb-16">
           {/* Results rule */}
           {!loading && displayed.length > 0 && (
-            <div className="flex items-center gap-4 mb-6">
-              <span className="inline-flex items-center gap-2" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '10px', letterSpacing: '0.14em', color: '#9A8A78', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+            <div className="flex items-center gap-4 mb-7">
+              <span className="inline-flex items-center gap-2" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '11.5px', letterSpacing: '0.13em', color: '#9A8A78', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
                 {countryMode ? (
                   <>
-                    {userCode && <FlagImg code={userCode} size={13} />}
+                    {userCode && <FlagImg code={userCode} size={17} />}
                     NEAR YOU — {displayed.length < sorted.length
                       ? `${displayed.length} OF ${sorted.length}`
                       : displayed.length} IN {userCountry!.toUpperCase()}
                   </>
                 ) : (
-                  <>SHOWING {sorted.length} {sorted.length === 1 ? 'CONFERENCE' : 'CONFERENCES'}</>
+                  <>
+                    <Emoji3D name="Globe with meridians" size={17} fallback={Globe} fallbackColor="#9A8A78" style={{ filter: 'none' }} />
+                    SHOWING {sorted.length} {sorted.length === 1 ? 'CONFERENCE' : 'CONFERENCES'}
+                  </>
                 )}
               </span>
               <div className="flex-1 h-px" style={{ backgroundColor: 'rgba(221,212,192,0.8)' }} />
@@ -977,7 +996,7 @@ export default function ConferencesExploreClient() {
           )}
 
           {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-7">
               {Array.from({ length: 6 }).map((_, i) => (
                 <div
                   key={i}
@@ -1050,7 +1069,7 @@ export default function ConferencesExploreClient() {
               ))}
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-7">
               {displayed.map(conf => (
                 <ConferenceCard
                   key={conf.id}

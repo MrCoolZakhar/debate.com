@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Globe, MessageCircle, Music, CalendarDays, MapPin, Users, GraduationCap, Monitor, Mail, Landmark, ChevronDown, ChevronLeft, ChevronRight, Check, X, Plus, ArrowUp, ArrowDown, ArrowUpDown, Star, Settings, LayoutDashboard, ArrowRight, UserRound } from 'lucide-react';
+import { Globe, MessageCircle, Music, CalendarDays, MapPin, Users, GraduationCap, Monitor, Mail, Landmark, ChevronDown, ChevronLeft, ChevronRight, Check, X, Plus, ArrowUp, ArrowDown, ArrowUpDown, Star, LayoutDashboard, ArrowRight, UserRound } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -1560,23 +1560,13 @@ export default function ConferenceDetailClient() {
                         )}
                         <Link
                           href={`/manage/${slug}`}
-                          className="flex items-center justify-center gap-2 w-full rounded-xl py-3 font-bold text-sm transition-all focus:outline-none mb-2"
+                          className="flex items-center justify-center gap-2 w-full rounded-xl py-3 font-bold text-sm transition-all focus:outline-none"
                           style={{ backgroundColor: '#EED98A', color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', boxShadow: '0 4px 16px rgba(0,0,0,0.2)', textDecoration: 'none' }}
                           onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'white'; }}
                           onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#EED98A'; }}
                         >
                           <LayoutDashboard size={15} strokeWidth={2.2} />
                           MANAGE CONFERENCE
-                        </Link>
-                        <Link
-                          href={`/manage/${slug}/settings`}
-                          className="flex items-center justify-center gap-2 w-full rounded-xl py-3 font-bold text-sm transition-all focus:outline-none"
-                          style={{ backgroundColor: 'transparent', color: '#EED98A', border: '1px solid rgba(238,217,138,0.4)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', textDecoration: 'none' }}
-                          onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = 'rgba(238,217,138,0.1)'; el.style.borderColor = 'rgba(238,217,138,0.7)'; }}
-                          onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = 'transparent'; el.style.borderColor = 'rgba(238,217,138,0.4)'; }}
-                        >
-                          <Settings size={15} strokeWidth={2.2} />
-                          EDIT PAGE
                         </Link>
                       </>
                     ) : myApp ? (
