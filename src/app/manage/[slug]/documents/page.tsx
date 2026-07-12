@@ -142,10 +142,10 @@ function UploadStudyGuideModal({
   }
 
   async function handleUpload() {
-    if (!selectedFile || !title.trim()) return;
+    if (!selectedFile || !title.trim() || uploading) return;
+    if (!session) return;
     setUploading(true);
     setUploadError('');
-    if (!session) return;
     const supabase = getAuthedClient(session.access_token);
     const path = `${conferenceId}/${selectedCommitteeId}/${Date.now()}_${selectedFile.name}`;
     const { error: storageError } = await supabase.storage
@@ -153,7 +153,7 @@ function UploadStudyGuideModal({
       .upload(path, selectedFile, { contentType: 'application/pdf' });
     if (storageError) { setUploadError('Upload failed. Please try again.'); setUploading(false); return; }
     const { data: { publicUrl } } = supabase.storage.from('study-guides').getPublicUrl(path);
-    await supabase.from('study_guides').insert({
+    const { error: insertError } = await supabase.from('study_guides').insert({
       conference_committee_id: selectedCommitteeId,
       uploaded_by: userId,
       title: title.trim(),
@@ -163,6 +163,7 @@ function UploadStudyGuideModal({
       mime_type: 'application/pdf',
       is_published: false,
     });
+    if (insertError) { setUploadError('Upload failed. Please try again.'); setUploading(false); return; }
     setUploading(false);
     onUploaded();
     onClose();
@@ -246,32 +247,26 @@ function UploadStudyGuideModal({
 // ── SetDeadlineModal ───────────────────────────────────────────────────────────
 
 function SetDeadlineModal({
-  selectedCommitteeId, currentDeadline, currentLabel, currentEnabled, onClose, onSaved,
+  currentDeadline, currentLabel, currentEnabled, onClose, onSave,
 }: {
-  selectedCommitteeId: string;
   currentDeadline: string | null;
   currentLabel: string | null;
   currentEnabled: boolean;
   onClose: () => void;
-  onSaved: () => void;
+  onSave: (updates: { position_paper_label: string; pp_submissions_enabled: boolean; position_paper_deadline: string | null }) => void;
 }) {
-  const { session } = useAuth();
   const [value, setValue] = useState(currentDeadline ? currentDeadline.slice(0, 16) : '');
   const [label, setLabel] = useState(currentLabel ?? 'Position Paper');
   const [enabled, setEnabled] = useState(currentEnabled);
-  const [saving, setSaving] = useState(false);
 
-  async function handleSave() {
-    if (!session) return;
-    setSaving(true);
-    const supabase = getAuthedClient(session.access_token);
-    await supabase.from('conference_committees').update({
+  // Optimistic: hand the values to the parent (which patches local state and
+  // persists in the background) and close immediately — no modal spinner.
+  function handleSave() {
+    onSave({
       position_paper_label: label.trim() || 'Position Paper',
       pp_submissions_enabled: enabled,
       position_paper_deadline: enabled ? (value || null) : null,
-    }).eq('id', selectedCommitteeId);
-    setSaving(false);
-    onSaved();
+    });
     onClose();
   }
 
@@ -322,8 +317,8 @@ function SetDeadlineModal({
           <button onClick={onClose} className="focus:outline-none" style={{ flex: 1, border: '1.5px solid #DDD4C0', borderRadius: 12, padding: '10px 0', fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 13, color: '#1C1410', backgroundColor: 'transparent', cursor: 'pointer' }}>
             CANCEL
           </button>
-          <button onClick={handleSave} disabled={saving} className="focus:outline-none" style={{ flex: 1, border: 'none', borderRadius: 12, padding: '10px 0', fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 13, backgroundColor: saving ? '#DDD4C0' : '#1B3828', color: saving ? '#9A8A78' : '#EED98A', cursor: saving ? 'default' : 'pointer' }}>
-            {saving ? 'SAVING...' : 'SAVE'}
+          <button onClick={handleSave} className="focus:outline-none" style={{ flex: 1, border: 'none', borderRadius: 12, padding: '10px 0', fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 13, backgroundColor: '#1B3828', color: '#EED98A', cursor: 'pointer' }}>
+            SAVE
           </button>
         </div>
       </div>
@@ -347,7 +342,22 @@ export default function DocumentsPage() {
   const [feedbackTexts, setFeedbackTexts] = useState<Record<string, string>>({});
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showDeadlineModal, setShowDeadlineModal] = useState(false);
+  const [actionError, setActionError] = useState('');
+  // Ids with a write in flight — disables that row's controls (double-click guard).
+  const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
   const didSetInitialTab = useRef(false);
+  // Stale-response guard: bump per committee-tab switch; late responses for an
+  // older tab are dropped instead of clobbering the current one.
+  const paperReqSeq = useRef(0);
+  const guideReqSeq = useRef(0);
+
+  function markBusy(id: string, busy: boolean) {
+    setBusyIds(prev => {
+      const next = new Set(prev);
+      if (busy) next.add(id); else next.delete(id);
+      return next;
+    });
+  }
 
   // ── Data loading ─────────────────────────────────────────────────────────────
 
@@ -378,18 +388,21 @@ export default function DocumentsPage() {
   const loadStudyGuides = useCallback(async () => {
     if (!selectedCommitteeId) return;
     if (!session) return;
+    const seq = ++guideReqSeq.current;
     const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase
       .from('study_guides')
       .select('id, title, file_url, file_name, file_size_bytes, is_published, published_at, created_at')
       .eq('conference_committee_id', selectedCommitteeId)
       .order('created_at', { ascending: false });
+    if (seq !== guideReqSeq.current) return; // stale response — a newer load superseded this one
     setStudyGuides((data ?? []) as StudyGuide[]);
   }, [selectedCommitteeId]);
 
   const loadPositionPapers = useCallback(async () => {
     if (!selectedCommitteeId) return;
     if (!session) return;
+    const seq = ++paperReqSeq.current;
     const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase
       .from('position_papers')
@@ -400,6 +413,7 @@ export default function DocumentsPage() {
       `)
       .eq('conference_committee_id', selectedCommitteeId)
       .order('submitted_at', { ascending: false });
+    if (seq !== paperReqSeq.current) return; // stale response
     setPositionPapers((data ?? []) as unknown as PositionPaper[]);
   }, [selectedCommitteeId]);
 
@@ -413,46 +427,102 @@ export default function DocumentsPage() {
 
   // ── Actions ──────────────────────────────────────────────────────────────────
 
-  async function handlePublishGuide(guideId: string, publish: boolean) {
-    if (!session) return;
+  // Optimistic-first pattern (house style, AGENTS.md Rule 5): mutate local
+  // state immediately, persist in the background, roll back + surface an
+  // inline error if the write fails.
+  function handlePublishGuide(guideId: string, publish: boolean) {
+    if (!session || busyIds.has(guideId)) return;
+    const previous = studyGuides;
+    const publishedAt = publish ? new Date().toISOString() : null;
+    setStudyGuides(prev => prev.map(g => g.id === guideId ? { ...g, is_published: publish, published_at: publishedAt } : g));
+    setActionError('');
+    markBusy(guideId, true);
     const supabase = getAuthedClient(session.access_token);
-    await supabase.from('study_guides').update({
+    supabase.from('study_guides').update({
       is_published: publish,
-      published_at: publish ? new Date().toISOString() : null,
-    }).eq('id', guideId);
-    await loadStudyGuides();
+      published_at: publishedAt,
+    }).eq('id', guideId).then(({ error }) => {
+      markBusy(guideId, false);
+      if (error) {
+        setStudyGuides(previous);
+        setActionError("Couldn't save — the change was reverted.");
+      }
+    });
   }
 
-  async function handleDeleteGuide(guideId: string) {
-    if (!session) return;
+  function handleDeleteGuide(guideId: string) {
+    if (!session || busyIds.has(guideId)) return;
+    const previous = studyGuides;
+    setStudyGuides(prev => prev.filter(g => g.id !== guideId));
+    setActionError('');
+    markBusy(guideId, true);
     const supabase = getAuthedClient(session.access_token);
-    await supabase.from('study_guides').delete().eq('id', guideId);
-    await loadStudyGuides();
+    supabase.from('study_guides').delete().eq('id', guideId).then(({ error }) => {
+      markBusy(guideId, false);
+      if (error) {
+        setStudyGuides(previous);
+        setActionError("Couldn't delete — the guide was restored.");
+      }
+    });
   }
 
-  async function updatePaperStatus(paperId: string, status: string) {
-    if (!user) return;
-    if (!session) return;
+  function updatePaperStatus(paperId: string, status: string) {
+    if (!user || !session || busyIds.has(paperId)) return;
+    const previous = positionPapers;
+    const reviewedAt = new Date().toISOString();
+    setPositionPapers(prev => prev.map(p => p.id === paperId ? { ...p, status, reviewed_at: reviewedAt } : p));
+    setActionError('');
+    markBusy(paperId, true);
     const supabase = getAuthedClient(session.access_token);
-    await supabase.from('position_papers').update({
+    supabase.from('position_papers').update({
       status,
       reviewed_by: user.id,
-      reviewed_at: new Date().toISOString(),
-    }).eq('id', paperId);
-    await loadPositionPapers();
+      reviewed_at: reviewedAt,
+    }).eq('id', paperId).then(({ error }) => {
+      markBusy(paperId, false);
+      if (error) {
+        setPositionPapers(previous);
+        setActionError("Couldn't update the paper status — the change was reverted.");
+      }
+    });
   }
 
-  async function saveFeedback(paperId: string) {
-    if (!user) return;
-    if (!session) return;
-    const supabase = getAuthedClient(session.access_token);
-    await supabase.from('position_papers').update({
-      chair_feedback: feedbackTexts[paperId] ?? '',
-      reviewed_by: user.id,
-      reviewed_at: new Date().toISOString(),
-    }).eq('id', paperId);
+  function saveFeedback(paperId: string) {
+    if (!user || !session) return;
+    const previous = positionPapers;
+    const feedback = feedbackTexts[paperId] ?? '';
+    const reviewedAt = new Date().toISOString();
+    setPositionPapers(prev => prev.map(p => p.id === paperId ? { ...p, chair_feedback: feedback, reviewed_at: reviewedAt } : p));
     setFeedbackEditing(prev => ({ ...prev, [paperId]: false }));
-    await loadPositionPapers();
+    setActionError('');
+    const supabase = getAuthedClient(session.access_token);
+    supabase.from('position_papers').update({
+      chair_feedback: feedback,
+      reviewed_by: user.id,
+      reviewed_at: reviewedAt,
+    }).eq('id', paperId).then(({ error }) => {
+      if (error) {
+        setPositionPapers(previous);
+        setFeedbackEditing(prev => ({ ...prev, [paperId]: true }));
+        setActionError("Couldn't save the feedback — please try again.");
+      }
+    });
+  }
+
+  // Position-paper settings: optimistic patch of the committees list, write in
+  // the background, roll back on failure.
+  function savePaperSettings(committeeId: string, updates: { position_paper_label: string; pp_submissions_enabled: boolean; position_paper_deadline: string | null }) {
+    if (!session) return;
+    const previous = committees;
+    setCommittees(prev => prev.map(c => c.id === committeeId ? { ...c, ...updates } : c));
+    setActionError('');
+    const supabase = getAuthedClient(session.access_token);
+    supabase.from('conference_committees').update(updates).eq('id', committeeId).then(({ error }) => {
+      if (error) {
+        setCommittees(previous);
+        setActionError("Couldn't save the position paper settings — the change was reverted.");
+      }
+    });
   }
 
   function toggleFeedbackEditor(paperId: string, existingFeedback: string | null) {
@@ -492,6 +562,12 @@ export default function DocumentsPage() {
       <h1 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: 24, color: '#1C1410', marginBottom: 24 }}>
         Documents
       </h1>
+
+      {actionError && (
+        <p style={{ fontFamily: "'Outfit', sans-serif", fontSize: 12, color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.06)', border: '1px solid rgba(139,32,32,0.2)', borderRadius: 10, padding: '8px 12px', marginBottom: 16 }}>
+          {actionError}
+        </p>
+      )}
 
       {loading && (
         <div className="flex justify-center py-16">
@@ -819,12 +895,11 @@ export default function DocumentsPage() {
       )}
       {showDeadlineModal && selectedCommitteeId && selectedCommittee && (
         <SetDeadlineModal
-          selectedCommitteeId={selectedCommitteeId}
           currentDeadline={selectedCommittee.position_paper_deadline}
           currentLabel={selectedCommittee.position_paper_label}
           currentEnabled={selectedCommittee.pp_submissions_enabled}
           onClose={() => setShowDeadlineModal(false)}
-          onSaved={loadCommittees}
+          onSave={updates => savePaperSettings(selectedCommitteeId, updates)}
         />
       )}
     </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Building2, CreditCard, Clock, Users, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -105,6 +105,9 @@ function ApplicationsPanel({
   const { session } = useAuth();
   const [apps, setApps] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
+  const [panelError, setPanelError] = useState('');
+  // App ids with a write in flight — hides that row's Accept/Reject (double-click guard).
+  const [busyAppIds, setBusyAppIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!session) return;
@@ -120,12 +123,24 @@ function ApplicationsPanel({
       });
   }, [postingId]);
 
-  async function handleStatus(appId: string, newStatus: string) {
-    if (!session) return;
-    const supabase = getAuthedClient(session.access_token);
-    await supabase.from('job_applications').update({ status: newStatus }).eq('id', appId);
+  function handleStatus(appId: string, newStatus: string) {
+    if (!session || busyAppIds.has(appId)) return;
+    // Optimistic: flip the status immediately, persist in the background,
+    // roll back only this row + show an inline error if the write fails.
+    const prevStatus = apps.find(a => a.id === appId)?.status ?? 'submitted';
     setApps(prev => prev.map(a => a.id === appId ? { ...a, status: newStatus } : a));
-    onStatusChange();
+    setPanelError('');
+    setBusyAppIds(prev => new Set(prev).add(appId));
+    const supabase = getAuthedClient(session.access_token);
+    supabase.from('job_applications').update({ status: newStatus }).eq('id', appId).then(({ error }) => {
+      setBusyAppIds(prev => { const next = new Set(prev); next.delete(appId); return next; });
+      if (error) {
+        setApps(prev => prev.map(a => a.id === appId ? { ...a, status: prevStatus } : a));
+        setPanelError("Couldn't update that application — the change was reverted.");
+        return;
+      }
+      onStatusChange();
+    });
   }
 
   if (loading) {
@@ -144,6 +159,11 @@ function ApplicationsPanel({
       className="rounded-xl p-4 mt-3"
       style={{ background: 'rgba(27,56,40,0.03)', border: '1px solid rgba(27,56,40,0.08)' }}
     >
+      {panelError && (
+        <p className="text-xs mb-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif", fontWeight: 600 }}>
+          {panelError}
+        </p>
+      )}
       {apps.length === 0 ? (
         <p className="text-xs text-center py-2" style={{ color: MUTED, fontFamily: "'Outfit', sans-serif" }}>
           No applications yet
@@ -230,6 +250,7 @@ function ApplicationsPanel({
 function PostingCard({
   posting,
   appCount,
+  busy,
   onEdit,
   onToggleOpen,
   onDelete,
@@ -237,6 +258,7 @@ function PostingCard({
 }: {
   posting: JobPosting;
   appCount: number;
+  busy: boolean;
   onEdit: (p: JobPosting) => void;
   onToggleOpen: (p: JobPosting) => void;
   onDelete: (p: JobPosting) => void;
@@ -341,10 +363,10 @@ function PostingCard({
         <div className="flex-1" />
 
         <GhostBtn onClick={() => onEdit(posting)}>EDIT</GhostBtn>
-        <GhostBtn onClick={() => onToggleOpen(posting)}>
+        <GhostBtn onClick={() => onToggleOpen(posting)} disabled={busy}>
           {posting.is_open ? 'CLOSE' : 'REOPEN'}
         </GhostBtn>
-        <GhostBtn onClick={() => onDelete(posting)} danger>DELETE</GhostBtn>
+        <GhostBtn onClick={() => onDelete(posting)} danger disabled={busy}>DELETE</GhostBtn>
       </div>
 
       {/* Inline applications */}
@@ -362,6 +384,7 @@ function PostingModal({
   committees,
   posting,
   saving,
+  errorText,
   onSave,
   onClose,
 }: {
@@ -369,6 +392,7 @@ function PostingModal({
   committees: Committee[];
   posting: JobPosting | null;
   saving: boolean;
+  errorText?: string;
   onSave: (data: {
     category: string;
     role_name: string;
@@ -572,6 +596,11 @@ function PostingModal({
           </div>
 
           {/* Submit */}
+          {errorText && (
+            <p className="text-xs" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif", fontWeight: 600 }}>
+              {errorText}
+            </p>
+          )}
           <button
             onClick={() =>
               onSave({
@@ -629,10 +658,25 @@ export default function JobBoardPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [editPosting, setEditPosting] = useState<JobPosting | null>(null);
   const [saving, setSaving] = useState(false);
+  const [actionError, setActionError] = useState('');
+  const [createError, setCreateError] = useState('');
+  // Posting ids with a write in flight — disables that row's controls (double-click guard).
+  const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
+  // Stale-response guard for background refetches.
+  const fetchSeq = useRef(0);
+
+  function markBusy(id: string, busy: boolean) {
+    setBusyIds(prev => {
+      const next = new Set(prev);
+      if (busy) next.add(id); else next.delete(id);
+      return next;
+    });
+  }
 
   const fetchAll = useCallback(async () => {
     if (!conference) return;
     if (!session) return;
+    const seq = ++fetchSeq.current;
     const supabase = getAuthedClient(session.access_token);
 
     const [{ data: postingsData }, { data: committeesData }] = await Promise.all([
@@ -651,6 +695,8 @@ export default function JobBoardPage() {
         .eq('conference_id', conference.id),
     ]);
 
+    if (seq !== fetchSeq.current) return; // stale response — a newer fetch superseded this one
+
     const ps = (postingsData as unknown as JobPosting[]) ?? [];
     setPostings(ps);
     setCommittees((committeesData as Committee[]) ?? []);
@@ -665,6 +711,7 @@ export default function JobBoardPage() {
             .eq('job_posting_id', p.id)
         )
       );
+      if (seq !== fetchSeq.current) return;
       const countMap: Record<string, number> = {};
       ps.forEach((p, i) => { countMap[p.id] = counts[i].count ?? 0; });
       setAppCounts(countMap);
@@ -680,11 +727,14 @@ export default function JobBoardPage() {
     description: string; requirements: string; compensation: string;
     compensation_note: string; deadline: string;
   }) {
-    if (!conference || !user) return;
-    setSaving(true);
+    if (!conference || !user || saving) return;
     if (!session) return;
+    // Creation needs the real DB row (id) back, so the insert stays awaited —
+    // but only the modal's save button is busy; the page stays interactive.
+    setSaving(true);
+    setCreateError('');
     const supabase = getAuthedClient(session.access_token);
-    await supabase.from('job_postings').insert({
+    const { data: created, error } = await supabase.from('job_postings').insert({
       conference_id: conference.id,
       posted_by: user.id,
       category: data.category,
@@ -696,21 +746,47 @@ export default function JobBoardPage() {
       compensation_note: data.compensation_note || null,
       deadline: data.deadline || null,
       is_open: true,
-    });
+    }).select(`
+      id, category, role_name, description, requirements,
+      compensation, compensation_note, deadline, is_open, created_at,
+      conference_committees (id, name)
+    `).single();
     setSaving(false);
+    if (error || !created) {
+      setCreateError("Couldn't post the position — please try again.");
+      return;
+    }
+    const row = created as unknown as JobPosting;
+    setPostings(prev => [row, ...prev]);
+    setAppCounts(prev => ({ ...prev, [row.id]: 0 }));
     setCreateOpen(false);
-    await fetchAll();
   }
 
-  async function handleEdit(posting: JobPosting, data: {
+  function handleEdit(posting: JobPosting, data: {
     category: string; role_name: string; committee_id: string | null;
     description: string; requirements: string; compensation: string;
     compensation_note: string; deadline: string;
   }) {
-    setSaving(true);
-    if (!session) return;
+    if (!session || busyIds.has(posting.id)) return;
+    // Optimistic: patch the posting locally and close the modal at once; the
+    // write runs in the background and rolls back on failure.
+    const committee = data.committee_id ? committees.find(c => c.id === data.committee_id) ?? null : null;
+    setPostings(prev => prev.map(p => p.id === posting.id ? {
+      ...p,
+      category: data.category,
+      role_name: data.role_name,
+      description: data.description || null,
+      requirements: data.requirements || null,
+      compensation: data.compensation,
+      compensation_note: data.compensation_note || null,
+      deadline: data.deadline || null,
+      conference_committees: committee,
+    } : p));
+    setEditPosting(null);
+    setActionError('');
+    markBusy(posting.id, true);
     const supabase = getAuthedClient(session.access_token);
-    await supabase.from('job_postings').update({
+    supabase.from('job_postings').update({
       category: data.category,
       role_name: data.role_name,
       committee_id: data.committee_id || null,
@@ -719,26 +795,54 @@ export default function JobBoardPage() {
       compensation: data.compensation,
       compensation_note: data.compensation_note || null,
       deadline: data.deadline || null,
-    }).eq('id', posting.id);
-    setSaving(false);
-    setEditPosting(null);
-    await fetchAll();
+    }).eq('id', posting.id).then(({ error }) => {
+      markBusy(posting.id, false);
+      if (error) {
+        // Restore only this row to its exact pre-edit values.
+        setPostings(prev => prev.map(p => p.id === posting.id ? posting : p));
+        setActionError("Couldn't save the position — the change was reverted.");
+      }
+    });
   }
 
-  async function handleToggleOpen(posting: JobPosting) {
-    if (!session) return;
-    const supabase = getAuthedClient(session.access_token);
-    await supabase.from('job_postings').update({ is_open: !posting.is_open }).eq('id', posting.id);
+  function handleToggleOpen(posting: JobPosting) {
+    if (!session || busyIds.has(posting.id)) return;
+    // Optimistic flip; roll back only this row on failure.
     setPostings(prev => prev.map(p => p.id === posting.id ? { ...p, is_open: !p.is_open } : p));
+    setActionError('');
+    markBusy(posting.id, true);
+    const supabase = getAuthedClient(session.access_token);
+    supabase.from('job_postings').update({ is_open: !posting.is_open }).eq('id', posting.id).then(({ error }) => {
+      markBusy(posting.id, false);
+      if (error) {
+        setPostings(prev => prev.map(p => p.id === posting.id ? { ...p, is_open: posting.is_open } : p));
+        setActionError("Couldn't update the posting — the change was reverted.");
+      }
+    });
   }
 
   async function handleDelete(posting: JobPosting) {
+    if (!session || busyIds.has(posting.id)) return;
     if (!confirm(`Delete "${posting.role_name}"? This cannot be undone.`)) return;
-    if (!session) return;
+    // Optimistic removal; re-insert at its prior index + inline error if either delete fails.
+    const removedIndex = postings.findIndex(p => p.id === posting.id);
+    setPostings(prev => prev.filter(p => p.id !== posting.id));
+    setActionError('');
+    markBusy(posting.id, true);
     const supabase = getAuthedClient(session.access_token);
-    await supabase.from('job_applications').delete().eq('job_posting_id', posting.id);
-    await supabase.from('job_postings').delete().eq('id', posting.id);
-    await fetchAll();
+    const { error: appsErr } = await supabase.from('job_applications').delete().eq('job_posting_id', posting.id);
+    const { error: postErr } = appsErr
+      ? { error: appsErr }
+      : await supabase.from('job_postings').delete().eq('id', posting.id);
+    markBusy(posting.id, false);
+    if (postErr) {
+      setPostings(prev => {
+        const next = prev.filter(p => p.id !== posting.id);
+        next.splice(Math.min(Math.max(removedIndex, 0), next.length), 0, posting);
+        return next;
+      });
+      setActionError("Couldn't delete the posting — it was restored.");
+    }
   }
 
   // ── Derived stats ──────────────────────────────────────────────────────
@@ -797,6 +901,15 @@ export default function JobBoardPage() {
           POST A POSITION
         </button>
       </div>
+
+      {actionError && (
+        <p
+          className="rounded-xl px-4 py-2.5 mb-5 text-xs"
+          style={{ color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.06)', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "'Outfit', sans-serif", fontWeight: 600 }}
+        >
+          {actionError}
+        </p>
+      )}
 
       {/* Stats row */}
       <div className="flex gap-4 mb-6 flex-wrap">
@@ -859,6 +972,7 @@ export default function JobBoardPage() {
               key={posting.id}
               posting={posting}
               appCount={appCounts[posting.id] ?? 0}
+              busy={busyIds.has(posting.id)}
               onEdit={(p) => setEditPosting(p)}
               onToggleOpen={handleToggleOpen}
               onDelete={handleDelete}
@@ -875,8 +989,9 @@ export default function JobBoardPage() {
           committees={committees}
           posting={null}
           saving={saving}
+          errorText={createError || undefined}
           onSave={handleCreate}
-          onClose={() => setCreateOpen(false)}
+          onClose={() => { setCreateOpen(false); setCreateError(''); }}
         />
       )}
 

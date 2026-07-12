@@ -386,7 +386,7 @@ interface DropAllocateModalProps {
   committee: CommitteeData;
   app: AcceptedApp;
   onClose: () => void;
-  onAssigned: (msg: string) => void;
+  onAssigned: (slot: SlotRow, msg: string) => void;
 }
 
 function DropAllocateModal({ committee, app, onClose, onAssigned }: DropAllocateModalProps) {
@@ -413,7 +413,7 @@ function DropAllocateModal({ committee, app, onClose, onAssigned }: DropAllocate
     const err = await insertAllocation(supabase, conference.id, committee, app, slot);
     setBusySlotId(null);
     if (err) { setError(err); return; }
-    onAssigned(`${app.profiles?.display_name ?? app.invited_name} allocated to ${slot.country_name} in ${committee.abbreviation ?? committee.name}.`);
+    onAssigned(slot, `${app.profiles?.display_name ?? app.invited_name} allocated to ${slot.country_name} in ${committee.abbreviation ?? committee.name}.`);
     onClose();
   }
 
@@ -521,7 +521,7 @@ interface AssignModalProps {
   preSelectedSlot?: SlotRow;
   preSelectedApp?: AcceptedApp;
   onClose: () => void;
-  onAssigned: () => void;
+  onAssigned: (app: AcceptedApp, slot: SlotRow, sentEmail: boolean) => void;
 }
 
 function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedApp, onClose, onAssigned }: AssignModalProps) {
@@ -573,7 +573,7 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedApp, o
     }
 
     setSaving(false);
-    onAssigned();
+    onAssigned(selectedApp, selectedSlot, sendEmail);
     onClose();
   }
 
@@ -1213,10 +1213,18 @@ export default function AssignmentPage() {
     setTimeout(() => setFlash(f => (f?.msg === msg ? null : f)), 4500);
   }
 
-  const loadData = useCallback(async () => {
+  // Monotonic sequence for loads — a slow older response never overwrites a
+  // newer one (silent background refetches can race with each other and with
+  // full loads).
+  const loadSeq = useRef(0);
+
+  const loadData = useCallback(async (opts?: { silent?: boolean }) => {
     if (!conference) return;
     if (!session) return;
-    setLoading(true);
+    const seq = ++loadSeq.current;
+    // silent: background refresh — never flips the page-level loading flag,
+    // so the board stays mounted and interactive while fresh data arrives.
+    if (!opts?.silent) setLoading(true);
     const supabase = getAuthedClient(session.access_token);
 
     const [appRes, commRes, chairRes, inviteRes] = await Promise.all([
@@ -1260,6 +1268,8 @@ export default function AssignmentPage() {
         .eq('status', 'pending'),
     ]);
 
+    if (seq !== loadSeq.current) return; // stale response — a newer load superseded this one
+
     const apps = ((appRes.data ?? []) as unknown as AcceptedApp[]).filter(a => a.attending !== false);
     const comms = (commRes.data ?? []) as unknown as CommitteeData[];
 
@@ -1276,6 +1286,7 @@ export default function AssignmentPage() {
         supabase.from('mun_cv_entries').select('user_id, award').in('user_id', userIds),
         supabase.from('conference_awards').select('user_id, award_label').in('user_id', userIds),
       ]);
+      if (seq !== loadSeq.current) return; // stale response
       const map: Record<string, UserHistory> = {};
       const ensure = (uid: string) => (map[uid] ??= { conferences: 0, awards: 0, awardLabels: [] });
       for (const row of (cvRes.data ?? []) as { user_id: string; award: string }[]) {
@@ -1312,7 +1323,9 @@ export default function AssignmentPage() {
   useEffect(() => {
     if (!modeMounted.current) { modeMounted.current = true; return; }
     if (authLoading) return;
-    if (mode === 'delegates' || mode === 'chairs') loadData();
+    // silent: keep showing the (possibly stale) board while fresh data loads
+    // instead of wiping the whole page behind a spinner on every tab switch.
+    if (mode === 'delegates' || mode === 'chairs') loadData({ silent: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
 
@@ -1337,56 +1350,163 @@ export default function AssignmentPage() {
     });
   }
 
+  // ── Optimistic allocation commit ────────────────────────────────────────────
+  // Applies exactly the change the user made — the allocation appears in the
+  // committee panel and the applicant leaves the unassigned rail — with a temp
+  // row id. The real UUID arrives via a silent background refetch.
+  function applyLocalAllocation(committee: CommitteeData, app: AcceptedApp, slot: SlotRow, sent = false): AllocationRow {
+    const row: AllocationRow = {
+      id: `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      user_id: app.profiles?.id ?? '',
+      country_code: slot.country_code,
+      country_name: slot.country_name,
+      allocation_sent: sent,
+      application_id: app.id,
+      profiles: app.profiles ? { display_name: app.profiles.display_name } : null,
+    };
+    setCommittees(prev => prev.map(c =>
+      c.id === committee.id ? { ...c, conference_allocations: [...c.conference_allocations, row] } : c
+    ));
+    setAccepted(prev => prev.filter(a => a.id !== app.id));
+    return row;
+  }
+
+  // Restores exactly what applyLocalAllocation changed: drops the temp row and
+  // puts the applicant back in the unassigned rail.
+  function rollbackLocalAllocation(committeeId: string, app: AcceptedApp, tempRowId: string) {
+    setCommittees(prev => prev.map(c =>
+      c.id === committeeId ? { ...c, conference_allocations: c.conference_allocations.filter(a => a.id !== tempRowId) } : c
+    ));
+    setAccepted(prev => (prev.some(a => a.id === app.id) ? prev : [...prev, app]));
+  }
+
   // ── One-click assign (used by suggestion cards) ─────────────────────────────
-  async function quickAssign(sug: Suggestion) {
+  // Optimistic: the suggestion card disappears and the allocation shows in the
+  // committee panel immediately; the insert persists in the background.
+  const inFlightAssignKeys = useRef(new Set<string>());
+  function quickAssign(sug: Suggestion) {
     if (!session || !conference) return;
     const key = `${sug.app.id}-${sug.slot.id}`;
+    if (inFlightAssignKeys.current.has(key)) return;
+    inFlightAssignKeys.current.add(key);
     setQuickAssigning(key);
     const supabase = getAuthedClient(session.access_token);
+    const conferenceId = conference.id;
 
-    const err = await insertAllocation(supabase, conference.id, sug.committee, sug.app, sug.slot);
-    setQuickAssigning(null);
-    if (err) {
-      showFlash('err', err);
-      await loadData();
-      return;
-    }
-
+    const tempRow = applyLocalAllocation(sug.committee, sug.app, sug.slot);
     showFlash('ok', `${sug.app.profiles?.display_name ?? sug.app.invited_name} assigned to ${sug.slot.country_name} in ${sug.committee.abbreviation ?? sug.committee.name}.`);
-    await loadData();
+
+    (async () => {
+      const err = await insertAllocation(supabase, conferenceId, sug.committee, sug.app, sug.slot);
+      if (err) {
+        rollbackLocalAllocation(sug.committee.id, sug.app, tempRow.id);
+        showFlash('err', err);
+        return;
+      }
+      loadData({ silent: true }); // swap the temp row for the real UUID
+    })().catch(() => {
+      rollbackLocalAllocation(sug.committee.id, sug.app, tempRow.id);
+      showFlash('err', 'Could not save this assignment.');
+    }).finally(() => {
+      inFlightAssignKeys.current.delete(key);
+      setQuickAssigning(prev => (prev === key ? null : prev));
+    });
   }
 
-  async function handleSendAllAllocations() {
-    if (!committees.length) return;
-    setSendingAll(true);
+  function handleSendAllAllocations() {
+    if (!committees.length || sendingAll) return;
     if (!session) return;
+    setSendingAll(true);
     const supabase = getAuthedClient(session.access_token);
     const committeeIds = committees.map(c => c.id);
-    await supabase
-      .from('conference_allocations')
-      .update({ allocation_sent: true, allocation_sent_at: new Date().toISOString() })
-      .in('conference_committee_id', committeeIds)
-      .eq('allocation_sent', false);
-    setSendingAll(false);
-    await loadData();
+    // Optimistic: flip every unsent allocation locally; remember which ones so
+    // a failed write restores exactly those rows.
+    const flippedIds = new Set(
+      committees.flatMap(c => c.conference_allocations.filter(a => !a.allocation_sent).map(a => a.id))
+    );
+    setCommittees(prev => prev.map(c => ({
+      ...c,
+      conference_allocations: c.conference_allocations.map(a => (a.allocation_sent ? a : { ...a, allocation_sent: true })),
+    })));
+
+    (async () => {
+      const { error } = await supabase
+        .from('conference_allocations')
+        .update({ allocation_sent: true, allocation_sent_at: new Date().toISOString() })
+        .in('conference_committee_id', committeeIds)
+        .eq('allocation_sent', false);
+      if (error) {
+        setCommittees(prev => prev.map(c => ({
+          ...c,
+          conference_allocations: c.conference_allocations.map(a => (flippedIds.has(a.id) ? { ...a, allocation_sent: false } : a)),
+        })));
+        showFlash('err', 'Could not send allocations.');
+      }
+    })().catch(() => {
+      setCommittees(prev => prev.map(c => ({
+        ...c,
+        conference_allocations: c.conference_allocations.map(a => (flippedIds.has(a.id) ? { ...a, allocation_sent: false } : a)),
+      })));
+      showFlash('err', 'Could not send allocations.');
+    }).finally(() => setSendingAll(false));
   }
 
-  async function handleRemoveAllocation(allocation: AllocationRow) {
+  const inFlightRemoveIds = useRef(new Set<string>());
+  function handleRemoveAllocation(allocation: AllocationRow) {
     if (!session || !conference) return;
-    const supabase = getAuthedClient(session.access_token);
-    await supabase.from('conference_allocations').delete().eq('id', allocation.id);
-    if (allocation.application_id) {
-      await supabase.from('applications').update({
-        status: 'accepted',
-        assigned_committee_id: null,
-        assigned_country_code: null,
-        assigned_country_name: null,
-      }).eq('id', allocation.application_id);
-
-      const result = await queueEventEmail(supabase, conference.id, 'allocation_removed', [allocation.application_id]);
-      if (!result.drafted) pushDraftNotice('allocation_removed');
+    if (allocation.id.startsWith('temp-')) {
+      showFlash('err', 'This allocation is still saving — try again in a moment.');
+      return;
     }
-    await loadData();
+    if (inFlightRemoveIds.current.has(allocation.id)) return;
+    inFlightRemoveIds.current.add(allocation.id);
+    const supabase = getAuthedClient(session.access_token);
+    const conferenceId = conference.id;
+    const committeeId = committees.find(c => c.conference_allocations.some(a => a.id === allocation.id))?.id ?? null;
+
+    // Optimistic: the row leaves the committee panel immediately.
+    setCommittees(prev => prev.map(c => ({
+      ...c,
+      conference_allocations: c.conference_allocations.filter(a => a.id !== allocation.id),
+    })));
+
+    const rollback = () => {
+      if (!committeeId) return;
+      setCommittees(prev => prev.map(c =>
+        c.id === committeeId ? { ...c, conference_allocations: [...c.conference_allocations, allocation] } : c
+      ));
+    };
+
+    (async () => {
+      // Same ordering as before: delete first (awaited), then the application
+      // status reset, then the email queue.
+      const { error: delErr } = await supabase.from('conference_allocations').delete().eq('id', allocation.id);
+      if (delErr) {
+        rollback();
+        showFlash('err', 'Could not remove this allocation.');
+        return;
+      }
+      if (allocation.application_id) {
+        await supabase.from('applications').update({
+          status: 'accepted',
+          assigned_committee_id: null,
+          assigned_country_code: null,
+          assigned_country_name: null,
+        }).eq('id', allocation.application_id);
+
+        try {
+          const result = await queueEventEmail(supabase, conferenceId, 'allocation_removed', [allocation.application_id]);
+          if (!result.drafted) pushDraftNotice('allocation_removed');
+        } catch {
+          // Email queueing is secondary — the removal stands.
+          showFlash('err', 'Allocation removed, but the notification email could not be queued.');
+        }
+      }
+      loadData({ silent: true }); // brings the delegate back into the unassigned rail
+    })().catch(() => {
+      rollback();
+      showFlash('err', 'Could not remove this allocation.');
+    }).finally(() => inFlightRemoveIds.current.delete(allocation.id));
   }
 
   // Batch-queue allocation_assigned (delivery: manual) for every currently
@@ -1432,13 +1552,58 @@ export default function AssignmentPage() {
     if (!session) return;
     const supabase = getAuthedClient(session.access_token);
     const nextIds = Array.from(new Set([...(committee.chair_user_ids ?? []), chairApp.user_id]));
-    await supabase.from('conference_committees').update({ chair_user_ids: nextIds }).eq('id', committee.id);
+
+    // Optimistic: the chair appears on the dais (and leaves the unassigned
+    // rail, which derives from chair_user_ids) immediately. avatar_url comes
+    // in with the silent refetch.
+    const prevIds = committee.chair_user_ids;
+    const prevDisplay = committee.display_chairs;
+    const prevStatus = chairApp.status;
+    const prevAssignedCommitteeId = chairApp.assigned_committee_id;
+    const alreadyOnDais = (committee.chair_user_ids ?? []).includes(chairApp.user_id);
+    setCommittees(prev => prev.map(c =>
+      c.id === committee.id
+        ? {
+            ...c,
+            chair_user_ids: nextIds,
+            display_chairs: alreadyOnDais
+              ? c.display_chairs
+              : [...(c.display_chairs ?? []), { name: chairApp.profiles?.display_name ?? 'Chair', avatar_url: null }],
+          }
+        : c
+    ));
     if (chairApp.status === 'accepted') {
-      await supabase.from('applications').update({ status: 'assigned', assigned_committee_id: committee.id }).eq('id', chairApp.id);
+      setChairApps(prev => prev.map(ca =>
+        ca.id === chairApp.id ? { ...ca, status: 'assigned', assigned_committee_id: committee.id } : ca
+      ));
     }
     setSelectedChairAppId(null);
     showFlash('ok', `${name} assigned as chair of ${label}.`);
-    await loadData();
+
+    const rollback = () => {
+      setCommittees(prev => prev.map(c =>
+        c.id === committee.id ? { ...c, chair_user_ids: prevIds, display_chairs: prevDisplay } : c
+      ));
+      setChairApps(prev => prev.map(ca =>
+        ca.id === chairApp.id ? { ...ca, status: prevStatus, assigned_committee_id: prevAssignedCommitteeId } : ca
+      ));
+    };
+
+    (async () => {
+      const { error } = await supabase.from('conference_committees').update({ chair_user_ids: nextIds }).eq('id', committee.id);
+      if (error) {
+        rollback();
+        showFlash('err', `Could not assign ${name} to ${label}.`);
+        return;
+      }
+      if (chairApp.status === 'accepted') {
+        await supabase.from('applications').update({ status: 'assigned', assigned_committee_id: committee.id }).eq('id', chairApp.id);
+      }
+      loadData({ silent: true });
+    })().catch(() => {
+      rollback();
+      showFlash('err', `Could not assign ${name} to ${label}.`);
+    });
   }
 
   // Reverts the removed chair's application to 'accepted' only if they don't
@@ -1455,18 +1620,57 @@ export default function AssignmentPage() {
     if (!confirmed) return;
     if (!session || !conference) return;
     const supabase = getAuthedClient(session.access_token);
+    const conferenceId = conference.id;
     const nextIds = (committee.chair_user_ids ?? []).filter(id => id !== userId);
-    await supabase.from('conference_committees').update({ chair_user_ids: nextIds }).eq('id', committee.id);
     const chairsElsewhere = committees.some(c => c.id !== committee.id && (c.chair_user_ids ?? []).includes(userId));
+
+    // Optimistic: drop the chair from the dais (display_chairs stays aligned
+    // with chair_user_ids by removing the matching index) and, if they chair
+    // nowhere else, put their application back in the unassigned rail.
+    const prevIds = committee.chair_user_ids;
+    const prevDisplay = committee.display_chairs;
+    const prevChairApps = chairApps;
+    setCommittees(prev => prev.map(c => {
+      if (c.id !== committee.id) return c;
+      const ids = c.chair_user_ids ?? [];
+      const dais = c.display_chairs ?? [];
+      const idx = ids.indexOf(userId);
+      const nextDisplay = ids.length === dais.length && idx >= 0 ? dais.filter((_, i) => i !== idx) : c.display_chairs;
+      return { ...c, chair_user_ids: ids.filter(id => id !== userId), display_chairs: nextDisplay };
+    }));
     if (!chairsElsewhere) {
-      await supabase.from('applications')
-        .update({ status: 'accepted', assigned_committee_id: null })
-        .eq('conference_id', conference.id)
-        .eq('user_id', userId)
-        .eq('role', 'chair');
+      setChairApps(prev => prev.map(ca =>
+        ca.user_id === userId ? { ...ca, status: 'accepted', assigned_committee_id: null } : ca
+      ));
     }
     showFlash('ok', `${name} removed from ${label}.`);
-    await loadData();
+
+    const rollback = () => {
+      setCommittees(prev => prev.map(c =>
+        c.id === committee.id ? { ...c, chair_user_ids: prevIds, display_chairs: prevDisplay } : c
+      ));
+      setChairApps(prevChairApps);
+    };
+
+    (async () => {
+      const { error } = await supabase.from('conference_committees').update({ chair_user_ids: nextIds }).eq('id', committee.id);
+      if (error) {
+        rollback();
+        showFlash('err', `Could not remove ${name} from ${label}.`);
+        return;
+      }
+      if (!chairsElsewhere) {
+        await supabase.from('applications')
+          .update({ status: 'accepted', assigned_committee_id: null })
+          .eq('conference_id', conferenceId)
+          .eq('user_id', userId)
+          .eq('role', 'chair');
+      }
+      loadData({ silent: true });
+    })().catch(() => {
+      rollback();
+      showFlash('err', `Could not remove ${name} from ${label}.`);
+    });
   }
 
   async function handleRevokeInvite(invite: PendingChairInvite, committee: CommitteeData) {
@@ -1480,9 +1684,21 @@ export default function AssignmentPage() {
     if (!confirmed) return;
     if (!session) return;
     const supabase = getAuthedClient(session.access_token);
-    await supabase.from('conference_chair_invites').update({ status: 'revoked' }).eq('id', invite.id);
+
+    // Optimistic: the pending chip disappears immediately.
+    setChairInvites(prev => prev.filter(i => i.id !== invite.id));
     showFlash('ok', `Invite to ${label} revoked.`);
-    await loadData();
+
+    (async () => {
+      const { error } = await supabase.from('conference_chair_invites').update({ status: 'revoked' }).eq('id', invite.id);
+      if (error) {
+        setChairInvites(prev => (prev.some(i => i.id === invite.id) ? prev : [...prev, invite]));
+        showFlash('err', `Could not revoke the invite to ${label}.`);
+      }
+    })().catch(() => {
+      setChairInvites(prev => (prev.some(i => i.id === invite.id) ? prev : [...prev, invite]));
+      showFlash('err', `Could not revoke the invite to ${label}.`);
+    });
   }
 
   function handleChairDropOnCommittee(committeeId: string, droppedChairAppId: string) {
@@ -2050,7 +2266,9 @@ export default function AssignmentPage() {
           onInvited={name => {
             setInviteModalCommitteeId(null);
             showFlash('ok', `Invite sent to ${name}`);
-            loadData();
+            // The invite row (id/token) is server-minted — fetch it silently
+            // instead of wiping the board behind a spinner.
+            loadData({ silent: true });
           }}
         />
       )}
@@ -2061,10 +2279,14 @@ export default function AssignmentPage() {
           committee={dropModalCommittee}
           app={dropModalApp}
           onClose={() => setDropModal(null)}
-          onAssigned={msg => {
+          onAssigned={(slot, msg) => {
+            // The insert already succeeded inside the modal (its button was
+            // the only busy control) — commit the same change locally and
+            // swap in the real row id with a silent refetch.
+            applyLocalAllocation(dropModalCommittee, dropModalApp, slot);
             showFlash('ok', msg);
             setSelectedAppId(null);
-            loadData();
+            loadData({ silent: true });
           }}
         />
       )}
@@ -2085,7 +2307,12 @@ export default function AssignmentPage() {
           unassigned={accepted}
           preSelectedSlot={assignModal.preSlot}
           onClose={() => setAssignModal(null)}
-          onAssigned={loadData}
+          onAssigned={(app, slot, sentEmail) => {
+            // Writes already succeeded inside the modal — commit the same
+            // change locally and fetch the real row id silently.
+            applyLocalAllocation(assignModalCommittee, app, slot, sentEmail);
+            loadData({ silent: true });
+          }}
         />
       )}
 

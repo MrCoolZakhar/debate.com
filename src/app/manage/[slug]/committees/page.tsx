@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Plus, X, Copy, Check, Building2, CalendarClock, Trash2, ArrowDown, ArrowUp, ArrowUpDown, Send } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -100,17 +100,19 @@ function SortButton({ label, dir, onClick }: { label: string; dir: 'asc' | 'desc
 
 // ── AddChairModal — assign an accepted chair applicant, or invite by email ────
 
-function AddChairModal({ conferenceId, committee, committees, onClose, onDone, onInvited }: {
+function AddChairModal({ conferenceId, committee, committees, onClose, onDone, onInvited, onAssign }: {
   conferenceId: string;
   committee: Committee;
   committees: Committee[];
   onClose: () => void;
   onDone: () => void;
   onInvited: (name: string) => void;
+  // Optimistic path — the parent patches its list, closes this modal, and
+  // persists in the background (AGENTS.md Rule 5).
+  onAssign: (app: ChairApplicant) => void;
 }) {
   const { session } = useAuth();
   const [applicants, setApplicants] = useState<ChairApplicant[] | null>(null);
-  const [assigningId, setAssigningId] = useState<string | null>(null);
   const [email, setEmail] = useState('');
   const [inviting, setInviting] = useState(false);
   const [error, setError] = useState('');
@@ -140,19 +142,6 @@ function AddChairModal({ conferenceId, committee, committees, onClose, onDone, o
       if (ua !== ub) return ua - ub; // unassigned first
       return (a.profiles?.display_name ?? '').localeCompare(b.profiles?.display_name ?? '');
     });
-
-  // Same semantics as assignment/page.tsx handleAssignChair — dedup-append to
-  // chair_user_ids; the DB trigger recomputes display_chairs.
-  async function handleAssign(app: ChairApplicant) {
-    if (!session) return;
-    setAssigningId(app.id); setError('');
-    const supabase = getAuthedClient(session.access_token);
-    const nextIds = Array.from(new Set([...(committee.chair_user_ids ?? []), app.user_id]));
-    await supabase.from('conference_committees').update({ chair_user_ids: nextIds }).eq('id', committee.id);
-    await supabase.from('applications').update({ status: 'assigned', assigned_committee_id: committee.id }).eq('id', app.id);
-    setAssigningId(null);
-    onDone();
-  }
 
   async function handleInvite() {
     const em = email.trim();
@@ -238,19 +227,18 @@ function AddChairModal({ conferenceId, committee, committees, onClose, onDone, o
                     </span>
                   )}
                   <button
-                    onClick={() => handleAssign(app)}
-                    disabled={assigningId !== null}
+                    onClick={() => onAssign(app)}
                     className="rounded-lg py-1.5 px-3 font-bold text-[10.5px] focus:outline-none flex-shrink-0"
                     style={{
-                      backgroundColor: assigningId === app.id ? '#DDD4C0' : '#1B3828',
-                      color: assigningId === app.id ? '#9A8A78' : '#EED98A',
+                      backgroundColor: '#1B3828',
+                      color: '#EED98A',
                       fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', cursor: 'pointer',
                       transition: `background-color 250ms ${EASE}`,
                     }}
-                    onMouseEnter={e => { if (assigningId === null) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-                    onMouseLeave={e => { if (assigningId === null) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
                   >
-                    {assigningId === app.id ? 'ASSIGNING…' : 'ASSIGN'}
+                    ASSIGN
                   </button>
                 </div>
               );
@@ -312,11 +300,15 @@ export default function CommitteesPage() {
   const [addChairTarget, setAddChairTarget] = useState<Committee | null>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<CommitteeRow | null>(null);
-  const [deleting, setDeleting] = useState(false);
   const [sortKey, setSortKey] = useState<'' | 'difficulty' | 'name' | 'type'>('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [flash, setFlash] = useState<string | null>(null);
+  const [actionError, setActionError] = useState('');
   const [sendingToChairs, setSendingToChairs] = useState<string | null>(null);
+  // Ids with a write in flight — disables only that control (double-click guard).
+  const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
+  // Stale-response guard for background (silent) reloads.
+  const loadSeq = useRef(0);
   const { draftNotices, pushDraftNotice, dismissDraftNotice } = useDraftNotices();
   const { confirm, modal: confirmModal } = useConfirmModal();
 
@@ -325,16 +317,27 @@ export default function CommitteesPage() {
     setTimeout(() => setFlash(f => (f === msg ? null : f)), 4500);
   }
 
-  const loadCommittees = useCallback(async () => {
-    if (!conference) return;
-    setLoading(true);
-    if (!session) return;
+  function markBusy(id: string, busy: boolean) {
+    setBusyIds(prev => {
+      const next = new Set(prev);
+      if (busy) next.add(id); else next.delete(id);
+      return next;
+    });
+  }
+
+  // `silent` skips the page-level loading flag so background refetches never
+  // unmount the grid; the seq guard drops stale responses.
+  const loadCommittees = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!conference || !session) return;
+    const seq = ++loadSeq.current;
+    if (!opts?.silent) setLoading(true);
     const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase
       .from('conference_committees')
       .select('id, name, abbreviation, topics, difficulty, committee_type, total_slots, session_code, session_id, position_paper_deadline, notification_email, pp_submissions_enabled, logo_url, chair_user_ids, display_chairs, released_to_chairs_at')
       .eq('conference_id', conference.id)
       .order('name', { ascending: true });
+    if (seq !== loadSeq.current) return; // stale — a newer load superseded this one
 
     const rows = (data ?? []) as CommitteeRow[];
 
@@ -347,6 +350,7 @@ export default function CommitteesPage() {
         return count ?? 0;
       })
     );
+    if (seq !== loadSeq.current) return; // stale
 
     setCommittees(rows.map((c, i) => ({ ...c, slotCount: slotCounts[i] })));
     setLoading(false);
@@ -354,12 +358,25 @@ export default function CommitteesPage() {
 
   useEffect(() => { loadCommittees(); }, [loadCommittees]);
 
+  // The session code is minted server-side, so this keeps its await — but the
+  // busy state is scoped to this one button; the rest of the page stays live.
   async function generateSessionCode(committee: CommitteeRow) {
     if (!session) return;
     if (committee.session_id) return; // already linked to a real session
+    const busyKey = `mint-${committee.id}`;
+    if (busyIds.has(busyKey)) return;
+    markBusy(busyKey, true);
+    setActionError('');
     const supabase = getAuthedClient(session.access_token);
-    await mintConferenceSession(supabase, committee.id, committee.name, (committee.topics ?? [])[0] ?? '', []);
-    await loadCommittees();
+    const code = await mintConferenceSession(supabase, committee.id, committee.name, (committee.topics ?? [])[0] ?? '', []);
+    markBusy(busyKey, false);
+    if (!code) {
+      setActionError("Couldn't generate a session code — please try again.");
+      return;
+    }
+    // Show the minted code immediately; a silent refetch syncs session_id.
+    setCommittees(prev => prev.map(x => x.id === committee.id ? { ...x, session_code: code } : x));
+    loadCommittees({ silent: true });
   }
 
   function handleCopyCode(code: string) {
@@ -368,19 +385,36 @@ export default function CommitteesPage() {
     setTimeout(() => setCopiedCode(null), 2000);
   }
 
-  async function handleDeleteCommittee(c: CommitteeRow) {
-    if (!session) return;
-    setDeleting(true);
-    const supabase = getAuthedClient(session.access_token);
-    // Delete the linked session first — cascades all session children (delegates, speakers_list, current_speaker, motions, documents, messages, feedback).
-    if (c.session_id) {
-      await supabase.from('committees').delete().eq('id', c.session_id);
-    }
-    // Delete the conference committee — cascades slots, allocations, awards, position_papers, study_guides, application_preferences; sets applications/job_postings to null (preserved).
-    await supabase.from('conference_committees').delete().eq('id', c.id);
-    setDeleting(false);
+  // Optimistic (AGENTS.md Rule 5): the card disappears immediately; the DB
+  // deletes run in the background and the row is re-inserted on failure.
+  function handleDeleteCommittee(c: CommitteeRow) {
+    if (!session || busyIds.has(c.id)) return;
+    const removedIndex = committees.findIndex(x => x.id === c.id);
+    const removedRow = removedIndex >= 0 ? committees[removedIndex] : null;
+    setCommittees(prev => prev.filter(x => x.id !== c.id));
     setDeleteTarget(null);
-    loadCommittees();
+    setActionError('');
+    markBusy(c.id, true);
+    const supabase = getAuthedClient(session.access_token);
+    (async () => {
+      // Delete the linked session first — cascades all session children (delegates, speakers_list, current_speaker, motions, documents, messages, feedback).
+      if (c.session_id) {
+        const { error: sessionError } = await supabase.from('committees').delete().eq('id', c.session_id);
+        if (sessionError) throw sessionError;
+      }
+      // Delete the conference committee — cascades slots, allocations, awards, position_papers, study_guides, application_preferences; sets applications/job_postings to null (preserved).
+      const { error } = await supabase.from('conference_committees').delete().eq('id', c.id);
+      if (error) throw error;
+    })().catch(() => {
+      if (removedRow) {
+        setCommittees(prev => {
+          const next = prev.filter(x => x.id !== c.id);
+          next.splice(Math.min(removedIndex, next.length), 0, removedRow);
+          return next;
+        });
+      }
+      setActionError(`Couldn't delete "${c.name}" — it was restored.`);
+    }).finally(() => markBusy(c.id, false));
   }
 
   // Same semantics as assignment/page.tsx handleRemoveChair — filter the id out of
@@ -389,7 +423,7 @@ export default function CommitteesPage() {
   // mapping relies on the trigger keeping display_chairs index-aligned with
   // chair_user_ids; on a mismatch (hand-seeded demo dais) fall back to profiles.
   async function handleRemoveChair(c: Committee, index: number, name: string) {
-    if (!session || !conference) return;
+    if (!session || !conference || busyIds.has(c.id)) return;
     if (!window.confirm(`Remove ${name} from the ${c.abbreviation || c.name} dais?`)) return;
     const supabase = getAuthedClient(session.access_token);
     const ids = c.chair_user_ids ?? [];
@@ -405,14 +439,66 @@ export default function CommitteesPage() {
       window.alert('This dais entry is not linked to a Gavelling account, so it cannot be removed here.');
       return;
     }
+    // Optimistic: drop the chair from the card immediately; the trigger's
+    // authoritative display_chairs arrives via the silent refetch.
+    const prevIds = c.chair_user_ids;
+    const prevDisplay = c.display_chairs;
     const nextIds = ids.filter(id => id !== userId);
-    await supabase.from('conference_committees').update({ chair_user_ids: nextIds }).eq('id', c.id);
-    await supabase.from('applications')
-      .update({ status: 'accepted', assigned_committee_id: null })
-      .eq('conference_id', conference.id)
-      .eq('user_id', userId)
-      .eq('role', 'chair');
-    await loadCommittees();
+    const nextDisplay = ids.length === dc.length ? dc.filter((_, i) => i !== index) : dc.filter(ch => ch.name !== name);
+    setCommittees(prev => prev.map(x => x.id === c.id ? { ...x, chair_user_ids: nextIds, display_chairs: nextDisplay } : x));
+    setActionError('');
+    markBusy(c.id, true);
+    (async () => {
+      const { error: primaryError } = await supabase.from('conference_committees').update({ chair_user_ids: nextIds }).eq('id', c.id);
+      if (primaryError) {
+        // Primary write failed — restore exactly the fields we touched.
+        setCommittees(prev => prev.map(x => x.id === c.id ? { ...x, chair_user_ids: prevIds, display_chairs: prevDisplay } : x));
+        setActionError(`Couldn't remove ${name} — the dais was restored.`);
+        return;
+      }
+      const { error: appError } = await supabase.from('applications')
+        .update({ status: 'accepted', assigned_committee_id: null })
+        .eq('conference_id', conference.id)
+        .eq('user_id', userId)
+        .eq('role', 'chair');
+      if (appError) {
+        // Secondary effect failed — surface it, but the removal stands.
+        setActionError(`${name} was removed from the dais, but their application couldn't be reset to accepted.`);
+      }
+      loadCommittees({ silent: true });
+    })().finally(() => markBusy(c.id, false));
+  }
+
+  // Optimistic assign (mirrors assignment/page.tsx handleAssignChair semantics):
+  // dedup-append to chair_user_ids, patch the card at once, persist in the
+  // background; the DB trigger recomputes display_chairs and the silent
+  // refetch syncs the authoritative version.
+  function handleAssignChair(c: Committee, app: ChairApplicant) {
+    if (!session) return;
+    const prevIds = c.chair_user_ids;
+    const prevDisplay = c.display_chairs;
+    const nextIds = Array.from(new Set([...(c.chair_user_ids ?? []), app.user_id]));
+    const alreadyOnDais = (c.chair_user_ids ?? []).includes(app.user_id);
+    const nextDisplay = alreadyOnDais
+      ? (c.display_chairs ?? [])
+      : [...(c.display_chairs ?? []), { name: app.profiles?.display_name ?? 'Unknown', avatar_url: app.profiles?.avatar_url ?? null }];
+    setCommittees(prev => prev.map(x => x.id === c.id ? { ...x, chair_user_ids: nextIds, display_chairs: nextDisplay } : x));
+    setAddChairTarget(null);
+    setActionError('');
+    const supabase = getAuthedClient(session.access_token);
+    (async () => {
+      const { error: primaryError } = await supabase.from('conference_committees').update({ chair_user_ids: nextIds }).eq('id', c.id);
+      if (primaryError) {
+        setCommittees(prev => prev.map(x => x.id === c.id ? { ...x, chair_user_ids: prevIds, display_chairs: prevDisplay } : x));
+        setActionError(`Couldn't add ${app.profiles?.display_name ?? 'that chair'} to the dais — the change was reverted.`);
+        return;
+      }
+      const { error: appError } = await supabase.from('applications').update({ status: 'assigned', assigned_committee_id: c.id }).eq('id', app.id);
+      if (appError) {
+        setActionError(`${app.profiles?.display_name ?? 'The chair'} was added to the dais, but their application couldn't be marked assigned.`);
+      }
+      loadCommittees({ silent: true });
+    })();
   }
 
   // Release the committee to its dais — always happens regardless of whether
@@ -430,28 +516,44 @@ export default function CommitteesPage() {
     });
     if (!confirmed) return;
 
+    // Optimistic: stamp the release locally and confirm at once; the write and
+    // the invite emails run in the background.
+    const prevReleasedAt = c.released_to_chairs_at;
+    const releasedAt = new Date().toISOString();
+    setCommittees(prev => prev.map(x => x.id === c.id ? { ...x, released_to_chairs_at: releasedAt } : x));
+    setActionError('');
     setSendingToChairs(c.id);
-    const supabase = getAuthedClient(session.access_token);
-    await supabase.from('conference_committees').update({ released_to_chairs_at: new Date().toISOString() }).eq('id', c.id);
-
-    const chairIds = c.chair_user_ids ?? [];
-    if (chairIds.length > 0) {
-      const { data: chairApps } = await supabase
-        .from('applications')
-        .select('id')
-        .eq('conference_id', conference.id)
-        .eq('role', 'chair')
-        .in('user_id', chairIds);
-      const appIds = ((chairApps ?? []) as { id: string }[]).map(a => a.id);
-      if (appIds.length > 0) {
-        const result = await queueEventEmail(supabase, conference.id, 'session_chair_invite', appIds);
-        if (!result.drafted) pushDraftNotice('session_chair_invite');
-      }
-    }
-
-    setSendingToChairs(null);
     showFlash(`Sent to ${dais.length} chair${dais.length === 1 ? '' : 's'}.`);
-    await loadCommittees();
+    const supabase = getAuthedClient(session.access_token);
+    (async () => {
+      const { error: primaryError } = await supabase.from('conference_committees').update({ released_to_chairs_at: releasedAt }).eq('id', c.id);
+      if (primaryError) {
+        // Primary write failed — restore only the release stamp.
+        setCommittees(prev => prev.map(x => x.id === c.id ? { ...x, released_to_chairs_at: prevReleasedAt } : x));
+        setFlash(null);
+        setActionError("Couldn't send to chairs — the release was reverted.");
+        return;
+      }
+      try {
+        const chairIds = c.chair_user_ids ?? [];
+        if (chairIds.length > 0) {
+          const { data: chairApps } = await supabase
+            .from('applications')
+            .select('id')
+            .eq('conference_id', conference.id)
+            .eq('role', 'chair')
+            .in('user_id', chairIds);
+          const appIds = ((chairApps ?? []) as { id: string }[]).map(a => a.id);
+          if (appIds.length > 0) {
+            const result = await queueEventEmail(supabase, conference.id, 'session_chair_invite', appIds);
+            if (!result.drafted) pushDraftNotice('session_chair_invite');
+          }
+        }
+      } catch {
+        // Secondary effect failed — the release stands; just surface it.
+        setActionError('Released to chairs, but the invite emails could not be queued.');
+      }
+    })().finally(() => setSendingToChairs(cur => (cur === c.id ? null : cur)));
   }
 
   if (!conference) return null;
@@ -518,6 +620,21 @@ export default function CommitteesPage() {
           }}
         >
           {flash}
+        </div>
+      )}
+
+      {actionError && (
+        <div
+          className="rounded-xl px-4 py-2.5 mb-5 text-sm"
+          style={{
+            backgroundColor: 'rgba(139,32,32,0.06)',
+            border: '1px solid rgba(139,32,32,0.2)',
+            color: '#8B2020',
+            fontFamily: "'Outfit', sans-serif",
+            fontWeight: 600,
+          }}
+        >
+          {actionError}
         </div>
       )}
 
@@ -840,16 +957,20 @@ export default function CommitteesPage() {
                         ) : (
                           <button
                             onClick={() => generateSessionCode(c)}
+                            disabled={busyIds.has(`mint-${c.id}`)}
                             className="w-full rounded-xl py-2.5 text-[11px] font-bold focus:outline-none"
                             style={{
-                              border: '1.5px dashed rgba(27,56,40,0.35)', color: '#1B3828', backgroundColor: 'transparent',
-                              fontFamily: "'Outfit', sans-serif", letterSpacing: '0.1em', cursor: 'pointer',
+                              border: '1.5px dashed rgba(27,56,40,0.35)',
+                              color: busyIds.has(`mint-${c.id}`) ? '#9A8A78' : '#1B3828',
+                              backgroundColor: 'transparent',
+                              fontFamily: "'Outfit', sans-serif", letterSpacing: '0.1em',
+                              cursor: busyIds.has(`mint-${c.id}`) ? 'default' : 'pointer',
                               transition: `background-color 300ms ${EASE}, color 300ms ${EASE}, border-color 300ms ${EASE}`,
                             }}
-                            onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = '#1B3828'; el.style.color = '#EED98A'; el.style.borderStyle = 'solid'; }}
-                            onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = 'transparent'; el.style.color = '#1B3828'; el.style.borderStyle = 'dashed'; }}
+                            onMouseEnter={e => { if (busyIds.has(`mint-${c.id}`)) return; const el = e.currentTarget as HTMLElement; el.style.backgroundColor = '#1B3828'; el.style.color = '#EED98A'; el.style.borderStyle = 'solid'; }}
+                            onMouseLeave={e => { if (busyIds.has(`mint-${c.id}`)) return; const el = e.currentTarget as HTMLElement; el.style.backgroundColor = 'transparent'; el.style.color = '#1B3828'; el.style.borderStyle = 'dashed'; }}
                           >
-                            GENERATE SESSION CODE
+                            {busyIds.has(`mint-${c.id}`) ? 'GENERATING…' : 'GENERATE SESSION CODE'}
                           </button>
                         )}
 
@@ -908,7 +1029,7 @@ export default function CommitteesPage() {
           conference={conference}
           committee={null}
           onClose={() => setShowAdd(false)}
-          onSaved={() => { setShowAdd(false); loadCommittees(); }}
+          onSaved={() => { setShowAdd(false); loadCommittees({ silent: true }); }}
         />
       )}
       {editTarget && (
@@ -916,7 +1037,7 @@ export default function CommitteesPage() {
           conference={conference}
           committee={editTarget}
           onClose={() => setEditTarget(null)}
-          onSaved={() => { setEditTarget(null); loadCommittees(); }}
+          onSaved={() => { setEditTarget(null); loadCommittees({ silent: true }); }}
         />
       )}
       {addChairTarget && (
@@ -925,20 +1046,21 @@ export default function CommitteesPage() {
           committee={addChairTarget}
           committees={committees}
           onClose={() => setAddChairTarget(null)}
-          onDone={() => { setAddChairTarget(null); loadCommittees(); }}
+          onDone={() => { setAddChairTarget(null); loadCommittees({ silent: true }); }}
           onInvited={name => showFlash(`Invite sent to ${name}`)}
+          onAssign={app => handleAssignChair(addChairTarget, app)}
         />
       )}
       {deleteTarget && (
-        <ModalOverlay onClose={() => { if (!deleting) setDeleteTarget(null); }}>
+        <ModalOverlay onClose={() => setDeleteTarget(null)}>
           <div className="rounded-2xl p-6 flex flex-col gap-4" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 400 }}>
             <p className="text-sm font-bold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Delete &ldquo;{deleteTarget.name}&rdquo;?</p>
             <p className="text-xs" style={{ color: '#6B5D4F', fontFamily: "'Outfit', sans-serif", lineHeight: 1.5 }}>
               This permanently removes the committee and its live session — including all delegates, documents, messages, country slots, and allocations. Applicants are kept but returned to unassigned. This cannot be undone.
             </p>
             <div className="flex gap-3 mt-1">
-              <button onClick={() => setDeleteTarget(null)} disabled={deleting} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ border: '1.5px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}>CANCEL</button>
-              <button onClick={() => handleDeleteCommittee(deleteTarget)} disabled={deleting} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ backgroundColor: deleting ? '#DDD4C0' : '#8B2020', color: deleting ? '#9A8A78' : '#FFFFFF', fontFamily: "'Outfit', sans-serif" }}>{deleting ? 'DELETING...' : 'DELETE'}</button>
+              <button onClick={() => setDeleteTarget(null)} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ border: '1.5px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}>CANCEL</button>
+              <button onClick={() => handleDeleteCommittee(deleteTarget)} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ backgroundColor: '#8B2020', color: '#FFFFFF', fontFamily: "'Outfit', sans-serif" }}>DELETE</button>
             </div>
           </div>
         </ModalOverlay>

@@ -184,13 +184,21 @@ export async function fetchAdvisorPool(
 // ── Shared DB mutations ──────────────────────────────────────────────────────
 
 // Grants an already-purchased open delegation spot — self_paid stays false.
-export async function markApplicationPaid(supabase: ReturnType<typeof getAuthedClient>, applicationId: string) {
-  await supabase.from('applications').update({ payment_status: 'paid', self_paid: false }).eq('id', applicationId);
+// Returns the primary write's error message (null on success) so callers can
+// roll back optimistic state.
+export async function markApplicationPaid(
+  supabase: ReturnType<typeof getAuthedClient>,
+  applicationId: string
+): Promise<{ error: string | null }> {
+  const { error } = await supabase.from('applications').update({ payment_status: 'paid', self_paid: false }).eq('id', applicationId);
+  return { error: error?.message ?? null };
 }
 
 export interface SwapEmailResult {
   incomingDrafted: boolean;
   outgoingDrafted: boolean;
+  /** First error from the primary payment/allocation writes, null on success. */
+  error: string | null;
 }
 
 /**
@@ -214,10 +222,15 @@ export async function performSwap(
   target: PoolMember,
   transfer: boolean
 ): Promise<SwapEmailResult> {
-  await Promise.all([
+  let firstError: string | null = null;
+  const note = (e: { message: string } | null) => { if (e && !firstError) firstError = e.message; };
+
+  const [srcRes, tgtRes] = await Promise.all([
     supabase.from('applications').update({ payment_status: 'paid', self_paid: false }).eq('id', source.id),
     supabase.from('applications').update({ payment_status: 'unpaid', self_paid: false }).eq('id', target.id),
   ]);
+  note(srcRes.error);
+  note(tgtRes.error);
 
   const canTransferAllocation = transfer && !!target.assigned_committee_id && !source.assigned_committee_id;
   if (canTransferAllocation) {
@@ -227,59 +240,64 @@ export async function performSwap(
       .eq('application_id', target.id)
       .maybeSingle();
     if (allocRow) {
-      await supabase.from('conference_allocations')
+      const { error } = await supabase.from('conference_allocations')
         .update({ user_id: source.user_id, application_id: source.id })
         .eq('id', (allocRow as { id: string }).id);
+      note(error);
     }
-    await supabase.from('applications').update({
+    const { error: srcAssignErr } = await supabase.from('applications').update({
       status: 'assigned',
       assigned_committee_id: target.assigned_committee_id,
       assigned_country_code: target.assigned_country_code,
       assigned_country_name: target.assigned_country_name,
     }).eq('id', source.id);
-    await supabase.from('applications').update({
+    note(srcAssignErr);
+    const { error: tgtClearErr } = await supabase.from('applications').update({
       status: 'accepted',
       assigned_committee_id: null,
       assigned_country_code: null,
       assigned_country_name: null,
     }).eq('id', target.id);
+    note(tgtClearErr);
   }
 
   const [incoming, outgoing] = await Promise.all([
     queueEventEmail(supabase, conferenceId, 'spot_received', [source.id]),
     queueEventEmail(supabase, conferenceId, 'spot_lost', [target.id]),
   ]);
-  return { incomingDrafted: incoming.drafted, outgoingDrafted: outgoing.drafted };
+  return { incomingDrafted: incoming.drafted, outgoingDrafted: outgoing.drafted, error: firstError };
 }
 
 export async function markNotAttending(
   supabase: ReturnType<typeof getAuthedClient>,
   conferenceId: string,
   member: PoolMember
-): Promise<{ drafted: boolean }> {
+): Promise<{ drafted: boolean; error: string | null }> {
   const hasAllocation = !!member.assigned_committee_id;
-  await supabase.from('applications').update({
+  const { error: updateErr } = await supabase.from('applications').update({
     attending: false,
     assigned_committee_id: null,
     assigned_country_code: null,
     assigned_country_name: null,
     status: member.status === 'assigned' ? 'accepted' : member.status,
   }).eq('id', member.id);
+  let firstError: string | null = updateErr?.message ?? null;
   if (hasAllocation) {
-    await supabase.from('conference_allocations').delete().eq('application_id', member.id);
+    const { error: delErr } = await supabase.from('conference_allocations').delete().eq('application_id', member.id);
+    if (delErr && !firstError) firstError = delErr.message;
   }
   const result = await queueEventEmail(supabase, conferenceId, 'not_attending', [member.id]);
-  return { drafted: result.drafted };
+  return { drafted: result.drafted, error: firstError };
 }
 
 export async function undoNotAttending(
   supabase: ReturnType<typeof getAuthedClient>,
   conferenceId: string,
   member: PoolMember
-): Promise<{ drafted: boolean }> {
-  await supabase.from('applications').update({ attending: true, payment_status: 'unpaid' }).eq('id', member.id);
+): Promise<{ drafted: boolean; error: string | null }> {
+  const { error } = await supabase.from('applications').update({ attending: true, payment_status: 'unpaid' }).eq('id', member.id);
   const result = await queueEventEmail(supabase, conferenceId, 'attendance_restored', [member.id]);
-  return { drafted: result.drafted };
+  return { drafted: result.drafted, error: error?.message ?? null };
 }
 
 /**
@@ -298,7 +316,7 @@ export async function removeFromDelegation(
   conferenceId: string,
   member: PoolMember,
   keepAllocation: boolean
-): Promise<{ drafted: boolean }> {
+): Promise<{ drafted: boolean; error: string | null }> {
   const pool = poolForRole(member.role);
   const selfFundedPaidSpot = member.payment_status === 'paid' && !!member.self_paid;
 
@@ -316,21 +334,24 @@ export async function removeFromDelegation(
     if (member.status === 'assigned') updates.status = 'accepted';
   }
 
-  await supabase.from('applications').update(updates).eq('id', member.id);
+  const { error: updateErr } = await supabase.from('applications').update(updates).eq('id', member.id);
+  let firstError: string | null = updateErr?.message ?? null;
 
   if (!keepAllocation && member.assigned_committee_id) {
-    await supabase.from('conference_allocations').delete().eq('application_id', member.id);
+    const { error: delErr } = await supabase.from('conference_allocations').delete().eq('application_id', member.id);
+    if (delErr && !firstError) firstError = delErr.message;
   }
 
   if (selfFundedPaidSpot && pool && member.society_id) {
     const spotsColumn = POOL_SPOTS_COLUMN[pool];
     const { data: soc } = await supabase.from('societies').select(spotsColumn).eq('id', member.society_id).single();
     const current = (soc as Record<string, number> | null)?.[spotsColumn] ?? 0;
-    await supabase.from('societies').update({ [spotsColumn]: Math.max(0, current - 1) }).eq('id', member.society_id);
+    const { error: socErr } = await supabase.from('societies').update({ [spotsColumn]: Math.max(0, current - 1) }).eq('id', member.society_id);
+    if (socErr && !firstError) firstError = socErr.message;
   }
 
   const result = await queueEventEmail(supabase, conferenceId, 'removed_from_delegation', [member.id]);
-  return { drafted: result.drafted };
+  return { drafted: result.drafted, error: firstError };
 }
 
 /**

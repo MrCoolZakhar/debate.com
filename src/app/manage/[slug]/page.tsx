@@ -15,7 +15,6 @@ import { LogoDisc } from '@/components/LogoDisc';
 import {
   NeuCard, NeuInset, NeuIconDisc, NeuStatTile, NeuProgress, NeuRing,
   NeuPill, NeuButton, NeuChecklistRow, Emoji3D, NEU, NEU_GRADIENTS, OUTFIT, EASE,
-  smoothPath,
 } from '@/components/neu';
 
 const RED = '#A8442F';
@@ -183,15 +182,10 @@ function bucketize(rows: AppRow[], range: RangeKey): { buckets: Bucket[]; prevPa
   return { buckets, prevPaid };
 }
 
-function cumulative(values: number[]): number[] {
-  let sum = 0;
-  return values.map(v => (sum += v));
-}
-
-// ── Revenue chart — interactive SVG: gold bars + forest cumulative line ────
+// ── Revenue chart — interactive SVG: gold revenue bars only ────────────────
 // Range tabs (24H/7D/30D/ALL), pointer-snapping hover with vertical guide +
-// neumorphic tooltip, gold peak marker, header shows range revenue + delta
-// vs the previous equivalent period. Hand-rolled, no chart libs.
+// neumorphic revenue tooltip, gold peak marker, header shows range revenue +
+// delta vs the previous equivalent period. Hand-rolled, no chart libs.
 
 function RevenueChart({
   rows,
@@ -225,29 +219,27 @@ function RevenueChart({
   const { buckets, prevPaid } = useMemo(() => bucketize(rows, range), [rows, range]);
 
   const revenue = buckets.map(b => b.paid * fee);
-  const cumApps = cumulative(buckets.map(b => b.apps));
+  const appsTotal = buckets.reduce((a, b) => a + b.apps, 0);
   const totalRev = revenue.reduce((a, b) => a + b, 0);
   const prevRev = prevPaid === null ? null : prevPaid * fee;
   const delta = prevRev === null ? null : totalRev - prevRev;
 
   const { w: W, h: H } = dims;
-  const padL = 34, padR = 12, padT = 18, padB = 20;
+  const padL = 46, padR = 12, padT = 18, padB = 20;
   const plotW = Math.max(40, W - padL - padR);
   const plotH = Math.max(40, H - padT - padB);
   const n = buckets.length;
   const slot = plotW / n;
 
-  const maxCum = Math.max(...cumApps, 1);
   const maxRev = Math.max(...revenue, 1);
   const hasRevenue = revenue.some(v => v > 0);
-  const hasActivity = cumApps[n - 1] > 0 || hasRevenue;
 
   const xc = (i: number) => padL + slot * (i + 0.5);
-  const yApps = (v: number) => padT + plotH - (v / maxCum) * plotH;
-  const yRev = (v: number) => padT + plotH - (v / maxRev) * (plotH * 0.86);
+  const yRev = (v: number) => padT + plotH - (v / maxRev) * (plotH * 0.88);
   const baseY = padT + plotH;
 
-  const barW = Math.min(22, slot * 0.55);
+  // Dense, serious bars: ~74% of the slot (≈35% gap→bar ratio).
+  const barW = Math.min(44, slot * 0.74);
 
   // Rounded-top bar path (width parameterised so the hovered bar can grow).
   const bar = (i: number, v: number, w: number): string => {
@@ -258,16 +250,15 @@ function RevenueChart({
     return `M ${x} ${baseY} L ${x} ${top + r} Q ${x} ${top} ${x + r} ${top} L ${x + w - r} ${top} Q ${x + w} ${top} ${x + w} ${top + r} L ${x + w} ${baseY} Z`;
   };
 
-  const linePts = cumApps.map((v, i) => ({ x: xc(i), y: yApps(v) }));
-  const lastPt = linePts[linePts.length - 1];
-
   // Peak-revenue bucket → gold dot + tiny label.
   let peakI = -1;
   for (let i = 0; i < revenue.length; i++) {
     if (revenue[i] > 0 && (peakI === -1 || revenue[i] > revenue[peakI])) peakI = i;
   }
 
-  const guides = [0.5, 1].map(f => ({ y: yApps(maxCum * f), v: Math.round(maxCum * f) }));
+  const guides = hasRevenue
+    ? [0.5, 1].map(f => ({ y: yRev(maxRev * f), v: formatFee(Math.round(maxRev * f), currency) }))
+    : [];
   const labelEvery = Math.max(1, Math.ceil(n / Math.max(4, Math.floor(plotW / 68))));
 
   // Snap pointer x to the nearest bucket.
@@ -289,7 +280,7 @@ function RevenueChart({
           className="flex items-center gap-3 min-w-0 transition-opacity hover:opacity-75"
           style={{ textDecoration: 'none', cursor: 'pointer' }}
         >
-          <NeuIconDisc gradient={NEU_GRADIENTS.gold} emoji="Chart increasing" icon={TrendingUp} size={32} />
+          <NeuIconDisc gradient={NEU_GRADIENTS.gold} emoji="Chart increasing" icon={TrendingUp} size={36} />
           <div className="min-w-0">
             <div className="flex items-baseline gap-2.5">
               <span style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 900, color: NEU.ink }}>Revenue</span>
@@ -303,23 +294,13 @@ function RevenueChart({
               </p>
             ) : (
               <p style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 600, color: NEU.muted, marginTop: 1 }}>
-                All time · {cumApps[n - 1]} application{cumApps[n - 1] === 1 ? '' : 's'}
+                All time · {appsTotal} application{appsTotal === 1 ? '' : 's'}
               </p>
             )}
           </div>
         </Link>
 
         <div className="flex items-center gap-3 flex-shrink-0">
-          <span className="hidden xl:inline-flex items-center gap-3">
-            <span className="inline-flex items-center gap-1.5">
-              <span style={{ width: 8, height: 8, borderRadius: 999, backgroundColor: NEU.forest }} />
-              <span style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 600, color: NEU.muted }}>Applications (cum.)</span>
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <span style={{ width: 8, height: 8, borderRadius: 999, backgroundColor: NEU.deepGold }} />
-              <span style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 600, color: NEU.muted }}>Revenue</span>
-            </span>
-          </span>
           <span className="inline-flex items-center gap-1.5">
             {RANGE_KEYS.map(k => (
               <NeuPill key={k} active={range === k} gradient={NEU_GRADIENTS.forest} onClick={() => { setRange(k); setHoverI(null); }}>
@@ -350,7 +331,7 @@ function RevenueChart({
                 onPointerLeave={() => setHoverI(null)}
                 style={{ display: 'block', touchAction: 'none' }}
                 role="img"
-                aria-label="Revenue and cumulative applications over time"
+                aria-label="Revenue over time"
               >
                 <defs>
                   <linearGradient id={gid} x1="0%" y1="0%" x2="0%" y2="100%">
@@ -359,8 +340,8 @@ function RevenueChart({
                   </linearGradient>
                 </defs>
 
-                {guides.map(g => (
-                  <g key={g.v}>
+                {guides.map((g, gi) => (
+                  <g key={gi}>
                     <line x1={padL} x2={W - padR} y1={g.y} y2={g.y} stroke="rgba(27,56,40,0.08)" strokeWidth={1} />
                     <text x={padL - 7} y={g.y + 3} textAnchor="end" style={{ fontFamily: OUTFIT, fontSize: 10, fill: NEU.muted, fontVariantNumeric: 'tabular-nums' }}>
                       {g.v}
@@ -386,13 +367,6 @@ function RevenueChart({
                     />
                   ) : null
                 ))}
-
-                {/* Cumulative applications — smooth forest line */}
-                <path d={smoothPath(linePts)} fill="none" stroke={NEU.forest} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
-                {lastPt && hoverI === null && <circle cx={lastPt.x} cy={lastPt.y} r={4} fill={NEU.forest} stroke="#FFFFFF" strokeWidth={2} />}
-                {hoverI !== null && (
-                  <circle cx={xc(hoverI)} cy={yApps(cumApps[hoverI])} r={5} fill={NEU.forest} stroke="#FFFFFF" strokeWidth={2} />
-                )}
 
                 {/* Peak-revenue marker — gold dot + tiny label */}
                 {peakI >= 0 && (
@@ -420,7 +394,7 @@ function RevenueChart({
               </svg>
 
               {/* No-activity note over an empty range */}
-              {!hasActivity && (
+              {!hasRevenue && (
                 <p
                   className="absolute inset-x-0 text-center pointer-events-none"
                   style={{ top: '38%', fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 600, color: NEU.muted }}
@@ -429,8 +403,8 @@ function RevenueChart({
                 </p>
               )}
 
-              {/* Neumorphic hover tooltip */}
-              {hoverI !== null && hasActivity && (
+              {/* Neumorphic hover tooltip — revenue only */}
+              {hoverI !== null && hasRevenue && (
                 <div
                   className="pointer-events-none"
                   style={{
@@ -451,9 +425,6 @@ function RevenueChart({
                   </p>
                   <p style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 900, color: NEU.deepGold, fontVariantNumeric: 'tabular-nums', marginTop: 1 }}>
                     {formatFee(revenue[hoverI], currency)}
-                  </p>
-                  <p style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 700, color: NEU.forest, fontVariantNumeric: 'tabular-nums' }}>
-                    {cumApps[hoverI]} application{cumApps[hoverI] === 1 ? '' : 's'} (cum.)
                   </p>
                 </div>
               )}
@@ -497,7 +468,7 @@ function UnallocatedTile({ count, href }: { count: number; href: string }) {
       <div className="flex items-start justify-between gap-2">
         <Emoji3D
           name={ok ? 'Check mark button' : 'Red exclamation mark'}
-          size={26}
+          size={32}
           fallback={ok ? CheckCircle2 : AlertCircle}
           fallbackColor={ok ? NEU.green : NEU.amber}
         />
@@ -620,11 +591,11 @@ export default function DashboardPage() {
     return (
       <div className="flex flex-col" style={{ height: 'calc(100vh - 56px)', overflow: 'hidden', padding: '14px 20px 16px' }}>
         <div className="rounded-[22px] animate-pulse flex-shrink-0" style={{ height: 48, backgroundColor: NEU.surface, boxShadow: NEU.out, marginBottom: 12 }} />
-        <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: 'minmax(320px, 34fr) minmax(0, 66fr)', gridTemplateRows: 'auto minmax(0, 1fr)', gap: 14 }}>
+        <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: 'minmax(320px, 34fr) minmax(0, 66fr)', gridTemplateRows: 'minmax(0, 11fr) minmax(0, 9fr)', gap: 14 }}>
           <div className="rounded-[22px] animate-pulse" style={{ gridRow: '1 / 3', backgroundColor: NEU.surface, boxShadow: NEU.out }} />
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.15fr) minmax(0,1.7fr) repeat(3, minmax(0,1fr))', gap: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.15fr) minmax(0,1.7fr) repeat(3, minmax(0,1fr))', gap: 14, minHeight: 0 }}>
             {[0, 1, 2, 3, 4].map(i => (
-              <div key={i} className="rounded-[22px] animate-pulse" style={{ height: 104, backgroundColor: NEU.surface, boxShadow: NEU.out }} />
+              <div key={i} className="rounded-[22px] animate-pulse" style={{ backgroundColor: NEU.surface, boxShadow: NEU.out }} />
             ))}
           </div>
           <div className="rounded-[22px] animate-pulse" style={{ minHeight: 0, backgroundColor: NEU.surface, boxShadow: NEU.out }} />
@@ -811,7 +782,9 @@ export default function DashboardPage() {
           minHeight: 0,
           display: 'grid',
           gridTemplateColumns: 'minmax(320px, 34fr) minmax(0, 66fr)',
-          gridTemplateRows: 'auto minmax(0, 1fr)',
+          // Right column: top row (alert/pipeline/tiles) gets the majority;
+          // the revenue graph is capped at ~45% so it stops dominating.
+          gridTemplateRows: 'minmax(0, 11fr) minmax(0, 9fr)',
           gap: 14,
         }}
       >
@@ -834,7 +807,9 @@ export default function DashboardPage() {
 
           <NeuProgress value={doneCount} max={checklist.length} gradient={NEU_GRADIENTS.gold} thumb height={10} style={{ marginBottom: 12, flexShrink: 0 }} />
 
-          <div className="flex flex-col" style={{ flex: 1, minHeight: 0, gap: 6, justifyContent: 'space-between', overflow: 'hidden' }}>
+          {/* Top-aligned stack with a FIXED gap — identical rhythm at every
+              viewport height; leftover card space simply stays empty below. */}
+          <div className="flex flex-col" style={{ flex: 1, minHeight: 0, gap: 7, justifyContent: 'flex-start', overflow: 'hidden' }}>
             {sortedChecklist.map(item => (
               <NeuChecklistRow
                 key={item.key}
@@ -875,7 +850,9 @@ export default function DashboardPage() {
               </span>
             </div>
             <NeuProgress value={dash.allocated} max={acceptedApps} gradient={NEU_GRADIENTS.forest} height={8} style={{ marginTop: 8, marginBottom: 9, flexShrink: 0 }} />
-            <div className="grid grid-cols-4" style={{ flex: 1, minHeight: 0 }}>
+            {/* Top-anchored (no flex:1 stretch) — extra card height stays empty
+                below rather than drifting the numbers toward the middle. */}
+            <div className="grid grid-cols-4">
               <PipelineCell n={totalApps} label="Submitted" href={`/manage/${slug}/applications`} first />
               <PipelineCell n={acceptedApps} label="Accepted" href={`/manage/${slug}/applications`} />
               <PipelineCell n={paidApps} label="Paid" href={`/manage/${slug}/financials`} />
@@ -890,7 +867,6 @@ export default function DashboardPage() {
             value={totalApps}
             label="Applications"
             href={`/manage/${slug}/applications`}
-            compact
           />
           <NeuStatTile
             emoji="Check mark button"
@@ -899,7 +875,6 @@ export default function DashboardPage() {
             value={acceptedApps}
             label="Accepted"
             href={`/manage/${slug}/applications`}
-            compact
           />
           <NeuStatTile
             emoji="Globe showing europe-africa"
@@ -908,7 +883,6 @@ export default function DashboardPage() {
             value={societies}
             label="Delegations"
             href={`/manage/${slug}/applications`}
-            compact
           />
         </div>
 

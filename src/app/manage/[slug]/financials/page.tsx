@@ -1,144 +1,581 @@
 'use client';
-import { Wallet, TrendingUp, Clock, Landmark, Sparkles } from 'lucide-react';
+
+/**
+ * Organiser financial dashboard — revenue overview, delegate estimate,
+ * read-only payment pipeline and voucher management. Neumorphic throughout
+ * (neu.tsx primitives); money math mirrors src/lib/finance.ts semantics
+ * (5% platform fee after discounts, waived participants excluded).
+ *
+ * The Stripe seam is a single integration point consistent with
+ * src/lib/payments.ts: conference.stripe_account_id null → connect teaser
+ * (stub, "coming soon"); set → CONNECTED pill. No payment writes happen on
+ * this page — marking paid stays on the Applications page.
+ */
+
+import { useState, useEffect, useMemo } from 'react';
+import Link from 'next/link';
+import {
+  ArrowRight, BadgePercent, CircleCheck, Clock, CreditCard, Eye, Gavel,
+  GraduationCap, HandCoins, Hourglass, Landmark, PiggyBank, TrendingUp,
+  User, Users, Wallet,
+} from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
-import { Pill } from '@/app/account/accountUi';
+import { useAuth } from '@/components/AuthProvider';
+import { getAuthedClient } from '@/lib/supabase-auth';
+import { PLATFORM_FEE_RATE, roundMoney, formatFee, currencySymbol } from '@/lib/finance';
+import { FlagImg } from '@/components/FlagImg';
+import { getCountryByName } from '@/lib/countries';
+import {
+  NEU, NEU_GRADIENTS, OUTFIT,
+  NeuCard, NeuInset, NeuStatTile, NeuProgress, NeuPill, NeuButton, NeuIconDisc,
+} from '@/components/neu';
+import VouchersSection from './VouchersSection';
 
-const OUTFIT = "'Outfit', sans-serif";
+// ── Types ──────────────────────────────────────────────────────────────────
 
-// Ghosted "future stat" medallion — reads as a designed preview, not an empty box.
-function GhostStat({
-  icon,
-  label,
-  hint,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  hint: string;
-}) {
+interface FinRow {
+  id: string;
+  role: string;
+  status: string;
+  payment_status: string | null;
+  fee_waiver_source: string | null;
+  voucher_discount: number | null;
+  submitted_at: string;
+  assigned_country_code: string | null;
+  assigned_country_name: string | null;
+  profiles: { display_name: string } | null;
+  assigned_committee: { name: string; abbreviation: string | null } | null;
+}
+
+// ── Money helpers (per-row, mirroring finance.ts) ──────────────────────────
+
+/** What this participant owes/paid for the conference fee itself:
+ *  base fee minus any recorded voucher discount, never below zero. */
+function rowAmount(fee: number, r: FinRow): number {
+  return roundMoney(Math.max(0, fee - (Number(r.voucher_discount) || 0)));
+}
+
+// ── Display helpers (conventions shared with applications/page.tsx) ────────
+
+function roleLabel(role: string) {
+  const map: Record<string, string> = {
+    delegate: 'Delegate', chair: 'Chair', 'head-delegate': 'Head Del.',
+    'faculty-advisor': 'Advisor', observer: 'Observer',
+  };
+  return map[role] ?? role;
+}
+
+function RoleIcon({ role, size = 10 }: { role: string; size?: number }) {
+  const Icon = role === 'chair' ? Gavel
+    : role === 'head-delegate' ? Users
+    : role === 'faculty-advisor' ? GraduationCap
+    : role === 'observer' ? Eye
+    : User;
+  return <Icon size={size} strokeWidth={2.5} />;
+}
+
+function roleTone(role: string) {
+  return role === 'delegate' || role === 'head-delegate'
+    ? { bg: 'rgba(42,90,60,0.14)', color: '#2A5A3C', border: 'rgba(42,90,60,0.38)' }
+    : role === 'chair'
+    ? { bg: 'rgba(182,135,31,0.16)', color: '#8A6614', border: 'rgba(182,135,31,0.42)' }
+    : { bg: 'rgba(90,110,160,0.13)', color: '#4A5A85', border: 'rgba(90,110,160,0.35)' };
+}
+
+/** Committee shorthand — abbreviation when set, else a monogram of the name. */
+function committeeAbbr(c: { name: string; abbreviation: string | null } | null): string {
+  if (!c) return '—';
+  if (c.abbreviation) return c.abbreviation;
+  const mono = c.name
+    .split(/\s+/)
+    .filter(w => /^[A-Za-z0-9]/.test(w))
+    .map(w => w[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 4);
+  return mono || c.name.slice(0, 4).toUpperCase();
+}
+
+function CountryFlag({ name, code, size = 14 }: { name: string | null; code?: string | null; size?: number }) {
+  const resolved = code || (name ? getCountryByName(name)?.code : undefined);
+  if (!resolved) return null;
   return (
-    <div
-      className="relative flex flex-col items-center text-center rounded-2xl px-4 py-6 overflow-hidden"
-      style={{
-        backgroundColor: 'rgba(250,248,243,0.55)',
-        border: '1.5px solid #D8CDB6',
-        boxShadow: '0 1px 3px rgba(27,56,40,0.05)',
-      }}
-    >
-      {/* Ghosted content */}
-      <div style={{ filter: 'blur(1.5px)', opacity: 0.55 }} className="flex flex-col items-center">
-        <span
-          className="flex items-center justify-center rounded-full mb-3"
-          style={{
-            width: '54px',
-            height: '54px',
-            background: 'radial-gradient(circle at 50% 36%, rgba(238,217,138,0.28) 0%, rgba(250,248,243,0) 74%)',
-            border: '1.5px solid rgba(182,135,31,0.4)',
-            boxShadow: '0 0 0 6px rgba(238,217,138,0.1)',
-          }}
-        >
-          <span style={{ color: '#B6871F' }}>{icon}</span>
-        </span>
-        <span style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: '26px', color: '#1C1410', lineHeight: 1 }}>
-          ——
-        </span>
-      </div>
-      <p
-        className="mt-3"
-        style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: '12px', color: '#6E5F4E', letterSpacing: '0.02em' }}
-      >
-        {label}
-      </p>
-      <p className="mt-1" style={{ fontFamily: OUTFIT, fontSize: '11px', color: '#9A8A78', lineHeight: 1.4 }}>
-        {hint}
-      </p>
-    </div>
+    <span title={name ?? resolved} className="inline-flex items-center flex-shrink-0" style={{ lineHeight: 0 }}>
+      <FlagImg code={resolved} size={size} />
+    </span>
   );
 }
 
+/** Cumulative sparkline over submitted_at — 12 buckets from first matching
+ *  row to now. Cheap approximation: there is no paid_at column, so paid rows
+ *  are bucketed by submission time (same note as the dashboard chart). */
+function cumulativeSpark(rows: FinRow[], pick: (r: FinRow) => boolean, n = 12): number[] | undefined {
+  const times = rows
+    .filter(pick)
+    .map(r => new Date(r.submitted_at).getTime())
+    .filter(t => Number.isFinite(t))
+    .sort((a, b) => a - b);
+  if (times.length < 2) return undefined;
+  const start = times[0];
+  const span = Math.max(1, Date.now() - start);
+  const buckets = new Array<number>(n).fill(0);
+  for (const t of times) {
+    buckets[Math.min(n - 1, Math.floor(((t - start) / span) * n))] += 1;
+  }
+  let acc = 0;
+  return buckets.map(v => (acc += v));
+}
+
+const chipStyle: React.CSSProperties = {
+  fontSize: 9, fontFamily: OUTFIT, fontWeight: 800, letterSpacing: '0.08em',
+  padding: '3px 9px', borderRadius: 999, whiteSpace: 'nowrap',
+};
+
+const PIPELINE_FILTERS = [
+  { label: 'ALL', value: 'all' },
+  { label: 'PAID', value: 'paid' },
+  { label: 'UNPAID', value: 'unpaid' },
+  { label: 'WAIVED', value: 'waived' },
+] as const;
+type PipelineFilter = (typeof PIPELINE_FILTERS)[number]['value'];
+
+// ── Page ───────────────────────────────────────────────────────────────────
+
 export default function FinancialsPage() {
   const { conference } = useManage();
+  const { session } = useAuth();
+  const [rows, setRows] = useState<FinRow[] | null>(null);
+  const [filter, setFilter] = useState<PipelineFilter>('all');
+
+  useEffect(() => {
+    if (!conference || !session) return;
+    const supabase = getAuthedClient(session.access_token);
+    (async () => {
+      // One batched query: everything the overview, estimate block and
+      // pipeline table need. Vouchers load inside their own section.
+      const { data } = await supabase
+        .from('applications')
+        .select(`
+          id, role, status, payment_status, fee_waiver_source, voucher_discount, submitted_at,
+          assigned_country_code, assigned_country_name,
+          profiles (display_name),
+          assigned_committee:conference_committees!assigned_committee_id (name, abbreviation)
+        `)
+        .eq('conference_id', conference.id)
+        .order('submitted_at', { ascending: false });
+      setRows((data ?? []) as unknown as FinRow[]);
+    })();
+  }, [conference?.id, session?.access_token]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const fee = conference?.fee_amount ?? 0;
+  const currency = conference?.fee_currency ?? 'USD';
+
+  // ── Derived money figures ────────────────────────────────────────────────
+  const fin = useMemo(() => {
+    const all = rows ?? [];
+    // Rejected applications drop out of the pipeline entirely — except paid
+    // ones, whose money was still collected.
+    const live = all.filter(r => r.status !== 'rejected' || r.payment_status === 'paid');
+
+    const paidRows = live.filter(r => r.payment_status === 'paid');
+    const pendingRows = live.filter(
+      r => (r.status === 'accepted' || r.status === 'assigned') && r.payment_status === 'unpaid'
+    );
+    const waivedRows = live.filter(r => r.payment_status === 'waived');
+
+    const collected = roundMoney(paidRows.reduce((s, r) => s + rowAmount(fee, r), 0));
+    const pending = roundMoney(pendingRows.reduce((s, r) => s + rowAmount(fee, r), 0));
+    const waived = roundMoney(waivedRows.length * fee);
+    const expectedTotal = roundMoney(collected + pending);
+
+    // Platform fee estimate — mirrors finance.ts: 5% of each paid
+    // participant's post-discount fee, zero when their fee_waiver_source is
+    // set (ambassador / unlimited waivers exempt the platform fee).
+    const platformFee = roundMoney(
+      paidRows.reduce((s, r) => s + (r.fee_waiver_source ? 0 : rowAmount(fee, r) * PLATFORM_FEE_RATE), 0)
+    );
+
+    // Delegate estimate — expected_delegates is the organiser's own estimate
+    // of DELEGATES, so reality is measured on the delegate pool only.
+    const delegateRows = live.filter(r => r.role === 'delegate' || r.role === 'head-delegate');
+    const acceptedDelegates = delegateRows.filter(r => r.status === 'accepted' || r.status === 'assigned').length;
+    const paidDelegates = delegateRows.filter(r => r.payment_status === 'paid').length;
+
+    return {
+      live, paidRows, pendingRows, waivedRows,
+      collected, pending, waived, expectedTotal, platformFee,
+      acceptedDelegates, paidDelegates,
+    };
+  }, [rows, fee]);
+
+  if (!conference) return null;
+
+  const loading = rows === null;
+  const stripeConnected = !!conference.stripe_account_id;
+  const expectedDelegates = conference.expected_delegates || 0;
+
+  const pipelineRows = fin.live.filter(r => {
+    if (filter === 'paid') return r.payment_status === 'paid';
+    if (filter === 'unpaid') return r.payment_status === 'unpaid';
+    if (filter === 'waived') return r.payment_status === 'waived';
+    return true;
+  });
+
+  const mutedCaption: React.CSSProperties = {
+    fontFamily: OUTFIT, fontSize: 10.5, color: NEU.muted, lineHeight: 1.55,
+  };
 
   return (
     <div className="px-6 md:px-10 py-8">
-      <div style={{ maxWidth: 880, margin: '0 auto' }}>
-        {/* Eyebrow */}
-        <p
-          className="mb-4"
-          style={{ fontFamily: OUTFIT, fontSize: '11px', fontWeight: 800, letterSpacing: '0.14em', color: '#B6871F', textTransform: 'uppercase' }}
-        >
-          {conference?.acronym ?? 'Conference'} · Financials
-        </p>
+      <div style={{ maxWidth: 1020, margin: '0 auto' }}>
 
-        {/* Hero teaser card */}
-        <div
-          className="relative overflow-hidden rounded-[26px]"
-          style={{
-            background: 'linear-gradient(150deg, #16301F 0%, #1B3828 46%, #2A5A3C 100%)',
-            border: '1.5px solid rgba(182,135,31,0.32)',
-            boxShadow: '0 2px 8px rgba(27,56,40,0.14), 0 24px 60px rgba(27,56,40,0.22)',
-          }}
-        >
-          {/* Gold radial glow */}
-          <div
-            className="pointer-events-none absolute inset-0"
-            style={{ background: 'radial-gradient(circle at 50% 8%, rgba(238,217,138,0.22) 0%, rgba(27,56,40,0) 58%)' }}
-          />
-
-          <div className="relative flex flex-col items-center text-center px-6 md:px-10 pt-12 pb-10">
-            {/* Wallet medallion */}
-            <div
-              className="flex items-center justify-center rounded-full mb-6"
-              style={{
-                width: '96px',
-                height: '96px',
-                background: 'radial-gradient(circle at 50% 36%, rgba(238,217,138,0.34) 0%, rgba(27,56,40,0) 72%)',
-                border: '1.5px solid rgba(238,217,138,0.5)',
-                boxShadow: '0 10px 30px rgba(0,0,0,0.28), 0 0 0 8px rgba(238,217,138,0.1)',
-              }}
-            >
-              <Wallet size={40} strokeWidth={1.9} style={{ color: '#EED98A' }} />
-            </div>
-
-            {/* Coming with Stripe badge */}
-            <div className="mb-5">
-              <Pill tone="gold" icon={<Sparkles size={12} strokeWidth={2.4} />}>
-                Coming with Stripe
-              </Pill>
-            </div>
-
-            <h1
-              className="mb-3"
-              style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: '30px', lineHeight: 1.1, color: '#FAF8F3', letterSpacing: '-0.01em' }}
-            >
-              Payments are coming to Gavelling
-            </h1>
+        {/* ── 1 · Header + Stripe seam ── */}
+        <div className="flex items-start justify-between gap-4 flex-wrap mb-5">
+          <div>
             <p
-              className="max-w-md"
-              style={{ fontFamily: OUTFIT, fontSize: '14px', lineHeight: 1.7, color: 'rgba(250,248,243,0.72)' }}
+              className="mb-1"
+              style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', color: NEU.deepGold, textTransform: 'uppercase' }}
             >
-              Soon you&apos;ll collect registration fees, track outstanding balances, and pay out
-              directly from here — powered by Stripe. We&apos;re building it now.
+              {conference.acronym} · Financials
             </p>
-          </div>
-
-          {/* Ghosted future stats grid */}
-          <div
-            className="relative px-6 md:px-10 pb-10 pt-8"
-            style={{ borderTop: '1px solid rgba(238,217,138,0.14)' }}
-          >
-            <p
-              className="text-center mb-5"
-              style={{ fontFamily: OUTFIT, fontSize: '10px', fontWeight: 800, letterSpacing: '0.16em', color: 'rgba(238,217,138,0.65)', textTransform: 'uppercase' }}
-            >
-              A preview of what&apos;s coming
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <GhostStat icon={<TrendingUp size={22} strokeWidth={2} />} label="Collected" hint="Fees successfully paid" />
-              <GhostStat icon={<Clock size={22} strokeWidth={2} />} label="Pending" hint="Awaiting payment" />
-              <GhostStat icon={<Landmark size={22} strokeWidth={2} />} label="Paid out" hint="Transferred to you" />
+            <div className="flex items-center gap-3 flex-wrap">
+              <h1 style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 26, color: NEU.ink, letterSpacing: '-0.01em' }}>
+                Financials
+              </h1>
+              <NeuPill>
+                {currencySymbol(currency)} {currency}
+              </NeuPill>
+              {stripeConnected && (
+                <NeuPill active gradient={NEU_GRADIENTS.green}>
+                  <CircleCheck size={11} strokeWidth={2.6} />
+                  STRIPE CONNECTED
+                </NeuPill>
+              )}
             </div>
           </div>
         </div>
+
+        {/* Stripe connect teaser — the single integration seam (payments.ts) */}
+        {!stripeConnected && (
+          <div
+            className="flex items-center gap-4 flex-wrap rounded-[20px] px-5 py-4 mb-6"
+            style={{
+              background: 'linear-gradient(150deg, #16301F 0%, #1B3828 52%, #2A5A3C 100%)',
+              boxShadow: '0 2px 8px rgba(27,56,40,0.14), 0 16px 40px rgba(27,56,40,0.22)',
+            }}
+          >
+            <span
+              className="flex items-center justify-center rounded-full flex-shrink-0"
+              style={{
+                width: 44, height: 44,
+                background: 'radial-gradient(circle at 50% 36%, rgba(238,217,138,0.34) 0%, rgba(27,56,40,0) 74%)',
+                border: '1.5px solid rgba(238,217,138,0.5)',
+              }}
+            >
+              <Wallet size={20} strokeWidth={2} style={{ color: NEU.gold }} />
+            </span>
+            <div className="flex-1 min-w-[220px]">
+              <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 14, color: '#FAF8F3', lineHeight: 1.3 }}>
+                Connect Stripe to collect payments automatically
+              </p>
+              <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: 'rgba(250,248,243,0.68)', lineHeight: 1.5 }}>
+                Until then, mark payments manually on the Applications page — every figure below stays accurate either way.
+              </p>
+            </div>
+            <div className="flex flex-col items-end gap-1 flex-shrink-0">
+              <NeuButton icon={CreditCard} disabled gradient={NEU_GRADIENTS.gold}>
+                CONNECT
+              </NeuButton>
+              <span style={{ fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 700, letterSpacing: '0.12em', color: 'rgba(238,217,138,0.65)' }}>
+                COMING SOON
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* ── 2 · Revenue overview ── */}
+        {loading ? (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
+            {[0, 1, 2, 3].map(i => (
+              <div key={i} className="rounded-[22px] animate-pulse" style={{ height: 118, backgroundColor: NEU.surface, boxShadow: NEU.out }} />
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
+            <NeuStatTile
+              emoji="Money bag"
+              icon={PiggyBank}
+              gradient={NEU_GRADIENTS.green}
+              value={formatFee(fin.collected, currency)}
+              label={`Collected · ${fin.paidRows.length} paid`}
+              spark={cumulativeSpark(rows ?? [], r => r.payment_status === 'paid')}
+            />
+            <NeuStatTile
+              emoji="Hourglass not done"
+              icon={Hourglass}
+              gradient={NEU_GRADIENTS.amber}
+              value={formatFee(fin.pending, currency)}
+              label={`Pending · ${fin.pendingRows.length} accepted unpaid`}
+              spark={cumulativeSpark(rows ?? [], r => (r.status === 'accepted' || r.status === 'assigned') && r.payment_status === 'unpaid')}
+            />
+            <NeuStatTile
+              emoji="Money with wings"
+              icon={HandCoins}
+              gradient={NEU_GRADIENTS.sage}
+              value={formatFee(fin.waived, currency)}
+              label={`Waived · ${fin.waivedRows.length} fee${fin.waivedRows.length === 1 ? '' : 's'} forgone`}
+              style={{ opacity: 0.72 }}
+            />
+            <NeuStatTile
+              emoji="Chart increasing"
+              icon={TrendingUp}
+              gradient={NEU_GRADIENTS.gold}
+              value={formatFee(fin.expectedTotal, currency)}
+              label="Expected total · collected + pending"
+              spark={cumulativeSpark(rows ?? [], r =>
+                r.payment_status === 'paid'
+                || ((r.status === 'accepted' || r.status === 'assigned') && r.payment_status === 'unpaid'))}
+            />
+          </div>
+        )}
+
+        {/* ── 6 · Platform fee estimate line ── */}
+        {!loading && (
+          <NeuInset small className="flex items-center gap-3 flex-wrap px-4 py-3 mb-8">
+            <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={Landmark} size={30} />
+            <span style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: NEU.ink }}>
+              Gavelling platform fee ({Math.round(PLATFORM_FEE_RATE * 100)}%)
+            </span>
+            <span style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 900, color: NEU.forest, fontVariantNumeric: 'tabular-nums' }}>
+              ≈ {formatFee(fin.platformFee, currency)}
+            </span>
+            <span className="flex-1" style={{ minWidth: 160, ...mutedCaption }}>
+              Estimated on collected revenue after voucher discounts; participants with an
+              ambassador or unlimited waiver excluded. Paid by participants at checkout — it never
+              comes out of your fee.
+            </span>
+          </NeuInset>
+        )}
+
+        {/* ── 3 · Delegate estimate block ── */}
+        <NeuCard style={{ padding: '20px 22px', marginBottom: 32 }}>
+          <div className="flex items-center gap-3 mb-4">
+            <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={Users} emoji="Busts in silhouette" size={36} />
+            <div>
+              <h2 style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 16, color: NEU.ink, lineHeight: 1.2 }}>
+                Delegate estimate vs reality
+              </h2>
+              <p style={mutedCaption}>
+                Your estimate of {expectedDelegates} delegates comes from the conference settings.
+              </p>
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="rounded-2xl animate-pulse" style={{ height: 84, backgroundColor: NEU.base, boxShadow: NEU.inSm }} />
+          ) : (
+            <>
+              <div className="flex items-baseline justify-between gap-3 flex-wrap mb-2">
+                <p style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: NEU.ink, fontVariantNumeric: 'tabular-nums' }}>
+                  {fin.acceptedDelegates} accepted · {fin.paidDelegates} paid
+                </p>
+                <p style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700, color: NEU.muted, fontVariantNumeric: 'tabular-nums' }}>
+                  estimate {expectedDelegates}
+                </p>
+              </div>
+              <NeuProgress value={fin.acceptedDelegates} max={Math.max(1, expectedDelegates)} thumb height={12} />
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-5">
+                <NeuInset small className="px-4 py-3">
+                  <p style={{ fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', color: NEU.muted, textTransform: 'uppercase' }}>
+                    Projected revenue at estimate
+                  </p>
+                  <p style={{ fontFamily: OUTFIT, fontSize: 20, fontWeight: 900, color: NEU.ink, fontVariantNumeric: 'tabular-nums', marginTop: 4 }}>
+                    {formatFee(roundMoney(expectedDelegates * fee), currency)}
+                  </p>
+                  <p style={mutedCaption}>
+                    {expectedDelegates} delegates × {formatFee(fee, currency)} fee — assumes every
+                    delegate pays the full fee, before vouchers and waivers.
+                  </p>
+                </NeuInset>
+                <NeuInset small className="px-4 py-3">
+                  <p style={{ fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', color: NEU.muted, textTransform: 'uppercase' }}>
+                    Revenue at current acceptance
+                  </p>
+                  <p style={{ fontFamily: OUTFIT, fontSize: 20, fontWeight: 900, color: NEU.forest, fontVariantNumeric: 'tabular-nums', marginTop: 4 }}>
+                    {formatFee(roundMoney(fin.acceptedDelegates * fee), currency)}
+                  </p>
+                  <p style={mutedCaption}>
+                    {fin.acceptedDelegates} accepted delegate{fin.acceptedDelegates === 1 ? '' : 's'} × {formatFee(fee, currency)} —
+                    same full-fee assumption; the tiles above show actual discounted figures.
+                  </p>
+                </NeuInset>
+              </div>
+            </>
+          )}
+        </NeuCard>
+
+        {/* ── 4 · Payment pipeline ── */}
+        <section className="mb-2">
+          <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+            <div className="flex items-center gap-3">
+              <NeuIconDisc gradient={NEU_GRADIENTS.amber} icon={HandCoins} emoji="Receipt" size={36} />
+              <div>
+                <h2 style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 18, color: NEU.ink, lineHeight: 1.15 }}>
+                  Payment pipeline
+                </h2>
+                <p style={mutedCaption}>
+                  Read-only here — mark payments on the{' '}
+                  <Link
+                    href={`/manage/${conference.slug}/applications`}
+                    style={{ color: NEU.forest, fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 2 }}
+                  >
+                    Applications page
+                  </Link>.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {PIPELINE_FILTERS.map(f => (
+                <NeuPill key={f.value} active={filter === f.value} onClick={() => setFilter(f.value)}>
+                  {f.label}
+                </NeuPill>
+              ))}
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="rounded-[22px] animate-pulse" style={{ height: 180, backgroundColor: NEU.surface, boxShadow: NEU.out }} />
+          ) : fin.live.length === 0 ? (
+            <NeuInset className="flex flex-col items-center text-center px-6 py-10">
+              <p style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: NEU.ink }}>
+                No applications yet
+              </p>
+              <p className="mt-1 max-w-sm" style={{ ...mutedCaption, fontSize: 11.5 }}>
+                Fees appear here as people apply. Share your conference page to start filling the pipeline.
+              </p>
+              <Link
+                href={`/manage/${conference.slug}/applications`}
+                className="inline-flex items-center gap-1.5 mt-4"
+                style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.06em', color: NEU.forest, textDecoration: 'none' }}
+              >
+                GO TO APPLICATIONS <ArrowRight size={13} strokeWidth={2.5} />
+              </Link>
+            </NeuInset>
+          ) : pipelineRows.length === 0 ? (
+            <NeuInset small className="text-center px-6 py-8">
+              <p style={{ ...mutedCaption, fontSize: 12 }}>
+                No {filter} applications right now.
+              </p>
+            </NeuInset>
+          ) : (
+            <NeuCard style={{ padding: '6px 0', overflow: 'hidden' }}>
+              {pipelineRows.map((r, i) => {
+                const paid = r.payment_status === 'paid';
+                const waived = r.payment_status === 'waived';
+                const amount = rowAmount(fee, r);
+                const discounted = (Number(r.voucher_discount) || 0) > 0;
+                return (
+                  <div
+                    key={r.id}
+                    className="flex items-center gap-3 flex-wrap px-5 py-2.5"
+                    style={i > 0 ? { borderTop: '1px solid rgba(221,212,192,0.55)' } : undefined}
+                  >
+                    {/* Name */}
+                    <span
+                      className="truncate"
+                      style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: NEU.ink, flex: '1 1 140px', minWidth: 120 }}
+                    >
+                      {r.profiles?.display_name ?? 'Unknown'}
+                    </span>
+
+                    {/* Role chip */}
+                    <span
+                      className="inline-flex items-center gap-1"
+                      style={{
+                        ...chipStyle,
+                        backgroundColor: roleTone(r.role).bg,
+                        color: roleTone(r.role).color,
+                        border: `1px solid ${roleTone(r.role).border}`,
+                      }}
+                    >
+                      <RoleIcon role={r.role} />
+                      {roleLabel(r.role).toUpperCase()}
+                    </span>
+
+                    {/* Committee + flag */}
+                    <span
+                      className="inline-flex items-center gap-1.5"
+                      title={r.assigned_committee?.name ?? undefined}
+                      style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, color: NEU.muted, minWidth: 64 }}
+                    >
+                      {committeeAbbr(r.assigned_committee)}
+                      <CountryFlag name={r.assigned_country_name} code={r.assigned_country_code} />
+                    </span>
+
+                    {/* Amount */}
+                    <span
+                      title={discounted ? `Voucher discount of ${formatFee(Number(r.voucher_discount) || 0, currency)} applied` : undefined}
+                      style={{
+                        fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 900,
+                        color: waived ? NEU.muted : NEU.ink,
+                        textDecoration: waived ? 'line-through' : 'none',
+                        textDecorationColor: 'rgba(154,138,120,0.55)',
+                        fontVariantNumeric: 'tabular-nums',
+                        minWidth: 64, textAlign: 'right', marginLeft: 'auto',
+                      }}
+                    >
+                      {formatFee(waived ? fee : amount, currency)}
+                      {discounted && !waived && (
+                        <BadgePercent size={11} strokeWidth={2.5} style={{ display: 'inline', marginLeft: 4, color: NEU.deepGold, verticalAlign: '-1.5px' }} />
+                      )}
+                    </span>
+
+                    {/* Status chip */}
+                    {waived ? (
+                      <span
+                        className="inline-flex items-center gap-1"
+                        style={{ ...chipStyle, backgroundColor: 'rgba(184,132,74,0.16)', color: '#9A6B2F', border: '1px solid rgba(184,132,74,0.42)' }}
+                      >
+                        <HandCoins size={10} strokeWidth={2.5} />
+                        WAIVED
+                      </span>
+                    ) : paid ? (
+                      <span
+                        className="inline-flex items-center gap-1"
+                        style={{ ...chipStyle, backgroundColor: 'rgba(61,122,82,0.17)', color: '#2A5A3C', border: '1px solid rgba(61,122,82,0.45)' }}
+                      >
+                        <CircleCheck size={10} strokeWidth={2.5} />
+                        PAID
+                      </span>
+                    ) : (
+                      <span
+                        className="inline-flex items-center gap-1"
+                        style={{ ...chipStyle, backgroundColor: 'rgba(184,132,74,0.12)', color: '#9A6B2F', border: '1px solid rgba(184,132,74,0.3)' }}
+                      >
+                        <Clock size={10} strokeWidth={2.5} />
+                        UNPAID
+                      </span>
+                    )}
+
+                    {/* Waiver source badge — platform-fee entitlement */}
+                    {r.fee_waiver_source && (
+                      <span
+                        title="Their 5% Gavelling platform fee is waived by this entitlement"
+                        style={{ ...chipStyle, backgroundColor: 'rgba(238,217,138,0.35)', color: '#7A5A10', border: '1px solid rgba(182,135,31,0.45)' }}
+                      >
+                        {r.fee_waiver_source.toUpperCase()}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </NeuCard>
+          )}
+        </section>
+
+        {/* ── 5 · Vouchers ── */}
+        <VouchersSection conference={conference} />
       </div>
     </div>
   );

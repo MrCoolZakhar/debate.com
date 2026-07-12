@@ -61,6 +61,15 @@ type LucideIcon = React.ComponentType<{
 
 const grad = (g: NeuGradient) => `linear-gradient(135deg, ${g[0]}, ${g[1]})`;
 
+/** Darker stop of a gradient — readable glyph colour on a soft emoji seat. */
+const darkStop = (g: NeuGradient): string => {
+  const lum = (hex: string) => {
+    const n = parseInt(hex.slice(1), 16);
+    return 0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255);
+  };
+  return lum(g[0]) <= lum(g[1]) ? g[0] : g[1];
+};
+
 // ── Emoji3D — Microsoft Fluent 3D emoji from jsDelivr (same CDN family as ──
 // the Twemoji flags in countries.ts). Peter explicitly asked for colourful
 // 3D emoji icons on the organiser dashboard — this deliberately overrides
@@ -104,7 +113,7 @@ export function Emoji3D({
         width: size,
         height: size,
         objectFit: 'contain',
-        filter: 'drop-shadow(0 2px 3px rgba(27,56,40,0.3))',
+        filter: 'drop-shadow(0 2px 3px rgba(27,56,40,0.25))',
         ...style,
       }}
     />
@@ -213,6 +222,12 @@ export function NeuIconDisc({
   iconColor?: string;
   style?: React.CSSProperties;
 }) {
+  // Emoji discs seat the 3D glyph on a soft ~20-25%-opacity tint of the
+  // gradient — the saturated fill fights the emoji's own colours, so the
+  // emoji reads as the icon and the disc is just a seat. Lucide-only discs
+  // keep the original vibrant gradient + white glyph (used outside the
+  // organiser dashboard).
+  const soft = !!emoji;
   return (
     <span
       className="inline-flex items-center justify-center flex-shrink-0"
@@ -220,13 +235,17 @@ export function NeuIconDisc({
         width: size,
         height: size,
         borderRadius: Math.max(12, Math.round(size * 0.34)),
-        background: grad(gradient),
-        boxShadow: `0 4px 10px ${gradient[0]}44, ${NEU.outSm}`,
+        background: soft
+          ? `linear-gradient(135deg, ${gradient[0]}40, ${gradient[1]}33), ${NEU.surface}`
+          : grad(gradient),
+        boxShadow: soft
+          ? `0 3px 8px ${gradient[0]}2E, ${NEU.outSm}`
+          : `0 4px 10px ${gradient[0]}44, ${NEU.outSm}`,
         ...style,
       }}
     >
       {emoji ? (
-        <Emoji3D name={emoji} size={Math.round(size * 0.62)} fallback={Icon} fallbackColor={iconColor} />
+        <Emoji3D name={emoji} size={Math.round(size * 0.74)} fallback={Icon} fallbackColor={darkStop(gradient)} />
       ) : Icon ? (
         <Icon size={Math.round(size * 0.48)} strokeWidth={2.2} style={{ color: iconColor }} />
       ) : null}
@@ -303,7 +322,7 @@ export function NeuStatTile({
   return (
     <NeuCard href={href} style={{ padding: compact ? '12px 14px' : '16px 18px', minWidth: 0, ...style }}>
       <div className="flex items-start justify-between gap-2">
-        <NeuIconDisc gradient={gradient} icon={icon} emoji={emoji} size={compact ? 30 : 38} />
+        <NeuIconDisc gradient={gradient} icon={icon} emoji={emoji} size={compact ? 34 : 40} />
         {spark && spark.length > 1 && <Sparkline data={spark} color={gradient[1]} />}
       </div>
       <p
@@ -571,7 +590,7 @@ export function NeuChecklistRow({
 }) {
   const [hovered, setHovered] = useState(false);
   const clickable = !done && !!onClick;
-  const disc = dense ? 28 : 34;
+  const disc = dense ? 34 : 36;
   return (
     <div
       role={clickable ? 'button' : undefined}

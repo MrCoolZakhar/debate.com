@@ -10,7 +10,7 @@
 // payment_status ever moves. Allocation cleanup on NOT ATTENDING is the
 // shared markNotAttending handler's existing behavior, not duplicated here.
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Lock } from 'lucide-react';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
@@ -195,9 +195,15 @@ export default function IndependentsView({ conference, showFlash }: Independents
   const { draftNotices, pushDraftNotice, dismissDraftNotice } = useDraftNotices();
   const { confirm, modal: confirmModal } = useConfirmModal();
 
-  const loadData = useCallback(async () => {
+  // Monotonic guard so a slow older load never overwrites a newer one.
+  const loadSeqRef = useRef(0);
+
+  const loadData = useCallback(async (opts?: { silent?: boolean }) => {
     if (!conference || !session) return;
-    setLoading(true);
+    const seq = ++loadSeqRef.current;
+    // silent: background refresh — keeps the card grid mounted (no spinner
+    // wipe, scroll and open modals survive).
+    if (!opts?.silent) setLoading(true);
     const supabase = getAuthedClient(session.access_token);
 
     const [indepRes, search] = await Promise.all([
@@ -211,6 +217,8 @@ export default function IndependentsView({ conference, showFlash }: Independents
       fetchSearchPool(supabase, conference.id),
     ]);
 
+    if (seq !== loadSeqRef.current) return; // stale response — a newer load superseded this one
+
     const list = ((indepRes.data ?? []) as unknown as PoolMember[])
       .sort((a, b) => a.submitted_at.localeCompare(b.submitted_at));
     setIndependents(list);
@@ -220,11 +228,25 @@ export default function IndependentsView({ conference, showFlash }: Independents
 
   useEffect(() => { loadData(); }, [loadData]);
 
+  // ── Optimistic local patch helpers ─────────────────────────────────────────
+  // Mutate exactly the affected card; rollbacks restore the exact snapshot.
+
+  function patchIndependent(id: string, patch: Partial<PoolMember>) {
+    setIndependents(prev => prev.map(m => (m.id === id ? { ...m, ...patch } : m)));
+  }
+  function restoreIndependent(snapshot: PoolMember) {
+    setIndependents(prev => prev.map(m => (m.id === snapshot.id ? snapshot : m)));
+  }
+
   // ── Mutations ────────────────────────────────────────────────────────────
+
+  // Per-control double-click lock: one in-flight transfer per holder.
+  const inFlightTransferIds = useRef(new Set<string>());
 
   async function handleTransferPicked(holder: PoolMember, recipient: SearchApp) {
     setTransferTarget(null);
     if (!session) return;
+    if (inFlightTransferIds.current.has(holder.id)) return;
     const holderName = holder.profiles?.display_name ?? holder.invited_name ?? 'this delegate';
     const recipientName = recipient.profiles?.display_name ?? recipient.invited_name ?? 'this delegate';
     const { confirmed } = await confirm({
@@ -233,15 +255,42 @@ export default function IndependentsView({ conference, showFlash }: Independents
       confirmLabel: 'Transfer',
     });
     if (!confirmed) return;
+    if (inFlightTransferIds.current.has(holder.id)) return;
+    inFlightTransferIds.current.add(holder.id);
 
     const supabase = getAuthedClient(session.access_token);
-    // transfer=false always — allocations are managed in the Delegates tab
-    // and are never read, written, transferred, or deleted from this tab.
-    const emailResult = await performSwap(supabase, conference.id, recipient, holder, false);
-    if (!emailResult.incomingDrafted) pushDraftNotice('spot_received');
-    if (!emailResult.outgoingDrafted) pushDraftNotice('spot_lost');
+
+    // Optimistic: the holder's card flips to UNPAID at once. The recipient
+    // may be an independent (patch their card too) or live in a delegation —
+    // in that case the silent refetch reconciles the other tab's data.
+    const holderSnapshot = independents.find(m => m.id === holder.id) ?? holder;
+    const recipientSnapshot = independents.find(m => m.id === recipient.id) ?? null;
+    patchIndependent(holder.id, { payment_status: 'unpaid', self_paid: false });
+    if (recipientSnapshot) patchIndependent(recipient.id, { payment_status: 'paid', self_paid: false });
     showFlash('ok', 'Paid spot transferred.');
-    await loadData();
+
+    const rollback = () => {
+      restoreIndependent(holderSnapshot);
+      if (recipientSnapshot) restoreIndependent(recipientSnapshot);
+    };
+
+    (async () => {
+      // transfer=false always — allocations are managed in the Delegates tab
+      // and are never read, written, transferred, or deleted from this tab.
+      const emailResult = await performSwap(supabase, conference.id, recipient, holder, false);
+      if (emailResult.error) {
+        rollback();
+        showFlash('err', 'Could not transfer this spot.');
+        loadData({ silent: true }); // converge any partial writes
+        return;
+      }
+      if (!emailResult.incomingDrafted) pushDraftNotice('spot_received');
+      if (!emailResult.outgoingDrafted) pushDraftNotice('spot_lost');
+      loadData({ silent: true });
+    })().catch(() => {
+      rollback();
+      showFlash('err', 'Could not transfer this spot.');
+    }).finally(() => inFlightTransferIds.current.delete(holder.id));
   }
 
   async function handleNotAttending(app: PoolMember) {
@@ -261,17 +310,56 @@ export default function IndependentsView({ conference, showFlash }: Independents
     if (!confirmed) return;
 
     const supabase = getAuthedClient(session.access_token);
-    const result = await markNotAttending(supabase, conference.id, app);
-    if (!result.drafted) pushDraftNotice('not_attending');
-    await loadData();
+
+    // Optimistic: exactly what markNotAttending writes for this row.
+    const snapshot = independents.find(m => m.id === app.id) ?? app;
+    patchIndependent(app.id, {
+      attending: false,
+      assigned_committee_id: null,
+      assigned_country_code: null,
+      assigned_country_name: null,
+      assigned_committee: null,
+      status: app.status === 'assigned' ? 'accepted' : app.status,
+    });
+
+    (async () => {
+      const result = await markNotAttending(supabase, conference.id, app);
+      if (result.error) {
+        restoreIndependent(snapshot);
+        showFlash('err', `Could not mark ${name} as not attending.`);
+        loadData({ silent: true });
+        return;
+      }
+      if (!result.drafted) pushDraftNotice('not_attending');
+      loadData({ silent: true });
+    })().catch(() => {
+      restoreIndependent(snapshot);
+      showFlash('err', `Could not mark ${name} as not attending.`);
+    });
   }
 
   async function handleUndoNotAttending(app: PoolMember) {
     if (!session) return;
     const supabase = getAuthedClient(session.access_token);
-    const result = await undoNotAttending(supabase, conference.id, app);
-    if (!result.drafted) pushDraftNotice('attendance_restored');
-    await loadData();
+
+    // Optimistic: exactly what undoNotAttending writes for this row.
+    const snapshot = independents.find(m => m.id === app.id) ?? app;
+    patchIndependent(app.id, { attending: true, payment_status: 'unpaid' });
+
+    (async () => {
+      const result = await undoNotAttending(supabase, conference.id, app);
+      if (result.error) {
+        restoreIndependent(snapshot);
+        showFlash('err', 'Could not restore attendance.');
+        loadData({ silent: true });
+        return;
+      }
+      if (!result.drafted) pushDraftNotice('attendance_restored');
+      loadData({ silent: true });
+    })().catch(() => {
+      restoreIndependent(snapshot);
+      showFlash('err', 'Could not restore attendance.');
+    });
   }
 
   if (loading) {
@@ -287,7 +375,7 @@ export default function IndependentsView({ conference, showFlash }: Independents
       <DraftNoticeList notices={draftNotices} conferenceSlug={conference.slug} onDismiss={dismissDraftNotice} />
       <p className="text-xs font-semibold tracking-widest mb-1" style={{ color: '#9A8A78', fontFamily: MONO }}>INDEPENDENTS</p>
       <p className="text-sm mb-5" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-        Delegates applying without a school or society. Manage payment and attendance below — allocations are managed in the Delegates tab.
+        Delegates applying without a high school or society. Manage payment and attendance below — allocations are managed in the Delegates tab.
       </p>
       {independents.length === 0 ? (
         <p className="text-sm" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>No independent delegates yet.</p>

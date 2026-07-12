@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   ArrowRight, BadgeCheck, Building2, Check, CircleCheck, Clock, Download, Eye,
   Gavel, Globe, GraduationCap, HandCoins, Inbox, MapPin, MessageSquareText,
@@ -272,13 +272,30 @@ export default function ApplicationsPage() {
   // Conferences done in any capacity, per user — count of their mun_cv_entries
   // rows (the same source profiles.mun_experience_level is derived from).
   const [cvCounts, setCvCounts] = useState<Record<string, number>>({});
+  const [actionError, setActionError] = useState('');
+  // App ids with a write in flight — double-click guard for row actions.
+  const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
   const { draftNotices, pushDraftNotice, dismissDraftNotice } = useDraftNotices();
   const { confirm, modal: confirmModal } = useConfirmModal();
+  // Stale-response guard for background refetches.
+  const loadSeq = useRef(0);
 
-  const loadApplications = useCallback(async () => {
+  function markBusy(id: string, busy: boolean) {
+    setBusyIds(prev => {
+      const next = new Set(prev);
+      if (busy) next.add(id); else next.delete(id);
+      return next;
+    });
+  }
+
+  // `silent` refetches never touch the page-level loading flag — they
+  // reconcile local optimistic state with what the server actually computed
+  // (fillFreeSpots promotions, etc) without wiping the list.
+  const loadApplications = useCallback(async (opts?: { silent?: boolean }) => {
     if (!conference) return;
     if (!session) return;
-    setLoading(true);
+    const seq = ++loadSeq.current;
+    if (!opts?.silent) setLoading(true);
     const supabase = getAuthedClient(session.access_token);
     const [appRes, cfgRes] = await Promise.all([
       supabase
@@ -304,6 +321,8 @@ export default function ApplicationsPage() {
         .eq('conference_id', conference.id),
     ]);
 
+    if (seq !== loadSeq.current) return; // stale response — a newer load superseded this one
+
     const apps = (appRes.data ?? []) as unknown as Application[];
     setApplications(apps);
     setRoleConfigs((cfgRes.data ?? []) as unknown as RoleConfigLite[]);
@@ -316,6 +335,7 @@ export default function ApplicationsPage() {
         .from('mun_cv_entries')
         .select('user_id')
         .in('user_id', userIds);
+      if (seq !== loadSeq.current) return;
       const counts: Record<string, number> = {};
       for (const row of (cvRows ?? []) as { user_id: string }[]) {
         counts[row.user_id] = (counts[row.user_id] ?? 0) + 1;
@@ -328,54 +348,102 @@ export default function ApplicationsPage() {
 
   useEffect(() => { loadApplications(); }, [loadApplications]);
 
-  async function handleAccept(appId: string) {
-    if (!session || !conference) return;
-    const supabase = getAuthedClient(session.access_token);
-    await supabase.from('applications').update({ status: 'accepted' }).eq('id', appId);
-
-    const result = await queueEventEmail(supabase, conference.id, 'application_accepted', [appId]);
-    if (!result.drafted) pushDraftNotice('application_accepted');
-
-    const app = applications.find(a => a.id === appId);
-    const roleConfig = app ? roleConfigs.find(rc => rc.role === app.role) : undefined;
-    if (roleConfig?.payment_timing === 'after_acceptance') {
-      const payResult = await queueEventEmail(supabase, conference.id, 'payment_available', [appId]);
-      if (!payResult.drafted) pushDraftNotice('payment_available');
-    }
-
-    // F13: acceptance is when auto-cover runs — newly accepted pool members
-    // absorb any free delegation-purchased spots, oldest-first.
-    const pool = app ? poolForRole(app.role) : null;
-    if (app?.society_id && pool) {
-      await fillFreeSpots(supabase, app.society_id, pool);
-    }
-
-    await loadApplications();
+  // ── Optimistic row helpers ──────────────────────────────────────────────────
+  // Patch one application in place (the UI updates instantly), and restore the
+  // exact prior row on rollback — never the whole list, so concurrent actions
+  // on other rows are untouched.
+  function applyRow(appId: string, patch: Partial<Application>) {
+    setApplications(cur => cur.map(a => (a.id === appId ? { ...a, ...patch } : a)));
+  }
+  function restoreRow(row: Application) {
+    setApplications(cur => cur.map(a => (a.id === row.id ? row : a)));
   }
 
-  async function handleReject(appId: string) {
-    if (!session || !conference) return;
-    const app = applications.find(a => a.id === appId);
-    const pool = app ? poolForRole(app.role) : null;
+  function handleAccept(appId: string) {
+    if (!session || !conference || busyIds.has(appId)) return;
+    const prevRow = applications.find(a => a.id === appId);
+    if (!prevRow) return;
+
+    setActionError('');
+    markBusy(appId, true);
+    // Optimistic: the card flips to ACCEPTED immediately.
+    applyRow(appId, { status: 'accepted' });
+
+    (async () => {
+      const supabase = getAuthedClient(session.access_token);
+      const { error } = await supabase.from('applications').update({ status: 'accepted' }).eq('id', appId);
+      if (error) throw error;
+
+      // Secondary effects — a failure here must NOT roll back the accept.
+      try {
+        const result = await queueEventEmail(supabase, conference.id, 'application_accepted', [appId]);
+        if (!result.drafted) pushDraftNotice('application_accepted');
+
+        const roleConfig = roleConfigs.find(rc => rc.role === prevRow.role);
+        if (roleConfig?.payment_timing === 'after_acceptance') {
+          const payResult = await queueEventEmail(supabase, conference.id, 'payment_available', [appId]);
+          if (!payResult.drafted) pushDraftNotice('payment_available');
+        }
+
+        // F13: acceptance is when auto-cover runs — newly accepted pool members
+        // absorb any free delegation-purchased spots, oldest-first.
+        const pool = poolForRole(prevRow.role);
+        if (prevRow.society_id && pool) {
+          await fillFreeSpots(supabase, prevRow.society_id, pool);
+        }
+      } catch {
+        setActionError('Accepted, but a follow-up step (email / auto-cover) failed — refresh to verify.');
+      }
+
+      // Auto-cover may have promoted OTHER members to paid — reconcile silently.
+      await loadApplications({ silent: true });
+    })()
+      .catch(() => {
+        restoreRow(prevRow);
+        setActionError('Could not accept the application — the change was reverted. Please try again.');
+      })
+      .finally(() => markBusy(appId, false));
+  }
+
+  function handleReject(appId: string) {
+    if (!session || !conference || busyIds.has(appId)) return;
+    const prevRow = applications.find(a => a.id === appId);
+    if (!prevRow) return;
+    const pool = poolForRole(prevRow.role);
     // F13: rejecting a pool-covered (not self-paid) paid member releases
     // their spot back to the delegation — it stays purchased, just open again.
-    const releasesSpot = !!app && app.payment_status === 'paid' && !app.self_paid && !!app.society_id && !!pool;
+    const releasesSpot = prevRow.payment_status === 'paid' && !prevRow.self_paid && !!prevRow.society_id && !!pool;
 
-    const supabase = getAuthedClient(session.access_token);
     const updates: { status: string; organizer_note: string | null; payment_status?: string } = {
       status: 'rejected',
       organizer_note: rejectNote.trim() || null,
     };
     if (releasesSpot) updates.payment_status = 'unpaid';
 
-    await supabase.from('applications').update(updates).eq('id', appId);
+    setActionError('');
+    markBusy(appId, true);
+    // Optimistic: badge flips to REJECTED, reject UI closes instantly.
+    applyRow(appId, updates as Partial<Application>);
     setRejectingId(null);
     setRejectNote('');
 
-    const result = await queueEventEmail(supabase, conference.id, 'application_rejected', [appId]);
-    if (!result.drafted) pushDraftNotice('application_rejected');
+    (async () => {
+      const supabase = getAuthedClient(session.access_token);
+      const { error } = await supabase.from('applications').update(updates).eq('id', appId);
+      if (error) throw error;
 
-    await loadApplications();
+      try {
+        const result = await queueEventEmail(supabase, conference.id, 'application_rejected', [appId]);
+        if (!result.drafted) pushDraftNotice('application_rejected');
+      } catch {
+        setActionError('Rejected, but the rejection email could not be queued.');
+      }
+    })()
+      .catch(() => {
+        restoreRow(prevRow);
+        setActionError('Could not reject the application — the change was reverted. Please try again.');
+      })
+      .finally(() => markBusy(appId, false));
   }
 
   async function openRejectConfirm(app: Application) {
@@ -390,38 +458,73 @@ export default function ApplicationsPage() {
       danger: true,
     });
     if (!confirmed) return;
-    await handleReject(app.id);
+    handleReject(app.id);
   }
 
-  async function handleReinstate(appId: string) {
-    if (!session) return;
-    const supabase = getAuthedClient(session.access_token);
-    await supabase.from('applications').update({ status: 'submitted', organizer_note: null }).eq('id', appId);
-    await loadApplications();
+  function handleReinstate(appId: string) {
+    if (!session || busyIds.has(appId)) return;
+    const prevRow = applications.find(a => a.id === appId);
+    if (!prevRow) return;
+
+    setActionError('');
+    markBusy(appId, true);
+    applyRow(appId, { status: 'submitted', organizer_note: null });
+
+    (async () => {
+      const supabase = getAuthedClient(session.access_token);
+      const { error } = await supabase.from('applications').update({ status: 'submitted', organizer_note: null }).eq('id', appId);
+      if (error) throw error;
+    })()
+      .catch(() => {
+        restoreRow(prevRow);
+        setActionError('Could not reinstate the application — the change was reverted. Please try again.');
+      })
+      .finally(() => markBusy(appId, false));
   }
 
-  async function handleMarkPaid(app: Application) {
-    if (!session || !conference) return;
-    const supabase = getAuthedClient(session.access_token);
-    await supabase.from('applications').update({ payment_status: 'paid', self_paid: true }).eq('id', app.id);
+  function handleMarkPaid(app: Application) {
+    if (!session || !conference || busyIds.has(app.id)) return;
+    const prevRow = applications.find(a => a.id === app.id) ?? app;
 
-    const pool = poolForRole(app.role);
-    if (app.society_id && pool) {
-      const spotsColumn = POOL_SPOTS_COLUMN[pool];
-      const { data: soc } = await supabase.from('societies').select(spotsColumn).eq('id', app.society_id).single();
-      const current = (soc as Record<string, number> | null)?.[spotsColumn] ?? 0;
-      await supabase.from('societies').update({ [spotsColumn]: current + 1 }).eq('id', app.society_id);
-      await fillFreeSpots(supabase, app.society_id, pool);
-    }
+    setActionError('');
+    markBusy(app.id, true);
+    // Optimistic: the PAID badge appears immediately.
+    applyRow(app.id, { payment_status: 'paid', self_paid: true });
 
-    const result = await queueEventEmail(supabase, conference.id, 'payment_received', [app.id]);
-    if (!result.drafted) pushDraftNotice('payment_received');
+    (async () => {
+      const supabase = getAuthedClient(session.access_token);
+      const { error } = await supabase.from('applications').update({ payment_status: 'paid', self_paid: true }).eq('id', app.id);
+      if (error) throw error;
 
-    await loadApplications();
+      // Secondary effects — a failure here must NOT roll back the payment mark.
+      try {
+        const pool = poolForRole(app.role);
+        if (app.society_id && pool) {
+          const spotsColumn = POOL_SPOTS_COLUMN[pool];
+          const { data: soc } = await supabase.from('societies').select(spotsColumn).eq('id', app.society_id).single();
+          const current = (soc as Record<string, number> | null)?.[spotsColumn] ?? 0;
+          await supabase.from('societies').update({ [spotsColumn]: current + 1 }).eq('id', app.society_id);
+          await fillFreeSpots(supabase, app.society_id, pool);
+        }
+
+        const result = await queueEventEmail(supabase, conference.id, 'payment_received', [app.id]);
+        if (!result.drafted) pushDraftNotice('payment_received');
+      } catch {
+        setActionError('Marked paid, but a follow-up step (spot update / email) failed — refresh to verify.');
+      }
+
+      // fillFreeSpots may have promoted OTHER members to paid — reconcile silently.
+      await loadApplications({ silent: true });
+    })()
+      .catch(() => {
+        restoreRow(prevRow);
+        setActionError('Could not mark the application paid — the change was reverted. Please try again.');
+      })
+      .finally(() => markBusy(app.id, false));
   }
 
   async function handleMarkUnpaid(app: Application) {
-    if (!session) return;
+    if (!session || busyIds.has(app.id)) return;
     const { confirmed } = await confirm({
       title: 'Mark this application unpaid?',
       body: 'If their payment opened a delegation spot, one spot will be removed.',
@@ -429,32 +532,65 @@ export default function ApplicationsPage() {
       danger: true,
     });
     if (!confirmed) return;
-    const supabase = getAuthedClient(session.access_token);
-    await supabase.from('applications').update({ payment_status: 'unpaid', self_paid: false }).eq('id', app.id);
+    const prevRow = applications.find(a => a.id === app.id) ?? app;
 
-    const pool = poolForRole(app.role);
-    if (app.society_id && pool) {
-      const spotsColumn = POOL_SPOTS_COLUMN[pool];
-      const { data: soc } = await supabase.from('societies').select(spotsColumn).eq('id', app.society_id).single();
-      const current = (soc as Record<string, number> | null)?.[spotsColumn] ?? 0;
-      await supabase.from('societies').update({ [spotsColumn]: Math.max(0, current - 1) }).eq('id', app.society_id);
-    }
-    await loadApplications();
+    setActionError('');
+    markBusy(app.id, true);
+    applyRow(app.id, { payment_status: 'unpaid', self_paid: false });
+
+    (async () => {
+      const supabase = getAuthedClient(session.access_token);
+      const { error } = await supabase.from('applications').update({ payment_status: 'unpaid', self_paid: false }).eq('id', app.id);
+      if (error) throw error;
+
+      try {
+        const pool = poolForRole(app.role);
+        if (app.society_id && pool) {
+          const spotsColumn = POOL_SPOTS_COLUMN[pool];
+          const { data: soc } = await supabase.from('societies').select(spotsColumn).eq('id', app.society_id).single();
+          const current = (soc as Record<string, number> | null)?.[spotsColumn] ?? 0;
+          await supabase.from('societies').update({ [spotsColumn]: Math.max(0, current - 1) }).eq('id', app.society_id);
+        }
+      } catch {
+        setActionError('Marked unpaid, but the delegation spot count could not be updated — refresh to verify.');
+      }
+    })()
+      .catch(() => {
+        restoreRow(prevRow);
+        setActionError('Could not mark the application unpaid — the change was reverted. Please try again.');
+      })
+      .finally(() => markBusy(app.id, false));
   }
 
-  async function handleWaive(app: Application) {
-    if (!session || !conference) return;
-    const supabase = getAuthedClient(session.access_token);
-    await supabase.from('applications').update({ payment_status: 'waived' }).eq('id', app.id);
+  function handleWaive(app: Application) {
+    if (!session || !conference || busyIds.has(app.id)) return;
+    const prevRow = applications.find(a => a.id === app.id) ?? app;
 
-    const result = await queueEventEmail(supabase, conference.id, 'fee_waived', [app.id]);
-    if (!result.drafted) pushDraftNotice('fee_waived');
+    setActionError('');
+    markBusy(app.id, true);
+    applyRow(app.id, { payment_status: 'waived' });
 
-    await loadApplications();
+    (async () => {
+      const supabase = getAuthedClient(session.access_token);
+      const { error } = await supabase.from('applications').update({ payment_status: 'waived' }).eq('id', app.id);
+      if (error) throw error;
+
+      try {
+        const result = await queueEventEmail(supabase, conference.id, 'fee_waived', [app.id]);
+        if (!result.drafted) pushDraftNotice('fee_waived');
+      } catch {
+        setActionError('Waived, but the waiver email could not be queued.');
+      }
+    })()
+      .catch(() => {
+        restoreRow(prevRow);
+        setActionError('Could not waive the fee — the change was reverted. Please try again.');
+      })
+      .finally(() => markBusy(app.id, false));
   }
 
   async function handleUndoWaive(app: Application) {
-    if (!session) return;
+    if (!session || busyIds.has(app.id)) return;
     const { confirmed } = await confirm({
       title: 'Remove this fee waiver?',
       body: 'They will owe payment again.',
@@ -462,9 +598,22 @@ export default function ApplicationsPage() {
       danger: true,
     });
     if (!confirmed) return;
-    const supabase = getAuthedClient(session.access_token);
-    await supabase.from('applications').update({ payment_status: 'unpaid' }).eq('id', app.id);
-    await loadApplications();
+    const prevRow = applications.find(a => a.id === app.id) ?? app;
+
+    setActionError('');
+    markBusy(app.id, true);
+    applyRow(app.id, { payment_status: 'unpaid' });
+
+    (async () => {
+      const supabase = getAuthedClient(session.access_token);
+      const { error } = await supabase.from('applications').update({ payment_status: 'unpaid' }).eq('id', app.id);
+      if (error) throw error;
+    })()
+      .catch(() => {
+        restoreRow(prevRow);
+        setActionError('Could not remove the waiver — the change was reverted. Please try again.');
+      })
+      .finally(() => markBusy(app.id, false));
   }
 
   function handleExportCSV() {
@@ -540,6 +689,12 @@ export default function ApplicationsPage() {
       </div>
 
       <DraftNoticeList notices={draftNotices} conferenceSlug={conference.slug} onDismiss={dismissDraftNotice} />
+
+      {actionError && (
+        <p className="text-xs font-semibold mb-3" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>
+          {actionError}
+        </p>
+      )}
 
       {/* Filter bar */}
       <div className="flex flex-wrap gap-2 mb-4">
@@ -800,6 +955,9 @@ export default function ApplicationsPage() {
         const questions = roleConfig?.custom_questions ?? [];
         const answers = app.custom_answers ?? {};
         const closeReview = () => { setReviewId(null); setRejectingId(null); setRejectNote(''); };
+        // Double-click guard — the row's controls grey out while its write is in flight.
+        const rowBusy = busyIds.has(app.id);
+        const busyStyle: React.CSSProperties = rowBusy ? { opacity: 0.5, pointerEvents: 'none' } : {};
 
         const showPaymentControls = app.status === 'accepted' || app.status === 'assigned' || app.status === 'submitted';
         const paymentControls = showPaymentControls ? (
@@ -807,8 +965,9 @@ export default function ApplicationsPage() {
             {!paid ? (
               <button
                 onClick={() => handleMarkPaid(app)}
+                disabled={rowBusy}
                 className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
-                style={{ backgroundColor: 'rgba(61,122,82,0.12)', color: '#3D7A52', border: '1px solid rgba(61,122,82,0.3)', fontFamily: "'Outfit', sans-serif" }}
+                style={{ backgroundColor: 'rgba(61,122,82,0.12)', color: '#3D7A52', border: '1px solid rgba(61,122,82,0.3)', fontFamily: "'Outfit', sans-serif", ...busyStyle }}
               >
                 <CircleCheck size={13} />
                 MARK PAID
@@ -816,8 +975,9 @@ export default function ApplicationsPage() {
             ) : (
               <button
                 onClick={() => handleMarkUnpaid(app)}
+                disabled={rowBusy}
                 className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
-                style={{ backgroundColor: 'rgba(184,132,74,0.12)', color: '#B8844A', border: '1px solid rgba(184,132,74,0.3)', fontFamily: "'Outfit', sans-serif" }}
+                style={{ backgroundColor: 'rgba(184,132,74,0.12)', color: '#B8844A', border: '1px solid rgba(184,132,74,0.3)', fontFamily: "'Outfit', sans-serif", ...busyStyle }}
               >
                 <RotateCcw size={13} />
                 MARK UNPAID
@@ -826,8 +986,9 @@ export default function ApplicationsPage() {
             {app.payment_status === 'unpaid' && (
               <button
                 onClick={() => handleWaive(app)}
+                disabled={rowBusy}
                 className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
-                style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}
+                style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif", ...busyStyle }}
                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
               >
@@ -838,8 +999,9 @@ export default function ApplicationsPage() {
             {waived && (
               <button
                 onClick={() => handleUndoWaive(app)}
+                disabled={rowBusy}
                 className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
-                style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}
+                style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif", ...busyStyle }}
                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
               >
@@ -862,8 +1024,9 @@ export default function ApplicationsPage() {
             />
             <button
               onClick={() => openRejectConfirm(app)}
+              disabled={rowBusy}
               className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-3 text-xs font-bold focus:outline-none"
-              style={{ backgroundColor: 'rgba(139,32,32,0.1)', color: '#8B2020', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "'Outfit', sans-serif" }}
+              style={{ backgroundColor: 'rgba(139,32,32,0.1)', color: '#8B2020', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "'Outfit', sans-serif", ...busyStyle }}
             >
               <Check size={13} />
               CONFIRM
@@ -1025,13 +1188,19 @@ export default function ApplicationsPage() {
               </div>
 
               {/* Actions */}
+              {actionError && (
+                <p className="text-xs font-semibold mt-4" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>
+                  {actionError}
+                </p>
+              )}
               <div className="flex flex-wrap gap-2 mt-4 pt-4" style={{ borderTop: '1px solid #F0EDE6' }}>
                 {app.status === 'submitted' && (
                   <>
                     <button
                       onClick={() => handleAccept(app.id)}
+                      disabled={rowBusy}
                       className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
-                      style={{ backgroundColor: 'rgba(61,122,82,0.12)', color: '#3D7A52', border: '1px solid rgba(61,122,82,0.3)', fontFamily: "'Outfit', sans-serif" }}
+                      style={{ backgroundColor: 'rgba(61,122,82,0.12)', color: '#3D7A52', border: '1px solid rgba(61,122,82,0.3)', fontFamily: "'Outfit', sans-serif", ...busyStyle }}
                     >
                       <Check size={13} />
                       ACCEPT
@@ -1063,8 +1232,9 @@ export default function ApplicationsPage() {
                 {app.status === 'rejected' && (
                   <button
                     onClick={() => handleReinstate(app.id)}
+                    disabled={rowBusy}
                     className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
-                    style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}
+                    style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif", ...busyStyle }}
                     onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
                     onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                   >

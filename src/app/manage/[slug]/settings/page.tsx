@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   SlidersHorizontal, Building2, Users2, ShieldCheck,
 } from 'lucide-react';
-import { useManage } from '@/app/manage/[slug]/layout';
+import { useManage, type Conference } from '@/app/manage/[slug]/layout';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
 import { createClient } from '@supabase/supabase-js';
@@ -336,21 +336,23 @@ export default function SettingsPage() {
 
   // Visual tab state
   const [bannerUploading, setBannerUploading] = useState(false);
+  const [bannerError, setBannerError] = useState('');
   const [description, setDescription] = useState('');
   const [instagramUrl, setInstagramUrl] = useState('');
   const [facebookUrl, setFacebookUrl] = useState('');
   const [tiktokUrl, setTiktokUrl] = useState('');
   const [whatsappUrl, setWhatsappUrl] = useState('');
   const [websiteUrl, setWebsiteUrl] = useState('');
-  const [visualSaving, setVisualSaving] = useState(false);
   const [visualSaved, setVisualSaved] = useState(false);
+  const [visualError, setVisualError] = useState('');
   const [logoUploading, setLogoUploading] = useState(false);
+  const [logoError, setLogoError] = useState('');
   // Logo picked but not yet uploaded — the drag-to-fit crop modal is open.
   const [logoCropFile, setLogoCropFile] = useState<File | null>(null);
   const [feeAmount, setFeeAmount] = useState('');
   const [feeCurrency, setFeeCurrency] = useState('GBP');
-  const [feeSaving, setFeeSaving] = useState(false);
   const [feeSaved, setFeeSaved] = useState(false);
+  const [feeError, setFeeError] = useState('');
 
   // Conference details (identity + logistics — mirrors the creation form)
   const [fullName, setFullName] = useState('');
@@ -364,12 +366,11 @@ export default function SettingsPage() {
   const [city, setCity] = useState('');
   const [format, setFormat] = useState<'in-person' | 'online' | 'hybrid' | ''>('');
   const [expectedDelegates, setExpectedDelegates] = useState('');
-  const [detailsSaving, setDetailsSaving] = useState(false);
   const [detailsSaved, setDetailsSaved] = useState(false);
+  const [detailsError, setDetailsError] = useState('');
 
   // Minimum age (Applications tab)
   const [minAge, setMinAge] = useState('');
-  const [minAgeSaving, setMinAgeSaving] = useState(false);
   const [minAgeSaved, setMinAgeSaved] = useState(false);
   const [minAgeError, setMinAgeError] = useState('');
 
@@ -402,16 +403,60 @@ export default function SettingsPage() {
   const [partnerBusy, setPartnerBusy] = useState<string | null>(null);
   const [partnerError, setPartnerError] = useState('');
 
+  // Organizers + privacy inline error surfaces
+  const [organizersError, setOrganizersError] = useState('');
+  const [privacyError, setPrivacyError] = useState('');
+  const [archiving, setArchiving] = useState(false);
+
+  // ── Optimistic conference overlay ───────────────────────────────────────
+  // The manage layout's refreshConference() flips a full-screen loading flag,
+  // which unmounts this entire page (the "page reloads" jank). We therefore
+  // never call it mid-session: conference-row writes patch this local overlay
+  // for instant rendering, and the layout context is refreshed once — on
+  // unmount — if anything changed, so other manage pages catch up silently.
+  const [confPatch, setConfPatch] = useState<Partial<Conference>>({});
+  const confDirtyRef = useRef(false);
+  const refreshRef = useRef(refreshConference);
+  useEffect(() => { refreshRef.current = refreshConference; });
+  useEffect(() => () => { if (confDirtyRef.current) void refreshRef.current(); }, []);
+  // If fresh context data ever arrives while mounted, it already contains our
+  // committed writes — drop the overlay so it can't mask newer server state.
+  useEffect(() => { setConfPatch({}); }, [conference]);
+
+  function patchConf(updates: Partial<Conference>) {
+    setConfPatch(p => ({ ...p, ...updates }));
+    confDirtyRef.current = true;
+  }
+  // Exact prior (merged) values for the given keys — captured before an
+  // optimistic patch so a failed write can restore precisely what was shown.
+  function priorConfValues(keys: (keyof Conference)[]): Partial<Conference> {
+    if (!conference) return {};
+    const merged = { ...conference, ...confPatch } as Conference;
+    const out: Partial<Conference> = {};
+    for (const k of keys) (out as Record<string, unknown>)[k] = merged[k];
+    return out;
+  }
+
+  // Stale-response guards: each loader bumps its counter at call start and
+  // bails after every await if a newer call has started since.
+  const roleSeq = useRef(0);
+  const orgSeq = useRef(0);
+  const lineageSeq = useRef(0);
+  const partnersSeq = useRef(0);
+  const incomingSeq = useRef(0);
+
   // ── Data loaders ────────────────────────────────────────────────────────
 
   const loadRoleConfigs = useCallback(async () => {
     if (!conference) return;
     if (!session) return;
+    const seq = ++roleSeq.current;
     const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase
       .from('application_role_configs')
       .select('*')
       .eq('conference_id', conference.id);
+    if (seq !== roleSeq.current) return;
     if (data) {
       setRoleConfigs(data as RoleConfig[]);
       setConfigVersion(v => v + 1);
@@ -421,6 +466,7 @@ export default function SettingsPage() {
   const loadOrganizers = useCallback(async () => {
     if (!conference) return;
     if (!session) return;
+    const seq = ++orgSeq.current;
     const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase
       .from('conference_organizers')
@@ -428,11 +474,13 @@ export default function SettingsPage() {
       .eq('conference_id', conference.id)
       .order('sort_order', { ascending: true })
       .order('created_at', { ascending: true });
+    if (seq !== orgSeq.current) return;
     if (data) setOrganizers(data as unknown as Organizer[]);
   }, [conference]);
 
   const loadLineage = useCallback(async () => {
     if (!conference || !session) return;
+    const seq = ++lineageSeq.current;
     const supabase = getAuthedClient(session.access_token);
 
     // Incoming claims: other conferences claiming this one as their previous edition.
@@ -440,6 +488,7 @@ export default function SettingsPage() {
     const { data: claims } = await supabase.rpc('list_incoming_predecessor_claims', {
       p_conference_id: conference.id,
     });
+    if (seq !== lineageSeq.current) return;
     setIncomingClaims((claims as IncomingClaim[] | null) ?? []);
 
     // Outgoing claim: this conference's own predecessor, if any.
@@ -449,6 +498,7 @@ export default function SettingsPage() {
         .select('id, full_name, acronym')
         .eq('id', conference.predecessor_conference_id)
         .maybeSingle();
+      if (seq !== lineageSeq.current) return;
       setPredecessorInfo((pred as PredecessorSummary | null) ?? null);
     } else {
       setPredecessorInfo(null);
@@ -457,12 +507,14 @@ export default function SettingsPage() {
 
   const loadPartners = useCallback(async () => {
     if (!conference || !session) return;
+    const seq = ++partnersSeq.current;
     const supabase = getAuthedClient(session.access_token);
     const { data: links } = await supabase
       .from('conference_partners')
       .select('id, sort_order, approved, partner_conference_id')
       .eq('conference_id', conference.id)
       .order('sort_order', { ascending: true });
+    if (seq !== partnersSeq.current) return;
     const rows = (links as Omit<PartnerLink, 'conf'>[] | null) ?? [];
 
     const details: Record<string, PartnerConf> = {};
@@ -471,6 +523,7 @@ export default function SettingsPage() {
         .from('conferences')
         .select('id, slug, full_name, acronym, logo_url, city, country, start_date')
         .in('id', rows.map(r => r.partner_conference_id));
+      if (seq !== partnersSeq.current) return;
       for (const c of (confs as PartnerConf[] | null) ?? []) details[c.id] = c;
     }
     setPartners(rows.map(r => ({ ...r, conf: details[r.partner_conference_id] ?? null })));
@@ -478,8 +531,10 @@ export default function SettingsPage() {
 
   const loadIncomingPartnerClaims = useCallback(async () => {
     if (!conference || !session) return;
+    const seq = ++incomingSeq.current;
     const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase.rpc('list_incoming_partner_claims');
+    if (seq !== incomingSeq.current) return;
     setIncomingPartnerClaims(
       ((data as IncomingPartnerClaim[] | null) ?? []).filter(c => c.my_conference_id === conference.id)
     );
@@ -616,16 +671,17 @@ export default function SettingsPage() {
       setSwapModeError(error ? error.message : "Couldn't save — please try again.");
       return;
     }
-    await refreshConference();
+    // Keep the local overlay in sync instead of refreshConference(), which
+    // would unmount the whole page behind the layout's loading spinner.
+    patchConf({ allocation_swap_mode: mode });
   }
 
   // ── Organizer actions ───────────────────────────────────────────────────
 
   async function handleInvite() {
-    if (!conference || !inviteEmail.trim()) return;
+    if (!conference || !session || !inviteEmail.trim()) return;
     setInviting(true);
     setInviteError('');
-    if (!session) return;
     const supabase = getAuthedClient(session.access_token);
 
     const { data: profile } = await supabase
@@ -647,14 +703,36 @@ export default function SettingsPage() {
       return;
     }
 
-    await supabase.from('conference_organizers').insert({
+    // The insert stays awaited: the server mints the row id, which the
+    // remove/permission controls need. Only the INVITE button is busy.
+    const { data: inserted, error: insertError } = await supabase.from('conference_organizers').insert({
       conference_id: conference.id,
       user_id: (profile as { id: string }).id,
       role: 'organizer',
-    });
+    }).select('id').single();
+
+    if (insertError || !inserted) {
+      setInviteError(insertError?.message ?? "Couldn't add this person. Please try again.");
+      setInviting(false);
+      return;
+    }
+
+    // Show the new member instantly with what we already know; a silent
+    // background reload reconciles avatar and canonical ordering.
+    const prof = profile as { id: string; display_name: string };
+    setOrganizers(prev => [...prev, {
+      id: (inserted as { id: string }).id,
+      role: 'organizer',
+      user_id: prof.id,
+      permissions: {},
+      public_title: null,
+      show_on_public: false,
+      sort_order: 0,
+      profiles: { display_name: prof.display_name, email: inviteEmail.trim().toLowerCase(), avatar_url: null },
+    }]);
     setInviteEmail('');
-    await loadOrganizers();
     setInviting(false);
+    void loadOrganizers();
   }
 
   const SECTION_KEYS: { key: string; label: string }[] = [
@@ -669,62 +747,123 @@ export default function SettingsPage() {
     { key: 'settings', label: 'Settings' },
   ];
 
-  async function toggleOrgPermission(orgId: string, current: Record<string, boolean> | undefined, key: string) {
+  function toggleOrgPermission(orgId: string, current: Record<string, boolean> | undefined, key: string) {
     if (!session) return;
     const next = { ...(current ?? {}), [key]: !(current?.[key]) };
-    const supabase = getAuthedClient(session.access_token);
-    await supabase.from('conference_organizers').update({ permissions: next }).eq('id', orgId);
+    // Optimistic: flip the pill instantly; persist in the background and
+    // restore only this organizer's prior permissions if the write fails.
     setOrganizers(prev => prev.map(o => o.id === orgId ? { ...o, permissions: next } : o));
+    setOrganizersError('');
+    const supabase = getAuthedClient(session.access_token);
+    void (async () => {
+      const { error } = await supabase.from('conference_organizers').update({ permissions: next }).eq('id', orgId);
+      if (error) {
+        setOrganizers(prev => prev.map(o => o.id === orgId ? { ...o, permissions: current } : o));
+        setOrganizersError(error.message);
+      }
+    })();
   }
 
-  async function handleRemoveOrganizer(organizerId: string) {
+  function handleRemoveOrganizer(organizerId: string) {
     if (!session) return;
+    const idx = organizers.findIndex(o => o.id === organizerId);
+    if (idx === -1) return;
+    const removed = organizers[idx];
+    // Optimistic: drop the row instantly; re-insert it at its old position
+    // (with an inline error) if the delete fails.
+    setOrganizers(prev => prev.filter(o => o.id !== organizerId));
+    setOrganizersError('');
     const supabase = getAuthedClient(session.access_token);
-    await supabase.from('conference_organizers').delete().eq('id', organizerId);
-    await loadOrganizers();
+    void (async () => {
+      const { error } = await supabase.from('conference_organizers').delete().eq('id', organizerId);
+      if (error) {
+        setOrganizers(prev => {
+          const arr = [...prev];
+          arr.splice(Math.min(idx, arr.length), 0, removed);
+          return arr;
+        });
+        setOrganizersError(error.message);
+      }
+    })();
   }
 
   // Public-page curation (owner only — enforced by RLS as well as the UI gate).
-  // The DB trigger recomputes conferences.display_secretariat on every write.
-  async function updateOrganizerPublic(orgId: string, updates: { public_title?: string | null; show_on_public?: boolean }) {
+  // The DB trigger recomputes conferences.display_secretariat on every write,
+  // so we mark the conference overlay dirty for the on-unmount refresh.
+  function updateOrganizerPublic(orgId: string, updates: { public_title?: string | null; show_on_public?: boolean }) {
     if (!session) return;
+    const target = organizers.find(o => o.id === orgId);
+    if (!target) return;
+    const prior: { public_title?: string | null; show_on_public?: boolean } = {};
+    if ('public_title' in updates) prior.public_title = target.public_title;
+    if ('show_on_public' in updates) prior.show_on_public = target.show_on_public;
+    setOrganizers(prev => prev.map(o => o.id === orgId ? { ...o, ...updates } : o));
+    setOrganizersError('');
+    confDirtyRef.current = true;
     const supabase = getAuthedClient(session.access_token);
-    await supabase.from('conference_organizers').update(updates).eq('id', orgId);
-    await loadOrganizers();
+    void (async () => {
+      const { error } = await supabase.from('conference_organizers').update(updates).eq('id', orgId);
+      if (error) {
+        setOrganizers(prev => prev.map(o => o.id === orgId ? { ...o, ...prior } : o));
+        setOrganizersError(error.message);
+      }
+    })();
   }
 
-  async function handleMoveOrganizer(idx: number, dir: -1 | 1) {
+  function handleMoveOrganizer(idx: number, dir: -1 | 1) {
     if (!session) return;
     const j = idx + dir;
     if (j < 0 || j >= organizers.length) return;
+    const previous = organizers;
     const order = [...organizers];
     [order[idx], order[j]] = [order[j], order[idx]];
+    // Optimistic: render the new order (with normalized sort_order values so
+    // consecutive moves diff correctly) and persist in the background.
+    setOrganizers(order.map((o, i) => ({ ...o, sort_order: i })));
+    setOrganizersError('');
+    confDirtyRef.current = true;
     const supabase = getAuthedClient(session.access_token);
-    // Persist the displayed index as sort_order for every row that drifted —
-    // a plain neighbour swap is a no-op while rows still share the default 0.
-    await Promise.all(
-      order
-        .map((o, i) => (o.sort_order === i ? null : supabase.from('conference_organizers').update({ sort_order: i }).eq('id', o.id)))
-        .filter(Boolean)
-    );
-    await loadOrganizers();
+    void (async () => {
+      // Persist the displayed index as sort_order for every row that drifted —
+      // a plain neighbour swap is a no-op while rows still share the default 0.
+      const results = await Promise.all(
+        order
+          .map((o, i) => (o.sort_order === i ? null : supabase.from('conference_organizers').update({ sort_order: i }).eq('id', o.id)))
+          .filter((p): p is NonNullable<typeof p> => p !== null)
+      );
+      const failed = results.find(r => r.error);
+      if (failed?.error) {
+        setOrganizers(previous);
+        setOrganizersError(failed.error.message);
+      }
+    })();
   }
 
   // ── Privacy actions ─────────────────────────────────────────────────────
 
-  async function handlePublicToggle(next: boolean) {
+  function handlePublicToggle(next: boolean) {
     if (!conference) return;
     if (!session) return;
+    // Optimistic: flip the pill instantly via the overlay; roll only these
+    // two fields back (with an inline error) if the write fails.
+    const prior = priorConfValues(['is_public', 'status']);
+    patchConf({ is_public: next, status: next ? 'public' : 'private' });
+    setPrivacyError('');
     const supabase = getAuthedClient(session.access_token);
-    await supabase.from('conferences').update({
-      is_public: next,
-      status: next ? 'public' : 'private',
-    }).eq('id', conference.id);
-    await refreshConference();
+    void (async () => {
+      const { error } = await supabase.from('conferences').update({
+        is_public: next,
+        status: next ? 'public' : 'private',
+      }).eq('id', conference.id);
+      if (error) {
+        setConfPatch(p => ({ ...p, ...prior }));
+        setPrivacyError(error.message);
+      }
+    })();
   }
 
   async function handleArchive() {
-    if (!conference) return;
+    if (!conference || archiving) return;
     const { confirmed } = await confirm({
       title: 'Archive this conference?',
       body: 'It will be hidden from all listings.',
@@ -733,12 +872,21 @@ export default function SettingsPage() {
     });
     if (!confirmed) return;
     if (!session) return;
+    // The write stays awaited: navigating away must depend on it succeeding.
+    // Only the ARCHIVE button is busy; no refreshConference (we leave the
+    // manage shell entirely on success).
+    setArchiving(true);
+    setPrivacyError('');
     const supabase = getAuthedClient(session.access_token);
-    await supabase.from('conferences').update({
+    const { error } = await supabase.from('conferences').update({
       status: 'archived',
       is_public: false,
     }).eq('id', conference.id);
-    await refreshConference();
+    if (error) {
+      setPrivacyError(error.message);
+      setArchiving(false);
+      return;
+    }
     router.push('/conferences/organise');
   }
 
@@ -746,18 +894,33 @@ export default function SettingsPage() {
 
   const isOwner = organizers.some(o => o.user_id === user?.id && o.role === 'owner');
 
-  async function handleClaimDecision(successorId: string, approve: boolean) {
+  function handleClaimDecision(successorId: string, approve: boolean) {
     if (!session) return;
+    if (lineageBusy === successorId) return;
+    const previousClaims = incomingClaims;
     setLineageBusy(successorId);
     setLineageError('');
+    // Optimistic: approvals flip the badge instantly, rejections drop the
+    // row instantly. A silent (stale-guarded) loadLineage afterwards picks
+    // up whatever canonical shape the RPC left behind.
+    setIncomingClaims(prev => approve
+      ? prev.map(c => c.id === successorId ? { ...c, predecessor_approved: true } : c)
+      : prev.filter(c => c.id !== successorId));
     const supabase = getAuthedClient(session.access_token);
-    const { error } = await supabase.rpc('approve_predecessor_link', {
-      p_successor_id: successorId,
-      p_approve: approve,
-    });
-    if (error) setLineageError(error.message);
-    await loadLineage();
-    setLineageBusy(null);
+    void (async () => {
+      const { error } = await supabase.rpc('approve_predecessor_link', {
+        p_successor_id: successorId,
+        p_approve: approve,
+      });
+      if (error) {
+        setIncomingClaims(previousClaims);
+        setLineageError(error.message);
+        setLineageBusy(null);
+        return;
+      }
+      await loadLineage();
+      setLineageBusy(null);
+    })();
   }
 
   async function handleWithdrawClaim() {
@@ -769,57 +932,94 @@ export default function SettingsPage() {
       danger: true,
     });
     if (!confirmed) return;
-    setLineageBusy('withdraw');
     setLineageError('');
+    // Optimistic: the predecessor card disappears instantly via the overlay
+    // (mirroring the DB trigger that resets predecessor_approved); a failed
+    // write restores the card and the summary exactly as they were.
+    const prior = priorConfValues(['predecessor_conference_id', 'predecessor_approved']);
+    const priorInfo = predecessorInfo;
+    patchConf({ predecessor_conference_id: null, predecessor_approved: false });
+    setPredecessorInfo(null);
     const supabase = getAuthedClient(session.access_token);
-    // Only clear the id — predecessor_approved is reset by the DB trigger.
-    const { error } = await supabase
-      .from('conferences')
-      .update({ predecessor_conference_id: null })
-      .eq('id', conference.id);
-    if (error) setLineageError(error.message);
-    // refreshConference replaces the conference object; the settings effect
-    // re-runs loadLineage with the fresh predecessor_conference_id.
-    await refreshConference();
-    setLineageBusy(null);
+    void (async () => {
+      // Only clear the id — predecessor_approved is reset by the DB trigger.
+      const { error } = await supabase
+        .from('conferences')
+        .update({ predecessor_conference_id: null })
+        .eq('id', conference.id);
+      if (error) {
+        setConfPatch(p => ({ ...p, ...prior }));
+        setPredecessorInfo(priorInfo);
+        setLineageError(error.message);
+      }
+    })();
   }
 
   // ── Partner conference actions ──────────────────────────────────────────
 
-  async function handleAddPartner(conf: PartnerConf) {
+  function handleAddPartner(conf: PartnerConf) {
     if (!conference || !session) return;
-    setPartnerBusy(conf.id);
-    setPartnerError('');
-    const supabase = getAuthedClient(session.access_token);
-    const { error } = await supabase.from('conference_partners').insert({
-      conference_id: conference.id,
+    // Optimistic with a temp id (house pattern — see motions in AGENTS.md):
+    // the row appears instantly; move/remove are guarded until the real UUID
+    // arrives, then the id is swapped in place.
+    const tempId = `temp-${Date.now()}`;
+    const sortOrder = partners.length;
+    setPartners(prev => [...prev, {
+      id: tempId,
+      sort_order: sortOrder,
+      approved: false,
       partner_conference_id: conf.id,
-      sort_order: partners.length,
-    });
-    if (error) setPartnerError(error.message);
+      conf,
+    }]);
     setPartnerQuery('');
     setPartnerResults([]);
-    await loadPartners();
-    setPartnerBusy(null);
+    setPartnerError('');
+    const supabase = getAuthedClient(session.access_token);
+    void (async () => {
+      const { data, error } = await supabase.from('conference_partners').insert({
+        conference_id: conference.id,
+        partner_conference_id: conf.id,
+        sort_order: sortOrder,
+      }).select('id').single();
+      if (error || !data) {
+        setPartners(prev => prev.filter(p => p.id !== tempId));
+        setPartnerError(error?.message ?? "Couldn't add this partner. Please try again.");
+      } else {
+        setPartners(prev => prev.map(p => p.id === tempId ? { ...p, id: (data as { id: string }).id } : p));
+      }
+    })();
   }
 
-  async function handleMovePartner(idx: number, dir: -1 | 1) {
+  function handleMovePartner(idx: number, dir: -1 | 1) {
     if (!session) return;
     const j = idx + dir;
     if (j < 0 || j >= partners.length) return;
+    // A just-added row is still waiting for its real UUID — skip reorders
+    // until it lands (moments later) so we never write against a temp id.
+    if (partners.some(p => p.id.startsWith('temp-'))) return;
+    const previous = partners;
     const order = [...partners];
     [order[idx], order[j]] = [order[j], order[idx]];
+    setPartners(order.map((p, i) => ({ ...p, sort_order: i })));
+    setPartnerError('');
     const supabase = getAuthedClient(session.access_token);
-    await Promise.all(
-      order
-        .map((p, i) => (p.sort_order === i ? null : supabase.from('conference_partners').update({ sort_order: i }).eq('id', p.id)))
-        .filter(Boolean)
-    );
-    await loadPartners();
+    void (async () => {
+      const results = await Promise.all(
+        order
+          .map((p, i) => (p.sort_order === i ? null : supabase.from('conference_partners').update({ sort_order: i }).eq('id', p.id)))
+          .filter((p): p is NonNullable<typeof p> => p !== null)
+      );
+      const failed = results.find(r => r.error);
+      if (failed?.error) {
+        setPartners(previous);
+        setPartnerError(failed.error.message);
+      }
+    })();
   }
 
   async function handleRemovePartner(link: PartnerLink) {
     if (!session) return;
+    if (link.id.startsWith('temp-')) return; // still being created
     const label = link.conf?.acronym ?? 'this conference';
     const { confirmed } = await confirm({
       title: `Remove the partner link with ${label}?`,
@@ -827,27 +1027,50 @@ export default function SettingsPage() {
       danger: true,
     });
     if (!confirmed) return;
-    setPartnerBusy(link.id);
+    const idx = partners.findIndex(p => p.id === link.id);
+    if (idx === -1) return;
+    // Optimistic: drop the row instantly; re-insert at its old position if
+    // the delete fails.
+    setPartners(prev => prev.filter(p => p.id !== link.id));
     setPartnerError('');
     const supabase = getAuthedClient(session.access_token);
-    const { error } = await supabase.from('conference_partners').delete().eq('id', link.id);
-    if (error) setPartnerError(error.message);
-    await loadPartners();
-    setPartnerBusy(null);
+    void (async () => {
+      const { error } = await supabase.from('conference_partners').delete().eq('id', link.id);
+      if (error) {
+        setPartners(prev => {
+          const arr = [...prev];
+          arr.splice(Math.min(idx, arr.length), 0, link);
+          return arr;
+        });
+        setPartnerError(error.message);
+      }
+    })();
   }
 
-  async function handlePartnerClaimDecision(linkId: string, approve: boolean) {
+  function handlePartnerClaimDecision(linkId: string, approve: boolean) {
     if (!session) return;
+    if (partnerBusy === linkId) return;
+    const previousIncoming = incomingPartnerClaims;
     setPartnerBusy(linkId);
     setPartnerError('');
+    // Optimistic: the request row disappears instantly; silent (stale-guarded)
+    // refetches afterwards pick up any server-side effects of the RPC.
+    setIncomingPartnerClaims(prev => prev.filter(c => c.link_id !== linkId));
     const supabase = getAuthedClient(session.access_token);
-    const { error } = await supabase.rpc('approve_partner_link', {
-      p_link_id: linkId,
-      p_approve: approve,
-    });
-    if (error) setPartnerError(error.message);
-    await Promise.all([loadPartners(), loadIncomingPartnerClaims()]);
-    setPartnerBusy(null);
+    void (async () => {
+      const { error } = await supabase.rpc('approve_partner_link', {
+        p_link_id: linkId,
+        p_approve: approve,
+      });
+      if (error) {
+        setIncomingPartnerClaims(previousIncoming);
+        setPartnerError(error.message);
+        setPartnerBusy(null);
+        return;
+      }
+      await Promise.all([loadPartners(), loadIncomingPartnerClaims()]);
+      setPartnerBusy(null);
+    })();
   }
 
   // ── Custom questions ────────────────────────────────────────────────────
@@ -856,77 +1079,120 @@ export default function SettingsPage() {
   const currentQuestions: CustomQuestion[] = selectedConfig?.custom_questions ?? [];
   const enabledRoles = ROLES.filter(r => roleConfigs.find(rc => rc.role === r)?.is_enabled);
 
-  async function handleSaveQuestion(q: CustomQuestion) {
+  function handleSaveQuestion(q: CustomQuestion) {
     const updated = questionModal.existing
       ? currentQuestions.map(eq => eq.id === q.id ? q : eq)
       : [...currentQuestions, q];
-    await saveRoleConfig(selectedRole, { custom_questions: updated });
+    // saveRoleConfig patches local state synchronously (optimistic with its
+    // own rollback + inline error) — close the modal immediately.
+    void saveRoleConfig(selectedRole, { custom_questions: updated });
     setQuestionModal({ open: false, existing: null });
   }
 
-  async function handleDeleteQuestion(id: string) {
-    await saveRoleConfig(selectedRole, { custom_questions: currentQuestions.filter(q => q.id !== id) });
+  function handleDeleteQuestion(id: string) {
+    void saveRoleConfig(selectedRole, { custom_questions: currentQuestions.filter(q => q.id !== id) });
   }
 
   async function handleBannerUpload(file: File) {
     if (!session || !conference) return;
     if (file.size > 5 * 1024 * 1024) { alert('Banner must be under 5MB.'); return; }
     setBannerUploading(true);
+    setBannerError('');
     const supabase = getAuthedClient(session.access_token);
     const ext = file.name.split('.').pop();
     const path = 'banners/' + conference.id + '-' + Date.now() + '.' + ext;
+    // The storage upload stays awaited — the server produces the public URL
+    // we must display — but only this card shows the busy state.
     const { error } = await supabase.storage.from('conference-assets').upload(path, file, { contentType: file.type, upsert: true });
     if (error) { alert('Upload failed: ' + error.message); setBannerUploading(false); return; }
     const { data: urlData } = supabase.storage.from('conference-assets').getPublicUrl(path);
-    await supabase.from('conferences').update({ banner_url: urlData.publicUrl }).eq('id', conference.id);
-    await refreshConference();
+    // Optimistic from here: show the new banner instantly, persist the row
+    // in the background, restore the previous banner if the write fails.
+    const prior = priorConfValues(['banner_url']);
+    patchConf({ banner_url: urlData.publicUrl });
     setBannerUploading(false);
+    void (async () => {
+      const { error: writeError } = await supabase.from('conferences').update({ banner_url: urlData.publicUrl }).eq('id', conference.id);
+      if (writeError) {
+        setConfPatch(p => ({ ...p, ...prior }));
+        setBannerError("Couldn't save the banner: " + writeError.message);
+      }
+    })();
   }
 
   // Preset banner selection — same authed-client update path as the upload,
   // just pointing banner_url at a bundled /banners/preset-N.jpg instead.
-  async function handleBannerPreset(path: string) {
+  function handleBannerPreset(path: string) {
     if (!session || !conference || bannerUploading) return;
-    if (conference.banner_url === path) return;
-    setBannerUploading(true);
+    const currentBanner = confPatch.banner_url !== undefined ? confPatch.banner_url : conference.banner_url;
+    if (currentBanner === path) return;
+    // Optimistic: highlight the preset instantly; roll back on failure.
+    setBannerError('');
+    patchConf({ banner_url: path });
     const supabase = getAuthedClient(session.access_token);
-    const { error } = await supabase.from('conferences').update({ banner_url: path }).eq('id', conference.id);
-    if (error) { alert('Could not set preset: ' + error.message); setBannerUploading(false); return; }
-    await refreshConference();
-    setBannerUploading(false);
+    void (async () => {
+      const { error } = await supabase.from('conferences').update({ banner_url: path }).eq('id', conference.id);
+      if (error) {
+        setConfPatch(p => ({ ...p, banner_url: currentBanner }));
+        setBannerError('Could not set preset: ' + error.message);
+      }
+    })();
   }
 
   async function handleLogoUpload(file: File) {
     if (!session || !conference) return;
     if (file.size > 5 * 1024 * 1024) { alert('Logo must be under 5MB.'); return; }
     setLogoUploading(true);
+    setLogoError('');
     const supabase = getAuthedClient(session.access_token);
     const ext = file.name.split('.').pop();
     const path = 'logos/' + conference.id + '-' + Date.now() + '.' + ext;
+    // Storage upload awaited (server mints the URL); busy state scoped to
+    // the logo card only. The row write is optimistic with rollback.
     const { error } = await supabase.storage.from('conference-assets').upload(path, file, { contentType: file.type, upsert: true });
     if (error) { alert('Upload failed: ' + error.message); setLogoUploading(false); return; }
     const { data: urlData } = supabase.storage.from('conference-assets').getPublicUrl(path);
-    await supabase.from('conferences').update({ logo_url: urlData.publicUrl }).eq('id', conference.id);
-    await refreshConference();
+    const prior = priorConfValues(['logo_url']);
+    patchConf({ logo_url: urlData.publicUrl });
     setLogoUploading(false);
+    void (async () => {
+      const { error: writeError } = await supabase.from('conferences').update({ logo_url: urlData.publicUrl }).eq('id', conference.id);
+      if (writeError) {
+        setConfPatch(p => ({ ...p, ...prior }));
+        setLogoError("Couldn't save the logo: " + writeError.message);
+      }
+    })();
   }
 
-  async function handleSaveFee() {
-    if (!session || !conference) return;
-    setFeeSaving(true);
-    const supabase = getAuthedClient(session.access_token);
-    await supabase.from('conferences').update({
-      fee_amount: parseFloat(feeAmount) || 0,
-      fee_currency: feeCurrency,
-    }).eq('id', conference.id);
-    await refreshConference();
-    setFeeSaving(false);
+  function handleSaveFee() {
+    if (!session || !conference || feeSaved) return;
+    setFeeError('');
+    const amount = parseFloat(feeAmount) || 0;
+    // Optimistic: flash SAVED instantly (the flash doubles as the re-click
+    // guard), persist in the background, and roll only these two overlay
+    // fields back — with an inline error — if the write fails. Never
+    // refreshConference() mid-session: the overlay renders the new value.
+    const prior = priorConfValues(['fee_amount', 'fee_currency']);
+    patchConf({ fee_amount: amount, fee_currency: feeCurrency });
     setFeeSaved(true);
-    setTimeout(() => setFeeSaved(false), 2500);
+    const supabase = getAuthedClient(session.access_token);
+    void (async () => {
+      const { error } = await supabase.from('conferences').update({
+        fee_amount: amount,
+        fee_currency: feeCurrency,
+      }).eq('id', conference.id);
+      if (error) {
+        setConfPatch(p => ({ ...p, ...prior }));
+        setFeeSaved(false);
+        setFeeError("Couldn't save the fee: " + error.message);
+        return;
+      }
+      setTimeout(() => setFeeSaved(false), 2500);
+    })();
   }
 
-  async function handleSaveMinAge() {
-    if (!session || !conference) return;
+  function handleSaveMinAge() {
+    if (!session || !conference || minAgeSaved) return;
     setMinAgeError('');
     const trimmed = minAge.trim();
     let value: number | null = null;
@@ -938,40 +1204,57 @@ export default function SettingsPage() {
       }
       value = parsed;
     }
-    setMinAgeSaving(true);
-    const supabase = getAuthedClient(session.access_token);
-    const { error } = await supabase.from('conferences').update({ min_age: value }).eq('id', conference.id);
-    if (error) {
-      setMinAgeError('Could not save the minimum age. Please try again.');
-      setMinAgeSaving(false);
-      return;
-    }
-    await refreshConference();
-    setMinAgeSaving(false);
+    // Validation passed — optimistic from here: the overlay updates the
+    // caption instantly, the write runs in the background, and a failure
+    // restores exactly the prior min_age with an inline error.
+    const prior = priorConfValues(['min_age']);
+    patchConf({ min_age: value });
     setMinAgeSaved(true);
-    setTimeout(() => setMinAgeSaved(false), 2500);
+    const supabase = getAuthedClient(session.access_token);
+    void (async () => {
+      const { error } = await supabase.from('conferences').update({ min_age: value }).eq('id', conference.id);
+      if (error) {
+        setConfPatch(p => ({ ...p, ...prior }));
+        setMinAgeSaved(false);
+        setMinAgeError('Could not save the minimum age. Please try again.');
+        return;
+      }
+      setTimeout(() => setMinAgeSaved(false), 2500);
+    })();
   }
 
-  async function handleSaveVisual() {
-    if (!session || !conference) return;
-    setVisualSaving(true);
-    const supabase = getAuthedClient(session.access_token);
-    await supabase.from('conferences').update({
+  function handleSaveVisual() {
+    if (!session || !conference || visualSaved) return;
+    setVisualError('');
+    const updates = {
       description: description || null,
       instagram_url: instagramUrl || null,
       facebook_url: facebookUrl || null,
       tiktok_url: tiktokUrl || null,
       whatsapp_url: whatsappUrl || null,
       website_url: websiteUrl || null,
-    }).eq('id', conference.id);
-    await refreshConference();
-    setVisualSaving(false);
+    };
+    // Optimistic: SAVED flashes instantly, the row write runs in the
+    // background. On failure the overlay rolls back to the exact prior
+    // values while the inputs keep the user's edits for a retry.
+    const prior = priorConfValues(['description', 'instagram_url', 'facebook_url', 'tiktok_url', 'whatsapp_url', 'website_url']);
+    patchConf(updates);
     setVisualSaved(true);
-    setTimeout(() => setVisualSaved(false), 2500);
+    const supabase = getAuthedClient(session.access_token);
+    void (async () => {
+      const { error } = await supabase.from('conferences').update(updates).eq('id', conference.id);
+      if (error) {
+        setConfPatch(p => ({ ...p, ...prior }));
+        setVisualSaved(false);
+        setVisualError("Couldn't save: " + error.message + ' — your edits are still here, try again.');
+        return;
+      }
+      setTimeout(() => setVisualSaved(false), 2500);
+    })();
   }
 
-  async function handleSaveDetails() {
-    if (!session || !conference) return;
+  function handleSaveDetails() {
+    if (!session || !conference || detailsSaved) return;
     const upperAcr = acronym.toUpperCase().trim();
     if (!upperAcr) {
       setAcronymError('Acronym is required.');
@@ -982,28 +1265,59 @@ export default function SettingsPage() {
       return;
     }
     setAcronymError('');
-    setDetailsSaving(true);
-    const supabase = getAuthedClient(session.access_token);
+    setDetailsError('');
     const parsedDelegates = parseInt(expectedDelegates, 10);
-    await supabase.from('conferences').update({
+    // Optimistic: capture the exact merged prior values for every field this
+    // save touches, patch the overlay (header acronym etc. update instantly),
+    // persist in the background, roll back with an inline error on failure.
+    const prior = priorConfValues([
+      'full_name', 'acronym', 'contact_email', 'student_level', 'start_date',
+      'end_date', 'country', 'city', 'format', 'expected_delegates',
+    ]);
+    const expected = Number.isFinite(parsedDelegates) ? parsedDelegates : (prior.expected_delegates as number);
+    patchConf({
       full_name: fullName,
       acronym: upperAcr,
-      contact_email: contactEmail || null,
-      student_level: studentLevel || null,
-      start_date: startDate || null,
-      end_date: endDate || null,
-      country: country || null,
-      city: city || null,
-      format: format || null,
-      expected_delegates: Number.isFinite(parsedDelegates) ? parsedDelegates : conference.expected_delegates,
-    }).eq('id', conference.id);
-    await refreshConference();
-    setDetailsSaving(false);
+      contact_email: contactEmail,
+      student_level: studentLevel,
+      start_date: startDate,
+      end_date: endDate,
+      country,
+      city,
+      format,
+      expected_delegates: expected,
+    });
     setDetailsSaved(true);
-    setTimeout(() => setDetailsSaved(false), 2500);
+    const supabase = getAuthedClient(session.access_token);
+    void (async () => {
+      const { error } = await supabase.from('conferences').update({
+        full_name: fullName,
+        acronym: upperAcr,
+        contact_email: contactEmail || null,
+        student_level: studentLevel || null,
+        start_date: startDate || null,
+        end_date: endDate || null,
+        country: country || null,
+        city: city || null,
+        format: format || null,
+        expected_delegates: expected,
+      }).eq('id', conference.id);
+      if (error) {
+        setConfPatch(p => ({ ...p, ...prior }));
+        setDetailsSaved(false);
+        setDetailsError("Couldn't save: " + error.message + ' — your edits are still here, try again.');
+        return;
+      }
+      setTimeout(() => setDetailsSaved(false), 2500);
+    })();
   }
 
   if (!conference) return null;
+
+  // Render view: the context row merged with this session's optimistic
+  // overlay — every conference-field read in the JSX below must go through
+  // `view`, never `conference`, so local writes are visible instantly.
+  const view: Conference = { ...conference, ...confPatch };
 
   // Inner grouped sub-card. These sit *inside* the raised floating panel, so
   // they read as quiet content groups (thicker 1.5px edge, a whisper of warm
@@ -1038,7 +1352,7 @@ export default function SettingsPage() {
     <div className="px-4 sm:px-6 md:px-10 py-8" style={{ maxWidth: '1080px' }}>
       {/* Header */}
       <p className="text-xs mb-2" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", fontWeight: 700, letterSpacing: '0.12em' }}>
-        {conference.acronym} / Settings
+        {view.acronym} / Settings
       </p>
       <h1 className="font-black text-2xl mb-7" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
         Settings
@@ -1439,7 +1753,7 @@ export default function SettingsPage() {
               <label className="block text-xs font-semibold mb-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Student level</label>
               <div className="flex gap-2">
                 {([
-                  { value: 'school', label: 'SCHOOL' },
+                  { value: 'school', label: 'HIGH SCHOOL' },
                   { value: 'university', label: 'UNIVERSITY' },
                   { value: 'both', label: 'BOTH' },
                 ] as { value: 'school' | 'university' | 'both'; label: string }[]).map(opt => {
@@ -1562,19 +1876,22 @@ export default function SettingsPage() {
 
             <button
               onClick={handleSaveDetails}
-              disabled={detailsSaving}
+              disabled={detailsSaved}
               className="w-full rounded-xl py-3 font-bold text-sm tracking-widest transition-colors focus:outline-none"
               style={{
-                backgroundColor: detailsSaved ? '#3D7A52' : detailsSaving ? '#DDD4C0' : '#1B3828',
-                color: detailsSaving ? '#9A8A78' : '#EED98A',
+                backgroundColor: detailsSaved ? '#3D7A52' : '#1B3828',
+                color: '#EED98A',
                 fontFamily: "'Outfit', sans-serif",
                 letterSpacing: '0.08em',
               }}
-              onMouseEnter={(e) => { if (!detailsSaving && !detailsSaved) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-              onMouseLeave={(e) => { if (!detailsSaving && !detailsSaved) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+              onMouseEnter={(e) => { if (!detailsSaved) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+              onMouseLeave={(e) => { if (!detailsSaved) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
             >
-              {detailsSaved ? 'SAVED ✓' : detailsSaving ? 'SAVING...' : 'SAVE CHANGES'}
+              {detailsSaved ? 'SAVED ✓' : 'SAVE CHANGES'}
             </button>
+            {detailsError && (
+              <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{detailsError}</p>
+            )}
           </div>
 
           {/* Banner card */}
@@ -1592,9 +1909,9 @@ export default function SettingsPage() {
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
             >
-              {conference.banner_url ? (
+              {view.banner_url ? (
                 <>
-                  <img src={conference.banner_url} alt="Banner" style={{ width: '100%', height: '160px', objectFit: 'cover', display: 'block' }} />
+                  <img src={view.banner_url} alt="Banner" style={{ width: '100%', height: '160px', objectFit: 'cover', display: 'block' }} />
                   <button
                     onClick={(e) => { e.stopPropagation(); document.getElementById('settings-banner-upload')?.click(); }}
                     style={{
@@ -1634,7 +1951,7 @@ export default function SettingsPage() {
               </p>
               <div className="flex flex-wrap gap-2">
                 {BANNER_PRESETS.map(p => {
-                  const selected = conference.banner_url === p;
+                  const selected = view.banner_url === p;
                   return (
                     <button
                       key={p}
@@ -1660,6 +1977,9 @@ export default function SettingsPage() {
                 })}
               </div>
             </div>
+            {bannerError && (
+              <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{bannerError}</p>
+            )}
           </div>
 
           {/* Logo card */}
@@ -1680,8 +2000,8 @@ export default function SettingsPage() {
               >
                 {logoUploading ? (
                   <div className="w-5 h-5 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
-                ) : conference.logo_url ? (
-                  <LogoDisc src={conference.logo_url} alt="Logo" size={80} fallbackText={conference.acronym?.slice(0, 3)} />
+                ) : view.logo_url ? (
+                  <LogoDisc src={view.logo_url} alt="Logo" size={80} fallbackText={view.acronym?.slice(0, 3)} />
                 ) : (
                   <span style={{ fontSize: 11, color: '#9A8A78', fontFamily: "'Outfit', sans-serif", textAlign: 'center', padding: '0 8px' }}>Click to upload</span>
                 )}
@@ -1694,7 +2014,7 @@ export default function SettingsPage() {
                   onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
                   onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
                 >
-                  {logoUploading ? 'UPLOADING...' : conference.logo_url ? 'REPLACE LOGO' : 'UPLOAD LOGO'}
+                  {logoUploading ? 'UPLOADING...' : view.logo_url ? 'REPLACE LOGO' : 'UPLOAD LOGO'}
                 </button>
               </div>
               <input
@@ -1711,6 +2031,9 @@ export default function SettingsPage() {
                 }}
               />
             </div>
+            {logoError && (
+              <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{logoError}</p>
+            )}
           </div>
 
           {/* Registration fee card */}
@@ -1746,20 +2069,23 @@ export default function SettingsPage() {
               </div>
               <button
                 onClick={handleSaveFee}
-                disabled={feeSaving}
+                disabled={feeSaved}
                 className="rounded-xl py-2.5 px-5 font-bold text-xs tracking-widest transition-colors focus:outline-none flex-shrink-0"
                 style={{
-                  backgroundColor: feeSaved ? '#3D7A52' : feeSaving ? '#DDD4C0' : '#1B3828',
-                  color: feeSaving ? '#9A8A78' : '#EED98A',
+                  backgroundColor: feeSaved ? '#3D7A52' : '#1B3828',
+                  color: '#EED98A',
                   fontFamily: "'Outfit', sans-serif",
                   letterSpacing: '0.07em',
                 }}
-                onMouseEnter={(e) => { if (!feeSaving && !feeSaved) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-                onMouseLeave={(e) => { if (!feeSaving && !feeSaved) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+                onMouseEnter={(e) => { if (!feeSaved) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+                onMouseLeave={(e) => { if (!feeSaved) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
               >
-                {feeSaved ? 'SAVED ✓' : feeSaving ? 'SAVING...' : 'SAVE'}
+                {feeSaved ? 'SAVED ✓' : 'SAVE'}
               </button>
             </div>
+            {feeError && (
+              <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{feeError}</p>
+            )}
           </div>
 
           {/* Description + socials card */}
@@ -1804,19 +2130,22 @@ export default function SettingsPage() {
             </div>
             <button
               onClick={handleSaveVisual}
-              disabled={visualSaving}
+              disabled={visualSaved}
               className="w-full mt-6 rounded-xl py-3 font-bold text-sm tracking-widest transition-colors focus:outline-none"
               style={{
-                backgroundColor: visualSaved ? '#3D7A52' : visualSaving ? '#DDD4C0' : '#1B3828',
-                color: visualSaving ? '#9A8A78' : '#EED98A',
+                backgroundColor: visualSaved ? '#3D7A52' : '#1B3828',
+                color: '#EED98A',
                 fontFamily: "'Outfit', sans-serif",
                 letterSpacing: '0.08em',
               }}
-              onMouseEnter={(e) => { if (!visualSaving && !visualSaved) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-              onMouseLeave={(e) => { if (!visualSaving && !visualSaved) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+              onMouseEnter={(e) => { if (!visualSaved) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+              onMouseLeave={(e) => { if (!visualSaved) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
             >
-              {visualSaved ? 'SAVED ✓' : visualSaving ? 'SAVING...' : 'SAVE CHANGES'}
+              {visualSaved ? 'SAVED ✓' : 'SAVE CHANGES'}
             </button>
+            {visualError && (
+              <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{visualError}</p>
+            )}
           </div>
         </div>
       )}
@@ -1849,26 +2178,26 @@ export default function SettingsPage() {
           </div>
           <button
             onClick={handleSaveMinAge}
-            disabled={minAgeSaving}
+            disabled={minAgeSaved}
             className="rounded-xl py-2.5 px-5 font-bold text-xs tracking-widest transition-colors focus:outline-none flex-shrink-0"
             style={{
-              backgroundColor: minAgeSaved ? '#3D7A52' : minAgeSaving ? '#DDD4C0' : '#1B3828',
-              color: minAgeSaving ? '#9A8A78' : '#EED98A',
+              backgroundColor: minAgeSaved ? '#3D7A52' : '#1B3828',
+              color: '#EED98A',
               fontFamily: "'Outfit', sans-serif",
               letterSpacing: '0.07em',
             }}
-            onMouseEnter={(e) => { if (!minAgeSaving && !minAgeSaved) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-            onMouseLeave={(e) => { if (!minAgeSaving && !minAgeSaved) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+            onMouseEnter={(e) => { if (!minAgeSaved) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+            onMouseLeave={(e) => { if (!minAgeSaved) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
           >
-            {minAgeSaved ? 'SAVED ✓' : minAgeSaving ? 'SAVING...' : 'SAVE'}
+            {minAgeSaved ? 'SAVED ✓' : 'SAVE'}
           </button>
         </div>
         {minAgeError && (
           <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{minAgeError}</p>
         )}
-        {conference.min_age != null && !minAgeError && (
+        {view.min_age != null && !minAgeError && (
           <p className="text-xs mt-3" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>
-            Delegates must be at least {conference.min_age} years old at the start of your conference to apply.
+            Delegates must be at least {view.min_age} years old at the start of your conference to apply.
           </p>
         )}
       </div>}
@@ -1970,7 +2299,7 @@ export default function SettingsPage() {
           Organizing Team
         </p>
         <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-          Add co-organizers who can manage this conference.
+          Add co-organizers who can manage this view.
           {isOwner && ' Members marked public are shown on your public page with photo, name and title.'}
         </p>
 
@@ -2147,7 +2476,7 @@ export default function SettingsPage() {
           Privacy & Publishing
         </p>
         <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-          Control who can see your conference.
+          Control who can see your view.
         </p>
 
         {/* Public toggle */}
@@ -2161,11 +2490,11 @@ export default function SettingsPage() {
               Your conference appears on gavelling.com/conferences
             </p>
           </div>
-          <PillToggle value={conference.is_public} onChange={handlePublicToggle} size="md" />
+          <PillToggle value={view.is_public} onChange={handlePublicToggle} size="md" />
         </div>
 
-        <p className="text-sm mt-3" style={{ color: conference.is_public ? '#1B3828' : '#B8844A', fontFamily: "'Outfit', sans-serif" }}>
-          {conference.is_public
+        <p className="text-sm mt-3" style={{ color: view.is_public ? '#1B3828' : '#B8844A', fontFamily: "'Outfit', sans-serif" }}>
+          {view.is_public
             ? 'Your conference is publicly listed on Gavelling.'
             : 'Your conference is private. Only people with the direct link can find it.'}
         </p>
@@ -2186,7 +2515,7 @@ export default function SettingsPage() {
           </button>
 
           <button
-            onClick={() => { if (!isOwner) { setDeleteError('Only the conference owner can delete this conference.'); return; } setDeleteError(''); setConfirmingDelete(true); }}
+            onClick={() => { if (!isOwner) { setDeleteError('Only the conference owner can delete this view.'); return; } setDeleteError(''); setConfirmingDelete(true); }}
             className="w-full rounded-xl py-2.5 mt-3 font-semibold text-sm focus:outline-none transition-colors"
             style={{ border: '1px solid rgba(139,32,32,0.3)', color: '#8B2020', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.05)'; }}
@@ -2211,8 +2540,8 @@ export default function SettingsPage() {
                       if (!session || deleting) return;
                       setDeleting(true);
                       const supabase = getAuthedClient(session.access_token);
-                      const { error } = await supabase.rpc('delete_conference', { p_conference_id: conference.id });
-                      if (error) { setDeleteError(error.message || 'Could not delete conference.'); setConfirmingDelete(false); setDeleting(false); return; }
+                      const { error } = await supabase.rpc('delete_conference', { p_conference_id: view.id });
+                      if (error) { setDeleteError(error.message || 'Could not delete view.'); setConfirmingDelete(false); setDeleting(false); return; }
                       window.location.href = '/conferences';
                     }}
                     disabled={deleting}
@@ -2252,7 +2581,7 @@ export default function SettingsPage() {
         >
           Previous edition
         </p>
-        {conference.predecessor_conference_id ? (
+        {view.predecessor_conference_id ? (
           <div
             className="flex items-center gap-3 px-4 py-3 rounded-xl mb-6"
             style={{ backgroundColor: 'rgba(27,56,40,0.03)', border: '1px solid rgba(27,56,40,0.08)' }}
@@ -2262,14 +2591,14 @@ export default function SettingsPage() {
                 {predecessorInfo?.full_name ?? 'A private conference'}
               </p>
               <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                {conference.predecessor_approved
-                  ? 'Confirmed as the previous edition of this conference.'
+                {view.predecessor_approved
+                  ? 'Confirmed as the previous edition of this view.'
                   : 'Waiting for its Main Organiser to confirm the link.'}
               </p>
             </div>
             <span className="flex-shrink-0">
-              <Pill tone={conference.predecessor_approved ? 'forest' : 'gold'} size="sm" dot>
-                {conference.predecessor_approved ? 'Approved' : 'Pending approval'}
+              <Pill tone={view.predecessor_approved ? 'forest' : 'gold'} size="sm" dot>
+                {view.predecessor_approved ? 'Approved' : 'Pending approval'}
               </Pill>
             </span>
             <button
@@ -2296,7 +2625,7 @@ export default function SettingsPage() {
         </p>
         {incomingClaims.length === 0 ? (
           <p className="text-sm" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-            No conferences currently claim {conference.acronym} as their previous edition.
+            No conferences currently claim {view.acronym} as their previous edition.
           </p>
         ) : (
           <div className="flex flex-col">
@@ -2317,7 +2646,7 @@ export default function SettingsPage() {
                       {claim.full_name}
                     </p>
                     <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                      claims to be the next edition of {conference.acronym}
+                      claims to be the next edition of {view.acronym}
                     </p>
                   </div>
 
@@ -2554,7 +2883,7 @@ export default function SettingsPage() {
                         {claim.requester_full_name}
                       </p>
                       <p className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                        {cityLine ? cityLine + ' — ' : ''}wants to list {conference.acronym} as a partner conference
+                        {cityLine ? cityLine + ' — ' : ''}wants to list {view.acronym} as a partner conference
                       </p>
                     </div>
                     <div className="flex gap-2 flex-shrink-0">

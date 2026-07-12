@@ -384,9 +384,8 @@ function CommunicationsPageInner() {
   const [inboxKindFilter, setInboxKindFilter] = useState<'all' | 'question' | 'swap_request' | 'swap_notice'>('all');
   const [inboxSearch, setInboxSearch] = useState('');
   const [replyText, setReplyText] = useState('');
-  const [replying, setReplying] = useState(false);
+  const [replyError, setReplyError] = useState('');
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
-  const [closingOrReopening, setClosingOrReopening] = useState(false);
   const [swapActing, setSwapActing] = useState(false);
   const [swapError, setSwapError] = useState('');
   const { draftNotices, pushDraftNotice, dismissDraftNotice } = useDraftNotices();
@@ -403,6 +402,9 @@ function CommunicationsPageInner() {
   const [builderError, setBuilderError] = useState('');
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [sending, setSending] = useState(false);
+  const [markingReady, setMarkingReady] = useState(false);
+  const [openingSend, setOpeningSend] = useState(false);
+  const [duplicatingIds, setDuplicatingIds] = useState<Set<string>>(new Set());
 
   // ── Audience state (ad-hoc only) ──
   const [selRoles, setSelRoles] = useState<Set<string>>(new Set());
@@ -426,19 +428,34 @@ function CommunicationsPageInner() {
   }
 
   // ── Data loading ──────────────────────────────────────────────────────────
+  // All load functions are "silent": none of them touch the page-level
+  // `loading` flag (only the initial mount effect does), so post-action
+  // refetches never wipe the page. Each load carries a stale-response guard:
+  // a per-key sequence number bumped at call start; after every await the
+  // load bails if a newer call for the same key has since started, so an
+  // out-of-order response can never clobber fresher (or optimistic) state.
+  const loadSeqs = useRef<Record<string, number>>({});
+  const beginLoad = useCallback((key: string) => {
+    const seq = (loadSeqs.current[key] ?? 0) + 1;
+    loadSeqs.current[key] = seq;
+    return () => loadSeqs.current[key] === seq;
+  }, []);
 
   const loadTemplates = useCallback(async () => {
     if (!conference || !session) return;
+    const fresh = beginLoad('templates');
     const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase
       .from('email_templates')
       .select('id, conference_id, event_key, name, subject, body, body_blocks, enabled, delivery, lifecycle, updated_at')
       .eq('conference_id', conference.id);
+    if (!fresh()) return;
     setTemplates((data ?? []) as EmailTemplate[]);
-  }, [conference, session?.access_token]);
+  }, [conference, session?.access_token, beginLoad]);
 
   const loadApplications = useCallback(async () => {
     if (!conference || !session) return;
+    const fresh = beginLoad('applications');
     const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase
       .from('applications')
@@ -452,64 +469,75 @@ function CommunicationsPageInner() {
         invited_email, invited_name
       `)
       .eq('conference_id', conference.id);
+    if (!fresh()) return;
     setApplications((data ?? []) as unknown as AppRow[]);
-  }, [conference, session?.access_token]);
+  }, [conference, session?.access_token, beginLoad]);
 
   const loadCommittees = useCallback(async () => {
     if (!conference || !session) return;
+    const fresh = beginLoad('committees');
     const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase
       .from('conference_committees')
       .select('id, name, abbreviation')
       .eq('conference_id', conference.id)
       .order('name', { ascending: true });
+    if (!fresh()) return;
     setCommittees((data ?? []) as Committee[]);
-  }, [conference, session?.access_token]);
+  }, [conference, session?.access_token, beginLoad]);
 
   const loadSocieties = useCallback(async () => {
     if (!conference || !session) return;
+    const fresh = beginLoad('societies');
     const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase
       .from('societies')
       .select('id, name')
       .eq('conference_id', conference.id)
       .order('name', { ascending: true });
+    if (!fresh()) return;
     setSocieties((data ?? []) as Society[]);
-  }, [conference, session?.access_token]);
+  }, [conference, session?.access_token, beginLoad]);
 
   const loadEmailSends = useCallback(async () => {
     if (!conference || !session) return;
+    const fresh = beginLoad('emailSends');
     const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase
       .from('email_sends')
       .select('id, subject, recipient_filter, recipient_count, scheduled_at, sent_at, status, created_at, body_html')
       .eq('conference_id', conference.id)
       .order('created_at', { ascending: false });
+    if (!fresh()) return;
     setEmailSends((data ?? []) as unknown as EmailSend[]);
-  }, [conference, session?.access_token]);
+  }, [conference, session?.access_token, beginLoad]);
 
   const loadOutboxPending = useCallback(async () => {
     if (!conference || !session) return;
+    const fresh = beginLoad('outboxPending');
     const supabase = getAuthedClient(session.access_token);
     const { count } = await supabase
       .from('email_outbox')
       .select('id', { count: 'exact', head: true })
       .eq('conference_id', conference.id)
       .eq('status', 'pending');
+    if (!fresh()) return;
     setOutboxPending(count ?? 0);
-  }, [conference, session?.access_token]);
+  }, [conference, session?.access_token, beginLoad]);
 
   // All requests + all their messages in two queries — modest for a single
   // conference's Q&R volume, and lets the list snippet / unread rule compute
   // "last message from participant" client-side without an N+1.
   const loadInbox = useCallback(async () => {
     if (!conference || !session) return;
+    const fresh = beginLoad('inbox');
     const supabase = getAuthedClient(session.access_token);
     const { data: reqData } = await supabase
       .from('conference_requests')
       .select('id, user_id, application_id, subject, status, kind, metadata, seen_by_organizer, created_at, last_message_at')
       .eq('conference_id', conference.id)
       .order('last_message_at', { ascending: false });
+    if (!fresh()) return;
     const requests = (reqData ?? []) as InboxRequest[];
     setInboxRequests(requests);
 
@@ -531,6 +559,7 @@ function CommunicationsPageInner() {
       supabase.from('profiles').select('id, display_name, avatar_url').in('id', userIds),
       supabase.from('applications').select('user_id, role').eq('conference_id', conference.id).in('user_id', userIds),
     ]);
+    if (!fresh()) return;
     setInboxMessages((msgRes.data ?? []) as InboxMessage[]);
     setInboxProfiles(new Map(((profileRes.data ?? []) as ({ id: string } & InboxProfile)[]).map(p => [p.id, p])));
     const roleMap = new Map<string, string>();
@@ -538,7 +567,7 @@ function CommunicationsPageInner() {
       if (!roleMap.has(a.user_id)) roleMap.set(a.user_id, a.role);
     }
     setInboxRoles(roleMap);
-  }, [conference, session?.access_token]);
+  }, [conference, session?.access_token, beginLoad]);
 
   useEffect(() => {
     if (!conference) return;
@@ -826,7 +855,7 @@ function CommunicationsPageInner() {
     if (builderTemplateId) {
       const { error } = await supabase.from('email_templates').update(payload).eq('id', builderTemplateId);
       if (error) { if (!opts.silent) setBuilderError(error.message); return null; }
-      await loadTemplates();
+      void loadTemplates(); // silent background refresh — never blocks the builder
       return builderTemplateId;
     }
 
@@ -838,7 +867,7 @@ function CommunicationsPageInner() {
     if (error) { if (!opts.silent) setBuilderError(error.message); return null; }
     const newId = (data as { id: string }).id;
     setBuilderTemplateId(newId);
-    await loadTemplates();
+    void loadTemplates(); // silent background refresh — never blocks the builder
     return newId;
   }
 
@@ -863,31 +892,59 @@ function CommunicationsPageInner() {
   }
 
   async function handleToggleLifecycle() {
-    const next: 'draft' | 'ready' = builderLifecycle === 'ready' ? 'draft' : 'ready';
+    if (markingReady) return;
+    const prev = builderLifecycle;
+    const next: 'draft' | 'ready' = prev === 'ready' ? 'draft' : 'ready';
     let id = builderTemplateId;
     if (!id) {
+      // Creation path: we need the real DB id before we can flip lifecycle,
+      // so this one write stays awaited — busy-state on this button only.
+      setMarkingReady(true);
       id = await persistTemplate(builderSubject, builderBlocks, { silent: false });
+      setMarkingReady(false);
       if (!id) return;
     }
     if (!session) return;
-    const supabase = getAuthedClient(session.access_token);
-    const { error } = await supabase.from('email_templates').update({ lifecycle: next }).eq('id', id);
-    if (error) { setBuilderError(error.message); return; }
+    const templateId = id;
+
+    // Optimistic: flip immediately, persist in the background, roll back on failure.
     setBuilderLifecycle(next);
-    await loadTemplates();
+    setTemplates(ts => ts.map(t => (t.id === templateId ? { ...t, lifecycle: next } : t)));
+    const supabase = getAuthedClient(session.access_token);
+    (async () => {
+      const { error } = await supabase.from('email_templates').update({ lifecycle: next }).eq('id', templateId);
+      if (error) throw error;
+      void loadTemplates();
+    })().catch((e: unknown) => {
+      setBuilderLifecycle(prev);
+      setTemplates(ts => ts.map(t => (t.id === templateId ? { ...t, lifecycle: prev } : t)));
+      setBuilderError(e instanceof Error ? e.message : 'Could not update the template status.');
+    });
   }
 
-  async function handleToggleEnabled(template: EmailTemplate) {
+  function handleToggleEnabled(template: EmailTemplate) {
     if (!session) return;
+    const prev = template.enabled;
+    const next = !prev;
+    // Optimistic: flip the pill immediately; roll back only this row on failure.
+    setTemplates(ts => ts.map(t => (t.id === template.id ? { ...t, enabled: next } : t)));
     const supabase = getAuthedClient(session.access_token);
-    await supabase.from('email_templates').update({ enabled: !template.enabled }).eq('id', template.id);
-    await loadTemplates();
+    (async () => {
+      const { error } = await supabase.from('email_templates').update({ enabled: next }).eq('id', template.id);
+      if (error) throw error;
+    })().catch((e: unknown) => {
+      setTemplates(ts => ts.map(t => (t.id === template.id ? { ...t, enabled: prev } : t)));
+      showFlash('err', e instanceof Error ? e.message : 'Could not update the notification toggle.');
+    });
   }
 
   async function handleDuplicateTemplate(t: EmailTemplate) {
-    if (!conference || !session) return;
+    if (!conference || !session || duplicatingIds.has(t.id)) return;
+    // Creation flow: the new row needs its real DB id (Edit/autosave target it),
+    // so the insert stays awaited — busy-state on this row's Copy button only.
+    setDuplicatingIds(prev => new Set(prev).add(t.id));
     const supabase = getAuthedClient(session.access_token);
-    const { error } = await supabase.from('email_templates').insert({
+    const { data, error } = await supabase.from('email_templates').insert({
       conference_id: conference.id,
       event_key: null,
       name: `Copy of ${t.name}`,
@@ -898,10 +955,11 @@ function CommunicationsPageInner() {
       lifecycle: 'draft',
       enabled: false,
       updated_at: new Date().toISOString(),
-    });
-    if (error) { showFlash('err', error.message); return; }
+    }).select('id, conference_id, event_key, name, subject, body, body_blocks, enabled, delivery, lifecycle, updated_at').single();
+    setDuplicatingIds(prev => { const nextSet = new Set(prev); nextSet.delete(t.id); return nextSet; });
+    if (error || !data) { showFlash('err', error?.message ?? 'Could not duplicate the template.'); return; }
+    setTemplates(prev => [...prev, data as EmailTemplate]);
     showFlash('ok', 'Duplicated as a new draft.');
-    await loadTemplates();
   }
 
   function handleExcludeRecipient(id: string) {
@@ -913,25 +971,37 @@ function CommunicationsPageInner() {
   }
 
   async function handleOpenSendConfirm() {
-    if (!conference || !session) return;
+    if (!conference || !session || openingSend) return;
     setBuilderError('');
     if (finalRecipients.length === 0) { setBuilderError('No recipients selected.'); return; }
+    // Awaited on purpose: we must have the real template id + a validated save
+    // before offering to send. Busy-state is scoped to the SEND button only.
+    setOpeningSend(true);
     const id = await persistTemplate(builderSubject, builderBlocks, { silent: false });
+    setOpeningSend(false);
     if (!id) return;
     setSendConfirmText('');
     setSendConfirmOpen(true);
   }
 
   async function handleConfirmSend() {
-    if (!conference || !session || !builderTemplateId) return;
+    // `sending` doubles as the double-send lock: while a send is in flight the
+    // confirm button is busy AND re-entry is rejected here, so queueing the
+    // same email twice is impossible.
+    if (!conference || !session || !builderTemplateId || sending) return;
     setSending(true);
     const supabase = getAuthedClient(session.access_token);
     const flatBody = flattenBlocksToPlainText(builderBlocks, conference);
     const recipients = finalRecipients;
     const snapshotHtml = renderEmailHtml({ blocks: builderBlocks, conference, ctx: {} });
+    const sentAtIso = new Date().toISOString();
+    const recipientFilterPayload = buildRecipientFilterPayload();
 
     // Insert the send summary first so each outbox row can be tagged with
     // its real id, letting History show a per-recipient delivery breakdown.
+    // These two inserts stay awaited: the outbox rows need the server-generated
+    // email_send id, and the success flash reports the real queued count.
+    // Only the confirm button is busy — the rest of the page stays interactive.
     const { data: sendData, error: sendError } = await supabase
       .from('email_sends')
       .insert({
@@ -939,11 +1009,11 @@ function CommunicationsPageInner() {
         sent_by: user?.id ?? null,
         subject: builderSubject,
         body_html: snapshotHtml,
-        recipient_filter: buildRecipientFilterPayload(),
+        recipient_filter: recipientFilterPayload,
         recipient_count: recipients.length,
         scheduled_at: null,
         status: 'sent',
-        sent_at: new Date().toISOString(),
+        sent_at: sentAtIso,
       })
       .select('id')
       .single();
@@ -974,12 +1044,30 @@ function CommunicationsPageInner() {
 
     triggerEmailDelivery(supabase);
 
+    // Optimistic: History and the Outbox Pending medallion update instantly
+    // from values we already know; the silent refetches below reconcile with
+    // the server (delivery may already have drained some of the outbox).
+    setEmailSends(prev => [{
+      id: emailSendId,
+      subject: builderSubject,
+      recipient_filter: recipientFilterPayload,
+      recipient_count: recipients.length,
+      scheduled_at: null,
+      sent_at: sentAtIso,
+      status: 'sent' as const,
+      created_at: sentAtIso,
+      body_html: snapshotHtml,
+    }, ...prev]);
+    setOutboxPending(p => p + rows.length);
+
     setSending(false);
     setSendConfirmOpen(false);
     setSendConfirmText('');
     closeBuilder();
     showFlash('ok', `Queued ${rows.length} email${rows.length === 1 ? '' : 's'} — sending now.`);
-    await Promise.all([loadTemplates(), loadEmailSends(), loadOutboxPending()]);
+    void loadTemplates();
+    void loadEmailSends();
+    void loadOutboxPending();
   }
 
   async function toggleRecipientsExpanded(sendId: string) {
@@ -1036,7 +1124,8 @@ function CommunicationsPageInner() {
           <button
             onClick={() => handleDuplicateTemplate(t)}
             title="Duplicate"
-            className="rounded-lg p-1.5 focus:outline-none transition-colors"
+            disabled={duplicatingIds.has(t.id)}
+            className="rounded-lg p-1.5 focus:outline-none transition-colors disabled:opacity-50"
             style={{ border: `1px solid ${BORDER}`, color: '#1C1410', backgroundColor: 'transparent' }}
             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
@@ -1070,94 +1159,174 @@ function CommunicationsPageInner() {
 
   // ── Inbox actions ────────────────────────────────────────────────────────
 
-  async function handleOpenThread(id: string) {
+  function handleOpenThread(id: string) {
     setSelectedRequestId(id);
     setReplyText('');
+    setReplyError('');
     setSwapError('');
     const req = inboxRequests.find(r => r.id === id);
     if (!req || req.seen_by_organizer || !session) return;
+    // Optimistic mark-read: the unread dot / badge clears instantly; the write
+    // persists in the background and rolls back this row's flag on failure.
     setInboxRequests(prev => prev.map(r => (r.id === id ? { ...r, seen_by_organizer: true } : r)));
     const supabase = getAuthedClient(session.access_token);
-    await supabase.from('conference_requests').update({ seen_by_organizer: true }).eq('id', id);
+    (async () => {
+      const { error } = await supabase.from('conference_requests').update({ seen_by_organizer: true }).eq('id', id);
+      if (error) throw error;
+    })().catch(() => {
+      setInboxRequests(prev => prev.map(r => (r.id === id ? { ...r, seen_by_organizer: false } : r)));
+      showFlash('err', 'Could not mark this thread as read.');
+    });
   }
 
   // Reply posts regardless of whether the notification email drafts — a
   // missing/disabled 'request_reply' template just nudges via DraftNotice.
-  async function handleInboxReply() {
-    if (!session || !conference || !selectedRequest || !replyText.trim() || replying) return;
-    setReplying(true);
-    const supabase = getAuthedClient(session.access_token);
+  function handleInboxReply() {
+    if (!session || !conference || !selectedRequest || !replyText.trim()) return;
+    const req = selectedRequest;
     const body = replyText.trim();
-    await supabase.from('conference_request_messages').insert({
-      request_id: selectedRequest.id,
-      sender_user_id: user!.id,
-      is_organizer: true,
-      body,
-    });
-    await supabase.from('conference_requests').update({
-      last_message_at: new Date().toISOString(),
-      seen_by_organizer: true,
-    }).eq('id', selectedRequest.id);
+    const tempId = `temp-${Date.now()}`;
+    const nowIso = new Date().toISOString();
+    const prevReq = { last_message_at: req.last_message_at, seen_by_organizer: req.seen_by_organizer };
 
-    if (selectedRequest.application_id) {
-      const result = await queueEventEmail(supabase, conference.id, 'request_reply', [selectedRequest.application_id], {
-        request_subject: selectedRequest.subject,
-      });
-      if (!result.drafted) pushDraftNotice('request_reply');
-    }
-
+    // Optimistic: the bubble appears and the input clears instantly. Clearing
+    // the input is also the double-send lock — a second Enter/click has no
+    // text, so the trim() guard above rejects it.
+    setInboxMessages(prev => [...prev, {
+      id: tempId, request_id: req.id, sender_user_id: user!.id, is_organizer: true, body, created_at: nowIso,
+    }]);
+    setInboxRequests(prev => prev.map(r => (r.id === req.id ? { ...r, last_message_at: nowIso, seen_by_organizer: true } : r)));
     setReplyText('');
-    setReplying(false);
-    await loadInbox();
+    setReplyError('');
+
+    const supabase = getAuthedClient(session.access_token);
+    (async () => {
+      const { error: msgError } = await supabase.from('conference_request_messages').insert({
+        request_id: req.id,
+        sender_user_id: user!.id,
+        is_organizer: true,
+        body,
+      });
+      if (msgError) throw msgError;
+      const { error: reqError } = await supabase.from('conference_requests').update({
+        last_message_at: new Date().toISOString(),
+        seen_by_organizer: true,
+      }).eq('id', req.id);
+      if (reqError) throw reqError;
+
+      if (req.application_id) {
+        // Secondary effect: failure surfaces inline but never rolls back the
+        // already-posted reply.
+        try {
+          const result = await queueEventEmail(supabase, conference.id, 'request_reply', [req.application_id], {
+            request_subject: req.subject,
+          });
+          if (!result.drafted) pushDraftNotice('request_reply');
+        } catch {
+          setReplyError('Reply posted, but the notification email could not be queued.');
+        }
+      }
+
+      // Silent refetch swaps the temp message for the real server row.
+      void loadInbox();
+    })().catch((e: unknown) => {
+      // Rollback: remove only the optimistic bubble, restore this request's
+      // prior fields, and put the draft back so the text isn't lost.
+      setInboxMessages(prev => prev.filter(m => m.id !== tempId));
+      setInboxRequests(prev => prev.map(r => (r.id === req.id ? { ...r, ...prevReq } : r)));
+      setReplyText(cur => (cur ? cur : body));
+      setReplyError(e instanceof Error ? e.message : 'Could not send the reply.');
+    });
   }
 
-  async function handleCloseReopen(close: boolean) {
-    if (!session || !selectedRequest || closingOrReopening) return;
-    setClosingOrReopening(true);
-    const supabase = getAuthedClient(session.access_token);
-    await supabase.from('conference_requests').update({
-      status: close ? 'closed' : 'open',
-      seen_by_organizer: true,
-    }).eq('id', selectedRequest.id);
-    setClosingOrReopening(false);
+  function handleCloseReopen(close: boolean) {
+    if (!session || !selectedRequest) return;
+    const req = selectedRequest;
+    const prevReq = { status: req.status, seen_by_organizer: req.seen_by_organizer };
+    const nextStatus = close ? 'closed' : 'open';
+
+    // Optimistic: the chip flips and the modal closes instantly.
+    setInboxRequests(prev => prev.map(r => (r.id === req.id ? { ...r, status: nextStatus, seen_by_organizer: true } : r)));
     setCloseConfirmOpen(false);
-    await loadInbox();
+
+    const supabase = getAuthedClient(session.access_token);
+    (async () => {
+      const { error } = await supabase.from('conference_requests').update({
+        status: nextStatus,
+        seen_by_organizer: true,
+      }).eq('id', req.id);
+      if (error) throw error;
+    })().catch((e: unknown) => {
+      setInboxRequests(prev => prev.map(r => (r.id === req.id ? { ...r, ...prevReq } : r)));
+      showFlash('err', e instanceof Error ? e.message : `Could not ${close ? 'close' : 'reopen'} the thread.`);
+    });
   }
 
   async function handleSwapDecision(approve: boolean) {
     if (!session || !conference || !selectedRequest || swapActing) return;
-    const { app_a, app_b } = selectedRequest.metadata;
-    setSwapActing(true);
+    const req = selectedRequest;
+    const { app_a, app_b } = req.metadata;
     setSwapError('');
     const supabase = getAuthedClient(session.access_token);
 
     if (approve) {
-      if (!app_a || !app_b) { setSwapError('This request is missing the application ids to swap.'); setSwapActing(false); return; }
+      // The swap itself is a server-computed RPC whose ok/error result gates
+      // everything else, so it stays awaited — busy-state on the Approve/
+      // Decline buttons only (swapActing).
+      if (!app_a || !app_b) { setSwapError('This request is missing the application ids to swap.'); return; }
+      setSwapActing(true);
       const { data, error } = await supabase.rpc('perform_delegation_swap', { p_app_a: app_a, p_app_b: app_b });
       if (error) { setSwapError(error.message || 'Could not perform the swap.'); setSwapActing(false); return; }
       const result = data as { ok: boolean; error?: string };
       if (!result.ok) { setSwapError(result.error ?? 'Could not perform the swap.'); setSwapActing(false); return; }
+      setSwapActing(false);
     }
 
-    await supabase.from('conference_request_messages').insert({
-      request_id: selectedRequest.id,
-      sender_user_id: user!.id,
-      is_organizer: true,
-      body: approve ? 'Swap approved and applied.' : 'Swap declined.',
+    // Optimistic: the decision message and CLOSED state appear instantly
+    // (closing also hides the Approve/Decline buttons, which is the
+    // double-click lock for the decline path).
+    const decisionBody = approve ? 'Swap approved and applied.' : 'Swap declined.';
+    const tempId = `temp-${Date.now()}`;
+    const nowIso = new Date().toISOString();
+    const prevReq = { status: req.status, last_message_at: req.last_message_at, seen_by_organizer: req.seen_by_organizer };
+    setInboxMessages(prev => [...prev, {
+      id: tempId, request_id: req.id, sender_user_id: user!.id, is_organizer: true, body: decisionBody, created_at: nowIso,
+    }]);
+    setInboxRequests(prev => prev.map(r => (r.id === req.id ? { ...r, status: 'closed', last_message_at: nowIso, seen_by_organizer: true } : r)));
+
+    (async () => {
+      const { error: msgError } = await supabase.from('conference_request_messages').insert({
+        request_id: req.id,
+        sender_user_id: user!.id,
+        is_organizer: true,
+        body: decisionBody,
+      });
+      if (msgError) throw msgError;
+      const { error: reqError } = await supabase.from('conference_requests').update({
+        status: 'closed',
+        last_message_at: new Date().toISOString(),
+        seen_by_organizer: true,
+      }).eq('id', req.id);
+      if (reqError) throw reqError;
+
+      if (app_a && app_b) {
+        // Secondary effect: inline error, no rollback of the decision.
+        try {
+          const result = await queueEventEmail(supabase, conference.id, 'delegation_swap', [app_a, app_b]);
+          if (!result.drafted) pushDraftNotice('delegation_swap');
+        } catch {
+          setSwapError('Decision recorded, but the notification email could not be queued.');
+        }
+      }
+
+      void loadInbox();
+    })().catch((e: unknown) => {
+      // Rollback the thread bookkeeping only — an approved swap itself (RPC)
+      // has already been applied and is not undone here.
+      setInboxMessages(prev => prev.filter(m => m.id !== tempId));
+      setInboxRequests(prev => prev.map(r => (r.id === req.id ? { ...r, ...prevReq } : r)));
+      setSwapError(e instanceof Error ? e.message : 'Could not record the decision.');
     });
-    await supabase.from('conference_requests').update({
-      status: 'closed',
-      last_message_at: new Date().toISOString(),
-      seen_by_organizer: true,
-    }).eq('id', selectedRequest.id);
-
-    if (app_a && app_b) {
-      const result = await queueEventEmail(supabase, conference.id, 'delegation_swap', [app_a, app_b]);
-      if (!result.drafted) pushDraftNotice('delegation_swap');
-    }
-
-    setSwapActing(false);
-    await loadInbox();
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -1203,24 +1372,25 @@ function CommunicationsPageInner() {
             {builderEventKey === null && (
               <button
                 onClick={handleToggleLifecycle}
-                className="rounded-xl py-2 px-4 text-sm font-bold focus:outline-none transition-colors"
+                disabled={markingReady}
+                className="rounded-xl py-2 px-4 text-sm font-bold focus:outline-none transition-colors disabled:opacity-60"
                 style={{ border: `1px solid ${BORDER}`, color: '#1C1410', backgroundColor: 'transparent', fontFamily: OUTFIT }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
+                onMouseEnter={e => { if (!markingReady) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
               >
-                {builderLifecycle === 'ready' ? 'BACK TO DRAFT' : 'MARK READY'}
+                {markingReady ? 'SAVING...' : builderLifecycle === 'ready' ? 'BACK TO DRAFT' : 'MARK READY'}
               </button>
             )}
             {builderEventKey === null && builderLifecycle === 'ready' && (
               <button
                 onClick={handleOpenSendConfirm}
-                disabled={sending}
+                disabled={sending || openingSend}
                 className="rounded-xl py-2 px-4 text-sm font-bold focus:outline-none transition-colors disabled:opacity-60"
                 style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT }}
-                onMouseEnter={e => { if (!sending) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+                onMouseEnter={e => { if (!(sending || openingSend)) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
               >
-                {sending ? 'QUEUEING...' : 'SEND'}
+                {sending ? 'QUEUEING...' : openingSend ? 'SAVING...' : 'SEND'}
               </button>
             )}
           </div>
@@ -1713,7 +1883,6 @@ function CommunicationsPageInner() {
                   </div>
                   <button
                     onClick={() => (selectedRequest.status === 'open' ? setCloseConfirmOpen(true) : handleCloseReopen(false))}
-                    disabled={closingOrReopening}
                     className="rounded-xl py-2 px-4 text-xs font-bold focus:outline-none flex-shrink-0"
                     style={{ border: `1px solid ${BORDER}`, color: '#1C1410', backgroundColor: 'transparent', fontFamily: OUTFIT, letterSpacing: '0.05em' }}
                   >
@@ -1733,11 +1902,11 @@ function CommunicationsPageInner() {
                     <p className="text-sm mt-1" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
                       {selectedRequest.metadata.member_b ?? 'Member B'}: {selectedRequest.metadata.before?.b ?? '—'} → {selectedRequest.metadata.after?.b ?? '—'}
                     </p>
+                    {swapError && (
+                      <p className="text-xs mt-3" style={{ color: '#8B2020', fontFamily: OUTFIT }}>{swapError}</p>
+                    )}
                     {selectedRequest.kind === 'swap_request' && selectedRequest.status === 'open' && (
                       <>
-                        {swapError && (
-                          <p className="text-xs mt-3" style={{ color: '#8B2020', fontFamily: OUTFIT }}>{swapError}</p>
-                        )}
                         <div className="flex gap-2 mt-3">
                           <button
                             onClick={() => handleSwapDecision(false)}
@@ -1793,24 +1962,27 @@ function CommunicationsPageInner() {
                     <input
                       value={replyText}
                       onChange={e => setReplyText(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter' && !replying) handleInboxReply(); }}
+                      onKeyDown={e => { if (e.key === 'Enter') handleInboxReply(); }}
                       placeholder="Write a reply..."
                       className="flex-1 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none"
                       style={{ border: `1px solid ${BORDER}`, backgroundColor: '#FFFFFF', color: '#1C1410', fontFamily: OUTFIT }}
                     />
                     <button
                       onClick={handleInboxReply}
-                      disabled={replying || !replyText.trim()}
+                      disabled={!replyText.trim()}
                       className="rounded-xl px-4 text-xs font-bold focus:outline-none flex-shrink-0"
                       style={{
-                        backgroundColor: replying || !replyText.trim() ? '#DDD4C0' : '#1B3828',
-                        color: replying || !replyText.trim() ? '#9A8A78' : '#EED98A',
+                        backgroundColor: !replyText.trim() ? '#DDD4C0' : '#1B3828',
+                        color: !replyText.trim() ? '#9A8A78' : '#EED98A',
                         border: 'none', fontFamily: OUTFIT, letterSpacing: '0.05em',
                       }}
                     >
-                      {replying ? '...' : 'SEND'}
+                      SEND
                     </button>
                   </div>
+                )}
+                {replyError && (
+                  <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: OUTFIT }}>{replyError}</p>
                 )}
 
                 {closeConfirmOpen && (
@@ -1819,7 +1991,6 @@ function CommunicationsPageInner() {
                     body="The participant will see it as closed. You can reopen it later."
                     confirmLabel="Close Thread"
                     danger
-                    loading={closingOrReopening}
                     onConfirm={() => handleCloseReopen(true)}
                     onCancel={() => setCloseConfirmOpen(false)}
                   />

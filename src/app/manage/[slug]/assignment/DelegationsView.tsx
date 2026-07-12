@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { ChevronLeft, Check } from 'lucide-react';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
@@ -172,9 +172,15 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
   const { draftNotices, pushDraftNotice, dismissDraftNotice } = useDraftNotices();
   const { confirm, modal: confirmModal } = useConfirmModal();
 
-  const loadData = useCallback(async () => {
+  // Monotonic guard so a slow older load never overwrites a newer one.
+  const loadSeqRef = useRef(0);
+
+  const loadData = useCallback(async (opts?: { silent?: boolean }) => {
     if (!conference || !session) return;
-    setLoading(true);
+    const seq = ++loadSeqRef.current;
+    // silent: background refresh — keeps the list mounted (no spinner wipe,
+    // expanded delegation and scroll survive).
+    if (!opts?.silent) setLoading(true);
     const supabase = getAuthedClient(session.access_token);
 
     const [socRes, memberRes, search, advisors, swapReqRes] = await Promise.all([
@@ -198,6 +204,8 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
         .in('kind', ['swap_request', 'swap_notice'])
         .eq('seen_by_organizer', false),
     ]);
+
+    if (seq !== loadSeqRef.current) return; // stale response
 
     setSocieties((socRes.data ?? []) as unknown as Society[]);
     setMembers((memberRes.data ?? []) as unknown as PoolMember[]);
@@ -243,6 +251,22 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
   const expandedSociety = societies.find(s => s.id === expandedId) ?? null;
   const expandedMembers = expandedId ? membersBySociety.get(expandedId) ?? [] : [];
 
+  // ── Optimistic local patch helpers ─────────────────────────────────────────
+  // Mutate exactly the affected rows; rollbacks restore the exact snapshots.
+
+  function patchMember(id: string, patch: Partial<PoolMember>) {
+    setMembers(prev => prev.map(m => (m.id === id ? { ...m, ...patch } : m)));
+  }
+  function restoreMember(snapshot: PoolMember) {
+    setMembers(prev => prev.map(m => (m.id === snapshot.id ? snapshot : m)));
+  }
+  function patchSociety(id: string, patch: Partial<Society>) {
+    setSocieties(prev => prev.map(s => (s.id === id ? { ...s, ...patch } : s)));
+  }
+  function restoreSociety(snapshot: Society) {
+    setSocieties(prev => prev.map(s => (s.id === snapshot.id ? snapshot : s)));
+  }
+
   // ── Mutations ────────────────────────────────────────────────────────────
 
   async function handleAddToDelegation(app: SearchApp, society: Society) {
@@ -257,13 +281,33 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
       if (!confirmed) return;
     }
     const supabase = getAuthedClient(session.access_token);
-    await supabase.from('applications').update({ society_id: society.id }).eq('id', app.id);
+
+    // Optimistic: the search result reflects the move immediately; the full
+    // PoolMember row (payment, pledge, etc.) arrives via silent refetch.
+    const prevSearchEntry = searchPool.find(a => a.id === app.id) ?? null;
+    setSearchPool(prev => prev.map(a =>
+      a.id === app.id ? { ...a, society_id: society.id, societies: { name: society.name } } : a
+    ));
     setSearchQuery('');
 
-    const result = await queueEventEmail(supabase, conference.id, 'added_to_delegation', [app.id]);
-    if (!result.drafted) pushDraftNotice('added_to_delegation');
-
-    await loadData();
+    (async () => {
+      const { error } = await supabase.from('applications').update({ society_id: society.id }).eq('id', app.id);
+      if (error) {
+        if (prevSearchEntry) setSearchPool(prev => prev.map(a => (a.id === app.id ? prevSearchEntry : a)));
+        showFlash('err', `Could not add ${app.profiles?.display_name ?? 'this delegate'} to ${society.name}.`);
+        return;
+      }
+      try {
+        const result = await queueEventEmail(supabase, conference.id, 'added_to_delegation', [app.id]);
+        if (!result.drafted) pushDraftNotice('added_to_delegation');
+      } catch {
+        showFlash('err', 'Added, but the notification email could not be queued.');
+      }
+      loadData({ silent: true });
+    })().catch(() => {
+      if (prevSearchEntry) setSearchPool(prev => prev.map(a => (a.id === app.id ? prevSearchEntry : a)));
+      showFlash('err', `Could not add ${app.profiles?.display_name ?? 'this delegate'} to ${society.name}.`);
+    });
   }
 
   async function handleMarkPledgeReceived(member: PoolMember, societyId: string) {
@@ -282,43 +326,92 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
     // double-grants delegation spots or re-funds an already-paid pledger.
     const delegationAlreadyConfirmed = !!member.pledge_confirmed_at;
     const pledgerAlreadyPaid = member.payment_status === 'paid';
+    const grantsDelegationSpots = (member.pledge_type === 'delegation' || member.pledge_type === 'both') && !delegationAlreadyConfirmed;
+    const paysOwnFee = (member.pledge_type === 'own' || member.pledge_type === 'both') && !pledgerAlreadyPaid;
+    const memberPool = poolForRole(member.role);
 
-    if ((member.pledge_type === 'delegation' || member.pledge_type === 'both') && !delegationAlreadyConfirmed) {
-      const { data: soc } = await supabase.from('societies').select('spots_purchased').eq('id', societyId).single();
-      const current = (soc as { spots_purchased: number } | null)?.spots_purchased ?? 0;
-      await supabase.from('societies').update({ spots_purchased: current + (member.spots_pledged ?? 0) }).eq('id', societyId);
-    }
-
-    if ((member.pledge_type === 'own' || member.pledge_type === 'both') && !pledgerAlreadyPaid) {
-      await supabase.from('applications').update({ payment_status: 'paid', self_paid: true }).eq('id', member.id);
-      const pool = poolForRole(member.role);
-      if (pool) {
-        const spotsColumn = POOL_SPOTS_COLUMN[pool];
-        const { data: soc } = await supabase.from('societies').select(spotsColumn).eq('id', societyId).single();
-        const current = (soc as Record<string, number> | null)?.[spotsColumn] ?? 0;
-        await supabase.from('societies').update({ [spotsColumn]: current + 1 }).eq('id', societyId);
+    // Optimistic: pledge shows COVERED, member shows paid, society spot
+    // counts grow — immediately. fillFreeSpots promotions land via silent
+    // refetch after the writes.
+    const memberSnapshot = members.find(m => m.id === member.id) ?? member;
+    const societySnapshot = societies.find(s => s.id === societyId) ?? null;
+    const memberPatch: Partial<PoolMember> = {};
+    if (paysOwnFee) { memberPatch.payment_status = 'paid'; memberPatch.self_paid = true; }
+    if (!delegationAlreadyConfirmed) memberPatch.pledge_confirmed_at = new Date().toISOString();
+    patchMember(member.id, memberPatch);
+    if (societySnapshot) {
+      const societyPatch: Partial<Society> = {};
+      if (grantsDelegationSpots) societyPatch.spots_purchased = societySnapshot.spots_purchased + (member.spots_pledged ?? 0);
+      if (paysOwnFee && memberPool) {
+        const col = POOL_SPOTS_COLUMN[memberPool];
+        societyPatch[col] = (societyPatch[col] ?? societySnapshot[col]) + 1;
       }
+      patchSociety(societyId, societyPatch);
     }
-
-    if (!delegationAlreadyConfirmed) {
-      await supabase.from('applications').update({ pledge_confirmed_at: new Date().toISOString() }).eq('id', member.id);
-    }
-
-    await fillFreeSpots(supabase, societyId, 'delegate');
-    const pool = poolForRole(member.role);
-    if (pool === 'advisor' && (member.pledge_type === 'own' || member.pledge_type === 'both') && !pledgerAlreadyPaid) {
-      await fillFreeSpots(supabase, societyId, 'advisor');
-    }
-
-    const headDelegateIds = members
-      .filter(m => m.society_id === societyId && isHeadDelegate(m))
-      .map(m => m.id);
-    const pledgeRecipientIds = Array.from(new Set([member.id, ...headDelegateIds]));
-    const result = await queueEventEmail(supabase, conference.id, 'pledge_received', pledgeRecipientIds);
-    if (!result.drafted) pushDraftNotice('pledge_received');
-
     showFlash('ok', 'Pledge marked received.');
-    await loadData();
+
+    const rollback = () => {
+      restoreMember(memberSnapshot);
+      if (societySnapshot) restoreSociety(societySnapshot);
+    };
+
+    (async () => {
+      let firstError: string | null = null;
+      const note = (e: { message: string } | null) => { if (e && !firstError) firstError = e.message; };
+
+      if (grantsDelegationSpots) {
+        const { data: soc } = await supabase.from('societies').select('spots_purchased').eq('id', societyId).single();
+        const current = (soc as { spots_purchased: number } | null)?.spots_purchased ?? 0;
+        const { error } = await supabase.from('societies').update({ spots_purchased: current + (member.spots_pledged ?? 0) }).eq('id', societyId);
+        note(error);
+      }
+
+      if (paysOwnFee) {
+        const { error: payErr } = await supabase.from('applications').update({ payment_status: 'paid', self_paid: true }).eq('id', member.id);
+        note(payErr);
+        if (memberPool) {
+          const spotsColumn = POOL_SPOTS_COLUMN[memberPool];
+          const { data: soc } = await supabase.from('societies').select(spotsColumn).eq('id', societyId).single();
+          const current = (soc as Record<string, number> | null)?.[spotsColumn] ?? 0;
+          const { error: spotErr } = await supabase.from('societies').update({ [spotsColumn]: current + 1 }).eq('id', societyId);
+          note(spotErr);
+        }
+      }
+
+      if (!delegationAlreadyConfirmed) {
+        const { error } = await supabase.from('applications').update({ pledge_confirmed_at: new Date().toISOString() }).eq('id', member.id);
+        note(error);
+      }
+
+      await fillFreeSpots(supabase, societyId, 'delegate');
+      if (memberPool === 'advisor' && paysOwnFee) {
+        await fillFreeSpots(supabase, societyId, 'advisor');
+      }
+
+      if (firstError) {
+        rollback();
+        showFlash('err', 'Could not confirm this pledge.');
+        loadData({ silent: true }); // converge any partial writes
+        return;
+      }
+
+      try {
+        const headDelegateIds = members
+          .filter(m => m.society_id === societyId && isHeadDelegate(m))
+          .map(m => m.id);
+        const pledgeRecipientIds = Array.from(new Set([member.id, ...headDelegateIds]));
+        const result = await queueEventEmail(supabase, conference.id, 'pledge_received', pledgeRecipientIds);
+        if (!result.drafted) pushDraftNotice('pledge_received');
+      } catch {
+        showFlash('err', 'Pledge confirmed, but the notification email could not be queued.');
+      }
+
+      loadData({ silent: true }); // brings in fillFreeSpots promotions
+    })().catch(() => {
+      rollback();
+      showFlash('err', 'Could not confirm this pledge.');
+      loadData({ silent: true });
+    });
   }
 
   async function handleNotAttending(member: PoolMember) {
@@ -336,17 +429,56 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
     if (!confirmed) return;
 
     const supabase = getAuthedClient(session.access_token);
-    const result = await markNotAttending(supabase, conference.id, member);
-    if (!result.drafted) pushDraftNotice('not_attending');
-    await loadData();
+
+    // Optimistic: exactly what markNotAttending writes for this row.
+    const snapshot = members.find(m => m.id === member.id) ?? member;
+    patchMember(member.id, {
+      attending: false,
+      assigned_committee_id: null,
+      assigned_country_code: null,
+      assigned_country_name: null,
+      assigned_committee: null,
+      status: member.status === 'assigned' ? 'accepted' : member.status,
+    });
+
+    (async () => {
+      const result = await markNotAttending(supabase, conference.id, member);
+      if (result.error) {
+        restoreMember(snapshot);
+        showFlash('err', `Could not mark ${name} as not attending.`);
+        loadData({ silent: true });
+        return;
+      }
+      if (!result.drafted) pushDraftNotice('not_attending');
+      loadData({ silent: true });
+    })().catch(() => {
+      restoreMember(snapshot);
+      showFlash('err', `Could not mark ${name} as not attending.`);
+    });
   }
 
   async function handleUndoNotAttending(member: PoolMember) {
     if (!session) return;
     const supabase = getAuthedClient(session.access_token);
-    const result = await undoNotAttending(supabase, conference.id, member);
-    if (!result.drafted) pushDraftNotice('attendance_restored');
-    await loadData();
+
+    // Optimistic: exactly what undoNotAttending writes for this row.
+    const snapshot = members.find(m => m.id === member.id) ?? member;
+    patchMember(member.id, { attending: true, payment_status: 'unpaid' });
+
+    (async () => {
+      const result = await undoNotAttending(supabase, conference.id, member);
+      if (result.error) {
+        restoreMember(snapshot);
+        showFlash('err', 'Could not restore attendance.');
+        loadData({ silent: true });
+        return;
+      }
+      if (!result.drafted) pushDraftNotice('attendance_restored');
+      loadData({ silent: true });
+    })().catch(() => {
+      restoreMember(snapshot);
+      showFlash('err', 'Could not restore attendance.');
+    });
   }
 
   async function handleRemove(member: PoolMember, societyName: string) {
@@ -372,10 +504,48 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
     if (!confirmed) return;
 
     const supabase = getAuthedClient(session.access_token);
-    const result = await removeFromDelegation(supabase, conference.id, member, hasAllocation ? checked : false);
-    if (!result.drafted) pushDraftNotice('removed_from_delegation');
+    const keepAllocation = hasAllocation ? checked : false;
+
+    // Optimistic: mirror removeFromDelegation's writes for this row —
+    // society_id -> null drops them out of this delegation's lists at once.
+    const snapshot = members.find(m => m.id === member.id) ?? member;
+    const societySnapshot = societies.find(s => s.id === member.society_id) ?? null;
+    const memberPatch: Partial<PoolMember> = { society_id: null };
+    if (member.payment_status === 'paid' && !member.self_paid) memberPatch.payment_status = 'unpaid';
+    if (!keepAllocation) {
+      memberPatch.assigned_committee_id = null;
+      memberPatch.assigned_country_code = null;
+      memberPatch.assigned_country_name = null;
+      memberPatch.assigned_committee = null;
+      if (member.status === 'assigned') memberPatch.status = 'accepted';
+    }
+    patchMember(member.id, memberPatch);
+    const pool = poolForRole(member.role);
+    if (selfFundedPaidSpot && pool && member.society_id && societySnapshot) {
+      const col = POOL_SPOTS_COLUMN[pool];
+      patchSociety(member.society_id, { [col]: Math.max(0, societySnapshot[col] - 1) });
+    }
     showFlash('ok', `${name} removed from the delegation.`);
-    await loadData();
+
+    const rollback = () => {
+      restoreMember(snapshot);
+      if (societySnapshot) restoreSociety(societySnapshot);
+    };
+
+    (async () => {
+      const result = await removeFromDelegation(supabase, conference.id, member, keepAllocation);
+      if (result.error) {
+        rollback();
+        showFlash('err', `Could not remove ${name} from the delegation.`);
+        loadData({ silent: true });
+        return;
+      }
+      if (!result.drafted) pushDraftNotice('removed_from_delegation');
+      loadData({ silent: true });
+    })().catch(() => {
+      rollback();
+      showFlash('err', `Could not remove ${name} from the delegation.`);
+    });
   }
 
   async function handleAdvisorTransfer(paidAdvisor: PoolMember, recipient: SearchApp) {
@@ -389,20 +559,58 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
     if (!confirmed) return;
 
     const supabase = getAuthedClient(session.access_token);
-    // Advisors never hold committee allocations, so transfer=false always.
-    const emailResult = await performSwap(supabase, conference.id, recipient, paidAdvisor, false);
-    if (!emailResult.incomingDrafted) pushDraftNotice('spot_received');
-    if (!emailResult.outgoingDrafted) pushDraftNotice('spot_lost');
+
+    // Optimistic: the outgoing advisor drops to unpaid at once; the recipient
+    // (who may live outside this delegation's member list) turns paid if
+    // they're local, otherwise the silent refetch brings them in.
+    const outgoingSnapshot = members.find(m => m.id === paidAdvisor.id) ?? paidAdvisor;
+    const incomingSnapshot = members.find(m => m.id === recipient.id) ?? null;
+    patchMember(paidAdvisor.id, { payment_status: 'unpaid', self_paid: false });
+    if (incomingSnapshot) patchMember(recipient.id, { payment_status: 'paid', self_paid: false });
     showFlash('ok', 'Advisor spot transferred.');
-    await loadData();
+
+    const rollback = () => {
+      restoreMember(outgoingSnapshot);
+      if (incomingSnapshot) restoreMember(incomingSnapshot);
+    };
+
+    (async () => {
+      // Advisors never hold committee allocations, so transfer=false always.
+      const emailResult = await performSwap(supabase, conference.id, recipient, paidAdvisor, false);
+      if (emailResult.error) {
+        rollback();
+        showFlash('err', 'Could not transfer this spot.');
+        loadData({ silent: true });
+        return;
+      }
+      if (!emailResult.incomingDrafted) pushDraftNotice('spot_received');
+      if (!emailResult.outgoingDrafted) pushDraftNotice('spot_lost');
+      loadData({ silent: true });
+    })().catch(() => {
+      rollback();
+      showFlash('err', 'Could not transfer this spot.');
+    });
   }
 
   async function handleGiveOpenSpot(sourceId: string) {
     if (!session) return;
     const supabase = getAuthedClient(session.access_token);
-    await markApplicationPaid(supabase, sourceId);
+
+    // Optimistic: the delegate fills the open paid slot immediately.
+    const snapshot = members.find(m => m.id === sourceId);
+    patchMember(sourceId, { payment_status: 'paid', self_paid: false });
     showFlash('ok', 'Delegate marked paid.');
-    await loadData();
+
+    (async () => {
+      const { error } = await markApplicationPaid(supabase, sourceId);
+      if (error) {
+        if (snapshot) restoreMember(snapshot);
+        showFlash('err', 'Could not mark this delegate paid.');
+      }
+    })().catch(() => {
+      if (snapshot) restoreMember(snapshot);
+      showFlash('err', 'Could not mark this delegate paid.');
+    });
   }
 
   async function handleSwap(sourceId: string, targetId: string, transfer: boolean) {
@@ -412,13 +620,56 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
     const target = members.find(m => m.id === targetId);
     if (!source || !target) return;
 
-    const emailResult = await performSwap(supabase, conference.id, source, target, transfer);
-    if (!emailResult.incomingDrafted) pushDraftNotice('spot_received');
-    if (!emailResult.outgoingDrafted) pushDraftNotice('spot_lost');
-
+    // Optimistic: mirror performSwap's writes — payment flips both ways, and
+    // the allocation moves only under the same guard the helper enforces.
+    const sourceSnapshot = source;
+    const targetSnapshot = target;
+    const canTransferAllocation = transfer && !!target.assigned_committee_id && !source.assigned_committee_id;
+    patchMember(source.id, {
+      payment_status: 'paid',
+      self_paid: false,
+      ...(canTransferAllocation ? {
+        status: 'assigned',
+        assigned_committee_id: target.assigned_committee_id,
+        assigned_country_code: target.assigned_country_code,
+        assigned_country_name: target.assigned_country_name,
+        assigned_committee: target.assigned_committee,
+      } : {}),
+    });
+    patchMember(target.id, {
+      payment_status: 'unpaid',
+      self_paid: false,
+      ...(canTransferAllocation ? {
+        status: 'accepted',
+        assigned_committee_id: null,
+        assigned_country_code: null,
+        assigned_country_name: null,
+        assigned_committee: null,
+      } : {}),
+    });
     setSwapConfirm(null);
     showFlash('ok', 'Delegates switched.');
-    await loadData();
+
+    const rollback = () => {
+      restoreMember(sourceSnapshot);
+      restoreMember(targetSnapshot);
+    };
+
+    (async () => {
+      const emailResult = await performSwap(supabase, conference.id, source, target, transfer);
+      if (emailResult.error) {
+        rollback();
+        showFlash('err', 'Could not switch these delegates.');
+        loadData({ silent: true });
+        return;
+      }
+      if (!emailResult.incomingDrafted) pushDraftNotice('spot_received');
+      if (!emailResult.outgoingDrafted) pushDraftNotice('spot_lost');
+      loadData({ silent: true });
+    })().catch(() => {
+      rollback();
+      showFlash('err', 'Could not switch these delegates.');
+    });
   }
 
   // ── Drop / click-target dispatch ──────────────────────────────────────────
