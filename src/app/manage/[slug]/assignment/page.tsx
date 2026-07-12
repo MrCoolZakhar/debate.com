@@ -1363,6 +1363,7 @@ export default function AssignmentPage() {
       allocation_sent: sent,
       application_id: app.id,
       profiles: app.profiles ? { display_name: app.profiles.display_name } : null,
+      applications: { invited_name: app.invited_name ?? null },
     };
     setCommittees(prev => prev.map(c =>
       c.id === committee.id ? { ...c, conference_allocations: [...c.conference_allocations, row] } : c
