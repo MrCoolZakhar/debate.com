@@ -1,14 +1,18 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Search, SlidersHorizontal, ArrowLeft, LayoutGrid, Rows3, Users, ArrowRight, Check } from 'lucide-react';
+import {
+  Search, SlidersHorizontal, ArrowLeft, LayoutGrid, Rows3, Users, ArrowRight, Check,
+  Calendar, Banknote, Globe, ChevronDown, CalendarArrowUp, CalendarArrowDown,
+} from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { supabase } from '@/lib/supabase';
-import { getCountryByName } from '@/lib/countries';
+import { getCountryByName, UN_COUNTRIES } from '@/lib/countries';
+import { FlagImg } from '@/components/FlagImg';
 import { currencySymbol, formatFeeAmount } from '@/lib/utils';
 import { ConferenceCard } from '../ConferenceCard';
 
@@ -34,6 +38,19 @@ const CONTINENT_LABELS: Record<string, string> = {
 
 const CONTINENT_KEYS = ['north-america', 'south-america', 'europe', 'africa', 'asia', 'oceania'] as const;
 
+// User-facing labels for student_level DB values ('school' stays 'school' in the DB).
+const LEVEL_LABELS: Record<string, string> = {
+  school: 'High School',
+  university: 'University',
+  both: 'HS & Uni',
+};
+
+const FORMAT_LABELS: Record<string, string> = {
+  'in-person': 'In person',
+  'online': 'Online',
+  'hybrid': 'Hybrid',
+};
+
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -56,6 +73,14 @@ interface Conference {
   banner_url: string | null;
   is_public: boolean;
   organizer_id: string | null;
+}
+
+// Resolve a Vercel ISO-3166 alpha-2 code (e.g. "GB") to a full country name
+// so it can be matched against conference.country ("United Kingdom").
+function countryNameFromCode(code: string | null | undefined): string | null {
+  if (!code) return null;
+  const hit = UN_COUNTRIES.find(c => c.code.toUpperCase() === code.toUpperCase());
+  return hit?.name ?? null;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -152,16 +177,212 @@ function ViewToggle({ view, onChange }: { view: ExploreView; onChange: (v: Explo
   );
 }
 
-// ── List row (compact list view) ──────────────────────────────────────────
+// ── Date sort toggle (soonest ↔ latest) ───────────────────────────────────
 
-function listDateRange(start: string, end: string): string {
+type DateSort = 'asc' | 'desc';
+
+function DateSortChip({ sort, onToggle }: { sort: DateSort; onToggle: () => void }) {
+  const soonest = sort === 'asc';
+  const Icon = soonest ? CalendarArrowUp : CalendarArrowDown;
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-label={soonest ? 'Sorted by date, soonest first — click for latest first' : 'Sorted by date, latest first — click for soonest first'}
+      title={soonest ? 'Date · soonest first' : 'Date · latest first'}
+      className="flex items-center gap-1.5 rounded-full py-2 px-3.5 font-bold text-[11px] transition-colors focus:outline-none flex-shrink-0"
+      style={{
+        backgroundColor: 'rgba(237,231,216,0.5)',
+        color: '#4A4238',
+        border: '1px solid rgba(221,212,192,0.9)',
+        fontFamily: "'Outfit', sans-serif",
+        letterSpacing: '0.08em',
+        fontVariantNumeric: 'tabular-nums',
+      }}
+      onMouseEnter={(e) => {
+        (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.08)';
+        (e.currentTarget as HTMLElement).style.color = '#1B3828';
+      }}
+      onMouseLeave={(e) => {
+        (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(237,231,216,0.5)';
+        (e.currentTarget as HTMLElement).style.color = '#4A4238';
+      }}
+    >
+      <Icon size={13} strokeWidth={2.25} />
+      DATE
+      <span aria-hidden style={{ fontSize: '11px', lineHeight: 1 }}>{soonest ? '↑' : '↓'}</span>
+    </button>
+  );
+}
+
+// ── Region control (user country · all · continents) ─────────────────────
+
+function RegionControl({
+  region, userCountry, onChange,
+}: {
+  region: string; // '' = all, 'country' = user country, else continent key
+  userCountry: string | null;
+  onChange: (r: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDown(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [open]);
+
+  const userCode = userCountry ? getCountryByName(userCountry)?.code : undefined;
+
+  const currentLabel =
+    region === 'country' && userCountry ? (
+      <>
+        {userCode && <FlagImg code={userCode} size={14} />}
+        <span className="truncate">{userCountry.toUpperCase()}</span>
+      </>
+    ) : region && CONTINENT_LABELS[region] ? (
+      <span className="truncate">{CONTINENT_LABELS[region].toUpperCase()}</span>
+    ) : (
+      <>
+        <Globe size={13} strokeWidth={2.25} />
+        <span className="truncate">ALL REGIONS</span>
+      </>
+    );
+
+  const optionStyle = (active: boolean): React.CSSProperties => ({
+    fontFamily: "'Outfit', sans-serif",
+    fontWeight: 700,
+    fontSize: '11px',
+    letterSpacing: '0.07em',
+    color: active ? '#EED98A' : '#1C1410',
+    backgroundColor: active ? '#1B3828' : 'transparent',
+    width: '100%',
+    textAlign: 'left' as const,
+    padding: '8px 12px',
+    borderRadius: '10px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    whiteSpace: 'nowrap',
+  });
+
+  function pick(r: string) {
+    onChange(r);
+    setOpen(false);
+  }
+
+  return (
+    <div ref={ref} className="relative flex-shrink-0">
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label="Region"
+        className="flex items-center gap-1.5 rounded-full py-2 px-3.5 font-bold text-[11px] transition-colors focus:outline-none"
+        style={{
+          backgroundColor: region ? '#1B3828' : 'rgba(237,231,216,0.5)',
+          color: region ? '#EED98A' : '#4A4238',
+          border: region ? '1px solid #1B3828' : '1px solid rgba(221,212,192,0.9)',
+          fontFamily: "'Outfit', sans-serif",
+          letterSpacing: '0.08em',
+          maxWidth: '180px',
+        }}
+        onMouseEnter={(e) => {
+          if (region) return;
+          (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.08)';
+          (e.currentTarget as HTMLElement).style.color = '#1B3828';
+        }}
+        onMouseLeave={(e) => {
+          if (region) return;
+          (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(237,231,216,0.5)';
+          (e.currentTarget as HTMLElement).style.color = '#4A4238';
+        }}
+      >
+        {currentLabel}
+        <ChevronDown size={12} strokeWidth={2.5} style={{ flexShrink: 0, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 180ms ease' }} />
+      </button>
+
+      {open && (
+        <div
+          role="listbox"
+          aria-label="Region"
+          className="absolute right-0 z-50 mt-2 p-1.5"
+          style={{
+            minWidth: '208px',
+            backgroundColor: '#FAF8F3',
+            border: '1px solid rgba(221,212,192,0.95)',
+            borderRadius: '16px',
+            boxShadow: '0 16px 44px rgba(27,56,40,0.16), 0 2px 8px rgba(27,56,40,0.08)',
+          }}
+        >
+          {userCountry && (
+            <>
+              <button role="option" aria-selected={region === 'country'} style={optionStyle(region === 'country')} onClick={() => pick('country')}
+                onMouseEnter={(e) => { if (region !== 'country') (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
+                onMouseLeave={(e) => { if (region !== 'country') (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+              >
+                {userCode && <FlagImg code={userCode} size={14} />}
+                {userCountry.toUpperCase()}
+                <span style={{ marginLeft: 'auto', fontSize: '8.5px', letterSpacing: '0.12em', color: region === 'country' ? 'rgba(238,217,138,0.75)' : '#B6871F' }}>NEAR YOU</span>
+              </button>
+              <div className="my-1 h-px" style={{ backgroundColor: 'rgba(221,212,192,0.7)' }} />
+            </>
+          )}
+          <button role="option" aria-selected={region === ''} style={optionStyle(region === '')} onClick={() => pick('')}
+            onMouseEnter={(e) => { if (region !== '') (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
+            onMouseLeave={(e) => { if (region !== '') (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+          >
+            <Globe size={13} strokeWidth={2.25} />
+            ALL REGIONS
+          </button>
+          {CONTINENT_KEYS.map(key => (
+            <button key={key} role="option" aria-selected={region === key} style={optionStyle(region === key)} onClick={() => pick(key)}
+              onMouseEnter={(e) => { if (region !== key) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
+              onMouseLeave={(e) => { if (region !== key) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+            >
+              {CONTINENT_LABELS[key].toUpperCase()}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── List row (myMUN-style directory row) ──────────────────────────────────
+
+// Two-line date range: "Jul 13 – Jul 17" over "2026".
+function splitDateRange(start: string, end: string): { range: string; year: string } {
   const s = new Date(start + 'T00:00:00');
   const e = new Date(end + 'T00:00:00');
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  if (s.getMonth() === e.getMonth() && s.getFullYear() === e.getFullYear()) {
-    return `${s.getDate()}–${e.getDate()} ${months[s.getMonth()]} ${s.getFullYear()}`;
-  }
-  return `${s.getDate()} ${months[s.getMonth()]} – ${e.getDate()} ${months[e.getMonth()]} ${e.getFullYear()}`;
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const range = `${months[s.getMonth()]} ${s.getDate()} – ${months[e.getMonth()]} ${e.getDate()}`;
+  const year = s.getFullYear() === e.getFullYear()
+    ? String(s.getFullYear())
+    : `${s.getFullYear()}–${String(e.getFullYear()).slice(2)}`;
+  return { range, year };
+}
+
+function RowChip({ label }: { label: string }) {
+  return (
+    <span
+      className="inline-flex flex-shrink-0"
+      style={{
+        fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.1em',
+        color: '#6B5F52', backgroundColor: 'transparent',
+        border: '1px solid rgba(154,138,120,0.45)',
+        padding: '2.5px 8px', borderRadius: 9999, whiteSpace: 'nowrap',
+        textTransform: 'uppercase',
+      }}
+    >
+      {label}
+    </span>
+  );
 }
 
 function ConferenceListRow({
@@ -175,38 +396,50 @@ function ConferenceListRow({
   onHover: () => void;
   onLeave: () => void;
 }) {
+  const router = useRouter();
+  const href = `/conferences/${conf.slug}`;
   const countryObj = getCountryByName(conf.country);
-  const countryCode = countryObj ? countryObj.code.toUpperCase() : conf.country;
-  const editionYear = conf.start_date.slice(0, 4);
   const initials = conf.acronym.slice(0, 3).toUpperCase();
+  const { range, year } = splitDateRange(conf.start_date, conf.end_date);
+  const formatLabel = FORMAT_LABELS[conf.format] ?? conf.format;
+  const levelLabel = LEVEL_LABELS[conf.student_level];
+
+  // CTA navigates itself and stops the click reaching the row link.
+  function onCta(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    router.push(href);
+  }
+
+  const ctaBase: React.CSSProperties = {
+    fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '10px', letterSpacing: '0.08em',
+    padding: '7px 14px', borderRadius: 9999, border: 'none', cursor: 'pointer',
+  };
 
   return (
     <Link
-      href={`/conferences/${conf.slug}`}
+      href={href}
       onMouseEnter={onHover}
       onMouseLeave={onLeave}
-      className="flex items-center gap-3 md:gap-4 px-3 py-2.5 md:px-4"
+      className="flex items-center gap-3.5 md:gap-5 px-2 md:px-4"
       style={{
-        backgroundColor: '#FAF8F3',
-        border: hovered ? '1px solid rgba(27,56,40,0.55)' : '1px solid #DDD4C0',
-        borderRadius: '13px',
+        paddingTop: '18px',
+        paddingBottom: '18px',
+        backgroundColor: hovered ? 'rgba(27,56,40,0.03)' : 'transparent',
+        borderBottom: '1px solid rgba(221,212,192,0.6)',
         textDecoration: 'none',
-        transform: hovered ? 'translateY(-2px)' : 'translateY(0)',
-        boxShadow: hovered
-          ? '0 10px 26px rgba(27,56,40,0.13), 0 2px 6px rgba(27,56,40,0.07)'
-          : '0 1px 3px rgba(27,56,40,0.05)',
-        transition: 'transform 200ms cubic-bezier(0.22,1,0.36,1), box-shadow 200ms ease, border-color 200ms ease',
+        transition: 'background-color 160ms ease',
       }}
     >
-      {/* Logo disc — near-white disc, ~12% inner padding, forest fallback */}
+      {/* Round logo — near-white disc, forest fallback with acronym initials */}
       <div
         className="flex-shrink-0 flex items-center justify-center overflow-hidden"
         style={{
-          width: '44px', height: '44px', borderRadius: '9999px',
+          width: '56px', height: '56px', borderRadius: '9999px',
           backgroundColor: conf.logo_url ? '#FDFCF9' : '#1B3828',
           border: '1px solid rgba(221,212,192,0.8)',
-          boxShadow: '0 3px 8px rgba(27,56,40,0.12)',
-          padding: conf.logo_url ? '5px' : 0,
+          boxShadow: '0 3px 8px rgba(27,56,40,0.10)',
+          padding: conf.logo_url ? '7px' : 0,
         }}
       >
         {conf.logo_url ? (
@@ -216,133 +449,118 @@ function ConferenceListRow({
             style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
           />
         ) : (
-          <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '11px', letterSpacing: '0.06em', color: '#EED98A', fontVariantNumeric: 'tabular-nums' }}>
+          <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '13px', letterSpacing: '0.06em', color: '#EED98A', fontVariantNumeric: 'tabular-nums' }}>
             {initials}
           </span>
         )}
       </div>
 
-      {/* Name + location/dates */}
+      {/* Name · city/country with flag · badge chips */}
       <div className="flex-1 min-w-0">
-        <div className="flex items-baseline gap-2 min-w-0">
-          <span
-            className="flex-shrink-0"
-            style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontVariantNumeric: 'tabular-nums', fontSize: '15px', letterSpacing: '0.01em', color: '#1C1410', whiteSpace: 'nowrap' }}
-          >
-            {conf.acronym} {editionYear}
-          </span>
-          <span
-            className="hidden sm:block truncate"
-            style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 500, fontSize: '12.5px', color: '#9A8A78' }}
-          >
-            {conf.full_name}
-          </span>
-        </div>
         <div
           className="truncate"
-          style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 500, fontVariantNumeric: 'tabular-nums', fontSize: '12px', color: '#6B5F52', marginTop: '2px' }}
+          style={{
+            fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '15.5px',
+            letterSpacing: '0.005em', color: hovered ? '#1B3828' : '#1C1410',
+            transition: 'color 160ms ease',
+          }}
         >
-          {conf.city}, {countryCode}
-          <span style={{ color: '#C8BFB0', margin: '0 6px' }}>·</span>
-          {listDateRange(conf.start_date, conf.end_date)}
+          {conf.full_name}
+        </div>
+        <div
+          className="flex items-center gap-1.5 truncate"
+          style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 500, fontSize: '12.5px', color: '#6B5F52', marginTop: '3px' }}
+        >
+          {countryObj && <FlagImg code={countryObj.code} size={14} className="flex-shrink-0" />}
+          <span className="truncate">{conf.city}, {conf.country}</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+          {conf.format && <RowChip label={formatLabel} />}
+          {levelLabel && <RowChip label={levelLabel} />}
+          {/* Mobile-only inline date (right columns hidden below sm) */}
+          <span
+            className="sm:hidden inline-flex items-center gap-1 flex-shrink-0"
+            style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '10.5px', color: '#8A7D6C', whiteSpace: 'nowrap' }}
+          >
+            <Calendar size={11} style={{ color: '#9A8A78' }} />
+            {range} {year}
+          </span>
         </div>
       </div>
 
-      {/* Right cluster: fee · delegates · format · apply */}
-      <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
-        {/* Fee bubble */}
-        <span
-          className="inline-flex items-baseline gap-0.5 flex-shrink-0"
-          style={{
-            backgroundColor: '#FDFCF9',
-            border: conf.fee_amount === 0 ? '1.5px solid rgba(61,122,82,0.5)' : '1.5px solid rgba(182,135,31,0.4)',
-            borderRadius: 9999, padding: '3px 10px',
-          }}
-        >
-          {conf.fee_amount === 0 ? (
-            <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '11px', letterSpacing: '0.08em', color: '#2A5A3C' }}>
-              FREE
-            </span>
-          ) : (
-            <>
-              <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '11.5px', color: '#B6871F' }}>
-                {currencySymbol(conf.fee_currency)}
-              </span>
-              <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontVariantNumeric: 'tabular-nums', fontSize: '12.5px', color: '#1C1410' }}>
-                {formatFeeAmount(conf.fee_amount)}
-              </span>
-            </>
-          )}
-        </span>
+      {/* Right cluster — aligned columns: date · delegates · fee · CTA */}
+      {/* Date (two-line) */}
+      <div className="hidden sm:flex items-start gap-1.5 flex-shrink-0" style={{ width: '128px' }}>
+        <Calendar size={14} strokeWidth={2} style={{ color: '#9A8A78', marginTop: '2px', flexShrink: 0 }} />
+        <div style={{ fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}>
+          <div style={{ fontWeight: 700, fontSize: '12.5px', color: '#1C1410', whiteSpace: 'nowrap' }}>{range}</div>
+          <div style={{ fontWeight: 500, fontSize: '11.5px', color: '#9A8A78', marginTop: '1px' }}>{year}</div>
+        </div>
+      </div>
 
-        {/* Delegates */}
-        <span
-          className="hidden sm:inline-flex items-center gap-1 flex-shrink-0"
-          style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '12px', color: '#4A4238' }}
-        >
-          <Users size={13} style={{ color: '#9A8A78' }} />
+      {/* Delegates */}
+      <div className="hidden lg:flex items-center gap-1.5 flex-shrink-0" style={{ width: '76px' }}>
+        <Users size={14} strokeWidth={2} style={{ color: '#9A8A78', flexShrink: 0 }} />
+        <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontVariantNumeric: 'tabular-nums', fontSize: '12.5px', color: '#1C1410' }}>
           {conf.expected_delegates.toLocaleString()}
         </span>
+      </div>
 
-        {/* Format chip — hidden on mobile */}
-        {conf.format && (
-          <span
-            className="hidden md:inline-flex flex-shrink-0"
-            style={{
-              fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.12em',
-              color: '#1B3828', backgroundColor: 'rgba(27,56,40,0.07)',
-              border: '1px solid rgba(27,56,40,0.18)',
-              padding: '3px 9px', borderRadius: 9999, whiteSpace: 'nowrap',
-            }}
-          >
-            {conf.format.toUpperCase().replace('-', ' ')}
+      {/* Fee */}
+      <div className="hidden md:flex items-center gap-1.5 flex-shrink-0" style={{ width: '92px' }}>
+        <Banknote size={15} strokeWidth={2} style={{ color: '#9A8A78', flexShrink: 0 }} />
+        {conf.fee_amount === 0 ? (
+          <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '11px', letterSpacing: '0.08em', color: '#2A5A3C' }}>
+            FREE
+          </span>
+        ) : (
+          <span className="inline-flex items-baseline gap-0.5">
+            <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '11.5px', color: '#B6871F' }}>
+              {currencySymbol(conf.fee_currency)}
+            </span>
+            <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontVariantNumeric: 'tabular-nums', fontSize: '12.5px', color: '#1C1410' }}>
+              {formatFeeAmount(conf.fee_amount)}
+            </span>
           </span>
         )}
+      </div>
 
-        {/* Apply affordance — same navigation as the grid card (bubbles to the row link).
-            member (already part of the conference) > applied > apply. */}
+      {/* CTA — member (part of the conference) > applied > apply */}
+      <div className="hidden sm:flex justify-end flex-shrink-0" style={{ width: '104px' }}>
         {member ? (
-          <span
-            className="hidden sm:inline-flex items-center gap-1 flex-shrink-0"
+          <button type="button" onClick={onCta} className="inline-flex items-center gap-1 focus:outline-none"
             style={{
-              fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '10px', letterSpacing: '0.08em',
+              ...ctaBase,
               color: '#EAF5EE', backgroundColor: '#2A5A3C',
-              border: '1px solid rgba(127,214,160,0.45)',
-              padding: '5px 12px', borderRadius: 9999,
-              boxShadow: '0 3px 8px rgba(27,56,40,0.25)',
+              boxShadow: '0 3px 8px rgba(27,56,40,0.25), 0 0 0 1px rgba(127,214,160,0.45)',
             }}
           >
             VIEW
             <ArrowRight size={11} strokeWidth={2.75} />
-          </span>
+          </button>
         ) : applied ? (
-          <span
-            className="hidden sm:inline-flex items-center gap-1 flex-shrink-0"
+          <button type="button" onClick={onCta} className="inline-flex items-center gap-1 focus:outline-none"
             style={{
-              fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '9.5px', letterSpacing: '0.08em',
+              ...ctaBase, fontSize: '9.5px',
               color: '#EAF5EE', backgroundColor: '#2A5A3C',
-              border: '1px solid rgba(127,214,160,0.45)',
-              padding: '5px 11px', borderRadius: 9999,
-              boxShadow: '0 3px 8px rgba(27,56,40,0.25)',
+              boxShadow: '0 3px 8px rgba(27,56,40,0.25), 0 0 0 1px rgba(127,214,160,0.45)',
             }}
           >
             APPLIED
             <Check size={11} strokeWidth={3} />
-          </span>
+          </button>
         ) : (
-          <span
-            className="hidden sm:inline-flex items-center gap-1 flex-shrink-0"
+          <button type="button" onClick={onCta} className="inline-flex items-center gap-1 focus:outline-none"
             style={{
-              fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '10px', letterSpacing: '0.08em',
+              ...ctaBase,
               color: '#1B3828', backgroundColor: hovered ? '#F3E3A1' : '#EED98A',
-              padding: '5px 12px', borderRadius: 9999,
               boxShadow: '0 3px 8px rgba(182,135,31,0.28), 0 0 0 1px rgba(182,135,31,0.22)',
               transition: 'background-color 180ms ease',
             }}
           >
             APPLY
             <ArrowRight size={11} strokeWidth={2.75} />
-          </span>
+          </button>
         )}
       </div>
     </Link>
@@ -377,8 +595,19 @@ export default function ConferencesExploreClient() {
   const [formatFilter, setFormatFilter] = useState<'in-person' | 'online' | 'hybrid' | ''>('');
   const [levelFilter, setLevelFilter] = useState<'school' | 'university' | 'both' | ''>('');
   const [applicationsOpen, setApplicationsOpen] = useState(false);
-  const [continentFilter, setContinentFilter] = useState<string>(() => searchParams.get('continent') ?? '');
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+
+  // Region: '' = all regions, 'country' = visitor's own country, else a continent key.
+  // A ?continent= URL param wins over the geo default.
+  const [region, setRegion] = useState<string>(() => searchParams.get('continent') ?? '');
+  const [regionTouched, setRegionTouched] = useState<boolean>(() => !!searchParams.get('continent'));
+  function changeRegion(r: string) {
+    setRegion(r);
+    setRegionTouched(true);
+  }
+
+  // Date sort — soonest-first by default, one click flips to latest-first.
+  const [dateSort, setDateSort] = useState<DateSort>('asc');
 
   // Grid / list view — restored from localStorage after mount (SSR-safe).
   const [view, setView] = useState<ExploreView>('grid');
@@ -406,6 +635,45 @@ export default function ConferencesExploreClient() {
     }
     fetchConferences();
   }, []);
+
+  // Visitor's country — /api/geo (Vercel edge headers), falling back to a
+  // keyless IP lookup in local dev. Best-effort; null keeps region = ALL.
+  const [userCountry, setUserCountry] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/geo');
+        if (res.ok) {
+          const data = await res.json();
+          const country = countryNameFromCode(data.countryCode) ?? (data.country ? countryNameFromCode(data.country) : null);
+          if (!cancelled && country) {
+            setUserCountry(country);
+            return;
+          }
+        }
+      } catch { /* fall through to the keyless lookup */ }
+      try {
+        const res = await fetch('https://ipapi.co/json/');
+        if (res.ok) {
+          const data = await res.json();
+          const country = countryNameFromCode(data.country_code) ?? (typeof data.country_name === 'string' && getCountryByName(data.country_name) ? data.country_name : null);
+          if (!cancelled && country) setUserCountry(country);
+        }
+      } catch { /* geolocation is best-effort — leave null */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Default the region to the visitor's country once — when geo resolved and
+  // the visitor hasn't touched the control. Zero local conferences shows the
+  // country empty state with its "explore all" reset. Geo failure → ALL.
+  const geoDefaultApplied = useRef(false);
+  useEffect(() => {
+    if (geoDefaultApplied.current || regionTouched || loading || !userCountry) return;
+    geoDefaultApplied.current = true;
+    setRegion('country');
+  }, [userCountry, loading, regionTouched]);
 
   // Conference ids the signed-in viewer already applied to — cards show
   // APPLIED instead of the APPLY pill. Conference ids the viewer is already
@@ -441,7 +709,9 @@ export default function ConferencesExploreClient() {
   const isMember = (c: Conference) =>
     memberIds.has(c.id) || (!!user && c.organizer_id === user.id);
 
-  const filtered = conferences.filter(c => {
+  const countryMode = region === 'country' && !!userCountry;
+
+  const filtered = useMemo(() => conferences.filter(c => {
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       if (
@@ -453,25 +723,41 @@ export default function ConferencesExploreClient() {
     }
     if (formatFilter && c.format !== formatFilter) return false;
     if (levelFilter && c.student_level !== levelFilter) return false;
-    if (continentFilter) {
-      const countries = CONTINENT_COUNTRIES[continentFilter];
+    if (countryMode) {
+      if (c.country.toLowerCase() !== userCountry!.toLowerCase()) return false;
+    } else if (region && region !== 'country') {
+      const countries = CONTINENT_COUNTRIES[region];
       if (!countries || !countries.includes(c.country)) return false;
     }
     return true;
-  });
+  }), [conferences, searchQuery, formatFilter, levelFilter, region, countryMode, userCountry]);
+
+  const sorted = useMemo(() => {
+    const copy = [...filtered];
+    copy.sort((a, b) => dateSort === 'asc'
+      ? a.start_date.localeCompare(b.start_date)
+      : b.start_date.localeCompare(a.start_date));
+    return copy;
+  }, [filtered, dateSort]);
+
+  // Country tab shows up to 4 local conferences prominently.
+  const displayed = countryMode ? sorted.slice(0, 4) : sorted;
 
   function clearFilters() {
     setFormatFilter('');
     setLevelFilter('');
     setApplicationsOpen(false);
-    setContinentFilter('');
+    setRegion('');
+    setRegionTouched(true);
     setSearchQuery('');
   }
 
-  const hasActiveFilters = !!formatFilter || !!levelFilter || applicationsOpen || !!searchQuery || !!continentFilter;
+  const hasActiveFilters = !!formatFilter || !!levelFilter || applicationsOpen || !!searchQuery || (!!region && region !== 'country');
+
+  const userCode = userCountry ? getCountryByName(userCountry)?.code : undefined;
 
   return (
-    <div className="min-h-screen flex flex-col relative" style={{ backgroundColor: '#EDE7D8' }}>
+    <div className="min-h-screen flex flex-col relative" style={{ backgroundColor: '#EDE7D8', overflowX: 'clip' }}>
       {/* Grain */}
       <div
         className="pointer-events-none fixed inset-0 z-0"
@@ -563,7 +849,7 @@ export default function ConferencesExploreClient() {
           </div>
         </header>
 
-        {/* ── Floating glass filter bar ────────────────────────────── */}
+        {/* ── Floating glass filter bar — one uncrowded row ─────────── */}
         <div className="sticky z-30 px-4 md:px-10" style={{ top: '12px' }}>
           <div
             style={{
@@ -578,7 +864,7 @@ export default function ConferencesExploreClient() {
           >
             <div className="flex items-center gap-2 px-2 py-2 md:px-3 flex-wrap md:flex-nowrap">
               {/* Search */}
-              <div className="relative flex items-center flex-1" style={{ minWidth: '180px' }}>
+              <div className="relative flex items-center flex-1" style={{ minWidth: '160px' }}>
                 <Search size={15} className="absolute left-3 pointer-events-none" style={{ color: '#9A8A78' }} />
                 <input
                   type="text"
@@ -598,53 +884,19 @@ export default function ConferencesExploreClient() {
               {/* Hairline divider */}
               <div className="hidden md:block w-px h-6 flex-shrink-0" style={{ backgroundColor: 'rgba(221,212,192,0.9)' }} />
 
-              {/* Continent pills */}
-              <div className="hidden lg:flex items-center gap-1.5 flex-shrink-0">
-                {CONTINENT_KEYS.map(key => (
-                  <FilterPill
-                    key={key}
-                    label={CONTINENT_LABELS[key].toUpperCase()}
-                    active={continentFilter === key}
-                    onClick={() => setContinentFilter(f => f === key ? '' : key)}
-                  />
-                ))}
-              </div>
+              {/* Region — visitor's country first, then all / continents */}
+              <RegionControl region={region} userCountry={userCountry} onChange={changeRegion} />
 
-              {/* Active continent chip (small screens, where the pill row is hidden) */}
-              {continentFilter && (
-                <span
-                  className="flex lg:hidden items-center gap-1.5 flex-shrink-0"
-                  style={{
-                    backgroundColor: 'rgba(27,56,40,0.08)',
-                    border: '1px solid rgba(27,56,40,0.2)',
-                    borderRadius: 9999,
-                    padding: '3px 10px',
-                    fontSize: 11,
-                    fontWeight: 700,
-                    color: '#1B3828',
-                    fontFamily: "'Outfit', sans-serif",
-                  }}
-                >
-                  {CONTINENT_LABELS[continentFilter]}
-                  <button
-                    className="focus:outline-none"
-                    onClick={() => setContinentFilter('')}
-                    style={{ lineHeight: 1, color: '#1B3828', opacity: 0.6 }}
-                  >
-                    ×
-                  </button>
-                </span>
-              )}
+              {/* Date sort — soonest ↔ latest */}
+              <DateSortChip sort={dateSort} onToggle={() => setDateSort(s => (s === 'asc' ? 'desc' : 'asc'))} />
 
               {/* View toggle (grid / list) */}
-              <div className="ml-auto flex-shrink-0">
-                <ViewToggle view={view} onChange={changeView} />
-              </div>
+              <ViewToggle view={view} onChange={changeView} />
 
               {/* Hairline divider */}
               <div className="hidden md:block w-px h-6 flex-shrink-0" style={{ backgroundColor: 'rgba(221,212,192,0.9)' }} />
 
-              {/* Filters toggle */}
+              {/* Filters toggle — format / level / applications live in the drawer */}
               <button
                 onClick={() => setFiltersOpen(v => !v)}
                 className="flex items-center gap-2 rounded-full py-2 px-4 font-bold text-[11px] transition-colors focus:outline-none flex-shrink-0"
@@ -681,25 +933,13 @@ export default function ConferencesExploreClient() {
                 <div className="w-px h-5 mx-1" style={{ backgroundColor: 'rgba(221,212,192,0.9)' }} />
 
                 <span className="text-[11px] font-bold mr-1" style={{ color: '#6B5F52', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.14em', textTransform: 'uppercase' }}>Level</span>
-                <FilterPill label="SCHOOL"     active={levelFilter === 'school'}     onClick={() => setLevelFilter(l => l === 'school' ? '' : 'school')} />
+                <FilterPill label="HIGH SCHOOL" active={levelFilter === 'school'}     onClick={() => setLevelFilter(l => l === 'school' ? '' : 'school')} />
                 <FilterPill label="UNIVERSITY" active={levelFilter === 'university'} onClick={() => setLevelFilter(l => l === 'university' ? '' : 'university')} />
                 <FilterPill label="BOTH"       active={levelFilter === 'both'}       onClick={() => setLevelFilter(l => l === 'both' ? '' : 'both')} />
 
                 <div className="w-px h-5 mx-1" style={{ backgroundColor: 'rgba(221,212,192,0.9)' }} />
 
                 <FilterPill label="APPLICATIONS OPEN" active={applicationsOpen} onClick={() => setApplicationsOpen(v => !v)} />
-
-                <div className="w-px h-5 mx-1" style={{ backgroundColor: 'rgba(221,212,192,0.9)' }} />
-
-                <span className="text-[11px] font-bold mr-1" style={{ color: '#6B5F52', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.14em', textTransform: 'uppercase' }}>Continent</span>
-                {CONTINENT_KEYS.map(key => (
-                  <FilterPill
-                    key={key}
-                    label={CONTINENT_LABELS[key].toUpperCase()}
-                    active={continentFilter === key}
-                    onClick={() => setContinentFilter(f => f === key ? '' : key)}
-                  />
-                ))}
 
                 {hasActiveFilters && (
                   <button
@@ -718,10 +958,19 @@ export default function ConferencesExploreClient() {
         {/* ── Main content ─────────────────────────────────────────── */}
         <main className="flex-1 px-6 md:px-14 pt-10 pb-16">
           {/* Results rule */}
-          {!loading && filtered.length > 0 && (
+          {!loading && displayed.length > 0 && (
             <div className="flex items-center gap-4 mb-6">
-              <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '10px', letterSpacing: '0.14em', color: '#9A8A78', whiteSpace: 'nowrap' }}>
-                SHOWING {filtered.length} {filtered.length === 1 ? 'CONFERENCE' : 'CONFERENCES'}
+              <span className="inline-flex items-center gap-2" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '10px', letterSpacing: '0.14em', color: '#9A8A78', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+                {countryMode ? (
+                  <>
+                    {userCode && <FlagImg code={userCode} size={13} />}
+                    NEAR YOU — {displayed.length < sorted.length
+                      ? `${displayed.length} OF ${sorted.length}`
+                      : displayed.length} IN {userCountry!.toUpperCase()}
+                  </>
+                ) : (
+                  <>SHOWING {sorted.length} {sorted.length === 1 ? 'CONFERENCE' : 'CONFERENCES'}</>
+                )}
               </span>
               <div className="flex-1 h-px" style={{ backgroundColor: 'rgba(221,212,192,0.8)' }} />
             </div>
@@ -745,28 +994,50 @@ export default function ConferencesExploreClient() {
                 </div>
               ))}
             </div>
-          ) : filtered.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-24 text-center">
-              <EmptySVG />
-              <h2 className="font-semibold text-lg mt-6 mb-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-                No conferences listed yet
-              </h2>
-              <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                Gavelling Conferences is launching soon. Be the first to list your conference.
-              </p>
-              <button
-                onClick={() => router.push('/conferences/new')}
-                className="rounded-xl py-3 px-6 font-bold text-sm tracking-widest transition-colors focus:outline-none"
-                style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.07em' }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-              >
-                ORGANISE A CONFERENCE →
-              </button>
-            </div>
+          ) : displayed.length === 0 ? (
+            countryMode && !searchQuery && !formatFilter && !levelFilter ? (
+              /* Country tab is empty — soft local empty state with a reset. */
+              <div className="flex flex-col items-center justify-center py-24 text-center">
+                {userCode && <FlagImg code={userCode} size={40} />}
+                <h2 className="font-semibold text-lg mt-5 mb-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                  No conferences in {userCountry} yet
+                </h2>
+                <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                  Be the first to bring one home — or browse the worldwide directory.
+                </p>
+                <button
+                  onClick={() => changeRegion('')}
+                  className="rounded-xl py-3 px-6 font-bold text-sm tracking-widest transition-colors focus:outline-none"
+                  style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.07em' }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+                >
+                  EXPLORE ALL CONFERENCES →
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-24 text-center">
+                <EmptySVG />
+                <h2 className="font-semibold text-lg mt-6 mb-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                  No conferences listed yet
+                </h2>
+                <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                  Gavelling Conferences is launching soon. Be the first to list your conference.
+                </p>
+                <button
+                  onClick={() => router.push('/conferences/new')}
+                  className="rounded-xl py-3 px-6 font-bold text-sm tracking-widest transition-colors focus:outline-none"
+                  style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.07em' }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+                >
+                  ORGANISE A CONFERENCE →
+                </button>
+              </div>
+            )
           ) : view === 'list' ? (
-            <div className="flex flex-col gap-2">
-              {filtered.map(conf => (
+            <div style={{ borderTop: '1px solid rgba(221,212,192,0.6)' }}>
+              {displayed.map(conf => (
                 <ConferenceListRow
                   key={conf.id}
                   conf={conf}
@@ -780,7 +1051,7 @@ export default function ConferencesExploreClient() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filtered.map(conf => (
+              {displayed.map(conf => (
                 <ConferenceCard
                   key={conf.id}
                   conf={conf}
@@ -792,6 +1063,28 @@ export default function ConferencesExploreClient() {
                   onClick={() => router.push(`/conferences/${conf.slug}`)}
                 />
               ))}
+            </div>
+          )}
+
+          {/* Country tab — subtle reset to the worldwide directory */}
+          {!loading && countryMode && displayed.length > 0 && (
+            <div className="flex justify-center mt-10">
+              <button
+                onClick={() => changeRegion('')}
+                className="inline-flex items-center gap-1.5 focus:outline-none transition-colors"
+                style={{
+                  fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '11px',
+                  letterSpacing: '0.1em', color: '#9A8A78',
+                  background: 'transparent', border: 'none', cursor: 'pointer',
+                  textTransform: 'uppercase',
+                }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
+              >
+                <Globe size={13} strokeWidth={2.25} />
+                Explore all conferences
+                <ArrowRight size={12} strokeWidth={2.5} />
+              </button>
             </div>
           )}
         </main>

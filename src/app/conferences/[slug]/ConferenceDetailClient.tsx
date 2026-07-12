@@ -1054,7 +1054,7 @@ export default function ConferenceDetailClient() {
                 { icon: CalendarDays, label: 'Dates', value: formatDateRange(conference.start_date, conference.end_date) },
                 { icon: MapPin, label: 'Location', value: isOnline ? 'Online' : `${conference.city}, ${conference.country}` },
                 { icon: Monitor, label: 'Format', value: capitalize(conference.format.replace('-', ' ')) },
-                { icon: GraduationCap, label: 'Level', value: capitalize(conference.student_level) },
+                { icon: GraduationCap, label: 'Level', value: conference.student_level === 'school' ? 'High School' : capitalize(conference.student_level) },
                 { icon: Users, label: 'Delegates', value: conference.expected_delegates.toLocaleString() },
               ].map((cell, i) => {
                 const Icon = cell.icon;

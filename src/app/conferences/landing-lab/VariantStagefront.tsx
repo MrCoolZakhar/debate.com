@@ -24,13 +24,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowRight, ArrowUpRight, MapPin } from 'lucide-react';
+import {
+  ArrowRight, ArrowUpRight, MapPin,
+  Users, Gavel, ClipboardList, CalendarPlus, GraduationCap, Eye,
+  type LucideIcon,
+} from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { supabase } from '@/lib/supabase';
 import { UN_COUNTRIES } from '@/lib/countries';
-import { Carousel, type CarouselSlide } from '@/components/ui/carousel';
+import { NeuCard, NeuIconDisc, NEU, NEU_GRADIENTS, EASE, type NeuGradient } from '@/components/neu';
 import { ConferenceCard } from '../ConferenceCard';
 import { LogoDisc } from '@/components/LogoDisc';
 import {
@@ -79,53 +83,65 @@ const CHIP_FAN = [
   { left: '176px', bottom: '0px', rot: '-2deg', delay: '440ms', z: 1 },
 ] as const;
 
-// "Find your seat" role carousel — one slide per way to be on the circuit.
-// Reuses the two conference-crowd photos already shipped on this page.
-const roleSlides: CarouselSlide[] = [
+// "Find your seat" — one neumorphic card per way to be on the circuit.
+// The ROLE is the hero: big Outfit-900 ink wordmark, muted supporting line,
+// the same primary/secondary links the old carousel slides carried.
+interface RoleCardDef {
+  role: string; // rendered uppercase, Outfit 900 — the biggest words in the card
+  blurb: string;
+  icon: LucideIcon;
+  gradient: NeuGradient;
+  primary: { label: string; href: string };
+  secondary?: { label: string; href: string };
+}
+
+const ROLE_CARDS: RoleCardDef[] = [
   {
-    kicker: 'Organizers',
-    title: 'Run the whole show.',
-    description: 'Registration, allocation, delegations, live committees — one platform, zero fees.',
-    image: '/landing/organiser-desk.jpg',
-    imageAlt: 'A delegation working together on Gavelling at a laptop',
-    primaryButton: { label: 'List your conference', href: '/conferences/new' },
-    secondaryButton: { label: 'View your conferences', href: '/my-conferences?tab=organizer' },
+    role: 'Delegates',
+    blurb: 'Browse the circuit, apply once with your Gavelling profile, and build a MUN CV that writes itself.',
+    icon: Users,
+    gradient: NEU_GRADIENTS.forest,
+    primary: { label: 'Explore conferences', href: '/conferences/explore' },
+    secondary: { label: 'View your conferences', href: '/my-conferences?tab=delegate' },
   },
   {
-    kicker: 'Chairs',
-    title: 'Gavel in hand.',
-    description: 'Run committees live — scoring, motions and the speakers list, all from one dashboard.',
-    image: '/landing/podium-speaker.jpg',
-    imageAlt: 'A full committee room mid-debate, chair at the podium',
-    primaryButton: { label: 'Explore chairing opportunities', href: '/conferences/roles' },
-    secondaryButton: { label: 'View your conferences', href: '/my-conferences?tab=chair' },
+    role: 'Chairs',
+    blurb: 'Gavel in hand — scoring, motions and the speakers list, run live from one dashboard.',
+    icon: Gavel,
+    gradient: NEU_GRADIENTS.gold,
+    primary: { label: 'Explore chairing opportunities', href: '/conferences/roles' },
+    secondary: { label: 'View your conferences', href: '/my-conferences?tab=chair' },
   },
   {
-    kicker: 'Delegates',
-    title: 'Find your committee.',
-    description: 'Browse the circuit, apply once with your Gavelling profile, and build a MUN CV that writes itself.',
-    image: '/landing/podium-speaker.jpg',
-    imageAlt: 'A full committee room mid-debate, chair at the podium',
-    primaryButton: { label: 'Explore conferences', href: '/conferences/explore' },
-    secondaryButton: { label: 'View your conferences', href: '/my-conferences?tab=delegate' },
+    role: 'Secretariat',
+    blurb: 'The machine behind the weekend — applications, allocations and communications in one place.',
+    icon: ClipboardList,
+    gradient: NEU_GRADIENTS.amber,
+    primary: { label: 'See open roles', href: '/conferences/roles' },
   },
   {
-    kicker: 'Advisors',
-    title: 'Bring your delegation.',
-    description: 'Pledge spots, manage payments and keep your delegation organised — all in one place.',
-    image: '/landing/organiser-desk.jpg',
-    imageAlt: 'A delegation working together on Gavelling at a laptop',
-    primaryButton: { label: 'Explore conferences', href: '/conferences/explore' },
-    secondaryButton: { label: 'View your conferences', href: '/my-conferences?tab=advisor' },
+    role: 'Organizers',
+    blurb: 'Registration, allocation, delegations, live committees — the whole show, zero fees.',
+    icon: CalendarPlus,
+    gradient: NEU_GRADIENTS.green,
+    primary: { label: 'List your conference', href: '/conferences/new' },
+    secondary: { label: 'View your conferences', href: '/my-conferences?tab=organizer' },
   },
   {
-    kicker: 'Observers',
-    title: 'Watch the debate.',
-    description: 'Follow committees live and see how the room moves — no placard required.',
-    image: '/landing/podium-speaker.jpg',
-    imageAlt: 'A full committee room mid-debate, chair at the podium',
-    primaryButton: { label: 'Explore conferences', href: '/conferences/explore' },
-    secondaryButton: { label: 'View your conferences', href: '/my-conferences?tab=observer' },
+    role: 'Advisors',
+    blurb: 'Pledge spots, manage payments and keep your delegation organised — all in one place.',
+    icon: GraduationCap,
+    gradient: NEU_GRADIENTS.sage,
+    primary: { label: 'Explore conferences', href: '/conferences/explore' },
+    secondary: { label: 'View your conferences', href: '/my-conferences?tab=advisor' },
+  },
+  {
+    role: 'Observers',
+    blurb: 'Follow committees live and see how the room moves — no placard required.',
+    icon: Eye,
+    gradient: NEU_GRADIENTS.forest,
+    primary: { label: 'Explore conferences', href: '/conferences/explore' },
+    secondary: { label: 'View your conferences', href: '/my-conferences?tab=observer' },
   },
 ];
 
@@ -307,7 +323,39 @@ export default function VariantStagefront({
         /* Hero "up next" rail: horizontal snap on narrow screens, vertical stack ≥lg. */
         .sf-hero-rail { scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
         .sf-hero-rail::-webkit-scrollbar { display: none; }
-        @media (min-width: 1024px) { .sf-hero-rail { scroll-snap-type: none; } }
+        /* Fluid hero aside: the trio grows with the viewport (356px was fixed —
+           at 1440/1920 the cards read undersized with dead space around them).
+           Width tracks ~23.5vw and the photo-card height tracks ~12.5vw so the
+           card keeps its ~1.9:1 stage-poster proportion at every size. */
+        .sf-hero-aside { width: 100%; }
+        @media (min-width: 1024px) {
+          .sf-hero-rail { scroll-snap-type: none; }
+          .sf-hero-aside { width: clamp(340px, 23.5vw, 476px); }
+          .sf-hero-rail .gv-photo-card { height: clamp(180px, 12.5vw, 252px) !important; }
+        }
+        /* Roles grid: 1 → 2 → 3 fluid columns; cards grow with the container. */
+        .sf-roles-grid {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: clamp(16px, 1.6vw, 28px);
+          max-width: 1560px;
+          margin: 0 auto;
+        }
+        @media (min-width: 640px) { .sf-roles-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+        @media (min-width: 1024px) { .sf-roles-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+        .sf-role-link svg { transition: transform 260ms cubic-bezier(0.22,1,0.36,1); }
+        .sf-role-link:hover { color: #2A5A3C !important; }
+        .sf-role-link:hover svg { transform: translateX(3px); }
+        .sf-role-sub:hover { color: #1B3828 !important; }
+        /* Job-board chip fan: the desktop offsets (up to 176px) push the ~230px
+           chips past a 375px viewport. Below 560px restack them as a gentle
+           cascade pinned to the left edge so nothing overflows. */
+        @media (max-width: 560px) {
+          .sf-chip-fan { height: 158px !important; }
+          .sf-chip:nth-of-type(1) { left: 0 !important; bottom: 0 !important; }
+          .sf-chip:nth-of-type(2) { left: 14px !important; bottom: 54px !important; }
+          .sf-chip:nth-of-type(3) { left: 28px !important; bottom: 108px !important; }
+        }
         @media (prefers-reduced-motion: reduce) {
           .sf-rail { overflow-x: auto; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; }
           .sf-rail-track { animation: none !important; transform: none !important; }
@@ -363,12 +411,12 @@ export default function VariantStagefront({
           <SiteNav overlay />
 
           <div className="relative z-10 flex-1 min-h-0 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6 lg:gap-14 px-6 md:px-14 pb-8 md:pb-9 pt-20 md:pt-24">
-            <div className="flex-1 flex flex-col justify-center" style={{ maxWidth: '760px' }}>
+            <div className="flex-1 flex flex-col justify-center" style={{ maxWidth: 'clamp(760px, 54vw, 940px)' }}>
               <h1
                 style={{
                   fontFamily: SANS,
                   fontWeight: 800,
-                  fontSize: 'clamp(44px, 7.5vw, 92px)',
+                  fontSize: 'clamp(44px, 7.2vw, 122px)',
                   lineHeight: 0.98,
                   letterSpacing: '-0.02em',
                   color: CREAM,
@@ -381,11 +429,11 @@ export default function VariantStagefront({
               <p
                 style={{
                   fontFamily: SANS,
-                  fontSize: 'clamp(15px, 1.6vw, 18px)',
+                  fontSize: 'clamp(15px, 1.4vw, 22px)',
                   lineHeight: 1.55,
                   color: 'rgba(237,231,216,0.82)',
                   margin: '20px 0 0 0',
-                  maxWidth: '460px',
+                  maxWidth: 'clamp(460px, 36vw, 620px)',
                 }}
               >
                 Real conferences, real committee rooms — from London to San Salvador. Pick your weekend.
@@ -397,12 +445,12 @@ export default function VariantStagefront({
                   className="inline-flex items-center gap-2.5"
                   style={{
                     fontFamily: SANS,
-                    fontSize: '15px',
+                    fontSize: 'clamp(15px, 1.05vw, 18px)',
                     fontWeight: 800,
                     letterSpacing: '0.04em',
                     color: '#14100B',
                     backgroundColor: PALE_GOLD,
-                    padding: '15px 28px',
+                    padding: 'clamp(15px, 1.1vw, 19px) clamp(28px, 2.1vw, 38px)',
                     borderRadius: '9999px',
                     textDecoration: 'none',
                     boxShadow: '0 14px 36px rgba(0,0,0,0.35)',
@@ -430,7 +478,7 @@ export default function VariantStagefront({
                 single-row snap rail so all three fit inside one viewport
                 height. */}
             {upcomingTrio.length > 0 && (
-              <aside className="w-full lg:w-[356px] flex-shrink-0 flex flex-col justify-center lg:justify-start lg:self-start lg:pt-3 lg:mr-[calc(5vw-56px)]">
+              <aside className="sf-hero-aside flex-shrink-0 flex flex-col justify-center lg:justify-start lg:self-start lg:pt-3 lg:mr-[calc(5vw-56px)]">
                 <div className="sf-hero-rail flex flex-row lg:flex-col gap-3 lg:gap-2.5 overflow-x-auto lg:overflow-visible -mx-6 px-6 lg:mx-0 lg:px-0 pb-2 lg:pb-0">
                   {upcomingTrio.map(c => (
                     <div
@@ -457,28 +505,33 @@ export default function VariantStagefront({
           </div>
         </section>
 
-        {/* ── Find your seat — role carousel, cream ──────────────────────────── */}
+        {/* ── Find your seat — neumorphic role grid, ivory ────────────────────
+            Soft extruded NeuCards on the ivory base; each card leads with the
+            ROLE as an Outfit-900 ink wordmark over a vibrant gradient icon
+            disc, with a muted line describing what that role gets. */}
         <section
-          className="px-6 md:px-14"
-          style={{ backgroundColor: CREAM, paddingTop: '72px', paddingBottom: '8px' }}
+          className="px-6 md:px-14 xl:px-20"
+          style={{ backgroundColor: NEU.base, paddingTop: 'clamp(64px, 6vw, 108px)', paddingBottom: 'clamp(56px, 5vw, 96px)' }}
         >
-          <p style={{ fontFamily: SANS, fontWeight: 700, fontSize: '12px', letterSpacing: '0.14em', textTransform: 'uppercase', color: GOLD, margin: '0 0 8px 0', textAlign: 'center' }}>
+          <p style={{ fontFamily: SANS, fontWeight: 700, fontSize: 'clamp(12px, 0.8vw, 14px)', letterSpacing: '0.14em', textTransform: 'uppercase', color: GOLD, margin: '0 0 8px 0', textAlign: 'center' }}>
             Find your seat
           </p>
           <h2
             style={{
               fontFamily: SANS,
               fontWeight: 900,
-              fontSize: 'clamp(26px, 3vw, 38px)',
+              fontSize: 'clamp(26px, 3vw, 48px)',
               letterSpacing: '-0.015em',
               color: INK,
-              margin: '0 0 34px 0',
+              margin: '0 0 clamp(34px, 3vw, 52px) 0',
               textAlign: 'center',
             }}
           >
             One platform, every role.
           </h2>
-          <Carousel slides={roleSlides} />
+          <div className="sf-roles-grid">
+            {ROLE_CARDS.map(rc => <RoleNeuCard key={rc.role} def={rc} />)}
+          </div>
         </section>
 
         {/* ── The circuit in numbers — slim worlddiplomats-style impact strip:
@@ -500,14 +553,14 @@ export default function VariantStagefront({
                 <span
                   style={{
                     fontFamily: SANS, fontWeight: 800, fontVariantNumeric: 'tabular-nums',
-                    fontSize: 'clamp(38px, 4.5vw, 56px)', lineHeight: 1, color: FOREST, letterSpacing: '-0.01em',
+                    fontSize: 'clamp(38px, 4.5vw, 74px)', lineHeight: 1, color: FOREST, letterSpacing: '-0.01em',
                   }}
                 >
                   {stat.n.toLocaleString()}
                 </span>
                 <span
                   style={{
-                    fontFamily: SANS, fontWeight: 700, fontSize: '11.5px', letterSpacing: '0.14em',
+                    fontFamily: SANS, fontWeight: 700, fontSize: 'clamp(11.5px, 0.75vw, 13.5px)', letterSpacing: '0.14em',
                     textTransform: 'uppercase', color: GOLD, marginTop: '10px',
                   }}
                 >
@@ -520,10 +573,10 @@ export default function VariantStagefront({
 
         {/* ── Opportunities beyond delegating — job board, cream, no panel ──── */}
         <section
-          className="relative px-6 md:px-14"
-          style={{ backgroundColor: CREAM, paddingTop: '72px', paddingBottom: '80px' }}
+          className="relative px-6 md:px-14 xl:px-20"
+          style={{ backgroundColor: CREAM, paddingTop: 'clamp(64px, 5.5vw, 100px)', paddingBottom: 'clamp(72px, 6vw, 110px)' }}
         >
-          <div className="flex flex-col lg:flex-row lg:items-center gap-10 lg:gap-0">
+          <div className="mx-auto flex flex-col lg:flex-row lg:items-center gap-10 lg:gap-0" style={{ maxWidth: '1720px' }}>
             <div className="lg:w-[42%]" style={{ position: 'relative', zIndex: 2 }}>
               <p style={{ fontFamily: SANS, fontWeight: 700, fontSize: '12px', letterSpacing: '0.14em', textTransform: 'uppercase', color: GOLD, margin: '0 0 14px 0' }}>
                 The job board
@@ -532,7 +585,7 @@ export default function VariantStagefront({
                 style={{
                   fontFamily: SANS,
                   fontWeight: 900,
-                  fontSize: 'clamp(30px, 3.6vw, 50px)',
+                  fontSize: 'clamp(30px, 3.6vw, 62px)',
                   lineHeight: 1.02,
                   letterSpacing: '-0.02em',
                   color: INK,
@@ -541,7 +594,7 @@ export default function VariantStagefront({
               >
                 Opportunities beyond delegating.
               </h2>
-              <p style={{ fontFamily: SANS, fontSize: '15px', lineHeight: 1.65, color: INK_70, margin: '18px 0 0 0', maxWidth: '420px' }}>
+              <p style={{ fontFamily: SANS, fontSize: 'clamp(15px, 1.05vw, 18px)', lineHeight: 1.65, color: INK_70, margin: '18px 0 0 0', maxWidth: 'clamp(420px, 30vw, 520px)' }}>
                 The best seat in the room isn&rsquo;t always behind a placard. Conferences on
                 Gavelling hire chairs, secretariat and staff every season — and your MUN CV
                 is the application.
@@ -549,7 +602,7 @@ export default function VariantStagefront({
               {/* Three tiny "notification" previews of the freshest open roles,
                   fanned playfully above the CTA. Real data, all roads lead to /roles. */}
               {roleChips.length > 0 && (
-                <div style={{ position: 'relative', height: '96px', marginTop: '24px', maxWidth: '360px' }}>
+                <div className="sf-chip-fan" style={{ position: 'relative', height: '96px', marginTop: '24px', maxWidth: '360px' }}>
                   {roleChips.map((chip, i) => {
                     const fan = CHIP_FAN[i] ?? CHIP_FAN[0];
                     return <RolePopChip key={chip.id} chip={chip} fan={fan} />;
@@ -636,7 +689,7 @@ export default function VariantStagefront({
                     className="px-5 py-4"
                     style={{ backgroundColor: FOREST }}
                   >
-                    <p style={{ fontFamily: SANS, fontWeight: 900, fontVariantNumeric: 'tabular-nums', fontSize: '26px', lineHeight: 1, color: PALE_GOLD, margin: 0 }}>
+                    <p style={{ fontFamily: SANS, fontWeight: 900, fontVariantNumeric: 'tabular-nums', fontSize: 'clamp(26px, 1.8vw, 34px)', lineHeight: 1, color: PALE_GOLD, margin: 0 }}>
                       {stat.n}
                     </p>
                     <p style={{ fontFamily: SANS, fontWeight: 700, fontSize: '9.5px', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(237,231,216,0.9)', margin: '7px 0 0 0' }}>
@@ -666,7 +719,7 @@ export default function VariantStagefront({
                 style={{
                   fontFamily: SANS,
                   fontWeight: 900,
-                  fontSize: 'clamp(26px, 3vw, 38px)',
+                  fontSize: 'clamp(26px, 3vw, 48px)',
                   letterSpacing: '-0.015em',
                   color: INK,
                   margin: '0 0 6px 0',
@@ -674,7 +727,7 @@ export default function VariantStagefront({
               >
                 {regionHeading}
               </h2>
-              <p style={{ fontFamily: SANS, fontSize: '15px', lineHeight: 1.6, color: INK_55, margin: 0, maxWidth: '540px' }}>
+              <p style={{ fontFamily: SANS, fontSize: 'clamp(15px, 1.05vw, 18px)', lineHeight: 1.6, color: INK_55, margin: 0, maxWidth: 'clamp(540px, 40vw, 680px)' }}>
                 {regionSub}
               </p>
             </div>
@@ -753,7 +806,7 @@ export default function VariantStagefront({
               paddingRight: 56,
               paddingTop: 100,
               paddingBottom: 40,
-              maxWidth: 600,
+              maxWidth: 'clamp(600px, 44vw, 820px)',
               flex: 1,
             }}
           >
@@ -762,7 +815,7 @@ export default function VariantStagefront({
                 style={{
                   display: 'block',
                   color: 'white',
-                  fontSize: 'clamp(48px, 5.5vw, 80px)',
+                  fontSize: 'clamp(48px, 5.5vw, 104px)',
                   fontFamily: "'Outfit', sans-serif",
                   fontWeight: 900,
                   lineHeight: 1.0,
@@ -774,7 +827,7 @@ export default function VariantStagefront({
                 style={{
                   display: 'block',
                   color: '#EED98A',
-                  fontSize: 'clamp(48px, 5.5vw, 80px)',
+                  fontSize: 'clamp(48px, 5.5vw, 104px)',
                   fontFamily: "'Outfit', sans-serif",
                   fontWeight: 900,
                   lineHeight: 1.0,
@@ -787,10 +840,10 @@ export default function VariantStagefront({
               style={{
                 marginTop: 24,
                 marginBottom: 40,
-                fontSize: '16px',
+                fontSize: 'clamp(16px, 1.1vw, 19px)',
                 lineHeight: 1.7,
                 color: 'rgba(237,231,216,0.75)',
-                maxWidth: 440,
+                maxWidth: 'clamp(440px, 32vw, 560px)',
                 fontFamily: "'Outfit', sans-serif",
               }}
             >
@@ -849,6 +902,92 @@ function HeroTextLink({ href, label }: { href: string; label: string }) {
 }
 
 /**
+ * One neumorphic role card: vibrant gradient icon disc + the ROLE as the
+ * hero wordmark (Outfit 900, ink, uppercase), a muted supporting line, and
+ * the same primary/secondary links the old carousel slides carried.
+ */
+function RoleNeuCard({ def }: { def: RoleCardDef }) {
+  return (
+    <NeuCard
+      hover
+      style={{
+        padding: 'clamp(22px, 1.9vw, 34px)',
+        display: 'flex',
+        flexDirection: 'column',
+        minWidth: 0,
+      }}
+    >
+      <div className="flex items-center" style={{ gap: 'clamp(14px, 1.1vw, 20px)' }}>
+        <NeuIconDisc gradient={def.gradient} icon={def.icon} size={48} />
+        <h3
+          style={{
+            fontFamily: SANS,
+            fontWeight: 900,
+            fontSize: 'clamp(26px, 1.9vw, 36px)',
+            lineHeight: 1,
+            letterSpacing: '0.015em',
+            textTransform: 'uppercase',
+            color: NEU.ink,
+            margin: 0,
+            minWidth: 0,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {def.role}
+        </h3>
+      </div>
+      <p
+        style={{
+          fontFamily: SANS,
+          fontSize: 'clamp(13.5px, 0.95vw, 16px)',
+          lineHeight: 1.6,
+          color: INK_70,
+          margin: 'clamp(14px, 1.2vw, 20px) 0 clamp(18px, 1.5vw, 26px) 0',
+        }}
+      >
+        {def.blurb}
+      </p>
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2" style={{ marginTop: 'auto' }}>
+        <Link
+          href={def.primary.href}
+          className="sf-role-link inline-flex items-center gap-1.5"
+          style={{
+            fontFamily: SANS,
+            fontWeight: 800,
+            fontSize: 'clamp(12.5px, 0.85vw, 14px)',
+            letterSpacing: '0.06em',
+            textTransform: 'uppercase',
+            color: FOREST,
+            textDecoration: 'none',
+            transition: `color 200ms ${EASE}`,
+          }}
+        >
+          {def.primary.label} <ArrowRight size={15} strokeWidth={2.5} />
+        </Link>
+        {def.secondary && (
+          <Link
+            href={def.secondary.href}
+            className="sf-role-sub"
+            style={{
+              fontFamily: SANS,
+              fontWeight: 600,
+              fontSize: 'clamp(11.5px, 0.8vw, 13px)',
+              color: NEU.muted,
+              textDecoration: 'none',
+              transition: `color 200ms ${EASE}`,
+            }}
+          >
+            {def.secondary.label}
+          </Link>
+        )}
+      </div>
+    </NeuCard>
+  );
+}
+
+/**
  * Regional auto-scrolling rail. Duplicates the card list once so the CSS
  * translateX(-50%) loop is seamless. Pauses on hover. Under prefers-reduced-
  * motion the track becomes a plain scroll-snap rail (the duplicate is hidden).
@@ -886,7 +1025,7 @@ function RegionalRail({
               key={`${c.id}-${i}`}
               className={isDupe ? 'sf-rail-dupe' : undefined}
               aria-hidden={isDupe}
-              style={{ width: '320px', flexShrink: 0 }}
+              style={{ width: 'clamp(300px, 20vw, 400px)', flexShrink: 0 }}
             >
               <ConferenceCard
                 conf={c}

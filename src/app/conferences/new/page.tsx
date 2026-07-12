@@ -652,7 +652,7 @@ function Step1({
         <Field label="Student Level">
           <ToggleGroup
             options={[
-              { value: 'school', label: 'SCHOOL' },
+              { value: 'school', label: 'HIGH SCHOOL' },
               { value: 'university', label: 'UNIVERSITY' },
               { value: 'both', label: 'BOTH' },
             ]}
