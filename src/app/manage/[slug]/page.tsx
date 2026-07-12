@@ -1,20 +1,24 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import {
-  Users, CheckCircle, MapPin, CreditCard, Building2, FileText, Rocket, Mail,
-  Gavel, UsersRound, UserPlus, Wallet, Palette, Flag, TrendingUp, ArrowRight,
+  Building2, Rocket, Mail, Gavel, UsersRound, UserPlus, Wallet, Palette,
+  TrendingUp, Inbox, Globe2, CheckCircle2, AlertCircle, ArrowRight,
 } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
 import { formatFee } from '@/lib/utils';
+import { LogoDisc } from '@/components/LogoDisc';
 import {
   NeuCard, NeuInset, NeuIconDisc, NeuStatTile, NeuProgress, NeuRing,
-  NeuPill, NeuButton, NeuChecklistRow, NEU, NEU_GRADIENTS, OUTFIT, EASE,
+  NeuPill, NeuButton, NeuChecklistRow, Emoji3D, NEU, NEU_GRADIENTS, OUTFIT, EASE,
   smoothPath,
 } from '@/components/neu';
+
+const RED = '#A8442F';
 
 // ── Publish modal ──────────────────────────────────────────────────────────
 
@@ -100,9 +104,16 @@ interface AppRow {
   society_id: string | null;
 }
 
-interface Bucket { t: number; label: string; apps: number; accepted: number; paid: number }
+type RangeKey = '24H' | '7D' | '30D' | 'ALL';
+const RANGE_KEYS: RangeKey[] = ['24H', '7D', '30D', 'ALL'];
+const RANGE_PREV_LABEL: Record<RangeKey, string> = {
+  '24H': 'previous 24 h', '7D': 'previous 7 days', '30D': 'previous 30 days', 'ALL': '',
+};
+
+interface Bucket { t: number; label: string; tip: string; apps: number; paid: number }
 
 const DAY = 86400000;
+const HOUR = 3600000;
 
 function startOfDay(t: number): number {
   const d = new Date(t);
@@ -110,51 +121,66 @@ function startOfDay(t: number): number {
   return d.getTime();
 }
 
+function floorHour(t: number): number {
+  const d = new Date(t);
+  d.setMinutes(0, 0, 0);
+  return d.getTime();
+}
+
 /**
- * Buckets applications into days (span ≤ 30 days) or weeks.
+ * Buckets applications for the selected range: 24H → hourly, 7D/30D → daily,
+ * ALL → weekly from the first application.
  * NOTE: there is no paid_at column on applications — paid rows are bucketed
  * by their submitted_at as an approximation of when the revenue arrived.
+ * Also counts paid rows in the previous equivalent window for the delta
+ * caption (null for ALL — there is no previous period to compare against).
  */
-function buildBuckets(rows: AppRow[]): Bucket[] {
-  const times = rows
-    .map(r => new Date(r.submitted_at).getTime())
-    .filter(t => Number.isFinite(t));
-  if (times.length === 0) return [];
-
-  const min = Math.min(...times);
-  const max = Math.max(...times);
-  const weekly = (max - min) / DAY > 30;
-  const step = weekly ? 7 * DAY : DAY;
-  const start = startOfDay(min);
-
-  const buckets: Bucket[] = [];
-  for (let t = start; t <= max; t += step) {
-    buckets.push({
-      t,
-      label: new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
-      apps: 0, accepted: 0, paid: 0,
-    });
+function bucketize(rows: AppRow[], range: RangeKey): { buckets: Bucket[]; prevPaid: number | null } {
+  const now = Date.now();
+  let start: number, step: number, count: number;
+  if (range === '24H') {
+    step = HOUR; count = 24; start = floorHour(now) - 23 * HOUR;
+  } else if (range === '7D') {
+    step = DAY; count = 7; start = startOfDay(now) - 6 * DAY;
+  } else if (range === '30D') {
+    step = DAY; count = 30; start = startOfDay(now) - 29 * DAY;
+  } else {
+    step = 7 * DAY;
+    const times = rows.map(r => new Date(r.submitted_at).getTime()).filter(t => Number.isFinite(t));
+    start = startOfDay(times.length > 0 ? Math.min(...times) : now);
+    count = Math.max(2, Math.floor((now - start) / step) + 1);
   }
 
+  const fmtAxis = (t: number) => range === '24H'
+    ? new Date(t).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+    : new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  const fmtTip = (t: number) => range === '24H'
+    ? new Date(t).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+    : range === 'ALL'
+      ? `Week of ${new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`
+      : new Date(t).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+
+  const buckets: Bucket[] = Array.from({ length: count }, (_, i) => ({
+    t: start + i * step,
+    label: fmtAxis(start + i * step),
+    tip: fmtTip(start + i * step),
+    apps: 0, paid: 0,
+  }));
+
+  let prevPaid: number | null = range === 'ALL' ? null : 0;
+  const prevStart = start - count * step;
   for (const r of rows) {
     const t = new Date(r.submitted_at).getTime();
     if (!Number.isFinite(t)) continue;
-    const i = Math.min(buckets.length - 1, Math.max(0, Math.floor((startOfDay(t) - start) / step)));
+    if (t < start) {
+      if (prevPaid !== null && t >= prevStart && r.payment_status === 'paid') prevPaid += 1;
+      continue;
+    }
+    const i = Math.min(count - 1, Math.floor((t - start) / step));
     buckets[i].apps += 1;
-    if (r.status === 'accepted') buckets[i].accepted += 1;
     if (r.payment_status === 'paid') buckets[i].paid += 1;
   }
-
-  // A lone bucket can't draw a line — pad a zero bucket before it.
-  if (buckets.length === 1) {
-    const prev = buckets[0].t - step;
-    buckets.unshift({
-      t: prev,
-      label: new Date(prev).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
-      apps: 0, accepted: 0, paid: 0,
-    });
-  }
-  return buckets;
+  return { buckets, prevPaid };
 }
 
 function cumulative(values: number[]): number[] {
@@ -162,126 +188,371 @@ function cumulative(values: number[]): number[] {
   return values.map(v => (sum += v));
 }
 
-// ── Growth chart — hand-rolled SVG: gold revenue bars + forest cumulative line ─
+// ── Revenue chart — interactive SVG: gold bars + forest cumulative line ────
+// Range tabs (24H/7D/30D/ALL), pointer-snapping hover with vertical guide +
+// neumorphic tooltip, gold peak marker, header shows range revenue + delta
+// vs the previous equivalent period. Hand-rolled, no chart libs.
 
-function GrowthChart({ buckets, fee, currency }: { buckets: Bucket[]; fee: number; currency: string }) {
-  const W = 640, H = 232;
-  const padL = 36, padR = 14, padT = 16, padB = 26;
-  const plotW = W - padL - padR;
-  const plotH = H - padT - padB;
+function RevenueChart({
+  rows,
+  fee,
+  currency,
+  financialsHref,
+}: {
+  rows: AppRow[];
+  fee: number;
+  currency: string;
+  financialsHref: string;
+}) {
+  const [range, setRange] = useState<RangeKey>('7D');
+  const [hoverI, setHoverI] = useState<number | null>(null);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const [dims, setDims] = useState({ w: 680, h: 240 });
+
+  // Measure the plot area so the SVG renders at exact pixel size — keeps
+  // text unscaled and makes pointer → bucket math exact.
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const r = entries[0].contentRect;
+      if (r.width > 40 && r.height > 40) setDims({ w: r.width, h: r.height });
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const { buckets, prevPaid } = useMemo(() => bucketize(rows, range), [rows, range]);
+
+  const revenue = buckets.map(b => b.paid * fee);
+  const cumApps = cumulative(buckets.map(b => b.apps));
+  const totalRev = revenue.reduce((a, b) => a + b, 0);
+  const prevRev = prevPaid === null ? null : prevPaid * fee;
+  const delta = prevRev === null ? null : totalRev - prevRev;
+
+  const { w: W, h: H } = dims;
+  const padL = 34, padR = 12, padT = 18, padB = 20;
+  const plotW = Math.max(40, W - padL - padR);
+  const plotH = Math.max(40, H - padT - padB);
   const n = buckets.length;
   const slot = plotW / n;
 
-  const cumApps = cumulative(buckets.map(b => b.apps));
-  const revenue = buckets.map(b => b.paid * fee);
   const maxCum = Math.max(...cumApps, 1);
   const maxRev = Math.max(...revenue, 1);
   const hasRevenue = revenue.some(v => v > 0);
+  const hasActivity = cumApps[n - 1] > 0 || hasRevenue;
 
   const xc = (i: number) => padL + slot * (i + 0.5);
   const yApps = (v: number) => padT + plotH - (v / maxCum) * plotH;
   const yRev = (v: number) => padT + plotH - (v / maxRev) * (plotH * 0.86);
-
-  const barW = Math.min(24, slot * 0.52);
   const baseY = padT + plotH;
 
-  // Rounded-top bar path.
-  const bar = (i: number, v: number): string => {
+  const barW = Math.min(22, slot * 0.55);
+
+  // Rounded-top bar path (width parameterised so the hovered bar can grow).
+  const bar = (i: number, v: number, w: number): string => {
     if (v <= 0) return '';
-    const x = xc(i) - barW / 2;
+    const x = xc(i) - w / 2;
     const top = yRev(v);
-    const r = Math.min(barW / 2, Math.max(2, baseY - top));
-    return `M ${x} ${baseY} L ${x} ${top + r} Q ${x} ${top} ${x + r} ${top} L ${x + barW - r} ${top} Q ${x + barW} ${top} ${x + barW} ${top + r} L ${x + barW} ${baseY} Z`;
+    const r = Math.min(w / 2, Math.max(2, baseY - top));
+    return `M ${x} ${baseY} L ${x} ${top + r} Q ${x} ${top} ${x + r} ${top} L ${x + w - r} ${top} Q ${x + w} ${top} ${x + w} ${top + r} L ${x + w} ${baseY} Z`;
   };
 
   const linePts = cumApps.map((v, i) => ({ x: xc(i), y: yApps(v) }));
   const lastPt = linePts[linePts.length - 1];
 
-  // 2 horizontal guides (half + max) — no gridline clutter.
+  // Peak-revenue bucket → gold dot + tiny label.
+  let peakI = -1;
+  for (let i = 0; i < revenue.length; i++) {
+    if (revenue[i] > 0 && (peakI === -1 || revenue[i] > revenue[peakI])) peakI = i;
+  }
+
   const guides = [0.5, 1].map(f => ({ y: yApps(maxCum * f), v: Math.round(maxCum * f) }));
-  const labelEvery = Math.max(1, Math.ceil(n / 6));
+  const labelEvery = Math.max(1, Math.ceil(n / Math.max(4, Math.floor(plotW / 68))));
+
+  // Snap pointer x to the nearest bucket.
+  function handleMove(e: React.PointerEvent<SVGSVGElement>) {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const i = Math.round((x - padL) / slot - 0.5);
+    setHoverI(Math.max(0, Math.min(n - 1, i)));
+  }
+
+  const gid = 'rev-bar-grad';
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block' }} role="img" aria-label="Applications and revenue over time">
-      {guides.map(g => (
-        <g key={g.v}>
-          <line x1={padL} x2={W - padR} y1={g.y} y2={g.y} stroke="rgba(27,56,40,0.08)" strokeWidth={1} />
-          <text x={padL - 7} y={g.y + 3} textAnchor="end" style={{ fontFamily: OUTFIT, fontSize: 10, fill: NEU.muted, fontVariantNumeric: 'tabular-nums' }}>
-            {g.v}
-          </text>
-        </g>
-      ))}
-      <line x1={padL} x2={W - padR} y1={baseY} y2={baseY} stroke="rgba(27,56,40,0.14)" strokeWidth={1} />
+    <div className="flex flex-col" style={{ flex: 1, minHeight: 0 }}>
+      {/* Header — links to financials */}
+      <div className="flex items-center justify-between gap-3 flex-shrink-0" style={{ marginBottom: 10 }}>
+        <Link
+          href={financialsHref}
+          className="flex items-center gap-3 min-w-0 transition-opacity hover:opacity-75"
+          style={{ textDecoration: 'none', cursor: 'pointer' }}
+        >
+          <NeuIconDisc gradient={NEU_GRADIENTS.gold} emoji="Chart increasing" icon={TrendingUp} size={32} />
+          <div className="min-w-0">
+            <div className="flex items-baseline gap-2.5">
+              <span style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 900, color: NEU.ink }}>Revenue</span>
+              <span style={{ fontFamily: OUTFIT, fontSize: 20, fontWeight: 900, color: NEU.ink, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+                {formatFee(totalRev, currency)}
+              </span>
+            </div>
+            {delta !== null ? (
+              <p style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 700, color: delta >= 0 ? NEU.green : RED, fontVariantNumeric: 'tabular-nums', marginTop: 1 }}>
+                {delta >= 0 ? '▲' : '▼'} {formatFee(Math.abs(delta), currency)} vs {RANGE_PREV_LABEL[range]}
+              </p>
+            ) : (
+              <p style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 600, color: NEU.muted, marginTop: 1 }}>
+                All time · {cumApps[n - 1]} application{cumApps[n - 1] === 1 ? '' : 's'}
+              </p>
+            )}
+          </div>
+        </Link>
 
-      {/* Revenue bars — alternating gold / deep gold, rounded tops */}
-      {hasRevenue && revenue.map((v, i) => (
-        v > 0 ? <path key={i} d={bar(i, v)} fill={i % 2 === 0 ? NEU.gold : NEU.deepGold} opacity={i % 2 === 0 ? 0.95 : 0.75} /> : null
-      ))}
+        <div className="flex items-center gap-3 flex-shrink-0">
+          <span className="hidden xl:inline-flex items-center gap-3">
+            <span className="inline-flex items-center gap-1.5">
+              <span style={{ width: 8, height: 8, borderRadius: 999, backgroundColor: NEU.forest }} />
+              <span style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 600, color: NEU.muted }}>Applications (cum.)</span>
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span style={{ width: 8, height: 8, borderRadius: 999, backgroundColor: NEU.deepGold }} />
+              <span style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 600, color: NEU.muted }}>Revenue</span>
+            </span>
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            {RANGE_KEYS.map(k => (
+              <NeuPill key={k} active={range === k} gradient={NEU_GRADIENTS.forest} onClick={() => { setRange(k); setHoverI(null); }}>
+                {k}
+              </NeuPill>
+            ))}
+          </span>
+        </div>
+      </div>
 
-      {/* Cumulative applications — smooth forest line + emphasised end dot */}
-      <path d={smoothPath(linePts)} fill="none" stroke={NEU.forest} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
-      {lastPt && <circle cx={lastPt.x} cy={lastPt.y} r={4} fill={NEU.forest} stroke="#FFFFFF" strokeWidth={2} />}
+      {/* Plot */}
+      <NeuInset style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' }}>
+        <div ref={wrapRef} style={{ position: 'absolute', inset: 8 }}>
+          {rows.length === 0 ? (
+            <div className="h-full flex flex-col items-center justify-center text-center">
+              <TrendingUp size={24} style={{ color: NEU.muted, opacity: 0.7 }} />
+              <p style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: NEU.ink, marginTop: 8 }}>No applications yet</p>
+              <p style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.muted, marginTop: 2, maxWidth: 300 }}>
+                Once delegates start applying, your application and revenue growth will chart here.
+              </p>
+            </div>
+          ) : (
+            <>
+              <svg
+                width={W}
+                height={H}
+                onPointerMove={handleMove}
+                onPointerLeave={() => setHoverI(null)}
+                style={{ display: 'block', touchAction: 'none' }}
+                role="img"
+                aria-label="Revenue and cumulative applications over time"
+              >
+                <defs>
+                  <linearGradient id={gid} x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stopColor={NEU.gold} />
+                    <stop offset="100%" stopColor={NEU.deepGold} />
+                  </linearGradient>
+                </defs>
 
-      {/* X labels */}
-      {buckets.map((b, i) => (
-        i % labelEvery === 0 ? (
-          <text key={b.t} x={xc(i)} y={H - 8} textAnchor="middle" style={{ fontFamily: OUTFIT, fontSize: 10, fill: NEU.muted, fontVariantNumeric: 'tabular-nums' }}>
-            {b.label}
-          </text>
-        ) : null
-      ))}
+                {guides.map(g => (
+                  <g key={g.v}>
+                    <line x1={padL} x2={W - padR} y1={g.y} y2={g.y} stroke="rgba(27,56,40,0.08)" strokeWidth={1} />
+                    <text x={padL - 7} y={g.y + 3} textAnchor="end" style={{ fontFamily: OUTFIT, fontSize: 10, fill: NEU.muted, fontVariantNumeric: 'tabular-nums' }}>
+                      {g.v}
+                    </text>
+                  </g>
+                ))}
+                <line x1={padL} x2={W - padR} y1={baseY} y2={baseY} stroke="rgba(27,56,40,0.14)" strokeWidth={1} />
 
-      {/* Max revenue tick, right-aligned in gold */}
-      {hasRevenue && (
-        <text x={W - padR} y={padT + 4} textAnchor="end" style={{ fontFamily: OUTFIT, fontSize: 10, fontWeight: 700, fill: NEU.deepGold, fontVariantNumeric: 'tabular-nums' }}>
-          {formatFee(maxRev, currency)}
-        </text>
-      )}
-    </svg>
+                {/* Hover guide */}
+                {hoverI !== null && (
+                  <line x1={xc(hoverI)} x2={xc(hoverI)} y1={padT} y2={baseY} stroke="rgba(27,56,40,0.28)" strokeWidth={1} strokeDasharray="3 3" />
+                )}
+
+                {/* Revenue bars — gold gradient, rounded tops; hovered bar grows */}
+                {hasRevenue && revenue.map((v, i) => (
+                  v > 0 ? (
+                    <path
+                      key={i}
+                      d={bar(i, v, hoverI === i ? barW + 4 : barW)}
+                      fill={`url(#${gid})`}
+                      opacity={hoverI === null ? 0.9 : hoverI === i ? 1 : 0.55}
+                      style={{ transition: `opacity 160ms ${EASE}` }}
+                    />
+                  ) : null
+                ))}
+
+                {/* Cumulative applications — smooth forest line */}
+                <path d={smoothPath(linePts)} fill="none" stroke={NEU.forest} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+                {lastPt && hoverI === null && <circle cx={lastPt.x} cy={lastPt.y} r={4} fill={NEU.forest} stroke="#FFFFFF" strokeWidth={2} />}
+                {hoverI !== null && (
+                  <circle cx={xc(hoverI)} cy={yApps(cumApps[hoverI])} r={5} fill={NEU.forest} stroke="#FFFFFF" strokeWidth={2} />
+                )}
+
+                {/* Peak-revenue marker — gold dot + tiny label */}
+                {peakI >= 0 && (
+                  <g>
+                    <circle cx={xc(peakI)} cy={yRev(revenue[peakI]) - 7} r={3.5} fill={NEU.deepGold} stroke="#FFFFFF" strokeWidth={1.5} />
+                    <text
+                      x={Math.max(padL + 24, Math.min(W - padR - 24, xc(peakI)))}
+                      y={Math.max(10, yRev(revenue[peakI]) - 15)}
+                      textAnchor="middle"
+                      style={{ fontFamily: OUTFIT, fontSize: 9, fontWeight: 800, fill: NEU.deepGold, fontVariantNumeric: 'tabular-nums' }}
+                    >
+                      {formatFee(revenue[peakI], currency)}
+                    </text>
+                  </g>
+                )}
+
+                {/* X labels */}
+                {buckets.map((b, i) => (
+                  i % labelEvery === 0 ? (
+                    <text key={b.t} x={xc(i)} y={H - 6} textAnchor="middle" style={{ fontFamily: OUTFIT, fontSize: 10, fill: hoverI === i ? NEU.forest : NEU.muted, fontWeight: hoverI === i ? 700 : 400, fontVariantNumeric: 'tabular-nums' }}>
+                      {b.label}
+                    </text>
+                  ) : null
+                ))}
+              </svg>
+
+              {/* No-activity note over an empty range */}
+              {!hasActivity && (
+                <p
+                  className="absolute inset-x-0 text-center pointer-events-none"
+                  style={{ top: '38%', fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 600, color: NEU.muted }}
+                >
+                  No activity in this range
+                </p>
+              )}
+
+              {/* Neumorphic hover tooltip */}
+              {hoverI !== null && hasActivity && (
+                <div
+                  className="pointer-events-none"
+                  style={{
+                    position: 'absolute',
+                    left: Math.max(78, Math.min(W - 78, xc(hoverI))),
+                    top: 6,
+                    transform: 'translateX(-50%)',
+                    backgroundColor: NEU.surface,
+                    boxShadow: NEU.outSm,
+                    borderRadius: 12,
+                    padding: '6px 11px',
+                    whiteSpace: 'nowrap',
+                    zIndex: 5,
+                  }}
+                >
+                  <p style={{ fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 800, color: NEU.muted, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                    {buckets[hoverI].tip}
+                  </p>
+                  <p style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 900, color: NEU.deepGold, fontVariantNumeric: 'tabular-nums', marginTop: 1 }}>
+                    {formatFee(revenue[hoverI], currency)}
+                  </p>
+                  <p style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 700, color: NEU.forest, fontVariantNumeric: 'tabular-nums' }}>
+                    {cumApps[hoverI]} application{cumApps[hoverI] === 1 ? '' : 's'} (cum.)
+                  </p>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </NeuInset>
+    </div>
   );
 }
 
-// ── Small helpers ──────────────────────────────────────────────────────────
+// ── Unallocated-delegates alert tile ───────────────────────────────────────
+// Amber alarm while accepted delegates await committee allocation; calm
+// green once everyone is placed. Links straight to the assignment board.
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
+function UnallocatedTile({ count, href }: { count: number; href: string }) {
+  const [hovered, setHovered] = useState(false);
+  const ok = count === 0;
   return (
-    <p
-      className="text-[11px] font-bold mb-3"
-      style={{ color: NEU.muted, fontFamily: OUTFIT, letterSpacing: '0.1em', textTransform: 'uppercase' }}
+    <Link
+      href={href}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      className="flex flex-col"
+      style={{
+        textDecoration: 'none',
+        minWidth: 0,
+        padding: '12px 14px',
+        borderRadius: 22,
+        backgroundColor: NEU.surface,
+        backgroundImage: ok
+          ? 'linear-gradient(rgba(61,122,82,0.10), rgba(61,122,82,0.10))'
+          : 'linear-gradient(rgba(184,132,74,0.12), rgba(184,132,74,0.12))',
+        border: ok ? '1.5px solid rgba(61,122,82,0.35)' : '1.5px solid rgba(184,132,74,0.4)',
+        boxShadow: hovered ? NEU.outHover : NEU.out,
+        transform: hovered ? 'translateY(-2px)' : 'translateY(0)',
+        transition: `box-shadow 260ms ${EASE}, transform 260ms ${EASE}`,
+        cursor: 'pointer',
+      }}
     >
-      {children}
-    </p>
+      <div className="flex items-start justify-between gap-2">
+        <Emoji3D
+          name={ok ? 'Check mark button' : 'Red exclamation mark'}
+          size={26}
+          fallback={ok ? CheckCircle2 : AlertCircle}
+          fallbackColor={ok ? NEU.green : NEU.amber}
+        />
+        <ArrowRight size={13} style={{ color: ok ? NEU.green : NEU.amber, opacity: hovered ? 1 : 0.6, transform: hovered ? 'translateX(2px)' : 'none', transition: `transform 200ms ${EASE}` }} />
+      </div>
+      {ok ? (
+        <>
+          <p style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: NEU.green, marginTop: 10, lineHeight: 1.2 }}>
+            All delegates allocated
+          </p>
+          <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 600, color: NEU.muted, marginTop: 3 }}>
+            Nothing waiting for assignment
+          </p>
+        </>
+      ) : (
+        <>
+          <p style={{ fontFamily: OUTFIT, fontSize: 22, fontWeight: 900, color: NEU.amber, fontVariantNumeric: 'tabular-nums', lineHeight: 1, marginTop: 9 }}>
+            {count}
+          </p>
+          <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 700, color: '#8A5A2E', marginTop: 3 }}>
+            Unallocated delegates
+          </p>
+        </>
+      )}
+    </Link>
   );
 }
 
-function LegendDot({ color, label }: { color: string; label: string }) {
-  return (
-    <span className="inline-flex items-center gap-1.5">
-      <span style={{ width: 8, height: 8, borderRadius: 999, backgroundColor: color, flexShrink: 0 }} />
-      <span style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 600, color: NEU.muted }}>{label}</span>
-    </span>
-  );
-}
+// ── Pipeline cell — links each stage to its fix ────────────────────────────
 
-function QuickActionCard({
-  icon,
-  gradient,
-  label,
-  onClick,
-}: {
-  icon: React.ComponentType<{ size?: number; style?: React.CSSProperties; strokeWidth?: number }>;
-  gradient: [string, string];
-  label: string;
-  onClick: () => void;
-}) {
+function PipelineCell({ n, label, href, first }: { n: number; label: string; href: string; first?: boolean }) {
+  const [hovered, setHovered] = useState(false);
   return (
-    <NeuCard hover onClick={onClick} style={{ padding: '12px 18px', borderRadius: 18 }}>
-      <span className="flex items-center gap-3">
-        <NeuIconDisc gradient={gradient} icon={icon} size={32} />
-        <span style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: NEU.ink }}>{label}</span>
-        <ArrowRight size={14} style={{ color: NEU.muted }} />
-      </span>
-    </NeuCard>
+    <Link
+      href={href}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      className="text-center flex flex-col justify-center min-w-0"
+      style={{
+        textDecoration: 'none',
+        borderLeft: first ? undefined : '1px solid rgba(27,56,40,0.1)',
+        backgroundColor: hovered ? 'rgba(27,56,40,0.06)' : 'transparent',
+        borderRadius: 8,
+        padding: '4px 2px',
+        cursor: 'pointer',
+        transition: `background-color 160ms ${EASE}`,
+      }}
+    >
+      <p style={{ fontFamily: OUTFIT, fontSize: 16, fontWeight: 900, color: hovered ? NEU.forest : NEU.ink, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+        {n}
+      </p>
+      <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 8.5, fontWeight: 700, color: NEU.muted, letterSpacing: '0.07em', textTransform: 'uppercase', marginTop: 3 }}>
+        {label}
+      </p>
+    </Link>
   );
 }
 
@@ -295,7 +566,7 @@ interface DashData {
   enabledEmailCount: number;
 }
 
-// ── Dashboard home ─────────────────────────────────────────────────────────
+// ── Dashboard home — single-viewport neumorphic grid, no scroll ────────────
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -344,23 +615,20 @@ export default function DashboardPage() {
     })();
   }, [conference?.id, session?.access_token]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Loading skeleton ─────────────────────────────────────────────────────
+  // ── Loading skeleton — mirrors the fixed one-viewport grid ───────────────
   if (!conference || !dash) {
     return (
-      <div className="px-6 md:px-10 py-8 max-w-6xl">
-        <div className="mb-6 rounded-[22px] animate-pulse" style={{ height: 64, backgroundColor: NEU.surface, boxShadow: NEU.out }} />
-        <div className="grid lg:grid-cols-[1.15fr_0.85fr] gap-5 mb-6">
-          <div className="rounded-[22px] animate-pulse" style={{ height: 460, backgroundColor: NEU.surface, boxShadow: NEU.out }} />
-          <div className="flex flex-col gap-5">
-            <div className="rounded-[22px] animate-pulse" style={{ height: 180, backgroundColor: NEU.surface, boxShadow: NEU.out }} />
-            <div className="grid grid-cols-2 gap-5">
-              {[0, 1, 2, 3].map(i => (
-                <div key={i} className="rounded-[22px] animate-pulse" style={{ height: 122, backgroundColor: NEU.surface, boxShadow: NEU.out }} />
-              ))}
-            </div>
+      <div className="flex flex-col" style={{ height: 'calc(100vh - 56px)', overflow: 'hidden', padding: '14px 20px 16px' }}>
+        <div className="rounded-[22px] animate-pulse flex-shrink-0" style={{ height: 48, backgroundColor: NEU.surface, boxShadow: NEU.out, marginBottom: 12 }} />
+        <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: 'minmax(320px, 34fr) minmax(0, 66fr)', gridTemplateRows: 'auto minmax(0, 1fr)', gap: 14 }}>
+          <div className="rounded-[22px] animate-pulse" style={{ gridRow: '1 / 3', backgroundColor: NEU.surface, boxShadow: NEU.out }} />
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.15fr) minmax(0,1.7fr) repeat(3, minmax(0,1fr))', gap: 14 }}>
+            {[0, 1, 2, 3, 4].map(i => (
+              <div key={i} className="rounded-[22px] animate-pulse" style={{ height: 104, backgroundColor: NEU.surface, boxShadow: NEU.out }} />
+            ))}
           </div>
+          <div className="rounded-[22px] animate-pulse" style={{ minHeight: 0, backgroundColor: NEU.surface, boxShadow: NEU.out }} />
         </div>
-        <div className="rounded-[22px] animate-pulse" style={{ height: 300, backgroundColor: NEU.surface, boxShadow: NEU.out }} />
       </div>
     );
   }
@@ -376,20 +644,15 @@ export default function DashboardPage() {
   const societies = new Set(dash.apps.map(a => a.society_id).filter(Boolean)).size;
   const committeeCount = dash.committees.length;
   const missingChairs = dash.committees.filter(c => !c.chair_user_ids || c.chair_user_ids.length === 0).length;
-
-  const buckets = buildBuckets(dash.apps);
-  const sparkTotal = cumulative(buckets.map(b => b.apps));
-  const sparkAccepted = cumulative(buckets.map(b => b.accepted));
-  const sparkPaid = cumulative(buckets.map(b => b.paid));
-  const lastBucketApps = buckets.length > 0 ? buckets[buckets.length - 1].apps : 0;
+  const unallocated = Math.max(0, acceptedApps - dash.allocated);
   const fee = conference.fee_amount ?? 0;
-  const totalRevenue = paidApps * fee;
 
   // ── Set-up priorities: 8 detection checks, in journey order ──────────────
   const checklist = [
     {
       key: 'email',
       icon: Mail,
+      emoji: 'Envelope',
       gradient: NEU_GRADIENTS.gold,
       title: 'Design an email',
       sub: 'Set up an automated email template for applicants.',
@@ -399,6 +662,7 @@ export default function DashboardPage() {
     {
       key: 'page',
       icon: Palette,
+      emoji: 'Artist palette',
       gradient: NEU_GRADIENTS.amber,
       title: 'Set up your conference page',
       sub: 'Add a banner and a description delegates will see.',
@@ -408,6 +672,7 @@ export default function DashboardPage() {
     {
       key: 'committees',
       icon: Building2,
+      emoji: 'Classical building',
       gradient: NEU_GRADIENTS.forest,
       title: 'Add committees',
       sub: committeeCount > 0 ? `${committeeCount} committee${committeeCount === 1 ? '' : 's'} created.` : 'Create committees and their topics.',
@@ -417,6 +682,7 @@ export default function DashboardPage() {
     {
       key: 'chairs',
       icon: Gavel,
+      emoji: 'Balance scale',
       gradient: NEU_GRADIENTS.gold,
       title: 'Add chairs or recruit',
       sub: committeeCount === 0
@@ -442,6 +708,7 @@ export default function DashboardPage() {
     {
       key: 'secretariat',
       icon: UsersRound,
+      emoji: 'Busts in silhouette',
       gradient: NEU_GRADIENTS.sage,
       title: 'Add your secretariat',
       sub: 'Invite co-organizers and grant them access.',
@@ -451,6 +718,7 @@ export default function DashboardPage() {
     {
       key: 'delegate',
       icon: UserPlus,
+      emoji: 'Graduation cap',
       gradient: NEU_GRADIENTS.green,
       title: 'Get your first delegate',
       sub: delegateApps > 0 ? `${delegateApps} delegate application${delegateApps === 1 ? '' : 's'} received.` : 'Share your page and receive an application.',
@@ -460,6 +728,7 @@ export default function DashboardPage() {
     {
       key: 'financials',
       icon: Wallet,
+      emoji: 'Money bag',
       gradient: NEU_GRADIENTS.amber,
       title: 'Add financial information',
       // fee_amount === 0 is a deliberate free conference — any non-null fee counts as configured.
@@ -468,8 +737,11 @@ export default function DashboardPage() {
       onClick: () => router.push(`/manage/${slug}/financials`),
     },
     {
+      // Compact publish CTA lives here as the checklist's launch row — the
+      // big accent quick-actions card was removed with the one-page layout.
       key: 'publish',
       icon: Rocket,
+      emoji: 'Rocket',
       gradient: NEU_GRADIENTS.forest,
       title: 'Launch delegate registrations',
       sub: conference.is_public ? 'Your conference is live.' : 'Publish your conference to gavelling.com.',
@@ -478,6 +750,8 @@ export default function DashboardPage() {
     },
   ];
   const doneCount = checklist.filter(c => c.done).length;
+  // Pending items first; done items sink to the bottom (stable sort keeps journey order within each group).
+  const sortedChecklist = [...checklist].sort((a, b) => Number(a.done) - Number(b.done));
 
   function handlePublishClick() {
     if (committeeCount === 0) {
@@ -494,266 +768,160 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="px-6 md:px-10 py-8 max-w-6xl" style={{ fontFamily: OUTFIT }}>
+    <div
+      className="flex flex-col"
+      style={{ height: 'calc(100vh - 56px)', overflow: 'hidden', padding: '14px 20px 16px', fontFamily: OUTFIT }}
+    >
 
-      {/* ── Header ── */}
-      <div className="flex flex-wrap items-center justify-between gap-4 mb-7">
-        <div className="flex items-center gap-4 min-w-0">
-          {conference.logo_url ? (
-            /* eslint-disable-next-line @next/next/no-img-element */
-            <img
-              src={conference.logo_url}
-              alt={conference.acronym}
-              className="flex-shrink-0"
-              style={{ width: 46, height: 46, objectFit: 'contain', filter: 'drop-shadow(0 3px 8px rgba(27,56,40,0.25))' }}
-            />
-          ) : (
-            <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={Building2} size={46} iconColor={NEU.gold} />
-          )}
+      {/* ── Header — compact single row ── */}
+      <div className="flex items-center justify-between gap-4 flex-shrink-0" style={{ marginBottom: 12 }}>
+        <div className="flex items-center gap-3 min-w-0">
+          <LogoDisc
+            src={conference.logo_url}
+            alt={conference.acronym}
+            size={38}
+            fallbackText={conference.acronym.slice(0, 2)}
+          />
           <div className="min-w-0">
-            <p style={{ fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, letterSpacing: '0.16em', color: NEU.deepGold }}>
+            <p style={{ fontFamily: OUTFIT, fontSize: 9, fontWeight: 800, letterSpacing: '0.16em', color: NEU.deepGold }}>
               {conference.acronym}{confYear ? ` · ${confYear}` : ''} — DASHBOARD
             </p>
-            <h1 className="font-black truncate" style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 24, lineHeight: 1.15, marginTop: 1 }}>
+            <h1 className="font-black truncate" style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 18, lineHeight: 1.15, marginTop: 1 }}>
               {conference.full_name}
             </h1>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-shrink-0">
           <NeuPill active={conference.is_public} gradient={NEU_GRADIENTS.green}>
             <span style={{ width: 6, height: 6, borderRadius: 999, backgroundColor: conference.is_public ? '#FFFFFF' : NEU.amber, flexShrink: 0 }} />
             {conference.is_public ? 'LIVE' : 'DRAFT'}
           </NeuPill>
           {!conference.is_public && (
-            <NeuButton gradient={NEU_GRADIENTS.forest} icon={Rocket} onClick={handlePublishClick}>
+            <NeuButton gradient={NEU_GRADIENTS.forest} icon={Rocket} onClick={handlePublishClick} style={{ padding: '8px 16px', fontSize: 12 }}>
               PUBLISH
             </NeuButton>
           )}
         </div>
       </div>
 
-      {/* ── Priority checklist (left, tall) + delegates / numbers (right) ── */}
-      <div className="grid lg:grid-cols-[1.15fr_0.85fr] gap-5 items-start mb-6">
+      {/* ── Main grid: priorities (left, full height) | alert + pipeline + tiles / revenue graph ── */}
+      <div
+        style={{
+          flex: 1,
+          minHeight: 0,
+          display: 'grid',
+          gridTemplateColumns: 'minmax(320px, 34fr) minmax(0, 66fr)',
+          gridTemplateRows: 'auto minmax(0, 1fr)',
+          gap: 14,
+        }}
+      >
 
-        {/* Set-up priorities */}
-        <NeuCard style={{ padding: '22px 22px 18px' }}>
-          <div className="flex items-center justify-between gap-4 mb-4">
-            <div>
-              <h2 style={{ fontFamily: OUTFIT, fontSize: 17, fontWeight: 900, color: NEU.ink }}>Set-up priorities</h2>
-              <p style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.muted, marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
+        {/* Set-up priorities — full left column, pending first */}
+        <NeuCard className="flex flex-col" style={{ gridRow: '1 / 3', minHeight: 0, padding: '16px 16px 12px' }}>
+          <div className="flex items-center justify-between gap-3 flex-shrink-0" style={{ marginBottom: 10 }}>
+            <div className="min-w-0">
+              <h2 style={{ fontFamily: OUTFIT, fontSize: 15, fontWeight: 900, color: NEU.ink }}>Set-up priorities</h2>
+              <p style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.muted, marginTop: 1, fontVariantNumeric: 'tabular-nums' }}>
                 {doneCount} of {checklist.length} done{doneCount === checklist.length ? ' — you are all set.' : ''}
               </p>
             </div>
-            <NeuRing value={doneCount} max={checklist.length} size={72} strokeWidth={8} gradient={NEU_GRADIENTS.gold}>
-              <span style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 17, color: NEU.ink, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
-                {doneCount}<span style={{ fontSize: 11, color: NEU.muted }}>/{checklist.length}</span>
+            <NeuRing value={doneCount} max={checklist.length} size={56} strokeWidth={7} gradient={NEU_GRADIENTS.gold}>
+              <span style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 14, color: NEU.ink, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+                {doneCount}<span style={{ fontSize: 9.5, color: NEU.muted }}>/{checklist.length}</span>
               </span>
             </NeuRing>
           </div>
 
-          <NeuProgress value={doneCount} max={checklist.length} gradient={NEU_GRADIENTS.gold} thumb style={{ marginBottom: 18 }} />
+          <NeuProgress value={doneCount} max={checklist.length} gradient={NEU_GRADIENTS.gold} thumb height={10} style={{ marginBottom: 12, flexShrink: 0 }} />
 
-          <div className="flex flex-col gap-2.5">
-            {checklist.map(item => (
+          <div className="flex flex-col" style={{ flex: 1, minHeight: 0, gap: 6, justifyContent: 'space-between', overflow: 'hidden' }}>
+            {sortedChecklist.map(item => (
               <NeuChecklistRow
                 key={item.key}
                 done={item.done}
                 icon={item.icon}
+                emoji={item.emoji}
                 gradient={item.gradient}
                 title={item.title}
                 sub={item.sub}
                 action={'action' in item ? item.action : undefined}
                 onClick={item.onClick}
+                dense
               />
             ))}
           </div>
           {publishBlockMsg && (
-            <p className="text-xs mt-3" style={{ color: NEU.amber, fontFamily: OUTFIT, fontWeight: 700 }}>{publishBlockMsg}</p>
+            <p className="flex-shrink-0" style={{ fontSize: 11, marginTop: 6, color: NEU.amber, fontFamily: OUTFIT, fontWeight: 700 }}>{publishBlockMsg}</p>
           )}
         </NeuCard>
 
-        {/* Right column: delegates card + raw numbers */}
-        <div className="flex flex-col gap-5">
-
-          {/* Delegates — allocation state + pipeline */}
-          <NeuCard style={{ padding: '20px 22px' }}>
-            <div className="flex items-center justify-between gap-3 mb-4">
-              <h2 style={{ fontFamily: OUTFIT, fontSize: 15, fontWeight: 900, color: NEU.ink }}>Delegates</h2>
-              <span style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, color: NEU.forest, fontVariantNumeric: 'tabular-nums' }}>
-                {dash.allocated} / {acceptedApps} <span style={{ fontWeight: 600, color: NEU.muted }}>allocated</span>
-              </span>
-            </div>
-            <NeuProgress value={dash.allocated} max={acceptedApps} gradient={NEU_GRADIENTS.forest} thumb style={{ marginBottom: 16 }} />
-
-            {/* Pipeline: submitted → accepted → paid → allocated */}
-            <NeuInset small style={{ padding: '12px 8px' }}>
-              <div className="grid grid-cols-4">
-                {[
-                  { n: totalApps, label: 'Submitted' },
-                  { n: acceptedApps, label: 'Accepted' },
-                  { n: paidApps, label: 'Paid' },
-                  { n: dash.allocated, label: 'Allocated' },
-                ].map((s, i) => (
-                  <div
-                    key={s.label}
-                    className="text-center"
-                    style={i > 0 ? { borderLeft: '1px solid rgba(27,56,40,0.1)' } : undefined}
-                  >
-                    <p style={{ fontFamily: OUTFIT, fontSize: 18, fontWeight: 900, color: NEU.ink, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
-                      {s.n}
-                    </p>
-                    <p style={{ fontFamily: OUTFIT, fontSize: 9, fontWeight: 700, color: NEU.muted, letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: 4 }}>
-                      {s.label}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </NeuInset>
-          </NeuCard>
-
-          {/* Raw numbers — vibrant discs + sparklines */}
-          <div className="grid grid-cols-2 gap-5">
-            <NeuStatTile
-              icon={Users}
-              gradient={NEU_GRADIENTS.forest}
-              value={totalApps}
-              label="Total applications"
-              spark={sparkTotal}
-              delta={lastBucketApps > 0 ? `+${lastBucketApps}` : undefined}
-            />
-            <NeuStatTile icon={CheckCircle} gradient={NEU_GRADIENTS.green} value={acceptedApps} label="Accepted" spark={sparkAccepted} />
-            <NeuStatTile icon={CreditCard} gradient={NEU_GRADIENTS.gold} value={paidApps} label="Paid" spark={sparkPaid} />
-            <NeuStatTile icon={MapPin} gradient={NEU_GRADIENTS.amber} value={dash.allocated} label="Allocated" />
-          </div>
-        </div>
-      </div>
-
-      {/* ── Growth graphs row ── */}
-      <div className="grid md:grid-cols-[1fr_220px] gap-5 items-start mb-6">
-        <NeuCard style={{ padding: '20px 22px' }}>
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-            <h2 style={{ fontFamily: OUTFIT, fontSize: 15, fontWeight: 900, color: NEU.ink }}>Growth</h2>
-            <div className="flex items-center gap-4">
-              <LegendDot color={NEU.forest} label="Applications (cumulative)" />
-              <LegendDot color={NEU.deepGold} label="Revenue" />
-              {totalRevenue > 0 && (
-                <span style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 900, color: NEU.ink, fontVariantNumeric: 'tabular-nums' }}>
-                  {formatFee(totalRevenue, conference.fee_currency)}
-                </span>
-              )}
-            </div>
-          </div>
-
-          {buckets.length === 0 ? (
-            <NeuInset className="flex flex-col items-center justify-center text-center" style={{ padding: '44px 20px' }}>
-              <TrendingUp size={26} style={{ color: NEU.muted, opacity: 0.7 }} />
-              <p style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: NEU.ink, marginTop: 10 }}>No applications yet</p>
-              <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.muted, marginTop: 3, maxWidth: 300 }}>
-                Once delegates start applying, your application and revenue growth will chart here.
-              </p>
-            </NeuInset>
-          ) : (
-            <NeuInset style={{ padding: '14px 12px 8px' }}>
-              <GrowthChart buckets={buckets} fee={fee} currency={conference.fee_currency} />
-            </NeuInset>
-          )}
-        </NeuCard>
-
-        <div className="flex flex-col gap-5">
-          <NeuStatTile icon={Flag} gradient={NEU_GRADIENTS.sage} value={societies} label="Delegations" />
-          <NeuStatTile icon={FileText} gradient={NEU_GRADIENTS.forest} value={committeeCount} label="Committees" />
-        </div>
-      </div>
-
-      {/* ── Quick actions — the one saturated accent card ── */}
-      {conference.is_public ? (
+        {/* Top-right row: unallocated alert + delegates pipeline + stat tiles */}
         <div
-          className="rounded-[22px] p-6"
           style={{
-            background: 'linear-gradient(135deg, #16301F 0%, #1B3828 46%, #2A5A3C 100%)',
-            boxShadow: NEU.out,
+            display: 'grid',
+            gridTemplateColumns: 'minmax(0, 1.15fr) minmax(0, 1.7fr) repeat(3, minmax(0, 1fr))',
+            gap: 14,
+            minHeight: 0,
           }}
         >
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <h2 style={{ fontFamily: OUTFIT, fontSize: 16, fontWeight: 900, color: NEU.gold }}>Quick actions</h2>
-              <p style={{ fontFamily: OUTFIT, fontSize: 12, color: 'rgba(237,231,216,0.62)', marginTop: 2 }}>
-                Your conference is live — keep the momentum going.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-3">
-              {[
-                { label: 'ADD COMMITTEE', icon: Building2, href: `/manage/${slug}/committees` },
-                { label: 'VIEW APPLICATIONS', icon: Users, href: `/manage/${slug}/applications` },
-                { label: 'EMAIL DELEGATES', icon: Mail, href: `/manage/${slug}/communications` },
-              ].map(a => {
-                const AIcon = a.icon;
-                return (
-                  <button
-                    key={a.label}
-                    onClick={() => router.push(a.href)}
-                    className="inline-flex items-center gap-2 focus:outline-none"
-                    style={{
-                      padding: '10px 18px', borderRadius: 999,
-                      backgroundColor: 'rgba(238,217,138,0.13)',
-                      border: '1px solid rgba(238,217,138,0.3)',
-                      color: NEU.gold, fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, letterSpacing: '0.05em',
-                      cursor: 'pointer', transition: `background-color 200ms ${EASE}`,
-                    }}
-                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(238,217,138,0.24)'; }}
-                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(238,217,138,0.13)'; }}
-                  >
-                    <AIcon size={14} />
-                    {a.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      ) : (
-        <>
-          {/* Launch CTA — the saturated accent card while unpublished */}
-          <div
-            className="rounded-[22px] p-6 mb-5"
-            style={{
-              background: 'linear-gradient(135deg, #16301F 0%, #1B3828 46%, #2A5A3C 100%)',
-              boxShadow: NEU.out,
-              position: 'relative',
-              overflow: 'hidden',
-            }}
-          >
-            <div
-              className="pointer-events-none absolute"
-              style={{ top: -110, right: -70, width: 320, height: 320, borderRadius: 9999, background: 'radial-gradient(circle, rgba(238,217,138,0.2), transparent 66%)' }}
-            />
-            <div className="relative flex flex-wrap items-center justify-between gap-4">
-              <div className="flex items-center gap-4 min-w-0">
-                <NeuIconDisc gradient={NEU_GRADIENTS.gold} icon={Rocket} size={44} iconColor={NEU.forest} />
-                <div className="min-w-0">
-                  <h2 style={{ fontFamily: OUTFIT, fontSize: 17, fontWeight: 900, color: NEU.gold }}>Launch delegate registrations</h2>
-                  <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: 'rgba(237,231,216,0.62)', marginTop: 2 }}>
-                    Your conference is still private. Publish it to appear on gavelling.com and start receiving applications.
-                  </p>
-                </div>
-              </div>
-              <NeuButton gradient={NEU_GRADIENTS.gold} icon={Rocket} onClick={handlePublishClick}>
-                PUBLISH CONFERENCE
-              </NeuButton>
-            </div>
-          </div>
+          <UnallocatedTile count={unallocated} href={`/manage/${slug}/assignment`} />
 
-          {/* Quiet extruded quick actions below the accent card */}
-          <div>
-            <SectionLabel>Quick actions</SectionLabel>
-            <div className="flex flex-wrap gap-4">
-              <QuickActionCard icon={Building2} gradient={NEU_GRADIENTS.forest} label="Add committee" onClick={() => router.push(`/manage/${slug}/committees`)} />
-              <QuickActionCard icon={Users} gradient={NEU_GRADIENTS.sage} label="View applications" onClick={() => router.push(`/manage/${slug}/applications`)} />
-              <QuickActionCard icon={Mail} gradient={NEU_GRADIENTS.gold} label="Email delegates" onClick={() => router.push(`/manage/${slug}/communications`)} />
+          {/* Delegates pipeline — each stage links to its fix */}
+          <NeuCard className="flex flex-col" style={{ padding: '12px 14px', minWidth: 0 }}>
+            <div className="flex items-center justify-between gap-2 flex-shrink-0">
+              <h2 className="truncate" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 900, color: NEU.ink }}>Delegates</h2>
+              <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800, color: NEU.forest, fontVariantNumeric: 'tabular-nums' }}>
+                {dash.allocated}/{acceptedApps} <span style={{ fontWeight: 600, color: NEU.muted }}>allocated</span>
+              </span>
             </div>
-          </div>
-        </>
-      )}
+            <NeuProgress value={dash.allocated} max={acceptedApps} gradient={NEU_GRADIENTS.forest} height={8} style={{ marginTop: 8, marginBottom: 9, flexShrink: 0 }} />
+            <div className="grid grid-cols-4" style={{ flex: 1, minHeight: 0 }}>
+              <PipelineCell n={totalApps} label="Submitted" href={`/manage/${slug}/applications`} first />
+              <PipelineCell n={acceptedApps} label="Accepted" href={`/manage/${slug}/applications`} />
+              <PipelineCell n={paidApps} label="Paid" href={`/manage/${slug}/financials`} />
+              <PipelineCell n={dash.allocated} label="Allocated" href={`/manage/${slug}/assignment`} />
+            </div>
+          </NeuCard>
+
+          <NeuStatTile
+            emoji="Inbox tray"
+            icon={Inbox}
+            gradient={NEU_GRADIENTS.forest}
+            value={totalApps}
+            label="Applications"
+            href={`/manage/${slug}/applications`}
+            compact
+          />
+          <NeuStatTile
+            emoji="Check mark button"
+            icon={CheckCircle2}
+            gradient={NEU_GRADIENTS.green}
+            value={acceptedApps}
+            label="Accepted"
+            href={`/manage/${slug}/applications`}
+            compact
+          />
+          <NeuStatTile
+            emoji="Globe showing europe-africa"
+            icon={Globe2}
+            gradient={NEU_GRADIENTS.sage}
+            value={societies}
+            label="Delegations"
+            href={`/manage/${slug}/applications`}
+            compact
+          />
+        </div>
+
+        {/* Revenue graph — spans the full right width, fills remaining height */}
+        <NeuCard className="flex flex-col" style={{ minHeight: 0, padding: '14px 16px 12px' }}>
+          <RevenueChart
+            rows={dash.apps}
+            fee={fee}
+            currency={conference.fee_currency}
+            financialsHref={`/manage/${slug}/financials`}
+          />
+        </NeuCard>
+      </div>
 
       {showPublishModal && (
         <PublishModal

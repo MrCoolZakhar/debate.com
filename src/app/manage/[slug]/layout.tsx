@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
+import { LogoDisc } from '@/components/LogoDisc';
 
 // ── Conference type ────────────────────────────────────────────────────────
 
@@ -159,12 +160,11 @@ function SideRail({
         left: '14px', top: '70px', bottom: '14px',
         width: expanded ? '256px' : '68px',
         zIndex: 25,
-        backgroundColor: 'rgba(250,248,243,0.82)',
-        backdropFilter: 'blur(18px) saturate(1.3)',
-        WebkitBackdropFilter: 'blur(18px) saturate(1.3)',
-        border: '1px solid rgba(221,212,192,0.9)',
+        // Neumorphic: same ivory family as the page (#EDE7D8), extruded via the
+        // NEU dual-shadow pair (src/components/neu.tsx) — no glass, no hard border.
+        backgroundColor: '#F0EBDD',
         borderRadius: '26px',
-        boxShadow: '0 12px 40px rgba(27,56,40,0.13), 0 2px 8px rgba(27,56,40,0.06)',
+        boxShadow: '-6px -6px 14px rgba(255,255,255,0.85), 8px 8px 20px rgba(27,56,40,0.16)',
         transition: 'width 280ms cubic-bezier(0.22,1,0.36,1)',
         overflow: 'hidden',
       }}
@@ -191,24 +191,12 @@ function SideRail({
           onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.opacity = '0.72'; }}
           onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}
         >
-          {conference?.logo_url ? (
-            <img
-              src={conference.logo_url}
-              alt={conference.acronym}
-              style={{ width: '40px', height: '40px', objectFit: 'contain', flexShrink: 0, filter: 'drop-shadow(0 3px 8px rgba(27,56,40,0.25))' }}
-            />
-          ) : (
-            <span
-              className="flex items-center justify-center flex-shrink-0"
-              style={{
-                width: '40px', height: '40px', borderRadius: '13px',
-                background: 'linear-gradient(135deg, #16301F, #2A5A3C)',
-                color: '#EED98A', fontSize: '13px', fontWeight: 800, fontFamily: "'Outfit', sans-serif",
-              }}
-            >
-              {(conference?.acronym ?? '?').slice(0, 2)}
-            </span>
-          )}
+          <LogoDisc
+            src={conference?.logo_url}
+            alt={conference?.acronym}
+            size={40}
+            fallbackText={(conference?.acronym ?? '?').slice(0, 2)}
+          />
           <div
             className="min-w-0"
             style={{
@@ -416,24 +404,12 @@ function SidebarContent({
         onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.opacity = '0.72'; }}
         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}
       >
-        {conference?.logo_url ? (
-          <img
-            src={conference.logo_url}
-            alt={conference.acronym}
-            style={{ width: '36px', height: '36px', objectFit: 'contain', flexShrink: 0, filter: 'drop-shadow(0 3px 8px rgba(27,56,40,0.25))' }}
-          />
-        ) : (
-          <span
-            className="flex items-center justify-center flex-shrink-0"
-            style={{
-              width: '36px', height: '36px', borderRadius: '12px',
-              background: 'linear-gradient(135deg, #16301F, #2A5A3C)',
-              color: '#EED98A', fontSize: '12px', fontWeight: 800, fontFamily: "'Outfit', sans-serif",
-            }}
-          >
-            {(conference?.acronym ?? '?').slice(0, 2)}
-          </span>
-        )}
+        <LogoDisc
+          src={conference?.logo_url}
+          alt={conference?.acronym}
+          size={36}
+          fallbackText={(conference?.acronym ?? '?').slice(0, 2)}
+        />
         <div className="min-w-0">
           <span className="block text-sm font-extrabold truncate" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", lineHeight: 1.2 }}>
             {conference?.acronym ?? '…'}{year ? ` ${year}` : ''}
@@ -731,8 +707,9 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
 
   return (
     <ManageContext.Provider value={{ conference, refreshConference }}>
-      {/* Grain */}
-      <div className="pointer-events-none fixed inset-0 z-0" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
+      {/* Base surface — one continuous ivory behind rail + content (body is white;
+          without this the strip behind the rail reads as a different background) */}
+      <div className="pointer-events-none fixed inset-0 z-0" style={{ backgroundColor: '#EDE7D8' }} />
 
       {/* Top bar */}
       <header
@@ -813,7 +790,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
         >
           <div
             className="absolute left-0 top-0 bottom-0 flex flex-col"
-            style={{ width: '280px', backgroundColor: '#FAF8F3', borderRight: '1px solid #DDD4C0' }}
+            style={{ width: '280px', backgroundColor: '#F0EBDD', boxShadow: '8px 0 28px rgba(27,56,40,0.22)' }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex-1 overflow-y-auto">

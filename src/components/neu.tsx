@@ -13,6 +13,7 @@
  */
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { Check, ChevronRight } from 'lucide-react';
 
 // ── Tokens ─────────────────────────────────────────────────────────────────
@@ -60,38 +61,106 @@ type LucideIcon = React.ComponentType<{
 
 const grad = (g: NeuGradient) => `linear-gradient(135deg, ${g[0]}, ${g[1]})`;
 
+// ── Emoji3D — Microsoft Fluent 3D emoji from jsDelivr (same CDN family as ──
+// the Twemoji flags in countries.ts). Peter explicitly asked for colourful
+// 3D emoji icons on the organiser dashboard — this deliberately overrides
+// the lucide-only rule for THAT dashboard only. Falls back to a lucide
+// glyph if the CDN image fails to load.
+
+const EMOJI_CDN = 'https://cdn.jsdelivr.net/gh/microsoft/fluentui-emoji@main/assets';
+
+export function Emoji3D({
+  name,
+  size = 18,
+  fallback: Fallback,
+  fallbackColor = '#FFFFFF',
+  style,
+}: {
+  /** Fluent emoji asset folder name, sentence case — e.g. "Money bag", "Globe showing europe-africa". */
+  name: string;
+  size?: number;
+  fallback?: LucideIcon;
+  fallbackColor?: string;
+  style?: React.CSSProperties;
+}) {
+  const [failed, setFailed] = useState(false);
+  if (failed) {
+    return Fallback
+      ? <Fallback size={size} strokeWidth={2.2} style={{ color: fallbackColor, ...style }} />
+      : null;
+  }
+  const file = name.toLowerCase().replace(/ /g, '_');
+  return (
+    /* eslint-disable-next-line @next/next/no-img-element */
+    <img
+      src={`${EMOJI_CDN}/${encodeURIComponent(name)}/3D/${file}_3d.png`}
+      alt=""
+      aria-hidden
+      width={size}
+      height={size}
+      draggable={false}
+      onError={() => setFailed(true)}
+      style={{
+        width: size,
+        height: size,
+        objectFit: 'contain',
+        filter: 'drop-shadow(0 2px 3px rgba(27,56,40,0.3))',
+        ...style,
+      }}
+    />
+  );
+}
+
 // ── NeuCard — extruded container ───────────────────────────────────────────
 
 export function NeuCard({
   children,
   hover = false,
   onClick,
+  href,
   className,
   style,
 }: {
   children: React.ReactNode;
   hover?: boolean;
   onClick?: () => void;
+  /** Renders the card as a Next Link (hover lift enabled automatically). */
+  href?: string;
   className?: string;
   style?: React.CSSProperties;
 }) {
   const [hovered, setHovered] = useState(false);
-  const lifted = hover && hovered;
+  const interactive = hover || !!href;
+  const lifted = interactive && hovered;
+  const shared: React.CSSProperties = {
+    backgroundColor: NEU.surface,
+    borderRadius: 22,
+    boxShadow: lifted ? NEU.outHover : NEU.out,
+    transform: lifted ? 'translateY(-2px)' : 'translateY(0)',
+    transition: `box-shadow 260ms ${EASE}, transform 260ms ${EASE}`,
+    cursor: onClick || href ? 'pointer' : undefined,
+    ...style,
+  };
+  if (href) {
+    return (
+      <Link
+        href={href}
+        className={className}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        style={{ display: 'block', textDecoration: 'none', color: 'inherit', ...shared }}
+      >
+        {children}
+      </Link>
+    );
+  }
   return (
     <div
       className={className}
       onClick={onClick}
-      onMouseEnter={hover ? () => setHovered(true) : undefined}
-      onMouseLeave={hover ? () => setHovered(false) : undefined}
-      style={{
-        backgroundColor: NEU.surface,
-        borderRadius: 22,
-        boxShadow: lifted ? NEU.outHover : NEU.out,
-        transform: lifted ? 'translateY(-2px)' : 'translateY(0)',
-        transition: `box-shadow 260ms ${EASE}, transform 260ms ${EASE}`,
-        cursor: onClick ? 'pointer' : undefined,
-        ...style,
-      }}
+      onMouseEnter={interactive ? () => setHovered(true) : undefined}
+      onMouseLeave={interactive ? () => setHovered(false) : undefined}
+      style={shared}
     >
       {children}
     </div>
@@ -131,12 +200,15 @@ export function NeuInset({
 export function NeuIconDisc({
   gradient,
   icon: Icon,
+  emoji,
   size = 38,
   iconColor = '#FFFFFF',
   style,
 }: {
   gradient: NeuGradient;
-  icon: LucideIcon;
+  icon?: LucideIcon;
+  /** Fluent 3D emoji asset name — replaces the lucide glyph inside the disc. */
+  emoji?: string;
   size?: number;
   iconColor?: string;
   style?: React.CSSProperties;
@@ -153,7 +225,11 @@ export function NeuIconDisc({
         ...style,
       }}
     >
-      <Icon size={Math.round(size * 0.48)} strokeWidth={2.2} style={{ color: iconColor }} />
+      {emoji ? (
+        <Emoji3D name={emoji} size={Math.round(size * 0.62)} fallback={Icon} fallbackColor={iconColor} />
+      ) : Icon ? (
+        <Icon size={Math.round(size * 0.48)} strokeWidth={2.2} style={{ color: iconColor }} />
+      ) : null}
     </span>
   );
 }
@@ -200,37 +276,46 @@ function Sparkline({ data, color }: { data: number[]; color: string }) {
 
 export function NeuStatTile({
   icon,
+  emoji,
   gradient,
   value,
   label,
   spark,
   delta,
+  href,
+  compact = false,
   style,
 }: {
-  icon: LucideIcon;
+  icon?: LucideIcon;
+  /** Fluent 3D emoji asset name for the disc. */
+  emoji?: string;
   gradient: NeuGradient;
   value: number | string;
   label: string;
   spark?: number[];
   delta?: string;
+  /** Links the whole tile to its manage section. */
+  href?: string;
+  /** Tighter paddings + smaller number, for single-viewport grids. */
+  compact?: boolean;
   style?: React.CSSProperties;
 }) {
   return (
-    <NeuCard style={{ padding: '16px 18px', ...style }}>
+    <NeuCard href={href} style={{ padding: compact ? '12px 14px' : '16px 18px', minWidth: 0, ...style }}>
       <div className="flex items-start justify-between gap-2">
-        <NeuIconDisc gradient={gradient} icon={icon} />
+        <NeuIconDisc gradient={gradient} icon={icon} emoji={emoji} size={compact ? 30 : 38} />
         {spark && spark.length > 1 && <Sparkline data={spark} color={gradient[1]} />}
       </div>
       <p
         style={{
-          fontFamily: OUTFIT, fontWeight: 900, fontSize: 28, lineHeight: 1,
-          color: NEU.ink, fontVariantNumeric: 'tabular-nums', marginTop: 14,
+          fontFamily: OUTFIT, fontWeight: 900, fontSize: compact ? 22 : 28, lineHeight: 1,
+          color: NEU.ink, fontVariantNumeric: 'tabular-nums', marginTop: compact ? 9 : 14,
         }}
       >
         {value}
       </p>
-      <p className="flex items-baseline gap-1.5" style={{ marginTop: 5 }}>
-        <span style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 600, color: NEU.muted }}>{label}</span>
+      <p className="flex items-baseline gap-1.5" style={{ marginTop: compact ? 3 : 5 }}>
+        <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: compact ? 10.5 : 11, fontWeight: 600, color: NEU.muted }}>{label}</span>
         {delta && (
           <span style={{ fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, color: NEU.green, fontVariantNumeric: 'tabular-nums' }}>
             {delta}
@@ -357,31 +442,50 @@ export function NeuPill({
   children,
   active = false,
   gradient = NEU_GRADIENTS.forest,
+  onClick,
   style,
 }: {
   children: React.ReactNode;
   active?: boolean;
   gradient?: NeuGradient;
+  /** Renders as a button (e.g. chart range tabs). */
+  onClick?: () => void;
   style?: React.CSSProperties;
 }) {
+  const [hovered, setHovered] = useState(false);
+  const shared: React.CSSProperties = {
+    padding: '4px 12px',
+    borderRadius: 999,
+    fontFamily: OUTFIT,
+    fontSize: 11,
+    fontWeight: 800,
+    letterSpacing: '0.04em',
+    fontVariantNumeric: 'tabular-nums',
+    backgroundColor: active ? undefined : NEU.surface,
+    background: active ? grad(gradient) : undefined,
+    color: active ? '#FFFFFF' : hovered && onClick ? NEU.forest : NEU.ink,
+    boxShadow: active
+      ? `0 3px 8px ${gradient[0]}55, ${NEU.outSm}`
+      : hovered && onClick ? NEU.outSmHover : NEU.outSm,
+    transition: `box-shadow 200ms ${EASE}, color 200ms ${EASE}`,
+    ...style,
+  };
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        className="inline-flex items-center gap-1.5 focus:outline-none"
+        style={{ border: 'none', cursor: 'pointer', ...shared }}
+      >
+        {children}
+      </button>
+    );
+  }
   return (
-    <span
-      className="inline-flex items-center gap-1.5"
-      style={{
-        padding: '4px 12px',
-        borderRadius: 999,
-        fontFamily: OUTFIT,
-        fontSize: 11,
-        fontWeight: 800,
-        letterSpacing: '0.04em',
-        fontVariantNumeric: 'tabular-nums',
-        backgroundColor: active ? undefined : NEU.surface,
-        background: active ? grad(gradient) : undefined,
-        color: active ? '#FFFFFF' : NEU.ink,
-        boxShadow: active ? `0 3px 8px ${gradient[0]}55, ${NEU.outSm}` : NEU.outSm,
-        ...style,
-      }}
-    >
+    <span className="inline-flex items-center gap-1.5" style={shared}>
       {children}
     </span>
   );
@@ -443,24 +547,31 @@ export function NeuButton({
 export function NeuChecklistRow({
   done,
   icon: Icon,
+  emoji,
   title,
   sub,
   action,
   gradient = NEU_GRADIENTS.forest,
+  dense = false,
   onClick,
 }: {
   done: boolean;
   icon: LucideIcon;
+  /** Fluent 3D emoji asset name for the pending row's disc. */
+  emoji?: string;
   title: string;
   sub?: string;
   /** Extra node on the right of a pending row (e.g. a secondary inline link). */
   action?: React.ReactNode;
   /** Gradient for the pending row's icon disc — where "vibrant" lives. */
   gradient?: NeuGradient;
+  /** Tighter row for single-viewport layouts. */
+  dense?: boolean;
   onClick?: () => void;
 }) {
   const [hovered, setHovered] = useState(false);
   const clickable = !done && !!onClick;
+  const disc = dense ? 28 : 34;
   return (
     <div
       role={clickable ? 'button' : undefined}
@@ -469,10 +580,10 @@ export function NeuChecklistRow({
       onKeyDown={clickable ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick?.(); } } : undefined}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      className="flex items-center gap-3.5 focus:outline-none"
+      className={`flex items-center focus:outline-none ${dense ? 'gap-2.5' : 'gap-3.5'}`}
       style={{
-        padding: '11px 14px',
-        borderRadius: 16,
+        padding: dense ? '5px 10px' : '11px 14px',
+        borderRadius: dense ? 13 : 16,
         backgroundColor: done ? NEU.base : NEU.surface,
         boxShadow: done ? NEU.inSm : clickable && hovered ? NEU.outSmHover : NEU.outSm,
         transform: clickable && hovered ? 'translateY(-2px)' : 'translateY(0)',
@@ -481,16 +592,16 @@ export function NeuChecklistRow({
       }}
     >
       {done ? (
-        <NeuIconDisc gradient={NEU_GRADIENTS.green} icon={Check} size={34} />
+        <NeuIconDisc gradient={NEU_GRADIENTS.green} icon={Check} size={disc} />
       ) : (
-        <NeuIconDisc gradient={gradient} icon={Icon} size={34} />
+        <NeuIconDisc gradient={gradient} icon={Icon} emoji={emoji} size={disc} />
       )}
 
       <div className="flex-1 min-w-0">
         <p
           className="truncate"
           style={{
-            fontFamily: OUTFIT, fontSize: 13, fontWeight: 700,
+            fontFamily: OUTFIT, fontSize: dense ? 12 : 13, fontWeight: 700,
             color: done ? NEU.muted : NEU.ink,
             textDecoration: done ? 'line-through' : 'none',
             textDecorationColor: 'rgba(154,138,120,0.55)',
@@ -499,7 +610,7 @@ export function NeuChecklistRow({
           {title}
         </p>
         {sub && (
-          <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.muted, marginTop: 1 }}>
+          <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: dense ? 10.5 : 11, color: NEU.muted, marginTop: 1 }}>
             {sub}
           </p>
         )}
