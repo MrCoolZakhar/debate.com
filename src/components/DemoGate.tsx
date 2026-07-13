@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { usePathname } from 'next/navigation';
+import { Brand } from '@/components/Brand';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // KILL SWITCH — set to false at public launch to disable the demo gate
@@ -150,12 +151,9 @@ export default function DemoGate() {
           padding: '0 24px',
         }}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/GavellingLogo.png"
-          alt="Gavelling"
-          style={{ height: 44, width: 'auto', marginBottom: 6 }}
-        />
+        <span style={{ marginBottom: 10 }}>
+          <Brand variant="conferences" tone="light" size={40} />
+        </span>
         <p
           style={{
             fontSize: 12.5,
