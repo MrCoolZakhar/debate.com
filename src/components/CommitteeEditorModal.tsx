@@ -12,8 +12,12 @@ import { NEU, NEU_GRADIENTS, OUTFIT, type NeuGradient } from '@/components/neu';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
 import { getCountryByName } from '@/lib/countries';
-import { CountryMatrixPicker } from '@/components/CountryMatrixPicker';
-import { CommitteeNameInput } from '@/components/CommitteeNameInput';
+import {
+  ConferenceRosterPicker,
+  ConferenceCommitteeNameInput,
+  entry,
+  type RosterEntry,
+} from '@/components/ConferenceRosterPicker';
 import { PRESET_EMBLEM_PICKS, matchPresetEmblem } from '@/lib/presetNames';
 import Portal from '@/components/Portal';
 
@@ -164,11 +168,11 @@ export async function mintConferenceSession(
 
 // ── CommitteeEditor (create + edit) ───────────────────────────────────────────
 
-function CommitteeEditor({ conferenceId, committeeType, existing, initialCountries, onClose, onSaved }: {
+function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster, onClose, onSaved }: {
   conferenceId: string;
   committeeType: CommitteeType;
   existing?: EditableCommittee | null;
-  initialCountries?: string[];
+  initialRoster?: RosterEntry[];
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -180,8 +184,8 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialCountri
   const [topics, setTopics] = useState<string[]>(existing?.topics ?? []);
   const [topicInput, setTopicInput] = useState('');
   const [difficulty, setDifficulty] = useState(existing?.difficulty ?? 'intermediate');
-  const [countries, setCountries] = useState<string[]>(initialCountries ?? []);
-  const [baselineCountries] = useState<string[]>(initialCountries ?? []);
+  const [roster, setRoster] = useState<RosterEntry[]>(initialRoster ?? []);
+  const [baselineRoster] = useState<RosterEntry[]>(initialRoster ?? []);
   const [pendingRemovalCount, setPendingRemovalCount] = useState<number | null>(null);
   const [logoUrl, setLogoUrl] = useState<string | null>(existing?.logo_url ?? null);
   const [logoUploading, setLogoUploading] = useState(false);
@@ -231,27 +235,33 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialCountri
       topics,
       difficulty,
       committee_type: committeeType,
-      total_slots: countries.length,
+      total_slots: roster.length,
       notification_email: null,
       logo_url: logoUrl,
     }).select('id').single();
     if (err || !created) { setError(err?.message ?? 'Failed to create committee.'); return false; }
     await supabase.from('committee_country_slots').insert(
-      countries.map((country) => ({
+      roster.map((r) => ({
         conference_committee_id: created.id,
-        country_code: getCountryByName(country)?.code ?? country,
-        country_name: country,
+        country_code: getCountryByName(r.name)?.code ?? r.name,
+        country_name: r.name,
         delegation_size: 1,
+        importance: r.importance,
       }))
     );
-    await mintConferenceSession(supabase, created.id, name.trim(), topics[0] ?? '', countries);
+    await mintConferenceSession(supabase, created.id, name.trim(), topics[0] ?? '', roster.map((r) => r.name));
     return true;
   }
 
   async function doEdit(supabase: ReturnType<typeof getAuthedClient>, force: boolean): Promise<'ok' | 'needs_confirm' | 'fail'> {
     const ex = existing!;
-    const added = countries.filter(c => !baselineCountries.includes(c));
-    const removed = baselineCountries.filter(c => !countries.includes(c));
+    const baseNames = baselineRoster.map(r => r.name);
+    const nextNames = roster.map(r => r.name);
+    const baseTier = new Map(baselineRoster.map(r => [r.name, r.importance]));
+    const added = roster.filter(r => !baseNames.includes(r.name));
+    const removed = baseNames.filter(c => !nextNames.includes(c));
+    // Rows kept across the edit whose importance tier the organiser changed.
+    const retiered = roster.filter(r => baseTier.has(r.name) && baseTier.get(r.name) !== r.importance);
 
     if (removed.length > 0 && !force) {
       const { data: allocs } = await supabase
@@ -274,25 +284,33 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialCountri
     }
     if (added.length > 0) {
       await supabase.from('committee_country_slots').insert(
-        added.map((country) => ({
+        added.map((r) => ({
           conference_committee_id: ex.id,
-          country_code: getCountryByName(country)?.code ?? country,
-          country_name: country,
+          country_code: getCountryByName(r.name)?.code ?? r.name,
+          country_name: r.name,
           delegation_size: 1,
+          importance: r.importance,
         }))
       );
       if (ex.session_id) {
         await supabase.from('delegates').insert(
-          added.map((country) => ({ committee_id: ex.session_id, country, status: 'absent' }))
+          added.map((r) => ({ committee_id: ex.session_id, country: r.name, status: 'absent' }))
         );
       }
+    }
+    // Persist tier-only changes on existing slots (the allocator reads this column).
+    for (const r of retiered) {
+      await supabase.from('committee_country_slots')
+        .update({ importance: r.importance })
+        .eq('conference_committee_id', ex.id)
+        .eq('country_name', r.name);
     }
     await supabase.from('conference_committees').update({
       name: name.trim(),
       abbreviation: abbreviation.trim() || null,
       topics,
       difficulty,
-      total_slots: countries.length,
+      total_slots: roster.length,
       logo_url: logoUrl,
     }).eq('id', ex.id);
     if (ex.session_id) {
@@ -304,7 +322,7 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialCountri
   async function handleSave(force = false) {
     if (!name.trim()) { setError('Committee name is required.'); return; }
     if (topics.length === 0) { setError('Add at least one topic.'); return; }
-    if (countries.length === 0) { setError(isCrisis ? 'Add at least one character.' : 'Add at least one country.'); return; }
+    if (roster.length === 0) { setError(isCrisis ? 'Add at least one character.' : 'Add at least one country.'); return; }
     if (!session) return;
     setSaving(true); setError('');
     const supabase = getAuthedClient(session.access_token);
@@ -333,10 +351,10 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialCountri
           <div>
             <label style={labelStyle}>Committee Name *</label>
             {!isCrisis ? (
-              <CommitteeNameInput
+              <ConferenceCommitteeNameInput
                 value={name}
                 onChange={setName}
-                onPresetSelect={(p) => { setName(p.name); setAbbreviation(p.acronym); if (!isEdit) setCountries(p.members); }}
+                onPresetSelect={(p) => { setName(p.name); setAbbreviation(p.acronym); if (!isEdit) setRoster(p.members.map((m) => entry(m))); }}
               />
             ) : (
               <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. The Cuban Missile Crisis, 1962" style={inputStyle} />
@@ -453,7 +471,7 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialCountri
               {isCrisis ? 'Committee Characters' : 'Committee Countries'}
             </p>
           </div>
-          <CountryMatrixPicker value={countries} onChange={setCountries} noun={isCrisis ? 'character' : 'country'} />
+          <ConferenceRosterPicker mode={isCrisis ? 'character' : 'country'} value={roster} onChange={setRoster} />
         </div>
         {error && <p className="text-xs mt-3" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{error}</p>}
         <div className="flex gap-3 mt-6">
@@ -551,7 +569,7 @@ export function CommitteeEditorModal({ conference, committee, onSaved, onClose }
     committee ? (committee.committee_type as CommitteeType) : null
   );
   // Edit flow: null until the committee's current slots are fetched.
-  const [initialCountries, setInitialCountries] = useState<string[] | null>(committee ? null : []);
+  const [initialRoster, setInitialRoster] = useState<RosterEntry[] | null>(committee ? null : []);
 
   useEffect(() => {
     if (!committee || !session) return;
@@ -560,9 +578,16 @@ export function CommitteeEditorModal({ conference, committee, onSaved, onClose }
       const supabase = getAuthedClient(session.access_token);
       const { data } = await supabase
         .from('committee_country_slots')
-        .select('country_name')
+        .select('country_name, importance')
         .eq('conference_committee_id', committee.id);
-      if (!cancelled) setInitialCountries((data ?? []).map((r: { country_name: string }) => r.country_name));
+      if (!cancelled) {
+        setInitialRoster(
+          (data ?? []).map((r: { country_name: string; importance: string | null }) => ({
+            name: r.country_name,
+            importance: (r.importance as RosterEntry['importance']) ?? 'standard',
+          }))
+        );
+      }
     })();
     return () => { cancelled = true; };
   }, [committee, session]);
@@ -587,7 +612,7 @@ export function CommitteeEditorModal({ conference, committee, onSaved, onClose }
   }
 
   // Edit flow, brief spinner while the current slots load.
-  if (isEdit && initialCountries === null) {
+  if (isEdit && initialRoster === null) {
     return (
       <ModalOverlay onClose={onClose}>
         <div className="rounded-2xl p-10 flex items-center justify-center" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 200 }}>
@@ -602,7 +627,7 @@ export function CommitteeEditorModal({ conference, committee, onSaved, onClose }
       conferenceId={conference.id}
       committeeType={pendingType ?? 'general-assembly'}
       existing={committee}
-      initialCountries={initialCountries ?? []}
+      initialRoster={initialRoster ?? []}
       onClose={onClose}
       onSaved={onSaved}
     />
