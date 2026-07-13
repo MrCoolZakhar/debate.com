@@ -51,7 +51,7 @@ interface ResultRow {
 
 // ── Pre-amendment repair ─────────────────────────────────────────────────────
 // Imports run before conference_allocations.user_id became nullable could only
-// set the application's assigned_* fields — no allocation row exists for them.
+// set the application's assigned_* fields, no allocation row exists for them.
 // This detects and backfills those orphans; the claim trigger (which now also
 // attaches conference_allocations.user_id on signup) still owns claim behavior.
 
@@ -149,7 +149,7 @@ export default function ImportPage() {
   useEffect(() => { loadUnclaimedCount(); }, [loadUnclaimedCount]);
 
   // Detects applications that carry an assignment but have no matching
-  // conference_allocations row — the state pre-amendment imports could leave
+  // conference_allocations row, the state pre-amendment imports could leave
   // behind. Re-checked after every repair run so the banner clears itself.
   const loadOrphanAllocations = useCallback(async () => {
     if (!conference || !session) return;
@@ -307,7 +307,7 @@ export default function ImportPage() {
       invited_name: r.resolved.name,
       role: r.resolved.role,
       society_id: r.resolved.societyName ? societyMap.get(r.resolved.societyName.trim().toLowerCase()) ?? null : null,
-      // Derived convenience, kept in sync — society_id IS NULL is the actual
+      // Derived convenience, kept in sync, society_id IS NULL is the actual
       // source of truth, never read is_independent for logic.
       is_independent: !r.resolved.societyName,
       is_head_delegate: r.resolved.role === 'head-delegate',
@@ -348,7 +348,7 @@ export default function ImportPage() {
       appIdByKey.set(`${a.invited_email.toLowerCase()}|${a.role}`, a.id);
     }
 
-    // 3. Pool increments — batched per (society, pool).
+    // 3. Pool increments, batched per (society, pool).
     const poolIncrements = new Map<string, number>(); // `${societyId}|${column}` -> count
     for (const r of importable) {
       if (r.resolved.paymentStatus !== 'paid' || !r.resolved.societyName || !r.resolved.role) continue;
@@ -486,7 +486,7 @@ export default function ImportPage() {
         )}
       </div>
 
-      {/* Repair banner — pre-amendment imports with no allocation row */}
+      {/* Repair banner, pre-amendment imports with no allocation row */}
       {orphanRows.length > 0 && (
         <div
           className="flex items-center gap-3 rounded-xl px-4 py-3 mb-6"

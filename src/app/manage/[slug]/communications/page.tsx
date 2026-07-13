@@ -631,7 +631,7 @@ function CommunicationsPageInner() {
     setOutboxPending(count ?? 0);
   }, [conference, session?.access_token, beginLoad]);
 
-  // All requests + all their messages in two queries — modest for a single
+  // All requests + all their messages in two queries, modest for a single
   // conference's Q&R volume, and lets the list snippet / unread rule compute
   // "last message from participant" client-side without an N+1.
   const loadInbox = useCallback(async () => {
@@ -683,7 +683,7 @@ function CommunicationsPageInner() {
   }, [conference, loadTemplates, loadApplications, loadCommittees, loadSocieties, loadEmailSends, loadOutboxPending, loadInbox]);
 
   // Seed the design draft from the conference's saved theme once (not on
-  // every refreshConference() — that would clobber an in-progress edit).
+  // every refreshConference(), that would clobber an in-progress edit).
   // Marks the autosave effect below to skip the resulting themeDraft change
   // so mounting the page never re-writes back the value it just read.
   useEffect(() => {
@@ -872,7 +872,7 @@ function CommunicationsPageInner() {
     return ctx;
   }, [conference, profile]);
 
-  // Live shell preview for the Design section — a representative sample
+  // Live shell preview for the Design section, a representative sample
   // (allocation_assigned) rendered through the in-progress theme draft, not
   // yet-saved conference.email_theme.
   const designPreviewHtml = useMemo(() => {
@@ -899,7 +899,7 @@ function CommunicationsPageInner() {
     };
   }
 
-  /** Full restorable audience selection — filters re-resolve live, manual adds/exclusions restore by id. */
+  /** Full restorable audience selection, filters re-resolve live, manual adds/exclusions restore by id. */
   function buildAudienceState(): SavedAudience {
     return {
       roles: [...selRoles],
@@ -927,7 +927,7 @@ function CommunicationsPageInner() {
     setAudienceRestored(false);
   }
 
-  /** Restores a saved audience by id/value against CURRENT data — filters
+  /** Restores a saved audience by id/value against CURRENT data, filters
    *  re-resolve naturally; manual adds/exclusions silently drop ids that no
    *  longer resolve to a live application. */
   function restoreAudience(saved: SavedAudience) {
@@ -1026,7 +1026,7 @@ function CommunicationsPageInner() {
     if (builderTemplateId) {
       const { error } = await supabase.from('email_templates').update(payload).eq('id', builderTemplateId);
       if (error) { if (!opts.silent) setBuilderError(error.message); return null; }
-      void loadTemplates(); // silent background refresh — never blocks the builder
+      void loadTemplates(); // silent background refresh, never blocks the builder
       return builderTemplateId;
     }
 
@@ -1038,7 +1038,7 @@ function CommunicationsPageInner() {
     if (error) { if (!opts.silent) setBuilderError(error.message); return null; }
     const newId = (data as { id: string }).id;
     setBuilderTemplateId(newId);
-    void loadTemplates(); // silent background refresh — never blocks the builder
+    void loadTemplates(); // silent background refresh, never blocks the builder
     return newId;
   }
 
@@ -1069,7 +1069,7 @@ function CommunicationsPageInner() {
     let id = builderTemplateId;
     if (!id) {
       // Creation path: we need the real DB id before we can flip lifecycle,
-      // so this one write stays awaited — busy-state on this button only.
+      // so this one write stays awaited, busy-state on this button only.
       setMarkingReady(true);
       id = await persistTemplate(builderSubject, builderBlocks, { silent: false });
       setMarkingReady(false);
@@ -1112,7 +1112,7 @@ function CommunicationsPageInner() {
   async function handleDuplicateTemplate(t: EmailTemplate) {
     if (!conference || !session || duplicatingIds.has(t.id)) return;
     // Creation flow: the new row needs its real DB id (Edit/autosave target it),
-    // so the insert stays awaited — busy-state on this row's Copy button only.
+    // so the insert stays awaited, busy-state on this row's Copy button only.
     setDuplicatingIds(prev => new Set(prev).add(t.id));
     const supabase = getAuthedClient(session.access_token);
     const { data, error } = await supabase.from('email_templates').insert({
@@ -1133,7 +1133,7 @@ function CommunicationsPageInner() {
     showFlash('ok', 'Duplicated as a new draft.');
   }
 
-  // Row-level MARK READY / BACK TO DRAFT — same optimistic-flip pattern as
+  // Row-level MARK READY / BACK TO DRAFT, same optimistic-flip pattern as
   // handleToggleEnabled, but for lifecycle, and independent of builder state
   // so it works directly from the EMAILS tab list.
   function handleToggleRowLifecycle(t: EmailTemplate) {
@@ -1180,7 +1180,7 @@ function CommunicationsPageInner() {
     setThemeDraft(t => ({ ...t, ...patch }));
   }
 
-  // Debounced autosave to conferences.email_theme — same pattern as the
+  // Debounced autosave to conferences.email_theme, same pattern as the
   // builder's body autosave. renderEmailHtml reads the theme with
   // current-look defaults, so every send/preview path picks this up with no
   // content migration once it lands.
@@ -1241,7 +1241,7 @@ function CommunicationsPageInner() {
     // its real id, letting History show a per-recipient delivery breakdown.
     // These two inserts stay awaited: the outbox rows need the server-generated
     // email_send id, and the success flash reports the real queued count.
-    // Only the confirm button is busy — the rest of the page stays interactive.
+    // Only the confirm button is busy, the rest of the page stays interactive.
     const { data: sendData, error: sendError } = await supabase
       .from('email_sends')
       .insert({
@@ -1440,7 +1440,7 @@ function CommunicationsPageInner() {
     });
   }
 
-  // Reply posts regardless of whether the notification email drafts — a
+  // Reply posts regardless of whether the notification email drafts, a
   // missing/disabled 'request_reply' template just nudges via DraftNotice.
   function handleInboxReply() {
     if (!session || !conference || !selectedRequest || !replyText.trim()) return;
@@ -1451,7 +1451,7 @@ function CommunicationsPageInner() {
     const prevReq = { last_message_at: req.last_message_at, seen_by_organizer: req.seen_by_organizer };
 
     // Optimistic: the bubble appears and the input clears instantly. Clearing
-    // the input is also the double-send lock — a second Enter/click has no
+    // the input is also the double-send lock, a second Enter/click has no
     // text, so the trim() guard above rejects it.
     setInboxMessages(prev => [...prev, {
       id: tempId, request_id: req.id, sender_user_id: user!.id, is_organizer: true, body, created_at: nowIso,
@@ -1532,7 +1532,7 @@ function CommunicationsPageInner() {
 
     if (approve) {
       // The swap itself is a server-computed RPC whose ok/error result gates
-      // everything else, so it stays awaited — busy-state on the Approve/
+      // everything else, so it stays awaited, busy-state on the Approve/
       // Decline buttons only (swapActing).
       if (!app_a || !app_b) { setSwapError('This request is missing the application ids to swap.'); return; }
       setSwapActing(true);
@@ -1582,7 +1582,7 @@ function CommunicationsPageInner() {
 
       void loadInbox();
     })().catch((e: unknown) => {
-      // Rollback the thread bookkeeping only — an approved swap itself (RPC)
+      // Rollback the thread bookkeeping only, an approved swap itself (RPC)
       // has already been applied and is not undone here.
       setInboxMessages(prev => prev.filter(m => m.id !== tempId));
       setInboxRequests(prev => prev.map(r => (r.id === req.id ? { ...r, ...prevReq } : r)));
@@ -1676,7 +1676,7 @@ function CommunicationsPageInner() {
       )}
 
       {/* ═══════════════════════════════════════════════════════════════════════
-          MAIN VIEW — tabs
+          MAIN VIEW, tabs
       ════════════════════════════════════════════════════════════════════════ */}
       {!builderOpen && (
         <>
@@ -1753,7 +1753,7 @@ function CommunicationsPageInner() {
                   <p className="font-semibold text-base" style={{ color: '#1C1410', fontFamily: OUTFIT }}>Design</p>
                 </button>
                 <p className="text-sm mt-0.5 mb-3" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-                  How every email from this conference looks — header, colors, logo, and footer.
+                  How every email from this conference looks, header, colors, logo, and footer.
                 </p>
                 {designOpen && (
                   <div className="rounded-2xl p-5 flex flex-col md:flex-row gap-6" style={CARD_STYLE}>
@@ -1784,7 +1784,7 @@ function CommunicationsPageInner() {
                       <input
                         value={themeDraft.footerLine}
                         onChange={e => patchTheme({ footerLine: e.target.value })}
-                        placeholder="Optional — shown above the standard footer"
+                        placeholder="Optional, shown above the standard footer"
                         className="w-full rounded-xl px-3.5 py-2 text-sm focus:outline-none mb-2"
                         style={{ border: `1px solid ${BORDER}`, color: '#1C1410', backgroundColor: '#FFFFFF', fontFamily: OUTFIT }}
                       />

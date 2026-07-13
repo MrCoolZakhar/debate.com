@@ -6,7 +6,7 @@ import { getCountryByName } from '@/lib/countries';
 
 const OUTFIT = "'Outfit', sans-serif";
 
-// ── Shared types (page.tsx imports these — page files can't export extras) ──
+// ── Shared types (page.tsx imports these, page files can't export extras) ──
 
 export interface CaucusJson {
   active?: boolean;
@@ -237,7 +237,7 @@ export function RecapModal({ data, onClose }: { data: LiveCommittee; onClose: ()
       )}
 
       {/* Chair feedback recap */}
-      {/* TODO(merge): feedback shape changes on main branch — swap this recap to the new format */}
+      {/* TODO(merge): feedback shape changes on main branch, swap this recap to the new format */}
       <div className="mb-6">
         <div className="flex items-center gap-2 flex-wrap">
           <Eyebrow>Chair feedback</Eyebrow>

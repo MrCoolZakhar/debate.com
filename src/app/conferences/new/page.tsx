@@ -27,8 +27,10 @@ import { NEU, NEU_GRADIENTS, OUTFIT, EASE, NeuButton, NeuInset, Emoji3D } from '
 import { DatePicker } from '@/components/DatePicker';
 import { LogoCropModal } from '@/components/LogoCropModal';
 import { uploadConferenceAsset } from '@/lib/conferenceAssets';
-import { CURRENCIES } from '@/lib/finance';
+import { currencyPickerGroups } from '@/lib/currencies';
 import { normalizeSocialUrl } from '@/lib/socialLinks';
+
+const CURRENCY_GROUPS = currencyPickerGroups();
 
 // Mirrors settings' ensureRoleConfigs default set (source of truth there) —
 // seeded here too so a freshly created conference already has per-role fee

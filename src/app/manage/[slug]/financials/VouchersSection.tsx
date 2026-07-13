@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * VouchersSection — conference-scoped voucher creation + management for the
+ * VouchersSection, conference-scoped voucher creation + management for the
  * organiser financials page. Neumorphic (neu.tsx primitives), house
  * optimistic pattern: instant UI, background write, exact rollback, inline
  * #8B2020 errors, control-level busy for the insert (we need the real UUID
@@ -25,7 +25,7 @@ import {
 } from '@/components/neu';
 
 /** Approximate conversion between two known currencies (via finance.ts's
- *  canonical USD_FX table — no local copy); null when either rate is
+ *  canonical USD_FX table, no local copy); null when either rate is
  *  missing (callers then fall back to the original amount). */
 export function convertApprox(amount: number, from: string, to: string): number | null {
   const rf = USD_FX[from.toUpperCase()];
@@ -69,7 +69,7 @@ function formatExpiry(iso: string): string {
   return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-/** Voucher chip label — flat amounts re-display in the chosen currency
+/** Voucher chip label, flat amounts re-display in the chosen currency
  *  (≈-prefixed) when it differs from the voucher's own currency. */
 function discountLabel(v: Voucher, displayCurrency?: string): string {
   if (v.kind === 'percent') return `${formatFeeAmount(v.amount)}% OFF`;
@@ -81,7 +81,7 @@ function discountLabel(v: Voucher, displayCurrency?: string): string {
   return `${currencySymbol(vCur)}${formatFeeAmount(v.amount)} OFF`;
 }
 
-// Neumorphic input well — pressed-in, transparent field inside.
+// Neumorphic input well, pressed-in, transparent field inside.
 const inputStyle: React.CSSProperties = {
   width: '100%',
   padding: '9px 12px',
@@ -109,7 +109,7 @@ export default function VouchersSection({
   displayCurrency,
 }: {
   conference: Conference;
-  /** Display-only currency for flat amounts in the list — creation stays in
+  /** Display-only currency for flat amounts in the list, creation stays in
    *  the conference currency regardless. */
   displayCurrency?: string;
 }) {
@@ -129,7 +129,7 @@ export default function VouchersSection({
   const [active, setActive] = useState(true);
   const [creating, setCreating] = useState(false);
 
-  // Voucher ids with a write in flight — double-click guard for row actions.
+  // Voucher ids with a write in flight, double-click guard for row actions.
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
   function markBusy(id: string, busy: boolean) {
     setBusyIds(prev => {
@@ -154,7 +154,7 @@ export default function VouchersSection({
 
   useEffect(() => { loadVouchers(); }, [loadVouchers]);
 
-  // ── Create — optimistic append (temp row), replace with the real UUID row
+  // ── Create, optimistic append (temp row), replace with the real UUID row
   // on success, remove exactly the temp row on failure. The CREATE button is
   // the busy control while the insert returns the id.
   function handleCreate() {
@@ -210,13 +210,13 @@ export default function VouchersSection({
         setVouchers(cur => cur.filter(v => v.id !== tempId));
         const isDuplicate = typeof e === 'object' && e !== null && (e as { code?: string }).code === '23505';
         setError(isDuplicate
-          ? `Code ${trimmed} is already taken — try another.`
-          : 'Could not create the voucher — it was removed from the list. Please try again.');
+          ? `Code ${trimmed} is already taken, try another.`
+          : 'Could not create the voucher, it was removed from the list. Please try again.');
       })
       .finally(() => setCreating(false));
   }
 
-  // ── Toggle active — optimistic flip, exact revert on failure.
+  // ── Toggle active, optimistic flip, exact revert on failure.
   function handleToggleActive(v: Voucher) {
     if (!session || busyIds.has(v.id) || v.id.startsWith('temp-')) return;
     const prev = v.active;
@@ -236,12 +236,12 @@ export default function VouchersSection({
     })()
       .catch(() => {
         setVouchers(cur => cur.map(x => (x.id === v.id ? { ...x, active: prev } : x)));
-        setError(`Could not ${prev ? 'deactivate' : 'activate'} ${v.code} — the change was reverted.`);
+        setError(`Could not ${prev ? 'deactivate' : 'activate'} ${v.code}, the change was reverted.`);
       })
       .finally(() => markBusy(v.id, false));
   }
 
-  // ── Delete — only at 0 redemptions (redeemed vouchers deactivate instead,
+  // ── Delete, only at 0 redemptions (redeemed vouchers deactivate instead,
   // so redemption history stays intact). Confirm first, optimistic remove,
   // restore the exact row on failure.
   async function handleDelete(v: Voucher) {
@@ -271,7 +271,7 @@ export default function VouchersSection({
     })()
       .catch(() => {
         setVouchers(cur => [v, ...cur.filter(x => x.id !== v.id)]);
-        setError(`Could not delete ${v.code} — it was restored. Please try again.`);
+        setError(`Could not delete ${v.code}, it was restored. Please try again.`);
       })
       .finally(() => markBusy(v.id, false));
   }
@@ -291,7 +291,7 @@ export default function VouchersSection({
             Vouchers
           </h2>
           <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.muted }}>
-            Discount codes participants can apply at signup — scoped to {conference.acronym} only.
+            Discount codes participants can apply at signup, scoped to {conference.acronym} only.
           </p>
         </div>
       </div>
@@ -436,7 +436,7 @@ export default function VouchersSection({
               No vouchers yet
             </p>
             <p className="mt-1 max-w-sm" style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.muted, lineHeight: 1.55 }}>
-              Create your first code above — early-bird discounts and partner codes are the usual starting points.
+              Create your first code above, early-bird discounts and partner codes are the usual starting points.
             </p>
           </NeuInset>
         ) : (
@@ -498,7 +498,7 @@ export default function VouchersSection({
                       onClick={() => handleToggleActive(v)}
                       disabled={rowBusy}
                       title={v.active
-                        ? (v.redeemed_count > 0 ? 'Deactivate — redeemed vouchers are kept for history, not deleted' : 'Deactivate')
+                        ? (v.redeemed_count > 0 ? 'Deactivate, redeemed vouchers are kept for history, not deleted' : 'Deactivate')
                         : 'Reactivate'}
                       className="focus:outline-none"
                       style={{
@@ -516,7 +516,7 @@ export default function VouchersSection({
                       {v.active ? 'ACTIVE' : 'INACTIVE'}
                     </button>
 
-                    {/* Delete — only when never redeemed */}
+                    {/* Delete, only when never redeemed */}
                     {v.redeemed_count === 0 && (
                       <button
                         type="button"

@@ -185,7 +185,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
   const loadData = useCallback(async (opts?: { silent?: boolean }) => {
     if (!conference || !session) return;
     const seq = ++loadSeqRef.current;
-    // silent: background refresh — keeps the list mounted (no spinner wipe,
+    // silent: background refresh, keeps the list mounted (no spinner wipe,
     // expanded delegation and scroll survive).
     if (!opts?.silent) setLoading(true);
     const supabase = getAuthedClient(session.access_token);
@@ -229,7 +229,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
   useEffect(() => { loadData(); }, [loadData]);
 
   // Opening a delegation marks its pending swap_request/swap_notice rows
-  // seen — optimistic locally, fire-and-forget on the DB.
+  // seen, optimistic locally, fire-and-forget on the DB.
   function handleExpandSociety(societyId: string) {
     setExpandedId(societyId);
     if (!unseenSwapSocietyIds.has(societyId) || !session) return;
@@ -299,7 +299,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
 
     (async () => {
       // is_independent is a derived convenience kept in sync on every
-      // mutation for read paths that haven't been ported — society_id IS
+      // mutation for read paths that haven't been ported, society_id IS
       // NULL is the actual source of truth, never read is_independent for logic.
       const { error } = await supabase.from('applications').update({ society_id: society.id, is_independent: false }).eq('id', app.id);
       if (error) {
@@ -322,7 +322,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
 
   async function handleMarkPledgeReceived(member: PoolMember, societyId: string) {
     if (!session) return;
-    // F21: fully idempotent — nothing left to do once the pledge is satisfied.
+    // F21: fully idempotent, nothing left to do once the pledge is satisfied.
     if (pledgeSatisfied(member)) return;
     const { confirmed } = await confirm({
       title: 'Confirm this pledge as paid?',
@@ -594,7 +594,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
     const target = members.find(m => m.id === targetId);
     if (!source || !target) return;
 
-    // Optimistic: mirror performSwap's writes — payment flips both ways, and
+    // Optimistic: mirror performSwap's writes, payment flips both ways, and
     // the allocation moves only under the same guard the helper enforces.
     const sourceSnapshot = source;
     const targetSnapshot = target;
@@ -717,7 +717,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
   const advisorPaidCount = advisors.filter(a => a.attending && a.payment_status === 'paid').length;
   const delegatePool = expandedMembers.filter(m => m.role === 'delegate' || m.role === 'head-delegate');
   // Head delegates keep counting toward every fill/accounting figure below, but
-  // their own row is their home in the UI (F17) — pulled out of the generic lists.
+  // their own row is their home in the UI (F17), pulled out of the generic lists.
   const headDelegates = [...delegatePool.filter(isHeadDelegate)]
     .sort((a, b) => a.submitted_at.localeCompare(b.submitted_at));
   const nonHDPool = delegatePool.filter(m => !isHeadDelegate(m));
@@ -829,7 +829,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
         </div>
       )}
 
-      {/* Head delegates (F17) — full delegate-pool members, own row */}
+      {/* Head delegates (F17), full delegate-pool members, own row */}
       {headDelegates.length > 0 && (
         <div className="mb-6">
           <SectionLabel>HEAD DELEGATES</SectionLabel>
@@ -865,7 +865,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
                   />
                 );
               }
-              // Paid — this card is informational; the actual paid slot they
+              // Paid, this card is informational; the actual paid slot they
               // occupy is the tagged HD entry in the right-hand ledger below.
               const name = m.profiles?.display_name ?? m.invited_name ?? 'Unknown';
               return (
@@ -939,7 +939,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
         </div>
       )}
 
-      {/* Two-column body — delegate pool only */}
+      {/* Two-column body, delegate pool only */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* LEFT */}
         <div>

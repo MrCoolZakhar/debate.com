@@ -59,10 +59,10 @@ function formatDate(iso: string): string {
   return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
 }
 
-// Shared card language — thick 1.5px border + layered warm shadow (rulebook F6).
+// Shared card language, thick 1.5px border + layered warm shadow (rulebook F6).
 const CARD_SHADOW = '0 2px 8px rgba(27,56,40,0.05), 0 12px 32px rgba(27,56,40,0.06)';
 
-// Red PDF file-type tile — a saturated square glyph, not the meek grey icon.
+// Red PDF file-type tile, a saturated square glyph, not the meek grey icon.
 function PdfTile({ size = 40 }: { size?: number }) {
   return (
     <span
@@ -260,7 +260,7 @@ function SetDeadlineModal({
   const [enabled, setEnabled] = useState(currentEnabled);
 
   // Optimistic: hand the values to the parent (which patches local state and
-  // persists in the background) and close immediately — no modal spinner.
+  // persists in the background) and close immediately, no modal spinner.
   function handleSave() {
     onSave({
       position_paper_label: label.trim() || 'Position Paper',
@@ -343,7 +343,7 @@ export default function DocumentsPage() {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showDeadlineModal, setShowDeadlineModal] = useState(false);
   const [actionError, setActionError] = useState('');
-  // Ids with a write in flight — disables that row's controls (double-click guard).
+  // Ids with a write in flight, disables that row's controls (double-click guard).
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
   const didSetInitialTab = useRef(false);
   // Stale-response guard: bump per committee-tab switch; late responses for an
@@ -395,7 +395,7 @@ export default function DocumentsPage() {
       .select('id, title, file_url, file_name, file_size_bytes, is_published, published_at, created_at')
       .eq('conference_committee_id', selectedCommitteeId)
       .order('created_at', { ascending: false });
-    if (seq !== guideReqSeq.current) return; // stale response — a newer load superseded this one
+    if (seq !== guideReqSeq.current) return; // stale response, a newer load superseded this one
     setStudyGuides((data ?? []) as StudyGuide[]);
   }, [selectedCommitteeId]);
 
@@ -445,7 +445,7 @@ export default function DocumentsPage() {
       markBusy(guideId, false);
       if (error) {
         setStudyGuides(previous);
-        setActionError("Couldn't save — the change was reverted.");
+        setActionError("Couldn't save, the change was reverted.");
       }
     });
   }
@@ -461,7 +461,7 @@ export default function DocumentsPage() {
       markBusy(guideId, false);
       if (error) {
         setStudyGuides(previous);
-        setActionError("Couldn't delete — the guide was restored.");
+        setActionError("Couldn't delete, the guide was restored.");
       }
     });
   }
