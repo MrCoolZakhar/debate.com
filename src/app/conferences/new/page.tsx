@@ -1,237 +1,154 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+/**
+ * /conferences/new — page-by-page conference creation wizard.
+ *
+ * One question per screen, built on the shared wizard kit
+ * (src/components/wizard.tsx). The submit logic writes exactly the same
+ * columns as the old two-step form and redirects to /manage/{slug}.
+ * Optional fields from the old form (description, socials, banner,
+ * visibility, previous editions) are deferred to Settings after creation.
+ *
+ * Progress lives in component state only — a refresh restarts the wizard.
+ */
+
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-  AlertTriangle, Camera, Globe, Music, MessageCircle, Search, X,
-  Type, Hash, Mail, GraduationCap, CalendarDays, MapPin, Monitor, Users, Banknote, Sparkles, Gavel,
-} from 'lucide-react';
+import { AlertTriangle, ArrowRight, CalendarDays, Mail, Pencil } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import { useAuth } from '@/components/AuthProvider';
 import { createClient } from '@supabase/supabase-js';
 import { generateSlug } from '@/lib/utils';
 import { UN_COUNTRIES } from '@/lib/countries';
+import { FlagImg } from '@/components/FlagImg';
+import { WizardShell, TwoTabPick, CardSelect } from '@/components/wizard';
+import { NEU, NEU_GRADIENTS, OUTFIT, EASE, NeuButton, NeuInset, Emoji3D } from '@/components/neu';
 
 // Mirrors settings' ensureRoleConfigs default set (source of truth there) —
 // seeded here too so a freshly created conference already has per-role fee
 // configs instead of relying on that lazy $0-delegate-fee fallback.
 const ROLE_DEFAULTS = ['delegate', 'chair', 'head-delegate', 'faculty-advisor', 'observer'] as const;
 
-// License-safe banner presets shipped in /public/banners (see its README.md).
-const BANNER_PRESETS = [
-  '/banners/preset-1.jpg',
-  '/banners/preset-2.jpg',
-  '/banners/preset-3.jpg',
-  '/banners/preset-4.jpg',
-  '/banners/preset-5.jpg',
+// ── Step model ─────────────────────────────────────────────────────────────
+
+const TOTAL_STEPS = 8;
+// 1 name+acronym · 2 format · 3 level · 4 where · 5 when · 6 delegates · 7 fee · 8 review
+
+const DELEGATE_RANGES = [
+  { key: '50', label: 'Up to 50', sub: 'Intimate', emoji: 'Bust in silhouette' },
+  { key: '100', label: '~100', sub: 'Mid-size', emoji: 'Busts in silhouette' },
+  { key: '250', label: '~250', sub: 'Large', emoji: 'People with bunny ears' },
+  { key: '500', label: '500+', sub: 'Flagship', emoji: 'Globe showing europe-africa' },
 ];
 
-// ── Input / label helpers ──────────────────────────────────────────────────
+// ── Small shared bits ──────────────────────────────────────────────────────
 
-const inputStyle: React.CSSProperties = {
+const bigInputStyle: React.CSSProperties = {
   width: '100%',
-  backgroundColor: '#FAF8F3',
-  border: '1.5px solid #DDD4C0',
-  borderRadius: '10px',
-  padding: '12px 16px',
-  fontSize: '14px',
-  color: '#1C1410',
-  fontFamily: "'Outfit', sans-serif",
+  backgroundColor: NEU.base,
+  border: '1.5px solid transparent',
+  borderRadius: 16,
+  padding: '15px 18px',
+  fontSize: 16,
+  fontWeight: 600,
+  color: NEU.ink,
+  fontFamily: OUTFIT,
   outline: 'none',
-  transition: 'border-color 150ms ease',
+  boxShadow: NEU.inSm,
+  transition: `border-color 180ms ${EASE}`,
 };
 
-function Field({ label, icon, children }: { label: string; icon?: React.ReactNode; children: React.ReactNode }) {
+function focusForest(e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) {
+  e.currentTarget.style.borderColor = NEU.forest;
+}
+function blurClear(e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) {
+  e.currentTarget.style.borderColor = 'transparent';
+}
+
+function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div>
-      <label
-        className="flex items-center gap-1.5 text-sm font-semibold mb-1.5"
-        style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}
-      >
-        {icon && <span className="inline-flex items-center" style={{ color: '#9A8A78' }}>{icon}</span>}
-        {label}
-      </label>
+    <p
+      style={{
+        fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.12em',
+        color: NEU.muted, textTransform: 'uppercase', marginBottom: 8,
+      }}
+    >
       {children}
-    </div>
+    </p>
   );
 }
 
-/**
- * A text/number input with a leading lucide icon prefix — the same pattern as
- * `SocialInput`, generalised so Step 1's fields get the icon affordance Step 2
- * already has.
- */
-function IconInput({
-  icon, value, onChange, placeholder, type = 'text', min, step, required, onBlur,
-}: {
-  icon: React.ReactNode;
-  value: string;
-  onChange: (v: string) => void;
-  placeholder?: string;
-  type?: string;
-  min?: number;
-  step?: number;
-  required?: boolean;
-  onBlur?: (e: React.FocusEvent<HTMLInputElement>) => void;
-}) {
+function ErrorNote({ children }: { children: React.ReactNode }) {
   return (
-    <div className="relative">
-      <span className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: '#9A8A78' }}>
-        {icon}
-      </span>
-      <input
-        type={type}
-        required={required}
-        min={min}
-        step={step}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        style={{ ...inputStyle, paddingLeft: '40px' }}
-        onFocus={focusGreen}
-        onBlur={onBlur ?? blurGray}
-      />
-    </div>
+    <p
+      className="flex items-center gap-1.5"
+      style={{ color: NEU.amber, fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, marginTop: 8 }}
+    >
+      <AlertTriangle size={14} />
+      {children}
+    </p>
   );
 }
 
-function focusGreen(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) {
-  e.currentTarget.style.borderColor = '#1B3828';
-}
-function blurGray(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) {
-  e.currentTarget.style.borderColor = '#DDD4C0';
-}
-
-// ── Toggle button group ───────────────────────────────────────────────────
-
-function ToggleGroup<T extends string>({
-  options,
-  value,
-  onChange,
-}: {
-  options: { value: T; label: string }[];
-  value: T | '';
-  onChange: (v: T) => void;
-}) {
+/** Subtle third choice under a TwoTabPick (hybrid / both). */
+function TertiaryPick({ label, selected, onClick }: { label: string; selected: boolean; onClick: () => void }) {
   return (
-    <div className="flex gap-2">
-      {options.map((opt) => {
-        const active = value === opt.value;
-        return (
-          <button
-            key={opt.value}
-            type="button"
-            onClick={() => onChange(opt.value)}
-            className="flex-1 py-3 rounded-[10px] font-bold text-sm tracking-widest transition-all focus:outline-none"
-            style={{
-              backgroundColor: active ? '#1B3828' : 'transparent',
-              color: active ? '#EED98A' : '#1C1410',
-              border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
-              fontFamily: "'Outfit', sans-serif",
-              letterSpacing: '0.08em',
-            }}
-          >
-            {opt.label}
-          </button>
-        );
-      })}
-    </div>
+    <button
+      type="button"
+      onClick={onClick}
+      className="focus:outline-none"
+      style={{
+        marginTop: 14,
+        padding: '9px 20px',
+        borderRadius: 999,
+        border: selected ? `2px solid ${NEU.forest}` : '2px solid rgba(27,56,40,0.14)',
+        backgroundColor: selected ? NEU.surface : 'transparent',
+        boxShadow: selected ? NEU.outSm : 'none',
+        color: selected ? NEU.forest : NEU.muted,
+        fontFamily: OUTFIT, fontSize: 13, fontWeight: 700,
+        cursor: 'pointer',
+        transition: `all 220ms ${EASE}`,
+      }}
+    >
+      {label}
+    </button>
   );
 }
 
-// ── Social input with icon ────────────────────────────────────────────────
-
-function SocialInput({
-  icon,
-  placeholder,
-  value,
-  onChange,
-}: {
-  icon: React.ReactNode;
-  placeholder: string;
-  value: string;
-  onChange: (v: string) => void;
-}) {
+function ContinueButton({ label = 'Continue', disabled, onClick }: { label?: string; disabled?: boolean; onClick: () => void }) {
   return (
-    <div className="relative">
-      <span
-        className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
-        style={{ color: '#9A8A78' }}
-      >
-        {icon}
-      </span>
-      <input
-        type="url"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        style={{ ...inputStyle, paddingLeft: '38px' }}
-        onFocus={focusGreen}
-        onBlur={blurGray}
-      />
+    <div className="flex justify-center" style={{ marginTop: 26 }}>
+      <NeuButton onClick={onClick} disabled={disabled} icon={ArrowRight} style={{ padding: '13px 34px', fontSize: 14 }}>
+        {label}
+      </NeuButton>
     </div>
   );
 }
 
-// ── Step indicator ────────────────────────────────────────────────────────
+// ── Acronym suggestion ─────────────────────────────────────────────────────
 
-function StepIndicator({ step }: { step: 1 | 2 }) {
-  const labels: Record<number, string> = { 1: 'The Basics', 2: 'Details' };
-  const pct = step === 1 ? 50 : 100;
-  return (
-    <div className="mb-6">
-      {/* Labels row */}
-      <div className="flex items-center justify-between mb-2.5">
-        {([1, 2] as const).map((n) => {
-          const active = step >= n;
-          return (
-            <div key={n} className="flex items-center gap-2">
-              <span
-                className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0 transition-all"
-                style={{
-                  backgroundColor: active ? '#1B3828' : '#DDD4C0',
-                  color: active ? '#EED98A' : '#9A8A78',
-                }}
-              >
-                {n}
-              </span>
-              <span
-                className="text-sm font-bold transition-colors"
-                style={{
-                  color: step === n ? '#1B3828' : active ? '#6B5F52' : '#9A8A78',
-                  fontFamily: "'Outfit', sans-serif",
-                }}
-              >
-                {labels[n]}
-              </span>
-            </div>
-          );
-        })}
-      </div>
-      {/* Progress bar */}
-      <div className="rounded-full overflow-hidden" style={{ height: '6px', backgroundColor: '#DDD4C0' }}>
-        <div
-          className="h-full rounded-full transition-all duration-500"
-          style={{ width: `${pct}%`, background: 'linear-gradient(to right, #1B3828, #3D7A52)' }}
-        />
-      </div>
-    </div>
-  );
+const STOP_WORDS = new Set(['the', 'of', 'and', 'for', 'a', 'an', 'in', 'on', 'at']);
+
+function suggestAcronym(fullName: string): string {
+  const initials = fullName
+    .split(/[\s-]+/)
+    .filter((w) => w && !STOP_WORDS.has(w.toLowerCase()))
+    .map((w) => w[0].toUpperCase())
+    .join('');
+  if (!initials) return '';
+  // The directory requires 'MUN' in the acronym. "Model United Nations" in the
+  // name already yields …MUN; otherwise append it as a friendly starting point.
+  return initials.includes('MUN') ? initials : initials + 'MUN';
 }
 
-// ── Predecessor (previous edition) types ─────────────────────────────────
-
-interface PredecessorOption {
-  id: string;
-  full_name: string;
-  acronym: string;
-  slug: string;
-  start_date: string;
-  city: string;
-  country: string;
+function acronymProblem(acr: string): string {
+  const upper = acr.toUpperCase();
+  if (upper.length < 4) return 'Acronym must be at least 4 characters.';
+  if (!upper.includes('MUN')) return "Acronym must include 'MUN' — e.g. TEIMUN, LIMUN, SMUNC.";
+  return '';
 }
 
-// ── Main page ─────────────────────────────────────────────────────────────
+// ── Main page ──────────────────────────────────────────────────────────────
 
 export default function NewConferencePage() {
   const router = useRouter();
@@ -245,127 +162,84 @@ export default function NewConferencePage() {
     );
   }
 
-  // Auth gate
+  // Auth gate — unchanged from the old form.
   useEffect(() => {
     if (!loading && !user) {
       router.replace('/auth/signin?next=/conferences/new');
     }
   }, [loading, user, router]);
 
-  const [step, setStep] = useState<1 | 2>(1);
+  const [step, setStep] = useState(1);
+  const [returnToReview, setReturnToReview] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [stepError, setStepError] = useState('');
 
-  // Step 1 fields
+  // Answers
   const [fullName, setFullName] = useState('');
   const [acronym, setAcronym] = useState('');
-  const [acronymError, setAcronymError] = useState('');
+  const acronymTouched = useRef(false);
   const [contactEmail, setContactEmail] = useState('');
+  const [format, setFormat] = useState<'in-person' | 'online' | 'hybrid' | ''>('');
   const [studentLevel, setStudentLevel] = useState<'school' | 'university' | 'both' | ''>('');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
   const [country, setCountry] = useState('');
   const [city, setCity] = useState('');
-  const [format, setFormat] = useState<'in-person' | 'online' | 'hybrid' | ''>('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [delegateRange, setDelegateRange] = useState('');
   const [expectedDelegates, setExpectedDelegates] = useState('');
-  const [feeAmount, setFeeAmount] = useState('0');
+  const [feeKind, setFeeKind] = useState<'free' | 'paid' | ''>('');
+  const [feeAmount, setFeeAmount] = useState('');
   const [feeCurrency, setFeeCurrency] = useState('GBP');
 
-  // Step 2 fields
-  const [description, setDescription] = useState('');
-  const [instagramUrl, setInstagramUrl] = useState('');
-  const [facebookUrl, setFacebookUrl] = useState('');
-  const [tiktokUrl, setTiktokUrl] = useState('');
-  const [whatsappUrl, setWhatsappUrl] = useState('');
-  const [websiteUrl, setWebsiteUrl] = useState('');
-  const [bannerUrl, setBannerUrl] = useState<string | null>(null);
-  const [bannerUploading, setBannerUploading] = useState(false);
-  const [isPublic, setIsPublic] = useState(false);
-
-  // Previous editions (lineage claim)
-  const [hasPredecessor, setHasPredecessor] = useState<'yes' | 'no'>('no');
-  const [predecessorQuery, setPredecessorQuery] = useState('');
-  const [predecessorResults, setPredecessorResults] = useState<PredecessorOption[]>([]);
-  const [predecessorSearching, setPredecessorSearching] = useState(false);
-  const [predecessor, setPredecessor] = useState<PredecessorOption | null>(null);
-
-  // Debounced predecessor search: own organized conferences AND public ones
-  // (RLS limits results to exactly that set for an authed client).
-  useEffect(() => {
-    if (loading || hasPredecessor !== 'yes' || !session) return;
-    const q = predecessorQuery.trim();
-    if (q.length < 2) { setPredecessorResults([]); setPredecessorSearching(false); return; }
-    let cancelled = false;
-    setPredecessorSearching(true);
-    const t = setTimeout(async () => {
-      const supabase = getAuthedClient();
-      const safe = q.replace(/[%,()]/g, '');
-      const { data } = await supabase
-        .from('conferences')
-        .select('id, full_name, acronym, slug, start_date, city, country')
-        .or(`full_name.ilike.%${safe}%,acronym.ilike.%${safe}%`)
-        .order('start_date', { ascending: false })
-        .limit(8);
-      if (!cancelled) {
-        setPredecessorResults((data as PredecessorOption[] | null) ?? []);
-        setPredecessorSearching(false);
-      }
-    }, 300);
-    return () => { cancelled = true; clearTimeout(t); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [predecessorQuery, hasPredecessor, loading, session?.access_token]);
-
-  // Pre-fill email from profile
+  // Pre-fill email from profile (same behaviour as the old form).
   useEffect(() => {
     if (profile?.email && !contactEmail) setContactEmail(profile.email);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.email]);
 
-  function validateAcronym(val: string) {
-    const upper = val.toUpperCase();
-    if (upper.length < 4) {
-      setAcronymError('Acronym must be at least 4 characters.');
-    } else if (!upper.includes('MUN')) {
-      setAcronymError("Acronym must include 'MUN' — e.g. TEIMUN, LIMUN, SMUNC.");
-    } else {
-      setAcronymError('');
-    }
-  }
+  const acronymError = acronym ? acronymProblem(acronym) : '';
 
-  function handleContinue() {
-    if (
-      !fullName.trim() ||
-      !acronym.trim() ||
-      acronymError ||
-      !contactEmail.trim() ||
-      !studentLevel ||
-      !startDate ||
-      !endDate ||
-      !country.trim() ||
-      !city.trim() ||
-      !format ||
-      !expectedDelegates
-    ) {
-      setError('Please fill in all required fields before continuing.');
-      return;
-    }
-    // Run acronym validation in case user never blurred
-    const upper = acronym.toUpperCase();
-    if (upper.length < 4) {
-      setAcronymError('Acronym must be at least 4 characters.');
-      setError('Please fix the errors above before continuing.');
-      return;
-    }
-    if (!upper.includes('MUN')) {
-      setAcronymError("Acronym must include 'MUN' — e.g. TEIMUN, LIMUN, SMUNC.");
-      setError('Please fix the errors above before continuing.');
-      return;
-    }
-    setError('');
-    setStep(2);
+  const countryOptions = useMemo(
+    () =>
+      UN_COUNTRIES.map((c) => ({
+        key: c.name,
+        label: c.name,
+        icon: <FlagImg code={c.code} size={30} />,
+      })),
+    [],
+  );
+
+  function goTo(next: number) {
+    setStepError('');
+    setStep(next);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
+  function advance(from: number) {
+    if (returnToReview) {
+      setReturnToReview(false);
+      goTo(8);
+    } else {
+      goTo(from + 1);
+    }
+  }
+
+  function editFromReview(target: number) {
+    setReturnToReview(true);
+    goTo(target);
+  }
+
+  function back() {
+    if (returnToReview) {
+      setReturnToReview(false);
+      goTo(8);
+    } else if (step > 1) {
+      goTo(step - 1);
+    }
+  }
+
+  // ── Submit — preserved exactly from the old form ─────────────────────────
   async function handleCreate() {
     if (!user || !session) {
       setError('You must be signed in to create a conference.');
@@ -403,18 +277,18 @@ export default function NewConferencePage() {
           city,
           format,
           expected_delegates: parseInt(expectedDelegates),
-          fee_amount: parseFloat(feeAmount) || 0,
+          fee_amount: feeKind === 'paid' ? parseFloat(feeAmount) || 0 : 0,
           fee_currency: feeCurrency,
-          description: description || null,
-          instagram_url: instagramUrl || null,
-          facebook_url: facebookUrl || null,
-          tiktok_url: tiktokUrl || null,
-          whatsapp_url: whatsappUrl || null,
-          website_url: websiteUrl || null,
-          banner_url: bannerUrl,
-          is_public: isPublic,
-          status: isPublic ? 'public' : 'private',
-          predecessor_conference_id: hasPredecessor === 'yes' && predecessor ? predecessor.id : null,
+          description: null,
+          instagram_url: null,
+          facebook_url: null,
+          tiktok_url: null,
+          whatsapp_url: null,
+          website_url: null,
+          banner_url: null,
+          is_public: false,
+          status: 'private',
+          predecessor_conference_id: null,
         });
 
       if (dbError) {
@@ -453,56 +327,62 @@ export default function NewConferencePage() {
     }
   }
 
-  async function handleBannerUpload(file: File) {
-    if (!file) return;
-    if (!session) {
-      alert('You must be signed in to upload a banner.');
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      alert('Banner image must be under 5MB.');
-      return;
-    }
-    setBannerUploading(true);
-    const supabase = createClient(
-      'https://luruhkwrgisytejswlas.supabase.co',
-      'sb_publishable_k7NdduzaXK358z8ew18ZKA_vBSieDlV',
-      { global: { headers: { Authorization: 'Bearer ' + session.access_token } } }
-    );
-    const ext = file.name.split('.').pop();
-    const path = 'banners/' + Date.now() + '-' + Math.random().toString(36).substring(2, 7) + '.' + ext;
-    const { error } = await supabase.storage
-      .from('conference-assets')
-      .upload(path, file, { contentType: file.type, upsert: false });
-    if (error) {
-      alert('Failed to upload banner: ' + error.message);
-      setBannerUploading(false);
-      return;
-    }
-    const { data: urlData } = supabase.storage
-      .from('conference-assets')
-      .getPublicUrl(path);
-    setBannerUrl(urlData.publicUrl);
-    setBannerUploading(false);
+  // ── Per-step validation before advancing ─────────────────────────────────
+
+  function continueStep1() {
+    if (!fullName.trim()) { setStepError('Give your conference its full name.'); return; }
+    const problem = acronymProblem(acronym);
+    if (problem) { setStepError(problem); return; }
+    advance(1);
   }
+
+  function continueStep4() {
+    if (!country) { setStepError('Pick the country your conference is in.'); return; }
+    if (!city.trim()) { setStepError('And the city — delegates will look for it.'); return; }
+    advance(4);
+  }
+
+  function continueStep5() {
+    if (!startDate || !endDate) { setStepError('Pick both a start and an end date.'); return; }
+    if (endDate < startDate) { setStepError('The end date cannot be before the start date.'); return; }
+    advance(5);
+  }
+
+  function continueStep6() {
+    const n = parseInt(expectedDelegates);
+    if (!expectedDelegates || isNaN(n) || n < 1) { setStepError('Give us a rough number of delegates.'); return; }
+    advance(6);
+  }
+
+  function continueStep7() {
+    if (!feeKind) { setStepError('Is your conference free or paid?'); return; }
+    if (feeKind === 'paid') {
+      const amt = parseFloat(feeAmount);
+      if (!feeAmount || isNaN(amt) || amt <= 0) { setStepError('Enter the delegate fee amount.'); return; }
+    }
+    advance(7);
+  }
+
+  const readyToCreate =
+    fullName.trim() && acronym.trim() && !acronymProblem(acronym) && contactEmail.trim() &&
+    studentLevel && startDate && endDate && country && city.trim() && format &&
+    expectedDelegates && parseInt(expectedDelegates) > 0 &&
+    (feeKind === 'free' || (feeKind === 'paid' && parseFloat(feeAmount) > 0));
 
   // Loading / auth spinner
   if (loading || !user) {
     return (
-      <div
-        className="min-h-screen flex items-center justify-center"
-        style={{ backgroundColor: '#EDE7D8' }}
-      >
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: NEU.base }}>
         <div
           className="w-7 h-7 rounded-full border-2 border-t-transparent animate-spin"
-          style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }}
+          style={{ borderColor: NEU.forest, borderTopColor: 'transparent' }}
         />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex flex-col relative" style={{ backgroundColor: '#EDE7D8' }}>
+    <div className="min-h-screen flex flex-col relative" style={{ backgroundColor: NEU.base }}>
       {/* Grain */}
       <div
         className="pointer-events-none fixed inset-0 z-0"
@@ -518,68 +398,364 @@ export default function NewConferencePage() {
       <div className="relative z-10 flex flex-col min-h-screen">
         <SiteNav />
 
-        <main className="flex-1 flex justify-center px-6 py-12">
-          <div className="w-full max-w-[680px]">
+        <main className="flex-1 flex justify-center px-5 py-10">
+          <div className="w-full">
 
-            <StepIndicator step={step} />
+            {/* ── Step 1 — name + acronym ─────────────────────────────── */}
+            {step === 1 && (
+              <WizardShell
+                step={1} total={TOTAL_STEPS}
+                title="What's your conference called?"
+                sub="The full name delegates will see — and the short acronym everyone actually uses."
+                onBack={returnToReview ? back : undefined}
+              >
+                <div className="flex flex-col gap-5">
+                  <div>
+                    <FieldLabel>Full conference name</FieldLabel>
+                    <input
+                      type="text"
+                      value={fullName}
+                      autoFocus
+                      onChange={(e) => {
+                        setFullName(e.target.value);
+                        if (!acronymTouched.current) setAcronym(suggestAcronym(e.target.value));
+                      }}
+                      placeholder="e.g. The European International Model United Nations"
+                      style={bigInputStyle}
+                      onFocus={focusForest}
+                      onBlur={blurClear}
+                    />
+                  </div>
+                  <div>
+                    <FieldLabel>Short name / acronym</FieldLabel>
+                    <input
+                      type="text"
+                      value={acronym}
+                      onChange={(e) => {
+                        acronymTouched.current = true;
+                        setAcronym(e.target.value.toUpperCase());
+                      }}
+                      placeholder="e.g. TEIMUN"
+                      style={{ ...bigInputStyle, letterSpacing: '0.08em', fontVariantNumeric: 'tabular-nums' }}
+                      onFocus={focusForest}
+                      onBlur={blurClear}
+                    />
+                    {acronymError ? (
+                      <ErrorNote>{acronymError}</ErrorNote>
+                    ) : (
+                      <p style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.muted, marginTop: 8 }}>
+                        Suggested from your conference name — every Gavelling acronym includes &lsquo;MUN&rsquo;.
+                      </p>
+                    )}
+                  </div>
+                </div>
+                {stepError && <ErrorNote>{stepError}</ErrorNote>}
+                <ContinueButton onClick={continueStep1} disabled={!fullName.trim() || !acronym.trim() || !!acronymError} />
+              </WizardShell>
+            )}
 
-            {/* Card */}
-            <div
-              style={{
-                backgroundColor: '#FAF8F3',
-                border: '1px solid #DDD4C0',
-                borderRadius: '16px',
-                boxShadow: '0 8px 40px rgba(28, 20, 16, 0.09), 0 2px 8px rgba(28, 20, 16, 0.05)',
-                padding: 'clamp(24px, 5vw, 40px) clamp(20px, 5vw, 36px)',
-              }}
-            >
-              {step === 1 ? (
-                <Step1
-                  fullName={fullName} setFullName={setFullName}
-                  acronym={acronym} setAcronym={setAcronym}
-                  acronymError={acronymError} validateAcronym={validateAcronym}
-                  contactEmail={contactEmail} setContactEmail={setContactEmail}
-                  studentLevel={studentLevel} setStudentLevel={setStudentLevel}
-                  startDate={startDate} setStartDate={setStartDate}
-                  endDate={endDate} setEndDate={setEndDate}
-                  country={country} setCountry={setCountry}
-                  city={city} setCity={setCity}
-                  format={format} setFormat={setFormat}
-                  expectedDelegates={expectedDelegates} setExpectedDelegates={setExpectedDelegates}
-                  feeAmount={feeAmount} setFeeAmount={setFeeAmount}
-                  feeCurrency={feeCurrency} setFeeCurrency={setFeeCurrency}
-                  error={error}
-                  onContinue={handleContinue}
+            {/* ── Step 2 — format ─────────────────────────────────────── */}
+            {step === 2 && (
+              <WizardShell
+                step={2} total={TOTAL_STEPS}
+                title="In person or online?"
+                sub="How will delegates attend your conference?"
+                onBack={back}
+              >
+                <TwoTabPick
+                  options={[
+                    { key: 'in-person', label: 'In Person', image: '/onboarding/hall-01.jpg', sub: 'A real venue, real gavels' },
+                    { key: 'online', label: 'Online', image: '/onboarding/laptop-01.jpg', sub: 'Fully remote committees' },
+                  ]}
+                  value={format || null}
+                  onChange={(k) => { setFormat(k as 'in-person' | 'online'); setStepError(''); }}
                 />
-              ) : (
-                <Step2
-                  description={description} setDescription={setDescription}
-                  instagramUrl={instagramUrl} setInstagramUrl={setInstagramUrl}
-                  facebookUrl={facebookUrl} setFacebookUrl={setFacebookUrl}
-                  tiktokUrl={tiktokUrl} setTiktokUrl={setTiktokUrl}
-                  whatsappUrl={whatsappUrl} setWhatsappUrl={setWhatsappUrl}
-                  websiteUrl={websiteUrl} setWebsiteUrl={setWebsiteUrl}
-                  bannerUrl={bannerUrl}
-                  setBannerUrl={setBannerUrl}
-                  bannerUploading={bannerUploading}
-                  onBannerUpload={handleBannerUpload}
-                  isPublic={isPublic}
-                  setIsPublic={setIsPublic}
-                  hasPredecessor={hasPredecessor}
-                  setHasPredecessor={setHasPredecessor}
-                  predecessorQuery={predecessorQuery}
-                  setPredecessorQuery={setPredecessorQuery}
-                  predecessorResults={predecessorResults}
-                  predecessorSearching={predecessorSearching}
-                  predecessor={predecessor}
-                  setPredecessor={setPredecessor}
-                  error={error}
-                  submitting={submitting}
-                  onBack={() => { setStep(1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-                  onCreate={handleCreate}
+                <div className="flex justify-center">
+                  <TertiaryPick label="A bit of both — it's hybrid" selected={format === 'hybrid'} onClick={() => { setFormat('hybrid'); setStepError(''); }} />
+                </div>
+                {stepError && <ErrorNote>{stepError}</ErrorNote>}
+                <ContinueButton onClick={() => (format ? advance(2) : setStepError('Pick how delegates will attend.'))} disabled={!format} />
+              </WizardShell>
+            )}
+
+            {/* ── Step 3 — level ──────────────────────────────────────── */}
+            {step === 3 && (
+              <WizardShell
+                step={3} total={TOTAL_STEPS}
+                title="High school or university level?"
+                sub="Who is your conference for?"
+                onBack={back}
+              >
+                <TwoTabPick
+                  options={[
+                    { key: 'school', label: 'High School', image: '/onboarding/classroom-01.jpg', sub: 'Secondary-school delegates' },
+                    { key: 'university', label: 'University', image: '/onboarding/campus-01.jpg', sub: 'University students and above' },
+                  ]}
+                  value={studentLevel || null}
+                  onChange={(k) => { setStudentLevel(k as 'school' | 'university'); setStepError(''); }}
                 />
-              )}
-            </div>
+                <div className="flex justify-center">
+                  <TertiaryPick label="Open to both" selected={studentLevel === 'both'} onClick={() => { setStudentLevel('both'); setStepError(''); }} />
+                </div>
+                {stepError && <ErrorNote>{stepError}</ErrorNote>}
+                <ContinueButton onClick={() => (studentLevel ? advance(3) : setStepError('Pick your delegate level.'))} disabled={!studentLevel} />
+              </WizardShell>
+            )}
+
+            {/* ── Step 4 — where ──────────────────────────────────────── */}
+            {step === 4 && (
+              <WizardShell
+                step={4} total={TOTAL_STEPS}
+                title="Where is it happening?"
+                sub="Country first, then the city."
+                onBack={back}
+              >
+                <CardSelect
+                  options={countryOptions}
+                  value={country || null}
+                  onChange={(k) => { setCountry(k); setStepError(''); }}
+                  searchable
+                  columns={3}
+                />
+                <div style={{ marginTop: 18 }}>
+                  <FieldLabel>City</FieldLabel>
+                  <input
+                    type="text"
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
+                    placeholder="e.g. The Hague"
+                    style={bigInputStyle}
+                    onFocus={focusForest}
+                    onBlur={blurClear}
+                  />
+                </div>
+                {stepError && <ErrorNote>{stepError}</ErrorNote>}
+                <ContinueButton onClick={continueStep4} disabled={!country || !city.trim()} />
+              </WizardShell>
+            )}
+
+            {/* ── Step 5 — when ───────────────────────────────────────── */}
+            {step === 5 && (
+              <WizardShell
+                step={5} total={TOTAL_STEPS}
+                title="When does it run?"
+                sub="First and last day of the conference."
+                onBack={back}
+              >
+                <NeuInset style={{ padding: '20px 22px', borderRadius: 20 }}>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <FieldLabel>First day</FieldLabel>
+                      <div className="relative">
+                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: NEU.muted }}>
+                          <CalendarDays size={16} />
+                        </span>
+                        <input
+                          type="date"
+                          value={startDate}
+                          onChange={(e) => { setStartDate(e.target.value); if (!endDate || endDate < e.target.value) setEndDate(e.target.value); }}
+                          style={{ ...bigInputStyle, backgroundColor: NEU.surface, boxShadow: NEU.outSm, paddingLeft: 40, fontVariantNumeric: 'tabular-nums' }}
+                          onFocus={focusForest}
+                          onBlur={blurClear}
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <FieldLabel>Last day</FieldLabel>
+                      <div className="relative">
+                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: NEU.muted }}>
+                          <CalendarDays size={16} />
+                        </span>
+                        <input
+                          type="date"
+                          value={endDate}
+                          min={startDate || undefined}
+                          onChange={(e) => setEndDate(e.target.value)}
+                          style={{ ...bigInputStyle, backgroundColor: NEU.surface, boxShadow: NEU.outSm, paddingLeft: 40, fontVariantNumeric: 'tabular-nums' }}
+                          onFocus={focusForest}
+                          onBlur={blurClear}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </NeuInset>
+                {stepError && <ErrorNote>{stepError}</ErrorNote>}
+                <ContinueButton onClick={continueStep5} disabled={!startDate || !endDate} />
+              </WizardShell>
+            )}
+
+            {/* ── Step 6 — expected delegates ─────────────────────────── */}
+            {step === 6 && (
+              <WizardShell
+                step={6} total={TOTAL_STEPS}
+                title="How many delegates do you expect?"
+                sub="A rough number is fine — you can refine it later."
+                onBack={back}
+              >
+                <CardSelect
+                  options={DELEGATE_RANGES.map((r) => ({
+                    key: r.key,
+                    label: r.label,
+                    sub: r.sub,
+                    icon: <Emoji3D name={r.emoji} size={34} />,
+                  }))}
+                  value={delegateRange || null}
+                  onChange={(k) => { setDelegateRange(k); setExpectedDelegates(k); setStepError(''); }}
+                  columns={4}
+                />
+                <div style={{ marginTop: 18 }}>
+                  <FieldLabel>Or an exact number</FieldLabel>
+                  <input
+                    type="number"
+                    min={1}
+                    value={expectedDelegates}
+                    onChange={(e) => { setExpectedDelegates(e.target.value); setDelegateRange(''); }}
+                    placeholder="e.g. 300"
+                    style={{ ...bigInputStyle, fontVariantNumeric: 'tabular-nums' }}
+                    onFocus={focusForest}
+                    onBlur={blurClear}
+                  />
+                </div>
+                {stepError && <ErrorNote>{stepError}</ErrorNote>}
+                <ContinueButton onClick={continueStep6} disabled={!expectedDelegates || parseInt(expectedDelegates) < 1} />
+              </WizardShell>
+            )}
+
+            {/* ── Step 7 — fee ────────────────────────────────────────── */}
+            {step === 7 && (
+              <WizardShell
+                step={7} total={TOTAL_STEPS}
+                title="Is there a delegate fee?"
+                sub="Free conferences fill fast. Paid fees are collected per delegate."
+                onBack={back}
+              >
+                <TwoTabPick
+                  options={[
+                    { key: 'free', label: 'Free', icon: <Emoji3D name="Party popper" size={52} />, sub: 'No delegate fee' },
+                    { key: 'paid', label: 'Paid', icon: <Emoji3D name="Money bag" size={52} />, sub: 'Delegates pay to attend' },
+                  ]}
+                  value={feeKind || null}
+                  onChange={(k) => { setFeeKind(k as 'free' | 'paid'); setStepError(''); }}
+                />
+                {feeKind === 'paid' && (
+                  <NeuInset style={{ padding: '18px 20px', borderRadius: 20, marginTop: 18 }}>
+                    <FieldLabel>Delegate fee</FieldLabel>
+                    <div className="flex gap-3">
+                      <select
+                        value={feeCurrency}
+                        onChange={(e) => setFeeCurrency(e.target.value)}
+                        style={{ ...bigInputStyle, width: 110, cursor: 'pointer', backgroundColor: NEU.surface, boxShadow: NEU.outSm }}
+                        onFocus={focusForest}
+                        onBlur={blurClear}
+                      >
+                        {['GBP', 'USD', 'EUR', 'CHF'].map((c) => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
+                      <input
+                        type="number"
+                        min={0}
+                        step={0.01}
+                        value={feeAmount}
+                        onChange={(e) => setFeeAmount(e.target.value)}
+                        placeholder="0.00"
+                        autoFocus
+                        style={{ ...bigInputStyle, flex: 1, backgroundColor: NEU.surface, boxShadow: NEU.outSm, fontVariantNumeric: 'tabular-nums' }}
+                        onFocus={focusForest}
+                        onBlur={blurClear}
+                      />
+                    </div>
+                    <p style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.muted, marginTop: 10, lineHeight: 1.5 }}>
+                      Gavelling adds a 5% surcharge for delegates without Gavelling Unlimited.
+                    </p>
+                  </NeuInset>
+                )}
+                {stepError && <ErrorNote>{stepError}</ErrorNote>}
+                <ContinueButton
+                  label="Review"
+                  onClick={continueStep7}
+                  disabled={!feeKind || (feeKind === 'paid' && !(parseFloat(feeAmount) > 0))}
+                />
+              </WizardShell>
+            )}
+
+            {/* ── Step 8 — review + create ────────────────────────────── */}
+            {step === 8 && (
+              <WizardShell
+                step={8} total={TOTAL_STEPS}
+                title="Ready to create it?"
+                sub="Check everything over — tap any row to change it."
+                onBack={back}
+              >
+                <div className="flex flex-col gap-2.5">
+                  <ReviewRow label="Conference" value={`${fullName} (${acronym.toUpperCase()})`} onEdit={() => editFromReview(1)} />
+                  <ReviewRow label="Format" value={format === 'in-person' ? 'In person' : format === 'online' ? 'Online' : 'Hybrid'} onEdit={() => editFromReview(2)} />
+                  <ReviewRow label="Level" value={studentLevel === 'school' ? 'High school' : studentLevel === 'university' ? 'University' : 'Both'} onEdit={() => editFromReview(3)} />
+                  <ReviewRow label="Location" value={`${city}, ${country}`} onEdit={() => editFromReview(4)} />
+                  <ReviewRow label="Dates" value={formatDateRange(startDate, endDate)} onEdit={() => editFromReview(5)} />
+                  <ReviewRow label="Expected delegates" value={expectedDelegates} onEdit={() => editFromReview(6)} />
+                  <ReviewRow
+                    label="Fee"
+                    value={feeKind === 'free' ? 'Free' : `${feeCurrency} ${parseFloat(feeAmount || '0').toFixed(2)} per delegate`}
+                    onEdit={() => editFromReview(7)}
+                  />
+                </div>
+
+                {/* Contact email — required by the directory, prefilled from your profile */}
+                <div style={{ marginTop: 20 }}>
+                  <FieldLabel>Organizer contact email</FieldLabel>
+                  <div className="relative">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: NEU.muted }}>
+                      <Mail size={16} />
+                    </span>
+                    <input
+                      type="email"
+                      value={contactEmail}
+                      onChange={(e) => setContactEmail(e.target.value)}
+                      placeholder="conference@example.com"
+                      style={{ ...bigInputStyle, paddingLeft: 42, fontSize: 14 }}
+                      onFocus={focusForest}
+                      onBlur={blurClear}
+                    />
+                  </div>
+                </div>
+
+                <p
+                  style={{
+                    fontFamily: OUTFIT, fontSize: 12.5, color: NEU.muted, lineHeight: 1.6,
+                    textAlign: 'center', marginTop: 22, padding: '0 12px',
+                  }}
+                >
+                  Description, banner, social links, visibility and previous editions —
+                  you can set everything else later in Settings. Your conference starts private.
+                </p>
+
+                {error && (
+                  <div
+                    className="mt-4 px-4 py-3 rounded-xl text-sm"
+                    style={{
+                      backgroundColor: 'rgba(139, 32, 32, 0.08)',
+                      border: '1px solid rgba(139, 32, 32, 0.2)',
+                      color: '#8B2020',
+                      fontFamily: OUTFIT,
+                    }}
+                  >
+                    {error}
+                  </div>
+                )}
+
+                <div className="flex justify-center" style={{ marginTop: 24 }}>
+                  <NeuButton
+                    onClick={handleCreate}
+                    disabled={submitting || !readyToCreate || !contactEmail.trim()}
+                    gradient={NEU_GRADIENTS.gold}
+                    style={{ padding: '15px 44px', fontSize: 15 }}
+                  >
+                    {submitting ? 'CREATING…' : 'CREATE CONFERENCE'}
+                  </NeuButton>
+                </div>
+              </WizardShell>
+            )}
 
           </div>
         </main>
@@ -588,652 +764,50 @@ export default function NewConferencePage() {
   );
 }
 
-// ── Step 1 component ──────────────────────────────────────────────────────
+// ── Review row ─────────────────────────────────────────────────────────────
 
-function Step1({
-  fullName, setFullName,
-  acronym, setAcronym, acronymError, validateAcronym,
-  contactEmail, setContactEmail,
-  studentLevel, setStudentLevel,
-  startDate, setStartDate,
-  endDate, setEndDate,
-  country, setCountry,
-  city, setCity,
-  format, setFormat,
-  expectedDelegates, setExpectedDelegates,
-  feeAmount, setFeeAmount,
-  feeCurrency, setFeeCurrency,
-  error,
-  onContinue,
-}: {
-  fullName: string; setFullName: (v: string) => void;
-  acronym: string; setAcronym: (v: string) => void;
-  acronymError: string; validateAcronym: (v: string) => void;
-  contactEmail: string; setContactEmail: (v: string) => void;
-  studentLevel: 'school' | 'university' | 'both' | ''; setStudentLevel: (v: 'school' | 'university' | 'both') => void;
-  startDate: string; setStartDate: (v: string) => void;
-  endDate: string; setEndDate: (v: string) => void;
-  country: string; setCountry: (v: string) => void;
-  city: string; setCity: (v: string) => void;
-  format: 'in-person' | 'online' | 'hybrid' | ''; setFormat: (v: 'in-person' | 'online' | 'hybrid') => void;
-  expectedDelegates: string; setExpectedDelegates: (v: string) => void;
-  feeAmount: string; setFeeAmount: (v: string) => void;
-  feeCurrency: string; setFeeCurrency: (v: string) => void;
-  error: string;
-  onContinue: () => void;
-}) {
+function ReviewRow({ label, value, onEdit }: { label: string; value: string; onEdit: () => void }) {
+  const [hovered, setHovered] = useState(false);
   return (
-    <div>
-      <h2
-        className="font-semibold mb-6"
-        style={{ color: '#1C1410', fontSize: '18px', fontFamily: "'Outfit', sans-serif" }}
-      >
-        The Basics
-      </h2>
-
-      <div className="flex flex-col gap-5">
-
-        <Field label="Full Conference Name">
-          <input
-            type="text"
-            required
-            value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
-            placeholder="e.g. The European International Model United Nations"
-            style={inputStyle}
-            onFocus={focusGreen}
-            onBlur={blurGray}
-          />
-        </Field>
-
-        <Field label="Short Name / Acronym">
-          <input
-            type="text"
-            required
-            value={acronym.toUpperCase()}
-            onChange={(e) => setAcronym(e.target.value.toUpperCase())}
-            onBlur={(e) => { blurGray(e); validateAcronym(e.target.value); }}
-            onFocus={focusGreen}
-            placeholder="e.g. TEIMUN"
-            style={inputStyle}
-          />
-          {acronymError && (
-            <p
-              className="flex items-center gap-1.5 mt-1.5 text-sm"
-              style={{ color: '#B8844A', fontFamily: "'Outfit', sans-serif" }}
-            >
-              <AlertTriangle size={14} />
-              {acronymError}
-            </p>
-          )}
-        </Field>
-
-        <Field label="Organizer Contact Email">
-          <input
-            type="email"
-            required
-            value={contactEmail}
-            onChange={(e) => setContactEmail(e.target.value)}
-            placeholder="conference@example.com"
-            style={inputStyle}
-            onFocus={focusGreen}
-            onBlur={blurGray}
-          />
-        </Field>
-
-        <Field label="Student Level">
-          <ToggleGroup
-            options={[
-              { value: 'school', label: 'HIGH SCHOOL' },
-              { value: 'university', label: 'UNIVERSITY' },
-              { value: 'both', label: 'BOTH' },
-            ]}
-            value={studentLevel}
-            onChange={setStudentLevel}
-          />
-        </Field>
-
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="Start Date">
-            <input
-              type="date"
-              required
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              style={inputStyle}
-              onFocus={focusGreen}
-              onBlur={blurGray}
-            />
-          </Field>
-          <Field label="End Date">
-            <input
-              type="date"
-              required
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              style={inputStyle}
-              onFocus={focusGreen}
-              onBlur={blurGray}
-            />
-          </Field>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="Country">
-            <select
-              required
-              value={country}
-              onChange={(e) => setCountry(e.target.value)}
-              style={{ ...inputStyle, cursor: 'pointer' }}
-              onFocus={focusGreen}
-              onBlur={blurGray}
-            >
-              <option value="">Select a country</option>
-              {UN_COUNTRIES.map(c => <option key={c.code} value={c.name}>{c.name}</option>)}
-            </select>
-          </Field>
-          <Field label="City">
-            <input
-              type="text"
-              required
-              value={city}
-              onChange={(e) => setCity(e.target.value)}
-              placeholder="e.g. The Hague"
-              style={inputStyle}
-              onFocus={focusGreen}
-              onBlur={blurGray}
-            />
-          </Field>
-        </div>
-
-        <Field label="Format">
-          <ToggleGroup
-            options={[
-              { value: 'in-person', label: 'IN-PERSON' },
-              { value: 'online', label: 'ONLINE' },
-              { value: 'hybrid', label: 'HYBRID' },
-            ]}
-            value={format}
-            onChange={setFormat}
-          />
-        </Field>
-
-        <Field label="Expected Delegates">
-          <input
-            type="number"
-            required
-            min={1}
-            value={expectedDelegates}
-            onChange={(e) => setExpectedDelegates(e.target.value)}
-            placeholder="e.g. 300"
-            style={inputStyle}
-            onFocus={focusGreen}
-            onBlur={blurGray}
-          />
-        </Field>
-
-        <Field label="Conference Fee">
-          <div className="flex gap-3">
-            <select
-              value={feeCurrency}
-              onChange={(e) => setFeeCurrency(e.target.value)}
-              style={{ ...inputStyle, width: '30%', cursor: 'pointer' }}
-              onFocus={focusGreen}
-              onBlur={blurGray}
-            >
-              {['GBP', 'USD', 'EUR', 'CHF'].map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-            <input
-              type="number"
-              min={0}
-              step={0.01}
-              value={feeAmount}
-              onChange={(e) => setFeeAmount(e.target.value)}
-              placeholder="0.00"
-              style={{ ...inputStyle, width: '70%' }}
-              onFocus={focusGreen}
-              onBlur={blurGray}
-            />
-          </div>
-          <p
-            className="text-xs mt-1.5"
-            style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}
-          >
-            Set to 0 for free conferences. Gavelling adds a 5% surcharge for delegates without Gavelling Unlimited.
-          </p>
-        </Field>
-
-      </div>
-
-      {error && (
-        <div
-          className="mt-5 px-4 py-3 rounded-xl text-sm"
-          style={{
-            backgroundColor: 'rgba(139, 32, 32, 0.08)',
-            border: '1px solid rgba(139, 32, 32, 0.2)',
-            color: '#8B2020',
-            fontFamily: "'Outfit', sans-serif",
-          }}
-        >
-          {error}
-        </div>
-      )}
-
-      <button
-        onClick={onContinue}
-        className="w-full mt-6 rounded-xl py-3 font-bold text-sm tracking-widest transition-colors focus:outline-none"
+    <button
+      type="button"
+      onClick={onEdit}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      className="w-full flex items-center gap-3 text-left focus:outline-none"
+      style={{
+        padding: '13px 18px',
+        borderRadius: 16,
+        border: 'none',
+        backgroundColor: NEU.surface,
+        boxShadow: hovered ? NEU.outSmHover : NEU.outSm,
+        transform: hovered ? 'translateY(-1px)' : 'translateY(0)',
+        transition: `all 220ms ${EASE}`,
+        cursor: 'pointer',
+      }}
+    >
+      <span
         style={{
-          backgroundColor: '#1B3828',
-          color: '#EED98A',
-          fontFamily: "'Outfit', sans-serif",
-          letterSpacing: '0.08em',
+          fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.1em',
+          color: NEU.muted, textTransform: 'uppercase', width: 132, flexShrink: 0,
         }}
-        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
       >
-        CONTINUE TO DETAILS →
-      </button>
-    </div>
+        {label}
+      </span>
+      <span
+        className="flex-1 truncate"
+        style={{ fontFamily: OUTFIT, fontSize: 14.5, fontWeight: 700, color: NEU.ink, fontVariantNumeric: 'tabular-nums' }}
+      >
+        {value}
+      </span>
+      <Pencil size={14} style={{ color: hovered ? NEU.forest : NEU.muted, flexShrink: 0, transition: `color 220ms ${EASE}` }} />
+    </button>
   );
 }
 
-// ── Step 2 component ──────────────────────────────────────────────────────
-
-function Step2({
-  description, setDescription,
-  instagramUrl, setInstagramUrl,
-  facebookUrl, setFacebookUrl,
-  tiktokUrl, setTiktokUrl,
-  whatsappUrl, setWhatsappUrl,
-  websiteUrl, setWebsiteUrl,
-  bannerUrl, setBannerUrl,
-  bannerUploading,
-  onBannerUpload,
-  isPublic, setIsPublic,
-  hasPredecessor, setHasPredecessor,
-  predecessorQuery, setPredecessorQuery,
-  predecessorResults, predecessorSearching,
-  predecessor, setPredecessor,
-  error,
-  submitting,
-  onBack,
-  onCreate,
-}: {
-  description: string; setDescription: (v: string) => void;
-  instagramUrl: string; setInstagramUrl: (v: string) => void;
-  facebookUrl: string; setFacebookUrl: (v: string) => void;
-  tiktokUrl: string; setTiktokUrl: (v: string) => void;
-  whatsappUrl: string; setWhatsappUrl: (v: string) => void;
-  websiteUrl: string; setWebsiteUrl: (v: string) => void;
-  bannerUrl: string | null; setBannerUrl: (url: string | null) => void;
-  bannerUploading: boolean;
-  onBannerUpload: (file: File) => void;
-  isPublic: boolean; setIsPublic: (v: boolean) => void;
-  hasPredecessor: 'yes' | 'no'; setHasPredecessor: (v: 'yes' | 'no') => void;
-  predecessorQuery: string; setPredecessorQuery: (v: string) => void;
-  predecessorResults: PredecessorOption[]; predecessorSearching: boolean;
-  predecessor: PredecessorOption | null; setPredecessor: (v: PredecessorOption | null) => void;
-  error: string;
-  submitting: boolean;
-  onBack: () => void;
-  onCreate: () => void;
-}) {
-  return (
-    <div>
-      <h2
-        className="font-semibold mb-1"
-        style={{ color: '#1C1410', fontSize: '18px', fontFamily: "'Outfit', sans-serif" }}
-      >
-        Details
-      </h2>
-      <p
-        className="text-sm mb-6"
-        style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}
-      >
-        All optional — you can fill these in later from your dashboard.
-      </p>
-
-      <div className="flex flex-col gap-5">
-
-        <Field label="Conference Banner">
-          <div
-            style={{
-              border: '1.5px dashed #DDD4C0',
-              borderRadius: 14,
-              overflow: 'hidden',
-              backgroundColor: '#FAF8F3',
-              minHeight: 140,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              position: 'relative',
-              cursor: 'pointer',
-            }}
-            onClick={() => { if (!bannerUploading) document.getElementById('banner-upload')?.click(); }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
-          >
-            {bannerUrl ? (
-              <>
-                <img src={bannerUrl} alt="Banner" style={{ width: '100%', height: '160px', objectFit: 'cover', display: 'block' }} />
-                <button
-                  onClick={(e) => { e.stopPropagation(); setBannerUrl(null); }}
-                  style={{
-                    position: 'absolute', top: 8, right: 8,
-                    backgroundColor: 'rgba(27,56,40,0.8)', color: '#EDE7D8',
-                    border: 'none', borderRadius: 8, padding: '4px 10px',
-                    fontSize: 11, fontFamily: "'Outfit', sans-serif", fontWeight: 700,
-                    cursor: 'pointer',
-                  }}
-                >
-                  CHANGE
-                </button>
-              </>
-            ) : bannerUploading ? (
-              <div style={{ textAlign: 'center', padding: 24 }}>
-                <div className="w-6 h-6 rounded-full border-2 border-t-transparent animate-spin mx-auto mb-2" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
-                <p style={{ fontSize: 12, color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Uploading...</p>
-              </div>
-            ) : (
-              <div style={{ textAlign: 'center', padding: 24 }}>
-                <p style={{ fontSize: 13, fontWeight: 700, color: '#1C1410', fontFamily: "'Outfit', sans-serif", marginBottom: 4 }}>Upload Conference Banner</p>
-                <p style={{ fontSize: 11, color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Recommended: 1200×630px · JPG, PNG or WebP · Max 5MB</p>
-              </div>
-            )}
-            <input
-              id="banner-upload"
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              style={{ display: 'none' }}
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) onBannerUpload(f); }}
-            />
-          </div>
-
-          {/* Preset picker — sets the local bannerUrl; saved with the conference on create */}
-          <div style={{ marginTop: 12 }}>
-            <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 10, letterSpacing: '0.14em', color: '#9A8A78', margin: '0 0 8px 0' }}>
-              OR PICK A PRESET
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {BANNER_PRESETS.map(p => {
-                const selected = bannerUrl === p;
-                return (
-                  <button
-                    key={p}
-                    type="button"
-                    onClick={() => setBannerUrl(p)}
-                    disabled={bannerUploading}
-                    aria-label={'Use preset banner ' + p}
-                    style={{
-                      width: 84, height: 48, padding: 0, borderRadius: 10, overflow: 'hidden',
-                      cursor: bannerUploading ? 'wait' : 'pointer',
-                      border: selected ? '2px solid #B6871F' : '1.5px solid #DDD4C0',
-                      boxShadow: selected ? '0 0 0 3px rgba(238,217,138,0.55)' : 'none',
-                      transition: 'border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease',
-                      backgroundColor: '#EDE7D8',
-                    }}
-                    onMouseEnter={(e) => { if (!selected) (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'; }}
-                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; }}
-                  >
-                    <img src={p} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </Field>
-
-        <Field label="Conference Description">
-          <textarea
-            rows={6}
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Tell delegates about your conference — theme, highlights, what to expect, fee inclusions, social events..."
-            style={{
-              ...inputStyle,
-              resize: 'vertical',
-              lineHeight: '1.6',
-            }}
-            onFocus={focusGreen}
-            onBlur={blurGray}
-          />
-        </Field>
-
-        <Field label="Social Media & Links">
-          <div className="flex flex-col gap-3">
-            <SocialInput
-              icon={<Camera size={16} />}
-              placeholder="Instagram URL"
-              value={instagramUrl}
-              onChange={setInstagramUrl}
-            />
-            <SocialInput
-              icon={<Globe size={16} />}
-              placeholder="Facebook URL"
-              value={facebookUrl}
-              onChange={setFacebookUrl}
-            />
-            <SocialInput
-              icon={<Music size={16} />}
-              placeholder="TikTok URL"
-              value={tiktokUrl}
-              onChange={setTiktokUrl}
-            />
-            <SocialInput
-              icon={<MessageCircle size={16} />}
-              placeholder="WhatsApp URL"
-              value={whatsappUrl}
-              onChange={setWhatsappUrl}
-            />
-            <SocialInput
-              icon={<Globe size={16} />}
-              placeholder="Website URL"
-              value={websiteUrl}
-              onChange={setWebsiteUrl}
-            />
-          </div>
-        </Field>
-
-        <Field label="Previous Editions">
-          <p className="text-sm mb-3" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-            Have you organised previous editions of this conference on Gavelling?
-          </p>
-          <ToggleGroup
-            options={[
-              { value: 'no', label: 'NO' },
-              { value: 'yes', label: 'YES' },
-            ]}
-            value={hasPredecessor}
-            onChange={(v) => {
-              setHasPredecessor(v);
-              if (v === 'no') { setPredecessor(null); setPredecessorQuery(''); }
-            }}
-          />
-
-          {hasPredecessor === 'yes' && (
-            <div className="mt-3">
-              {predecessor ? (
-                <div
-                  className="flex items-start gap-3 px-4 py-3 rounded-xl"
-                  style={{ border: '1.5px solid #1B3828', backgroundColor: 'rgba(27,56,40,0.04)' }}
-                >
-                  <div className="flex-1 min-w-0">
-                    <p style={{ fontSize: 10, color: '#B6871F', fontFamily: "'Outfit', sans-serif", fontWeight: 700, letterSpacing: '0.12em', fontVariantNumeric: 'tabular-nums', textTransform: 'uppercase', marginBottom: 2 }}>
-                      {predecessor.acronym}
-                      {predecessor.start_date ? ' · ' + new Date(predecessor.start_date + 'T00:00:00').getFullYear() : ''}
-                    </p>
-                    <p className="font-semibold text-sm truncate" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-                      {predecessor.full_name}
-                    </p>
-                    <p className="text-xs mt-1.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", lineHeight: 1.5 }}>
-                      The Main Organiser of this conference will be asked to confirm the link after you create yours. Nothing is shown publicly until they approve.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => { setPredecessor(null); setPredecessorQuery(''); }}
-                    className="flex-shrink-0 focus:outline-none"
-                    style={{ color: '#9A8A78', marginTop: 2 }}
-                    aria-label="Remove selected previous edition"
-                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#8B2020'; }}
-                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-              ) : (
-                <div className="relative">
-                  <span className="absolute left-3 top-[22px] -translate-y-1/2 pointer-events-none" style={{ color: '#9A8A78' }}>
-                    <Search size={16} />
-                  </span>
-                  <input
-                    type="text"
-                    value={predecessorQuery}
-                    onChange={(e) => setPredecessorQuery(e.target.value)}
-                    placeholder="Search by conference name or acronym..."
-                    style={{ ...inputStyle, paddingLeft: '38px' }}
-                    onFocus={focusGreen}
-                    onBlur={blurGray}
-                  />
-                  <p className="text-xs mt-1.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                    A past edition may belong to a different account — its Main Organiser approves the link.
-                  </p>
-                  {(predecessorSearching || predecessorResults.length > 0 || predecessorQuery.trim().length >= 2) && (
-                    <div
-                      className="mt-2 rounded-xl overflow-hidden"
-                      style={{ border: '1.5px solid #DDD4C0', backgroundColor: '#FAF8F3' }}
-                    >
-                      {predecessorSearching ? (
-                        <p className="px-4 py-3 text-sm" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                          Searching...
-                        </p>
-                      ) : predecessorResults.length === 0 ? (
-                        <p className="px-4 py-3 text-sm" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                          No conferences found. Try the full name or acronym.
-                        </p>
-                      ) : (
-                        predecessorResults.map((opt, idx) => (
-                          <button
-                            key={opt.id}
-                            type="button"
-                            onClick={() => setPredecessor(opt)}
-                            className="w-full text-left px-4 py-2.5 focus:outline-none transition-colors"
-                            style={{
-                              backgroundColor: 'transparent',
-                              borderTop: idx > 0 ? '1px solid #F0EDE6' : 'none',
-                              cursor: 'pointer',
-                            }}
-                            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
-                            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                          >
-                            <p style={{ fontSize: 10, color: '#B6871F', fontFamily: "'Outfit', sans-serif", fontWeight: 700, letterSpacing: '0.12em', fontVariantNumeric: 'tabular-nums', textTransform: 'uppercase' }}>
-                              {opt.acronym}
-                              {opt.start_date ? ' · ' + new Date(opt.start_date + 'T00:00:00').getFullYear() : ''}
-                              {opt.city ? ' · ' + opt.city : ''}
-                            </p>
-                            <p className="font-semibold text-sm truncate" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-                              {opt.full_name}
-                            </p>
-                          </button>
-                        ))
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-        </Field>
-
-        <Field label="Conference Visibility">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {([
-              { value: false, label: 'PRIVATE', desc: 'Only visible to people with a direct link. Delegates cannot find or apply through Gavelling until you make it public.' },
-              { value: true, label: 'PUBLIC', desc: 'Listed in the Gavelling conference directory. Delegates can find and apply immediately.' },
-            ] as { value: boolean; label: string; desc: string }[]).map(({ value, label, desc }) => (
-              <div
-                key={label}
-                onClick={() => setIsPublic(value)}
-                style={{
-                  display: 'flex', alignItems: 'flex-start', gap: 12,
-                  padding: '12px 16px', borderRadius: 12, cursor: 'pointer',
-                  border: isPublic === value ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
-                  backgroundColor: isPublic === value ? 'rgba(27,56,40,0.04)' : 'transparent',
-                  transition: 'all 150ms ease',
-                }}
-              >
-                <div style={{
-                  width: 18, height: 18, borderRadius: '50%', flexShrink: 0, marginTop: 2,
-                  border: isPublic === value ? '5px solid #1B3828' : '2px solid #DDD4C0',
-                  backgroundColor: 'transparent', transition: 'all 150ms ease',
-                }} />
-                <div>
-                  <p style={{ fontSize: 13, fontWeight: 800, color: '#1C1410', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.06em', marginBottom: 2 }}>{label}</p>
-                  <p style={{ fontSize: 12, color: '#9A8A78', fontFamily: "'Outfit', sans-serif", lineHeight: 1.5 }}>{desc}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Field>
-
-      </div>
-
-      {error && (
-        <div
-          className="mt-5 px-4 py-3 rounded-xl text-sm"
-          style={{
-            backgroundColor: 'rgba(139, 32, 32, 0.08)',
-            border: '1px solid rgba(139, 32, 32, 0.2)',
-            color: '#8B2020',
-            fontFamily: "'Outfit', sans-serif",
-          }}
-        >
-          {error}
-        </div>
-      )}
-
-      <div className="flex gap-3 mt-6">
-        <button
-          onClick={onBack}
-          disabled={submitting}
-          className="rounded-xl py-3 px-6 font-bold text-sm tracking-widest transition-colors focus:outline-none"
-          style={{
-            backgroundColor: 'transparent',
-            color: '#1C1410',
-            border: '1.5px solid #DDD4C0',
-            fontFamily: "'Outfit', sans-serif",
-            letterSpacing: '0.06em',
-          }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
-        >
-          ← BACK
-        </button>
-
-        <button
-          onClick={onCreate}
-          disabled={submitting}
-          className="flex-1 rounded-xl py-3 font-bold text-sm tracking-widest transition-colors focus:outline-none flex items-center justify-center gap-2"
-          style={{
-            backgroundColor: submitting ? '#DDD4C0' : '#1B3828',
-            color: submitting ? '#9A8A78' : '#EED98A',
-            fontFamily: "'Outfit', sans-serif",
-            letterSpacing: '0.08em',
-          }}
-          onMouseEnter={(e) => { if (!submitting) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-          onMouseLeave={(e) => { if (!submitting) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-        >
-          {submitting && (
-            <div
-              className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin flex-shrink-0"
-              style={{ borderColor: '#9A8A78', borderTopColor: 'transparent' }}
-            />
-          )}
-          {submitting ? 'CREATING...' : 'CREATE CONFERENCE'}
-        </button>
-      </div>
-    </div>
-  );
+function formatDateRange(start: string, end: string): string {
+  if (!start || !end) return '';
+  const fmt = (d: string) =>
+    new Date(d + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  return start === end ? fmt(start) : `${fmt(start)} – ${fmt(end)}`;
 }
