@@ -97,7 +97,7 @@ export interface PoolMember {
   payment_status: string | null;
   self_paid: boolean | null;
   attending: boolean;
-  pledge_type: 'own' | 'delegation' | 'both' | null;
+  pledge_type: 'delegation' | null;
   spots_pledged: number | null;
   pledge_confirmed_at: string | null;
   submitted_at: string;
@@ -356,15 +356,12 @@ export async function removeFromDelegation(
 
 /**
  * Whether a pledge's obligations are already met, independent of whether
- * MARK RECEIVED was ever clicked (F21 self-resolution). 'own' resolves once
- * the pledger is paid by any means; 'delegation' once the spots grant has
- * run (pledge_confirmed_at); 'both' needs both.
+ * MARK RECEIVED was ever clicked (F21 self-resolution) — the spots grant has
+ * run (pledge_confirmed_at).
  */
 export function pledgeSatisfied(m: PoolMember): boolean {
-  if (m.pledge_type === 'own') return m.payment_status === 'paid';
-  if (m.pledge_type === 'delegation') return !!m.pledge_confirmed_at;
-  if (m.pledge_type === 'both') return m.payment_status === 'paid' && !!m.pledge_confirmed_at;
-  return false;
+  if (m.pledge_type !== 'delegation') return false;
+  return !!m.pledge_confirmed_at;
 }
 
 // ── Small shared bits ────────────────────────────────────────────────────────
@@ -439,10 +436,8 @@ export function ModalOverlay({ children, onClose }: { children: React.ReactNode;
 }
 
 export function pledgeText(m: PoolMember): string {
-  if (m.pledge_type === 'own') return 'own fee';
-  if (m.pledge_type === 'delegation') return `${m.spots_pledged ?? 0} delegation spots`;
-  if (m.pledge_type === 'both') return `own fee + ${m.spots_pledged ?? 0} delegation spots`;
-  return '';
+  if (m.pledge_type !== 'delegation') return '';
+  return `${m.spots_pledged ?? 0} delegation spots`;
 }
 
 // ── Chips ────────────────────────────────────────────────────────────────────

@@ -48,8 +48,6 @@ interface RoleConfig {
   custom_questions: Array<{ id: string; label: string; required: boolean; type: string }>;
 }
 
-type PledgeType = 'own' | 'delegation' | 'both';
-
 interface CommitteeOption {
   id: string;
   name: string;
@@ -207,8 +205,10 @@ function ConferenceApplyInner() {
   const [societyDropdownOpen, setSocietyDropdownOpen] = useState(false);
   const [societyError, setSocietyError] = useState('');
 
-  // ── Step — Invoicing (head-delegate / faculty-advisor only)
-  const [pledgeType, setPledgeType] = useState<PledgeType | ''>('');
+  // ── Step — Invoicing (head-delegate / faculty-advisor only). A pledge is
+  // ONLY about paying for delegation spots — everyone's own fee flows through
+  // the normal payment system, so this is a plain yes/no.
+  const [willPledgeSpots, setWillPledgeSpots] = useState<boolean | null>(null);
   const [spotsPledged, setSpotsPledged] = useState<number | ''>('');
   const [invoicingError, setInvoicingError] = useState('');
 
@@ -469,11 +469,11 @@ function ConferenceApplyInner() {
       return;
     }
     if (currentStepKind === 'invoicing') {
-      if (!pledgeType) {
+      if (willPledgeSpots === null) {
         setInvoicingError('Please select an option.');
         return;
       }
-      if ((pledgeType === 'delegation' || pledgeType === 'both') && (spotsPledged === '' || spotsPledged < 1)) {
+      if (willPledgeSpots && (spotsPledged === '' || spotsPledged < 1)) {
         setInvoicingError('Please enter how many delegate spots you will pay for.');
         return;
       }
@@ -608,8 +608,8 @@ function ConferenceApplyInner() {
         insertPayload.voucher_discount = breakdown.voucherDiscount;
       }
       if (isInvoicingRole) {
-        insertPayload.pledge_type = pledgeType;
-        insertPayload.spots_pledged = pledgeType === 'own' ? 0 : (spotsPledged || 0);
+        insertPayload.pledge_type = willPledgeSpots ? 'delegation' : null;
+        insertPayload.spots_pledged = willPledgeSpots ? (spotsPledged || 0) : 0;
       }
 
       const { data: app, error: appError } = await supabase
@@ -1078,45 +1078,35 @@ function ConferenceApplyInner() {
   }
 
   function renderStepInvoicing() {
-    const options: Array<{ value: PledgeType; label: string }> = [
-      { value: 'own', label: 'MY OWN FEE ONLY' },
-      { value: 'delegation', label: 'DELEGATION SPOTS ONLY' },
-      { value: 'both', label: 'MY FEE + DELEGATION' },
+    const options: Array<{ value: boolean; label: string }> = [
+      { value: true, label: 'YES' },
+      { value: false, label: 'NO' },
     ];
-    const showSpots = pledgeType === 'delegation' || pledgeType === 'both';
+    const showSpots = willPledgeSpots === true;
 
     return (
       <>
         <h2 className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-          Payment &amp; delegation size
+          Will you be paying for delegation spots?
         </h2>
         <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-          Tell us what your payment will cover. This helps the organizers invoice your delegation correctly.
+          This is separate from your own registration fee — it only covers spots for your delegates.
         </p>
 
-        <div className="flex flex-col gap-3 mb-6">
+        <div className="grid grid-cols-2 gap-3 mb-6">
           {options.map(opt => {
-            const selected = pledgeType === opt.value;
+            const selected = willPledgeSpots === opt.value;
             return (
               <button
-                key={opt.value}
-                onClick={() => { setPledgeType(opt.value); setInvoicingError(''); }}
-                className="relative rounded-xl p-4 text-left focus:outline-none transition-all"
+                key={String(opt.value)}
+                onClick={() => { setWillPledgeSpots(opt.value); setInvoicingError(''); }}
+                className="relative rounded-xl p-4 text-center focus:outline-none transition-all"
                 style={{
                   border: selected ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
                   backgroundColor: selected ? 'rgba(27,56,40,0.06)' : 'transparent',
                 }}
               >
-                <div
-                  className="absolute top-1/2 right-4 w-4 h-4 rounded-full border"
-                  style={{
-                    transform: 'translateY(-50%)',
-                    ...(selected
-                      ? { backgroundColor: '#1B3828', borderColor: '#1B3828' }
-                      : { backgroundColor: 'transparent', borderColor: '#DDD4C0' }),
-                  }}
-                />
-                <p className="font-bold text-sm pr-8" style={{ color: '#1C1410', fontFamily: "'DM Mono', monospace", letterSpacing: '0.06em' }}>
+                <p className="font-bold text-sm" style={{ color: '#1C1410', fontFamily: "'DM Mono', monospace", letterSpacing: '0.06em' }}>
                   {opt.label}
                 </p>
               </button>

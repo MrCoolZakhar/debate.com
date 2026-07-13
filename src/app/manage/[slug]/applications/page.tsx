@@ -62,7 +62,7 @@ interface Application {
   application_preferences: AppPreference[];
   self_paid: boolean;
   attending: boolean;
-  pledge_type: 'own' | 'delegation' | 'both' | null;
+  pledge_type: 'delegation' | null;
   spots_pledged: number | null;
   pledge_confirmed_at: string | null;
   society_id: string | null;
@@ -779,12 +779,8 @@ export default function ApplicationsPage() {
             const expLabel = app.experience_level ?? app.profiles?.mun_experience_level ?? null;
             const confCount = app.user_id ? cvCounts[app.user_id] : undefined;
 
-            const pledgeLine = app.pledge_type === 'own'
-              ? 'Pledged: own fee'
-              : app.pledge_type === 'delegation'
+            const pledgeLine = app.pledge_type === 'delegation'
               ? `Pledged: ${app.spots_pledged ?? 0} delegation spots`
-              : app.pledge_type === 'both'
-              ? `Pledged: own fee + ${app.spots_pledged ?? 0} delegation spots`
               : null;
 
             return (

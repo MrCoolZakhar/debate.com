@@ -325,31 +325,14 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
     if (!confirmed) return;
     const supabase = getAuthedClient(session.access_token);
 
-    // Guard each half independently so re-clicking (or a race) never
-    // double-grants delegation spots or re-funds an already-paid pledger.
-    const delegationAlreadyConfirmed = !!member.pledge_confirmed_at;
-    const pledgerAlreadyPaid = member.payment_status === 'paid';
-    const grantsDelegationSpots = (member.pledge_type === 'delegation' || member.pledge_type === 'both') && !delegationAlreadyConfirmed;
-    const paysOwnFee = (member.pledge_type === 'own' || member.pledge_type === 'both') && !pledgerAlreadyPaid;
-    const memberPool = poolForRole(member.role);
-
-    // Optimistic: pledge shows COVERED, member shows paid, society spot
-    // counts grow — immediately. fillFreeSpots promotions land via silent
-    // refetch after the writes.
+    // Optimistic: pledge shows COVERED, society spot count grows —
+    // immediately. fillFreeSpots promotions land via silent refetch after
+    // the writes.
     const memberSnapshot = members.find(m => m.id === member.id) ?? member;
     const societySnapshot = societies.find(s => s.id === societyId) ?? null;
-    const memberPatch: Partial<PoolMember> = {};
-    if (paysOwnFee) { memberPatch.payment_status = 'paid'; memberPatch.self_paid = true; }
-    if (!delegationAlreadyConfirmed) memberPatch.pledge_confirmed_at = new Date().toISOString();
-    patchMember(member.id, memberPatch);
+    patchMember(member.id, { pledge_confirmed_at: new Date().toISOString() });
     if (societySnapshot) {
-      const societyPatch: Partial<Society> = {};
-      if (grantsDelegationSpots) societyPatch.spots_purchased = societySnapshot.spots_purchased + (member.spots_pledged ?? 0);
-      if (paysOwnFee && memberPool) {
-        const col = POOL_SPOTS_COLUMN[memberPool];
-        societyPatch[col] = (societyPatch[col] ?? societySnapshot[col]) + 1;
-      }
-      patchSociety(societyId, societyPatch);
+      patchSociety(societyId, { spots_purchased: societySnapshot.spots_purchased + (member.spots_pledged ?? 0) });
     }
     showFlash('ok', 'Pledge marked received.');
 
@@ -362,34 +345,15 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
       let firstError: string | null = null;
       const note = (e: { message: string } | null) => { if (e && !firstError) firstError = e.message; };
 
-      if (grantsDelegationSpots) {
-        const { data: soc } = await supabase.from('societies').select('spots_purchased').eq('id', societyId).single();
-        const current = (soc as { spots_purchased: number } | null)?.spots_purchased ?? 0;
-        const { error } = await supabase.from('societies').update({ spots_purchased: current + (member.spots_pledged ?? 0) }).eq('id', societyId);
-        note(error);
-      }
+      const { data: soc } = await supabase.from('societies').select('spots_purchased').eq('id', societyId).single();
+      const current = (soc as { spots_purchased: number } | null)?.spots_purchased ?? 0;
+      const { error } = await supabase.from('societies').update({ spots_purchased: current + (member.spots_pledged ?? 0) }).eq('id', societyId);
+      note(error);
 
-      if (paysOwnFee) {
-        const { error: payErr } = await supabase.from('applications').update({ payment_status: 'paid', self_paid: true }).eq('id', member.id);
-        note(payErr);
-        if (memberPool) {
-          const spotsColumn = POOL_SPOTS_COLUMN[memberPool];
-          const { data: soc } = await supabase.from('societies').select(spotsColumn).eq('id', societyId).single();
-          const current = (soc as Record<string, number> | null)?.[spotsColumn] ?? 0;
-          const { error: spotErr } = await supabase.from('societies').update({ [spotsColumn]: current + 1 }).eq('id', societyId);
-          note(spotErr);
-        }
-      }
-
-      if (!delegationAlreadyConfirmed) {
-        const { error } = await supabase.from('applications').update({ pledge_confirmed_at: new Date().toISOString() }).eq('id', member.id);
-        note(error);
-      }
+      const { error: confirmErr } = await supabase.from('applications').update({ pledge_confirmed_at: new Date().toISOString() }).eq('id', member.id);
+      note(confirmErr);
 
       await fillFreeSpots(supabase, societyId, 'delegate');
-      if (memberPool === 'advisor' && paysOwnFee) {
-        await fillFreeSpots(supabase, societyId, 'advisor');
-      }
 
       if (firstError) {
         rollback();

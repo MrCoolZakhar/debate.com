@@ -26,7 +26,6 @@ export default function AdvisorParticipant({ conferenceId, application, allocati
     );
   }
 
-  const advisorConfig = roleConfigs.find(rc => rc.role === 'faculty-advisor') ?? null;
   const delegateConfig = roleConfigs.find(rc => rc.role === 'delegate') ?? null;
 
   return (
@@ -40,10 +39,7 @@ export default function AdvisorParticipant({ conferenceId, application, allocati
         applicationId={application.id}
         pledgeType={application.pledge_type}
         spotsPledged={application.spots_pledged}
-        paymentStatus={application.payment_status}
         pledgeConfirmedAt={application.pledge_confirmed_at}
-        advisorFeeAmount={advisorConfig?.fee_amount ?? null}
-        advisorFeeCurrency={advisorConfig?.fee_currency ?? null}
         delegateFeeAmount={delegateConfig?.fee_amount ?? null}
         contactEmail={contactEmail}
       />

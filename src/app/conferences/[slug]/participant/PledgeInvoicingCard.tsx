@@ -1,11 +1,12 @@
 'use client';
 
-// PLEDGE & INVOICING card — advisor-only. Their own pledge rendered as
-// invoice lines, each with a PAY affordance calling the payments stub.
+// PLEDGE & INVOICING card — advisor-only. A pledge is only ever about paying
+// for delegation spots (the advisor's own fee is handled by the universal
+// PaymentPanel above, like any other participant), so this renders a single
+// spots-pledge line with a PAY affordance calling the payments stub.
 
 import { useState } from 'react';
 import { CreditCard, Mail } from 'lucide-react';
-import { formatFee } from '@/lib/utils';
 import { ModalOverlay } from '@/components/CommitteeEditorModal';
 import { initiatePayment } from '@/lib/payments';
 import { SectionCard, OUTFIT } from './shared';
@@ -19,36 +20,22 @@ export interface InvoicingLine {
 
 export interface PledgeInvoicingCardProps {
   applicationId: string;
-  pledgeType: 'own' | 'delegation' | 'both' | null;
+  pledgeType: 'delegation' | null;
   spotsPledged: number | null;
-  paymentStatus: string;
   pledgeConfirmedAt: string | null;
-  advisorFeeAmount: number | null;
-  advisorFeeCurrency: string | null;
   delegateFeeAmount: number | null;
   contactEmail: string | null;
 }
 
 export default function PledgeInvoicingCard({
-  applicationId, pledgeType, spotsPledged, paymentStatus, pledgeConfirmedAt,
-  advisorFeeAmount, advisorFeeCurrency, delegateFeeAmount, contactEmail,
+  applicationId, pledgeType, spotsPledged, pledgeConfirmedAt, delegateFeeAmount, contactEmail,
 }: PledgeInvoicingCardProps) {
   const [payingLine, setPayingLine] = useState<number | null>(null);
   const [stubMessage, setStubMessage] = useState<string | null>(null);
 
-  const currency = advisorFeeCurrency ?? 'GBP';
   const lines: InvoicingLine[] = [];
 
-  if (pledgeType === 'own' || pledgeType === 'both') {
-    const fee = advisorFeeAmount ?? 0;
-    lines.push({
-      label: fee > 0 ? `Your fee — ${formatFee(fee, currency)}` : 'Your fee',
-      satisfied: paymentStatus === 'paid' || paymentStatus === 'waived',
-      satisfiedLabel: 'received',
-      amountCents: Math.round(fee * 100),
-    });
-  }
-  if (pledgeType === 'delegation' || pledgeType === 'both') {
+  if (pledgeType === 'delegation') {
     const spots = spotsPledged ?? 0;
     lines.push({
       label: `${spots} delegation spot${spots === 1 ? '' : 's'}`,

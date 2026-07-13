@@ -36,9 +36,7 @@ function allocationLabel(m: PoolMember): string | null {
 }
 
 function pledgeStatusLabel(m: PoolMember): string {
-  const satisfied = pledgeSatisfied(m);
-  if (!satisfied) return 'pending';
-  return m.pledge_type === 'delegation' ? 'covered ✓' : 'received ✓';
+  return pledgeSatisfied(m) ? 'covered ✓' : 'pending';
 }
 
 // ── Member row ───────────────────────────────────────────────────────────────
