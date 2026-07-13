@@ -26,6 +26,7 @@ function ConfirmationInner() {
   const searchParams = useSearchParams();
   const role = searchParams.get('role') ?? 'delegate';
   const timing = searchParams.get('timing');
+  const resubmitted = searchParams.get('resubmitted') === '1';
   const timingNote = timing === 'after_application'
     ? 'Payment for your registration is now available in your conference view.'
     : timing === 'after_acceptance'
@@ -33,7 +34,7 @@ function ConfirmationInner() {
     : null;
 
   const timeline = [
-    { icon: Send, label: 'Submitted', sub: 'Your application is in', state: 'done' as const },
+    { icon: Send, label: resubmitted ? 'Resubmitted' : 'Submitted', sub: resubmitted ? 'Your updated application is in' : 'Your application is in', state: 'done' as const },
     { icon: Search, label: 'Under review', sub: 'The team reads it over', state: 'active' as const },
     { icon: Award, label: 'Decision', sub: 'You hear back by email', state: 'todo' as const },
   ];
@@ -84,19 +85,21 @@ function ConfirmationInner() {
           className="text-xs mb-3"
           style={{ color: '#B6871F', fontFamily: "'Outfit', sans-serif", fontWeight: 700, letterSpacing: '0.14em' }}
         >
-          APPLICATION SUBMITTED
+          {resubmitted ? 'APPLICATION RESUBMITTED' : 'APPLICATION SUBMITTED'}
         </p>
         <h1
           className="mb-2"
           style={{ color: '#1C1410', fontFamily: OUTFIT, fontWeight: 900, fontSize: '32px', letterSpacing: '-0.01em' }}
         >
-          You&apos;re in the queue!
+          {resubmitted ? "You're back in the queue!" : "You're in the queue!"}
         </h1>
         <p
           className={`text-sm leading-relaxed max-w-sm ${timingNote ? 'mb-3' : 'mb-9'}`}
           style={{ color: '#9A8A78', fontFamily: OUTFIT }}
         >
-          Your application as {roleWithArticle(role)} has been submitted. The conference team will review it and you&apos;ll hear back soon.
+          {resubmitted
+            ? "Your application has been resubmitted. The conference team will take another look and you'll hear back soon."
+            : <>Your application as {roleWithArticle(role)} has been submitted. The conference team will review it and you&apos;ll hear back soon.</>}
         </p>
         {timingNote && (
           <p

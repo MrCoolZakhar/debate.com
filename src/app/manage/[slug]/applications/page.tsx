@@ -63,6 +63,7 @@ interface Application {
   submitted_at: string;
   checked_in_at: string | null;
   organizer_note: string | null;
+  resubmitted_at: string | null;
   custom_answers: Record<string, string> | null;
   assigned_committee_id: string | null;
   assigned_country_code: string | null;
@@ -467,7 +468,7 @@ export default function ApplicationsPage() {
         .from('applications')
         .select(`
           id, user_id, invited_email, invited_name, role, status, is_head_delegate, experience_level,
-          payment_status, submitted_at, checked_in_at, organizer_note, custom_answers,
+          payment_status, submitted_at, checked_in_at, organizer_note, resubmitted_at, custom_answers,
           assigned_committee_id, assigned_country_code, assigned_country_name,
           self_paid, attending, pledge_type, spots_pledged, pledge_confirmed_at, society_id,
           assigned_committee:conference_committees!assigned_committee_id (name, abbreviation, topics, logo_url),
@@ -1260,7 +1261,6 @@ export default function ApplicationsPage() {
                       <RoleIcon role={app.role} />
                       {roleLabel(app.role).toUpperCase()}
                     </span>
-
                     {hasAllocation ? (
                       <div className="flex items-center gap-2.5 min-w-0">
                         <LogoDisc src={app.assigned_committee!.logo_url} size={32} fallbackText={committeeAbbr(app.assigned_committee)} alt={app.assigned_committee!.name} />
@@ -1317,6 +1317,16 @@ export default function ApplicationsPage() {
                         <StatusIcon status={app.status} />
                         {app.status.replace('-', ' ').toUpperCase()}
                       </span>
+                      {app.resubmitted_at && (
+                        <span
+                          className="inline-flex items-center gap-1"
+                          title="The applicant edited and resubmitted this application"
+                          style={chip('rgba(182,135,31,0.18)', '#8A6614', 'rgba(182,135,31,0.4)')}
+                        >
+                          <RotateCcw size={10} strokeWidth={2.5} />
+                          RESUBMITTED {formatDate(app.resubmitted_at)}
+                        </span>
+                      )}
                       {waived ? (
                         <span className="inline-flex items-center gap-1" style={chip('rgba(184,132,74,0.16)', '#9A6B2F', 'rgba(184,132,74,0.42)')}>
                           <HandCoins size={10} strokeWidth={2.5} />
@@ -1609,6 +1619,16 @@ export default function ApplicationsPage() {
                       <StatusIcon status={app.status} />
                       {app.status.replace('-', ' ').toUpperCase()}
                     </span>
+                    {app.resubmitted_at && (
+                      <span
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold"
+                        title="The applicant edited and resubmitted this application"
+                        style={{ fontSize: 9, fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', backgroundColor: 'rgba(182,135,31,0.18)', color: '#8A6614', border: '1px solid rgba(182,135,31,0.4)' }}
+                      >
+                        <RotateCcw size={10} strokeWidth={2.5} />
+                        RESUBMITTED {formatDate(app.resubmitted_at)}
+                      </span>
+                    )}
                     {expLabel && (
                       <span
                         className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold"

@@ -5,7 +5,8 @@
 // their place, see getGateState in shared.tsx for the three-way logic.
 // Never wraps the payment panel or Q&R, those are always visible.
 
-import { Lock, Clock } from 'lucide-react';
+import Link from 'next/link';
+import { Lock, Clock, XCircle, RotateCcw } from 'lucide-react';
 import { SectionCard, OUTFIT, type GateState } from './shared';
 
 export function LockedCard() {
@@ -24,6 +25,42 @@ export function LockedCard() {
         <p className="text-[13px] max-w-[340px]" style={{ color: '#9A8A78', fontFamily: OUTFIT, lineHeight: 1.7 }}>
           Settle your fee below and this section opens up right away.
         </p>
+      </div>
+    </SectionCard>
+  );
+}
+
+/** Shown in place of the payment panel + role content for a rejected
+ *  application (rendered by ParticipantView directly, outside PayGate — a
+ *  rejection isn't one of the three pay-gate states, and payment/role
+ *  content is meaningless once rejected). Links into the apply flow's edit
+ *  mode, resubmit_application is the only write path for the edit. */
+export function RejectedCard({ conferenceSlug, role }: { conferenceSlug: string; role: string }) {
+  return (
+    <SectionCard>
+      <div className="flex flex-col items-center text-center py-10">
+        <div
+          className="flex items-center justify-center mb-5"
+          style={{ width: '64px', height: '64px', borderRadius: '9999px', backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.2)' }}
+        >
+          <XCircle size={24} strokeWidth={1.8} style={{ color: '#8B2020' }} />
+        </div>
+        <p className="text-[15px] font-semibold mb-1.5" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+          Your application wasn&apos;t accepted this time.
+        </p>
+        <p className="text-[13px] max-w-[340px] mb-6" style={{ color: '#9A8A78', fontFamily: OUTFIT, lineHeight: 1.7 }}>
+          You can edit your application and resubmit it for another look from the organizing team.
+        </p>
+        <Link
+          href={`/conferences/${conferenceSlug}/apply?role=${role}&edit=1`}
+          className="inline-flex items-center gap-2 rounded-xl py-2.5 px-6 font-bold text-sm focus:outline-none transition-colors"
+          style={{ backgroundColor: '#1B3828', color: '#EED98A', textDecoration: 'none', fontFamily: OUTFIT, letterSpacing: '0.06em' }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+        >
+          <RotateCcw size={15} />
+          EDIT AND RESUBMIT
+        </Link>
       </div>
     </SectionCard>
   );

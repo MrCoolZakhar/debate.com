@@ -11,6 +11,7 @@ import { ageAt } from '@/lib/age';
 import { formatFee } from '@/lib/utils';
 import { Pill } from '@/app/account/accountUi';
 import { computeCheckout, localizedApproxSavings, activePhaseFee, type VoucherInput, type FeePhase } from '@/lib/finance';
+import { queueEventEmail } from '@/lib/emailEvents';
 import { NEU, NeuInset, NeuCard, OUTFIT, EASE } from '@/components/neu';
 import { LogoDisc } from '@/components/LogoDisc';
 import { FlagImg } from '@/components/FlagImg';
@@ -88,6 +89,19 @@ interface Preference {
   committeeName: string;
   countryCode: string;
   countryName: string;
+}
+
+/** The applicant's own existing application for this role — the "already
+ *  applied" gate, and (when editable) the prefill source for edit mode. */
+interface ExistingApp {
+  id: string;
+  status: string;
+  is_independent: boolean;
+  society_id: string | null;
+  experience_level: string | null;
+  custom_answers: Record<string, string> | null;
+  pledge_type: 'delegation' | null;
+  spots_pledged: number | null;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -492,6 +506,12 @@ function ConferenceApplyInner() {
   const { slug } = useParams() as { slug: string };
   const searchParams = useSearchParams();
   const role = searchParams.get('role') ?? 'delegate';
+  // Edit-and-resubmit: opens the same stepper prefilled from the applicant's
+  // own existing application for this role, instead of the fresh-apply flow.
+  // Only takes effect once fetchAll confirms the application is actually in
+  // an editable status (rejected or submitted), see `canEdit` below — never
+  // trust the query param alone.
+  const isEditMode = searchParams.get('edit') === '1';
   const router = useRouter();
   const reducedMotion = useReducedMotion();
   const { user, session, loading: authLoading } = useAuth();
@@ -501,7 +521,7 @@ function ConferenceApplyInner() {
   const [roleConfig, setRoleConfig] = useState<RoleConfig | null | undefined>(undefined);
   const [committees, setCommittees] = useState<CommitteeOption[]>([]);
   const [societies, setSocieties] = useState<Society[]>([]);
-  const [existingApp, setExistingApp] = useState<{ id: string; status: string } | null | undefined>(undefined);
+  const [existingApp, setExistingApp] = useState<ExistingApp | null | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
@@ -715,7 +735,7 @@ function ConferenceApplyInner() {
         .order('name', { ascending: true }),
       supabase
         .from('applications')
-        .select('id, status')
+        .select('id, status, is_independent, society_id, experience_level, custom_answers, pledge_type, spots_pledged')
         .eq('conference_id', confData.id)
         .eq('user_id', user!.id)
         .eq('role', role)
@@ -727,16 +747,59 @@ function ConferenceApplyInner() {
         .maybeSingle(),
     ]);
 
+    const committeesData = (committeesRes.data as CommitteeOption[]) ?? [];
+    const societiesData = (societiesRes.data as Society[]) ?? [];
+    const appData = (appRes.data as ExistingApp) ?? null;
+
     setRoleConfig((roleRes.data as RoleConfig) ?? null);
-    setCommittees((committeesRes.data as CommitteeOption[]) ?? []);
-    setSocieties((societiesRes.data as Society[]) ?? []);
-    setExistingApp((appRes.data as { id: string; status: string }) ?? null);
+    setCommittees(committeesData);
+    setSocieties(societiesData);
+    setExistingApp(appData);
     const prof = profileRes.data as { date_of_birth: string | null; is_ambassador: boolean; unlimited_conferences_remaining: number } | null;
     setMyDob(prof?.date_of_birth ?? null);
     setFinanceProfile({
       is_ambassador: prof?.is_ambassador ?? false,
       unlimited_conferences_remaining: prof?.unlimited_conferences_remaining ?? 0,
     });
+
+    // Edit mode: prefill every step from the existing application, only once
+    // it's confirmed editable (rejected or submitted) — never for accepted/
+    // assigned/withdrawn, those still hit the "already applied" wall below.
+    if (isEditMode && appData && (appData.status === 'rejected' || appData.status === 'submitted')) {
+      setIsIndependent(appData.is_independent);
+      setSelectedSocietyId(appData.society_id);
+      setSocietyInput(appData.society_id ? (societiesData.find(s => s.id === appData.society_id)?.name ?? '') : '');
+      // pledge_type/spots_pledged only ever get set for invoicing roles
+      // (head-delegate/faculty-advisor); a submitted/rejected application
+      // for one of those roles always has a definitive answer already, so
+      // this is a plain boolean, never the "unanswered" null state.
+      if (isInvoicingRole) {
+        setWillPledgeSpots(appData.pledge_type === 'delegation');
+        setSpotsPledged(appData.spots_pledged ? appData.spots_pledged : '');
+      }
+      setExperienceLevel(appData.experience_level ?? '');
+      setCustomAnswers(appData.custom_answers ?? {});
+
+      const { data: prefRows } = await supabase
+        .from('application_preferences')
+        .select('preference_order, conference_committee_id, country_code, country_name')
+        .eq('application_id', appData.id)
+        .order('preference_order', { ascending: true });
+      const existingPrefs = ((prefRows ?? []) as { preference_order: number; conference_committee_id: string; country_code: string | null; country_name: string | null }[])
+        .map((p): Preference | null => {
+          const committee = committeesData.find(c => c.id === p.conference_committee_id);
+          if (!committee) return null;
+          return {
+            committeeId: p.conference_committee_id,
+            committeeName: committee.abbreviation ?? committee.name,
+            countryCode: p.country_code ?? '',
+            countryName: p.country_name ?? '',
+          };
+        })
+        .filter((p): p is Preference => p !== null);
+      setPreferences(existingPrefs);
+    }
+
     setLoading(false);
   }
 
@@ -887,6 +950,10 @@ function ConferenceApplyInner() {
       );
       return;
     }
+    if (isEditMode) {
+      await handleResubmit();
+      return;
+    }
     setSubmitting(true);
     setSubmitError('');
     if (!session) { setSubmitError('Session expired. Please sign in again.'); setSubmitting(false); return; }
@@ -1033,6 +1100,93 @@ function ConferenceApplyInner() {
 
       const timingParam = roleConfig?.payment_timing ? `&timing=${roleConfig.payment_timing}` : '';
       router.push(`/conferences/${slug}/apply/confirmation?role=${role}${timingParam}`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Something went wrong. Please try again.';
+      setSubmitError(msg);
+      setSubmitting(false);
+    }
+  }
+
+  // Edit mode's submit path: resubmit_application is the ONLY write path for
+  // applicant edits — a whitelisted SECURITY DEFINER RPC, never a direct
+  // `applications` update. It forces status back to 'submitted' and stamps
+  // resubmitted_at itself when coming from 'rejected'; financial fields
+  // (payment_status, vouchers, fee waivers) aren't in its whitelist and
+  // aren't touched here either, resubmitting only edits the whitelisted
+  // fields, it never re-runs checkout.
+  async function handleResubmit() {
+    setSubmitting(true);
+    setSubmitError('');
+    if (!session || !existingApp) { setSubmitError('Session expired. Please sign in again.'); setSubmitting(false); return; }
+    const supabase = getAuthedClient(session.access_token);
+
+    try {
+      let societyId: string | null = null;
+      if (!isIndependent && !isObserver && societyInput.trim()) {
+        if (selectedSocietyId) {
+          societyId = selectedSocietyId;
+        } else if (isInvoicingRole) {
+          const normalized = societyInput.trim().toLowerCase();
+          const { data: existingSoc } = await supabase
+            .from('societies')
+            .select('id')
+            .eq('conference_id', conference!.id)
+            .eq('name_normalized', normalized)
+            .maybeSingle();
+
+          if (existingSoc) {
+            societyId = (existingSoc as { id: string }).id;
+          } else {
+            const { data: newSoc } = await supabase
+              .from('societies')
+              .insert({ conference_id: conference!.id, name: societyInput.trim(), name_normalized: normalized })
+              .select('id')
+              .single();
+            societyId = (newSoc as { id: string } | null)?.id ?? null;
+          }
+        }
+      }
+
+      const updates: Record<string, unknown> = {
+        is_independent: isIndependent,
+        society_id: societyId,
+        is_head_delegate: role === 'head-delegate',
+        experience_level: experienceLevel || null,
+        custom_answers: customAnswers,
+      };
+      if (isInvoicingRole) {
+        updates.pledge_type = willPledgeSpots ? 'delegation' : null;
+        updates.spots_pledged = willPledgeSpots ? (spotsPledged || 0) : 0;
+      }
+      if (showPreferenceStep) {
+        // Same row shape as the fresh-submit insert, minus application_id
+        // (the RPC already has p_application_id) — the RPC owns replacing
+        // application_preferences server-side.
+        updates.preferences = preferences.map((p, i) => ({
+          preference_order: i + 1,
+          conference_committee_id: p.committeeId,
+          country_code: p.countryCode || null,
+          country_name: p.countryName || null,
+        }));
+      }
+
+      const { data, error } = await supabase.rpc('resubmit_application', {
+        p_application_id: existingApp.id,
+        p_updates: updates,
+      });
+      if (error) throw error;
+      const result = data as { ok: boolean; resubmitted?: boolean; error?: string };
+      if (!result.ok) throw new Error(result.error ?? 'Could not resubmit your application. Please try again.');
+
+      // Same event key a fresh submission would use ('application_received'),
+      // gated by the organizer's normal three-state template rules (drafted/
+      // default/off/unconfigured) — no new event key, and this queues
+      // nothing if the organizer hasn't configured anything for it.
+      try {
+        await queueEventEmail(supabase, conference!.id, 'application_received', [existingApp.id]);
+      } catch { /* non-fatal, the resubmission itself already succeeded */ }
+
+      router.push(`/conferences/${slug}/apply/confirmation?role=${role}&resubmitted=1`);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Something went wrong. Please try again.';
       setSubmitError(msg);
@@ -1564,7 +1718,7 @@ function ConferenceApplyInner() {
             onMouseEnter={(e) => { if (!submitting) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
             onMouseLeave={(e) => { if (!submitting) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
           >
-            {step >= totalSteps ? (submitting ? 'SUBMITTING...' : 'SUBMIT APPLICATION') : 'CONTINUE →'}
+            {step >= totalSteps ? (submitting ? 'SUBMITTING...' : (isEditMode ? 'RESUBMIT APPLICATION' : 'SUBMIT APPLICATION')) : 'CONTINUE →'}
           </button>
         </div>
       </>
@@ -1904,7 +2058,7 @@ function ConferenceApplyInner() {
                 <span className="inline-block w-4 h-4 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: '#EED98A', borderTopColor: 'transparent' }} />
                 SUBMITTING...
               </span>
-            ) : 'SUBMIT APPLICATION'}
+            ) : (isEditMode ? 'RESUBMIT APPLICATION' : 'SUBMIT APPLICATION')}
           </button>
         </div>
       </>
@@ -1939,7 +2093,16 @@ function ConferenceApplyInner() {
     );
   }
 
-  if (existingApp) {
+  // A valid edit session (edit=1, resolved against an actually-editable
+  // application) bypasses both the "already applied" wall and the
+  // applications-closed wall below — they're editing an application that
+  // already exists, not creating a new one. Requires roleConfig to still
+  // exist (renderStep1 reads it non-null) — is_enabled doesn't matter here,
+  // an existing applicant can still edit while applications are paused.
+  const canEdit = isEditMode && !!existingApp && !!roleConfig
+    && (existingApp.status === 'rejected' || existingApp.status === 'submitted');
+
+  if (existingApp && !canEdit) {
     return (
       <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#EDE7D8' }}>
         <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
@@ -1965,7 +2128,7 @@ function ConferenceApplyInner() {
     );
   }
 
-  if (!roleConfig || !roleConfig.is_enabled) {
+  if ((!roleConfig || !roleConfig.is_enabled) && !canEdit) {
     return (
       <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#EDE7D8' }}>
         <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
@@ -2117,6 +2280,17 @@ function ConferenceApplyInner() {
             ← {conference.acronym}
           </Link>
         </div>
+
+        {isEditMode && (
+          <div
+            className="inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 mb-5"
+            style={{ backgroundColor: 'rgba(182,135,31,0.14)', border: '1px solid rgba(182,135,31,0.35)' }}
+          >
+            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', color: '#8A6614', fontFamily: "'Outfit', sans-serif" }}>
+              EDITING YOUR APPLICATION
+            </span>
+          </div>
+        )}
 
         {/* Step indicator */}
         <div className="flex items-start mb-8">

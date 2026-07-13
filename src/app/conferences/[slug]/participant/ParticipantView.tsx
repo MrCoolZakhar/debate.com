@@ -7,9 +7,11 @@
 // this tab already is one.
 
 import { useState } from 'react';
+import Link from 'next/link';
+import { Pencil } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { SectionCard, OUTFIT, getGateState, roleLabel, statusPriority } from './shared';
-import { PayGate } from './PayGate';
+import { PayGate, RejectedCard } from './PayGate';
 import DelegateParticipant from './DelegateParticipant';
 import AdvisorParticipant from './AdvisorParticipant';
 import ChairParticipant from './ChairParticipant';
@@ -104,43 +106,71 @@ export default function ParticipantView({
         </SectionCard>
       )}
 
-      <PaymentPanel
-        key={selected.id}
-        applicationId={selected.id}
-        feeAmount={roleConfig?.fee_amount ?? 0}
-        feeCurrency={roleConfig?.fee_currency ?? defaultFeeCurrency}
-        allowPartial={roleConfig?.allow_partial_payments ?? false}
-        paymentStatus={selected.payment_status}
-        amountPaid={selected.amount_paid}
-        payableNow={payableNow}
-        contactEmail={contactEmail}
-      />
+      {selected.status === 'rejected' ? (
+        // Payment and role content are meaningless once rejected, replaces
+        // both rather than gating them (a rejection isn't a PayGate state).
+        <RejectedCard conferenceSlug={conferenceSlug} role={selected.role} />
+      ) : (
+        <>
+          {selected.status === 'submitted' && (
+            <SectionCard className="!py-4 !px-5">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <p className="text-[13px]" style={{ color: '#6B5F52', fontFamily: OUTFIT }}>
+                  Need to change something before it&apos;s reviewed?
+                </p>
+                <Link
+                  href={`/conferences/${conferenceSlug}/apply?role=${selected.role}&edit=1`}
+                  className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-3.5 text-xs font-bold focus:outline-none transition-colors flex-shrink-0"
+                  style={{ border: '1px solid #DDD4C0', color: '#1C1410', textDecoration: 'none', fontFamily: OUTFIT, letterSpacing: '0.04em' }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                >
+                  <Pencil size={12} />
+                  EDIT APPLICATION
+                </Link>
+              </div>
+            </SectionCard>
+          )}
 
-      <PayGate gateState={gateState}>
-        {DELEGATE_ROLES.has(selected.role) ? (
-          <DelegateParticipant
-            conferenceId={conferenceId}
-            application={selected}
-            myAllocation={myAllocation}
-            committees={committees}
-            allocationSwapMode={allocationSwapMode}
-          />
-        ) : selected.role === 'faculty-advisor' ? (
-          <AdvisorParticipant
-            conferenceId={conferenceId}
-            application={selected}
-            allocationSwapMode={allocationSwapMode}
-            roleConfigs={roleConfigs}
+          <PaymentPanel
+            key={selected.id}
+            applicationId={selected.id}
+            feeAmount={roleConfig?.fee_amount ?? 0}
+            feeCurrency={roleConfig?.fee_currency ?? defaultFeeCurrency}
+            allowPartial={roleConfig?.allow_partial_payments ?? false}
+            paymentStatus={selected.payment_status}
+            amountPaid={selected.amount_paid}
+            payableNow={payableNow}
             contactEmail={contactEmail}
           />
-        ) : selected.role === 'chair' ? (
-          <ChairParticipant conferenceId={conferenceId} />
-        ) : selected.role === 'observer' ? (
-          <ObserverParticipant />
-        ) : (
-          <RolePlaceholder role={selected.role} />
-        )}
-      </PayGate>
+
+          <PayGate gateState={gateState}>
+            {DELEGATE_ROLES.has(selected.role) ? (
+              <DelegateParticipant
+                conferenceId={conferenceId}
+                application={selected}
+                myAllocation={myAllocation}
+                committees={committees}
+                allocationSwapMode={allocationSwapMode}
+              />
+            ) : selected.role === 'faculty-advisor' ? (
+              <AdvisorParticipant
+                conferenceId={conferenceId}
+                application={selected}
+                allocationSwapMode={allocationSwapMode}
+                roleConfigs={roleConfigs}
+                contactEmail={contactEmail}
+              />
+            ) : selected.role === 'chair' ? (
+              <ChairParticipant conferenceId={conferenceId} />
+            ) : selected.role === 'observer' ? (
+              <ObserverParticipant />
+            ) : (
+              <RolePlaceholder role={selected.role} />
+            )}
+          </PayGate>
+        </>
+      )}
 
       <RequestsPanel conferenceId={conferenceId} applicationId={selected.id} />
     </div>
