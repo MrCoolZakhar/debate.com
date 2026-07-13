@@ -280,7 +280,7 @@ function JoinPageInner() {
       if (!name) { setError(t('join_select_name')); return; }
       const expectedPassword = foundCommittee.dbChairJoinSuffix ?? getSettings(foundCommittee.code).chairJoinSuffix;
       if (expectedPassword && chairPassword !== expectedPassword) {
-        setPasswordError('Incorrect password — ask your head chair.');
+        setPasswordError('Incorrect password. Ask your head chair.');
         return;
       }
       addChairName(foundCommittee.id, name);
@@ -635,7 +635,7 @@ function JoinPageInner() {
               </div>
               <p className="text-[11px] mt-1.5" style={{ color: '#9A8A78' }}>
                 {chairRole === 'head'
-                  ? 'You’ll take the gavel — any current head chair becomes view-only.'
+                  ? 'You’ll take the gavel: any current head chair becomes view-only.'
                   : 'You’ll join view-only; you can take the gavel later from Settings.'}
               </p>
             </div>

@@ -1,5 +1,5 @@
 // Shared primitives for the participant view (person tab). Small and
-// self-contained on purpose — duplicated from ConferenceDetailClient's own
+// self-contained on purpose, duplicated from ConferenceDetailClient's own
 // SectionCard rather than imported, since ConferenceDetailClient imports
 // ParticipantView and an import back the other way would cycle.
 
@@ -70,7 +70,7 @@ export function statusPriority(status: string): number {
 
 // ── Payment chip ─────────────────────────────────────────────────────────────
 // PAID/WAIVED/UNPAID/PARTIAL plus the delegation-aware COVERED variant
-// (paid, but not self-funded — the delegation's pool covered it). Shared by
+// (paid, but not self-funded, the delegation's pool covered it). Shared by
 // DelegationPlacard (viewer's own status) and DelegationPanel (every member).
 
 export type PaymentChip = 'PAID' | 'COVERED' | 'WAIVED' | 'PARTIAL' | 'UNPAID' | 'REFUNDED';

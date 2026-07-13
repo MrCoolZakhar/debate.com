@@ -1,6 +1,6 @@
 'use client';
 
-// Observer participant view — spine only, plus a short welcome card. No
+// Observer participant view, spine only, plus a short welcome card. No
 // committee content: observers aren't allocated anywhere.
 
 import { Eye } from 'lucide-react';
@@ -17,7 +17,7 @@ export default function ObserverParticipant() {
           <Eye size={26} strokeWidth={1.8} style={{ color: '#1B3828' }} />
         </div>
         <p className="text-[15px] font-semibold max-w-[360px]" style={{ color: '#1C1410', fontFamily: OUTFIT, lineHeight: 1.6 }}>
-          You&apos;re registered as an observer — the organizing team will share event details.
+          You&apos;re registered as an observer. The organizing team will share event details.
         </p>
       </div>
     </SectionCard>

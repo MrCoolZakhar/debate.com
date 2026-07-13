@@ -4,11 +4,11 @@ import type { Metadata } from 'next';
 import React from 'react';
 
 export const metadata: Metadata = {
-  title: 'How to Plan a MUN Conference — Step-by-Step for Schools and Clubs',
+  title: 'How to Plan a MUN Conference: Step-by-Step for Schools and Clubs',
   description: 'A complete step-by-step guide to planning a Model UN conference from scratch: timeline, committees, registration, background guides, technology, and logistics.',
   alternates: { canonical: 'https://gavelling.com/blog/mun-conference-planning' },
   openGraph: {
-    title: 'How to Plan a MUN Conference — Step-by-Step for Schools and Clubs',
+    title: 'How to Plan a MUN Conference: Step-by-Step for Schools and Clubs',
     description: 'Plan your first MUN conference with this complete organiser guide.',
     url: 'https://gavelling.com/blog/mun-conference-planning',
     siteName: 'Gavelling',
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
 const articleSchema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
-  headline: 'How to Plan a MUN Conference — Step-by-Step for Schools and Clubs',
+  headline: 'How to Plan a MUN Conference: Step-by-Step for Schools and Clubs',
   description: 'Step-by-step MUN conference planning guide.',
   url: 'https://gavelling.com/blog/mun-conference-planning',
   datePublished: '2026-06-07',
@@ -68,10 +68,10 @@ export default function Article() {
       <div style={s.page}>
         <div style={s.wrap}>
           <Link href="/blog" style={s.back}>← MUN Resources</Link>
-          <h1 style={s.h1}>How to Plan a MUN Conference — Step-by-Step for Schools and Clubs</h1>
+          <h1 style={s.h1}>How to Plan a MUN Conference: Step-by-Step for Schools and Clubs</h1>
           <p style={s.meta}>By Gavelling · June 2026 · 13 min read</p>
           <article style={s.article}>
-            <p style={s.p}>Planning a Model UN conference from scratch is genuinely hard. You are simultaneously managing academic content, event logistics, people management, and technology — often with a team of students who have never done it before. This guide gives you a realistic, chronological plan for pulling it off well.</p>
+            <p style={s.p}>Planning a Model UN conference from scratch is genuinely hard. You are simultaneously managing academic content, event logistics, people management, and technology, often with a team of students who have never done it before. This guide gives you a realistic, chronological plan for pulling it off well.</p>
 
             <h2 style={s.h2}>Decide Your Scope First</h2>
             <p style={s.p}>Before anything else, answer three questions: How many delegates? How many committees? How many days? These decisions cascade into every other planning choice. A first-time conference organiser is better served by a small, excellent conference (50–80 delegates, three committees, one day) than an ambitious one that collapses under its own complexity.</p>
@@ -79,7 +79,7 @@ export default function Article() {
 
             <h2 style={s.h2}>Eight Months Out: Foundation</h2>
             <ul style={s.ul}>
-              <li style={s.li}><strong>Book your venue.</strong> School cafeterias, library halls, university rooms — whatever you can secure. You need one room per committee plus a space for opening and closing ceremonies.</li>
+              <li style={s.li}><strong>Book your venue.</strong> School cafeterias, library halls, university rooms, whatever you can secure. You need one room per committee plus a space for opening and closing ceremonies.</li>
               <li style={s.li}><strong>Set your date.</strong> Avoid exam periods, major holidays, and dates that clash with other regional conferences that would compete for delegates.</li>
               <li style={s.li}><strong>Form your secretariat.</strong> At minimum: a Secretary-General (overall lead), a Director-General (operations), committee directors for each committee, and a communications/registration lead.</li>
               <li style={s.li}><strong>Choose your conference name and branding.</strong> Register a domain, set up a simple website or Google Form for interest registration.</li>
@@ -94,7 +94,7 @@ export default function Article() {
             </ul>
 
             <h2 style={s.h2}>Four Months Out: Background Guides</h2>
-            <p style={s.p}>Each committee's chair team should produce a background guide of ten to fifteen pages. This is the most time-consuming academic deliverable. Give chairs a template and a hard deadline — eight weeks before the conference — and review drafts before publication.</p>
+            <p style={s.p}>Each committee's chair team should produce a background guide of ten to fifteen pages. This is the most time-consuming academic deliverable. Give chairs a template and a hard deadline (eight weeks before the conference), and review drafts before publication.</p>
             <h3 style={s.h3}>Background Guide Structure</h3>
             <ul style={s.ul}>
               <li style={s.li}>Committee introduction and mandate</li>
@@ -109,7 +109,7 @@ export default function Article() {
             <ul style={s.ul}>
               <li style={s.li}><strong>Close registration</strong> and finalise your delegate count.</li>
               <li style={s.li}><strong>Assign countries.</strong> Each registered school or team gets a list of countries across committees. Try to give schools country assignments that match their team's experience level.</li>
-              <li style={s.li}><strong>Send confirmation packages</strong> — committee assignments, country assignments, background guides, rules of procedure, schedule.</li>
+              <li style={s.li}><strong>Send confirmation packages</strong>: committee assignments, country assignments, background guides, rules of procedure, schedule.</li>
               <li style={s.li}><strong>Set up your committee management platform.</strong> Create all committee sessions in Gavelling, configure delegate lists, and share chair access codes with your dais team so they can familiarise themselves before conference day.</li>
             </ul>
 
@@ -117,20 +117,20 @@ export default function Article() {
             <ul style={s.ul}>
               <li style={s.li}>Confirm venue access and room setup</li>
               <li style={s.li}>Test all technology (projectors, WiFi, committee management software)</li>
-              <li style={s.li}>Brief your full secretariat team — everyone should know their role and their fallback if something goes wrong</li>
+              <li style={s.li}>Brief your full secretariat team: everyone should know their role and their fallback if something goes wrong</li>
               <li style={s.li}>Prepare printed name placards if using physical ones</li>
               <li style={s.li}>Prepare awards certificates and materials</li>
             </ul>
 
             <h2 style={s.h2}>Conference Day</h2>
-            <p style={s.p}>Run a tight opening ceremony — under thirty minutes. Get delegates into committee sessions as fast as possible. The energy peaks early; capitalise on it. Have secretariat members assigned to roam between committees and report issues back to the Secretary-General in real time.</p>
+            <p style={s.p}>Run a tight opening ceremony, under thirty minutes. Get delegates into committee sessions as fast as possible. The energy peaks early; capitalise on it. Have secretariat members assigned to roam between committees and report issues back to the Secretary-General in real time.</p>
 
             <h2 style={s.h2}>After the Conference</h2>
-            <p style={s.p}>Send a survey within 48 hours. Debrief your secretariat. Document what worked and what did not — write it down before memory fades. Share your notes with next year's planning team. This institutional knowledge is more valuable than any single conference outcome.</p>
+            <p style={s.p}>Send a survey within 48 hours. Debrief your secretariat. Document what worked and what did not. Write it down before memory fades. Share your notes with next year's planning team. This institutional knowledge is more valuable than any single conference outcome.</p>
 
             <RelatedGuides currentSlug="mun-conference-planning" />
             <div style={s.cta}>
-              <p style={s.ctaText}>Set up all your conference committees in Gavelling for free — no software installation, no IT team required.</p>
+              <p style={s.ctaText}>Set up all your conference committees in Gavelling for free: no software installation, no IT team required.</p>
               <a href="https://gavelling.com" style={s.ctaLink}>Try Gavelling free →</a>
             </div>
           </article>

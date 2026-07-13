@@ -1,11 +1,11 @@
 'use client';
 
 /**
- * ProfileDropdown — the shared account menu used by SiteNav and the
+ * ProfileDropdown, the shared account menu used by SiteNav and the
  * organiser (/manage) top bar.
  *
  * Owns the whole dropdown behaviour: hover-open with a ~200ms grace timer
- * (desktop pointer only — touch stays click-toggle), click-outside close,
+ * (desktop pointer only, touch stays click-toggle), click-outside close,
  * the kokonutui-style panel (header, menu rows, lazily fetched
  * "YOUR CONFERENCES" section, sign out). Callers only supply the trigger
  * visual via a render prop, so each surface keeps its own trigger styling.
@@ -34,7 +34,7 @@ function firstRow<T>(v: T | T[] | null | undefined): T | null {
 }
 
 interface ProfileDropdownProps {
-  /** Trigger visual — rendered inside the hover/click zone. */
+  /** Trigger visual, rendered inside the hover/click zone. */
   trigger: (open: boolean, toggle: () => void) => React.ReactNode;
   /** Extra styles merged onto the panel (e.g. z-index above a fixed top bar). */
   panelStyle?: React.CSSProperties;
@@ -45,7 +45,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
   const rootRef = useRef<HTMLDivElement>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // "Your conferences" section — fetched lazily the first time the menu opens.
+  // "Your conferences" section, fetched lazily the first time the menu opens.
   const [myConfs, setMyConfs] = useState<NavConference[] | null>(null);
   const [confsLoading, setConfsLoading] = useState(false);
   const confsFetched = useRef(false);
@@ -81,7 +81,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
     }
   }, []);
 
-  // Hover-open (desktop pointer only — touch keeps pure click-toggle behaviour).
+  // Hover-open (desktop pointer only, touch keeps pure click-toggle behaviour).
   const handlePointerEnter = useCallback((e: React.PointerEvent) => {
     if (e.pointerType !== 'mouse') return;
     cancelClose();
@@ -187,7 +187,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
     >
       {trigger(open, toggle)}
 
-      {/* Dropdown — kokonutui profile-dropdown anatomy in house style */}
+      {/* Dropdown, kokonutui profile-dropdown anatomy in house style */}
       {open && (
         <div
           className="absolute right-0 mt-2"
@@ -205,7 +205,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
         >
           <style>{`@keyframes profileMenuIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }`}</style>
 
-          {/* Header — avatar + name + email */}
+          {/* Header, avatar + name + email */}
           <div className="flex items-center gap-3 px-4 py-3.5">
             {profile?.avatar_url ? (
               <img
@@ -300,7 +300,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
             ) : null}
           </div>
 
-          {/* Your conferences — lazily fetched; omitted entirely when empty */}
+          {/* Your conferences, lazily fetched; omitted entirely when empty */}
           {(confsLoading || (myConfs !== null && myConfs.length > 0)) && (
             <>
               <div style={{ height: '1px', backgroundColor: '#DDD4C0' }} />

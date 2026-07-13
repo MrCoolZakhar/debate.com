@@ -201,7 +201,7 @@ export default function ProfilePage() {
     if (dateOfBirth) {
       const age = ageAt(dateOfBirth);
       if (age === null || age < 0 || age > 120) {
-        setDobError('That date of birth doesn’t look right — please double-check it.');
+        setDobError('That date of birth doesn’t look right. Please double-check it.');
         return;
       }
       if (age < 13) {
@@ -366,7 +366,7 @@ export default function ProfilePage() {
               <span style={{ fontFamily: OUTFIT, fontSize: '13px', fontWeight: 600, color: 'rgba(250,248,243,0.92)' }}>
                 {exp.nextLabel
                   ? `Attend more conferences to increase your rank`
-                  : `Top tier reached — you're an Expert delegate`}
+                  : `Top tier reached. You're an Expert delegate`}
               </span>
               <span
                 className="inline-flex items-center gap-1.5"

@@ -1,13 +1,13 @@
 'use client';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// V2 · "The Record" — Eventbrite-style search utility × Stripe numeric precision.
+// V2 · "The Record", Eventbrite-style search utility × Stripe numeric precision.
 //
 // Thesis (landing-research.md §4/V2): the delegate's real anxiety is information
-// asymmetry — cost, size, quality. mymun hides all three on its cards. Put every
+// asymmetry, cost, size, quality. mymun hides all three on its cards. Put every
 // decision fact in one typeset index with a working search on top; the page
 // converts on confidence. One memorable move: the ledger itself. No hero image,
-// no cards — typography and tabular figures carry the whole page.
+// no cards, typography and tabular figures carry the whole page.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useMemo, useState } from 'react';
@@ -49,7 +49,7 @@ export default function VariantRecord({
     const map: Record<string, LabReview> = {};
     for (const r of reviews) {
       const existing = map[r.conference_id];
-      // Prefer the shortest quotable review — footnotes must stay one line-ish.
+      // Prefer the shortest quotable review, footnotes must stay one line-ish.
       if (!existing || r.review_text.length < existing.review_text.length) {
         map[r.conference_id] = r;
       }
@@ -88,12 +88,12 @@ export default function VariantRecord({
               maxWidth: '560px',
             }}
           >
-            Dates, fees, delegate counts and real reviews — every listed conference, before you commit a weekend.
+            Dates, fees, delegate counts and real reviews: every listed conference, before you commit a weekend.
           </p>
 
           <RecordSearch conferences={conferences} />
 
-          {/* Live-computed stat strip — Stripe register: numbers, not adjectives */}
+          {/* Live-computed stat strip, Stripe register: numbers, not adjectives */}
           <p
             className="flex flex-wrap items-center gap-x-3 gap-y-1"
             style={{ fontFamily: MONO, fontSize: '11.5px', letterSpacing: '0.14em', color: TAUPE, margin: '18px 0 0 0' }}
@@ -107,7 +107,7 @@ export default function VariantRecord({
         </div>
       </section>
 
-      {/* ── The index — a full-width typeset ledger, the page's one move ──────── */}
+      {/* ── The index, a full-width typeset ledger, the page's one move ──────── */}
       <section className="px-6 md:px-14" style={{ paddingTop: '64px', paddingBottom: '20px' }}>
         {/* Column heads (desktop) */}
         <div
@@ -167,7 +167,7 @@ export default function VariantRecord({
         </div>
       </section>
 
-      {/* ── Organiser band — Ticket Tailor logic: fee claim + concrete proof ──── */}
+      {/* ── Organiser band, Ticket Tailor logic: fee claim + concrete proof ──── */}
       <section
         style={{
           marginTop: '56px',
@@ -199,7 +199,7 @@ export default function VariantRecord({
               Get on the record. It costs you nothing.
             </h2>
             <p style={{ fontFamily: SANS, fontSize: '15px', lineHeight: 1.6, color: 'rgba(237,231,216,0.75)', margin: '14px 0 0 0', maxWidth: '480px' }}>
-              Zero platform fees for organisers — registration, allocations, documents and live committee sessions included.
+              Zero platform fees for organisers: registration, allocations, documents and live committee sessions included.
             </p>
             <Link
               href="/conferences/new"
@@ -223,12 +223,12 @@ export default function VariantRecord({
               List your conference <ArrowRight size={16} strokeWidth={2.5} />
             </Link>
           </div>
-          {/* Proof column — the largest listed conference, stated as a fact */}
+          {/* Proof column, the largest listed conference, stated as a fact */}
           <ProofColumn conferences={conferences} ratings={ratings} />
         </div>
       </section>
 
-      {/* ── Roles line — a single sentence, not a section ─────────────────────── */}
+      {/* ── Roles line, a single sentence, not a section ─────────────────────── */}
       <section style={{ padding: '30px 0' }}>
         <div className="px-6 md:px-14 flex flex-col sm:flex-row sm:items-baseline gap-2 sm:gap-4" style={{ width: '100%' }}>
           <p style={{ fontFamily: SANS, fontSize: '15px', fontWeight: 600, color: INK, margin: 0 }}>
@@ -424,7 +424,7 @@ function IndexRow({
             </p>
             {footnote && (
               <p style={{ fontFamily: SANS, fontStyle: 'italic', fontSize: '12.5px', color: '#7A6E5D', margin: '7px 0 0 0', maxWidth: '520px' }}>
-                “{footnote.review_text.length > 110 ? footnote.review_text.slice(0, 107).trimEnd() + '…' : footnote.review_text}” — delegate review
+                “{footnote.review_text.length > 110 ? footnote.review_text.slice(0, 107).trimEnd() + '…' : footnote.review_text}”, delegate review
               </p>
             )}
           </div>

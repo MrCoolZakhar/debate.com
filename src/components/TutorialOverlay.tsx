@@ -18,7 +18,7 @@ interface TutorialStep {
   kind: StepKind;
   otterImage: string;
   bubbleText: React.ReactNode;
-  // Array of data-tutorial values — all light up simultaneously
+  // Array of data-tutorial values, all light up simultaneously
   spotlightTargets?: string[];
   spotlightRadius?: number;
   // Committee-state condition to auto-advance
@@ -42,12 +42,12 @@ function getSteps(language: string): TutorialStep[] {
       otterImage: '/Otter.Tutorial.webp',
       spotlightTargets: [],
       bubbleText: language === 'ar'
-        ? <>مرحباً بك في <strong>قاعة لجنتك</strong>. {GR('المتحدثون')}، {GR('المؤقّتات')}، {GR('التصويت')}، {GR('الاقتراحات')}، {GR('المحادثة')}، {GR('المستندات')} — كل ذلك في مكان واحد، مُصمَّم لإدارة <strong>جلسة المحاكاة الكاملة</strong> من أول ضربة مطرقة إلى آخرها.</>
+        ? <>مرحباً بك في <strong>قاعة لجنتك</strong>. {GR('المتحدثون')}، {GR('المؤقّتات')}، {GR('التصويت')}، {GR('الاقتراحات')}، {GR('المحادثة')}، {GR('المستندات')}، كل ذلك في مكان واحد، مُصمَّم لإدارة <strong>جلسة المحاكاة الكاملة</strong> من أول ضربة مطرقة إلى آخرها.</>
         : language === 'fr'
-        ? <>Bienvenue dans votre <strong>salle de comité</strong>. {GR('Orateurs')}, {GR('chronomètres')}, {GR('votes')}, {GR('motions')}, {GR('chat')}, {GR('documents')} — tout en un seul endroit, conçu pour gérer votre <strong>session MUN complète</strong> du premier coup de maillet au dernier.</>
+        ? <>Bienvenue dans votre <strong>salle de comité</strong>. {GR('Orateurs')}, {GR('chronomètres')}, {GR('votes')}, {GR('motions')}, {GR('chat')}, {GR('documents')}, tout en un seul endroit, conçu pour gérer votre <strong>session MUN complète</strong> du premier coup de maillet au dernier.</>
         : language === 'es'
-        ? <>Bienvenido a tu <strong>sala de comité</strong>. {GR('Oradores')}, {GR('cronómetros')}, {GR('votos')}, {GR('mociones')}, {GR('chat')}, {GR('documentos')} — todo en un solo lugar para dirigir tu <strong>sesión completa de MUN</strong>.</>
-        : <>Welcome to your <strong>committee room</strong>. {GR('Speakers')}, {GR('timers')}, {GR('voting')}, {GR('motions')}, {GR('chat')}, {GR('documents')} — all bundled in one place, built to run your <strong>entire MUN session</strong> from the first gavel to the last.</>,
+        ? <>Bienvenido a tu <strong>sala de comité</strong>. {GR('Oradores')}, {GR('cronómetros')}, {GR('votos')}, {GR('mociones')}, {GR('chat')}, {GR('documentos')}, todo en un solo lugar para dirigir tu <strong>sesión completa de MUN</strong>.</>
+        : <>Welcome to your <strong>committee room</strong>. {GR('Speakers')}, {GR('timers')}, {GR('voting')}, {GR('motions')}, {GR('chat')}, {GR('documents')}, all bundled in one place, built to run your <strong>entire MUN session</strong> from the first gavel to the last.</>,
     },
     {
       id: 'speakers-bottom-bar', kind: 'spotlight',
@@ -66,12 +66,12 @@ function getSteps(language: string): TutorialStep[] {
       otterImage: '/Otter.Tutorial.webp',
       spotlightTargets: ['sidebar-view-toggle'], spotlightRadius: 99,
       bubbleText: language === 'ar'
-        ? <>للوحة الجانبية عرضان — {G('أ-ي')} و{G('القائمة')}. بدّل إلى <strong>القائمة</strong> لرؤية ترتيب المتحدثين.</>
+        ? <>للوحة الجانبية عرضان: {G('أ-ي')} و{G('القائمة')}. بدّل إلى <strong>القائمة</strong> لرؤية ترتيب المتحدثين.</>
         : language === 'fr'
-        ? <>Le panneau latéral a deux vues — {G('A-Z')} et {G('LISTE')}. Passez sur <strong>LISTE</strong> pour voir l&apos;ordre des orateurs.</>
+        ? <>Le panneau latéral a deux vues : {G('A-Z')} et {G('LISTE')}. Passez sur <strong>LISTE</strong> pour voir l&apos;ordre des orateurs.</>
         : language === 'es'
-        ? <>El panel lateral tiene dos opciones — {G('A-Z')} y {G('FILA')}. Cambia a <strong>FILA</strong> para ver el orden de oradores.</>
-        : <>The sidebar has two views — {G('A-Z')} and {G('QUEUE')}. Switch to <strong>QUEUE</strong> to see the speaking order.</>,
+        ? <>El panel lateral tiene dos opciones: {G('A-Z')} y {G('FILA')}. Cambia a <strong>FILA</strong> para ver el orden de oradores.</>
+        : <>The sidebar has two views: {G('A-Z')} and {G('QUEUE')}. Switch to <strong>QUEUE</strong> to see the speaking order.</>,
       domActionDone: () => {
         const el = document.querySelector('[data-tutorial="sidebar-view-toggle"]');
         return el?.getAttribute('data-current-view') === 'queue';
@@ -83,12 +83,12 @@ function getSteps(language: string): TutorialStep[] {
       spotlightTargets: ['speakers-bottom-bar', 'speakers-sidebar', 'speakers-autocomplete'],
       spotlightRadius: 12,
       bubbleText: language === 'ar'
-        ? <>أضف <strong>3 دول</strong> إلى القائمة — استخدم {G('شريط البحث')} أو انقر على المندوبين في {G('اللوحة الجانبية')}. كلاهما يعمل!</>
+        ? <>أضف <strong>3 دول</strong> إلى القائمة: استخدم {G('شريط البحث')} أو انقر على المندوبين في {G('اللوحة الجانبية')}. كلاهما يعمل!</>
         : language === 'fr'
-        ? <>Ajoutez <strong>3 pays</strong> à la liste — utilisez la {G('barre de recherche')} ou cliquez sur des délégués dans le {G('panneau latéral')}. Les deux fonctionnent !</>
+        ? <>Ajoutez <strong>3 pays</strong> à la liste : utilisez la {G('barre de recherche')} ou cliquez sur des délégués dans le {G('panneau latéral')}. Les deux fonctionnent !</>
         : language === 'es'
-        ? <>Agrega <strong>3 países</strong> a la lista — usa la {G('barra de búsqueda')} o haz clic en delegados del {G('panel lateral')}. ¡Ambos funcionan!</>
-        : <>Add <strong>any 3 countries</strong> to the speakers list — use the {G('input bar')} below or click delegates in the {G('sidebar')}. Both work!</>,
+        ? <>Agrega <strong>3 países</strong> a la lista: usa la {G('barra de búsqueda')} o haz clic en delegados del {G('panel lateral')}. ¡Ambos funcionan!</>
+        : <>Add <strong>any 3 countries</strong> to the speakers list: use the {G('input bar')} below or click delegates in the {G('sidebar')}. Both work!</>,
       actionDone: (c) => c.speakersList.length >= 3,
     },
     {
@@ -145,60 +145,60 @@ function getSteps(language: string): TutorialStep[] {
       otterImage: '/Otter.Tutorial.webp',
       spotlightTargets: ['tab-rollcall'], spotlightRadius: 6,
       bubbleText: language === 'ar'
-        ? <>{G('تدقيق الحضور')} — انقر هنا لتحديد كل مندوب على أنه <strong>غائب</strong> أو <strong>حاضر</strong> أو <strong>حاضر ومصوّت</strong>. يمكنك تحديث الحضور في أي وقت أثناء الجلسة.</>
+        ? <>{G('تدقيق الحضور')}: انقر هنا لتحديد كل مندوب على أنه <strong>غائب</strong> أو <strong>حاضر</strong> أو <strong>حاضر ومصوّت</strong>. يمكنك تحديث الحضور في أي وقت أثناء الجلسة.</>
         : language === 'fr'
-        ? <>{G('Appel')} — cliquer ici pour marquer chaque délégué comme <strong>Absent</strong>, <strong>Présent</strong> ou <strong>Présent et Votant</strong>. Mettre à jour l&apos;assiduité à tout moment pendant la session.</>
+        ? <>{G('Appel')} : cliquer ici pour marquer chaque délégué comme <strong>Absent</strong>, <strong>Présent</strong> ou <strong>Présent et Votant</strong>. Mettre à jour l&apos;assiduité à tout moment pendant la session.</>
         : language === 'es'
-        ? <>{G('Lista de Asistencia')} — marca a cada delegado como <strong>Ausente</strong>, <strong>Presente</strong> o <strong>Presente y Votante</strong>. Puedes actualizar la asistencia en cualquier momento.</>
-        : <>{G('Roll Call')} — click here to mark each delegate as <strong>Absent</strong>, <strong>Present</strong>, or <strong>Present & Voting</strong>. You can update attendance at any point during the session.</>,
+        ? <>{G('Lista de Asistencia')}: marca a cada delegado como <strong>Ausente</strong>, <strong>Presente</strong> o <strong>Presente y Votante</strong>. Puedes actualizar la asistencia en cualquier momento.</>
+        : <>{G('Roll Call')}: click here to mark each delegate as <strong>Absent</strong>, <strong>Present</strong>, or <strong>Present & Voting</strong>. You can update attendance at any point during the session.</>,
     },
     {
       id: 'tab-motions', kind: 'spotlight',
       otterImage: '/Otter.Tutorial.webp',
       spotlightTargets: ['tab-motions'], spotlightRadius: 6,
       bubbleText: language === 'ar'
-        ? <>{G('الاقتراحات')} — يطرح المندوبون هنا <strong>حواراً منهجياً</strong> و<strong>حواراً حراً</strong> و<strong>جولة متحدثين</strong> و<strong>مشاورات الهيئة</strong>. يمكنك أيضاً <strong>إنهاء</strong> أو <strong>تعليق النقاش</strong> من هذه التبويبة.</>
+        ? <>{G('الاقتراحات')}: يطرح المندوبون هنا <strong>حواراً منهجياً</strong> و<strong>حواراً حراً</strong> و<strong>جولة متحدثين</strong> و<strong>مشاورات الهيئة</strong>. يمكنك أيضاً <strong>إنهاء</strong> أو <strong>تعليق النقاش</strong> من هذه التبويبة.</>
         : language === 'fr'
-        ? <>{G('Motions')} — les délégués proposent ici un <strong>Caucus modéré</strong>, un <strong>Caucus non modéré</strong>, un <strong>Tour de table</strong> et une <strong>Consultation de l&apos;assemblée</strong>. Vous pouvez aussi <strong>clôturer</strong> ou <strong>suspendre le débat</strong> depuis cet onglet.</>
+        ? <>{G('Motions')} : les délégués proposent ici un <strong>Caucus modéré</strong>, un <strong>Caucus non modéré</strong>, un <strong>Tour de table</strong> et une <strong>Consultation de l&apos;assemblée</strong>. Vous pouvez aussi <strong>clôturer</strong> ou <strong>suspendre le débat</strong> depuis cet onglet.</>
         : language === 'es'
-        ? <>{G('Mociones')} — los delegados levantan <strong>Cáucus Moderado</strong>, <strong>Cáucus No Moderado</strong>, <strong>Round Robin</strong> y <strong>Consulta de Gabinete</strong>. También puedes <strong>cerrar</strong> o <strong>suspender el debate</strong>.</>
-        : <>{G('Motions')} — delegates raise <strong>Moderated Caucus</strong>, <strong>Unmoderated Caucus</strong>, <strong>Tour de Table</strong>, and <strong>Consultation of the Whole</strong> here. You can also <strong>close</strong> or <strong>suspend debate</strong> from this tab.</>,
+        ? <>{G('Mociones')}: los delegados levantan <strong>Cáucus Moderado</strong>, <strong>Cáucus No Moderado</strong>, <strong>Round Robin</strong> y <strong>Consulta de Gabinete</strong>. También puedes <strong>cerrar</strong> o <strong>suspender el debate</strong>.</>
+        : <>{G('Motions')}: delegates raise <strong>Moderated Caucus</strong>, <strong>Unmoderated Caucus</strong>, <strong>Tour de Table</strong>, and <strong>Consultation of the Whole</strong> here. You can also <strong>close</strong> or <strong>suspend debate</strong> from this tab.</>,
     },
     {
       id: 'tab-documents', kind: 'spotlight',
       otterImage: '/Otter.Tutorial.webp',
       spotlightTargets: ['tab-documents'], spotlightRadius: 6,
       bubbleText: language === 'ar'
-        ? <>{G('المستندات')} — تظهر هنا <strong>أوراق العمل</strong> و<strong>مشاريع القرارات</strong> المقدَّمة من المندوبين. بعد الموافقة، يحصل المندوبون على صفحة مخصّصة لـ {GR('القراءة')} و{GR('العرض')} و{GR('الأسئلة والأجوبة')}.</>
+        ? <>{G('المستندات')}: تظهر هنا <strong>أوراق العمل</strong> و<strong>مشاريع القرارات</strong> المقدَّمة من المندوبين. بعد الموافقة، يحصل المندوبون على صفحة مخصّصة لـ {GR('القراءة')} و{GR('العرض')} و{GR('الأسئلة والأجوبة')}.</>
         : language === 'fr'
-        ? <>{G('Documents')} — les <strong>Documents de travail</strong> et <strong>Projets de résolution</strong> soumis par les délégués apparaissent ici. Une fois approuvés, les délégués obtiennent une page dédiée de {GR('Lecture')}, {GR('Présentation')} et {GR('Q&R')}.</>
+        ? <>{G('Documents')} : les <strong>Documents de travail</strong> et <strong>Projets de résolution</strong> soumis par les délégués apparaissent ici. Une fois approuvés, les délégués obtiennent une page dédiée de {GR('Lecture')}, {GR('Présentation')} et {GR('Q&R')}.</>
         : language === 'es'
-        ? <>{G('Documentos')} — las <strong>Hojas de Trabajo</strong> y <strong>Proyectos de Resolución</strong> aparecen aquí. Una vez aprobados, los delegados tienen páginas de {GR('Lectura')}, {GR('Presentación')} y {GR('Preguntas')}.</>
-        : <>{G('Documents')} — <strong>Working Papers</strong> and <strong>Draft Resolutions</strong> submitted by delegates appear here. Once approved, delegates get a dedicated {GR('Reading')}, {GR('Presentation')}, and {GR('Q&A')} page.</>,
+        ? <>{G('Documentos')}: las <strong>Hojas de Trabajo</strong> y <strong>Proyectos de Resolución</strong> aparecen aquí. Una vez aprobados, los delegados tienen páginas de {GR('Lectura')}, {GR('Presentación')} y {GR('Preguntas')}.</>
+        : <>{G('Documents')}: <strong>Working Papers</strong> and <strong>Draft Resolutions</strong> submitted by delegates appear here. Once approved, delegates get a dedicated {GR('Reading')}, {GR('Presentation')}, and {GR('Q&A')} page.</>,
     },
     {
       id: 'tab-chat', kind: 'spotlight',
       otterImage: '/Otter.Tutorial.webp',
       spotlightTargets: ['tab-chat'], spotlightRadius: 6,
       bubbleText: language === 'ar'
-        ? <>{G('المحادثة')} — راسل <strong>جميع المندوبين</strong> دفعة واحدة أو أرسل رسائل خاصة فردية. نوصي بإبقائها مفتوحة على <strong>جهازك الشخصي</strong> بدلاً من شاشة اللجنة الرئيسية.</>
+        ? <>{G('المحادثة')}: راسل <strong>جميع المندوبين</strong> دفعة واحدة أو أرسل رسائل خاصة فردية. نوصي بإبقائها مفتوحة على <strong>جهازك الشخصي</strong> بدلاً من شاشة اللجنة الرئيسية.</>
         : language === 'fr'
-        ? <>{G('Chat')} — envoyez un message à <strong>tous les délégués</strong> ou des messages privés individuels. Nous recommandons de le garder ouvert sur votre <strong>appareil personnel</strong> plutôt que sur l&apos;écran principal du comité.</>
+        ? <>{G('Chat')} : envoyez un message à <strong>tous les délégués</strong> ou des messages privés individuels. Nous recommandons de le garder ouvert sur votre <strong>appareil personnel</strong> plutôt que sur l&apos;écran principal du comité.</>
         : language === 'es'
-        ? <>{G('Chat')} — envía mensajes a <strong>todos los delegados</strong> o DM individuales. Recomendamos tenerlo abierto en tu <strong>dispositivo personal</strong>.</>
-        : <>{G('Chat')} — message <strong>all delegates</strong> at once or DM individuals. We recommend keeping this open on your <strong>personal device</strong> rather than the main committee screen.</>,
+        ? <>{G('Chat')}: envía mensajes a <strong>todos los delegados</strong> o DM individuales. Recomendamos tenerlo abierto en tu <strong>dispositivo personal</strong>.</>
+        : <>{G('Chat')}: message <strong>all delegates</strong> at once or DM individuals. We recommend keeping this open on your <strong>personal device</strong> rather than the main committee screen.</>,
     },
     {
       id: 'tab-settings', kind: 'spotlight',
       otterImage: '/Otter.Tutorial.webp',
       spotlightTargets: ['tab-settings'], spotlightRadius: 6,
       bubbleText: language === 'ar'
-        ? <>{G('الإعدادات')} — اضبط <strong>قواعد التصويت</strong> وأنواع الاقتراحات وأوقات الكلام وضوابط الوصول.</>
+        ? <>{G('الإعدادات')}: اضبط <strong>قواعد التصويت</strong> وأنواع الاقتراحات وأوقات الكلام وضوابط الوصول.</>
         : language === 'fr'
-        ? <>{G('Paramètres')} — configurez les <strong>règles de vote</strong>, les types de motions, les temps de parole et les contrôles d&apos;accès.</>
+        ? <>{G('Paramètres')} : configurez les <strong>règles de vote</strong>, les types de motions, les temps de parole et les contrôles d&apos;accès.</>
         : language === 'es'
-        ? <>{G('Configuración')} — configura <strong>reglas de votación</strong>, tipos de mociones, tiempos de habla y controles de acceso.</>
-        : <>{G('Settings')} — configure <strong>voting rules</strong>, motion types, speaking times, and access controls.</>,
+        ? <>{G('Configuración')}: configura <strong>reglas de votación</strong>, tipos de mociones, tiempos de habla y controles de acceso.</>
+        : <>{G('Settings')}: configure <strong>voting rules</strong>, motion types, speaking times, and access controls.</>,
     },
     {
       id: 'join-code', kind: 'spotlight',
@@ -216,12 +216,12 @@ function getSteps(language: string): TutorialStep[] {
       id: 'goodbye', kind: 'goodbye',
       otterImage: '/Otter.Tutorial.Outro.webp',
       bubbleText: language === 'ar'
-        ? <>استمتع بالاستكشاف! وزوّدنا دائماً بـ {G('ملاحظاتك')} — فهكذا يتحسّن Gavelling. راسلنا على إنستغرام {GR('@wearegavelling')} في أي وقت 🎉</>
+        ? <>استمتع بالاستكشاف! وزوّدنا دائماً بـ {G('ملاحظاتك')}، فهكذا يتحسّن Gavelling. راسلنا على إنستغرام {GR('@wearegavelling')} في أي وقت 🎉</>
         : language === 'fr'
-        ? <>Amusez-vous à explorer ! Et donnez-nous toujours votre {G('avis')} — c&apos;est comme ça que Gavelling s&apos;améliore. Écrivez-nous sur IG {GR('@wearegavelling')} à tout moment 🎉</>
+        ? <>Amusez-vous à explorer ! Et donnez-nous toujours votre {G('avis')}, c&apos;est comme ça que Gavelling s&apos;améliore. Écrivez-nous sur IG {GR('@wearegavelling')} à tout moment 🎉</>
         : language === 'es'
-        ? <>¡Diviértete explorando! Y siempre {G('danos tu opinión')} — así mejora Gavelling. Escríbenos en IG {GR('@wearegavelling')} cuando quieras 🎉</>
-        : <>Have fun exploring! And always {G('give us feedback')} — it&apos;s how Gavelling gets better. Text us on IG {GR('@wearegavelling')} any time 🎉</>,
+        ? <>¡Diviértete explorando! Y siempre {G('danos tu opinión')}, así mejora Gavelling. Escríbenos en IG {GR('@wearegavelling')} cuando quieras 🎉</>
+        : <>Have fun exploring! And always {G('give us feedback')}, it&apos;s how Gavelling gets better. Text us on IG {GR('@wearegavelling')} any time 🎉</>,
     },
   ];
 }
@@ -303,7 +303,7 @@ export default function TutorialOverlay({ committee, onEnd, onStepId }: Props) {
   }, [onEnd]);
 
   // Notify parent whenever step.id changes.
-  // Use a ref so the effect ONLY fires on step changes — not every time the
+  // Use a ref so the effect ONLY fires on step changes, not every time the
   // parent re-renders and passes a new inline function reference (which would
   // continuously reset the toggle view during the timer's per-second re-renders).
   const onStepIdRef = useRef(onStepId);
@@ -371,7 +371,7 @@ export default function TutorialOverlay({ committee, onEnd, onStepId }: Props) {
           width: 440, height: 660,
           pointerEvents: 'none',
         }}>
-          {/* Portrait image — anchored to bottom */}
+          {/* Portrait image, anchored to bottom */}
           <img
             src={step.otterImage} alt="Gavin"
             style={{
@@ -382,7 +382,7 @@ export default function TutorialOverlay({ committee, onEnd, onStepId }: Props) {
             }}
           />
 
-          {/* Bubble + button — pinned just above first otter pixel (335px from bottom) */}
+          {/* Bubble + button, pinned just above first otter pixel (335px from bottom) */}
           <div style={{
             position: 'absolute', bottom: 345, left: 0, right: 0,
             display: 'flex', flexDirection: 'column', alignItems: 'center',
@@ -431,7 +431,7 @@ export default function TutorialOverlay({ committee, onEnd, onStepId }: Props) {
   // ── Spotlight / Action steps ──────────────────────────────────────────────
   return (
     <>
-      {/* SVG mask — one hole per spotlight target */}
+      {/* SVG mask, one hole per spotlight target */}
       {vw > 0 && (
         <svg
           style={{ position: 'fixed', top: 0, left: 0, zIndex: 9990, pointerEvents: 'none' }}
@@ -481,16 +481,16 @@ export default function TutorialOverlay({ committee, onEnd, onStepId }: Props) {
         );
       })}
 
-      {/* Click-to-advance catcher — spotlight steps only */}
+      {/* Click-to-advance catcher, spotlight steps only */}
       {!isAction && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 9991, cursor: 'pointer' }}
           onClick={advance} />
       )}
 
-      {/* End Tutorial — fixed, just below the h-11 (44px) top navbar */}
+      {/* End Tutorial, fixed, just below the h-11 (44px) top navbar */}
       <EndTutorialBtn onEnd={onEnd} />
 
-      {/* Gavin — fixed bottom-right, portrait touching bottom */}
+      {/* Gavin, fixed bottom-right, portrait touching bottom */}
       {/*
         PNG is 2000×2000 with 528px transparent top.
         Rendered at 440×440 (fit-to-width) inside the 660px box, bottom-anchored:
@@ -505,7 +505,7 @@ export default function TutorialOverlay({ committee, onEnd, onStepId }: Props) {
         width: 440, height: 660,
         pointerEvents: 'none',
       }}>
-        {/* Portrait image — fills the container, content anchored to bottom */}
+        {/* Portrait image, fills the container, content anchored to bottom */}
         <img
           src={step.otterImage} alt="Gavin"
           style={{
@@ -516,7 +516,7 @@ export default function TutorialOverlay({ committee, onEnd, onStepId }: Props) {
           }}
         />
 
-        {/* Speech bubble — pinned just above first otter pixel */}
+        {/* Speech bubble, pinned just above first otter pixel */}
         {step.bubbleText && (
           <div style={{
             position: 'absolute', bottom: 334, left: 0, right: 0,

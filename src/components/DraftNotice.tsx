@@ -22,12 +22,12 @@ export function useDraftNotices() {
 
   function pushDraftNotice(eventKey: string) {
     setDraftNotices(prev => {
-      // Dedupe: a notice for this event is already visible — don't stack another.
+      // Dedupe: a notice for this event is already visible, don't stack another.
       if (prev.some(n => n.eventKey === eventKey)) return prev;
       const id = `${eventKey}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
       setTimeout(() => setDraftNotices(p => p.filter(n => n.id !== id)), 8000);
       const next = [...prev, { id, eventKey }];
-      // Cap at MAX_VISIBLE distinct events — the oldest collapses first.
+      // Cap at MAX_VISIBLE distinct events, the oldest collapses first.
       return next.length > MAX_VISIBLE ? next.slice(next.length - MAX_VISIBLE) : next;
     });
   }
@@ -55,7 +55,7 @@ export function DraftNoticeList({
           className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm"
           style={{ backgroundColor: 'rgba(182,135,31,0.08)', border: '1px solid rgba(182,135,31,0.25)', color: '#8A6614', fontFamily: OUTFIT }}
         >
-          <span>No email is drafted for &lsquo;{getEventLabel(n.eventKey)}&rsquo; —</span>
+          <span>No email is drafted for &lsquo;{getEventLabel(n.eventKey)}&rsquo;.</span>
           <Link
             href={`/manage/${conferenceSlug}/communications?event=${n.eventKey}`}
             className="font-bold flex-shrink-0"

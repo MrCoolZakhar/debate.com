@@ -36,7 +36,7 @@ export function FlagCircle({ country, size = 'md' }: { country: string; size?: '
 
 // ── 3-state slider ────────────────────────────────────────────────────────────
 function StatusSlider({ status, onCycle, isObserver = false }: { status: DelegateStatus; onCycle: () => void; isObserver?: boolean }) {
-  // Observers can only be Absent or Present — no present-voting (PV) segment.
+  // Observers can only be Absent or Present, no present-voting (PV) segment.
   if (isObserver) {
     const thumbStart = status === 'absent' ? '2px' : '32px';
     const thumbColor = status === 'absent' ? 'bg-[#8B2020]' : 'bg-[#3D7A52]';
@@ -243,7 +243,7 @@ function FullListPopup({
 // ── MajorityPie ───────────────────────────────────────────────────────────────
 // arcFill: fixed fraction 0–1 for the arc shape (never changes per chart).
 // label:   live-computed number shown next to the arc.
-// color:   always active — these are informational thresholds, not pass/fail.
+// color:   always active, these are informational thresholds, not pass/fail.
 export function MajorityPie({ arcFill, color, label }: {
   arcFill: number; color: string; label: string;
 }) {
@@ -291,7 +291,7 @@ function RollCallPanelInner({
   onAddToList?: (delegateId: string) => void;
   onListIds?: Set<string>;
   onRemoveFromList?: (delegateId: string) => void;
-  /** Preferred over onStatusChange for toggle clicks — parent reads from a ref for rapid-click safety */
+  /** Preferred over onStatusChange for toggle clicks, parent reads from a ref for rapid-click safety */
   onCycleStatus?: (delegateId: string) => void;
   onStatusChange?: (delegateId: string, status: DelegateStatus) => void;
   onPhaseChange?: (phase: string) => void;
@@ -339,7 +339,7 @@ function RollCallPanelInner({
   (committee.speakersList ?? []).forEach((s, i) => {
     queuePositionMap.set(s.delegateId, i + queueOffset);
   });
-  // Caucus current speaker — only when committee.currentSpeaker is null (caucus mode)
+  // Caucus current speaker, only when committee.currentSpeaker is null (caucus mode)
   if (!committee.currentSpeaker && committee.caucus?.currentSpeaker) {
     const caucusCurrent = committee.delegates.find((d) => d.country === committee.caucus!.currentSpeaker);
     if (caucusCurrent) queuePositionMap.set(caucusCurrent.id, 1);
@@ -580,7 +580,7 @@ function RollCallPanelInner({
                   ) : (
                     <FlagCircle country={d.country} size={isUpNext ? 'md' : 'sm'} />
                   )}
-                  {/* Queue position bubble — omitted when isRoomOrderTdT since position is already the primary display */}
+                  {/* Queue position bubble, omitted when isRoomOrderTdT since position is already the primary display */}
                   {queuePos !== null && !isRoomOrderTdT && (
                     <div className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-0.5 rounded-full flex items-center justify-center font-black leading-none text-[10px]"
                       style={{ backgroundColor: '#EDE7D8', color: '#1B3828', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }}>
@@ -594,7 +594,7 @@ function RollCallPanelInner({
                 {isObserver && (
                   <span className="text-[9px] shrink-0 font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-md" style={{ backgroundColor: 'rgba(238,217,138,0.15)', color: 'rgba(238,217,138,0.85)', border: '1px solid rgba(238,217,138,0.3)' }}>{t('rollcall_observer')}</span>
                 )}
-                {/* Observer placard toggle — available during roll call and mid-session */}
+                {/* Observer placard toggle, available during roll call and mid-session */}
                 {(isRollCallPhase || showStatusSliders) && !(isReadOnly || isViewOnly) && (
                   <button
                     onClick={(e) => { e.stopPropagation(); toggleObserver(d.id, isObserver); }}

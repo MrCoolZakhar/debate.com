@@ -364,7 +364,7 @@ export default function EmailComposer({
   const [sendingTest, setSendingTest] = useState(false);
   const [testSentMessage, setTestSentMessage] = useState<string | null>(null);
   // "Send test to me" resolves tokens either as the organizer (testSendContext,
-  // the default) or as a picked sample applicant — the recipient is always
+  // the default) or as a picked sample applicant, the recipient is always
   // the organizer's own address either way.
   const [testAsId, setTestAsId] = useState<string | null>(null);
   const [testAsOpen, setTestAsOpen] = useState(false);
@@ -508,7 +508,7 @@ export default function EmailComposer({
           </span>
         )}
 
-        {/* "Test as" picker — resolves tokens as this applicant; the test
+        {/* "Test as" picker, resolves tokens as this applicant; the test
             email itself always goes to the organizer's own address. */}
         <div className="relative">
           <button

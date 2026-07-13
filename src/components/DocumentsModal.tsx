@@ -101,7 +101,7 @@ function SponsorSelect({ candidates, selected, onChange, committee }: {
           </div>
         )}
       </div>
-      {/* Selected sponsors — flags only, below input */}
+      {/* Selected sponsors, flags only, below input */}
       {selected.length > 0 && (
         <div className="flex flex-wrap gap-2 mt-2">
           {selected.map((c) => {
@@ -702,11 +702,11 @@ function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation
     <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl overflow-hidden">
       <div className="flex items-stretch">
 
-        {/* Left strip — doc thumbnail with padding from border */}
+        {/* Left strip, doc thumbnail with padding from border */}
         <div className="flex flex-col items-center justify-between shrink-0 p-2"
           style={{ backgroundColor: 'rgba(27,56,40,0.10)', width: '88px' }}>
 
-          {/* Thumbnail — PDF preview or fallback emoji */}
+          {/* Thumbnail, PDF preview or fallback emoji */}
           <div className="w-full rounded-lg overflow-hidden flex-1 flex items-center justify-center"
             style={{ maxHeight: '120px', minHeight: '80px' }}>
             {doc.fileUrl ? (
@@ -804,7 +804,7 @@ function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation
             </div>
           )}
 
-          {/* Chair approval gate — approve/reject before the doc can be introduced */}
+          {/* Chair approval gate, approve/reject before the doc can be introduced */}
           {canDecide && (
             <div className="flex gap-2">
               <button onClick={() => onApprovalChange(doc.id, 'approved')}
@@ -821,7 +821,7 @@ function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation
             </div>
           )}
 
-          {/* Introduce / advance button — withheld until approved when approval is required */}
+          {/* Introduce / advance button, withheld until approved when approval is required */}
           {nextStatus && doc.status !== 'passed' && doc.status !== 'failed' && doc.status !== 'introduced' && !approvalBlocksIntroduce && (
             <button onClick={handleAdvance}
               className="w-full bg-[#1B3828] hover:bg-[#2A5A3C] text-white py-2 rounded-lg font-bold text-sm transition-colors focus:outline-none">
@@ -914,7 +914,7 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
       setStage(null);
       setActiveDoc(null);
     } else {
-      // DR: presentation complete — stay on documents page, chair navigates to voting manually
+      // DR: presentation complete, stay on documents page, chair navigates to voting manually
       setStage(null);
       setActiveDoc(null);
     }

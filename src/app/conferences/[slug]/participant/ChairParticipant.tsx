@@ -3,7 +3,7 @@
 // Chair participant view. A chair may hold the dais on more than one
 // committee, so this fetches every conference_committees row where
 // chair_user_ids contains them (safe under "Associated users read their
-// committee" RLS — row-level, so session_code etc. only comes back for
+// committee" RLS, row-level, so session_code etc. only comes back for
 // committees they actually chair) and stacks a full block per committee.
 
 import { useState, useEffect, useCallback } from 'react';
@@ -69,7 +69,7 @@ interface PositionPaperRow {
   submitted_at: string;
 }
 
-// ── Committee header card (item 1) — mirrors the public committee card ─────
+// ── Committee header card (item 1), mirrors the public committee card ─────
 
 function CommitteeHeaderCard({ committee }: { committee: ChairCommittee }) {
   const diff = committee.difficulty?.toLowerCase() ?? '';
@@ -145,7 +145,7 @@ function SessionCard({ committee, chairDisplayName }: { committee: ChairCommitte
         </p>
       ) : !committee.session_code ? (
         <p className="text-sm" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-          Your session hasn&apos;t been created yet — check back soon.
+          Your session hasn&apos;t been created yet. Check back soon.
         </p>
       ) : (
         <div className="flex flex-col gap-3">
@@ -192,7 +192,7 @@ function SessionCard({ committee, chairDisplayName }: { committee: ChairCommitte
   );
 }
 
-// ── Roster row (item 3) — expandable, feedback authoring ───────────────────
+// ── Roster row (item 3), expandable, feedback authoring ───────────────────
 
 function RosterRow({ member, paper, conferenceId, onFeedbackSaved }: {
   member: RosterMember;
@@ -226,7 +226,7 @@ function RosterRow({ member, paper, conferenceId, onFeedbackSaved }: {
     // NOTE: email_outbox/email_templates are organizer-only under current RLS
     // ("Organizers manage email templates/outbox"). A chair session isn't an
     // organizer, so this queue call silently no-ops (template lookup returns
-    // nothing) — the same confirmed, reported gap as delegation_swap last
+    // nothing), the same confirmed, reported gap as delegation_swap last
     // round. Not worked around; flagged, not guessed around.
     await queueEventEmail(supabase, conferenceId, 'position_paper_feedback', [member.id]);
     setSaving(false);

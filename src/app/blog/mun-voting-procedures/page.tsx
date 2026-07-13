@@ -4,11 +4,11 @@ import type { Metadata } from 'next';
 import React from 'react';
 
 export const metadata: Metadata = {
-  title: 'MUN Voting Procedures Explained — In Favour, Against, Abstain',
+  title: 'MUN Voting Procedures Explained: In Favour, Against, Abstain',
   description: 'A complete guide to Model UN voting procedures: simple majority, supermajority, roll call votes, placard votes, abstentions, and voting on resolutions.',
   alternates: { canonical: 'https://gavelling.com/blog/mun-voting-procedures' },
   openGraph: {
-    title: 'MUN Voting Procedures Explained — In Favour, Against, Abstain',
+    title: 'MUN Voting Procedures Explained: In Favour, Against, Abstain',
     description: 'Everything you need to know about voting in Model UN committees.',
     url: 'https://gavelling.com/blog/mun-voting-procedures',
     siteName: 'Gavelling',
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
 const articleSchema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
-  headline: 'MUN Voting Procedures Explained — In Favour, Against, Abstain',
+  headline: 'MUN Voting Procedures Explained: In Favour, Against, Abstain',
   description: 'Complete guide to MUN voting procedures.',
   url: 'https://gavelling.com/blog/mun-voting-procedures',
   datePublished: '2026-06-07',
@@ -68,11 +68,11 @@ export default function Article() {
       <div style={s.page}>
         <div style={s.wrap}>
           <Link href="/blog" style={s.back}>← MUN Resources</Link>
-          <h1 style={s.h1}>MUN Voting Procedures Explained — In Favour, Against, Abstain</h1>
+          <h1 style={s.h1}>MUN Voting Procedures Explained: In Favour, Against, Abstain</h1>
           <p style={s.meta}>By Gavelling · June 2026 · 10 min read</p>
           <article style={s.article}>
 
-            <p style={s.p}>Voting is the moment everything in a Model UN committee builds toward. Hours of debate, bloc-building, and resolution drafting all come down to a few minutes at the voting rostrum. Understanding exactly how MUN voting works — what counts, what does not, and what your options are — is essential for both delegates and chairs.</p>
+            <p style={s.p}>Voting is the moment everything in a Model UN committee builds toward. Hours of debate, bloc-building, and resolution drafting all come down to a few minutes at the voting rostrum. Understanding exactly how MUN voting works, what counts, what does not, and what your options are, is essential for both delegates and chairs.</p>
 
             <h2 style={s.h2}>Types of Votes in MUN</h2>
             <p style={s.p}>Most MUN committees use two main voting mechanisms: placard votes (show of placards) for procedural motions, and roll call votes for substantive matters like resolutions. Some conferences use electronic voting systems or a standing vote for certain matters. Regardless of format, the principle is the same: each present-and-voting delegation casts one vote.</p>
@@ -81,7 +81,7 @@ export default function Article() {
             <p style={s.p}>The simplest form. The chair asks delegates to raise their placards in favour, against, and those abstaining. The chair (or a counter) tallies the results. Used primarily for procedural motions: caucus proposals, adjournment of the speakers list, suspension of debate.</p>
 
             <h3 style={s.h3}>Roll Call Vote</h3>
-            <p style={s.p}>Used for resolutions and other substantive matters. Each delegation is called in alphabetical order and votes aloud: "In Favour," "Against," or "Abstain." Delegates may also pass (defer) and vote at the end. Roll call votes create a permanent record of each country's position — which is why they matter diplomatically and for awards consideration.</p>
+            <p style={s.p}>Used for resolutions and other substantive matters. Each delegation is called in alphabetical order and votes aloud: "In Favour," "Against," or "Abstain." Delegates may also pass (defer) and vote at the end. Roll call votes create a permanent record of each country's position, which is why they matter diplomatically and for awards consideration.</p>
 
             <h2 style={s.h2}>Understanding the Threshold</h2>
             <p style={s.p}>Whether a resolution passes depends on the voting threshold set by your rules of procedure:</p>
@@ -96,7 +96,7 @@ export default function Article() {
             <p style={s.p}>During roll call at the start of a session, delegates can mark themselves as "Present" or "Present and Voting." The distinction matters for voting:</p>
             <ul style={s.ul}>
               <li style={s.li}><strong>Present:</strong> The delegate may abstain on substantive votes.</li>
-              <li style={s.li}><strong>Present and Voting:</strong> The delegate must vote In Favour or Against on substantive matters — they cannot abstain. This is a stronger diplomatic signal used by states that want to show they are fully engaged.</li>
+              <li style={s.li}><strong>Present and Voting:</strong> The delegate must vote In Favour or Against on substantive matters; they cannot abstain. This is a stronger diplomatic signal used by states that want to show they are fully engaged.</li>
             </ul>
 
             <h2 style={s.h2}>Rights of Explanation</h2>
@@ -104,16 +104,16 @@ export default function Article() {
             <p style={s.p}>Rights of explanation come after all general debate has closed. The chair calls for them before opening the voting procedure.</p>
 
             <h2 style={s.h2}>Voting on Amendments</h2>
-            <p style={s.p}>If amendments have been submitted to a draft resolution, they are voted on first — in reverse order of submission (most recently submitted first). If an amendment passes, the resolution text is updated before the final vote. If the amendment fails, the original text stands.</p>
-            <p style={s.p}>Friendly amendments (agreed to by the main sponsor) do not require a separate vote — they are incorporated into the draft before voting begins.</p>
+            <p style={s.p}>If amendments have been submitted to a draft resolution, they are voted on first, in reverse order of submission (most recently submitted first). If an amendment passes, the resolution text is updated before the final vote. If the amendment fails, the original text stands.</p>
+            <p style={s.p}>Friendly amendments (agreed to by the main sponsor) do not require a separate vote. They are incorporated into the draft before voting begins.</p>
 
             <h2 style={s.h2}>Security Council Veto</h2>
-            <p style={s.p}>Security Council simulations follow different rules. The P5 (US, UK, France, Russia, China) hold veto power — any single P5 member voting Against defeats a resolution, regardless of the total vote count. Abstentions by P5 members do not constitute a veto. This creates fundamentally different bloc dynamics compared to GA committees.</p>
+            <p style={s.p}>Security Council simulations follow different rules. The P5 (US, UK, France, Russia, China) hold veto power: any single P5 member voting Against defeats a resolution, regardless of the total vote count. Abstentions by P5 members do not constitute a veto. This creates fundamentally different bloc dynamics compared to GA committees.</p>
 
             <h2 style={s.h2}>Chair's Role During Voting</h2>
             <p style={s.p}>The chair must announce the voting procedure clearly before it begins, manage any rights of explanation, call the roll in order, announce the final tally, and declare the result. The declaration is formal:</p>
             <p style={s.p}>"With X votes in favour, Y against, and Z abstentions, Resolution [number] is adopted / fails to pass."</p>
-            <p style={s.p}>Software like Gavelling handles roll call voting with an interactive per-delegate voting interface, tallies the result automatically, and supports custom thresholds — including veto mode for Security Council simulations.</p>
+            <p style={s.p}>Software like Gavelling handles roll call voting with an interactive per-delegate voting interface, tallies the result automatically, and supports custom thresholds, including veto mode for Security Council simulations.</p>
 
             <RelatedGuides currentSlug="mun-voting-procedures" />
             <div style={s.cta}>

@@ -3,12 +3,12 @@ import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'MUN Motions Explained — Types, How to Propose, and Voting Rules',
+  title: 'MUN Motions Explained: Types, How to Propose, and Voting Rules',
   description:
     'A complete guide to Model UN motions: moderated caucus, unmoderated caucus, extension of speaking time, adjournment, and more. Includes voting thresholds and chair tips.',
   alternates: { canonical: 'https://gavelling.com/blog/mun-motions-explained' },
   openGraph: {
-    title: 'MUN Motions Explained — Types, How to Propose, and Voting Rules',
+    title: 'MUN Motions Explained: Types, How to Propose, and Voting Rules',
     description: 'Complete reference for every MUN motion type with voting thresholds and chair tips.',
     url: 'https://gavelling.com/blog/mun-motions-explained',
     siteName: 'Gavelling',
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
 const articleSchema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
-  headline: 'MUN Motions Explained — Types, How to Propose, and Voting Rules',
+  headline: 'MUN Motions Explained: Types, How to Propose, and Voting Rules',
   description: 'A complete guide to Model UN motions: every type, voting thresholds, precedence, and chair tips.',
   url: 'https://gavelling.com/blog/mun-motions-explained',
   datePublished: '2026-06-01',
@@ -73,12 +73,12 @@ export default function Article4() {
       <div style={s.page}>
         <div style={s.wrap}>
           <Link href="/blog" style={s.back}>← MUN Resources</Link>
-          <h1 style={s.h1}>MUN Motions Explained — Types, How to Propose, and Voting Rules</h1>
+          <h1 style={s.h1}>MUN Motions Explained: Types, How to Propose, and Voting Rules</h1>
           <p style={s.meta}>By Gavelling · June 2026 · 10 min read</p>
           <article style={s.article}>
 
             <p style={s.p}>
-              Motions are the mechanism through which delegates change what the committee is doing — shifting from formal debate to a caucus, extending speaking time, moving to a vote, or closing the session. Understanding every motion type, when to use it, and what threshold it requires is essential for both chairs and experienced delegates.
+              Motions are the mechanism through which delegates change what the committee is doing: shifting from formal debate to a caucus, extending speaking time, moving to a vote, or closing the session. Understanding every motion type, when to use it, and what threshold it requires is essential for both chairs and experienced delegates.
             </p>
 
             <h2 style={s.h2}>1. What Is a Motion in MUN?</h2>
@@ -86,7 +86,7 @@ export default function Article4() {
               A motion is a formal proposal by a delegate to change the committee&apos;s mode of debate or take a procedural action. Motions interrupt or redirect the current floor activity. They are debated briefly (if at all) and put to a vote before taking effect.
             </p>
             <p style={s.p}>
-              Motions are distinct from working papers and draft resolutions, which are substantive documents about the committee&apos;s topic. A motion is always procedural — it affects how the committee operates, not the content of its conclusions.
+              Motions are distinct from working papers and draft resolutions, which are substantive documents about the committee&apos;s topic. A motion is always procedural. It affects how the committee operates, not the content of its conclusions.
             </p>
 
             <h2 style={s.h2}>2. How to Make a Motion</h2>
@@ -94,27 +94,27 @@ export default function Article4() {
               The process is the same for every motion type:
             </p>
             <ul style={s.ul}>
-              <li style={s.li}><strong>Raise placard</strong> — wait to be recognised by the chair.</li>
-              <li style={s.li}><strong>State the motion</strong> — clearly and completely. For a moderated caucus, this means stating the topic, total time, and per-speaker time. Example: <em>&quot;The delegation of Brazil moves for a moderated caucus on the topic of climate financing, for a total time of 10 minutes with 90 seconds per speaker.&quot;</em></li>
-              <li style={s.li}><strong>Second the motion</strong> — most motions require at least one second before going to a vote. The chair asks &quot;Is there a second?&quot;</li>
-              <li style={s.li}><strong>Vote</strong> — the chair calls a vote. Motions pass by simple majority unless otherwise specified.</li>
+              <li style={s.li}><strong>Raise placard</strong>: wait to be recognised by the chair.</li>
+              <li style={s.li}><strong>State the motion</strong>: clearly and completely. For a moderated caucus, this means stating the topic, total time, and per-speaker time. Example: <em>&quot;The delegation of Brazil moves for a moderated caucus on the topic of climate financing, for a total time of 10 minutes with 90 seconds per speaker.&quot;</em></li>
+              <li style={s.li}><strong>Second the motion</strong>: most motions require at least one second before going to a vote. The chair asks &quot;Is there a second?&quot;</li>
+              <li style={s.li}><strong>Vote</strong>: the chair calls a vote. Motions pass by simple majority unless otherwise specified.</li>
             </ul>
 
             <h2 style={s.h2}>3. The Most Common MUN Motions</h2>
 
             <div style={s.motionCard}>
               <p style={s.motionTitle}>Motion to Open / Continue the Speakers List</p>
-              <p style={s.motionDetail}>Opens or reopens the General Speakers List after a caucus. Requires: none specified (chair may open it directly). Vote threshold: typically no vote needed — chair opens it as a matter of course.</p>
+              <p style={s.motionDetail}>Opens or reopens the General Speakers List after a caucus. Requires: none specified (chair may open it directly). Vote threshold: typically no vote needed. The chair opens it as a matter of course.</p>
             </div>
 
             <div style={s.motionCard}>
               <p style={s.motionTitle}>Motion for a Moderated Caucus</p>
-              <p style={s.motionDetail}>Suspends the GSL for a focused, structured debate on a specific sub-topic. Required parameters: <strong>topic</strong>, <strong>total time</strong> (e.g. 10 minutes), <strong>per-speaker time</strong> (e.g. 90 seconds). Vote threshold: simple majority. The chair runs a new speaker queue within the caucus. The GSL is paused — not cleared.</p>
+              <p style={s.motionDetail}>Suspends the GSL for a focused, structured debate on a specific sub-topic. Required parameters: <strong>topic</strong>, <strong>total time</strong> (e.g. 10 minutes), <strong>per-speaker time</strong> (e.g. 90 seconds). Vote threshold: simple majority. The chair runs a new speaker queue within the caucus. The GSL is paused, not cleared.</p>
             </div>
 
             <div style={s.motionCard}>
               <p style={s.motionTitle}>Motion for an Unmoderated Caucus</p>
-              <p style={s.motionDetail}>Suspends formal procedure for informal negotiation and bloc-building. Required parameters: <strong>total time</strong> only (e.g. 15 minutes). No speaker queue — delegates move freely. Vote threshold: simple majority. Used for working paper drafting and lobbying.</p>
+              <p style={s.motionDetail}>Suspends formal procedure for informal negotiation and bloc-building. Required parameters: <strong>total time</strong> only (e.g. 15 minutes). No speaker queue: delegates move freely. Vote threshold: simple majority. Used for working paper drafting and lobbying.</p>
             </div>
 
             <div style={s.motionCard}>
@@ -134,7 +134,7 @@ export default function Article4() {
 
             <div style={s.motionCard}>
               <p style={s.motionTitle}>Motion to Move into Voting Procedure</p>
-              <p style={s.motionDetail}>Closes debate and moves the committee to vote on a draft resolution. Once passed, no further debate is permitted. Vote threshold: simple majority. This is a significant motion — debate ends permanently once it passes.</p>
+              <p style={s.motionDetail}>Closes debate and moves the committee to vote on a draft resolution. Once passed, no further debate is permitted. Vote threshold: simple majority. This is a significant motion. Debate ends permanently once it passes.</p>
             </div>
 
             <div style={s.motionCard}>
@@ -186,7 +186,7 @@ export default function Article4() {
 
             <h2 style={s.h2}>5. Which Motion Takes Precedence?</h2>
             <p style={s.p}>
-              When multiple delegates raise motions at the same time, the chair must decide which to entertain first. The principle is <strong>most disruptive first</strong> — the motion that would most significantly change committee procedure is voted on before less disruptive ones.
+              When multiple delegates raise motions at the same time, the chair must decide which to entertain first. The principle is <strong>most disruptive first</strong>: the motion that would most significantly change committee procedure is voted on before less disruptive ones.
             </p>
             <p style={s.p}>
               A general order of precedence (most to least disruptive):
@@ -216,7 +216,7 @@ export default function Article4() {
             <RelatedGuides currentSlug="mun-motions-explained" />
             <div style={s.cta}>
               <p style={s.ctaText}>
-                Gavelling&apos;s motion queue tracks and sorts every motion automatically — so you can focus on running the vote.
+                Gavelling&apos;s motion queue tracks and sorts every motion automatically, so you can focus on running the vote.
               </p>
               <a href="https://gavelling.com" style={s.ctaLink}>Start your committee free at gavelling.com →</a>
             </div>

@@ -1,14 +1,14 @@
 'use client';
 
 /**
- * wizard.tsx — shared step-questionnaire kit for onboarding flows
+ * wizard.tsx, shared step-questionnaire kit for onboarding flows
  * (conference creation, auth onboarding). Neumorphism-inspired,
- * forest/ivory, Outfit — built on the NEU tokens from neu.tsx.
+ * forest/ivory, Outfit, built on the NEU tokens from neu.tsx.
  *
  * Exports:
- *   WizardShell  — centered column with progress dots, big title, back arrow
- *   TwoTabPick   — two large side-by-side pick cards (binary choice)
- *   CardSelect   — grid of select cards, every option has an icon/image slot;
+ *   WizardShell , centered column with progress dots, big title, back arrow
+ *   TwoTabPick  , two large side-by-side pick cards (binary choice)
+ *   CardSelect  , grid of select cards, every option has an icon/image slot;
  *                  supports multiple + searchable
  */
 
@@ -21,9 +21,9 @@ import { NEU, OUTFIT, EASE } from '@/components/neu';
 export interface WizardOption {
   key: string;
   label: string;
-  /** Small/large glyph slot — lucide icon, Emoji3D, flag <img>, anything. */
+  /** Small/large glyph slot, lucide icon, Emoji3D, flag <img>, anything. */
   icon?: React.ReactNode;
-  /** Image URL (e.g. /onboarding/hall-01.jpg) — used as a large picture on the card. */
+  /** Image URL (e.g. /onboarding/hall-01.jpg), used as a large picture on the card. */
   image?: string;
   /** Muted secondary line under the label. */
   sub?: string;
@@ -198,7 +198,7 @@ function cardBaseStyle(selected: boolean, hovered: boolean): React.CSSProperties
   };
 }
 
-// ── TwoTabPick — two LARGE side-by-side cards ──────────────────────────────
+// ── TwoTabPick, two LARGE side-by-side cards ──────────────────────────────
 
 export function TwoTabPick({
   options,
@@ -315,7 +315,7 @@ export function TwoTabPick({
   );
 }
 
-// ── CardSelect — grid of select cards ──────────────────────────────────────
+// ── CardSelect, grid of select cards ──────────────────────────────────────
 
 export function CardSelect({
   options,
@@ -325,7 +325,7 @@ export function CardSelect({
   searchable = false,
   columns = 3,
 }: {
-  /** Every option must carry an icon or image — never text-only. */
+  /** Every option must carry an icon or image, never text-only. */
   options: WizardOption[];
   /** Single mode: selected key (or null). Multiple mode: array of selected keys. */
   value: string | string[] | null;

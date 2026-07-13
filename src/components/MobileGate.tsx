@@ -63,7 +63,7 @@ export default function MobileGate({ children }: { children: React.ReactNode }) 
           marginBottom: 32,
         }}
       >
-        The chair yields the floor… to a real screen. Gavelling is built for the big stage — timers, speaker queues, live voting — all of it needs a bit more room to breathe.
+        The chair yields the floor… to a real screen. Gavelling is built for the big stage (timers, speaker queues, live voting), and all of it needs a bit more room to breathe.
       </p>
 
       <div
@@ -82,7 +82,7 @@ export default function MobileGate({ children }: { children: React.ReactNode }) 
       </div>
 
       <p style={{ marginTop: 16, fontSize: 12, color: '#9A8A78' }}>
-        (or just rotate your phone — we're not judging)
+        (or just rotate your phone, we're not judging)
       </p>
     </div>
   );

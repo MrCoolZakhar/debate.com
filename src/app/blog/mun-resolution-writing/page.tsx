@@ -4,11 +4,11 @@ import type { Metadata } from 'next';
 import React from 'react';
 
 export const metadata: Metadata = {
-  title: 'How to Write a MUN Resolution — Clauses, Format & Examples',
+  title: 'How to Write a MUN Resolution: Clauses, Format & Examples',
   description: 'Learn how to write a Model UN resolution from scratch: preambulatory clauses, operative clauses, correct format, sponsor rules, and amendment process.',
   alternates: { canonical: 'https://gavelling.com/blog/mun-resolution-writing' },
   openGraph: {
-    title: 'How to Write a MUN Resolution — Clauses, Format & Examples',
+    title: 'How to Write a MUN Resolution: Clauses, Format & Examples',
     description: 'The complete guide to drafting MUN resolutions that pass.',
     url: 'https://gavelling.com/blog/mun-resolution-writing',
     siteName: 'Gavelling',
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
 const articleSchema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
-  headline: 'How to Write a MUN Resolution — Clauses, Format & Examples',
+  headline: 'How to Write a MUN Resolution: Clauses, Format & Examples',
   description: 'Complete guide to drafting MUN resolutions.',
   url: 'https://gavelling.com/blog/mun-resolution-writing',
   datePublished: '2026-06-07',
@@ -68,14 +68,14 @@ export default function Article() {
       <div style={s.page}>
         <div style={s.wrap}>
           <Link href="/blog" style={s.back}>← MUN Resources</Link>
-          <h1 style={s.h1}>How to Write a MUN Resolution — Clauses, Format & Examples</h1>
+          <h1 style={s.h1}>How to Write a MUN Resolution: Clauses, Format & Examples</h1>
           <p style={s.meta}>By Gavelling · June 2026 · 12 min read</p>
           <article style={s.article}>
 
             <p style={s.p}>A Model UN resolution is the formal output of a committee's work. It is the document that delegates spend hours debating, amending, and eventually voting on. Writing one that is both substantive and passable requires understanding the format, choosing the right language, and building a coalition wide enough to get it across the line. This guide covers everything from your first clause to the final vote.</p>
 
             <h2 style={s.h2}>Working Paper vs. Draft Resolution</h2>
-            <p style={s.p}>The terms are often used interchangeably but technically mean different things. A <strong>working paper</strong> is an informal document used to develop ideas — it does not need to follow strict resolution format and is not voted on directly. A <strong>draft resolution</strong> is a formally formatted document submitted to the committee for debate and a vote. Most conferences require a draft resolution to have a minimum number of sponsors before it can be introduced.</p>
+            <p style={s.p}>The terms are often used interchangeably but technically mean different things. A <strong>working paper</strong> is an informal document used to develop ideas; it does not need to follow strict resolution format and is not voted on directly. A <strong>draft resolution</strong> is a formally formatted document submitted to the committee for debate and a vote. Most conferences require a draft resolution to have a minimum number of sponsors before it can be introduced.</p>
 
             <h2 style={s.h2}>Resolution Structure</h2>
             <p style={s.p}>Every MUN resolution has the same structure: a header, preambulatory clauses, and operative clauses.</p>
@@ -85,34 +85,34 @@ export default function Article() {
             <p style={s.p}><em>Committee: General Assembly Third Committee | Topic: Protection of Refugees | Sponsors: Germany, Canada, Kenya | Signatories: Brazil, India, Sweden...</em></p>
 
             <h3 style={s.h3}>Preambulatory Clauses</h3>
-            <p style={s.p}>Preambulatory clauses come first and provide context and justification. They begin with a present participle (a gerund) and end with a comma. They explain why the committee is acting — citing previous resolutions, existing international law, or recognising the scale of the problem.</p>
+            <p style={s.p}>Preambulatory clauses come first and provide context and justification. They begin with a present participle (a gerund) and end with a comma. They explain why the committee is acting, citing previous resolutions, existing international law, or recognising the scale of the problem.</p>
             <p style={s.p}>Common preambulatory phrases:</p>
             <ul style={s.ul}>
-              <li style={s.li}><em>Recalling</em> — past UN resolutions on this topic</li>
-              <li style={s.li}><em>Recognising</em> — the severity or importance of the issue</li>
-              <li style={s.li}><em>Noting with concern</em> — a troubling trend or statistic</li>
-              <li style={s.li}><em>Affirming</em> — a principle or right already established in international law</li>
-              <li style={s.li}><em>Deeply concerned</em> — strong urgency</li>
-              <li style={s.li}><em>Welcoming</em> — positive recent developments</li>
+              <li style={s.li}><em>Recalling:</em> past UN resolutions on this topic</li>
+              <li style={s.li}><em>Recognising:</em> the severity or importance of the issue</li>
+              <li style={s.li}><em>Noting with concern:</em> a troubling trend or statistic</li>
+              <li style={s.li}><em>Affirming:</em> a principle or right already established in international law</li>
+              <li style={s.li}><em>Deeply concerned:</em> strong urgency</li>
+              <li style={s.li}><em>Welcoming:</em> positive recent developments</li>
             </ul>
-            <div style={s.callout}><p style={s.calloutText}>Preambulatory clauses are italicised in formal resolution format. They do not create obligations — they only set context. Keep them tight. Three to five is usually enough.</p></div>
+            <div style={s.callout}><p style={s.calloutText}>Preambulatory clauses are italicised in formal resolution format. They do not create obligations; they only set context. Keep them tight. Three to five is usually enough.</p></div>
 
             <h3 style={s.h3}>Operative Clauses</h3>
             <p style={s.p}>Operative clauses are the resolution's actual content. They begin with a strong verb in the third person and end with a semicolon, except the final one which ends with a period. They are numbered and are what gets debated, amended, and voted on.</p>
             <p style={s.p}>Common operative phrases:</p>
             <ul style={s.ul}>
-              <li style={s.li}><em>Calls upon</em> — requests but does not require action</li>
-              <li style={s.li}><em>Urges</em> — stronger than calls upon</li>
-              <li style={s.li}><em>Strongly urges</em> — even stronger</li>
-              <li style={s.li}><em>Decides</em> — binding, used when the body has authority to mandate</li>
-              <li style={s.li}><em>Requests</em> — asks another body (e.g. Secretary-General) to take action</li>
-              <li style={s.li}><em>Encourages</em> — soft language for sensitive topics</li>
-              <li style={s.li}><em>Establishes</em> — creates a new mechanism or body</li>
-              <li style={s.li}><em>Recommends</em> — suggests action without requiring it</li>
+              <li style={s.li}><em>Calls upon:</em> requests but does not require action</li>
+              <li style={s.li}><em>Urges:</em> stronger than calls upon</li>
+              <li style={s.li}><em>Strongly urges:</em> even stronger</li>
+              <li style={s.li}><em>Decides:</em> binding, used when the body has authority to mandate</li>
+              <li style={s.li}><em>Requests:</em> asks another body (e.g. Secretary-General) to take action</li>
+              <li style={s.li}><em>Encourages:</em> soft language for sensitive topics</li>
+              <li style={s.li}><em>Establishes:</em> creates a new mechanism or body</li>
+              <li style={s.li}><em>Recommends:</em> suggests action without requiring it</li>
             </ul>
 
             <h2 style={s.h2}>Writing Good Operative Clauses</h2>
-            <p style={s.p}>The most common mistake in resolution writing is vagueness. "Encourages member states to cooperate on climate change" is not a clause — it is a platitude. A well-written operative clause specifies who does what, how, by when, and with what resources.</p>
+            <p style={s.p}>The most common mistake in resolution writing is vagueness. "Encourages member states to cooperate on climate change" is not a clause; it is a platitude. A well-written operative clause specifies who does what, how, by when, and with what resources.</p>
             <p style={s.p}>Compare:</p>
             <ul style={s.ul}>
               <li style={s.li}><strong>Weak:</strong> Urges member states to address the refugee crisis;</li>

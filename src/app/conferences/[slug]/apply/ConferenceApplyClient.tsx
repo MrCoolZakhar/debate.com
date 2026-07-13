@@ -187,7 +187,7 @@ function ConferenceApplyInner() {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
-  // ── Age gate (conference.min_age) — DOB comes from the user's profile
+  // ── Age gate (conference.min_age), DOB comes from the user's profile
   const [myDob, setMyDob] = useState<string | null>(null);
   const [dobInput, setDobInput] = useState('');
   const [dobSaving, setDobSaving] = useState(false);
@@ -198,7 +198,7 @@ function ConferenceApplyInner() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
 
-  // ── Step 2 — Society
+  // ── Step 2, Society
   const [isIndependent, setIsIndependent] = useState(false);
   const [societyInput, setSocietyInput] = useState('');
   const [societySuggestions, setSocietySuggestions] = useState<Society[]>([]);
@@ -206,20 +206,20 @@ function ConferenceApplyInner() {
   const [societyDropdownOpen, setSocietyDropdownOpen] = useState(false);
   const [societyError, setSocietyError] = useState('');
 
-  // ── Step — Invoicing (head-delegate / faculty-advisor only). A pledge is
-  // ONLY about paying for delegation spots — everyone's own fee flows through
+  // ── Step, Invoicing (head-delegate / faculty-advisor only). A pledge is
+  // ONLY about paying for delegation spots, everyone's own fee flows through
   // the normal payment system, so this is a plain yes/no.
   const [willPledgeSpots, setWillPledgeSpots] = useState<boolean | null>(null);
   const [spotsPledged, setSpotsPledged] = useState<number | ''>('');
   const [invoicingError, setInvoicingError] = useState('');
 
-  // ── Step 3 — Preferences
+  // ── Step 3, Preferences
   const [preferences, setPreferences] = useState<Preference[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [countrySlots, setCountrySlots] = useState<Record<string, CountrySlot[]>>({});
   const [prefError, setPrefError] = useState('');
 
-  // ── Step 4 — Experience & Questions
+  // ── Step 4, Experience & Questions
   const [experienceLevel, setExperienceLevel] = useState('');
   const [customAnswers, setCustomAnswers] = useState<Record<string, string>>({});
 
@@ -229,7 +229,7 @@ function ConferenceApplyInner() {
   const [voucherChecking, setVoucherChecking] = useState(false);
   const [voucherError, setVoucherError] = useState('');
   const [appliedVoucher, setAppliedVoucher] = useState<VoucherInput | null>(null);
-  // Gavin upsell — geo country for the localized "~$10/mo" figure, plus a
+  // Gavin upsell, geo country for the localized "~$10/mo" figure, plus a
   // localStorage dismiss so the banner never nags. Never blocks checkout.
   const [geoCountry, setGeoCountry] = useState<string | null>(null);
   const [upsellDismissed, setUpsellDismissed] = useState(true); // true until localStorage read
@@ -285,7 +285,7 @@ function ConferenceApplyInner() {
     setAppliedVoucher({ voucherId: res.voucher_id, code, kind: res.kind, amount: Number(res.amount), currency: res.currency });
   }
 
-  // ── Age gate derivations — age is computed at the conference START DATE
+  // ── Age gate derivations, age is computed at the conference START DATE
   const minAgeLimit = conference?.min_age ?? null;
   const ageAtStart = minAgeLimit != null && myDob && conference ? ageAt(myDob, conference.start_date) : null;
   const underAge = minAgeLimit != null && ageAtStart !== null && ageAtStart < minAgeLimit;
@@ -295,7 +295,7 @@ function ConferenceApplyInner() {
   const isObserver = role === 'observer';
   const isInvoicingRole = role === 'head-delegate' || role === 'faculty-advisor';
 
-  // F15: faculty advisors skip Experience entirely — MUN experience level
+  // F15: faculty advisors skip Experience entirely, MUN experience level
   // doesn't apply to them, so experience_level submits null for this role.
   const skipExperience = role === 'faculty-advisor';
 
@@ -393,7 +393,7 @@ function ConferenceApplyInner() {
     setLoading(false);
   }
 
-  // head-delegate / faculty-advisor always belong to a society — no independent option
+  // head-delegate / faculty-advisor always belong to a society, no independent option
   useEffect(() => {
     if (isInvoicingRole) setIsIndependent(false);
   }, [isInvoicingRole]);
@@ -430,7 +430,7 @@ function ConferenceApplyInner() {
     setDobError('');
     const age = ageAt(dobInput);
     if (age === null || age < 0 || age > 120) {
-      setDobError('That date of birth doesn’t look right — please double-check it.');
+      setDobError('That date of birth doesn’t look right. Please double-check it.');
       return;
     }
     setDobSaving(true);
@@ -445,7 +445,7 @@ function ConferenceApplyInner() {
   }
 
   // Advisors skip Experience (F15), so 'invoicing' can now be the final step
-  // in their sequence — advance to it normally, but submit instead of
+  // in their sequence, advance to it normally, but submit instead of
   // stepping past the end when there's nothing left.
   function advanceStep() {
     if (step >= totalSteps) {
@@ -578,13 +578,13 @@ function ConferenceApplyInner() {
         }
       }
 
-      // Checkout breakdown — the SAME pure math the order summary rendered.
+      // Checkout breakdown, the SAME pure math the order summary rendered.
       // fee_waiver_source is recorded at submit; the unlimited counter itself
       // is only decremented by the DB trigger when payment_status flips to
       // 'paid' (server-side, so it can't be gamed from the client).
       const breakdown = computeCheckout({
         // Phased pricing: charge the fee phase active TODAY (falls back to the
-        // flat role fee when no phase window covers today) — same resolution
+        // flat role fee when no phase window covers today), same resolution
         // the order summary rendered in step 1.
         feeAmount: roleConfig ? activePhaseFee(roleConfig).amount : 0,
         feeCurrency: roleConfig?.fee_currency ?? conference!.fee_currency,
@@ -597,7 +597,7 @@ function ConferenceApplyInner() {
         user_id: user!.id,
         role,
         status: roleConfig?.auto_accept ? 'accepted' : 'submitted',
-        // Derived convenience, kept in sync — society_id IS NULL is the
+        // Derived convenience, kept in sync, society_id IS NULL is the
         // actual source of truth, never read is_independent for logic.
         is_independent: isIndependent,
         society_id: societyId,
@@ -628,7 +628,7 @@ function ConferenceApplyInner() {
 
       // Record the voucher redemption atomically (BEFORE INSERT trigger locks
       // the voucher row, enforces active/expiry/limit, bumps redeemed_count).
-      // Non-fatal: the application is already in — a failed redemption just
+      // Non-fatal: the application is already in, a failed redemption just
       // means the organizer sees the voucher columns without a redemption row.
       if (appliedVoucher && breakdown.voucherDiscount > 0) {
         await supabase.rpc('redeem_voucher', {
@@ -684,7 +684,7 @@ function ConferenceApplyInner() {
       <>
         <StepHeading icon={BadgeCheck} title="Applying as" subtitle="Confirm your role and the registration fee." />
 
-        {/* Role + fee — role identity on the left, gold-ringed fee medallion on the right */}
+        {/* Role + fee, role identity on the left, gold-ringed fee medallion on the right */}
         <div
           className="rounded-2xl p-5 mb-4 flex items-center gap-5"
           style={{ backgroundColor: 'rgba(27,56,40,0.05)', border: '1.5px solid rgba(27,56,40,0.14)' }}
@@ -716,7 +716,7 @@ function ConferenceApplyInner() {
             )}
           </div>
 
-          {/* Fee medallion — echoes the detail page's gold-ringed pricing medallion */}
+          {/* Fee medallion, echoes the detail page's gold-ringed pricing medallion */}
           <div
             className="relative flex flex-col items-center justify-center flex-shrink-0"
             style={{
@@ -739,25 +739,25 @@ function ConferenceApplyInner() {
           </div>
         </div>
 
-        {/* ── ORDER SUMMARY — neumorphic well; all math from finance.computeCheckout ── */}
+        {/* ── ORDER SUMMARY, neumorphic well; all math from finance.computeCheckout ── */}
         {!isFree && (
           <NeuInset className="p-5 mb-4">
             <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.22em', color: NEU.muted, marginBottom: 14 }}>
               ORDER SUMMARY
             </p>
 
-            {/* Fee line — names the active fee phase when one applies */}
+            {/* Fee line, names the active fee phase when one applies */}
             <div style={{ ...summaryRow, marginBottom: 10 }}>
               <span style={{ color: 'rgba(28,20,16,0.75)' }}>
                 Registration fee
                 {currentPhase && (
-                  <span style={{ color: NEU.muted, fontWeight: 600 }}> — {currentPhase.label || 'Current phase'}</span>
+                  <span style={{ color: NEU.muted, fontWeight: 600 }}>: {currentPhase.label || 'Current phase'}</span>
                 )}
               </span>
               <span style={amountStyle}>{formatFee(breakdown.baseFee, breakdown.currency)}</span>
             </div>
 
-            {/* Voucher — single field + APPLY chip, or the applied green line */}
+            {/* Voucher, single field + APPLY chip, or the applied green line */}
             {appliedVoucher ? (
               <div style={{ ...summaryRow, marginBottom: 10 }}>
                 <span className="inline-flex items-center gap-1.5" style={{ color: NEU.green, fontWeight: 600 }}>
@@ -814,7 +814,7 @@ function ConferenceApplyInner() {
               </p>
             )}
 
-            {/* Platform fee — 5% of post-discount, or the waived states */}
+            {/* Platform fee, 5% of post-discount, or the waived states */}
             {breakdown.waiverSource === 'ambassador' ? (
               <div
                 className="rounded-xl px-3.5 py-2.5"
@@ -826,7 +826,7 @@ function ConferenceApplyInner() {
               >
                 <span className="inline-flex items-center gap-2" style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 11.5, letterSpacing: '0.06em', color: '#7A5A20' }}>
                   <Crown size={14} strokeWidth={2.3} style={{ color: NEU.deepGold }} />
-                  AMBASSADOR — Gavelling fee waived, always
+                  AMBASSADOR: Gavelling fee waived, always
                 </span>
               </div>
             ) : breakdown.waiverSource === 'unlimited' ? (
@@ -836,7 +836,7 @@ function ConferenceApplyInner() {
               >
                 <span className="inline-flex items-center gap-2" style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 12, color: NEU.forest }}>
                   <InfinityIcon size={14} strokeWidth={2.4} />
-                  Gavelling Unlimited — fee waived ({financeProfile.unlimited_conferences_remaining} left)
+                  Gavelling Unlimited: fee waived ({financeProfile.unlimited_conferences_remaining} left)
                 </span>
               </div>
             ) : (
@@ -846,7 +846,7 @@ function ConferenceApplyInner() {
               </div>
             )}
 
-            {/* Total — big tabular-nums */}
+            {/* Total, big tabular-nums */}
             <div style={{ borderTop: '1.5px solid rgba(27,56,40,0.14)', paddingTop: 12, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
               <span style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 11, letterSpacing: '0.18em', color: NEU.muted }}>TOTAL</span>
               <span style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 28, color: NEU.ink, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
@@ -856,7 +856,7 @@ function ConferenceApplyInner() {
           </NeuInset>
         )}
 
-        {/* ── Gavin upsell — only when no waiver is active; dismissable; never blocks ── */}
+        {/* ── Gavin upsell, only when no waiver is active; dismissable; never blocks ── */}
         {showUpsell && (
           <div
             className="relative rounded-2xl mb-4 flex items-center gap-4 overflow-hidden"
@@ -1105,7 +1105,7 @@ function ConferenceApplyInner() {
           Will you be paying for delegation spots?
         </h2>
         <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-          This is separate from your own registration fee — it only covers spots for your delegates.
+          This is separate from your own registration fee. It only covers spots for your delegates.
         </p>
 
         <div className="grid grid-cols-2 gap-3 mb-6">
@@ -1195,7 +1195,7 @@ function ConferenceApplyInner() {
         <StepHeading
           icon={ListOrdered}
           title="Your Preferences"
-          subtitle="Add at least 3 preferences in order of priority — each is a committee + country."
+          subtitle="Add at least 3 preferences in order of priority: each is a committee + country."
         />
 
         {preferences.map((pref, idx) => (

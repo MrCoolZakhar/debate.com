@@ -3,12 +3,12 @@ import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'General Speakers List (GSL) in MUN — Complete Guide for Chairs and Delegates',
+  title: 'General Speakers List (GSL) in MUN: Complete Guide for Chairs and Delegates',
   description:
     'What is the General Speakers List in Model UN? How does it work, how do delegates add themselves, how do chairs manage it, and what are the rules? Full guide with tips.',
   alternates: { canonical: 'https://gavelling.com/blog/general-speakers-list-guide' },
   openGraph: {
-    title: 'General Speakers List (GSL) in MUN — Complete Guide for Chairs and Delegates',
+    title: 'General Speakers List (GSL) in MUN: Complete Guide for Chairs and Delegates',
     description: 'Everything you need to know about the GSL: how it works, yielding, points, and chair tips.',
     url: 'https://gavelling.com/blog/general-speakers-list-guide',
     siteName: 'Gavelling',
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
 const articleSchema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
-  headline: 'General Speakers List (GSL) in MUN — Complete Guide for Chairs and Delegates',
+  headline: 'General Speakers List (GSL) in MUN: Complete Guide for Chairs and Delegates',
   description: 'What is the General Speakers List in Model UN? How does it work, how do chairs manage it?',
   url: 'https://gavelling.com/blog/general-speakers-list-guide',
   datePublished: '2026-06-01',
@@ -68,7 +68,7 @@ export default function Article3() {
       <div style={s.page}>
         <div style={s.wrap}>
           <Link href="/blog" style={s.back}>← MUN Resources</Link>
-          <h1 style={s.h1}>General Speakers List (GSL) in MUN — Complete Guide for Chairs and Delegates</h1>
+          <h1 style={s.h1}>General Speakers List (GSL) in MUN: Complete Guide for Chairs and Delegates</h1>
           <p style={s.meta}>By Gavelling · June 2026 · 9 min read</p>
           <article style={s.article}>
 
@@ -77,36 +77,36 @@ export default function Article3() {
             </p>
 
             <div style={s.callout}>
-              <p style={s.calloutText}>GSL stands for General Speakers List — the primary, ongoing queue of delegates who wish to address the committee. It is distinct from caucus speaker lists, which are temporary.</p>
+              <p style={s.calloutText}>GSL stands for General Speakers List: the primary, ongoing queue of delegates who wish to address the committee. It is distinct from caucus speaker lists, which are temporary.</p>
             </div>
 
             <h2 style={s.h2}>1. What Is the General Speakers List?</h2>
             <p style={s.p}>
-              The GSL is MUN&apos;s primary debate mechanism — the &quot;floor&quot; of the committee. Once the agenda is set, the chair opens the GSL and delegates who wish to speak on the topic add their names. The list is maintained in order, and delegates speak one at a time when their turn arrives, subject to a per-speaker time limit set by the committee.
+              The GSL is MUN&apos;s primary debate mechanism, the &quot;floor&quot; of the committee. Once the agenda is set, the chair opens the GSL and delegates who wish to speak on the topic add their names. The list is maintained in order, and delegates speak one at a time when their turn arrives, subject to a per-speaker time limit set by the committee.
             </p>
             <p style={s.p}>
               The critical property of the GSL is its permanence: unlike caucus speaker queues, which are wiped when a caucus ends, the GSL survives throughout the entire session. A delegate who signed up at the beginning of day one might still be on the list at the end of day two. This continuity gives the GSL its role as the committee&apos;s primary formal debate channel.
             </p>
 
-            <h2 style={s.h2}>2. How the GSL Works — Step by Step</h2>
+            <h2 style={s.h2}>2. How the GSL Works, Step by Step</h2>
             <h3 style={s.h3}>Opening the list</h3>
             <p style={s.p}>
-              After the agenda is set, the chair declares the GSL open and asks delegates who wish to speak to raise their placards. The chair (or co-chair) notes each delegation in the order their placard was raised and adds them to the list. In practice, this happens quickly — most delegates raise immediately, so the chair moves through the room efficiently.
+              After the agenda is set, the chair declares the GSL open and asks delegates who wish to speak to raise their placards. The chair (or co-chair) notes each delegation in the order their placard was raised and adds them to the list. In practice, this happens quickly. Most delegates raise immediately, so the chair moves through the room efficiently.
             </p>
             <h3 style={s.h3}>Adding to the list</h3>
             <p style={s.p}>
-              The list stays open throughout the session. At any point between speakers, delegates may raise their placard to be added. In most rules of procedure, a delegate can only appear on the GSL once at a time — they cannot queue twice.
+              The list stays open throughout the session. At any point between speakers, delegates may raise their placard to be added. In most rules of procedure, a delegate can only appear on the GSL once at a time; they cannot queue twice.
             </p>
             <p style={s.p}>
-              In Gavelling, delegates can request to speak directly from their device. The chair sees the request and approves with one tap — eliminating the placard-watching overhead for the chair and making it easier for delegates in large rooms to register.
+              In Gavelling, delegates can request to speak directly from their device. The chair sees the request and approves with one tap, eliminating the placard-watching overhead for the chair and making it easier for delegates in large rooms to register.
             </p>
             <h3 style={s.h3}>Speaking</h3>
             <p style={s.p}>
-              When a delegate&apos;s name reaches the top of the list, the chair recognises them: <em>&quot;The chair recognises the delegation of France.&quot;</em> The speaker&apos;s timer begins. They have the full speaking time — typically 60–90 seconds — to address the committee. The chair enforces the time limit strictly and gives a warning (usually a knock) when a few seconds remain.
+              When a delegate&apos;s name reaches the top of the list, the chair recognises them: <em>&quot;The chair recognises the delegation of France.&quot;</em> The speaker&apos;s timer begins. They have the full speaking time (typically 60–90 seconds) to address the committee. The chair enforces the time limit strictly and gives a warning (usually a knock) when a few seconds remain.
             </p>
             <h3 style={s.h3}>After speaking</h3>
             <p style={s.p}>
-              When the delegate finishes, they yield their remaining time (see below) and the chair calls the next speaker. The current speaker is removed from the list and cannot re-add themselves until it is their turn again — though most rules of procedure allow re-adding after speaking.
+              When the delegate finishes, they yield their remaining time (see below) and the chair calls the next speaker. The current speaker is removed from the list and cannot re-add themselves until it is their turn again, though most rules of procedure allow re-adding after speaking.
             </p>
 
             <h2 style={s.h2}>3. Yielding Remaining Time</h2>
@@ -115,13 +115,13 @@ export default function Article3() {
             </p>
             <ul style={s.ul}>
               <li style={s.li}>
-                <strong>Yield to the chair</strong> — the simplest and most common option. The remaining time is lost; the chair immediately calls the next speaker.
+                <strong>Yield to the chair</strong>: the simplest and most common option. The remaining time is lost; the chair immediately calls the next speaker.
               </li>
               <li style={s.li}>
-                <strong>Yield to another delegate</strong> — the named delegation speaks for whatever time remains. This is a useful tactical tool — yielding to an ally gives them floor time without them needing to wait for their position in the queue.
+                <strong>Yield to another delegate</strong>: the named delegation speaks for whatever time remains. This is a useful tactical tool: yielding to an ally gives them floor time without them needing to wait for their position in the queue.
               </li>
               <li style={s.li}>
-                <strong>Yield to points/questions</strong> — the floor is briefly opened for points of information from other delegates. The original speaker must answer within the remaining time. Not all rules of procedure allow this.
+                <strong>Yield to points/questions</strong>: the floor is briefly opened for points of information from other delegates. The original speaker must answer within the remaining time. Not all rules of procedure allow this.
               </li>
             </ul>
             <p style={s.p}>
@@ -138,35 +138,35 @@ export default function Article3() {
             </p>
             <h3 style={s.h3}>Point of Order</h3>
             <p style={s.p}>
-              A challenge to the chair&apos;s procedural ruling or a note that procedure is not being followed correctly. Not a question — it is a formal challenge. The chair must address it immediately. Point of Order always takes precedence over the floor.
+              A challenge to the chair&apos;s procedural ruling or a note that procedure is not being followed correctly. Not a question, but a formal challenge. The chair must address it immediately. Point of Order always takes precedence over the floor.
             </p>
             <h3 style={s.h3}>Right of Reply</h3>
             <p style={s.p}>
-              When a delegate&apos;s nation has been directly and personally attacked in a speech, they may request a Right of Reply. If granted by the chair, they are inserted at the top of the GSL with a shorter time limit (usually 30 seconds) specifically to respond to the attack. Right of Reply cannot be used for general disagreement — only for personal or national insults.
+              When a delegate&apos;s nation has been directly and personally attacked in a speech, they may request a Right of Reply. If granted by the chair, they are inserted at the top of the GSL with a shorter time limit (usually 30 seconds) specifically to respond to the attack. Right of Reply cannot be used for general disagreement, only for personal or national insults.
             </p>
 
             <h2 style={s.h2}>5. How Chairs Should Manage the GSL</h2>
             <p style={s.p}>
-              The quality of GSL management directly affects the energy and flow of a committee session. Dead time — the pause between one speaker finishing and the next being called — is the enemy. Here is how experienced chairs minimise it:
+              The quality of GSL management directly affects the energy and flow of a committee session. Dead time, the pause between one speaker finishing and the next being called, is the enemy. Here is how experienced chairs minimise it:
             </p>
             <ul style={s.ul}>
               <li style={s.li}><strong>Keep the list visible.</strong> Delegates who cannot see their position ask constantly. Display the queue on a screen or use a tool like Gavelling that shows delegates their queue position on their own device.</li>
               <li style={s.li}><strong>Pre-call the next speaker.</strong> While the current speaker is finishing, quietly note who is next and be ready to call them the instant the timer ends.</li>
-              <li style={s.li}><strong>Enforce time strictly.</strong> Inconsistent enforcement erodes your authority. Use the gavel at time — every time.</li>
+              <li style={s.li}><strong>Enforce time strictly.</strong> Inconsistent enforcement erodes your authority. Use the gavel at time, every time.</li>
               <li style={s.li}><strong>Add to the list continuously.</strong> During speakers, glance around the room for raised placards and note them without interrupting the speaker.</li>
             </ul>
             <p style={s.p}>
               <strong>Gavelling</strong> automates the hardest parts of GSL management: the timer runs automatically, the queue is visible to all delegates in real time, and speaker advancement is a single button tap. Chairs who use it report significantly shorter inter-speaker gaps and fewer procedural interruptions.
             </p>
 
-            <h2 style={s.h2}>6. GSL vs Caucuses — When to Use Each</h2>
+            <h2 style={s.h2}>6. GSL vs Caucuses: When to Use Each</h2>
             <p style={s.p}>
               The GSL provides formal, structured debate where every delegate gets equal floor time. Caucuses (moderated or unmoderated) are tools for shifting the committee into a different mode:
             </p>
             <ul style={s.ul}>
-              <li style={s.li}><strong>GSL</strong> — best for formal position statements, broad debate, or when you want to hear from a wide range of delegations.</li>
-              <li style={s.li}><strong>Moderated Caucus</strong> — best for focused debate on a specific sub-topic with a controlled number of speakers and a clear time limit.</li>
-              <li style={s.li}><strong>Unmoderated Caucus</strong> — best for informal negotiation, bloc-building, and working paper drafting.</li>
+              <li style={s.li}><strong>GSL</strong>: best for formal position statements, broad debate, or when you want to hear from a wide range of delegations.</li>
+              <li style={s.li}><strong>Moderated Caucus</strong>: best for focused debate on a specific sub-topic with a controlled number of speakers and a clear time limit.</li>
+              <li style={s.li}><strong>Unmoderated Caucus</strong>: best for informal negotiation, bloc-building, and working paper drafting.</li>
             </ul>
             <p style={s.p}>
               A healthy committee session alternates between GSL debate and caucuses. Too much GSL without caucuses can feel rigid; too many caucuses without GSL debate loses the formal record.
@@ -186,7 +186,7 @@ export default function Article3() {
             <RelatedGuides currentSlug="general-speakers-list-guide" />
             <div style={s.cta}>
               <p style={s.ctaText}>
-                Gavelling manages the GSL automatically — queue, timer, and speaker advancement — so you can focus on the debate.
+                Gavelling manages the GSL automatically (queue, timer, and speaker advancement) so you can focus on the debate.
               </p>
               <a href="https://gavelling.com" style={s.ctaLink}>Try it free at gavelling.com →</a>
             </div>

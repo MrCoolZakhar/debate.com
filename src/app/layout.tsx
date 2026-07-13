@@ -8,11 +8,11 @@ import DemoGate from '@/components/DemoGate';
 export const metadata: Metadata = {
   metadataBase: new URL('https://gavelling.com'),
   title: {
-    default: 'Gavelling — Modern MUN Committee Software',
+    default: 'Gavelling: Modern MUN Committee Software',
     template: '%s | Gavelling',
   },
   description:
-    'Gavelling gives chairs and directors everything they need to run professional, efficient Model UN sessions. Roll call, speakers, motions, voting — all in one place.',
+    'Gavelling gives chairs and directors everything they need to run professional, efficient Model UN sessions. Roll call, speakers, motions, voting, all in one place.',
   keywords: [
     'Model UN software',
     'MUN committee platform',
@@ -44,9 +44,9 @@ export const metadata: Metadata = {
     },
   },
   openGraph: {
-    title: 'Gavelling — Modern MUN Committee Software',
+    title: 'Gavelling: Modern MUN Committee Software',
     description:
-      'Gavelling gives chairs and directors everything they need to run professional, efficient Model UN sessions. Roll call, speakers, motions, voting — all in one place.',
+      'Gavelling gives chairs and directors everything they need to run professional, efficient Model UN sessions. Roll call, speakers, motions, voting, all in one place.',
     url: 'https://gavelling.com',
     siteName: 'Gavelling',
     images: [
@@ -54,7 +54,7 @@ export const metadata: Metadata = {
         url: 'https://gavelling.com/og-image.png',
         width: 1200,
         height: 630,
-        alt: 'Gavelling — Modern MUN Committee Software',
+        alt: 'Gavelling: Modern MUN Committee Software',
       },
     ],
     locale: 'en_US',
@@ -62,9 +62,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Gavelling — Modern MUN Committee Software',
+    title: 'Gavelling: Modern MUN Committee Software',
     description:
-      'The modern platform for running Model UN sessions. Roll call, speakers lists, motions, and voting — all in one place.',
+      'The modern platform for running Model UN sessions. Roll call, speakers lists, motions, and voting, all in one place.',
     creator: '@wearegavelling',
     images: ['https://gavelling.com/og-image.png'],
   },

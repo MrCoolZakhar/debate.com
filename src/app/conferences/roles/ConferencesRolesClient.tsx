@@ -31,7 +31,7 @@ const BORDER = '#DDD4C0';
 const DANGER = '#8B2020';
 const SLATE_BLUE = '#46617A';
 
-// Category metadata — canonical lowercase keys matching the DB values.
+// Category metadata, canonical lowercase keys matching the DB values.
 // Chip colours: chairs = gold, secretariat = slate-blue, staff = forest-green.
 const CATEGORY_META: Record<string, {
   label: string; single: string; icon: typeof Gavel;
@@ -53,7 +53,7 @@ const CATEGORY_META: Record<string, {
 
 const CATEGORY_ORDER = ['chairs', 'secretariat', 'staff'] as const;
 
-// Compensation metadata — canonical lowercase-hyphenated keys matching the DB.
+// Compensation metadata, canonical lowercase-hyphenated keys matching the DB.
 const COMP_META: Record<string, { label: string; icon: typeof Banknote; gold: boolean }> = {
   'paid':           { label: 'PAID',           icon: Banknote,       gold: true },
   'travel-covered': { label: 'TRAVEL COVERED', icon: Plane,          gold: true },
@@ -1013,7 +1013,7 @@ export default function ConferencesRolesClient() {
 
               <div className="hidden md:block w-px h-6 flex-shrink-0" style={{ backgroundColor: 'rgba(221,212,192,0.9)' }} />
 
-              {/* Category pills — toggle on/off */}
+              {/* Category pills, toggle on/off */}
               {CATEGORY_ORDER.map(key => (
                 <FilterPill
                   key={key}

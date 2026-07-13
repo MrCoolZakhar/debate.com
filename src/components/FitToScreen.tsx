@@ -21,7 +21,7 @@ export default function FitToScreen({
   useEffect(() => {
     const content = rootRef.current?.firstElementChild as HTMLElement | null;
     const compute = () => {
-      // Default (fitContent=false): identical to the original behaviour — scale BASE_H to
+      // Default (fitContent=false): identical to the original behaviour, scale BASE_H to
       // the window. fitContent=true: use the taller of BASE_H and the real content height,
       // so overflowing pages shrink to fit instead of being clipped.
       // NOTE: fit-root height stays fixed at BASE_H; only the scale reacts to content. The

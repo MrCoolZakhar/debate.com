@@ -1,6 +1,6 @@
 'use client';
 
-// Shared "a conference I'm personally connected to" card — banner/logo strip,
+// Shared "a conference I'm personally connected to" card, banner/logo strip,
 // countdown chip, date + location, role badge(s). Used by /account/calendar
 // (which merges every role a user holds into one card) and /my-conferences
 // (one card per tab, one role badge each).
@@ -28,7 +28,7 @@ export interface CardConference {
   status?: string;
 }
 
-/** A role the signed-in user holds at a conference — becomes a tinted tag chip. */
+/** A role the signed-in user holds at a conference, becomes a tinted tag chip. */
 export interface RoleTag {
   key: string;        // dedupe key so the same role isn't shown twice
   label: string;      // "Organiser", "Chair · DISEC", "Delegate · France"…
@@ -78,7 +78,7 @@ export function countdown(start: string, end: string): { label: string; tone: Pi
   const today = startOfToday().getTime();
   const s = new Date(start + 'T00:00:00').getTime();
   const e = new Date(end + 'T00:00:00').getTime();
-  if (e < today) return null;               // fully past — handled elsewhere
+  if (e < today) return null;               // fully past, handled elsewhere
   if (s <= today && today <= e) return { label: 'Happening now', tone: 'gold' };
   const days = Math.round((s - today) / 86_400_000);
   if (days === 0) return { label: 'Starts today', tone: 'gold' };
@@ -156,7 +156,7 @@ export function PersonalConferenceCard({
         e.currentTarget.style.transform = 'translateY(0)';
       }}
     >
-      {/* Soft header strip — banner if present, otherwise a warm forest wash */}
+      {/* Soft header strip, banner if present, otherwise a warm forest wash */}
       <div
         className="relative"
         style={{
@@ -260,7 +260,7 @@ export function PersonalConferenceCard({
           )}
         </div>
 
-        {/* Role tags — every role the user holds here */}
+        {/* Role tags, every role the user holds here */}
         <div className="flex flex-wrap gap-1.5 mt-3.5">
           {roles.map((tag) => (
             <RoleTagChip key={tag.key} tag={tag} />

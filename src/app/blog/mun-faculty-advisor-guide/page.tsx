@@ -4,11 +4,11 @@ import type { Metadata } from 'next';
 import React from 'react';
 
 export const metadata: Metadata = {
-  title: 'MUN Faculty Advisor Guide — How to Prepare and Support Your Team',
+  title: 'MUN Faculty Advisor Guide: How to Prepare and Support Your Team',
   description: 'A complete guide for faculty advisors running a Model UN program: preparing students, choosing conferences, reviewing position papers, and supporting delegates at the conference.',
   alternates: { canonical: 'https://gavelling.com/blog/mun-faculty-advisor-guide' },
   openGraph: {
-    title: 'MUN Faculty Advisor Guide — How to Prepare and Support Your Team',
+    title: 'MUN Faculty Advisor Guide: How to Prepare and Support Your Team',
     description: 'Everything faculty advisors need to run a successful MUN program.',
     url: 'https://gavelling.com/blog/mun-faculty-advisor-guide',
     siteName: 'Gavelling',
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
 const articleSchema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
-  headline: 'MUN Faculty Advisor Guide — How to Prepare and Support Your Team',
+  headline: 'MUN Faculty Advisor Guide: How to Prepare and Support Your Team',
   description: 'Complete guide for MUN faculty advisors.',
   url: 'https://gavelling.com/blog/mun-faculty-advisor-guide',
   datePublished: '2026-06-07',
@@ -67,13 +67,13 @@ export default function Article() {
       <div style={s.page}>
         <div style={s.wrap}>
           <Link href="/blog" style={s.back}>← MUN Resources</Link>
-          <h1 style={s.h1}>MUN Faculty Advisor Guide — How to Prepare and Support Your Team</h1>
+          <h1 style={s.h1}>MUN Faculty Advisor Guide: How to Prepare and Support Your Team</h1>
           <p style={s.meta}>By Gavelling · June 2026 · 11 min read</p>
           <article style={s.article}>
-            <p style={s.p}>Faculty advisors are the backbone of every successful school MUN program. You are simultaneously coach, logistics coordinator, welfare officer, and sometimes the only adult in the building who knows what a moderated caucus is. This guide covers the full advisor role — from building a program from scratch to supporting experienced delegates at competitive conferences.</p>
+            <p style={s.p}>Faculty advisors are the backbone of every successful school MUN program. You are simultaneously coach, logistics coordinator, welfare officer, and sometimes the only adult in the building who knows what a moderated caucus is. This guide covers the full advisor role: from building a program from scratch to supporting experienced delegates at competitive conferences.</p>
 
             <h2 style={s.h2}>Your Role at the Conference</h2>
-            <p style={s.p}>The faculty advisor is an observer at the conference itself. You do not participate in committee. Your role during sessions is to be available — for pastoral support, logistical issues, liaison with conference staff, and debrief conversations between sessions. You are not a coach on the sidelines calling plays; you are a support structure that lets students take full ownership of their performance.</p>
+            <p style={s.p}>The faculty advisor is an observer at the conference itself. You do not participate in committee. Your role during sessions is to be available: for pastoral support, logistical issues, liaison with conference staff, and debrief conversations between sessions. You are not a coach on the sidelines calling plays; you are a support structure that lets students take full ownership of their performance.</p>
             <div style={s.callout}><p style={s.calloutText}>The hardest part of being a good faculty advisor is resisting the urge to intervene when a student is struggling in committee. Let them work through it. The learning is in the difficulty.</p></div>
 
             <h2 style={s.h2}>Building the Program</h2>
@@ -106,20 +106,20 @@ export default function Article() {
             <p style={s.p}>Your schedule during the conference should include:</p>
             <ul style={s.ul}>
               <li style={s.li}><strong>Morning check-ins:</strong> Brief team meeting before sessions start. How is everyone feeling? Any questions about procedure or strategy?</li>
-              <li style={s.li}><strong>Lunch debrief:</strong> What happened in the morning session? What is the plan for the afternoon? Keep this constructive — it is not a critique session, it is a strategy session.</li>
+              <li style={s.li}><strong>Lunch debrief:</strong> What happened in the morning session? What is the plan for the afternoon? Keep this constructive. It is not a critique session, it is a strategy session.</li>
               <li style={s.li}><strong>Evening wrap-up:</strong> Full debrief, pastoral check-in, and preparation for the next day.</li>
             </ul>
-            <p style={s.p}>Do not attend committee sessions unless there is a serious welfare concern. Your presence changes delegate behaviour — they look to you instead of finding their own solutions.</p>
+            <p style={s.p}>Do not attend committee sessions unless there is a serious welfare concern. Your presence changes delegate behaviour. They look to you instead of finding their own solutions.</p>
 
             <h2 style={s.h2}>After the Conference</h2>
             <p style={s.p}>A structured post-conference debrief is one of the most valuable parts of the program. Do it within a week while the experience is fresh. Have each student share: one thing they did well, one thing they would do differently, and one specific skill they want to develop before the next conference. This reflection loop is what separates programs that improve every year from those that plateau.</p>
 
             <h2 style={s.h2}>Using Technology as a Faculty Advisor</h2>
-            <p style={s.p}>Some conferences now offer faculty advisor views — read-only access to committee sessions so advisors can monitor how their students are performing without being physically present in the room. Gavelling's faculty advisor mode provides exactly this: a live view of the committee, current speakers, queue positions, and session status. This allows advisors to see what is happening in real time and have better-informed debrief conversations.</p>
+            <p style={s.p}>Some conferences now offer faculty advisor views: read-only access to committee sessions so advisors can monitor how their students are performing without being physically present in the room. Gavelling's faculty advisor mode provides exactly this: a live view of the committee, current speakers, queue positions, and session status. This allows advisors to see what is happening in real time and have better-informed debrief conversations.</p>
 
             <RelatedGuides currentSlug="mun-faculty-advisor-guide" />
             <div style={s.cta}>
-              <p style={s.ctaText}>Gavelling includes a Faculty Advisor view — observe any session live without disrupting the committee.</p>
+              <p style={s.ctaText}>Gavelling includes a Faculty Advisor view: observe any session live without disrupting the committee.</p>
               <a href="https://gavelling.com" style={s.ctaLink}>Try Gavelling free →</a>
             </div>
           </article>

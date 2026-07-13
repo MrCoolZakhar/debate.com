@@ -87,7 +87,7 @@ export function renderWelcomeEmail(name: string | null | undefined): { subject: 
 
   const paragraphs = [
     `Dear ${firstName},`,
-    'Welcome to Gavelling — the home of Model UN conferences, committees, and your growing MUN CV.',
+    'Welcome to Gavelling, the home of Model UN conferences, committees, and your growing MUN CV.',
     'To get you started, we’ve credited 50 Gavelling Points to your account. Earn more by attending conferences and winning awards, and spend them on rewards and fee waivers.',
     'Your next step: browse upcoming conferences and apply as a delegate or chair.',
   ];
@@ -110,7 +110,7 @@ export function renderWelcomeEmail(name: string | null | undefined): { subject: 
   });
 
   return {
-    subject: 'Welcome to Gavelling — 50 points are waiting for you',
+    subject: 'Welcome to Gavelling: 50 points are waiting for you',
     html,
     text: `${paragraphs.join('\n\n')}\n\nExplore conferences: ${siteUrl}/conferences\n\nSee you in committee,\nThe Gavelling Team`,
   };

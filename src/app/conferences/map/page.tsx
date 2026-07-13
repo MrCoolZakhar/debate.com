@@ -197,7 +197,7 @@ async function fetchContinentDetail(countries: string[]): Promise<{ highlighted:
     if (hl) return { highlighted: hl, flagCountries };
   }
 
-  // No recent applications — fall back to the soonest upcoming listing so the
+  // No recent applications, fall back to the soonest upcoming listing so the
   // card always spotlights a real conference instead of an empty dash.
   const today = new Date().toISOString().split('T')[0];
   const upcoming = confs
@@ -450,7 +450,7 @@ export default function ConferencesMapPage() {
         backgroundColor: '#1B3828',
       }}
     >
-      {/* LAYER 1 — Grain overlay */}
+      {/* LAYER 1, Grain overlay */}
       <div
         style={{
           position: 'absolute',
@@ -465,7 +465,7 @@ export default function ConferencesMapPage() {
         }}
       />
 
-      {/* Keyframes — unconditional */}
+      {/* Keyframes, unconditional */}
       <style>{`
         @keyframes pulse-skeleton {
           0%, 100% { opacity: 1; }
@@ -475,7 +475,7 @@ export default function ConferencesMapPage() {
         .map-nav-wrapper a:hover { color: #EED98A !important; }
       `}</style>
 
-      {/* LAYER 0.5 — Cursor trail canvas */}
+      {/* LAYER 0.5, Cursor trail canvas */}
       <canvas
         ref={canvasRef}
         style={{
@@ -488,7 +488,7 @@ export default function ConferencesMapPage() {
         }}
       />
 
-      {/* LAYER 2 — SiteNav with semi-transparent forest background */}
+      {/* LAYER 2, SiteNav with semi-transparent forest background */}
       <div
         className="map-nav-wrapper"
         style={{
@@ -505,7 +505,7 @@ export default function ConferencesMapPage() {
         <SiteNav />
       </div>
 
-      {/* LAYER 3 — World map image */}
+      {/* LAYER 3, World map image */}
       <img
         src="/map/world_map.png"
         alt="World Map"
@@ -521,7 +521,7 @@ export default function ConferencesMapPage() {
         }}
       />
 
-      {/* LAYER 4 — SVG polygon hover zones */}
+      {/* LAYER 4, SVG polygon hover zones */}
       {phase === 'world' && (
         <svg
           viewBox="0 0 100 100"
@@ -551,7 +551,7 @@ export default function ConferencesMapPage() {
       )}
 
 
-      {/* LAYER 6 — Cloud transition video */}
+      {/* LAYER 6, Cloud transition video */}
       <video
         ref={videoRef}
         muted
@@ -570,7 +570,7 @@ export default function ConferencesMapPage() {
         }}
       />
 
-      {/* LAYER 7 — Continent map image */}
+      {/* LAYER 7, Continent map image */}
       {selected && (
         <img
           src={selectedDef?.mapSrc}
@@ -588,7 +588,7 @@ export default function ConferencesMapPage() {
         />
       )}
 
-      {/* LAYER 8 — Info card + scroll-up hint (continent phase) */}
+      {/* LAYER 8, Info card + scroll-up hint (continent phase) */}
       {phase === 'continent' && selectedDef && (
         <>
           <div
@@ -652,7 +652,7 @@ export default function ConferencesMapPage() {
                 {selectedDef.label}
               </h2>
 
-              {/* Flag cluster — rectangular twemoji flags from the continent's
+              {/* Flag cluster, rectangular twemoji flags from the continent's
                   live listings, so the card feels part of the flag-forward card
                   system rather than a text-only readout. */}
               {!cardLoading && detail && detail.flagCountries.length > 0 && (
@@ -711,7 +711,7 @@ export default function ConferencesMapPage() {
                   />
                 </>
               ) : activeCount === 0 && (!detail || !detail.highlighted) ? (
-                /* Designed 0-state — no live conferences here yet. */
+                /* Designed 0-state, no live conferences here yet. */
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
                   <span
                     aria-hidden="true"
@@ -741,7 +741,7 @@ export default function ConferencesMapPage() {
                 </div>
               ) : (
                 <>
-                  {/* Live count as an oversized gold numeral — the card's hero
+                  {/* Live count as an oversized gold numeral, the card's hero
                       figure, not a justify-between debug row. */}
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 4 }}>
                     <span
@@ -870,7 +870,7 @@ export default function ConferencesMapPage() {
         </>
       )}
 
-      {/* LAYER 10 — Hint text (world phase) */}
+      {/* LAYER 10, Hint text (world phase) */}
       {phase === 'world' && (
         <div
           style={{

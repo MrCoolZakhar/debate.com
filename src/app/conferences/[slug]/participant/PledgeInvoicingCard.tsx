@@ -1,6 +1,6 @@
 'use client';
 
-// PLEDGE & INVOICING card — advisor-only. A pledge is only ever about paying
+// PLEDGE & INVOICING card, advisor-only. A pledge is only ever about paying
 // for delegation spots (the advisor's own fee is handled by the universal
 // PaymentPanel above, like any other participant), so this renders a single
 // spots-pledge line with a PAY affordance calling the payments stub.

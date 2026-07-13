@@ -73,7 +73,7 @@ export default function ResetPasswordPage() {
     <AuthLayout
       eyebrow="Model UN, run properly"
       headline="Set a new password."
-      sub="Pick something strong — then you're straight back into your conferences."
+      sub="Pick something strong, then you're straight back into your conferences."
     >
       {done ? (
         <div className="text-center">
@@ -89,7 +89,7 @@ export default function ResetPasswordPage() {
             Password updated
           </h2>
           <p className="text-sm" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-            You&apos;re signed in — taking you home…
+            You&apos;re signed in. Taking you home…
           </p>
         </div>
       ) : hasSession === false ? (

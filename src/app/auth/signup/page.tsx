@@ -171,7 +171,7 @@ function SignUpInner() {
     const dateOfBirth = `${dobYear}-${dobMonth.padStart(2, '0')}-${dobDay.padStart(2, '0')}`;
     const age = ageAt(dateOfBirth);
     if (age === null || age < 0 || age > 120) {
-      setError('That date of birth doesn’t look right — please double-check it.');
+      setError('That date of birth doesn’t look right. Please double-check it.');
       return;
     }
     if (age < 13) {

@@ -37,7 +37,7 @@ function FlagTile({ country, active, spoken }: { country: string; active: boolea
   );
 }
 
-// Live delegation board for a Consultation of the Whole (open floor — no queue).
+// Live delegation board for a Consultation of the Whole (open floor, no queue).
 // Read-only everywhere; chairs pass onTap to set the current speaker.
 export default function CowDelegationBoard({ committee, onTap }: {
   committee: Committee; onTap?: (country: string) => void;

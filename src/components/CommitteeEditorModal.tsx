@@ -1,6 +1,6 @@
 'use client';
 
-// Shared committee editor modal — extracted from manage/[slug]/committees/page.tsx
+// Shared committee editor modal, extracted from manage/[slug]/committees/page.tsx
 // so the organiser committees tab and the public conference page can share it.
 // Exposes: CommitteeEditorModal (create + edit, with built-in type picker for the
 // create flow), MonogramMedallion (fallback emblem), ModalOverlay (house modal
@@ -49,7 +49,7 @@ const labelStyle: React.CSSProperties = {
 
 // Committee type governs rostering: GA + Specialised roster by country slots;
 // Crisis rosters free-text character names. Only Crisis takes the character
-// path — every non-crisis type falls through to countries.
+// path, every non-crisis type falls through to countries.
 export type CommitteeType = 'general-assembly' | 'specialised' | 'crisis';
 
 export interface EditableCommittee {
@@ -63,7 +63,7 @@ export interface EditableCommittee {
   logo_url: string | null;
 }
 
-// ── Fallback emblem — gradient monogram disc with grain, matching the public card
+// ── Fallback emblem, gradient monogram disc with grain, matching the public card
 
 export function MonogramMedallion({ text, isCrisis, size }: { text: string; isCrisis: boolean; size: number }) {
   const monogram = text.replace(/[^A-Za-z0-9]/g, '').slice(0, 6).toUpperCase() || '—';
@@ -131,7 +131,7 @@ export async function mintConferenceSession(
       .select('id')
       .single();
     if (sErr) {
-      if (sErr.code === '23505') continue; // code collision — try a new code
+      if (sErr.code === '23505') continue; // code collision, try a new code
       console.error('Error minting conference session:', sErr);
       return null;
     }
@@ -193,7 +193,7 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialCountri
     setLogoUrl(matchPresetEmblem(name, abbreviation));
   }, [name, abbreviation, emblemManuallySet]);
 
-  // Mirrors the conference logo upload in manage/[slug]/settings — same bucket, own folder.
+  // Mirrors the conference logo upload in manage/[slug]/settings, same bucket, own folder.
   async function handleEmblemUpload(file: File) {
     if (!session) return;
     if (file.size > 5 * 1024 * 1024) { setError('Emblem must be under 5MB.'); return; }
@@ -395,7 +395,7 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialCountri
                 onChange={e => { const f = e.target.files?.[0]; if (f) handleEmblemUpload(f); e.target.value = ''; }}
               />
             </div>
-            {/* Preset emblem picker — one-click seals for common committees. */}
+            {/* Preset emblem picker, one-click seals for common committees. */}
             <div className="mt-2 flex items-center gap-2 flex-wrap">
               <span style={{ ...labelStyle, marginBottom: 0, textTransform: 'uppercase', letterSpacing: '0.12em' }}>Presets</span>
               {PRESET_EMBLEM_PICKS.map((p) => {
@@ -528,7 +528,7 @@ function TypeCard({ opt, onSelect }: { opt: (typeof TYPE_OPTIONS)[number]; onSel
   );
 }
 
-// ── CommitteeEditorModal — public API ─────────────────────────────────────────
+// ── CommitteeEditorModal, public API ─────────────────────────────────────────
 // committee = null → create flow (opens with the GA / Specialised / Crisis
 // type picker); committee set → edit flow (self-loads the committee's slots).
 
@@ -560,7 +560,7 @@ export function CommitteeEditorModal({ conference, committee, onSaved, onClose }
     return () => { cancelled = true; };
   }, [committee, session]);
 
-  // Create flow — choose committee type first (GA / Specialised / Crisis).
+  // Create flow, choose committee type first (GA / Specialised / Crisis).
   if (!isEdit && !pendingType) {
     return (
       <ModalOverlay onClose={onClose}>
@@ -579,7 +579,7 @@ export function CommitteeEditorModal({ conference, committee, onSaved, onClose }
     );
   }
 
-  // Edit flow — brief spinner while the current slots load.
+  // Edit flow, brief spinner while the current slots load.
   if (isEdit && initialCountries === null) {
     return (
       <ModalOverlay onClose={onClose}>

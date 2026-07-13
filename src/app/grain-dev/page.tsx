@@ -77,7 +77,7 @@ export default function GrainDevPage() {
           </h1>
 
           <p className="text-lg max-w-md mb-12 leading-relaxed" style={{ color: muted }}>
-            Gavelling gives chairs everything they need — from roll call to final voting.
+            Gavelling gives chairs everything they need, from roll call to final voting.
           </p>
 
           <div className="px-10 py-5 rounded-2xl font-black text-xl text-[#1C1410] mb-6 shadow-lg"

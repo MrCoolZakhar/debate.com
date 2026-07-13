@@ -1,9 +1,9 @@
 'use client';
 
-// Independents tab — a flat card grid, one card per independent delegate.
+// Independents tab, a flat card grid, one card per independent delegate.
 // Deliberately not a clone of DelegationsView: there's no delegation to drag
 // members into or out of, so there's no drag-and-drop and no expanded
-// two-column view. Payment and allocation are fully decoupled here — the
+// two-column view. Payment and allocation are fully decoupled here, the
 // only thing this file ever does to an allocation is display it; it never
 // reads it for logic, writes it, transfers it, or deletes it. TRANSFER SPOT
 // / GIVE SPOT always call performSwap with transfer=false, so only
@@ -27,7 +27,7 @@ import {
 // ── Transfer / give-spot picker ─────────────────────────────────────────────
 // Searchable list of the conference's accepted/assigned delegates and head
 // delegates (any delegation or independent). Picking a name here only
-// narrows down the recipient — the actual swap is confirmed via ConfirmModal
+// narrows down the recipient, the actual swap is confirmed via ConfirmModal
 // by the caller.
 
 function TransferSpotModal({
@@ -134,7 +134,7 @@ function IndependentCard({
   const notAttending = !app.attending;
   const openSpot = paid && notAttending;
   const allocationLine = app.assigned_committee_id
-    ? `${app.assigned_committee?.abbreviation ?? app.assigned_committee?.name ?? 'Unknown committee'} — ${app.assigned_country_name}`
+    ? `${app.assigned_committee?.abbreviation ?? app.assigned_committee?.name ?? 'Unknown committee'}, ${app.assigned_country_name}`
     : null;
 
   return (
@@ -169,7 +169,7 @@ function IndependentCard({
       {openSpot && (
         <div className="mt-3 rounded-xl px-3 py-2" style={{ border: '1.5px dashed #DDD4C0' }}>
           <p style={{ fontSize: 10, fontWeight: 700, color: '#9A8A78', fontFamily: MONO, letterSpacing: '0.06em' }}>
-            OPEN SPOT — held by {name}
+            OPEN SPOT (held by {name})
           </p>
         </div>
       )}
@@ -208,7 +208,7 @@ export default function IndependentsView({ conference, showFlash }: Independents
   const loadData = useCallback(async (opts?: { silent?: boolean }) => {
     if (!conference || !session) return;
     const seq = ++loadSeqRef.current;
-    // silent: background refresh — keeps the card grid mounted (no spinner
+    // silent: background refresh, keeps the card grid mounted (no spinner
     // wipe, scroll and open modals survive).
     if (!opts?.silent) setLoading(true);
     const supabase = getAuthedClient(session.access_token);
@@ -224,7 +224,7 @@ export default function IndependentsView({ conference, showFlash }: Independents
       fetchSearchPool(supabase, conference.id),
     ]);
 
-    if (seq !== loadSeqRef.current) return; // stale response — a newer load superseded this one
+    if (seq !== loadSeqRef.current) return; // stale response, a newer load superseded this one
 
     const list = ((indepRes.data ?? []) as unknown as PoolMember[])
       .sort((a, b) => a.submitted_at.localeCompare(b.submitted_at));
@@ -282,7 +282,7 @@ export default function IndependentsView({ conference, showFlash }: Independents
     };
 
     (async () => {
-      // transfer=false always — allocations are managed in the Delegates tab
+      // transfer=false always, allocations are managed in the Delegates tab
       // and are never read, written, transferred, or deleted from this tab.
       const emailResult = await performSwap(supabase, conference.id, recipient, holder, false);
       if (emailResult.error) {
@@ -382,7 +382,7 @@ export default function IndependentsView({ conference, showFlash }: Independents
       <DraftNoticeList notices={draftNotices} conferenceSlug={conference.slug} onDismiss={dismissDraftNotice} />
       <p className="text-xs font-semibold tracking-widest mb-1" style={{ color: '#9A8A78', fontFamily: MONO }}>INDEPENDENTS</p>
       <p className="text-sm mb-5" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-        Delegates applying without a high school or society. Manage payment and attendance below — allocations are managed in the Delegates tab.
+        Delegates applying without a high school or society. Manage payment and attendance below; allocations are managed in the Delegates tab.
       </p>
       {independents.length === 0 ? (
         <p className="text-sm" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>No independent delegates yet.</p>

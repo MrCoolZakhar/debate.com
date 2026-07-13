@@ -1,13 +1,13 @@
 'use client';
 
-// Delegation placard — society name, advisors, and the delegate's own
+// Delegation placard, society name, advisors, and the delegate's own
 // payment status within that delegation. Independent delegates get a plain
 // "Independent delegate" card instead.
 //
 // Advisor lookup relies on the recursion-safe "Members read society
 // leadership" policy on applications (via the my_society_ids() /
 // is_society_leader() SECURITY DEFINER helpers) plus "Society co-members
-// read profiles" on profiles (via shares_society_with()) — both applied
+// read profiles" on profiles (via shares_society_with()), both applied
 // server-side. Verified end-to-end under RLS as a real delegate and a real
 // head-delegate in seeded data; falls back to "No faculty advisor listed"
 // for societies with none on record.

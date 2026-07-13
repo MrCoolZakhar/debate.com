@@ -56,7 +56,7 @@ async function manualProvider(input: PaymentIntentInput): Promise<PaymentResult>
   return {
     status: 'recorded',
     message:
-      `Secure card payment is being connected — your total of ${formatFee(input.total, input.currency)} ` +
+      `Secure card payment is being connected. Your total of ${formatFee(input.total, input.currency)} ` +
       'is locked in, and the organizing team can confirm your payment manually in the meantime.',
   };
 }
@@ -129,6 +129,6 @@ export interface InitiatePaymentResult {
 export async function initiatePayment(_args: InitiatePaymentArgs): Promise<InitiatePaymentResult> {
   return {
     status: 'stub',
-    message: 'Secure card payment is being connected — the organizing team can confirm payments manually in the meantime.',
+    message: 'Secure card payment is being connected. In the meantime, the organizing team can confirm payments manually.',
   };
 }

@@ -106,7 +106,7 @@ function ApplicationsPanel({
   const [apps, setApps] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
   const [panelError, setPanelError] = useState('');
-  // App ids with a write in flight — hides that row's Accept/Reject (double-click guard).
+  // App ids with a write in flight, hides that row's Accept/Reject (double-click guard).
   const [busyAppIds, setBusyAppIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -136,7 +136,7 @@ function ApplicationsPanel({
       setBusyAppIds(prev => { const next = new Set(prev); next.delete(appId); return next; });
       if (error) {
         setApps(prev => prev.map(a => a.id === appId ? { ...a, status: prevStatus } : a));
-        setPanelError("Couldn't update that application — the change was reverted.");
+        setPanelError("Couldn't update that application. The change was reverted.");
         return;
       }
       onStatusChange();
@@ -660,7 +660,7 @@ export default function JobBoardPage() {
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState('');
   const [createError, setCreateError] = useState('');
-  // Posting ids with a write in flight — disables that row's controls (double-click guard).
+  // Posting ids with a write in flight, disables that row's controls (double-click guard).
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
   // Stale-response guard for background refetches.
   const fetchSeq = useRef(0);
@@ -695,7 +695,7 @@ export default function JobBoardPage() {
         .eq('conference_id', conference.id),
     ]);
 
-    if (seq !== fetchSeq.current) return; // stale response — a newer fetch superseded this one
+    if (seq !== fetchSeq.current) return; // stale response, a newer fetch superseded this one
 
     const ps = (postingsData as unknown as JobPosting[]) ?? [];
     setPostings(ps);
@@ -753,7 +753,7 @@ export default function JobBoardPage() {
     `).single();
     setSaving(false);
     if (error || !created) {
-      setCreateError("Couldn't post the position — please try again.");
+      setCreateError("Couldn't post the position. Please try again.");
       return;
     }
     const row = created as unknown as JobPosting;
@@ -800,7 +800,7 @@ export default function JobBoardPage() {
       if (error) {
         // Restore only this row to its exact pre-edit values.
         setPostings(prev => prev.map(p => p.id === posting.id ? posting : p));
-        setActionError("Couldn't save the position — the change was reverted.");
+        setActionError("Couldn't save the position. The change was reverted.");
       }
     });
   }
@@ -816,7 +816,7 @@ export default function JobBoardPage() {
       markBusy(posting.id, false);
       if (error) {
         setPostings(prev => prev.map(p => p.id === posting.id ? { ...p, is_open: posting.is_open } : p));
-        setActionError("Couldn't update the posting — the change was reverted.");
+        setActionError("Couldn't update the posting. The change was reverted.");
       }
     });
   }
@@ -841,7 +841,7 @@ export default function JobBoardPage() {
         next.splice(Math.min(Math.max(removedIndex, 0), next.length), 0, posting);
         return next;
       });
-      setActionError("Couldn't delete the posting — it was restored.");
+      setActionError("Couldn't delete the posting. It was restored.");
     }
   }
 

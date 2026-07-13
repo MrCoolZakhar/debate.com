@@ -4,11 +4,11 @@ import type { Metadata } from 'next';
 import React from 'react';
 
 export const metadata: Metadata = {
-  title: 'MUN Delegate Tips — How to Stand Out in Any Committee',
+  title: 'MUN Delegate Tips: How to Stand Out in Any Committee',
   description: 'Practical MUN delegate tips for beginners and experienced delegates: how to research, speak, build blocs, draft resolutions, and win best delegate.',
   alternates: { canonical: 'https://gavelling.com/blog/mun-delegate-tips' },
   openGraph: {
-    title: 'MUN Delegate Tips — How to Stand Out in Any Committee',
+    title: 'MUN Delegate Tips: How to Stand Out in Any Committee',
     description: 'The practical delegate playbook for Model UN success.',
     url: 'https://gavelling.com/blog/mun-delegate-tips',
     siteName: 'Gavelling',
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
 const articleSchema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
-  headline: 'MUN Delegate Tips — How to Stand Out in Any Committee',
+  headline: 'MUN Delegate Tips: How to Stand Out in Any Committee',
   description: 'Practical tips for MUN delegates at all levels.',
   url: 'https://gavelling.com/blog/mun-delegate-tips',
   datePublished: '2026-06-07',
@@ -68,17 +68,17 @@ export default function Article() {
       <div style={s.page}>
         <div style={s.wrap}>
           <Link href="/blog" style={s.back}>← MUN Resources</Link>
-          <h1 style={s.h1}>MUN Delegate Tips — How to Stand Out in Any Committee</h1>
+          <h1 style={s.h1}>MUN Delegate Tips: How to Stand Out in Any Committee</h1>
           <p style={s.meta}>By Gavelling · June 2026 · 11 min read</p>
           <article style={s.article}>
 
-            <p style={s.p}>Every delegate walks into committee wanting to make an impact. Few do. The gap between a forgettable delegate and one who earns Best Delegate is rarely about intelligence or knowledge — it is almost always about preparation, strategy, and presence. These tips apply whether you are attending your first conference or your fifteenth.</p>
+            <p style={s.p}>Every delegate walks into committee wanting to make an impact. Few do. The gap between a forgettable delegate and one who earns Best Delegate is rarely about intelligence or knowledge. It is almost always about preparation, strategy, and presence. These tips apply whether you are attending your first conference or your fifteenth.</p>
 
             <h2 style={s.h2}>Before the Conference: Research Like a Diplomat</h2>
             <p style={s.p}>The single biggest differentiator in MUN is preparation. Delegates who know their country's position cold can spend committee time on strategy instead of scrambling to figure out what they believe.</p>
             <ul style={s.ul}>
               <li style={s.li}><strong>Read your country's UN voting record.</strong> The UN Digital Library and Dag Hammarskjöld Library both have full voting records. How has your country voted on similar resolutions in the last five years?</li>
-              <li style={s.li}><strong>Find your country's official statements.</strong> Ministry of Foreign Affairs websites often publish speeches given at UN sessions. These are gold — they tell you exactly how your country phrases its positions.</li>
+              <li style={s.li}><strong>Find your country's official statements.</strong> Ministry of Foreign Affairs websites often publish speeches given at UN sessions. These are gold: they tell you exactly how your country phrases its positions.</li>
               <li style={s.li}><strong>Know the topic cold, not just your position.</strong> The best delegates can explain every major bloc's perspective, not just their own. This makes you a more effective negotiator.</li>
               <li style={s.li}><strong>Read the background guide.</strong> It exists for a reason. Chairs write questions to guide. Read it and answer every question from your country's perspective.</li>
             </ul>
@@ -106,7 +106,7 @@ export default function Article() {
             <ul style={s.ul}>
               <li style={s.li}><strong>Respond to what was just said.</strong> The most impactful speeches directly engage with the previous speaker's argument. This shows you are listening, not just waiting to speak.</li>
               <li style={s.li}><strong>Use specific data.</strong> Numbers anchor arguments. "Over 800 million people lack access to safe drinking water" lands harder than "many people face water scarcity."</li>
-              <li style={s.li}><strong>Propose concrete operative clauses.</strong> Do not just describe the problem — propose a solution. This advances the committee's work and marks you as a constructive delegate.</li>
+              <li style={s.li}><strong>Propose concrete operative clauses.</strong> Do not just describe the problem, propose a solution. This advances the committee's work and marks you as a constructive delegate.</li>
             </ul>
 
             <h2 style={s.h2}>Points and Motions: Use Them Strategically</h2>
@@ -118,7 +118,7 @@ export default function Article() {
             </ul>
 
             <h2 style={s.h2}>What Chairs Notice When Awarding Best Delegate</h2>
-            <p style={s.p}>Awards vary by conference, but most chairs are looking for the same things: substantive contribution to debate, leadership in bloc-building, quality of resolution language, adherence to rules of procedure, and consistent, respectful engagement with all delegates — not just your allies.</p>
+            <p style={s.p}>Awards vary by conference, but most chairs are looking for the same things: substantive contribution to debate, leadership in bloc-building, quality of resolution language, adherence to rules of procedure, and consistent, respectful engagement with all delegates, not just your allies.</p>
             <p style={s.p}>Being the loudest is not the same as being the best. The delegate who quietly drafts an amendment that bridges two opposing blocs often impresses more than the one who gives six speeches.</p>
 
             <RelatedGuides currentSlug="mun-delegate-tips" />

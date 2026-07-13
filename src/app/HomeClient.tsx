@@ -518,7 +518,7 @@ export default function HomeClient() {
             '@type': 'WebApplication',
             name: 'Gavelling',
             url: 'https://gavelling.com',
-            description: 'Modern MUN committee software. Manage roll call, speakers lists, motions, and voting — all in one place.',
+            description: 'Modern MUN committee software. Manage roll call, speakers lists, motions, and voting, all in one place.',
             applicationCategory: 'EducationalApplication',
             operatingSystem: 'Web',
             offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },

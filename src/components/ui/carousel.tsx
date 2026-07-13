@@ -1,11 +1,11 @@
 'use client';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Carousel — Aceternity-style center-focus carousel, reskinned for Gavelling.
+// Carousel, Aceternity-style center-focus carousel, reskinned for Gavelling.
 //
 // Large center slide, dimmed/scaled side-peek neighbors, circular prev/next
 // arrows below, keyboard + touch/drag support, loops in both directions.
-// Fully prop-driven — no hardcoded slide content.
+// Fully prop-driven, no hardcoded slide content.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useCallback, useState } from 'react';

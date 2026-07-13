@@ -1,6 +1,6 @@
 'use client';
 
-// Friendly calendar date picker — a drop-in replacement for <input type="date">.
+// Friendly calendar date picker, a drop-in replacement for <input type="date">.
 // Shows a readable trigger ("12 Mar 2026") and a click-to-open month grid so
 // picking a date never means fighting a native OS date control. Forest/ivory
 // neumorphic styling. Value in/out is an ISO date string (YYYY-MM-DD).

@@ -1,11 +1,11 @@
 'use client';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// LogoDisc — the ONE way a conference logo renders anywhere in the app.
+// LogoDisc, the ONE way a conference logo renders anywhere in the app.
 //
 // Conference logos are arbitrary user uploads (transparent PNGs, odd crops,
 // dark seals). Rendered raw they look bad on cards, so every logo sits inside
-// a clean circular backdrop: a near-white disc (#FDFCF9 — reads as white on
+// a clean circular backdrop: a near-white disc (#FDFCF9, reads as white on
 // both ivory and forest surfaces) with a soft forest shadow, and the artwork
 // contained inside a 12% inner margin so it NEVER touches the rim.
 //
@@ -32,7 +32,7 @@ export function LogoDisc({
   /** Monogram initials for the fallback disc (e.g. acronym.slice(0, 3)). */
   fallbackText?: string;
   className?: string;
-  /** Merged last — positioning overrides (margins, z-index…) welcome. */
+  /** Merged last, positioning overrides (margins, z-index…) welcome. */
   style?: CSSProperties;
 }) {
   // Track failures per-URL so a src change retries the image.
@@ -59,7 +59,7 @@ export function LogoDisc({
           ...base,
           backgroundColor: '#FDFCF9',
           border: '1px solid rgba(221,212,192,0.8)',
-          // 12% of the diameter — the artwork never reaches the rim.
+          // 12% of the diameter, the artwork never reaches the rim.
           padding: `${Math.round(size * 0.12)}px`,
           ...style,
         }}

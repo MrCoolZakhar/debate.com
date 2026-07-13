@@ -1,6 +1,6 @@
 'use client';
 
-// Allocation card — the centerpiece of the delegate participant view. Mirrors
+// Allocation card, the centerpiece of the delegate participant view. Mirrors
 // the public committee card language (monogram/logo, name, difficulty pill,
 // roman-numeral topics) from ConferenceDetailClient's committee carousel,
 // plus a large flag + country ribbon for the delegate's own allocation.
@@ -102,7 +102,7 @@ export default function AllocationCard({ committee, countryCode, countryName }: 
           </div>
         )}
 
-        {/* Your country — large */}
+        {/* Your country, large */}
         <div className="w-full flex flex-col items-center mt-6 pt-6" style={{ borderTop: '1px solid rgba(221,212,192,0.55)' }}>
           <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: '9px', letterSpacing: '0.16em', color: '#B6871F', margin: '0 0 12px 0' }}>
             YOUR COUNTRY

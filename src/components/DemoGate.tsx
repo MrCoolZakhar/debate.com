@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { Brand } from '@/components/Brand';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// KILL SWITCH — set to false at public launch to disable the demo gate
+// KILL SWITCH, set to false at public launch to disable the demo gate
 // entirely (no gate is ever rendered, no storage is read).
 // ─────────────────────────────────────────────────────────────────────────────
 const DEMO_GATE_ENABLED = true;
@@ -35,7 +35,7 @@ function hasCookieAccess(): boolean {
 }
 
 function hasStoredAccess(): boolean {
-  // Check BOTH localStorage and the cookie — some in-app browsers clear one
+  // Check BOTH localStorage and the cookie, some in-app browsers clear one
   // but not the other.
   try {
     if (localStorage.getItem(STORAGE_KEY) === GRANTED) return true;
@@ -163,7 +163,7 @@ export default function DemoGate() {
             margin: 0,
           }}
         >
-          Private demo — enter the access code
+          Private demo: enter the access code
         </p>
         <div
           style={{

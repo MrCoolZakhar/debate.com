@@ -123,7 +123,7 @@ function RenameRow({ label, defaultName, value, onChange, resetValue }: {
 // ── Motion order drag-and-rename tab ──────────────────────────────────────────
 type OrderableType = 'moderated' | 'unmoderated' | 'consultation' | 'tour';
 
-// Note: disruptiveness ordering is NOT stored here — it is purely the position
+// Note: disruptiveness ordering is NOT stored here, it is purely the position
 // in `motionOrder` (top = most disruptive). The pip bar below renders from `4 - i`.
 const MOTION_META: Record<OrderableType, {
   enabledKey: keyof CommitteeSettings;
@@ -206,7 +206,7 @@ function MotionsTab({ s, upd }: {
                   </div>
                 ))}
               </div>
-              {/* Name (click to rename inline) — flex-1 */}
+              {/* Name (click to rename inline), flex-1 */}
               <div className="flex-1 min-w-0">
                 <RenameRow
                   defaultName={localizedDefault}
@@ -215,7 +215,7 @@ function MotionsTab({ s, upd }: {
                   onChange={(v) => upd('motionNames', { ...s.motionNames, [meta.namesKey]: v })}
                 />
               </div>
-              {/* Disruptiveness pip bar — live: top position = 4 pips, bottom = 1 */}
+              {/* Disruptiveness pip bar, live: top position = 4 pips, bottom = 1 */}
               <div className="shrink-0 flex gap-[2px] items-center" title={`Disruptiveness: ${4 - i}/4`}>
                 {[1,2,3,4].map((level) => (
                   <div key={level} className="w-[4px] h-[10px] rounded-sm"
@@ -244,7 +244,7 @@ function MotionsTab({ s, upd }: {
         />
       )}
 
-      {/* Suspend/End debate — always at bottom, always enabled, rename only */}
+      {/* Suspend/End debate, always at bottom, always enabled, rename only */}
       <SectionLabel>{t('settings_procedural_motions_heading')}</SectionLabel>
       <p className="text-xs mb-2 leading-snug" style={{ color: '#9A8A78' }}>{t('settings_procedural_motions_desc')}</p>
       <div className="space-y-1">
@@ -270,13 +270,13 @@ function MotionsTab({ s, upd }: {
                 onChange={(v) => upd('motionNames', { ...s.motionNames, [key]: v })}
               />
             </div>
-            {/* All 4 pips filled in red — max disruptiveness */}
+            {/* All 4 pips filled in red, max disruptiveness */}
             <div className="shrink-0 flex gap-[2px] items-center" title="High disruptiveness">
               {[1,2,3,4].map((level) => (
                 <div key={level} className="w-[4px] h-[10px] rounded-sm" style={{ backgroundColor: '#8B2020' }} />
               ))}
             </div>
-            {/* No toggle — always on, spacer for alignment */}
+            {/* No toggle, always on, spacer for alignment */}
             <div className="w-8 shrink-0" />
           </div>
         ))}
@@ -355,7 +355,7 @@ export function SettingsPanel({ committee, onClose, myChairName, onBecomeHeadCha
     saveCommitteeSettings(committee.id, { ...getSettings(committee.code), [key]: value });
   };
 
-  // Scoring config — local store + DB jsonb (so delegates/FAs on other devices see it)
+  // Scoring config, local store + DB jsonb (so delegates/FAs on other devices see it)
   const scoring: ScoringConfig = s.scoring ?? DEFAULT_SCORING;
   const updScoring = (next: ScoringConfig) => {
     updateSetting(committee.code, 'scoring', next);

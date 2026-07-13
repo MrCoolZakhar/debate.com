@@ -4,11 +4,11 @@ import type { Metadata } from 'next';
 import React from 'react';
 
 export const metadata: Metadata = {
-  title: 'MUN Chair Script — Exact Phrases for Every Situation',
+  title: 'MUN Chair Script: Exact Phrases for Every Situation',
   description: 'A complete MUN chair script with exact phrases for opening, roll call, GSL, caucuses, voting, and closing. Copy-paste language for every committee situation.',
   alternates: { canonical: 'https://gavelling.com/blog/mun-chair-script' },
   openGraph: {
-    title: 'MUN Chair Script — Exact Phrases for Every Situation',
+    title: 'MUN Chair Script: Exact Phrases for Every Situation',
     description: 'The complete MUN chair script with language for every committee moment.',
     url: 'https://gavelling.com/blog/mun-chair-script',
     siteName: 'Gavelling',
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
 const articleSchema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
-  headline: 'MUN Chair Script — Exact Phrases for Every Situation',
+  headline: 'MUN Chair Script: Exact Phrases for Every Situation',
   description: 'Complete MUN chair script with phrases for every committee situation.',
   url: 'https://gavelling.com/blog/mun-chair-script',
   datePublished: '2026-06-07',
@@ -70,11 +70,11 @@ export default function Article() {
       <div style={s.page}>
         <div style={s.wrap}>
           <Link href="/blog" style={s.back}>← MUN Resources</Link>
-          <h1 style={s.h1}>MUN Chair Script — Exact Phrases for Every Situation</h1>
+          <h1 style={s.h1}>MUN Chair Script: Exact Phrases for Every Situation</h1>
           <p style={s.meta}>By Gavelling · June 2026 · 11 min read</p>
           <article style={s.article}>
 
-            <p style={s.p}>New chairs often know what needs to happen next but freeze when they have to say it out loud to a room of fifty delegates. This guide provides word-for-word chair language for every standard committee moment — from the first gavel strike to final adjournment. Adapt these to your conference's specific rules, but use them as a starting point.</p>
+            <p style={s.p}>New chairs often know what needs to happen next but freeze when they have to say it out loud to a room of fifty delegates. This guide provides word-for-word chair language for every standard committee moment, from the first gavel strike to final adjournment. Adapt these to your conference's specific rules, but use them as a starting point.</p>
 
             <h2 style={s.h2}>Opening the Session</h2>
             <div style={s.script}><p style={s.scriptText}>"The chair will call this session of the [Committee Name] to order. Welcome, delegates, to [Conference Name]. The topic before this committee is [Topic]. Before we begin, the chair will call roll. When your delegation is called, please respond 'Present' or 'Present and Voting.'"</p></div>
@@ -110,7 +110,7 @@ export default function Article() {
             <div style={s.script}><p style={s.scriptText}>"The moderated caucus has concluded. The committee returns to the General Speakers List. The next speaker is the delegate of [Country]."</p></div>
 
             <h2 style={s.h2}>Opening an Unmoderated Caucus</h2>
-            <div style={s.script}><p style={s.scriptText}>"The motion passes. The committee will now take an unmoderated caucus of [X] minutes. Delegates are free to leave their seats. The committee will reconvene at [time]. Two minutes remaining — delegates, please return to your seats."</p></div>
+            <div style={s.script}><p style={s.scriptText}>"The motion passes. The committee will now take an unmoderated caucus of [X] minutes. Delegates are free to leave their seats. The committee will reconvene at [time]. Two minutes remaining. Delegates, please return to your seats."</p></div>
 
             <h2 style={s.h2}>Voting on a Resolution</h2>
             <div style={s.script}><p style={s.scriptText}>"The committee will now proceed to vote on Draft Resolution [number]. All those in favour, please raise your placards... all those against... abstentions... The resolution [passes/fails] with [X] in favour, [Y] against, and [Z] abstentions."</p></div>

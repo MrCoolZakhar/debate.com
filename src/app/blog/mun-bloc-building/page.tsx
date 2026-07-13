@@ -4,11 +4,11 @@ import type { Metadata } from 'next';
 import React from 'react';
 
 export const metadata: Metadata = {
-  title: 'MUN Bloc Building — How to Form and Lead a Coalition',
+  title: 'MUN Bloc Building: How to Form and Lead a Coalition',
   description: 'A practical guide to building blocs in Model UN: how to find allies, draft collaboratively, handle defections, and lead a coalition to a successful resolution.',
   alternates: { canonical: 'https://gavelling.com/blog/mun-bloc-building' },
   openGraph: {
-    title: 'MUN Bloc Building — How to Form and Lead a Coalition',
+    title: 'MUN Bloc Building: How to Form and Lead a Coalition',
     description: 'Master coalition building in Model UN committees.',
     url: 'https://gavelling.com/blog/mun-bloc-building',
     siteName: 'Gavelling',
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
 const articleSchema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
-  headline: 'MUN Bloc Building — How to Form and Lead a Coalition',
+  headline: 'MUN Bloc Building: How to Form and Lead a Coalition',
   description: 'Guide to bloc building in MUN.',
   url: 'https://gavelling.com/blog/mun-bloc-building',
   datePublished: '2026-06-07',
@@ -67,10 +67,10 @@ export default function Article() {
       <div style={s.page}>
         <div style={s.wrap}>
           <Link href="/blog" style={s.back}>← MUN Resources</Link>
-          <h1 style={s.h1}>MUN Bloc Building — How to Form and Lead a Coalition</h1>
+          <h1 style={s.h1}>MUN Bloc Building: How to Form and Lead a Coalition</h1>
           <p style={s.meta}>By Gavelling · June 2026 · 9 min read</p>
           <article style={s.article}>
-            <p style={s.p}>In Model UN, no resolution passes alone. Every passed resolution is the product of a coalition — delegates who found enough common ground to put their names on the same document and get it across the majority line. Bloc building is the skill that determines whether your ideas become committee output or stay in your notes. This is how to do it.</p>
+            <p style={s.p}>In Model UN, no resolution passes alone. Every passed resolution is the product of a coalition: delegates who found enough common ground to put their names on the same document and get it across the majority line. Bloc building is the skill that determines whether your ideas become committee output or stay in your notes. This is how to do it.</p>
 
             <h2 style={s.h2}>Identify Your Natural Allies Before Committee Begins</h2>
             <p style={s.p}>Research the country list for your committee before the conference starts. Which countries typically vote together on your topic? Regional blocs (African Group, G77, EU, ASEAN) tend to vote in patterns that are well-documented in UN voting records. This research gives you your first target list before you have said a word in committee.</p>
@@ -80,7 +80,7 @@ export default function Article() {
             <p style={s.p}>Most delegates treat the opening speech as a statement. Strong delegates treat it as an invitation. End your speech with explicit coalition language: "Denmark invites delegations that support a binding climate finance mechanism to collaborate on a working paper." You have just given potential allies a clear signal and a reason to find you during the first unmod.</p>
 
             <h2 style={s.h2}>First Unmoderated Caucus: Move Fast</h2>
-            <p style={s.p}>The first unmoderated caucus is where blocs form. Move immediately — do not wait for people to come to you. Walk to your target allies, introduce yourself, and ask one question: "What is [Country]'s priority on this topic?" Listen more than you speak. The delegate who listens in the first unmod learns more than the one who talks.</p>
+            <p style={s.p}>The first unmoderated caucus is where blocs form. Move immediately. Do not wait for people to come to you. Walk to your target allies, introduce yourself, and ask one question: "What is [Country]'s priority on this topic?" Listen more than you speak. The delegate who listens in the first unmod learns more than the one who talks.</p>
             <ul style={s.ul}>
               <li style={s.li}>Approach three to five delegates in the first five minutes</li>
               <li style={s.li}>Find the one or two who are most aligned and invite them to a small working group</li>
@@ -88,22 +88,22 @@ export default function Article() {
             </ul>
 
             <h2 style={s.h2}>Giving Up Something to Gain More</h2>
-            <p style={s.p}>No bloc forms without compromise. The delegate who insists on their exact language in every clause will end up with a small bloc and a failed resolution. Identify your non-negotiables — the two or three clauses you will not alter — and be flexible on everything else. Offering to adopt another delegate's preferred operative clause in exchange for their sponsorship is a trade worth making almost every time.</p>
+            <p style={s.p}>No bloc forms without compromise. The delegate who insists on their exact language in every clause will end up with a small bloc and a failed resolution. Identify your non-negotiables (the two or three clauses you will not alter) and be flexible on everything else. Offering to adopt another delegate's preferred operative clause in exchange for their sponsorship is a trade worth making almost every time.</p>
             <div style={s.callout}><p style={s.calloutText}>A resolution with eight sponsors and broad support that passes beats a resolution with three sponsors and perfect language that fails. Always optimise for majority, not perfection.</p></div>
 
             <h2 style={s.h2}>Bringing in Swing Delegates</h2>
-            <p style={s.p}>Every committee has swing delegates — delegations whose country position is genuinely ambiguous, or who have not committed publicly. These are your best targets for expanding a coalition. Approach them with a specific offer: "If we add a clause on [their priority], would you be willing to sponsor?" This is more effective than a general ask to join your bloc.</p>
+            <p style={s.p}>Every committee has swing delegates: delegations whose country position is genuinely ambiguous, or who have not committed publicly. These are your best targets for expanding a coalition. Approach them with a specific offer: "If we add a clause on [their priority], would you be willing to sponsor?" This is more effective than a general ask to join your bloc.</p>
 
             <h2 style={s.h2}>Handling Competing Working Papers</h2>
             <p style={s.p}>When two strong blocs emerge with competing working papers, you face a choice: compete or merge. Competing is only viable if you are confident your bloc can deliver the necessary majority without the other group's votes. If you cannot, merger negotiations are always worth attempting.</p>
             <p style={s.p}>In merger talks: identify the three clauses each side cares most about and try to preserve all six in the merged document. Accept that some language will be weakened. Agree on primary sponsor order upfront.</p>
 
             <h2 style={s.h2}>Keeping Your Bloc Together</h2>
-            <p style={s.p}>Blocs fracture under pressure — especially when the other side makes targeted concessions to specific members. Keep your coalition informed: update them after every unmod, share the latest document version immediately, and be transparent about negotiations with opposing blocs. Defections happen when delegates feel uninformed or undervalued.</p>
+            <p style={s.p}>Blocs fracture under pressure, especially when the other side makes targeted concessions to specific members. Keep your coalition informed: update them after every unmod, share the latest document version immediately, and be transparent about negotiations with opposing blocs. Defections happen when delegates feel uninformed or undervalued.</p>
             <p style={s.p}>Give your bloc members specific roles: one drafts preambulatory language, one manages the signatory list, one handles liaison with the opposing bloc. When people have ownership of a piece of the work, they stay invested.</p>
 
             <h2 style={s.h2}>The Vote Count</h2>
-            <p style={s.p}>Before calling for introduction of your draft resolution, do a private head count. Go through every delegation in the room and estimate their vote: In Favour, Against, Abstain, or Unknown. If you cannot reach majority among your known supporters, do not introduce — spend more time persuading the Unknowns first. A failed vote on your resolution is diplomatically damaging and hard to recover from.</p>
+            <p style={s.p}>Before calling for introduction of your draft resolution, do a private head count. Go through every delegation in the room and estimate their vote: In Favour, Against, Abstain, or Unknown. If you cannot reach majority among your known supporters, do not introduce. Spend more time persuading the Unknowns first. A failed vote on your resolution is diplomatically damaging and hard to recover from.</p>
 
             <RelatedGuides currentSlug="mun-bloc-building" />
             <div style={s.cta}>

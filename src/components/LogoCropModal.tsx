@@ -1,45 +1,45 @@
 'use client';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// LogoCropModal — drag-to-fit crop step for conference logo uploads.
+// LogoCropModal, drag-to-fit crop step for conference logo uploads.
 //
 // Shown when an organiser picks a logo file, BEFORE the upload happens. The
 // image is draggable inside a large circular preview (the exact LogoDisc look:
 // near-white backdrop, soft forest shadow) with a zoom slider and a dashed
-// safe-margin ring at the 12%-inset boundary — whatever sits inside the ring
+// safe-margin ring at the 12%-inset boundary, whatever sits inside the ring
 // is what ships.
 //
 // SMART AUTO-FIT: on load the image is scanned on a small offscreen canvas to
-// find the artwork's REAL bounding box — alpha bounds for transparent images;
+// find the artwork's REAL bounding box, alpha bounds for transparent images;
 // for fully opaque files (JPEGs) the 4 corners are sampled for the background
 // colour and near-background border pixels are treated as padding. That
 // content box (not the file's frame) is what gets placed, so logos with
 // baked-in whitespace land correctly sized instead of tiny.
 //
-// Roughly square content (ratio 0.8–1.25) defaults to FILL — the artwork
+// Roughly square content (ratio 0.8–1.25) defaults to FILL, the artwork
 // covers the safe circle, corners get cut, the classic seal/square-logo look.
-// Clearly rectangular content defaults to FIT — fully contained inside the
+// Clearly rectangular content defaults to FIT, fully contained inside the
 // dashed ring. Two chips re-apply either placement instantly; dragging and
 // zooming afterwards stay free.
 //
 // On SAVE the chosen offset/scale is composited client-side onto a 512×512
 // TRANSPARENT canvas (clipped to the circle, so artwork can never poke past
-// LogoDisc's rim at render time — the disc backdrop itself is applied by
+// LogoDisc's rim at render time, the disc backdrop itself is applied by
 // LogoDisc, never baked into the asset) and handed back via onSave(blob).
-// No schema changes — the crop is flattened into the uploaded asset.
+// No schema changes, the crop is flattened into the uploaded asset.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { X, ZoomIn, ZoomOut, Move } from 'lucide-react';
 
 const DISC = 280;              // preview disc diameter (px)
-const SAFE = DISC * 0.76;      // safe-area diameter — 12% margin each side
+const SAFE = DISC * 0.76;      // safe-area diameter, 12% margin each side
 const OUT = 512;               // exported square canvas (px)
 const MIN_ZOOM = 0.5;
 const BASE_MAX_ZOOM = 3;       // slider ceiling; extended when content box is small
 const HARD_MAX_ZOOM = 10;      // absolute ceiling even for tiny content boxes
 const MIN_OVERLAP = 24;        // px of image that must stay over the safe area
-const SCAN_MAX = 256;          // analysis downscale — plenty for a bounding box
+const SCAN_MAX = 256;          // analysis downscale, plenty for a bounding box
 const ALPHA_MIN = 16;          // alpha above this counts as content
 const BG_TOLERANCE = 12;       // per-channel distance from corner-sampled background
 
@@ -64,7 +64,7 @@ function contentBoxFromRGBA(data: Uint8ClampedArray, w: number, h: number): Box 
   if (hasAlpha) {
     isContent = (i) => data[i + 3] > ALPHA_MIN;
   } else {
-    // Opaque file (JPEG etc.) — sample the 4 corners for the background
+    // Opaque file (JPEG etc.), sample the 4 corners for the background
     // colour; near-background pixels count as padding.
     const corner = (x: number, y: number): number[] => {
       const i = (y * w + x) * 4;
@@ -93,7 +93,7 @@ function contentBoxFromRGBA(data: Uint8ClampedArray, w: number, h: number): Box 
       }
     }
   }
-  if (maxX < 0) return full; // blank image — keep the full frame
+  if (maxX < 0) return full; // blank image, keep the full frame
   return { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 };
 }
 
@@ -136,7 +136,7 @@ function analyzeImage(img: HTMLImageElement, nw: number, nh: number): Box {
       h: Math.min(nh - y, (box.h + pad * 2) / ds),
     };
   } catch {
-    return full; // decode/CORS oddity — behave exactly like the pre-scan modal
+    return full; // decode/CORS oddity, behave exactly like the pre-scan modal
   }
 }
 
@@ -167,7 +167,7 @@ export function LogoCropModal({
   const maxZoom = fits?.maxZoom ?? BASE_MAX_ZOOM;
 
   // Contain-fit the artwork's FRAME into the safe area at zoom 1 (the zoom
-  // slider's reference point — auto-fit then picks the zoom that places the
+  // slider's reference point, auto-fit then picks the zoom that places the
   // detected content box).
   const baseFit = natural ? Math.min(SAFE / natural.w, SAFE / natural.h) : 0;
   const drawnW = natural ? natural.w * baseFit * zoom : 0;
@@ -192,7 +192,7 @@ export function LogoCropModal({
   function handleZoom(next: number) {
     const z = Math.min(maxZoom, Math.max(MIN_ZOOM, next));
     setZoom(z);
-    setMode(null); // manual zoom — chips release
+    setMode(null); // manual zoom, chips release
     if (natural) {
       const w = natural.w * baseFit * z;
       const h = natural.h * baseFit * z;
@@ -200,7 +200,7 @@ export function LogoCropModal({
     }
   }
 
-  /** Snap to a stored FIT/FILL placement — exact, no clamping. */
+  /** Snap to a stored FIT/FILL placement, exact, no clamping. */
   function applyMode(m: FitMode) {
     if (!fits) return;
     const p = fits[m];
@@ -210,7 +210,7 @@ export function LogoCropModal({
   }
 
   function onImageLoad(el: HTMLImageElement) {
-    // SVGs without intrinsic dimensions report 0 — fall back square.
+    // SVGs without intrinsic dimensions report 0, fall back square.
     const nw = el.naturalWidth || 512;
     const nh = el.naturalHeight || 512;
     setNatural({ w: nw, h: nh });
@@ -253,7 +253,7 @@ export function LogoCropModal({
   function onPointerMove(e: React.PointerEvent<HTMLDivElement>) {
     const s = dragStart.current;
     if (!s || !natural) return;
-    setMode(null); // manual drag — chips release
+    setMode(null); // manual drag, chips release
     setOffset(clampOffset(s.ox + (e.clientX - s.px), s.oy + (e.clientY - s.py), drawnW, drawnH));
   }
 
@@ -324,7 +324,7 @@ export function LogoCropModal({
           </button>
         </div>
 
-        {/* Circular preview — exactly how the logo will look inside LogoDisc */}
+        {/* Circular preview, exactly how the logo will look inside LogoDisc */}
         <div className="flex justify-center">
           <div
             onPointerDown={onPointerDown}
@@ -363,7 +363,7 @@ export function LogoCropModal({
                 opacity: natural ? 1 : 0,
               }}
             />
-            {/* Safe-margin ring — the 12%-inset boundary the artwork ships inside */}
+            {/* Safe-margin ring, the 12%-inset boundary the artwork ships inside */}
             <div
               aria-hidden
               style={{
@@ -377,7 +377,7 @@ export function LogoCropModal({
           </div>
         </div>
 
-        {/* Fit / Fill quick actions — content-box based, drag stays free after */}
+        {/* Fit / Fill quick actions, content-box based, drag stays free after */}
         <div className="flex items-center justify-center gap-2 mt-3">
           {(['fit', 'fill'] as const).map((m) => {
             const active = mode === m;
@@ -396,7 +396,7 @@ export function LogoCropModal({
                   cursor: fits ? 'pointer' : 'default',
                   opacity: fits ? 1 : 0.6,
                 }}
-                title={m === 'fit' ? 'Whole artwork inside the ring' : 'Artwork covers the circle — corners get cut'}
+                title={m === 'fit' ? 'Whole artwork inside the ring' : 'Artwork covers the circle, corners get cut'}
               >
                 {m === 'fit' ? 'FIT' : 'FILL'}
               </button>
@@ -409,7 +409,7 @@ export function LogoCropModal({
           style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", fontWeight: 500, margin: '8px 0 0 0' }}
         >
           <Move size={12} strokeWidth={2.2} />
-          Drag to position — keep your artwork inside the dashed ring
+          Drag to position, keep your artwork inside the dashed ring
         </p>
 
         {/* Zoom slider */}
@@ -435,7 +435,7 @@ export function LogoCropModal({
           </span>
         </div>
 
-        {/* Actions — house modal recipe */}
+        {/* Actions, house modal recipe */}
         <div className="flex gap-3 mt-5">
           <button
             onClick={() => { if (!saving) onCancel(); }}

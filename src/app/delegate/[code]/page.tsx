@@ -278,7 +278,7 @@ function DelegateDocCard({ doc }: { doc: CommitteeDocument }) {
   return (
     <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl p-3 space-y-2">
       <div className="flex items-center justify-between">
-        <div className="font-semibold text-[#1C1410] text-sm">{doc.docCode} — {doc.title}</div>
+        <div className="font-semibold text-[#1C1410] text-sm">{doc.docCode}: {doc.title}</div>
         <span className="text-xs font-black ms-2 shrink-0 px-2 py-0.5 rounded-full" style={{ color: statusColor, backgroundColor: statusBg, border: `1px solid ${statusColor}30` }}>{statusLabel}</span>
       </div>
       <div className="text-xs text-[#9A8A78]">
@@ -789,7 +789,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
 
   // Browser title abbreviation
   useEffect(() => {
-    if (committee) document.title = `${abbreviateCommitteeName(committee.name)} — ${country || 'Delegate'}`;
+    if (committee) document.title = `${abbreviateCommitteeName(committee.name)} - ${country || 'Delegate'}`;
     return () => { document.title = 'Gavelling'; };
   }, [committee?.name, country]);
 
@@ -1334,7 +1334,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                     <div className="mt-3">
                       <div className="text-sm text-[#6A5A4A] mb-2">
                         {committee.caucus.type === 'moderated' ? t('delegate_moderated') : t('delegate_unmoderated')} {language === 'ar' ? '' : language === 'es' ? 'Cáucus' : 'Caucus'}
-                        {committee.caucus.purpose && ` — ${committee.caucus.purpose}`}
+                        {committee.caucus.purpose && `: ${committee.caucus.purpose}`}
                       </div>
                       <div className="text-3xl font-black font-mono text-[#1C1410]">
                         {formatTime(committee.caucus.remainingTime)}

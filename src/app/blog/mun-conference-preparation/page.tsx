@@ -4,11 +4,11 @@ import type { Metadata } from 'next';
 import React from 'react';
 
 export const metadata: Metadata = {
-  title: 'How to Prepare for a MUN Conference — Complete Pre-Conference Checklist',
+  title: 'How to Prepare for a MUN Conference: Complete Pre-Conference Checklist',
   description: 'Everything you need to do before a Model UN conference: research, position papers, practice speeches, rules of procedure, and what to pack.',
   alternates: { canonical: 'https://gavelling.com/blog/mun-conference-preparation' },
   openGraph: {
-    title: 'How to Prepare for a MUN Conference — Complete Pre-Conference Checklist',
+    title: 'How to Prepare for a MUN Conference: Complete Pre-Conference Checklist',
     description: 'The complete MUN pre-conference preparation guide.',
     url: 'https://gavelling.com/blog/mun-conference-preparation',
     siteName: 'Gavelling',
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
 const articleSchema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
-  headline: 'How to Prepare for a MUN Conference — Complete Pre-Conference Checklist',
+  headline: 'How to Prepare for a MUN Conference: Complete Pre-Conference Checklist',
   description: 'Complete MUN pre-conference preparation guide.',
   url: 'https://gavelling.com/blog/mun-conference-preparation',
   datePublished: '2026-06-07',
@@ -68,7 +68,7 @@ export default function Article() {
       <div style={s.page}>
         <div style={s.wrap}>
           <Link href="/blog" style={s.back}>← MUN Resources</Link>
-          <h1 style={s.h1}>How to Prepare for a MUN Conference — Complete Pre-Conference Checklist</h1>
+          <h1 style={s.h1}>How to Prepare for a MUN Conference: Complete Pre-Conference Checklist</h1>
           <p style={s.meta}>By Gavelling · June 2026 · 10 min read</p>
           <article style={s.article}>
 
@@ -77,22 +77,22 @@ export default function Article() {
             <h2 style={s.h2}>Six Weeks Out: Know Your Assignment</h2>
             <p style={s.p}>As soon as you receive your country and committee assignment, start researching. Do not wait for the background guide. The earlier you start, the deeper your understanding will be by conference day.</p>
             <ul style={s.ul}>
-              <li style={s.li}>Look up your country's general foreign policy orientation — are they typically aligned with Western blocs, the G77, BRICS, or do they tend to take independent positions?</li>
+              <li style={s.li}>Look up your country's general foreign policy orientation: are they typically aligned with Western blocs, the G77, BRICS, or do they tend to take independent positions?</li>
               <li style={s.li}>Find your country's UN voting record on topics related to your committee's subject matter.</li>
               <li style={s.li}>Identify who the key decision-makers are in your country's foreign ministry and what recent statements they have made.</li>
             </ul>
 
             <h2 style={s.h2}>Four Weeks Out: Deep Research</h2>
-            <p style={s.p}>When the background guide arrives, read it fully — then go beyond it. Background guides are starting points, not finish lines.</p>
+            <p style={s.p}>When the background guide arrives, read it fully. Then go beyond it. Background guides are starting points, not finish lines.</p>
             <ul style={s.ul}>
               <li style={s.li}><strong>Read at least three recent news articles</strong> on the committee topic from different perspectives (Western press, regional press, UN sources).</li>
               <li style={s.li}><strong>Find the most recent UN resolution</strong> on this topic and note how your country voted.</li>
               <li style={s.li}><strong>Identify two to three potential allies</strong> (countries likely to share your position) and two to three likely opponents.</li>
-              <li style={s.li}><strong>Draft a rough position statement:</strong> three sentences — what is the problem, what does your country believe, what should the committee do.</li>
+              <li style={s.li}><strong>Draft a rough position statement:</strong> three sentences: what is the problem, what does your country believe, what should the committee do.</li>
             </ul>
 
             <h2 style={s.h2}>Three Weeks Out: Write Your Position Paper</h2>
-            <p style={s.p}>Most conferences require position papers three to four weeks before the conference. Do not treat this as an administrative task — treat it as a speech outline. Your position paper becomes your opening speech, your working paper framework, and your negotiating position.</p>
+            <p style={s.p}>Most conferences require position papers three to four weeks before the conference. Do not treat this as an administrative task. Treat it as a speech outline. Your position paper becomes your opening speech, your working paper framework, and your negotiating position.</p>
             <div style={s.callout}><p style={s.calloutText}>A good position paper has three sections: country background on the issue, your country's official stance with evidence, and specific proposed solutions. Two pages maximum. Every claim cited.</p></div>
 
             <h2 style={s.h2}>Two Weeks Out: Learn the Procedure</h2>
@@ -106,24 +106,24 @@ export default function Article() {
             </ul>
 
             <h2 style={s.h2}>One Week Out: Practise Out Loud</h2>
-            <p style={s.p}>Reading your speech is not the same as delivering it. Stand up and practise your opening speech out loud until it feels natural at the target length. Time yourself with a phone. If your conference has a sixty-second default, your speech should land in fifty to sixty seconds — not forty and not seventy.</p>
+            <p style={s.p}>Reading your speech is not the same as delivering it. Stand up and practise your opening speech out loud until it feels natural at the target length. Time yourself with a phone. If your conference has a sixty-second default, your speech should land in fifty to sixty seconds, not forty and not seventy.</p>
             <p style={s.p}>Practise one moderated caucus speech. Practise a point of information. If possible, do a practice session with your school's MUN club.</p>
 
             <h2 style={s.h2}>What to Pack</h2>
             <ul style={s.ul}>
-              <li style={s.li}><strong>Notepad and pens</strong> — you will be writing names, motion proposals, and resolution ideas constantly</li>
-              <li style={s.li}><strong>Printed position paper copy</strong> — some dais teams ask to see it in person</li>
-              <li style={s.li}><strong>Laptop or tablet</strong> — for collaborative document editing during caucuses</li>
-              <li style={s.li}><strong>Portable charger</strong> — three days of full committee sessions drain every battery</li>
-              <li style={s.li}><strong>Business cards</strong> — optional but impressive at large conferences for bloc-building</li>
-              <li style={s.li}><strong>Appropriate dress</strong> — western business formal is standard for most conferences</li>
+              <li style={s.li}><strong>Notepad and pens</strong>: you will be writing names, motion proposals, and resolution ideas constantly</li>
+              <li style={s.li}><strong>Printed position paper copy</strong>: some dais teams ask to see it in person</li>
+              <li style={s.li}><strong>Laptop or tablet</strong>: for collaborative document editing during caucuses</li>
+              <li style={s.li}><strong>Portable charger</strong>: three days of full committee sessions drain every battery</li>
+              <li style={s.li}><strong>Business cards</strong>: optional but impressive at large conferences for bloc-building</li>
+              <li style={s.li}><strong>Appropriate dress</strong>: western business formal is standard for most conferences</li>
             </ul>
 
             <h2 style={s.h2}>Day One: First Impressions Matter</h2>
             <p style={s.p}>Arrive early. Introduce yourself to the chairs and to delegates from your likely ally countries before the session opens. Being the person who starts conversations early sets the tone for the whole conference. The delegate who walks in with established relationships already has an advantage over the one who waits to be approached.</p>
 
             <h2 style={s.h2}>After the Conference: Reflect and Improve</h2>
-            <p style={s.p}>Write down three things that went well and three things to improve while the experience is fresh. Review any feedback from the dais. Keep your position papers — they are useful templates for future conferences on similar topics.</p>
+            <p style={s.p}>Write down three things that went well and three things to improve while the experience is fresh. Review any feedback from the dais. Keep your position papers: they are useful templates for future conferences on similar topics.</p>
 
             <RelatedGuides currentSlug="mun-conference-preparation" />
             <div style={s.cta}>

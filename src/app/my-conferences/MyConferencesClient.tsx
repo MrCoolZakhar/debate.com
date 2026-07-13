@@ -569,7 +569,7 @@ function MyConferencesInner() {
           >
             <Check size={14} style={{ color: '#3D7A52', flexShrink: 0 }} />
             <p className="text-sm" style={{ color: '#1B3828', fontFamily: OUTFIT, fontWeight: 600 }}>
-              Invite accepted — you&apos;re now chairing this committee.
+              Invite accepted. You&apos;re now chairing this committee.
             </p>
           </div>
         )}

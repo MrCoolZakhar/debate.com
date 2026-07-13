@@ -240,7 +240,7 @@ export default function OnboardingPage() {
             step={2}
             total={TOTAL_STEPS}
             title="Which countries do you usually do MUN in?"
-            sub="Search and pick as many as you like — we'll surface conferences in your region."
+            sub="Search and pick as many as you like, and we'll surface conferences in your region."
             onBack={() => setStep(1)}
           >
             <CardSelect
@@ -264,7 +264,7 @@ export default function OnboardingPage() {
             step={3}
             total={TOTAL_STEPS}
             title="How experienced a delegate are you?"
-            sub="A rough starting point — your level updates automatically as your MUN CV grows."
+            sub="A rough starting point. Your level updates automatically as your MUN CV grows."
             onBack={() => setStep(2)}
           >
             <CardSelect options={LEVEL_OPTIONS} value={level} onChange={pickLevel} columns={2} />

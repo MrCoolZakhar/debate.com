@@ -14,7 +14,7 @@ import { ConfirmModal } from '@/components/ConfirmModal';
 // ── Shared bits (matches the visual language of the rest of this page) ─────────
 
 export const OUTFIT = "'Outfit', sans-serif";
-// Typography rule on this page: no monospace — MONO resolves to Outfit (family swap only).
+// Typography rule on this page: no monospace, MONO resolves to Outfit (family swap only).
 export const MONO = "'Outfit', sans-serif";
 
 // ── Pool accounting (adapted from applications/page.tsx's fillFreeSpots) ───────
@@ -40,7 +40,7 @@ export function poolForRole(role: string): Pool | null {
 /**
  * Promotes the oldest-submitted attending unpaid members of a pool to 'paid'
  * until the pool's purchased-spots column is full or candidates run out.
- * Idempotent — a no-op when the pool has no free spots.
+ * Idempotent, a no-op when the pool has no free spots.
  */
 export async function fillFreeSpots(
   supabase: ReturnType<typeof getAuthedClient>,
@@ -79,7 +79,7 @@ export async function fillFreeSpots(
   if (ids.length === 0) return;
 
   // These members are absorbed into an already-purchased delegation spot, not
-  // funding one themselves — self_paid stays false.
+  // funding one themselves, self_paid stays false.
   await supabase.from('applications').update({ payment_status: 'paid', self_paid: false }).in('id', ids);
 }
 
@@ -145,7 +145,7 @@ export interface NamedApp {
   invited_name?: string | null;
 }
 
-/** All accepted/assigned delegates and head delegates across the conference — the shared search pool. */
+/** All accepted/assigned delegates and head delegates across the conference, the shared search pool. */
 export async function fetchSearchPool(
   supabase: ReturnType<typeof getAuthedClient>,
   conferenceId: string
@@ -165,14 +165,14 @@ export async function fetchSearchPool(
 }
 
 /**
- * Candidates worth transferring a paid spot to: unpaid and attending — a
+ * Candidates worth transferring a paid spot to: unpaid and attending, a
  * waived or already-paid recipient has no use for someone else's spot.
  */
 export function eligibleTransferRecipients(pool: SearchApp[]): SearchApp[] {
   return pool.filter(a => a.payment_status === 'unpaid' && a.attending);
 }
 
-/** All accepted/assigned faculty advisors across the conference — used by the TRANSFER SPOT picker (F18). */
+/** All accepted/assigned faculty advisors across the conference, used by the TRANSFER SPOT picker (F18). */
 export async function fetchAdvisorPool(
   supabase: ReturnType<typeof getAuthedClient>,
   conferenceId: string
@@ -193,7 +193,7 @@ export async function fetchAdvisorPool(
 
 // ── Shared DB mutations ──────────────────────────────────────────────────────
 
-// Grants an already-purchased open delegation spot — self_paid stays false.
+// Grants an already-purchased open delegation spot, self_paid stays false.
 // Returns the primary write's error message (null on success) so callers can
 // roll back optimistic state.
 export async function markApplicationPaid(
@@ -213,13 +213,13 @@ export interface SwapEmailResult {
 
 /**
  * Swaps payment status between a source (gaining 'paid') and a target
- * (losing it, dropping to 'unpaid'). Both sides end self_paid = false — the
+ * (losing it, dropping to 'unpaid'). Both sides end self_paid = false, the
  * spot is delegation-owned after a swap. If transfer is requested, the
  * target holds a committee allocation, AND the source does not already hold
  * one of its own, that allocation row and the assigned_* fields move to the
  * source, and status flips 'assigned' <-> 'accepted' accordingly. This
- * allocation-transfer path never runs — and so never deletes or overwrites
- * an allocation — when the incoming delegate (source) already has one; the
+ * allocation-transfer path never runs, and so never deletes or overwrites
+ * an allocation, when the incoming delegate (source) already has one; the
  * caller (SwapConfirmModal, F11) also disables the checkbox in that case, but
  * the guard here holds regardless of what the caller passes.
  * Queues spot_received for the incoming delegate and spot_lost for the
@@ -312,10 +312,10 @@ export async function undoNotAttending(
 
 /**
  * Removes a member from their delegation (F4/D). Outcome depends on how they
- * were paid: a self-funded paid spot (self_paid) travels with them — they
+ * were paid: a self-funded paid spot (self_paid) travels with them, they
  * leave as a paid independent and their pool's spots column is decremented
  * by 1. A pool-covered paid spot (self_paid = false) stays with the
- * delegation — they leave unpaid and the pool count is untouched (the spot
+ * delegation, they leave unpaid and the pool count is untouched (the spot
  * simply shows open again). Waived stays waived (personal), unpaid stays
  * unpaid. attending is left as-is. Their allocation is untouched unless
  * keepAllocation is false, in which case it's deleted along with the
@@ -333,7 +333,7 @@ export async function removeFromDelegation(
   const updates: Record<string, unknown> = {
     society_id: null,
     // Derived convenience, kept in sync for read paths that haven't been
-    // ported — society_id IS NULL is the actual source of truth, never read
+    // ported, society_id IS NULL is the actual source of truth, never read
     // is_independent for logic.
     is_independent: true,
   };
@@ -369,7 +369,7 @@ export async function removeFromDelegation(
 
 /**
  * Whether a pledge's obligations are already met, independent of whether
- * MARK RECEIVED was ever clicked (F21 self-resolution) — the spots grant has
+ * MARK RECEIVED was ever clicked (F21 self-resolution), the spots grant has
  * run (pledge_confirmed_at).
  */
 export function pledgeSatisfied(m: PoolMember): boolean {
@@ -409,7 +409,7 @@ export function SectionLabel({ children }: { children: React.ReactNode }) {
 
 // Single avatar primitive for every person listed across the assignment page.
 // Renders profiles.avatar_url when present; otherwise an initial-disc built
-// from the (display or invited) name — forest disc, ivory letter — so imported,
+// from the (display or invited) name, forest disc, ivory letter, so imported,
 // account-less applicants still get a recognisable, legible avatar.
 export function MemberAvatar({ name, url, size = 28 }: { name: string; url: string | null; size?: number }) {
   const initial = (name?.trim()?.charAt(0) ?? '?').toUpperCase();
@@ -456,7 +456,7 @@ export function pledgeText(m: PoolMember): string {
 // ── Chips ────────────────────────────────────────────────────────────────────
 
 // Small text-button used consistently for the REMOVE action across every
-// chip variant (F4/D — every member card gets one).
+// chip variant (F4/D, every member card gets one).
 function RemoveButton({ onRemove }: { onRemove: () => void }) {
   return (
     <button
@@ -648,7 +648,7 @@ export function OpenSlot({
 // ── Swap confirmation modal ──────────────────────────────────────────────────
 // Built on the shared ConfirmModal. F11: when the incoming delegate (source)
 // already holds an allocation of their own, the transfer checkbox is forced
-// off and disabled — the swap then only exchanges payment_status, and
+// off and disabled, the swap then only exchanges payment_status, and
 // performSwap's own guard (above) backs this up regardless of what gets
 // passed in.
 
@@ -675,7 +675,7 @@ export function SwapConfirmModal({
               defaultChecked: !sourceHasAllocation,
               disabled: sourceHasAllocation,
               disabledNote: sourceHasAllocation
-                ? `${sourceName} already holds an allocation — manage allocations in the Delegates tab.`
+                ? `${sourceName} already holds an allocation, manage allocations in the Delegates tab.`
                 : undefined,
             }
           : undefined

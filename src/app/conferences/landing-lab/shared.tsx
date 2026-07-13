@@ -7,9 +7,9 @@ import { formatFeeAmount } from '@/lib/utils';
 // Landing lab · shared primitives
 //
 // Three variants, three theses (see docs/design/landing-research.md §4):
-//   V1 "Stagefront"   — Dice/RA poster-first browse          (delegates)
-//   V2 "The Record"   — Eventbrite search × Stripe precision (delegates/advisors)
-//   V3 "First Gavel"  — Luma supply-side minimalism          (organisers)
+//   V1 "Stagefront"  , Dice/RA poster-first browse          (delegates)
+//   V2 "The Record"  , Eventbrite search × Stripe precision (delegates/advisors)
+//   V3 "First Gavel" , Luma supply-side minimalism          (organisers)
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const INK = '#1C1410';
@@ -88,7 +88,7 @@ export function formatDateRange(start: string, end: string): string {
   return `${s.getDate()} ${MONTHS_SHORT[s.getMonth()]} – ${e.getDate()} ${MONTHS_SHORT[e.getMonth()]} ${e.getFullYear()}`;
 }
 
-/** "12–14 JUN" — compact ledger form. */
+/** "12–14 JUN", compact ledger form. */
 export function compactRange(start: string, end: string): string {
   const s = new Date(start + 'T00:00:00');
   const e = new Date(end + 'T00:00:00');
@@ -98,7 +98,7 @@ export function compactRange(start: string, end: string): string {
   return `${s.getDate()} ${MONTHS_SHORT[s.getMonth()].toUpperCase()} – ${e.getDate()} ${MONTHS_SHORT[e.getMonth()].toUpperCase()}`;
 }
 
-/** "February 2027" — month bucket label for season grouping. */
+/** "February 2027", month bucket label for season grouping. */
 export function monthLabel(dateStr: string): string {
   const d = new Date(dateStr + 'T00:00:00');
   return `${MONTHS_LONG[d.getMonth()]} ${d.getFullYear()}`;
@@ -119,7 +119,7 @@ export function feeLabel(c: LabConference): string {
   return c.fee_amount === 0 ? 'Free' : `${c.fee_currency} ${formatFeeAmount(c.fee_amount)}`;
 }
 
-/** "In 231 days" / "Happening now" / "Concluded" — honest urgency (RA/Meetup register). */
+/** "In 231 days" / "Happening now" / "Concluded", honest urgency (RA/Meetup register). */
 export function timingLabel(c: LabConference): string {
   const start = daysUntil(c.start_date);
   const end = daysUntil(c.end_date);
@@ -154,7 +154,7 @@ export function Stars({ avg, size = 13, color = GOLD }: { avg: number; size?: nu
   );
 }
 
-// ── Fixed glass variant switcher pill (lab mechanic — do not remove) ─────────
+// ── Fixed glass variant switcher pill (lab mechanic, do not remove) ─────────
 
 export function VariantSwitcher({ current }: { current: 1 | 2 | 3 }) {
   return (
