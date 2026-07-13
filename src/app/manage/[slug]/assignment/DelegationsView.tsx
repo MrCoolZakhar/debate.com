@@ -5,7 +5,7 @@ import { ChevronLeft, Check } from 'lucide-react';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
 import type { Conference } from '@/app/manage/[slug]/layout';
-import { queueEventEmail } from '@/lib/emailEvents';
+import { queueEventEmail, notifyIfNeeded, turnOnDefaultEmail } from '@/lib/emailEvents';
 import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
 import { useConfirmModal } from '@/components/ConfirmModal';
 import {
@@ -261,6 +261,18 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
   // ── Optimistic local patch helpers ─────────────────────────────────────────
   // Mutate exactly the affected rows; rollbacks restore the exact snapshots.
 
+  // In-flight guard for this view's per-member mutations (swap, remove, not
+  // attending, transfer, pledge) — every handler below early-returns while
+  // its own key is busy, and the relevant chip/button dims via busyIds.has(...).
+  const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
+  function markBusy(id: string, busy: boolean) {
+    setBusyIds(prev => {
+      const next = new Set(prev);
+      if (busy) next.add(id); else next.delete(id);
+      return next;
+    });
+  }
+
   function patchMember(id: string, patch: Partial<PoolMember>) {
     setMembers(prev => prev.map(m => (m.id === id ? { ...m, ...patch } : m)));
   }
@@ -274,10 +286,16 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
     setSocieties(prev => prev.map(s => (s.id === snapshot.id ? snapshot : s)));
   }
 
+  async function handleTurnOnDefault(eventKey: string) {
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
+    await turnOnDefaultEmail(supabase, conference.id, eventKey);
+  }
+
   // ── Mutations ────────────────────────────────────────────────────────────
 
   async function handleAddToDelegation(app: SearchApp, society: Society) {
-    if (!session) return;
+    if (!session || busyIds.has(app.id)) return;
     if (app.society_id && app.society_id !== society.id) {
       const fromName = app.societies?.name ?? 'their delegation';
       const { confirmed } = await confirm({
@@ -288,6 +306,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
       if (!confirmed) return;
     }
     const supabase = getAuthedClient(session.access_token);
+    markBusy(app.id, true);
 
     // Optimistic: the search result reflects the move immediately; the full
     // PoolMember row (payment, pledge, etc.) arrives via silent refetch.
@@ -309,7 +328,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
       }
       try {
         const result = await queueEventEmail(supabase, conference.id, 'added_to_delegation', [app.id]);
-        if (!result.drafted) pushDraftNotice('added_to_delegation');
+        notifyIfNeeded(result, pushDraftNotice);
       } catch {
         showFlash('err', 'Added, but the notification email could not be queued.');
       }
@@ -317,11 +336,11 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
     })().catch(() => {
       if (prevSearchEntry) setSearchPool(prev => prev.map(a => (a.id === app.id ? prevSearchEntry : a)));
       showFlash('err', `Could not add ${app.profiles?.display_name ?? 'this delegate'} to ${society.name}.`);
-    });
+    }).finally(() => markBusy(app.id, false));
   }
 
   async function handleMarkPledgeReceived(member: PoolMember, societyId: string) {
-    if (!session) return;
+    if (!session || busyIds.has(member.id)) return;
     // F21: fully idempotent — nothing left to do once the pledge is satisfied.
     if (pledgeSatisfied(member)) return;
     const { confirmed } = await confirm({
@@ -331,6 +350,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
     });
     if (!confirmed) return;
     const supabase = getAuthedClient(session.access_token);
+    markBusy(member.id, true);
 
     // Optimistic: pledge shows COVERED, society spot count grows —
     // immediately. fillFreeSpots promotions land via silent refetch after
@@ -360,7 +380,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
       const { error: confirmErr } = await supabase.from('applications').update({ pledge_confirmed_at: new Date().toISOString() }).eq('id', member.id);
       note(confirmErr);
 
-      await fillFreeSpots(supabase, societyId, 'delegate');
+      await fillFreeSpots(supabase, conference.id, societyId, 'delegate');
 
       if (firstError) {
         rollback();
@@ -375,7 +395,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
           .map(m => m.id);
         const pledgeRecipientIds = Array.from(new Set([member.id, ...headDelegateIds]));
         const result = await queueEventEmail(supabase, conference.id, 'pledge_received', pledgeRecipientIds);
-        if (!result.drafted) pushDraftNotice('pledge_received');
+        notifyIfNeeded(result, pushDraftNotice);
       } catch {
         showFlash('err', 'Pledge confirmed, but the notification email could not be queued.');
       }
@@ -385,11 +405,11 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
       rollback();
       showFlash('err', 'Could not confirm this pledge.');
       loadData({ silent: true });
-    });
+    }).finally(() => markBusy(member.id, false));
   }
 
   async function handleNotAttending(member: PoolMember) {
-    if (!session) return;
+    if (!session || busyIds.has(member.id)) return;
     const name = member.profiles?.display_name ?? member.invited_name ?? 'this delegate';
     const hasAllocation = !!member.assigned_committee_id;
     const { confirmed } = await confirm({
@@ -403,6 +423,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
     if (!confirmed) return;
 
     const supabase = getAuthedClient(session.access_token);
+    markBusy(member.id, true);
 
     // Optimistic: exactly what markNotAttending writes for this row.
     const snapshot = members.find(m => m.id === member.id) ?? member;
@@ -423,17 +444,18 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
         loadData({ silent: true });
         return;
       }
-      if (!result.drafted) pushDraftNotice('not_attending');
+      notifyIfNeeded(result.result, pushDraftNotice);
       loadData({ silent: true });
     })().catch(() => {
       restoreMember(snapshot);
       showFlash('err', `Could not mark ${name} as not attending.`);
-    });
+    }).finally(() => markBusy(member.id, false));
   }
 
   async function handleUndoNotAttending(member: PoolMember) {
-    if (!session) return;
+    if (!session || busyIds.has(member.id)) return;
     const supabase = getAuthedClient(session.access_token);
+    markBusy(member.id, true);
 
     // Optimistic: exactly what undoNotAttending writes for this row.
     const snapshot = members.find(m => m.id === member.id) ?? member;
@@ -447,16 +469,16 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
         loadData({ silent: true });
         return;
       }
-      if (!result.drafted) pushDraftNotice('attendance_restored');
+      notifyIfNeeded(result.result, pushDraftNotice);
       loadData({ silent: true });
     })().catch(() => {
       restoreMember(snapshot);
       showFlash('err', 'Could not restore attendance.');
-    });
+    }).finally(() => markBusy(member.id, false));
   }
 
   async function handleRemove(member: PoolMember, societyName: string) {
-    if (!session) return;
+    if (!session || busyIds.has(member.id)) return;
     const name = member.profiles?.display_name ?? member.invited_name ?? 'this delegate';
     const hasAllocation = !!member.assigned_committee_id;
     const selfFundedPaidSpot = member.payment_status === 'paid' && !!member.self_paid;
@@ -479,6 +501,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
 
     const supabase = getAuthedClient(session.access_token);
     const keepAllocation = hasAllocation ? checked : false;
+    markBusy(member.id, true);
 
     // Optimistic: mirror removeFromDelegation's writes for this row —
     // society_id -> null drops them out of this delegation's lists at once.
@@ -514,17 +537,17 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
         loadData({ silent: true });
         return;
       }
-      if (!result.drafted) pushDraftNotice('removed_from_delegation');
+      notifyIfNeeded(result.result, pushDraftNotice);
       loadData({ silent: true });
     })().catch(() => {
       rollback();
       showFlash('err', `Could not remove ${name} from the delegation.`);
-    });
+    }).finally(() => markBusy(member.id, false));
   }
 
   async function handleAdvisorTransfer(paidAdvisor: PoolMember, recipient: SearchApp) {
     setAdvisorTransferPicker(null);
-    if (!session) return;
+    if (!session || busyIds.has(paidAdvisor.id) || busyIds.has(recipient.id)) return;
     const { confirmed } = await confirm({
       title: 'Transfer this spot?',
       body: `Transfer ${paidAdvisor.profiles?.display_name ?? paidAdvisor.invited_name ?? 'this advisor'}'s paid spot to ${recipient.profiles?.display_name ?? recipient.invited_name ?? 'this advisor'}?`,
@@ -533,6 +556,8 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
     if (!confirmed) return;
 
     const supabase = getAuthedClient(session.access_token);
+    markBusy(paidAdvisor.id, true);
+    markBusy(recipient.id, true);
 
     // Optimistic: the outgoing advisor drops to unpaid at once; the recipient
     // (who may live outside this delegation's member list) turns paid if
@@ -557,18 +582,19 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
         loadData({ silent: true });
         return;
       }
-      if (!emailResult.incomingDrafted) pushDraftNotice('spot_received');
-      if (!emailResult.outgoingDrafted) pushDraftNotice('spot_lost');
+      notifyIfNeeded(emailResult.incoming, pushDraftNotice);
+      notifyIfNeeded(emailResult.outgoing, pushDraftNotice);
       loadData({ silent: true });
     })().catch(() => {
       rollback();
       showFlash('err', 'Could not transfer this spot.');
-    });
+    }).finally(() => { markBusy(paidAdvisor.id, false); markBusy(recipient.id, false); });
   }
 
   async function handleGiveOpenSpot(sourceId: string) {
-    if (!session) return;
+    if (!session || busyIds.has(sourceId)) return;
     const supabase = getAuthedClient(session.access_token);
+    markBusy(sourceId, true);
 
     // Optimistic: the delegate fills the open paid slot immediately.
     const snapshot = members.find(m => m.id === sourceId);
@@ -584,15 +610,17 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
     })().catch(() => {
       if (snapshot) restoreMember(snapshot);
       showFlash('err', 'Could not mark this delegate paid.');
-    });
+    }).finally(() => markBusy(sourceId, false));
   }
 
   async function handleSwap(sourceId: string, targetId: string, transfer: boolean) {
-    if (!session) return;
+    if (!session || busyIds.has(sourceId) || busyIds.has(targetId)) return;
     const supabase = getAuthedClient(session.access_token);
     const source = members.find(m => m.id === sourceId);
     const target = members.find(m => m.id === targetId);
     if (!source || !target) return;
+    markBusy(sourceId, true);
+    markBusy(targetId, true);
 
     // Optimistic: mirror performSwap's writes — payment flips both ways, and
     // the allocation moves only under the same guard the helper enforces.
@@ -637,13 +665,13 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
         loadData({ silent: true });
         return;
       }
-      if (!emailResult.incomingDrafted) pushDraftNotice('spot_received');
-      if (!emailResult.outgoingDrafted) pushDraftNotice('spot_lost');
+      notifyIfNeeded(emailResult.incoming, pushDraftNotice);
+      notifyIfNeeded(emailResult.outgoing, pushDraftNotice);
       loadData({ silent: true });
     })().catch(() => {
       rollback();
       showFlash('err', 'Could not switch these delegates.');
-    });
+    }).finally(() => { markBusy(sourceId, false); markBusy(targetId, false); });
   }
 
   // ── Drop / click-target dispatch ──────────────────────────────────────────
@@ -685,7 +713,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
   if (!expandedSociety) {
     return (
       <div>
-        <DraftNoticeList notices={draftNotices} conferenceSlug={conference.slug} onDismiss={dismissDraftNotice} />
+        <DraftNoticeList notices={draftNotices} conferenceSlug={conference.slug} onDismiss={dismissDraftNotice} onTurnOn={handleTurnOnDefault} />
         <p className="text-xs font-semibold tracking-widest mb-1" style={{ color: '#9A8A78', fontFamily: MONO }}>DELEGATIONS</p>
         <p className="text-sm mb-5" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
           Groups brought by a faculty advisor or head delegate. Click a delegation to manage its members, payments and spots.
@@ -744,7 +772,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
 
   return (
     <div>
-      <DraftNoticeList notices={draftNotices} conferenceSlug={conference.slug} onDismiss={dismissDraftNotice} />
+      <DraftNoticeList notices={draftNotices} conferenceSlug={conference.slug} onDismiss={dismissDraftNotice} onTurnOn={handleTurnOnDefault} />
       <div className="flex items-center gap-3 mb-6">
         <button
           onClick={() => { setExpandedId(null); setSelectedMemberId(null); setSearchQuery(''); }}

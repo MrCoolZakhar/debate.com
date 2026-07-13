@@ -228,9 +228,12 @@ export default function FinancialsPage() {
   // ── Derived money figures ────────────────────────────────────────────────
   const fin = useMemo(() => {
     const all = rows ?? [];
-    // Rejected applications drop out of the pipeline entirely — except paid
-    // ones, whose money was still collected.
-    const live = all.filter(r => r.status !== 'rejected' || r.payment_status === 'paid');
+    // Rejected and withdrawn applications drop out of the pipeline entirely —
+    // except paid ones, whose money was still collected. Withdrawal is only
+    // ever allowed while unpaid/waived (see applications/page.tsx), so this
+    // exception is defensive rather than load-bearing today, but it keeps the
+    // rule symmetric with rejected's.
+    const live = all.filter(r => (r.status !== 'rejected' && r.status !== 'withdrawn') || r.payment_status === 'paid');
 
     const paidRows = live.filter(r => r.payment_status === 'paid');
     const pendingRows = live.filter(

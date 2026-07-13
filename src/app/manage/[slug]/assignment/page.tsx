@@ -9,7 +9,7 @@ import { getFlagUrl, getCountryByName } from '@/lib/countries';
 import { LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
 import DelegationsView from '@/app/manage/[slug]/assignment/DelegationsView';
 import IndependentsView from '@/app/manage/[slug]/assignment/IndependentsView';
-import { queueEventEmail } from '@/lib/emailEvents';
+import { queueEventEmail, notifyIfNeeded, turnOnDefaultEmail } from '@/lib/emailEvents';
 import { sendChairInvite } from '@/lib/chairInvites';
 import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
 import { useConfirmModal } from '@/components/ConfirmModal';
@@ -1452,6 +1452,10 @@ export default function AssignmentPage() {
   }
 
   const inFlightRemoveIds = useRef(new Set<string>());
+  // Double-click guards for chair-dais mutations (assign/remove share a
+  // committee-id key; revoke uses the invite's own id).
+  const inFlightChairIds = useRef(new Set<string>());
+  const inFlightInviteIds = useRef(new Set<string>());
   function handleRemoveAllocation(allocation: AllocationRow) {
     if (!session || !conference) return;
     if (allocation.id.startsWith('temp-')) {
@@ -1496,7 +1500,7 @@ export default function AssignmentPage() {
 
         try {
           const result = await queueEventEmail(supabase, conferenceId, 'allocation_removed', [allocation.application_id]);
-          if (!result.drafted) pushDraftNotice('allocation_removed');
+          notifyIfNeeded(result, pushDraftNotice);
         } catch {
           // Email queueing is secondary — the removal stands.
           showFlash('err', 'Allocation removed, but the notification email could not be queued.');
@@ -1533,9 +1537,8 @@ export default function AssignmentPage() {
     const supabase = getAuthedClient(session.access_token);
     const result = await queueEventEmail(supabase, conference.id, 'allocation_assigned', applicationIds);
     setSendingAllocationEmails(false);
-    if (!result.drafted) {
-      pushDraftNotice('allocation_assigned');
-    } else {
+    notifyIfNeeded(result, pushDraftNotice);
+    if (result.outcome === 'sent-custom' || result.outcome === 'sent-default') {
       showFlash('ok', `Queued ${result.queued ?? 0} allocation email${(result.queued ?? 0) === 1 ? '' : 's'}.`);
     }
   }
@@ -1549,7 +1552,8 @@ export default function AssignmentPage() {
       confirmLabel: 'Assign',
     });
     if (!confirmed) return;
-    if (!session) return;
+    if (!session || inFlightChairIds.current.has(committee.id)) return;
+    inFlightChairIds.current.add(committee.id);
     const supabase = getAuthedClient(session.access_token);
     const nextIds = Array.from(new Set([...(committee.chair_user_ids ?? []), chairApp.user_id]));
 
@@ -1603,7 +1607,7 @@ export default function AssignmentPage() {
     })().catch(() => {
       rollback();
       showFlash('err', `Could not assign ${name} to ${label}.`);
-    });
+    }).finally(() => inFlightChairIds.current.delete(committee.id));
   }
 
   // Reverts the removed chair's application to 'accepted' only if they don't
@@ -1618,7 +1622,8 @@ export default function AssignmentPage() {
       danger: true,
     });
     if (!confirmed) return;
-    if (!session || !conference) return;
+    if (!session || !conference || inFlightChairIds.current.has(committee.id)) return;
+    inFlightChairIds.current.add(committee.id);
     const supabase = getAuthedClient(session.access_token);
     const conferenceId = conference.id;
     const nextIds = (committee.chair_user_ids ?? []).filter(id => id !== userId);
@@ -1670,7 +1675,7 @@ export default function AssignmentPage() {
     })().catch(() => {
       rollback();
       showFlash('err', `Could not remove ${name} from ${label}.`);
-    });
+    }).finally(() => inFlightChairIds.current.delete(committee.id));
   }
 
   async function handleRevokeInvite(invite: PendingChairInvite, committee: CommitteeData) {
@@ -1682,7 +1687,8 @@ export default function AssignmentPage() {
       danger: true,
     });
     if (!confirmed) return;
-    if (!session) return;
+    if (!session || inFlightInviteIds.current.has(invite.id)) return;
+    inFlightInviteIds.current.add(invite.id);
     const supabase = getAuthedClient(session.access_token);
 
     // Optimistic: the pending chip disappears immediately.
@@ -1698,7 +1704,7 @@ export default function AssignmentPage() {
     })().catch(() => {
       setChairInvites(prev => (prev.some(i => i.id === invite.id) ? prev : [...prev, invite]));
       showFlash('err', `Could not revoke the invite to ${label}.`);
-    });
+    }).finally(() => inFlightInviteIds.current.delete(invite.id));
   }
 
   function handleChairDropOnCommittee(committeeId: string, droppedChairAppId: string) {
@@ -1829,7 +1835,16 @@ export default function AssignmentPage() {
         )}
       </div>
 
-      <DraftNoticeList notices={draftNotices} conferenceSlug={conference.slug} onDismiss={dismissDraftNotice} />
+      <DraftNoticeList
+        notices={draftNotices}
+        conferenceSlug={conference.slug}
+        onDismiss={dismissDraftNotice}
+        onTurnOn={async (eventKey) => {
+          if (!session) return;
+          const supabase = getAuthedClient(session.access_token);
+          await turnOnDefaultEmail(supabase, conference.id, eventKey);
+        }}
+      />
 
       {/* Mode toggle: Delegates | Chairs | Delegations | Independents */}
       <div className="inline-flex rounded-xl p-1 mb-6 flex-wrap" style={{ border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3' }}>

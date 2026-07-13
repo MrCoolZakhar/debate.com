@@ -16,6 +16,7 @@ import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
 import type { Conference } from '@/app/manage/[slug]/layout';
 import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
+import { notifyIfNeeded, turnOnDefaultEmail } from '@/lib/emailEvents';
 import { useConfirmModal } from '@/components/ConfirmModal';
 import {
   OUTFIT, MONO, POOL_MEMBER_SELECT,
@@ -106,27 +107,32 @@ function badgeStyle(kind: 'paid' | 'unpaid' | 'waived') {
   return { backgroundColor: 'rgba(182,135,31,0.14)', color: '#8A6614', border: '1px solid rgba(182,135,31,0.4)' };
 }
 
-function ActionButton({ label, onClick, danger }: { label: string; onClick: () => void; danger?: boolean }) {
+function ActionButton({ label, onClick, danger, busy }: { label: string; onClick: () => void; danger?: boolean; busy?: boolean }) {
   return (
     <button
       onClick={onClick}
+      disabled={busy}
       className="focus:outline-none"
-      style={{ fontSize: 10, fontWeight: 700, color: danger ? '#9A8A78' : '#1B3828', fontFamily: MONO, letterSpacing: '0.06em' }}
-      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = danger ? '#8B2020' : '#2A5A3C'; }}
+      style={{
+        fontSize: 10, fontWeight: 700, color: danger ? '#9A8A78' : '#1B3828', fontFamily: MONO, letterSpacing: '0.06em',
+        opacity: busy ? 0.5 : 1, cursor: busy ? 'wait' : 'pointer',
+      }}
+      onMouseEnter={e => { if (!busy) (e.currentTarget as HTMLElement).style.color = danger ? '#8B2020' : '#2A5A3C'; }}
       onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = danger ? '#9A8A78' : '#1B3828'; }}
     >
-      {label}
+      {busy ? '…' : label}
     </button>
   );
 }
 
 function IndependentCard({
-  app, onTransfer, onNotAttending, onUndo,
+  app, onTransfer, onNotAttending, onUndo, busy,
 }: {
   app: PoolMember;
   onTransfer: () => void;
   onNotAttending: () => void;
   onUndo: () => void;
+  busy?: boolean;
 }) {
   const name = app.profiles?.display_name ?? app.invited_name ?? 'Unknown';
   const waived = app.payment_status === 'waived';
@@ -176,10 +182,10 @@ function IndependentCard({
 
       {!waived && (
         <div className="mt-3 flex items-center gap-4">
-          {paid && !notAttending && <ActionButton label="TRANSFER SPOT" onClick={onTransfer} />}
-          {openSpot && <ActionButton label="GIVE SPOT" onClick={onTransfer} />}
-          {!notAttending && <ActionButton label="NOT ATTENDING" onClick={onNotAttending} danger />}
-          {notAttending && <ActionButton label="UNDO" onClick={onUndo} />}
+          {paid && !notAttending && <ActionButton label="TRANSFER SPOT" onClick={onTransfer} busy={busy} />}
+          {openSpot && <ActionButton label="GIVE SPOT" onClick={onTransfer} busy={busy} />}
+          {!notAttending && <ActionButton label="NOT ATTENDING" onClick={onNotAttending} danger busy={busy} />}
+          {notAttending && <ActionButton label="UNDO" onClick={onUndo} busy={busy} />}
         </div>
       )}
     </div>
@@ -247,8 +253,17 @@ export default function IndependentsView({ conference, showFlash }: Independents
 
   // ── Mutations ────────────────────────────────────────────────────────────
 
-  // Per-control double-click lock: one in-flight transfer per holder.
+  // Per-control double-click lock: one in-flight transfer per holder. Also
+  // used as the busy set for not-attending/undo (disabled + guard).
   const inFlightTransferIds = useRef(new Set<string>());
+  const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
+  function markBusy(id: string, busy: boolean) {
+    setBusyIds(prev => {
+      const next = new Set(prev);
+      if (busy) next.add(id); else next.delete(id);
+      return next;
+    });
+  }
 
   async function handleTransferPicked(holder: PoolMember, recipient: SearchApp) {
     setTransferTarget(null);
@@ -291,8 +306,8 @@ export default function IndependentsView({ conference, showFlash }: Independents
         loadData({ silent: true }); // converge any partial writes
         return;
       }
-      if (!emailResult.incomingDrafted) pushDraftNotice('spot_received');
-      if (!emailResult.outgoingDrafted) pushDraftNotice('spot_lost');
+      notifyIfNeeded(emailResult.incoming, pushDraftNotice);
+      notifyIfNeeded(emailResult.outgoing, pushDraftNotice);
       loadData({ silent: true });
     })().catch(() => {
       rollback();
@@ -301,7 +316,7 @@ export default function IndependentsView({ conference, showFlash }: Independents
   }
 
   async function handleNotAttending(app: PoolMember) {
-    if (!session) return;
+    if (!session || busyIds.has(app.id)) return;
     const name = app.profiles?.display_name ?? app.invited_name ?? 'this delegate';
     const hasAllocation = !!app.assigned_committee_id;
     const isPaid = app.payment_status === 'paid';
@@ -317,6 +332,7 @@ export default function IndependentsView({ conference, showFlash }: Independents
     if (!confirmed) return;
 
     const supabase = getAuthedClient(session.access_token);
+    markBusy(app.id, true);
 
     // Optimistic: exactly what markNotAttending writes for this row.
     const snapshot = independents.find(m => m.id === app.id) ?? app;
@@ -337,17 +353,18 @@ export default function IndependentsView({ conference, showFlash }: Independents
         loadData({ silent: true });
         return;
       }
-      if (!result.drafted) pushDraftNotice('not_attending');
+      notifyIfNeeded(result.result, pushDraftNotice);
       loadData({ silent: true });
     })().catch(() => {
       restoreIndependent(snapshot);
       showFlash('err', `Could not mark ${name} as not attending.`);
-    });
+    }).finally(() => markBusy(app.id, false));
   }
 
   async function handleUndoNotAttending(app: PoolMember) {
-    if (!session) return;
+    if (!session || busyIds.has(app.id)) return;
     const supabase = getAuthedClient(session.access_token);
+    markBusy(app.id, true);
 
     // Optimistic: exactly what undoNotAttending writes for this row.
     const snapshot = independents.find(m => m.id === app.id) ?? app;
@@ -361,12 +378,12 @@ export default function IndependentsView({ conference, showFlash }: Independents
         loadData({ silent: true });
         return;
       }
-      if (!result.drafted) pushDraftNotice('attendance_restored');
+      notifyIfNeeded(result.result, pushDraftNotice);
       loadData({ silent: true });
     })().catch(() => {
       restoreIndependent(snapshot);
       showFlash('err', 'Could not restore attendance.');
-    });
+    }).finally(() => markBusy(app.id, false));
   }
 
   if (loading) {
@@ -379,7 +396,16 @@ export default function IndependentsView({ conference, showFlash }: Independents
 
   return (
     <div>
-      <DraftNoticeList notices={draftNotices} conferenceSlug={conference.slug} onDismiss={dismissDraftNotice} />
+      <DraftNoticeList
+        notices={draftNotices}
+        conferenceSlug={conference.slug}
+        onDismiss={dismissDraftNotice}
+        onTurnOn={async (eventKey) => {
+          if (!session) return;
+          const supabase = getAuthedClient(session.access_token);
+          await turnOnDefaultEmail(supabase, conference.id, eventKey);
+        }}
+      />
       <p className="text-xs font-semibold tracking-widest mb-1" style={{ color: '#9A8A78', fontFamily: MONO }}>INDEPENDENTS</p>
       <p className="text-sm mb-5" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
         Delegates applying without a high school or society. Manage payment and attendance below — allocations are managed in the Delegates tab.
@@ -392,6 +418,7 @@ export default function IndependentsView({ conference, showFlash }: Independents
             <IndependentCard
               key={app.id}
               app={app}
+              busy={busyIds.has(app.id)}
               onTransfer={() => setTransferTarget(app)}
               onNotAttending={() => handleNotAttending(app)}
               onUndo={() => handleUndoNotAttending(app)}

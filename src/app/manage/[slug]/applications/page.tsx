@@ -3,18 +3,21 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   ArrowRight, BadgeCheck, Building2, Check, CircleCheck, Clock, Download, Eye,
-  Gavel, Globe, GraduationCap, HandCoins, Inbox, MapPin, MessageSquareText,
+  Gavel, Globe, GraduationCap, HandCoins, Inbox, LogOut, MapPin, MessageSquareText,
   RotateCcw, User, Users, X,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
-import { queueEventEmail } from '@/lib/emailEvents';
+import { queueEventEmail, notifyIfNeeded, turnOnDefaultEmail } from '@/lib/emailEvents';
 import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
 import { useConfirmModal } from '@/components/ConfirmModal';
 import { FlagImg } from '@/components/FlagImg';
 import { getCountryByName } from '@/lib/countries';
+import {
+  poolForRole, fillFreeSpots, releasePoolSpot, POOL_SPOTS_COLUMN,
+} from '@/app/manage/[slug]/assignment/delegationShared';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -67,73 +70,9 @@ interface Application {
   society_id: string | null;
 }
 
-// ── Pool accounting ──────────────────────────────────────────────────────────
-
-type Pool = 'delegate' | 'advisor';
-
-const POOL_ROLES: Record<Pool, string[]> = {
-  delegate: ['delegate', 'head-delegate'],
-  advisor: ['faculty-advisor'],
-};
-
-const POOL_SPOTS_COLUMN: Record<Pool, 'spots_purchased' | 'advisor_spots_purchased'> = {
-  delegate: 'spots_purchased',
-  advisor: 'advisor_spots_purchased',
-};
-
-function poolForRole(role: string): Pool | null {
-  if (role === 'delegate' || role === 'head-delegate') return 'delegate';
-  if (role === 'faculty-advisor') return 'advisor';
-  return null;
-}
-
-/**
- * Given a society and a spot pool, promotes the oldest-submitted attending
- * unpaid members of that pool to 'paid' until the pool's purchased-spots
- * column is full or there are no more candidates. Idempotent — a no-op when
- * the pool has no free spots.
- */
-export async function fillFreeSpots(
-  supabase: ReturnType<typeof getAuthedClient>,
-  societyId: string,
-  pool: Pool
-) {
-  const roles = POOL_ROLES[pool];
-  const spotsColumn = POOL_SPOTS_COLUMN[pool];
-
-  const [{ data: society }, { count: occupancy }] = await Promise.all([
-    supabase.from('societies').select(spotsColumn).eq('id', societyId).single(),
-    supabase
-      .from('applications')
-      .select('id', { count: 'exact', head: true })
-      .eq('society_id', societyId)
-      .in('role', roles)
-      .in('status', ['accepted', 'assigned'])
-      .eq('attending', true)
-      .eq('payment_status', 'paid'),
-  ]);
-
-  const spotsPurchased = (society as Record<string, number> | null)?.[spotsColumn] ?? 0;
-  const freeSpots = spotsPurchased - (occupancy ?? 0);
-  if (freeSpots <= 0) return;
-
-  // Unpaid only — waived members are already covered and skipped.
-  const { data: candidates } = await supabase
-    .from('applications')
-    .select('id')
-    .eq('society_id', societyId)
-    .in('role', roles)
-    .in('status', ['accepted', 'assigned'])
-    .eq('attending', true)
-    .eq('payment_status', 'unpaid')
-    .order('submitted_at', { ascending: true })
-    .limit(freeSpots);
-
-  const ids = ((candidates ?? []) as { id: string }[]).map(c => c.id);
-  if (ids.length === 0) return;
-
-  await supabase.from('applications').update({ payment_status: 'paid' }).in('id', ids);
-}
+// Pool accounting (poolForRole, fillFreeSpots, releasePoolSpot, POOL_SPOTS_COLUMN)
+// is imported from delegationShared.tsx — the canonical location (F: fillFreeSpots
+// consolidation). This page no longer keeps its own copy.
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -175,6 +114,7 @@ function StatusIcon({ status, size = 10 }: { status: string; size?: number }) {
     : status === 'accepted' ? Check
     : status === 'assigned' ? BadgeCheck
     : status === 'rejected' ? X
+    : status === 'withdrawn' ? LogOut
     : Clock;
   return <Icon size={size} strokeWidth={2.5} />;
 }
@@ -211,6 +151,7 @@ const STATUS_FILTERS = [
   { label: 'ACCEPTED', value: 'accepted' },
   { label: 'ASSIGNED', value: 'assigned' },
   { label: 'REJECTED', value: 'rejected' },
+  { label: 'WITHDRAWN', value: 'withdrawn' },
 ];
 
 const ROLE_FILTERS = [
@@ -376,19 +317,26 @@ export default function ApplicationsPage() {
       // Secondary effects — a failure here must NOT roll back the accept.
       try {
         const result = await queueEventEmail(supabase, conference.id, 'application_accepted', [appId]);
-        if (!result.drafted) pushDraftNotice('application_accepted');
+        notifyIfNeeded(result, pushDraftNotice);
+        // Consolidation: application_accepted wins over payment_available —
+        // payment_available only sends alone for this person when acceptance
+        // actually resolved to nothing (off/unconfigured) for them.
+        const acceptedIds = new Set(result.queuedApplicationIds ?? []);
 
         const roleConfig = roleConfigs.find(rc => rc.role === prevRow.role);
         if (roleConfig?.payment_timing === 'after_acceptance') {
-          const payResult = await queueEventEmail(supabase, conference.id, 'payment_available', [appId]);
-          if (!payResult.drafted) pushDraftNotice('payment_available');
+          const payResult = await queueEventEmail(supabase, conference.id, 'payment_available', [appId], undefined, { suppressIds: acceptedIds });
+          notifyIfNeeded(payResult, pushDraftNotice);
         }
 
         // F13: acceptance is when auto-cover runs — newly accepted pool members
-        // absorb any free delegation-purchased spots, oldest-first.
+        // absorb any free delegation-purchased spots, oldest-first. The fill
+        // helper emails spot_received for whoever it covers — suppress the
+        // just-accepted person's own id so they don't get that on top of
+        // application_accepted (rule one wins) if the same action covers them.
         const pool = poolForRole(prevRow.role);
         if (prevRow.society_id && pool) {
-          await fillFreeSpots(supabase, prevRow.society_id, pool);
+          await fillFreeSpots(supabase, conference.id, prevRow.society_id, pool, { suppressIds: acceptedIds });
         }
       } catch {
         setActionError('Accepted, but a follow-up step (email / auto-cover) failed — refresh to verify.');
@@ -433,7 +381,7 @@ export default function ApplicationsPage() {
 
       try {
         const result = await queueEventEmail(supabase, conference.id, 'application_rejected', [appId]);
-        if (!result.drafted) pushDraftNotice('application_rejected');
+        notifyIfNeeded(result, pushDraftNotice);
       } catch {
         setActionError('Rejected, but the rejection email could not be queued.');
       }
@@ -481,6 +429,121 @@ export default function ApplicationsPage() {
       .finally(() => markBusy(appId, false));
   }
 
+  // ── Withdraw from conference (accepted/assigned, unpaid or waived only) ────
+  // Paid applications render this action disabled — refunds come with
+  // finances, so payment must be handled first (Danger ConfirmModal spells
+  // this out; the button itself is also disabled, see the review modal JSX).
+
+  async function openWithdrawConfirm(app: Application) {
+    const pool = poolForRole(app.role);
+    const hasAllocation = !!app.assigned_committee_id;
+    const inDelegation = !!app.society_id;
+    const selfFundedPaidSpot = app.payment_status === 'paid' && !!app.self_paid;
+    const parts: string[] = [];
+    if (hasAllocation) parts.push('Their committee allocation will be removed.');
+    if (inDelegation && pool) {
+      parts.push(
+        selfFundedPaidSpot
+          ? "Their paid spot was self-funded, so it leaves with them — the delegation's purchased-spots count goes down by one."
+          : app.payment_status === 'paid'
+          ? "Their spot was covered by the delegation's purchased spots, so it stays behind — it will show as open."
+          : 'They will leave their delegation.'
+      );
+    }
+    if (app.role === 'chair') parts.push('If they chair a committee, they will be removed from its dais.');
+    parts.push('This cannot be undone from here — reinstating only restores their application to Accepted, nothing else.');
+
+    const { confirmed } = await confirm({
+      title: 'Remove from conference?',
+      body: parts.join(' '),
+      confirmLabel: 'Withdraw',
+      danger: true,
+    });
+    if (!confirmed) return;
+    handleWithdraw(app.id);
+  }
+
+  function handleWithdraw(appId: string) {
+    if (!session || !conference || busyIds.has(appId)) return;
+    const prevRow = applications.find(a => a.id === appId);
+    if (!prevRow) return;
+
+    setActionError('');
+    markBusy(appId, true);
+    // Optimistic: the card flips to WITHDRAWN immediately.
+    applyRow(appId, {
+      status: 'withdrawn',
+      assigned_committee_id: null,
+      assigned_country_code: null,
+      assigned_country_name: null,
+      society_id: null,
+    });
+
+    (async () => {
+      const supabase = getAuthedClient(session.access_token);
+      const { dropToUnpaid, error: releaseError } = await releasePoolSpot(supabase, prevRow);
+      if (releaseError) throw new Error(releaseError);
+
+      const updates: Record<string, unknown> = {
+        status: 'withdrawn',
+        assigned_committee_id: null,
+        assigned_country_code: null,
+        assigned_country_name: null,
+        society_id: null,
+      };
+      if (dropToUnpaid) updates.payment_status = 'unpaid';
+
+      const { error } = await supabase.from('applications').update(updates).eq('id', appId);
+      if (error) throw error;
+
+      if (prevRow.assigned_committee_id) {
+        await supabase.from('conference_allocations').delete().eq('application_id', appId);
+      }
+
+      // If they chair any committee, drop them from its dais — mirrors
+      // committees/page.tsx & assignment/page.tsx's handleRemoveChair.
+      if (prevRow.role === 'chair' && prevRow.user_id) {
+        const { data: chaired } = await supabase
+          .from('conference_committees')
+          .select('id, chair_user_ids')
+          .eq('conference_id', conference.id)
+          .contains('chair_user_ids', [prevRow.user_id]);
+        for (const c of (chaired ?? []) as { id: string; chair_user_ids: string[] | null }[]) {
+          const nextIds = (c.chair_user_ids ?? []).filter(id => id !== prevRow.user_id);
+          await supabase.from('conference_committees').update({ chair_user_ids: nextIds }).eq('id', c.id);
+        }
+      }
+    })()
+      .catch(() => {
+        restoreRow(prevRow);
+        setActionError('Could not withdraw the application — the change was reverted. Please try again.');
+      })
+      .finally(() => markBusy(appId, false));
+  }
+
+  function handleReinstateFromWithdrawn(appId: string) {
+    if (!session || busyIds.has(appId)) return;
+    const prevRow = applications.find(a => a.id === appId);
+    if (!prevRow) return;
+
+    setActionError('');
+    markBusy(appId, true);
+    // Only the status is restored — nothing else (allocation, delegation,
+    // dais seat) comes back automatically.
+    applyRow(appId, { status: 'accepted' });
+
+    (async () => {
+      const supabase = getAuthedClient(session.access_token);
+      const { error } = await supabase.from('applications').update({ status: 'accepted' }).eq('id', appId);
+      if (error) throw error;
+    })()
+      .catch(() => {
+        restoreRow(prevRow);
+        setActionError('Could not reinstate the application — the change was reverted. Please try again.');
+      })
+      .finally(() => markBusy(appId, false));
+  }
+
   function handleMarkPaid(app: Application) {
     if (!session || !conference || busyIds.has(app.id)) return;
     const prevRow = applications.find(a => a.id === app.id) ?? app;
@@ -503,11 +566,11 @@ export default function ApplicationsPage() {
           const { data: soc } = await supabase.from('societies').select(spotsColumn).eq('id', app.society_id).single();
           const current = (soc as Record<string, number> | null)?.[spotsColumn] ?? 0;
           await supabase.from('societies').update({ [spotsColumn]: current + 1 }).eq('id', app.society_id);
-          await fillFreeSpots(supabase, app.society_id, pool);
+          await fillFreeSpots(supabase, conference.id, app.society_id, pool);
         }
 
         const result = await queueEventEmail(supabase, conference.id, 'payment_received', [app.id]);
-        if (!result.drafted) pushDraftNotice('payment_received');
+        notifyIfNeeded(result, pushDraftNotice);
       } catch {
         setActionError('Marked paid, but a follow-up step (spot update / email) failed — refresh to verify.');
       }
@@ -576,7 +639,7 @@ export default function ApplicationsPage() {
 
       try {
         const result = await queueEventEmail(supabase, conference.id, 'fee_waived', [app.id]);
-        if (!result.drafted) pushDraftNotice('fee_waived');
+        notifyIfNeeded(result, pushDraftNotice);
       } catch {
         setActionError('Waived, but the waiver email could not be queued.');
       }
@@ -687,7 +750,16 @@ export default function ApplicationsPage() {
         </button>
       </div>
 
-      <DraftNoticeList notices={draftNotices} conferenceSlug={conference.slug} onDismiss={dismissDraftNotice} />
+      <DraftNoticeList
+        notices={draftNotices}
+        conferenceSlug={conference.slug}
+        onDismiss={dismissDraftNotice}
+        onTurnOn={async (eventKey) => {
+          if (!session) return;
+          const supabase = getAuthedClient(session.access_token);
+          await turnOnDefaultEmail(supabase, conference.id, eventKey);
+        }}
+      />
 
       {actionError && (
         <p className="text-xs font-semibold mb-3" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>
@@ -1045,6 +1117,29 @@ export default function ApplicationsPage() {
           </button>
         );
 
+        // Withdraw (F: PART 2 item 1) — accepted/assigned only, and only when
+        // payment_status is 'unpaid' or 'waived'. Paid applicants must have
+        // their payment handled first (refunds come with finances).
+        const canWithdraw = app.payment_status !== 'paid';
+        const withdrawControls = (
+          <button
+            onClick={() => { if (canWithdraw) openWithdrawConfirm(app); }}
+            disabled={rowBusy || !canWithdraw}
+            title={!canWithdraw ? 'Handle their payment before removing' : undefined}
+            className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
+            style={{
+              backgroundColor: 'rgba(139,32,32,0.08)', color: '#8B2020', border: '1px solid rgba(139,32,32,0.2)',
+              fontFamily: "'Outfit', sans-serif",
+              opacity: !canWithdraw ? 0.4 : rowBusy ? 0.5 : 1,
+              cursor: !canWithdraw ? 'not-allowed' : rowBusy ? 'default' : 'pointer',
+              pointerEvents: rowBusy ? 'none' : undefined,
+            }}
+          >
+            <LogOut size={13} />
+            REMOVE FROM CONFERENCE
+          </button>
+        );
+
         return (
           <div
             className="fixed inset-0 z-50 flex items-center justify-center px-4 py-10"
@@ -1219,14 +1314,34 @@ export default function ApplicationsPage() {
                     )}
                     {paymentControls}
                     {rejectControls}
+                    {withdrawControls}
                   </>
                 )}
 
-                {app.status === 'assigned' && paymentControls}
+                {app.status === 'assigned' && (
+                  <>
+                    {paymentControls}
+                    {withdrawControls}
+                  </>
+                )}
 
                 {app.status === 'rejected' && (
                   <button
                     onClick={() => handleReinstate(app.id)}
+                    disabled={rowBusy}
+                    className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
+                    style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif", ...busyStyle }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                  >
+                    <RotateCcw size={13} />
+                    REINSTATE
+                  </button>
+                )}
+
+                {app.status === 'withdrawn' && (
+                  <button
+                    onClick={() => handleReinstateFromWithdrawn(app.id)}
                     disabled={rowBusy}
                     className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
                     style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif", ...busyStyle }}

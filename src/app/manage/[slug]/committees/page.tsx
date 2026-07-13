@@ -6,7 +6,7 @@ import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
 import { sendChairInvite } from '@/lib/chairInvites';
-import { queueEventEmail } from '@/lib/emailEvents';
+import { queueEventEmail, notifyIfNeeded, turnOnDefaultEmail } from '@/lib/emailEvents';
 import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
 import { useConfirmModal } from '@/components/ConfirmModal';
 import {
@@ -474,7 +474,7 @@ export default function CommitteesPage() {
   // background; the DB trigger recomputes display_chairs and the silent
   // refetch syncs the authoritative version.
   function handleAssignChair(c: Committee, app: ChairApplicant) {
-    if (!session) return;
+    if (!session || busyIds.has(c.id)) return;
     const prevIds = c.chair_user_ids;
     const prevDisplay = c.display_chairs;
     const nextIds = Array.from(new Set([...(c.chair_user_ids ?? []), app.user_id]));
@@ -485,6 +485,7 @@ export default function CommitteesPage() {
     setCommittees(prev => prev.map(x => x.id === c.id ? { ...x, chair_user_ids: nextIds, display_chairs: nextDisplay } : x));
     setAddChairTarget(null);
     setActionError('');
+    markBusy(c.id, true);
     const supabase = getAuthedClient(session.access_token);
     (async () => {
       const { error: primaryError } = await supabase.from('conference_committees').update({ chair_user_ids: nextIds }).eq('id', c.id);
@@ -498,7 +499,7 @@ export default function CommitteesPage() {
         setActionError(`${app.profiles?.display_name ?? 'The chair'} was added to the dais, but their application couldn't be marked assigned.`);
       }
       loadCommittees({ silent: true });
-    })();
+    })().finally(() => markBusy(c.id, false));
   }
 
   // Release the committee to its dais — always happens regardless of whether
@@ -546,7 +547,7 @@ export default function CommitteesPage() {
           const appIds = ((chairApps ?? []) as { id: string }[]).map(a => a.id);
           if (appIds.length > 0) {
             const result = await queueEventEmail(supabase, conference.id, 'session_chair_invite', appIds);
-            if (!result.drafted) pushDraftNotice('session_chair_invite');
+            notifyIfNeeded(result, pushDraftNotice);
           }
         }
       } catch {
@@ -606,7 +607,16 @@ export default function CommitteesPage() {
         </button>
       </div>
 
-      <DraftNoticeList notices={draftNotices} conferenceSlug={conference.slug} onDismiss={dismissDraftNotice} />
+      <DraftNoticeList
+        notices={draftNotices}
+        conferenceSlug={conference.slug}
+        onDismiss={dismissDraftNotice}
+        onTurnOn={async (eventKey) => {
+          if (!session) return;
+          const supabase = getAuthedClient(session.access_token);
+          await turnOnDefaultEmail(supabase, conference.id, eventKey);
+        }}
+      />
 
       {flash && (
         <div

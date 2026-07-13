@@ -11,7 +11,7 @@ import {
   resolveTokens, EMAIL_TOKEN_KEYS, EMAIL_TOKEN_LABELS,
   type EmailTokenContext, type EmailTokenKey,
 } from '@/lib/emailTokens';
-import { EVENT_REGISTRY, queueEventEmail, getEventLabel, type EventDef } from '@/lib/emailEvents';
+import { EVENT_REGISTRY, queueEventEmail, getEventLabel, notifyIfNeeded, turnOnDefaultEmail, type EventDef } from '@/lib/emailEvents';
 import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
 import { type EmailBlock, normalizeBlocks, flattenBlocksToPlainText } from '@/lib/emailBlocks';
 import { renderEmailHtml, resolveEmailTheme, type EmailTheme } from '@/lib/emailHtml';
@@ -496,6 +496,10 @@ function CommunicationsPageInner() {
   const [duplicatingIds, setDuplicatingIds] = useState<Set<string>>(new Set());
   const [togglingLifecycleIds, setTogglingLifecycleIds] = useState<Set<string>>(new Set());
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
+  // Busy set for the Notifications registry toggle when it has to create the
+  // stub row first (never-configured event -> TURN ON) — an insert, unlike
+  // the instant optimistic flip for an already-existing template row.
+  const [togglingEventKeys, setTogglingEventKeys] = useState<Set<string>>(new Set());
   const { confirm: confirmDelete, modal: deleteConfirmModal } = useConfirmModal();
   // Restored a saved audience (email_templates.audience) into the picker below.
   const [audienceRestored, setAudienceRestored] = useState(false);
@@ -1093,8 +1097,29 @@ function CommunicationsPageInner() {
     });
   }
 
-  function handleToggleEnabled(template: EmailTemplate) {
-    if (!session) return;
+  // Toggling ON an event with no template row yet creates the stub (F:
+  // three-state events) — an awaited insert, busy-scoped to that row's
+  // toggle. Toggling an existing row (either direction) stays the instant
+  // optimistic flip.
+  function handleToggleEnabled(ev: EventDef, template: EmailTemplate | undefined) {
+    if (!session || !conference) return;
+
+    if (!template) {
+      if (togglingEventKeys.has(ev.key)) return;
+      setTogglingEventKeys(s => new Set(s).add(ev.key));
+      const supabase = getAuthedClient(session.access_token);
+      (async () => {
+        const res = await turnOnDefaultEmail(supabase, conference.id, ev.key);
+        if (!res.ok) throw new Error(res.error ?? 'Could not turn this on.');
+        void loadTemplates();
+      })()
+        .catch((e: unknown) => {
+          showFlash('err', e instanceof Error ? e.message : 'Could not turn this on.');
+        })
+        .finally(() => setTogglingEventKeys(s => { const next = new Set(s); next.delete(ev.key); return next; }));
+      return;
+    }
+
     const prev = template.enabled;
     const next = !prev;
     // Optimistic: flip the pill immediately; roll back only this row on failure.
@@ -1482,7 +1507,7 @@ function CommunicationsPageInner() {
           const result = await queueEventEmail(supabase, conference.id, 'request_reply', [req.application_id], {
             request_subject: req.subject,
           });
-          if (!result.drafted) pushDraftNotice('request_reply');
+          notifyIfNeeded(result, pushDraftNotice);
         } catch {
           setReplyError('Reply posted, but the notification email could not be queued.');
         }
@@ -1570,11 +1595,15 @@ function CommunicationsPageInner() {
       }).eq('id', req.id);
       if (reqError) throw reqError;
 
-      if (app_a && app_b) {
+      // Consolidation: delegation_swap only fires on APPROVE — nothing was
+      // actually swapped on decline, so no swap email goes out for it. If the
+      // organizer wants to notify a decline, the normal reply flow (request_reply)
+      // carries that news instead.
+      if (approve && app_a && app_b) {
         // Secondary effect: inline error, no rollback of the decision.
         try {
           const result = await queueEventEmail(supabase, conference.id, 'delegation_swap', [app_a, app_b]);
-          if (!result.drafted) pushDraftNotice('delegation_swap');
+          notifyIfNeeded(result, pushDraftNotice);
         } catch {
           setSwapError('Decision recorded, but the notification email could not be queued.');
         }
@@ -1658,7 +1687,19 @@ function CommunicationsPageInner() {
         </div>
       )}
 
-      {!builderOpen && <DraftNoticeList notices={draftNotices} conferenceSlug={conference.slug} onDismiss={dismissDraftNotice} />}
+      {!builderOpen && (
+        <DraftNoticeList
+          notices={draftNotices}
+          conferenceSlug={conference.slug}
+          onDismiss={dismissDraftNotice}
+          onTurnOn={async (eventKey) => {
+            if (!session) return;
+            const supabase = getAuthedClient(session.access_token);
+            await turnOnDefaultEmail(supabase, conference.id, eventKey);
+            void loadTemplates();
+          }}
+        />
+      )}
 
       {/* Flash */}
       {flash && (
@@ -2011,6 +2052,11 @@ function CommunicationsPageInner() {
               <div className="flex flex-col gap-2">
                 {EVENT_REGISTRY.map(ev => {
                   const template = templatesByEvent.get(ev.key);
+                  const hasDraft = !!template && (
+                    (Array.isArray(template.body_blocks) && (template.body_blocks as unknown[]).length > 0)
+                    || !!(template.body && template.body.trim().length > 0)
+                  );
+                  const togglingStub = togglingEventKeys.has(ev.key);
                   return (
                     <div
                       key={ev.key}
@@ -2022,27 +2068,43 @@ function CommunicationsPageInner() {
                         <p className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>{ev.description}</p>
                       </div>
                       <div className="flex items-center gap-3 flex-shrink-0">
-                        {!template ? (
+                        {ev.functional ? (
                           <span
                             className="rounded-md px-2.5 py-0.5"
-                            style={{ fontSize: 11, fontWeight: 700, fontFamily: OUTFIT, backgroundColor: STATUS_COLORS.draft.bg, color: STATUS_COLORS.draft.text, border: `1px solid ${STATUS_COLORS.draft.dot}55` }}
+                            style={{ fontSize: 11, fontWeight: 700, fontFamily: OUTFIT, backgroundColor: 'rgba(27,56,40,0.08)', color: '#1B3828', border: '1px solid rgba(27,56,40,0.22)' }}
                           >
-                            NOT DRAFTED
+                            ALWAYS SENDS
                           </span>
                         ) : (
                           <div className="flex items-center gap-2">
+                            {!template ? (
+                              <span
+                                className="rounded-md px-2.5 py-0.5"
+                                style={{ fontSize: 11, fontWeight: 700, fontFamily: OUTFIT, backgroundColor: STATUS_COLORS.draft.bg, color: STATUS_COLORS.draft.text, border: `1px solid ${STATUS_COLORS.draft.dot}55` }}
+                              >
+                                NOT CONFIGURED
+                              </span>
+                            ) : (
+                              <>
+                                <span style={{ fontSize: 10, color: '#9A8A78', fontFamily: OUTFIT, fontWeight: 700, letterSpacing: '0.06em' }}>
+                                  {template.delivery === 'immediate' ? 'AUTO-SEND' : 'MANUAL'}
+                                </span>
+                                <span
+                                  className="rounded-md px-2.5 py-0.5"
+                                  style={hasDraft
+                                    ? { fontSize: 11, fontWeight: 700, fontFamily: OUTFIT, backgroundColor: 'rgba(61,122,82,0.1)', color: '#3D7A52', border: '1px solid rgba(61,122,82,0.35)' }
+                                    : { fontSize: 11, fontWeight: 700, fontFamily: OUTFIT, backgroundColor: 'rgba(182,135,31,0.12)', color: '#8A6614', border: '1px solid rgba(182,135,31,0.35)' }}
+                                >
+                                  {hasDraft ? 'DRAFTED' : 'DEFAULT'}
+                                </span>
+                              </>
+                            )}
+                            <PillToggle
+                              value={template?.enabled ?? false}
+                              onChange={togglingStub ? () => {} : () => handleToggleEnabled(ev, template)}
+                            />
                             <span style={{ fontSize: 10, color: '#9A8A78', fontFamily: OUTFIT, fontWeight: 700, letterSpacing: '0.06em' }}>
-                              {template.delivery === 'immediate' ? 'AUTO-SEND' : 'MANUAL'}
-                            </span>
-                            <span
-                              className="rounded-md px-2.5 py-0.5"
-                              style={{ fontSize: 11, fontWeight: 700, fontFamily: OUTFIT, backgroundColor: 'rgba(61,122,82,0.1)', color: '#3D7A52', border: '1px solid rgba(61,122,82,0.35)' }}
-                            >
-                              DRAFTED
-                            </span>
-                            <PillToggle value={template.enabled} onChange={() => handleToggleEnabled(template)} />
-                            <span style={{ fontSize: 10, color: '#9A8A78', fontFamily: OUTFIT, fontWeight: 700, letterSpacing: '0.06em' }}>
-                              {template.enabled ? 'ON' : 'OFF'}
+                              {togglingStub ? 'TURNING ON…' : template?.enabled ? (hasDraft ? 'ON (CUSTOM)' : 'ON (DEFAULT)') : 'OFF'}
                             </span>
                           </div>
                         )}
@@ -2062,7 +2124,7 @@ function CommunicationsPageInner() {
                           onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
                           onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                         >
-                          {template ? 'EDIT' : 'DRAFT'}
+                          {hasDraft ? 'EDIT' : 'DRAFT'}
                         </button>
                       </div>
                     </div>

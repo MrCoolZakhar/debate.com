@@ -8,7 +8,7 @@
 import { useState } from 'react';
 import { GripVertical, Lock, Check } from 'lucide-react';
 import { getAuthedClient } from '@/lib/supabase-auth';
-import { queueEventEmail } from '@/lib/emailEvents';
+import { queueEventEmail, type QueueEventEmailResult } from '@/lib/emailEvents';
 import { ConfirmModal } from '@/components/ConfirmModal';
 
 // ── Shared bits (matches the visual language of the rest of this page) ─────────
@@ -40,13 +40,26 @@ export function poolForRole(role: string): Pool | null {
 /**
  * Promotes the oldest-submitted attending unpaid members of a pool to 'paid'
  * until the pool's purchased-spots column is full or candidates run out.
- * Idempotent — a no-op when the pool has no free spots.
+ * Idempotent — a no-op when the pool has no free spots. Only 'accepted' and
+ * 'assigned' applications count towards occupancy or are eligible candidates
+ * — a still-pending or withdrawn/rejected application must never occupy or
+ * be auto-promoted into a delegation-purchased spot.
+ *
+ * Canonical location (F: fillFreeSpots consolidation) — applications/page.tsx
+ * and DelegationsView.tsx both import this rather than keeping their own copy.
+ *
+ * Every newly-covered member gets a 'spot_received' email (the fill-path
+ * notification), except any id in `opts.suppressIds` — used when the fill was
+ * triggered by that same person's own acceptance, which already told them via
+ * 'application_accepted' (rule one wins; see emailEvents.ts consolidation notes).
  */
 export async function fillFreeSpots(
   supabase: ReturnType<typeof getAuthedClient>,
+  conferenceId: string,
   societyId: string,
-  pool: Pool
-) {
+  pool: Pool,
+  opts?: { suppressIds?: Set<string> | string[] }
+): Promise<{ filledIds: string[] }> {
   const roles = POOL_ROLES[pool];
   const spotsColumn = POOL_SPOTS_COLUMN[pool];
 
@@ -57,30 +70,41 @@ export async function fillFreeSpots(
       .select('id', { count: 'exact', head: true })
       .eq('society_id', societyId)
       .in('role', roles)
+      .in('status', ['accepted', 'assigned'])
       .eq('attending', true)
       .eq('payment_status', 'paid'),
   ]);
 
   const spotsPurchased = (society as Record<string, number> | null)?.[spotsColumn] ?? 0;
   const freeSpots = spotsPurchased - (occupancy ?? 0);
-  if (freeSpots <= 0) return;
+  if (freeSpots <= 0) return { filledIds: [] };
 
+  // Unpaid only — waived members are already covered and skipped.
   const { data: candidates } = await supabase
     .from('applications')
     .select('id')
     .eq('society_id', societyId)
     .in('role', roles)
+    .in('status', ['accepted', 'assigned'])
     .eq('attending', true)
     .eq('payment_status', 'unpaid')
     .order('submitted_at', { ascending: true })
     .limit(freeSpots);
 
   const ids = ((candidates ?? []) as { id: string }[]).map(c => c.id);
-  if (ids.length === 0) return;
+  if (ids.length === 0) return { filledIds: [] };
 
   // These members are absorbed into an already-purchased delegation spot, not
   // funding one themselves — self_paid stays false.
   await supabase.from('applications').update({ payment_status: 'paid', self_paid: false }).in('id', ids);
+
+  const suppress = opts?.suppressIds instanceof Set ? opts.suppressIds : new Set(opts?.suppressIds ?? []);
+  const emailIds = ids.filter(id => !suppress.has(id));
+  if (emailIds.length > 0) {
+    await queueEventEmail(supabase, conferenceId, 'spot_received', emailIds);
+  }
+
+  return { filledIds: ids };
 }
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -205,8 +229,8 @@ export async function markApplicationPaid(
 }
 
 export interface SwapEmailResult {
-  incomingDrafted: boolean;
-  outgoingDrafted: boolean;
+  incoming: QueueEventEmailResult;
+  outgoing: QueueEventEmailResult;
   /** First error from the primary payment/allocation writes, null on success. */
   error: string | null;
 }
@@ -275,14 +299,14 @@ export async function performSwap(
     queueEventEmail(supabase, conferenceId, 'spot_received', [source.id]),
     queueEventEmail(supabase, conferenceId, 'spot_lost', [target.id]),
   ]);
-  return { incomingDrafted: incoming.drafted, outgoingDrafted: outgoing.drafted, error: firstError };
+  return { incoming, outgoing, error: firstError };
 }
 
 export async function markNotAttending(
   supabase: ReturnType<typeof getAuthedClient>,
   conferenceId: string,
   member: PoolMember
-): Promise<{ drafted: boolean; error: string | null }> {
+): Promise<{ result: QueueEventEmailResult; error: string | null }> {
   const hasAllocation = !!member.assigned_committee_id;
   const { error: updateErr } = await supabase.from('applications').update({
     attending: false,
@@ -297,17 +321,46 @@ export async function markNotAttending(
     if (delErr && !firstError) firstError = delErr.message;
   }
   const result = await queueEventEmail(supabase, conferenceId, 'not_attending', [member.id]);
-  return { drafted: result.drafted, error: firstError };
+  return { result, error: firstError };
 }
 
 export async function undoNotAttending(
   supabase: ReturnType<typeof getAuthedClient>,
   conferenceId: string,
   member: PoolMember
-): Promise<{ drafted: boolean; error: string | null }> {
+): Promise<{ result: QueueEventEmailResult; error: string | null }> {
   const { error } = await supabase.from('applications').update({ attending: true, payment_status: 'unpaid' }).eq('id', member.id);
   const result = await queueEventEmail(supabase, conferenceId, 'attendance_restored', [member.id]);
-  return { drafted: result.drafted, error: error?.message ?? null };
+  return { result, error: error?.message ?? null };
+}
+
+/**
+ * Payment-provenance outcome when someone leaves their delegation's pool —
+ * via remove-from-delegation OR a full conference withdrawal (both reuse this
+ * exact accounting so the "existing removal provenance rules" stay singular):
+ * a self-funded paid spot (self_paid) travels with them, so the pool's
+ * purchased-spots column decrements by 1; a pool-covered paid spot
+ * (self_paid = false) stays behind — the caller should drop payment_status to
+ * 'unpaid' (returned as `dropToUnpaid`) so the now-open spot is simply free
+ * again for fillFreeSpots. Waived/unpaid members are untouched here.
+ */
+export async function releasePoolSpot(
+  supabase: ReturnType<typeof getAuthedClient>,
+  member: { role: string; payment_status: string | null; self_paid: boolean | null; society_id: string | null }
+): Promise<{ dropToUnpaid: boolean; error: string | null }> {
+  const pool = poolForRole(member.role);
+  const selfFundedPaidSpot = member.payment_status === 'paid' && !!member.self_paid;
+  const pooledPaidSpot = member.payment_status === 'paid' && !member.self_paid;
+
+  if (selfFundedPaidSpot && pool && member.society_id) {
+    const spotsColumn = POOL_SPOTS_COLUMN[pool];
+    const { data: soc } = await supabase.from('societies').select(spotsColumn).eq('id', member.society_id).single();
+    const current = (soc as Record<string, number> | null)?.[spotsColumn] ?? 0;
+    const { error: socErr } = await supabase.from('societies').update({ [spotsColumn]: Math.max(0, current - 1) }).eq('id', member.society_id);
+    if (socErr) return { dropToUnpaid: false, error: socErr.message };
+  }
+
+  return { dropToUnpaid: pooledPaidSpot, error: null };
 }
 
 /**
@@ -326,9 +379,8 @@ export async function removeFromDelegation(
   conferenceId: string,
   member: PoolMember,
   keepAllocation: boolean
-): Promise<{ drafted: boolean; error: string | null }> {
-  const pool = poolForRole(member.role);
-  const selfFundedPaidSpot = member.payment_status === 'paid' && !!member.self_paid;
+): Promise<{ result: QueueEventEmailResult; error: string | null }> {
+  const { dropToUnpaid, error: releaseError } = await releasePoolSpot(supabase, member);
 
   const updates: Record<string, unknown> = {
     society_id: null,
@@ -337,9 +389,7 @@ export async function removeFromDelegation(
     // is_independent for logic.
     is_independent: true,
   };
-  if (member.payment_status === 'paid' && !member.self_paid) {
-    updates.payment_status = 'unpaid';
-  }
+  if (dropToUnpaid) updates.payment_status = 'unpaid';
   if (!keepAllocation) {
     updates.assigned_committee_id = null;
     updates.assigned_country_code = null;
@@ -348,23 +398,15 @@ export async function removeFromDelegation(
   }
 
   const { error: updateErr } = await supabase.from('applications').update(updates).eq('id', member.id);
-  let firstError: string | null = updateErr?.message ?? null;
+  let firstError: string | null = releaseError ?? updateErr?.message ?? null;
 
   if (!keepAllocation && member.assigned_committee_id) {
     const { error: delErr } = await supabase.from('conference_allocations').delete().eq('application_id', member.id);
     if (delErr && !firstError) firstError = delErr.message;
   }
 
-  if (selfFundedPaidSpot && pool && member.society_id) {
-    const spotsColumn = POOL_SPOTS_COLUMN[pool];
-    const { data: soc } = await supabase.from('societies').select(spotsColumn).eq('id', member.society_id).single();
-    const current = (soc as Record<string, number> | null)?.[spotsColumn] ?? 0;
-    const { error: socErr } = await supabase.from('societies').update({ [spotsColumn]: Math.max(0, current - 1) }).eq('id', member.society_id);
-    if (socErr && !firstError) firstError = socErr.message;
-  }
-
   const result = await queueEventEmail(supabase, conferenceId, 'removed_from_delegation', [member.id]);
-  return { drafted: result.drafted, error: firstError };
+  return { result, error: firstError };
 }
 
 /**
