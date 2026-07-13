@@ -442,7 +442,7 @@ function SegButton({
 // ── CommunicationsPage ────────────────────────────────────────────────────────
 
 function CommunicationsPageInner() {
-  const { conference, refreshConference } = useManage();
+  const { conference, refreshConferenceQuiet } = useManage();
   const { user, session, profile } = useAuth();
   const searchParams = useSearchParams();
 
@@ -515,7 +515,16 @@ function CommunicationsPageInner() {
   const [themeSaved, setThemeSaved] = useState(false);
   const [themeError, setThemeError] = useState('');
   const themeSeededRef = useRef(false);
-  const skipNextThemeAutosaveRef = useRef(false);
+  // Last theme value actually confirmed on the conference row (seeded on
+  // load, updated after every successful save). The autosave effect below
+  // bails whenever themeDraft is deep-equal to this, so re-seeding after a
+  // refresh (quiet or otherwise) can never itself trigger a write.
+  const lastSavedThemeRef = useRef<Required<EmailTheme> | null>(null);
+  // Flipped true only by patchTheme, the single mutator every design control
+  // goes through. Autosave never fires before a real user edit, closing off
+  // the seed-effect entirely as a write trigger, independent of the
+  // deep-equal check above.
+  const themeTouchedRef = useRef(false);
 
   // ── Audience state (ad-hoc only) ──
   const [selRoles, setSelRoles] = useState<Set<string>>(new Set());
@@ -562,7 +571,7 @@ function CommunicationsPageInner() {
       .eq('conference_id', conference.id);
     if (!fresh()) return;
     setTemplates((data ?? []) as EmailTemplate[]);
-  }, [conference, session?.access_token, beginLoad]);
+  }, [conference?.id, session?.access_token, beginLoad]);
 
   const loadApplications = useCallback(async () => {
     if (!conference || !session) return;
@@ -582,7 +591,7 @@ function CommunicationsPageInner() {
       .eq('conference_id', conference.id);
     if (!fresh()) return;
     setApplications((data ?? []) as unknown as AppRow[]);
-  }, [conference, session?.access_token, beginLoad]);
+  }, [conference?.id, session?.access_token, beginLoad]);
 
   const loadCommittees = useCallback(async () => {
     if (!conference || !session) return;
@@ -595,7 +604,7 @@ function CommunicationsPageInner() {
       .order('name', { ascending: true });
     if (!fresh()) return;
     setCommittees((data ?? []) as Committee[]);
-  }, [conference, session?.access_token, beginLoad]);
+  }, [conference?.id, session?.access_token, beginLoad]);
 
   const loadSocieties = useCallback(async () => {
     if (!conference || !session) return;
@@ -608,7 +617,7 @@ function CommunicationsPageInner() {
       .order('name', { ascending: true });
     if (!fresh()) return;
     setSocieties((data ?? []) as Society[]);
-  }, [conference, session?.access_token, beginLoad]);
+  }, [conference?.id, session?.access_token, beginLoad]);
 
   const loadEmailSends = useCallback(async () => {
     if (!conference || !session) return;
@@ -621,7 +630,7 @@ function CommunicationsPageInner() {
       .order('created_at', { ascending: false });
     if (!fresh()) return;
     setEmailSends((data ?? []) as unknown as EmailSend[]);
-  }, [conference, session?.access_token, beginLoad]);
+  }, [conference?.id, session?.access_token, beginLoad]);
 
   const loadOutboxPending = useCallback(async () => {
     if (!conference || !session) return;
@@ -634,7 +643,7 @@ function CommunicationsPageInner() {
       .eq('status', 'pending');
     if (!fresh()) return;
     setOutboxPending(count ?? 0);
-  }, [conference, session?.access_token, beginLoad]);
+  }, [conference?.id, session?.access_token, beginLoad]);
 
   // All requests + all their messages in two queries, modest for a single
   // conference's Q&R volume, and lets the list snippet / unread rule compute
@@ -678,25 +687,30 @@ function CommunicationsPageInner() {
       if (!roleMap.has(a.user_id)) roleMap.set(a.user_id, a.role);
     }
     setInboxRoles(roleMap);
-  }, [conference, session?.access_token, beginLoad]);
+  }, [conference?.id, session?.access_token, beginLoad]);
 
   useEffect(() => {
     if (!conference) return;
     setLoading(true);
     Promise.all([loadTemplates(), loadApplications(), loadCommittees(), loadSocieties(), loadEmailSends(), loadOutboxPending(), loadInbox()])
       .finally(() => setLoading(false));
-  }, [conference, loadTemplates, loadApplications, loadCommittees, loadSocieties, loadEmailSends, loadOutboxPending, loadInbox]);
+    // conference?.id, not conference: every load callback above is itself
+    // keyed on conference?.id, so this only re-fires when the id genuinely
+    // changes, a background refresh (quiet or otherwise) that swaps in a new
+    // conference object with the same id must never restart the page load.
+  }, [conference?.id, loadTemplates, loadApplications, loadCommittees, loadSocieties, loadEmailSends, loadOutboxPending, loadInbox]);
 
   // Seed the design draft from the conference's saved theme once (not on
-  // every refreshConference(), that would clobber an in-progress edit).
-  // Marks the autosave effect below to skip the resulting themeDraft change
-  // so mounting the page never re-writes back the value it just read.
+  // every refreshConferenceQuiet(), that would clobber an in-progress edit).
+  // Records the seeded value as "last saved" so the autosave effect below
+  // sees no real change and never writes it straight back.
   useEffect(() => {
     if (!conference || themeSeededRef.current) return;
     themeSeededRef.current = true;
-    skipNextThemeAutosaveRef.current = true;
-    setThemeDraft(resolveEmailTheme(conference.email_theme));
-  }, [conference]);
+    const seeded = resolveEmailTheme(conference.email_theme);
+    lastSavedThemeRef.current = seeded;
+    setThemeDraft(seeded);
+  }, [conference?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sweep the outbox once on mount: retries anything still pending from an
   // earlier session (a page that closed before delivery fired, a prior sweep
@@ -709,7 +723,7 @@ function CommunicationsPageInner() {
       loadOutboxPending();
       loadEmailSends();
     });
-  }, [conference, session, loadOutboxPending, loadEmailSends]);
+  }, [conference?.id, session?.access_token, loadOutboxPending, loadEmailSends]);
 
   // ── Inbox derived data ───────────────────────────────────────────────────
 
@@ -1224,7 +1238,10 @@ function CommunicationsPageInner() {
     showFlash('ok', 'Deleted.');
   }
 
+  // The one and only mutator for themeDraft's user-facing controls, marks
+  // this a real edit so the autosave effect below is allowed to fire.
   function patchTheme(patch: Partial<EmailTheme>) {
+    themeTouchedRef.current = true;
     setThemeDraft(t => ({ ...t, ...patch }));
   }
 
@@ -1232,9 +1249,16 @@ function CommunicationsPageInner() {
   // builder's body autosave. renderEmailHtml reads the theme with
   // current-look defaults, so every send/preview path picks this up with no
   // content migration once it lands.
+  //
+  // Two independent guards keep the seeding effect from ever causing a
+  // write: themeTouchedRef only flips inside patchTheme (a real control
+  // interaction), and the deep-equal check below is a second line of
+  // defense against saving a draft that already matches the DB. Either one
+  // alone would be sufficient; both together mean this can't regress into
+  // the reload loop even if one of them is ever bypassed.
   useEffect(() => {
-    if (!conference || !session || !themeSeededRef.current) return;
-    if (skipNextThemeAutosaveRef.current) { skipNextThemeAutosaveRef.current = false; return; }
+    if (!conference || !session || !themeTouchedRef.current) return;
+    if (JSON.stringify(themeDraft) === JSON.stringify(lastSavedThemeRef.current)) return;
     const t = setTimeout(async () => {
       setThemeSaving(true);
       setThemeError('');
@@ -1242,9 +1266,13 @@ function CommunicationsPageInner() {
       const { error } = await supabase.from('conferences').update({ email_theme: themeDraft }).eq('id', conference.id);
       setThemeSaving(false);
       if (error) { setThemeError(error.message); return; }
+      lastSavedThemeRef.current = themeDraft;
       setThemeSaved(true);
       setTimeout(() => setThemeSaved(false), 2000);
-      void refreshConference();
+      // Quiet: swaps the conference row in without flipping the layout's
+      // loading flag, a full refreshConference() here would unmount and
+      // remount this entire page on every autosave.
+      void refreshConferenceQuiet();
     }, 700);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps

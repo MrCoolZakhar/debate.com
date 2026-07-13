@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter, usePathname, useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -583,15 +583,11 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
     }
   }, [authLoading, user, router, slug]);
 
-  // Fetch conference + ownership gate
-  useEffect(() => {
-    if (authLoading) return;
-    if (!user || !session) return;
-    loadConference();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading, user?.id, slug, session?.access_token]);
-
-  async function loadConference() {
+  // Stable identity across renders (useCallback), so the memoised context
+  // value below only changes when it genuinely should, never on every
+  // layout render, that's what let a background refresh cascade into
+  // re-running every consumer's effects.
+  const loadConference = useCallback(async () => {
     setLoadingConf(true);
     if (!session) return;
     const supabase = getAuthedClient(session.access_token);
@@ -629,17 +625,17 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
     const { organizer_id: _oid, ...conf } = confData as any;
     setConference(conf as Conference);
     setLoadingConf(false);
-  }
+  }, [session, slug, user, router]);
 
-  async function refreshConference() {
+  const refreshConference = useCallback(async () => {
     if (!user) return;
     await loadConference();
-  }
+  }, [user, loadConference]);
 
   // Quiet variant: re-fetches the conference row and swaps it in directly,
   // without touching loadingConf, so settings saves can confirm DB truth
   // post-write without unmounting the page behind the full-screen spinner.
-  async function refreshConferenceQuiet() {
+  const refreshConferenceQuiet = useCallback(async () => {
     if (!user || !session) return;
     const supabase = getAuthedClient(session.access_token);
     const { data: confData } = await supabase
@@ -651,13 +647,30 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { organizer_id: _oid, ...conf } = confData as any;
     setConference(conf as Conference);
-  }
+  }, [user, session, slug]);
+
+  // Fetch conference + ownership gate
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user || !session) return;
+    loadConference();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading, user?.id, slug, session?.access_token]);
 
   const avatarInitial = profile?.display_name
     ? profile.display_name[0].toUpperCase()
     : user?.email
     ? user.email[0].toUpperCase()
     : '?';
+
+  // Memoised so consumers (useManage()) only see a new context value when
+  // the conference data or the (now-stable, useCallback'd) refresh functions
+  // actually change, not on every layout render. Declared before the early
+  // returns below, hooks can't run conditionally.
+  const manageContextValue = useMemo(
+    () => ({ conference, refreshConference, refreshConferenceQuiet }),
+    [conference, refreshConference, refreshConferenceQuiet]
+  );
 
   // Loading state
   if (authLoading || (user && loadingConf)) {
@@ -734,7 +747,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
   }
 
   return (
-    <ManageContext.Provider value={{ conference, refreshConference, refreshConferenceQuiet }}>
+    <ManageContext.Provider value={manageContextValue}>
       {/* Base surface, one continuous ivory behind rail + content (body is white;
           without this the strip behind the rail reads as a different background) */}
       <div className="pointer-events-none fixed inset-0 z-0" style={{ backgroundColor: '#EDE7D8' }} />

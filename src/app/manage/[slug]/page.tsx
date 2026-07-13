@@ -673,7 +673,7 @@ interface DashData {
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { conference, refreshConference } = useManage();
+  const { conference, refreshConferenceQuiet } = useManage();
   const { session } = useAuth();
   const [showPublishModal, setShowPublishModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
@@ -878,7 +878,10 @@ export default function DashboardPage() {
   }
 
   async function handlePublished() {
-    await refreshConference();
+    // Quiet: swaps the conference row in without flipping the layout's
+    // full-screen loading flag, no reason to unmount this page (and lose
+    // the just-closed modal state) for a routine post-write confirmation.
+    await refreshConferenceQuiet();
     setShowPublishModal(false);
   }
 
