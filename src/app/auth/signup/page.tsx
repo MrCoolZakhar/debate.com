@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, Suspense } from 'react';
+import { useEffect, useMemo, useState, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createAuthClient } from '@/lib/supabase-auth';
@@ -8,17 +8,22 @@ import { ageAt } from '@/lib/age';
 import {
   AuthLayout,
   CardHeading,
+  CheckEmailScreen,
+  CheckMark,
   ErrorBanner,
   FieldLabel,
   GoogleButton,
+  NoticeScreen,
   OrDivider,
   OUTFIT,
   PasswordField,
+  PrimaryActionButton,
   PrimaryButton,
   TextField,
   blurInput,
   focusInput,
   inputStyle,
+  isValidEmail,
 } from '../authUi';
 
 const MONTHS = [
@@ -125,6 +130,8 @@ function DobPicker({
   );
 }
 
+type Phase = 'form' | 'awaiting' | 'verified';
+
 function SignUpInner() {
   const router = useRouter();
   const [name, setName] = useState('');
@@ -134,10 +141,79 @@ function SignUpInner() {
   const [dobYear, setDobYear] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [emailError, setEmailError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [showConfirmation, setShowConfirmation] = useState(false);
+  const [phase, setPhase] = useState<Phase>('form');
+  const [continuing, setContinuing] = useState(false);
 
   const supabase = useMemo(() => createAuthClient(), []);
+
+  // ── Live verification detection ──────────────────────────────────────────
+  // While the awaiting screen shows, watch for the account being confirmed —
+  // possibly in ANOTHER tab (the email link opens /auth/callback there, which
+  // sets the shared session cookie). Poll getSession, subscribe to auth-state
+  // changes, and re-check on tab focus / storage writes. All listeners are torn
+  // down on unmount and once we've transitioned to the verified state.
+  useEffect(() => {
+    if (phase !== 'awaiting') return;
+    let done = false;
+
+    const markVerified = () => {
+      if (done) return;
+      done = true;
+      setPhase('verified');
+    };
+
+    const check = async () => {
+      const { data } = await supabase.auth.getSession();
+      if (data.session) markVerified();
+    };
+
+    // Poll every 3s.
+    const poll = setInterval(check, 3000);
+    // Same-tab auth changes.
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+      if (session) markVerified();
+    });
+    // Cross-tab signals.
+    const onStorage = () => { void check(); };
+    const onVisible = () => { if (document.visibilityState === 'visible') void check(); };
+    window.addEventListener('storage', onStorage);
+    document.addEventListener('visibilitychange', onVisible);
+    // Fire an immediate check in case verification already happened.
+    void check();
+
+    return () => {
+      done = true;
+      clearInterval(poll);
+      sub.subscription.unsubscribe();
+      window.removeEventListener('storage', onStorage);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [phase, supabase]);
+
+  async function handleContinue() {
+    setContinuing(true);
+    const { data } = await supabase.auth.getSession();
+    if (data.session) {
+      router.push('/auth/onboarding');
+    } else {
+      // Verified but the session didn't stick to this tab — send them to sign
+      // in rather than a dead end.
+      router.push('/auth/signin?next=/auth/onboarding&verified=1');
+    }
+  }
+
+  function resendSignupEmail(): Promise<string | null> {
+    return supabase.auth
+      .resend({
+        type: 'signup',
+        email,
+        options: { emailRedirectTo: `${window.location.origin}/auth/callback?next=/auth/onboarding` },
+      })
+      .then(({ error }) => (error ? error.message : null))
+      .catch((e) => (e instanceof Error ? e.message : 'Could not resend right now. Please try again.'));
+  }
 
   async function handleGoogleSignUp() {
     await supabase.auth.signInWithOAuth({
@@ -160,6 +236,11 @@ function SignUpInner() {
   async function handleEmailSignUp(e: React.FormEvent) {
     e.preventDefault();
     setError('');
+    setEmailError('');
+    if (!isValidEmail(email)) {
+      setEmailError('Please enter a valid email address, including a domain like example.com.');
+      return;
+    }
     if (password.length < 8) {
       setError('Password must be at least 8 characters.');
       return;
@@ -196,21 +277,16 @@ function SignUpInner() {
 
     fireWelcomeEmail();
 
-    // Instant entry: when email confirmation is disabled, signUp returns a
-    // live session — go straight to onboarding. Otherwise try an immediate
-    // password sign-in; only fall back to "check your email" if the project
-    // really requires confirmation.
+    // Instant entry: when email confirmation is DISABLED, signUp returns a
+    // live session — go straight to onboarding. With confirmation ON (the
+    // normal path) there is no session, so the awaiting-verification screen
+    // is the primary outcome.
     if (data.session) {
       router.push('/auth/onboarding');
       return;
     }
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-    if (!signInError) {
-      router.push('/auth/onboarding');
-      return;
-    }
     setLoading(false);
-    setShowConfirmation(true);
+    setPhase('awaiting');
   }
 
   return (
@@ -219,30 +295,41 @@ function SignUpInner() {
       headline="Take the floor."
       sub="Create an account to attend conferences, build your MUN CV, and run committees of your own."
     >
-      {showConfirmation ? (
-        <div className="text-center">
-          <div
-            className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4"
-            style={{ backgroundColor: 'rgba(27, 56, 40, 0.1)' }}
-          >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1B3828" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
-          </div>
-          <h2 className="text-lg font-semibold mb-2" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-            Check your email
-          </h2>
-          <p className="text-sm" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-            We&apos;ve sent a confirmation link to <strong style={{ color: '#1C1410' }}>{email}</strong>. Click it to activate your account.
-          </p>
-          <Link
-            href="/auth/signin"
-            className="inline-block mt-6 text-sm font-semibold transition-colors"
-            style={{ color: '#1B3828', fontFamily: OUTFIT }}
-          >
-            Back to sign in
-          </Link>
-        </div>
+      {phase === 'verified' ? (
+        <NoticeScreen
+          icon={<CheckMark size={26} />}
+          title="You're verified. Happy Gavelling!"
+          action={
+            <PrimaryActionButton loading={continuing} loadingText="TAKING YOU IN…" onClick={handleContinue}>
+              CONTINUE
+            </PrimaryActionButton>
+          }
+        >
+          Your email is confirmed and your account is ready. Let&apos;s finish setting things up.
+        </NoticeScreen>
+      ) : phase === 'awaiting' ? (
+        <CheckEmailScreen
+          email={email}
+          intro={
+            <>
+              We&apos;ve sent a confirmation link to your inbox. Open it and click{' '}
+              <strong style={{ color: '#1C1410' }}>ACTIVATE MY ACCOUNT</strong> to finish creating your account. This page will update automatically once you do.
+            </>
+          }
+          onResend={resendSignupEmail}
+          footer={
+            <button
+              type="button"
+              onClick={() => { setPhase('form'); setError(''); }}
+              className="text-sm font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 rounded"
+              style={{ color: '#9A8A78', fontFamily: OUTFIT, background: 'none', border: 'none', cursor: 'pointer', outlineColor: '#1B3828' }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
+            >
+              Wrong email? Start over
+            </button>
+          }
+        />
       ) : (
         <>
           <CardHeading
@@ -265,15 +352,24 @@ function SignUpInner() {
               placeholder="Ada Lovelace"
               autoComplete="name"
             />
-            <TextField
-              label="Email address"
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
-              autoComplete="email"
-            />
+            <div>
+              <TextField
+                label="Email address"
+                type="email"
+                required
+                value={email}
+                onChange={(e) => { setEmail(e.target.value); if (emailError) setEmailError(''); }}
+                placeholder="you@example.com"
+                autoComplete="email"
+                aria-invalid={!!emailError}
+                aria-describedby={emailError ? 'signup-email-error' : undefined}
+              />
+              {emailError && (
+                <p id="signup-email-error" role="alert" className="text-xs mt-1.5" style={{ color: '#8B2020', fontFamily: OUTFIT }}>
+                  {emailError}
+                </p>
+              )}
+            </div>
             <DobPicker
               day={dobDay} month={dobMonth} year={dobYear}
               onDay={setDobDay} onMonth={setDobMonth} onYear={setDobYear}

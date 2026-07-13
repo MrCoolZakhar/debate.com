@@ -6,10 +6,12 @@ import { createAuthClient } from '@/lib/supabase-auth';
 import {
   AuthLayout,
   CardHeading,
+  CheckEmailScreen,
   ErrorBanner,
   OUTFIT,
   PrimaryButton,
   TextField,
+  isValidEmail,
 } from '../authUi';
 
 export default function ForgotPasswordPage() {
@@ -20,15 +22,30 @@ export default function ForgotPasswordPage() {
 
   const supabase = useMemo(() => createAuthClient(), []);
 
+  function sendResetEmail(): Promise<{ error: string | null }> {
+    return supabase.auth
+      .resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth/callback?next=/auth/reset`,
+      })
+      .then(({ error }) => ({ error: error ? error.message : null }))
+      .catch((e) => ({ error: e instanceof Error ? e.message : 'Something went wrong.' }));
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
+    if (!isValidEmail(email)) {
+      setError('Please enter a valid email address, including a domain like example.com.');
+      return;
+    }
     setLoading(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/callback?next=/auth/reset`,
-    });
+    // Fire the reset. We ALWAYS show the same neutral success screen afterwards,
+    // whether or not an account exists — never reveal account existence. Only a
+    // hard transport/config failure (not an unknown-email error, which Supabase
+    // does not raise) surfaces an error.
+    const { error } = await sendResetEmail();
     setLoading(false);
-    if (error) setError(error.message);
+    if (error) setError(error);
     else setSent(true);
   }
 
@@ -39,30 +56,32 @@ export default function ForgotPasswordPage() {
       sub="We'll email you a secure link so you can set a new password and get back to committee."
     >
       {sent ? (
-        <div className="text-center">
-          <div
-            className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4"
-            style={{ backgroundColor: 'rgba(27, 56, 40, 0.1)' }}
-          >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1B3828" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
-          </div>
-          <h2 className="text-lg font-semibold mb-2" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-            Check your email
-          </h2>
-          <p className="text-sm" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-            If an account exists for <strong style={{ color: '#1C1410' }}>{email}</strong>, we&apos;ve
-            sent a link to reset your password. The link expires after a short while.
-          </p>
-          <Link
-            href="/auth/signin"
-            className="inline-block mt-6 text-sm font-semibold transition-colors"
-            style={{ color: '#1B3828', fontFamily: OUTFIT }}
-          >
-            Back to sign in
-          </Link>
-        </div>
+        <CheckEmailScreen
+          email={email}
+          intro={
+            <>
+              If an account exists for this address, we&apos;ve sent a link to reset your
+              password. Open it and choose a new password. The link expires after a short while.
+            </>
+          }
+          onResend={async () => {
+            // Swallow errors here too — resending must never reveal whether an
+            // account exists. Always report success to the user.
+            await sendResetEmail();
+            return null;
+          }}
+          footer={
+            <Link
+              href="/auth/signin"
+              className="text-sm font-semibold transition-colors"
+              style={{ color: '#9A8A78', fontFamily: OUTFIT }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
+            >
+              Back to sign in
+            </Link>
+          }
+        />
       ) : (
         <>
           <CardHeading

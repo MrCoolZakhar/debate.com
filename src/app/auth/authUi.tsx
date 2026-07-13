@@ -11,8 +11,8 @@
  */
 
 import Link from 'next/link';
-import { useState } from 'react';
-import { ArrowLeft, Globe2, CalendarCheck } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { ArrowLeft, Globe2, CalendarCheck, MailCheck, RotateCw } from 'lucide-react';
 
 export const OUTFIT = "'Outfit', sans-serif";
 
@@ -292,6 +292,61 @@ export function PrimaryButton({
   );
 }
 
+/** Primary button driven by an onClick handler (vs. PrimaryButton's submit). */
+export function PrimaryActionButton({
+  children,
+  loading,
+  loadingText,
+  onClick,
+}: {
+  children: React.ReactNode;
+  loading?: boolean;
+  loadingText?: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={loading}
+      className="w-full rounded-xl py-3 font-bold text-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+      style={{
+        backgroundColor: loading ? '#DDD4C0' : '#1B3828',
+        color: loading ? '#9A8A78' : '#EED98A',
+        fontFamily: OUTFIT,
+        letterSpacing: '0.08em',
+        outlineColor: '#1B3828',
+      }}
+      onMouseEnter={(e) => { if (!loading) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+      onMouseLeave={(e) => { if (!loading) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+    >
+      {loading ? loadingText : children}
+    </button>
+  );
+}
+
+/** Primary-styled link (for CTA navigation like "Request a new link"). */
+export function PrimaryLinkButton({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className="w-full inline-flex items-center justify-center rounded-xl py-3 font-bold text-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+      style={{
+        backgroundColor: '#1B3828',
+        color: '#EED98A',
+        fontFamily: OUTFIT,
+        letterSpacing: '0.08em',
+        textDecoration: 'none',
+        outlineColor: '#1B3828',
+      }}
+      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+    >
+      {children}
+    </Link>
+  );
+}
+
 export function GoogleButton({ label, onClick }: { label: string; onClick: () => void }) {
   return (
     <button
@@ -433,5 +488,245 @@ export function EyeOffIcon() {
       <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
       <line x1="1" y1="1" x2="23" y2="23" />
     </svg>
+  );
+}
+
+// ── Email validation ───────────────────────────────────────────────────────
+
+/**
+ * Rejects junk like "dddddddd@gma" or "a@b". Requires a local part, an @,
+ * a domain label, a dot, and a TLD of at least two letters. Intentionally
+ * stricter than the browser's built-in type="email" check, which accepts
+ * TLD-less addresses like "you@localhost".
+ */
+export function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[A-Za-z]{2,}$/.test(email.trim());
+}
+
+// ── Cooldown + toast primitives ────────────────────────────────────────────
+
+/**
+ * Countdown timer for resend cooldowns. `start()` seeds `seconds`; the value
+ * ticks to 0 and the interval cleans itself up (no leak — the effect re-runs
+ * on every decrement and clears the previous interval).
+ */
+export function useCooldown(seconds = 60) {
+  const [remaining, setRemaining] = useState(0);
+  useEffect(() => {
+    if (remaining <= 0) return;
+    const id = setInterval(() => {
+      setRemaining((r) => (r <= 1 ? 0 : r - 1));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [remaining]);
+  const start = useCallback(() => setRemaining(seconds), [seconds]);
+  return { remaining, start, active: remaining > 0 };
+}
+
+/** Ephemeral confirmation message that clears itself after `ms`. */
+export function useToast(ms = 3500) {
+  const [message, setMessage] = useState('');
+  useEffect(() => {
+    if (!message) return;
+    const t = setTimeout(() => setMessage(''), ms);
+    return () => clearTimeout(t);
+  }, [message, ms]);
+  const show = useCallback((m: string) => setMessage(m), []);
+  return { message, show };
+}
+
+/**
+ * Fixed, screen-reader-announced toast. The live region is always mounted so
+ * assistive tech announces the message when it appears.
+ */
+export function Toast({ message }: { message: string }) {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="fixed left-1/2 bottom-6 z-[60] -translate-x-1/2 px-1 pointer-events-none w-full max-w-xs"
+      style={{ display: 'flex', justifyContent: 'center' }}
+    >
+      {message && (
+        <div
+          style={{
+            backgroundColor: '#1B3828',
+            color: '#EED98A',
+            fontFamily: OUTFIT,
+            fontSize: '13px',
+            fontWeight: 600,
+            padding: '10px 18px',
+            borderRadius: '9999px',
+            boxShadow: '0 8px 24px rgba(27,56,40,0.28)',
+            border: '1px solid rgba(238,217,138,0.35)',
+            animation: 'auth-toast-in 220ms ease',
+          }}
+        >
+          {message}
+        </div>
+      )}
+      <style>{`
+        @keyframes auth-toast-in {
+          from { opacity: 0; transform: translateY(8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+// ── Notice / centred-state primitives ──────────────────────────────────────
+
+/** Round icon badge used at the top of centred notice screens. */
+export function IconBadge({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4"
+      style={{ backgroundColor: 'rgba(27, 56, 40, 0.1)' }}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** Secondary (outline) button — used for resend and other lower-emphasis actions. */
+export function SecondaryButton({
+  children,
+  disabled,
+  onClick,
+  ...rest
+}: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className="w-full rounded-xl py-3 font-bold text-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+      style={{
+        backgroundColor: 'transparent',
+        color: disabled ? '#B6AC98' : '#1B3828',
+        border: `1.5px solid ${disabled ? '#DDD4C0' : '#1B3828'}`,
+        fontFamily: OUTFIT,
+        letterSpacing: '0.06em',
+        cursor: disabled ? 'default' : 'pointer',
+        outlineColor: '#1B3828',
+      }}
+      onMouseEnter={(e) => { if (!disabled) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
+      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+      {...rest}
+    >
+      {children}
+    </button>
+  );
+}
+
+/**
+ * Generic centred notice (icon + title + body + action slot). Used for the
+ * verified-success, expired-link and callback-error states.
+ */
+export function NoticeScreen({
+  icon,
+  title,
+  children,
+  action,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  children: React.ReactNode;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="text-center">
+      <IconBadge>{icon}</IconBadge>
+      <h1 className="text-lg font-semibold mb-2" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+        {title}
+      </h1>
+      <div className="text-sm leading-relaxed" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+        {children}
+      </div>
+      {action && <div className="mt-6">{action}</div>}
+    </div>
+  );
+}
+
+/** Green check mark used across success states. */
+export function CheckMark({ size = 24 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#1B3828" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}
+
+/**
+ * Shared "Check your email" screen with a resend button (60s cooldown + toast).
+ * Used by both /auth/signup (awaiting verification) and /auth/forgot.
+ *
+ * `onResend` performs the actual resend and returns an error message to show
+ * inline, or null on success. For the forgot-password flow the caller swallows
+ * errors and always returns null so account existence is never revealed.
+ */
+export function CheckEmailScreen({
+  email,
+  intro,
+  onResend,
+  footer,
+}: {
+  email: string;
+  intro: React.ReactNode;
+  onResend: () => Promise<string | null>;
+  footer?: React.ReactNode;
+}) {
+  const { remaining, active, start } = useCooldown(60);
+  const { message: toast, show } = useToast();
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+
+  async function handleResend() {
+    if (active || busy) return;
+    setErr('');
+    setBusy(true);
+    const error = await onResend();
+    setBusy(false);
+    if (error) {
+      setErr(error);
+      return;
+    }
+    start();
+    show('Sent — check your inbox');
+  }
+
+  return (
+    <div className="text-center">
+      <IconBadge>
+        <MailCheck size={24} color="#1B3828" strokeWidth={2} />
+      </IconBadge>
+      <h1 className="text-xl font-semibold mb-2" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+        Check your email
+      </h1>
+      <p className="text-sm leading-relaxed mb-1" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+        {intro}
+      </p>
+      <p className="text-sm font-semibold mb-5 break-words" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+        {email}
+      </p>
+
+      {err && <div className="mb-4"><ErrorBanner>{err}</ErrorBanner></div>}
+
+      <SecondaryButton onClick={handleResend} disabled={active || busy}>
+        <span className="inline-flex items-center justify-center gap-2">
+          <RotateCw size={15} className={busy ? 'animate-spin' : ''} />
+          {busy ? 'SENDING…' : active ? `RESEND EMAIL (${remaining}s)` : 'RESEND EMAIL'}
+        </span>
+      </SecondaryButton>
+
+      {/* Live region so screen readers hear the countdown / ready state. */}
+      <p aria-live="polite" className="text-xs mt-2" style={{ color: '#B6AC98', fontFamily: OUTFIT, minHeight: '1.2em' }}>
+        {active ? `You can resend in ${remaining} second${remaining === 1 ? '' : 's'}.` : 'Didn’t get it? Check spam, or resend.'}
+      </p>
+
+      {footer && <div className="mt-4">{footer}</div>}
+
+      <Toast message={toast} />
+    </div>
   );
 }

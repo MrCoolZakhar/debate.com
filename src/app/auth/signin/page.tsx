@@ -20,6 +20,7 @@ function SignInInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const hasCallbackError = searchParams.get('error') === 'auth_callback_failed';
+  const justVerified = searchParams.get('verified') === '1';
   const rawNext = searchParams.get('next');
   // Only allow relative paths (must start with a single "/") to prevent open-redirect.
   const next = rawNext && rawNext.startsWith('/') && !rawNext.startsWith('//') ? rawNext : '/';
@@ -64,6 +65,20 @@ function SignInInner() {
         sub="Sign in to access conferences, track your MUN history, and more."
       />
 
+      {justVerified && (
+        <div
+          role="status"
+          className="mb-4 px-4 py-3 rounded-xl text-sm text-center"
+          style={{
+            backgroundColor: 'rgba(27, 56, 40, 0.08)',
+            border: '1px solid rgba(27, 56, 40, 0.2)',
+            color: '#1B3828',
+            fontFamily: OUTFIT,
+          }}
+        >
+          Your email is verified. Sign in to finish setting up your account.
+        </div>
+      )}
       {hasCallbackError && (
         <div
           className="mb-4 px-4 py-3 rounded-xl text-sm text-center"

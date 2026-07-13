@@ -2,15 +2,18 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { createAuthClient } from '@/lib/supabase-auth';
 import {
   AuthLayout,
   CardHeading,
+  CheckMark,
   ErrorBanner,
+  NoticeScreen,
   OUTFIT,
   PasswordField,
   PrimaryButton,
+  PrimaryLinkButton,
+  Toast,
 } from '../authUi';
 
 /**
@@ -76,38 +79,34 @@ export default function ResetPasswordPage() {
       sub="Pick something strong, then you're straight back into your conferences."
     >
       {done ? (
-        <div className="text-center">
-          <div
-            className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4"
-            style={{ backgroundColor: 'rgba(27, 56, 40, 0.1)' }}
-          >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1B3828" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
-          </div>
-          <h2 className="text-lg font-semibold mb-2" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-            Password updated
-          </h2>
-          <p className="text-sm" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+        <>
+          <NoticeScreen icon={<CheckMark size={26} />} title="Password updated">
             You&apos;re signed in. Taking you home…
-          </p>
+          </NoticeScreen>
+          <Toast message="Password updated — you're signed in" />
+        </>
+      ) : hasSession === null ? (
+        // Still establishing (or failing to establish) the recovery session.
+        // Show a neutral checking state rather than flashing the form for a
+        // link that may have already expired.
+        <div className="py-10 flex flex-col items-center justify-center gap-3" role="status" aria-live="polite">
+          <div className="w-6 h-6 border-2 rounded-full animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
+          <p className="text-sm" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>Checking your reset link…</p>
         </div>
       ) : hasSession === false ? (
-        <div className="text-center">
-          <h2 className="text-lg font-semibold mb-2" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-            This link has expired
-          </h2>
-          <p className="text-sm" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-            Password reset links only work once and expire quickly. Request a fresh one and try again.
-          </p>
-          <Link
-            href="/auth/forgot"
-            className="inline-block mt-6 text-sm font-semibold transition-colors"
-            style={{ color: '#1B3828', fontFamily: OUTFIT }}
-          >
-            Request a new link
-          </Link>
-        </div>
+        <NoticeScreen
+          icon={
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1B3828" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="9" />
+              <line x1="12" y1="7" x2="12" y2="13" />
+              <line x1="12" y1="17" x2="12" y2="17" />
+            </svg>
+          }
+          title="This reset link has expired"
+          action={<PrimaryLinkButton href="/auth/forgot">REQUEST A NEW LINK</PrimaryLinkButton>}
+        >
+          Password reset links only work once and expire quickly. Request a fresh one and we&apos;ll email it straight over.
+        </NoticeScreen>
       ) : (
         <>
           <CardHeading title="Choose a new password" sub="Minimum 8 characters." />
