@@ -224,15 +224,6 @@ function SignUpInner() {
     });
   }
 
-  function fireWelcomeEmail() {
-    // Fire-and-forget — the route no-ops gracefully when RESEND_API_KEY is unset.
-    fetch('/api/email/send', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ template: 'welcome', to: email, name }),
-    }).catch(() => {});
-  }
-
   async function handleEmailSignUp(e: React.FormEvent) {
     e.preventDefault();
     setError('');
@@ -274,8 +265,6 @@ function SignUpInner() {
       setError(error.message);
       return;
     }
-
-    fireWelcomeEmail();
 
     // Instant entry: when email confirmation is DISABLED, signUp returns a
     // live session — go straight to onboarding. With confirmation ON (the
