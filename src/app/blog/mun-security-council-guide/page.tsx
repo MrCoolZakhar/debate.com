@@ -4,11 +4,11 @@ import type { Metadata } from 'next';
 import React from 'react';
 
 export const metadata: Metadata = {
-  title: 'MUN Security Council Guide — Veto, P5, and How UNSC Works',
+  title: 'MUN Security Council Guide: Veto, P5, and How UNSC Works',
   description: 'Everything you need to know about simulating the UN Security Council in MUN: veto power, P5 dynamics, procedure differences, and how to chair or delegate UNSC.',
   alternates: { canonical: 'https://gavelling.com/blog/mun-security-council-guide' },
   openGraph: {
-    title: 'MUN Security Council Guide — Veto, P5, and How UNSC Works',
+    title: 'MUN Security Council Guide: Veto, P5, and How UNSC Works',
     description: 'Master the UN Security Council simulation in Model UN.',
     url: 'https://gavelling.com/blog/mun-security-council-guide',
     siteName: 'Gavelling',
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
 const articleSchema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
-  headline: 'MUN Security Council Guide — Veto, P5, and How UNSC Works',
+  headline: 'MUN Security Council Guide: Veto, P5, and How UNSC Works',
   description: 'Complete guide to the MUN Security Council simulation.',
   url: 'https://gavelling.com/blog/mun-security-council-guide',
   datePublished: '2026-06-07',
@@ -68,18 +68,18 @@ export default function Article() {
       <div style={s.page}>
         <div style={s.wrap}>
           <Link href="/blog" style={s.back}>← MUN Resources</Link>
-          <h1 style={s.h1}>MUN Security Council Guide — Veto, P5, and How UNSC Works</h1>
+          <h1 style={s.h1}>MUN Security Council Guide: Veto, P5, and How UNSC Works</h1>
           <p style={s.meta}>By Gavelling · June 2026 · 11 min read</p>
           <article style={s.article}>
 
-            <p style={s.p}>The UN Security Council simulation is the most coveted placement at many Model UN conferences. It is small — fifteen delegates — intensely political, and operates under completely different dynamics to General Assembly committees. If you have been assigned a UNSC role, or if you are chairing one, this guide will tell you exactly what you are walking into.</p>
+            <p style={s.p}>The UN Security Council simulation is the most coveted placement at many Model UN conferences. It is small (fifteen delegates), intensely political, and operates under completely different dynamics to General Assembly committees. If you have been assigned a UNSC role, or if you are chairing one, this guide will tell you exactly what you are walking into.</p>
 
             <h2 style={s.h2}>UNSC Composition</h2>
             <p style={s.p}>The real Security Council has fifteen members: five permanent members (P5) and ten non-permanent members elected for two-year terms. MUN simulations replicate this structure, sometimes with a fixed list of assigned nations, sometimes allowing the conference to choose which ten non-permanent members to include.</p>
             <p style={s.p}>The P5 are: the United States, United Kingdom, France, Russia, and China. Each holds permanent veto power over substantive resolutions.</p>
 
-            <h2 style={s.h2}>The Veto — How It Actually Works</h2>
-            <p style={s.p}>A Security Council resolution passes only if it receives nine or more affirmative votes AND no P5 member votes Against. A single P5 member voting Against defeats the resolution — regardless of whether the other fourteen members vote in favour. This is the veto.</p>
+            <h2 style={s.h2}>The Veto: How It Actually Works</h2>
+            <p style={s.p}>A Security Council resolution passes only if it receives nine or more affirmative votes AND no P5 member votes Against. A single P5 member voting Against defeats the resolution, regardless of whether the other fourteen members vote in favour. This is the veto.</p>
             <div style={s.callout}><p style={s.calloutText}>Crucially: a P5 abstention is NOT a veto. A P5 member can abstain and the resolution still passes (if nine votes are reached). This matters enormously for Security Council diplomacy.</p></div>
             <p style={s.p}>In MUN simulations, the veto creates completely different bloc dynamics. No resolution can pass without at least tacit P5 acceptance. Non-permanent members must spend significant effort persuading P5 delegates to support or at minimum abstain.</p>
 
@@ -89,19 +89,19 @@ export default function Article() {
               <li style={s.li}><strong>No formal speakers list in many simulations.</strong> Chairs often run debate more conversationally, recognising delegates to speak without a formal queue.</li>
               <li style={s.li}><strong>More unmoderated caucus time.</strong> With only fifteen delegates, the whole committee can effectively negotiate in the room.</li>
               <li style={s.li}><strong>Faster document cycles.</strong> Working papers emerge and merge much faster in a fifteen-person room than a hundred-person GA.</li>
-              <li style={s.li}><strong>Consultations of the whole.</strong> Many UNSC simulations use "consultations of the whole" — a semi-informal full-committee discussion without a strict speakers list.</li>
+              <li style={s.li}><strong>Consultations of the whole.</strong> Many UNSC simulations use "consultations of the whole": a semi-informal full-committee discussion without a strict speakers list.</li>
             </ul>
 
             <h2 style={s.h2}>P5 Strategy</h2>
             <p style={s.p}>If you hold a P5 seat, you are the most powerful delegate in the room. Use it wisely:</p>
             <ul style={s.ul}>
-              <li style={s.li}><strong>Your veto threat is leverage.</strong> You rarely need to actually veto — the threat alone shapes resolution language. Use it in negotiations to extract concessions.</li>
+              <li style={s.li}><strong>Your veto threat is leverage.</strong> You rarely need to actually veto; the threat alone shapes resolution language. Use it in negotiations to extract concessions.</li>
               <li style={s.li}><strong>P5 coordination is critical.</strong> If the other P5 members are voting in a block against you, no resolution passes that you oppose. Align with at least some P5 members early.</li>
               <li style={s.li}><strong>Abstentions are a diplomatic tool.</strong> Publicly abstaining rather than vetoing signals that you have reservations but are not actively blocking progress. This is a real-world diplomatic move worth simulating.</li>
             </ul>
 
             <h2 style={s.h2}>Non-Permanent Member Strategy</h2>
-            <p style={s.p}>Non-permanent members cannot veto, but they are not powerless. Nine votes are needed to pass a resolution, and with only five P5 members, at least four non-permanent votes are always required. This gives swing states real leverage — especially if two or more P5 members are already committed and you can deny the ninth vote.</p>
+            <p style={s.p}>Non-permanent members cannot veto, but they are not powerless. Nine votes are needed to pass a resolution, and with only five P5 members, at least four non-permanent votes are always required. This gives swing states real leverage, especially if two or more P5 members are already committed and you can deny the ninth vote.</p>
 
             <h2 style={s.h2}>Chairing a Security Council Simulation</h2>
             <p style={s.p}>Chairing UNSC is more like moderating a high-stakes negotiation than running a formal debate. Your key responsibilities:</p>
@@ -112,11 +112,11 @@ export default function Article() {
             </ul>
 
             <h2 style={s.h2}>Common Topics for UNSC Simulations</h2>
-            <p style={s.p}>UNSC simulations typically address: ongoing armed conflicts (Syria, Sudan, Ukraine), nuclear non-proliferation, terrorism, sanctions regimes, and peacekeeping operations. The most interesting topics are those where the P5 have genuinely divergent interests — these create authentic diplomatic tension.</p>
+            <p style={s.p}>UNSC simulations typically address: ongoing armed conflicts (Syria, Sudan, Ukraine), nuclear non-proliferation, terrorism, sanctions regimes, and peacekeeping operations. The most interesting topics are those where the P5 have genuinely divergent interests. These create authentic diplomatic tension.</p>
 
             <RelatedGuides currentSlug="mun-security-council-guide" />
             <div style={s.cta}>
-              <p style={s.ctaText}>Gavelling supports veto mode for Security Council simulations — one P5 Against defeats the resolution automatically.</p>
+              <p style={s.ctaText}>Gavelling supports veto mode for Security Council simulations: one P5 Against defeats the resolution automatically.</p>
               <a href="https://gavelling.com" style={s.ctaLink}>Try Gavelling free →</a>
             </div>
           </article>

@@ -198,7 +198,7 @@ export function classifyImportRows(rows: ParsedImportRow[], ctx: ClassifyContext
 
     const { role, isChair } = mapRole(raw.role);
     if (isChair) {
-      reasons.push({ severity: 'error', message: "Chairs aren't importable — invite chairs from Committees instead." });
+      reasons.push({ severity: 'error', message: "Chairs aren't importable. Invite chairs from Committees instead." });
     } else if (!role) {
       reasons.push({ severity: 'error', message: `Unknown role "${raw.role}".` });
     }
@@ -228,18 +228,18 @@ export function classifyImportRows(rows: ParsedImportRow[], ctx: ClassifyContext
     if (raw.committee.trim()) {
       const committee = matchCommittee(ctx.committees, raw.committee);
       if (!committee) {
-        reasons.push({ severity: 'warning', message: `Committee "${raw.committee}" not found — imported without allocation.` });
+        reasons.push({ severity: 'warning', message: `Committee "${raw.committee}" not found, so imported without allocation.` });
       } else {
         committeeLabel = committee.abbreviation ?? committee.name;
         if (raw.country.trim()) {
           const country = getCountryByName(raw.country.trim());
           if (!country) {
-            reasons.push({ severity: 'warning', message: `Country "${raw.country}" not recognized — imported without allocation.` });
+            reasons.push({ severity: 'warning', message: `Country "${raw.country}" not recognized, so imported without allocation.` });
           } else {
             const slotKey = `${committee.id}|${country.code}`;
             const occupied = ctx.existingAllocations.has(slotKey) || claimedInFile.has(slotKey);
             if (occupied) {
-              reasons.push({ severity: 'warning', message: `${country.name} is already allocated in ${committeeLabel} — imported without allocation.` });
+              reasons.push({ severity: 'warning', message: `${country.name} is already allocated in ${committeeLabel}, so imported without allocation.` });
             } else {
               claimedInFile.add(slotKey);
               committeeId = committee.id;
@@ -253,7 +253,7 @@ export function classifyImportRows(rows: ParsedImportRow[], ctx: ClassifyContext
 
     const payment = mapPayment(raw.payment);
     if (payment.unknown) {
-      reasons.push({ severity: 'warning', message: `Unknown payment value "${raw.payment}" — defaulting to unpaid.` });
+      reasons.push({ severity: 'warning', message: `Unknown payment value "${raw.payment}", defaulting to unpaid.` });
     }
 
     const cls: ImportRowClass = reasons.some(r => r.severity === 'error')

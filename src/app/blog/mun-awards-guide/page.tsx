@@ -4,11 +4,11 @@ import type { Metadata } from 'next';
 import React from 'react';
 
 export const metadata: Metadata = {
-  title: 'MUN Awards Guide — How Best Delegate Is Chosen',
-  description: 'How MUN awards work: Best Delegate, Outstanding Delegate, Verbal Commendation — what chairs look for, how to improve your score, and what not to do.',
+  title: 'MUN Awards Guide: How Best Delegate Is Chosen',
+  description: 'How MUN awards work: Best Delegate, Outstanding Delegate, Verbal Commendation: what chairs look for, how to improve your score, and what not to do.',
   alternates: { canonical: 'https://gavelling.com/blog/mun-awards-guide' },
   openGraph: {
-    title: 'MUN Awards Guide — How Best Delegate Is Chosen',
+    title: 'MUN Awards Guide: How Best Delegate Is Chosen',
     description: 'Understand how MUN awards are chosen and how to improve your chances.',
     url: 'https://gavelling.com/blog/mun-awards-guide',
     siteName: 'Gavelling',
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
 const articleSchema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
-  headline: 'MUN Awards Guide — How Best Delegate Is Chosen',
+  headline: 'MUN Awards Guide: How Best Delegate Is Chosen',
   description: 'How MUN awards work and how to improve your chances.',
   url: 'https://gavelling.com/blog/mun-awards-guide',
   datePublished: '2026-06-07',
@@ -67,7 +67,7 @@ export default function Article() {
       <div style={s.page}>
         <div style={s.wrap}>
           <Link href="/blog" style={s.back}>← MUN Resources</Link>
-          <h1 style={s.h1}>MUN Awards Guide — How Best Delegate Is Chosen</h1>
+          <h1 style={s.h1}>MUN Awards Guide: How Best Delegate Is Chosen</h1>
           <p style={s.meta}>By Gavelling · June 2026 · 9 min read</p>
           <article style={s.article}>
             <p style={s.p}>Every MUN delegate wants to know how awards are decided. The honest answer: it varies by conference, by chair, and by committee dynamics. But the factors that consistently produce awards are more predictable than delegates often assume. This guide explains how the award system works and how to perform at the level that earns recognition.</p>
@@ -78,7 +78,7 @@ export default function Article() {
               <li style={s.li}><strong>Best Delegate:</strong> The single highest-performing delegate in the committee. Usually one per committee.</li>
               <li style={s.li}><strong>Outstanding Delegate:</strong> Strong performance, clearly above average. One to two per committee.</li>
               <li style={s.li}><strong>Honourable Mention:</strong> Good performance with notable contributions. Two to four per committee.</li>
-              <li style={s.li}><strong>Verbal Commendation:</strong> Recognised for specific contributions — a particularly good speech, strong position paper, or key amendment.</li>
+              <li style={s.li}><strong>Verbal Commendation:</strong> Recognised for specific contributions: a particularly good speech, strong position paper, or key amendment.</li>
               <li style={s.li}><strong>Best Position Paper:</strong> Some conferences award separately for the pre-submitted position paper.</li>
             </ul>
 
@@ -86,7 +86,7 @@ export default function Article() {
             <p style={s.p}>Most experienced chairs assess delegates across five dimensions:</p>
             <ul style={s.ul}>
               <li style={s.li}><strong>Knowledge:</strong> Does the delegate know their country's position? Can they speak to specific resolutions, treaties, or statistics?</li>
-              <li style={s.li}><strong>Diplomacy:</strong> Can the delegate build relationships with opposing blocs? Do they treat all delegations respectfully — not just their allies?</li>
+              <li style={s.li}><strong>Diplomacy:</strong> Can the delegate build relationships with opposing blocs? Do they treat all delegations respectfully, not just their allies?</li>
               <li style={s.li}><strong>Procedure:</strong> Does the delegate use rules of procedure correctly? Do they know when to raise a point of order and when not to?</li>
               <li style={s.li}><strong>Contribution:</strong> Did this delegate actually move the committee forward? Are their operative clauses in the final resolution? Did they lead bloc mergers?</li>
               <li style={s.li}><strong>Consistency:</strong> Strong performance across the whole conference, not just one memorable speech on the first day.</li>
@@ -107,10 +107,10 @@ export default function Article() {
             </ul>
 
             <h2 style={s.h2}>A Note on Fairness</h2>
-            <p style={s.p}>Not every conference awards fairly. Some chair teams are inconsistent. Some conferences heavily weight country prestige. Do not interpret a missed award as a definitive judgment of your performance — ask your faculty advisor or the dais for feedback and use it to improve. The delegates who improve most consistently between conferences are the ones who become the strongest.</p>
+            <p style={s.p}>Not every conference awards fairly. Some chair teams are inconsistent. Some conferences heavily weight country prestige. Do not interpret a missed award as a definitive judgment of your performance. Ask your faculty advisor or the dais for feedback and use it to improve. The delegates who improve most consistently between conferences are the ones who become the strongest.</p>
 
             <h2 style={s.h2}>Awards as a Chair</h2>
-            <p style={s.p}>For chairs: track delegates throughout the conference, not just at the end. Note specific moments — a standout speech, a key amendment proposal, a bloc merger they brokered. When you sit down to make award decisions, concrete examples beat vague impressions every time. Gavelling's delegate stats panel tracks speaking time and participation metrics that can support your qualitative notes.</p>
+            <p style={s.p}>For chairs: track delegates throughout the conference, not just at the end. Note specific moments: a standout speech, a key amendment proposal, a bloc merger they brokered. When you sit down to make award decisions, concrete examples beat vague impressions every time. Gavelling's delegate stats panel tracks speaking time and participation metrics that can support your qualitative notes.</p>
 
             <RelatedGuides currentSlug="mun-awards-guide" />
             <div style={s.cta}>

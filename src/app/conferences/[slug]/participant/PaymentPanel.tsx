@@ -1,6 +1,6 @@
 'use client';
 
-// Payment panel — never gated, always visible per selected application.
+// Payment panel, never gated, always visible per selected application.
 // Real UI; Stripe wiring lands separately (see src/lib/payments.ts). Shows
 // the role fee, a status badge, and a PAY button that (for now) opens a
 // styled "not connected yet" modal instead of a real checkout.
@@ -98,7 +98,7 @@ export default function PaymentPanel({
         </p>
       ) : fee === 0 ? (
         <p className="text-[13px]" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-          There&apos;s no fee for this role — nothing to pay.
+          There&apos;s no fee for this role, nothing to pay.
         </p>
       ) : owesSomething ? (
         <>

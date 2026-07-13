@@ -1,8 +1,8 @@
 'use client';
 
-// Participant view — the person tab. Orchestrates: role pill switcher (when
+// Participant view, the person tab. Orchestrates: role pill switcher (when
 // the viewer has more than one application here), the pay-gated content for
-// the selected application, the payment panel, and Q&R — the latter two are
+// the selected application, the payment panel, and Q&R, the latter two are
 // never gated. Deliberately has no conference summary card: the page around
 // this tab already is one.
 

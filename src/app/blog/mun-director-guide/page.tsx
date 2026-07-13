@@ -4,11 +4,11 @@ import type { Metadata } from 'next';
 import React from 'react';
 
 export const metadata: Metadata = {
-  title: 'MUN Director Guide — How to Run a Model UN Conference',
+  title: 'MUN Director Guide: How to Run a Model UN Conference',
   description: 'A complete guide for MUN secretariat directors: planning the conference, assigning committees, briefing chairs, managing logistics, and running a smooth event.',
   alternates: { canonical: 'https://gavelling.com/blog/mun-director-guide' },
   openGraph: {
-    title: 'MUN Director Guide — How to Run a Model UN Conference',
+    title: 'MUN Director Guide: How to Run a Model UN Conference',
     description: 'The complete secretariat guide to directing a Model UN conference.',
     url: 'https://gavelling.com/blog/mun-director-guide',
     siteName: 'Gavelling',
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
 const articleSchema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
-  headline: 'MUN Director Guide — How to Run a Model UN Conference',
+  headline: 'MUN Director Guide: How to Run a Model UN Conference',
   description: 'Complete guide for MUN conference directors.',
   url: 'https://gavelling.com/blog/mun-director-guide',
   datePublished: '2026-06-07',
@@ -68,11 +68,11 @@ export default function Article() {
       <div style={s.page}>
         <div style={s.wrap}>
           <Link href="/blog" style={s.back}>← MUN Resources</Link>
-          <h1 style={s.h1}>MUN Director Guide — How to Run a Model UN Conference</h1>
+          <h1 style={s.h1}>MUN Director Guide: How to Run a Model UN Conference</h1>
           <p style={s.meta}>By Gavelling · June 2026 · 12 min read</p>
           <article style={s.article}>
 
-            <p style={s.p}>Directing a Model UN conference is one of the most complex leadership experiences available to students. You are responsible for every committee running simultaneously, dozens of chair relationships, hundreds of delegates, venue logistics, and the overall quality of the academic and social programme. This guide covers the full arc — from initial planning to post-conference wrap-up.</p>
+            <p style={s.p}>Directing a Model UN conference is one of the most complex leadership experiences available to students. You are responsible for every committee running simultaneously, dozens of chair relationships, hundreds of delegates, venue logistics, and the overall quality of the academic and social programme. This guide covers the full arc, from initial planning to post-conference wrap-up.</p>
 
             <h2 style={s.h2}>What Does a MUN Director Do?</h2>
             <p style={s.p}>The director (sometimes called Secretary-General, Director-General, or simply the conference head depending on your secretariat structure) is responsible for the overall conference programme. Specific responsibilities typically include:</p>
@@ -102,23 +102,23 @@ export default function Article() {
             </ul>
 
             <h2 style={s.h2}>Three Months Out: Background Guides</h2>
-            <p style={s.p}>Background guides should be published at least six to eight weeks before the conference to give delegates adequate preparation time. Each guide should cover: committee mandate and history, topic background, key country positions, and guiding questions. Aim for ten to fifteen pages per topic — long enough to be substantive, short enough to be read.</p>
+            <p style={s.p}>Background guides should be published at least six to eight weeks before the conference to give delegates adequate preparation time. Each guide should cover: committee mandate and history, topic background, key country positions, and guiding questions. Aim for ten to fifteen pages per topic: long enough to be substantive, short enough to be read.</p>
             <p style={s.p}>Review every background guide before publication. Factual errors in background guides undermine chair credibility and frustrate well-prepared delegates.</p>
 
             <h2 style={s.h2}>One Month Out: Registration and Logistics</h2>
             <ul style={s.ul}>
-              <li style={s.li}><strong>Confirm delegate registrations</strong> and assign countries. Try to match country allocations to school or team size — larger delegations should get more committee slots.</li>
-              <li style={s.li}><strong>Confirm venue layouts</strong> — committee room sizes, projector availability, power access, WiFi.</li>
+              <li style={s.li}><strong>Confirm delegate registrations</strong> and assign countries. Try to match country allocations to school or team size, since larger delegations should get more committee slots.</li>
+              <li style={s.li}><strong>Confirm venue layouts</strong>: committee room sizes, projector availability, power access, WiFi.</li>
               <li style={s.li}><strong>Set up committee management software.</strong> Gavelling allows directors to create committee sessions in advance, with co-chair access codes, delegate lists, and settings pre-configured before conference day.</li>
               <li style={s.li}><strong>Brief your dais team in full.</strong> Run a mock committee session with your chairs if possible.</li>
             </ul>
 
             <h2 style={s.h2}>Conference Day: Director Operations</h2>
-            <p style={s.p}>On conference day, your primary job is problem-solving. Committees will have issues — a chair goes absent, a room has no projector, two committees request the same delegate for a joint crisis session. Keep a live list of all open issues and assign team members to resolve them.</p>
-            <p style={s.p}>Visit every committee room at least once per session. A brief appearance from the director signals to delegates that the secretariat cares about quality. It also lets you catch problems — a committee that is too quiet, a chair who is struggling, a bloc that has completely stalled — before they become crises.</p>
+            <p style={s.p}>On conference day, your primary job is problem-solving. Committees will have issues: a chair goes absent, a room has no projector, two committees request the same delegate for a joint crisis session. Keep a live list of all open issues and assign team members to resolve them.</p>
+            <p style={s.p}>Visit every committee room at least once per session. A brief appearance from the director signals to delegates that the secretariat cares about quality. It also lets you catch problems (a committee that is too quiet, a chair who is struggling, a bloc that has completely stalled) before they become crises.</p>
 
             <h2 style={s.h2}>Awards</h2>
-            <p style={s.p}>Brief chairs on awards criteria well in advance. Decide: will you give Best Delegate, Outstanding Delegate, Honourable Mention, and Verbal Commendation in every committee? Will crisis committees use a different system? Will you give a Best Position Paper award? Consistency matters — delegates and advisors notice when award criteria appear arbitrary.</p>
+            <p style={s.p}>Brief chairs on awards criteria well in advance. Decide: will you give Best Delegate, Outstanding Delegate, Honourable Mention, and Verbal Commendation in every committee? Will crisis committees use a different system? Will you give a Best Position Paper award? Consistency matters. Delegates and advisors notice when award criteria appear arbitrary.</p>
             <p style={s.p}>Collect chair recommendations privately, cross-check for conflicts of interest, and ensure award distribution is reasonably spread across schools rather than concentrated.</p>
 
             <h2 style={s.h2}>Post-Conference</h2>
@@ -126,7 +126,7 @@ export default function Article() {
 
             <RelatedGuides currentSlug="mun-director-guide" />
             <div style={s.cta}>
-              <p style={s.ctaText}>Set up all your conference committees in Gavelling before conference day — sessions, delegates, and settings ready to go.</p>
+              <p style={s.ctaText}>Set up all your conference committees in Gavelling before conference day: sessions, delegates, and settings ready to go.</p>
               <a href="https://gavelling.com" style={s.ctaLink}>Try Gavelling free →</a>
             </div>
           </article>

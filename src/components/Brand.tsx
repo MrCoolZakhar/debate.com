@@ -1,14 +1,14 @@
 'use client';
 
 /**
- * Brand.tsx — the Gavelling brand lockup (gavel mark + optional live wordmark).
+ * Brand.tsx, the Gavelling brand lockup (gavel mark + optional live wordmark).
  *
  * The shipped logo PNGs read "GAVELLING SESSIONS APP"; every
  * conferences-related surface must read "GAVELLING CONFERENCES" instead.
  * Rather than shipping another baked PNG, <Brand /> composes the standalone
- * gavel mark (/gavel-mark.png — gavel + laurel, transparent) with live text:
- * "GAVELLING" in Outfit 900 (ink on light surfaces, ivory on dark) and — for
- * the conferences variant — a gold "CONFERENCES" eyebrow underneath.
+ * gavel mark (/gavel-mark.png, gavel + laurel, transparent) with live text:
+ * "GAVELLING" in Outfit 900 (ink on light surfaces, ivory on dark) and, for
+ * the conferences variant, a gold "CONFERENCES" eyebrow underneath.
  *
  * <BrandConferences /> is the stable conferences-variant shorthand used by
  * SiteNav and other conferences surfaces.
@@ -19,14 +19,14 @@ const OUTFIT = "'Outfit', sans-serif";
 export interface BrandProps {
   /**
    * Which product layer the lockup names:
-   * - 'sessions'    — "GAVELLING" wordmark only
-   * - 'conferences' — "GAVELLING" + gold "CONFERENCES" eyebrow
+   * - 'sessions'   , "GAVELLING" wordmark only
+   * - 'conferences', "GAVELLING" + gold "CONFERENCES" eyebrow
    */
   variant?: 'sessions' | 'conferences';
   /**
    * Surface the brand sits on:
-   * - 'light'  — ivory pages (ink wordmark, deep-gold eyebrow)
-   * - 'dark'   — forest bars / dark heroes (ivory wordmark, light-gold eyebrow)
+   * - 'light' , ivory pages (ink wordmark, deep-gold eyebrow)
+   * - 'dark'  , forest bars / dark heroes (ivory wordmark, light-gold eyebrow)
    */
   tone?: 'light' | 'dark';
   /** Gavel-mark height in px; the type block scales off it. Default 34. */

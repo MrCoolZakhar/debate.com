@@ -152,7 +152,7 @@ const STATUS_STYLES: Record<string, { bg: string; color: string; border: string;
 // ── Desktop floating rail ──────────────────────────────────────────────────
 // Collapsed: a slim glass pill of floating icons, each perfectly centred on
 // the pill's vertical axis. Expands on hover to reveal the conference
-// identity ("ACRONYM YEAR"), section headers and labels — content keeps the
+// identity ("ACRONYM YEAR"), section headers and labels, content keeps the
 // reclaimed horizontal space.
 
 function SideRail({
@@ -181,7 +181,7 @@ function SideRail({
         width: expanded ? '256px' : '68px',
         zIndex: 25,
         // Neumorphic: same ivory family as the page (#EDE7D8), extruded via the
-        // NEU dual-shadow pair (src/components/neu.tsx) — no glass, no hard border.
+        // NEU dual-shadow pair (src/components/neu.tsx), no glass, no hard border.
         backgroundColor: '#F0EBDD',
         borderRadius: '26px',
         boxShadow: '-6px -6px 14px rgba(255,255,255,0.85), 8px 8px 20px rgba(27,56,40,0.16)',
@@ -189,7 +189,7 @@ function SideRail({
         overflow: 'hidden',
       }}
     >
-      {/* Conference identity — links to the public conference page */}
+      {/* Conference identity, links to the public conference page */}
       <div
         className="flex-shrink-0"
         style={{
@@ -414,7 +414,7 @@ function SidebarContent({
 
   return (
     <div className="flex flex-col h-full">
-      {/* Conference identity — links to the public conference page */}
+      {/* Conference identity, links to the public conference page */}
       <Link
         href={`/conferences/${slug}`}
         title="View public page"
@@ -558,7 +558,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [inboxBadge, setInboxBadge] = useState(0);
 
-  // Nav badge — cheap count-only query. seen_by_organizer flips to false on
+  // Nav badge, cheap count-only query. seen_by_organizer flips to false on
   // every participant-side write (new request, reply, swap request/notice)
   // and back to true on every organizer-side write, so this alone already
   // captures "unseen or last message from the participant" for open threads.
@@ -637,7 +637,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
   }
 
   // Quiet variant: re-fetches the conference row and swaps it in directly,
-  // without touching loadingConf — so settings saves can confirm DB truth
+  // without touching loadingConf, so settings saves can confirm DB truth
   // post-write without unmounting the page behind the full-screen spinner.
   async function refreshConferenceQuiet() {
     if (!user || !session) return;
@@ -735,7 +735,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
 
   return (
     <ManageContext.Provider value={{ conference, refreshConference, refreshConferenceQuiet }}>
-      {/* Base surface — one continuous ivory behind rail + content (body is white;
+      {/* Base surface, one continuous ivory behind rail + content (body is white;
           without this the strip behind the rail reads as a different background) */}
       <div className="pointer-events-none fixed inset-0 z-0" style={{ backgroundColor: '#EDE7D8' }} />
 
@@ -818,7 +818,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
         </div>
       </header>
 
-      {/* Desktop floating rail — icons only, expands on hover */}
+      {/* Desktop floating rail, icons only, expands on hover */}
       <SideRail slug={slug} conference={conference} pathname={pathname} communicationsBadge={inboxBadge} />
 
       {/* Mobile drawer overlay */}
@@ -846,7 +846,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
         </div>
       )}
 
-      {/* Main content — rail is 68px + 14px inset, so content reclaims the old sidebar width */}
+      {/* Main content, rail is 68px + 14px inset, so content reclaims the old sidebar width */}
       <div
         className="relative z-10 md:ml-[96px]"
         style={{ marginTop: '56px', minHeight: 'calc(100vh - 56px)', backgroundColor: '#EDE7D8' }}

@@ -1,12 +1,12 @@
 'use client';
 
-// Delegation panel — shared between the advisor view and the head-delegate
+// Delegation panel, shared between the advisor view and the head-delegate
 // view (rendered below their own R2 delegate view). Read-only-style mirror
 // of the organizer's delegation view: advisors row, head delegates row,
 // delegates list, paid-spots counter, pledges block, plus the allocation
 // swap control (item C). Visibility of every row here is granted by the
 // "Members read society leadership" / "Leaders read society members" RLS
-// policies (leaders — advisors/head-delegates — read the whole roster; any
+// policies (leaders, advisors/head-delegates, read the whole roster; any
 // member reads just the leaders) via the my_society_ids()/is_society_leader()
 // SECURITY DEFINER helpers, so this just works with the viewer's own authed
 // client.
@@ -32,7 +32,7 @@ interface Society {
 
 function allocationLabel(m: PoolMember): string | null {
   if (!m.assigned_committee_id) return null;
-  return `${m.assigned_committee?.abbreviation ?? m.assigned_committee?.name ?? 'Committee'} — ${m.assigned_country_name}`;
+  return `${m.assigned_committee?.abbreviation ?? m.assigned_committee?.name ?? 'Committee'}: ${m.assigned_country_name}`;
 }
 
 function pledgeStatusLabel(m: PoolMember): string {
@@ -63,7 +63,7 @@ function MemberRow({ member, swapMode, swapSelectable, swapSelected, onToggleSwa
         opacity: dimmed ? 0.55 : swapMode && !swapSelectable ? 0.45 : 1,
         cursor: swapMode && swapSelectable ? 'pointer' : 'default',
       }}
-      title={swapMode && !swapSelectable ? 'No allocation yet — not swappable' : undefined}
+      title={swapMode && !swapSelectable ? 'No allocation yet, not swappable' : undefined}
     >
       <MemberAvatar name={name} url={member.profiles?.avatar_url ?? null} size={28} />
       <div className="flex-1 min-w-0">
@@ -150,7 +150,7 @@ export default function DelegationPanel({ conferenceId, societyId, allocationSwa
 
   useEffect(() => { load(); }, [load]);
 
-  // Own pending swap_request — conference_requests RLS only lets a
+  // Own pending swap_request, conference_requests RLS only lets a
   // participant read rows they created themselves, so a co-leader's request
   // isn't visible here; each leader sees their own.
   const loadMyPendingSwap = useCallback(async () => {
@@ -236,7 +236,7 @@ export default function DelegationPanel({ conferenceId, societyId, allocationSwa
       // templates/outbox"). Calling it here from a leader's (non-organizer)
       // session will silently no-op (template lookup returns nothing, so it
       // returns { drafted: false } without ever attempting the insert). This
-      // is a known, reported gap — not worked around — pending either a
+      // is a known, reported gap, not worked around, pending either a
       // SECURITY DEFINER queue-email RPC or a scoped outbox insert policy
       // for society leaders.
       await queueEventEmail(supabase, conferenceId, 'delegation_swap', [swapA.id, swapB.id]);
@@ -254,7 +254,7 @@ export default function DelegationPanel({ conferenceId, societyId, allocationSwa
         request_id: (reqRow as { id: string }).id, sender_user_id: user.id, is_organizer: false,
         body: `Requesting to swap allocations: ${nameA} (${allocA}) ↔ ${nameB} (${allocB}).`,
       });
-      // See NOTE above — same organizer-only RLS gap applies to request mode.
+      // See NOTE above, same organizer-only RLS gap applies to request mode.
       await queueEventEmail(supabase, conferenceId, 'delegation_swap', [swapA.id, swapB.id]);
 
       setSwapping(false);
@@ -292,7 +292,7 @@ export default function DelegationPanel({ conferenceId, societyId, allocationSwa
         <div className="flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 mb-4" style={{ backgroundColor: 'rgba(238,217,138,0.16)', border: '1px solid rgba(182,135,31,0.3)' }}>
           <ArrowLeftRight size={14} style={{ color: '#8A6614', flexShrink: 0 }} />
           <p className="text-xs" style={{ color: '#6B5F52', fontFamily: OUTFIT }}>
-            Swap requested — awaiting the organizing team
+            Swap requested, awaiting the organizing team
           </p>
         </div>
       )}
@@ -349,7 +349,7 @@ export default function DelegationPanel({ conferenceId, societyId, allocationSwa
             {pledgingMembers.map(m => (
               <div key={m.id} className="flex items-center justify-between gap-2 py-1">
                 <span className="text-xs truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                  {m.profiles?.display_name ?? 'Unknown'} <span style={{ color: '#9A8A78' }}>— {pledgeText(m)}</span>
+                  {m.profiles?.display_name ?? 'Unknown'} <span style={{ color: '#9A8A78' }}>· {pledgeText(m)}</span>
                 </span>
                 <span
                   className="flex-shrink-0"

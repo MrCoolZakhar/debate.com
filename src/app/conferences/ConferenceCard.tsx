@@ -1,7 +1,7 @@
 'use client';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Shared conference card — ONE definition used by both the explore directory
+// Shared conference card, ONE definition used by both the explore directory
 // (/conferences/explore) and the Stagefront landing (/conferences).
 //
 // Anatomy: banner band (104px, banner_url + top-dark gradient, or gradient +
@@ -13,9 +13,9 @@
 // an application).
 // Hover lifts the card and deepens the shadow so it reads as a floating object.
 //
-// `compact` (default false — the explore directory is untouched) shrinks the
+// `compact` (default false, the explore directory is untouched) shrinks the
 // same anatomy for narrow rails (~340–380px): 72px banner band, smaller logo
-// overlap and tighter padding. One definition, two densities — never fork it.
+// overlap and tighter padding. One definition, two densities, never fork it.
 //
 // `heroCompact` is the PHOTO-FORWARD hero tier, used ONLY by the Stagefront
 // hero "up next" rail: the banner photo fills the entire 188px card (cover)
@@ -24,14 +24,14 @@
 // key facts (location+flag · dates · fee · attendees) sit in a 2×2 micro-grid
 // in the photo's lower zone with the APPLY pill bottom-right. Cards without a
 // banner fall back to the forest gradient + watermark acronym. This tier
-// completely replaces the banner-band anatomy — the classic layout below is
+// completely replaces the banner-band anatomy, the classic layout below is
 // never reached when heroCompact is set, so explore/near-you/calendar are
 // untouched.
 // `goldGlow` adds a premium golden outer glow + an overlapping gavel disc that
-// straddles the card's top-right corner — hero-only, never on explore/near-you.
+// straddles the card's top-right corner, hero-only, never on explore/near-you.
 // The disc renders in a positioned WRAPPER around the card (not inside the
-// article) so the article's `overflow-hidden` — required for the banner band's
-// rounded corners — can never clip it. The hover lift moves to the wrapper in
+// article) so the article's `overflow-hidden`, required for the banner band's
+// rounded corners, can never clip it. The hover lift moves to the wrapper in
 // this branch so disc and card travel together.
 // `applied` marks conferences the signed-in viewer already has an application
 // for: the APPLY pill becomes a solid forest APPLIED ✓ badge. Consumers own
@@ -104,7 +104,7 @@ export function ConferenceCard({
   onHover: () => void;
   onLeave: () => void;
   onClick: () => void;
-  /** Denser variant for narrow vertical rails. Default false — explore unchanged. */
+  /** Denser variant for narrow vertical rails. Default false, explore unchanged. */
   compact?: boolean;
   /** Still-denser tier for the Stagefront hero rail (implies compact spacing). Default false. */
   heroCompact?: boolean;
@@ -113,11 +113,11 @@ export function ConferenceCard({
   /** The signed-in viewer already has an application for this conference. */
   applied?: boolean;
   /** The signed-in viewer is already PART of this conference (organiser, chair
-   *  or accepted/assigned delegate) — the CTA becomes VIEW →. Wins over applied. */
+   *  or accepted/assigned delegate), the CTA becomes VIEW →. Wins over applied. */
   member?: boolean;
 }) {
   const countryObj = getCountryByName(conf.country);
-  // "Oxford, GB" — ISO country code instead of the full country name (or flag)
+  // "Oxford, GB", ISO country code instead of the full country name (or flag)
   const countryCode = countryObj ? countryObj.code.toUpperCase() : conf.country;
   const editionYear = conf.start_date.slice(0, 4);
   const initials = conf.acronym.slice(0, 3).toUpperCase();
@@ -126,7 +126,7 @@ export function ConferenceCard({
   const dense = compact || heroCompact;
   const padX = dense ? 'px-4' : 'px-5';
 
-  // Layered golden glow — soft, static, tasteful (deepens slightly on hover).
+  // Layered golden glow, soft, static, tasteful (deepens slightly on hover).
   const glowShadow = hovered
     ? '0 0 0 1px rgba(238,217,138,0.55), 0 6px 20px rgba(182,135,31,0.30), 0 18px 46px rgba(238,217,138,0.24), 0 2px 8px rgba(27,56,40,0.10)'
     : '0 0 0 1px rgba(238,217,138,0.40), 0 4px 16px rgba(182,135,31,0.22), 0 12px 34px rgba(238,217,138,0.18)';
@@ -146,7 +146,7 @@ export function ConferenceCard({
         position: 'relative',
         height: '188px',
         backgroundColor: '#14241B',
-        // Solid, defined edge over the glow — stronger card definition.
+        // Solid, defined edge over the glow, stronger card definition.
         border: goldGlow ? '1px solid rgba(238,217,138,0.75)' : '1px solid rgba(221,212,192,0.9)',
         borderRadius: '20px',
         transform: goldGlow ? undefined : hovered ? 'translateY(-4px)' : 'translateY(0)',
@@ -160,7 +160,7 @@ export function ConferenceCard({
     >
       <style>{PHOTO_REDUCED_MOTION_CSS}</style>
 
-      {/* Full-bleed banner photo — or forest gradient + watermark fallback */}
+      {/* Full-bleed banner photo, or forest gradient + watermark fallback */}
       {conf.banner_url ? (
         <img
           src={conf.banner_url}
@@ -188,7 +188,7 @@ export function ConferenceCard({
         </>
       )}
 
-      {/* Warm forest-tinted scrim — heavier at the bottom for text legibility,
+      {/* Warm forest-tinted scrim, heavier at the bottom for text legibility,
           a whisper at the top so the floating logo still reads on bright shots */}
       <div
         style={{
@@ -197,7 +197,7 @@ export function ConferenceCard({
         }}
       />
 
-      {/* Date chip — glass pill, top-right over the photo */}
+      {/* Date chip, glass pill, top-right over the photo */}
       <span
         className="flex items-center gap-1"
         style={{
@@ -214,7 +214,7 @@ export function ConferenceCard({
         </span>
       </span>
 
-      {/* Floating logo disc — top-left over the photo */}
+      {/* Floating logo disc, top-left over the photo */}
       <div style={{ position: 'absolute', top: '12px', left: '14px' }}>
         <LogoDisc
           src={conf.logo_url}
@@ -337,7 +337,7 @@ export function ConferenceCard({
             </span>
           </>
         )}
-        {/* Date chip — glass pill, top-left, so the dates read first */}
+        {/* Date chip, glass pill, top-left, so the dates read first */}
         <span
           className="absolute top-3 left-3 flex items-center gap-1"
           style={{
@@ -369,7 +369,7 @@ export function ConferenceCard({
         )}
       </div>
 
-      {/* Fee bubble — straddles the seam between the banner photo and the
+      {/* Fee bubble, straddles the seam between the banner photo and the
           card body, right-hand side, with the real currency symbol */}
       <div
         style={{
@@ -411,7 +411,7 @@ export function ConferenceCard({
       </div>
 
       <div className={`${padX} ${heroCompact ? 'pt-1 pb-2.5' : compact ? 'pt-2 pb-4' : 'pt-3 pb-5'}`}>
-        {/* Acronym + edition year — the card's main heading */}
+        {/* Acronym + edition year, the card's main heading */}
         <h3
           className={heroCompact ? 'mb-1.5' : compact ? 'mb-2' : 'mb-2.5'}
           style={{
@@ -452,7 +452,7 @@ export function ConferenceCard({
   if (!goldGlow) return card;
 
   // goldGlow: positioned wrapper carries the hover lift and hosts the gavel
-  // disc as a SIBLING of the article, above it in z-order — the article keeps
+  // disc as a SIBLING of the article, above it in z-order, the article keeps
   // its own overflow-hidden (for the banner band's rounded corners) but can no
   // longer slice the disc.
   return (
@@ -465,7 +465,7 @@ export function ConferenceCard({
       }}
     >
       {card}
-      {/* Gold gavel disc — straddles the top-right corner, fully visible. */}
+      {/* Gold gavel disc, straddles the top-right corner, fully visible. */}
       <span
         aria-hidden="true"
         style={{
@@ -491,7 +491,7 @@ export function ConferenceCard({
   );
 }
 
-/** Gold pill APPLY button for the card foot row — a solid forest APPLIED ✓
+/** Gold pill APPLY button for the card foot row, a solid forest APPLIED ✓
  *  badge when the viewer already has an application, or a solid forest VIEW →
  *  pill when the viewer is already part of the conference (member wins over
  *  applied). The whole card is the click target (routing to

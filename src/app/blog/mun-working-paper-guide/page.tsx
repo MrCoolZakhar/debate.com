@@ -4,11 +4,11 @@ import type { Metadata } from 'next';
 import React from 'react';
 
 export const metadata: Metadata = {
-  title: 'MUN Working Paper Guide — How to Draft, Merge, and Introduce',
+  title: 'MUN Working Paper Guide: How to Draft, Merge, and Introduce',
   description: 'How to write and submit a MUN working paper: format, drafting tips, merging blocs, and transitioning from working paper to draft resolution.',
   alternates: { canonical: 'https://gavelling.com/blog/mun-working-paper-guide' },
   openGraph: {
-    title: 'MUN Working Paper Guide — How to Draft, Merge, and Introduce',
+    title: 'MUN Working Paper Guide: How to Draft, Merge, and Introduce',
     description: 'The complete guide to MUN working papers.',
     url: 'https://gavelling.com/blog/mun-working-paper-guide',
     siteName: 'Gavelling',
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
 const articleSchema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
-  headline: 'MUN Working Paper Guide — How to Draft, Merge, and Introduce',
+  headline: 'MUN Working Paper Guide: How to Draft, Merge, and Introduce',
   description: 'Complete guide to MUN working papers.',
   url: 'https://gavelling.com/blog/mun-working-paper-guide',
   datePublished: '2026-06-07',
@@ -68,11 +68,11 @@ export default function Article() {
       <div style={s.page}>
         <div style={s.wrap}>
           <Link href="/blog" style={s.back}>← MUN Resources</Link>
-          <h1 style={s.h1}>MUN Working Paper Guide — How to Draft, Merge, and Introduce</h1>
+          <h1 style={s.h1}>MUN Working Paper Guide: How to Draft, Merge, and Introduce</h1>
           <p style={s.meta}>By Gavelling · June 2026 · 10 min read</p>
           <article style={s.article}>
 
-            <p style={s.p}>A working paper is the informal predecessor to a draft resolution. It is where the real work of MUN happens — messy, collaborative, and often written in the chaos of an unmoderated caucus on someone's laptop. Knowing how to write one quickly, structure it correctly, and merge it strategically with other blocs is one of the most valuable skills in MUN.</p>
+            <p style={s.p}>A working paper is the informal predecessor to a draft resolution. It is where the real work of MUN happens: messy, collaborative, and often written in the chaos of an unmoderated caucus on someone's laptop. Knowing how to write one quickly, structure it correctly, and merge it strategically with other blocs is one of the most valuable skills in MUN.</p>
 
             <h2 style={s.h2}>Working Paper vs. Draft Resolution</h2>
             <p style={s.p}>The terms are sometimes used interchangeably, but technically they are different stages:</p>
@@ -84,19 +84,19 @@ export default function Article() {
 
             <h2 style={s.h2}>When to Start Drafting</h2>
             <p style={s.p}>Start earlier than feels necessary. The bloc that has a working paper to show at the first unmoderated caucus immediately attracts other delegates. A blank Google Doc with three bullet points still outperforms nothing.</p>
-            <div style={s.callout}><p style={s.calloutText}>Draft in Google Docs or a shared document. Do not draft in a Word file on one person's laptop — the moment they leave the room, your whole bloc is stalled.</p></div>
+            <div style={s.callout}><p style={s.calloutText}>Draft in Google Docs or a shared document. Do not draft in a Word file on one person's laptop. The moment they leave the room, your whole bloc is stalled.</p></div>
 
             <h2 style={s.h2}>What to Put in a Working Paper</h2>
             <p style={s.p}>Even an informal working paper should have:</p>
             <ul style={s.ul}>
-              <li style={s.li}><strong>A header</strong> — committee, topic, list of writing delegates</li>
-              <li style={s.li}><strong>Two to four preambulatory ideas</strong> — the context and justification for your proposals</li>
-              <li style={s.li}><strong>Four to eight operative clauses</strong> — the specific actions you want the committee to take</li>
+              <li style={s.li}><strong>A header:</strong> committee, topic, list of writing delegates</li>
+              <li style={s.li}><strong>Two to four preambulatory ideas:</strong> the context and justification for your proposals</li>
+              <li style={s.li}><strong>Four to eight operative clauses:</strong> the specific actions you want the committee to take</li>
             </ul>
             <p style={s.p}>At the working paper stage, you do not need to worry about perfect formatting. What matters is that the ideas are clear, the clauses are specific, and the document reflects your bloc's actual positions.</p>
 
             <h2 style={s.h2}>Getting Sponsors and Signatories</h2>
-            <p style={s.p}>To convert a working paper into a draft resolution, you need a minimum number of sponsors (countries that helped write it and fully support it) and signatories (countries that want the document debated, but may not support its passage). Check your conference's requirements — these vary widely.</p>
+            <p style={s.p}>To convert a working paper into a draft resolution, you need a minimum number of sponsors (countries that helped write it and fully support it) and signatories (countries that want the document debated, but may not support its passage). Check your conference's requirements, as these vary widely.</p>
             <ul style={s.ul}>
               <li style={s.li}><strong>Sponsors</strong> generally cannot vote against their own resolution without withdrawing sponsorship first.</li>
               <li style={s.li}><strong>Signatories</strong> carry no obligation to vote in favour.</li>
@@ -104,22 +104,22 @@ export default function Article() {
             </ul>
 
             <h2 style={s.h2}>Merging Working Papers</h2>
-            <p style={s.p}>When two blocs have competing working papers, the chair will often encourage merging rather than allowing both to be introduced. Merging is a negotiation — each side has clauses they will not give up, and clauses they can compromise on.</p>
+            <p style={s.p}>When two blocs have competing working papers, the chair will often encourage merging rather than allowing both to be introduced. Merging is a negotiation: each side has clauses they will not give up, and clauses they can compromise on.</p>
             <h3 style={s.h3}>Merging Strategy</h3>
             <ul style={s.ul}>
               <li style={s.li}>Identify your non-negotiable clauses before entering merger talks. Know what you would withdraw sponsorship over.</li>
-              <li style={s.li}>Offer to adopt the other bloc's strongest operative clause wholesale — this often unlocks agreement on three or four other clauses.</li>
+              <li style={s.li}>Offer to adopt the other bloc's strongest operative clause wholesale. This often unlocks agreement on three or four other clauses.</li>
               <li style={s.li}>Use "calls upon" instead of "urges" or "decides" on contested clauses. Softer language often breaks deadlocks.</li>
-              <li style={s.li}>Agree on who will be listed first as primary sponsor — this is more important to some delegations than specific clauses.</li>
+              <li style={s.li}>Agree on who will be listed first as primary sponsor; this is more important to some delegations than specific clauses.</li>
             </ul>
 
             <h2 style={s.h2}>Introducing a Draft Resolution</h2>
-            <p style={s.p}>Once formatted and signed, the primary sponsor submits the draft resolution to the dais. The chair will schedule introduction — a brief period where the primary sponsor presents the document to the committee. Keep introductions short: two minutes maximum, covering the key operative clauses and the coalition that supports it.</p>
-            <p style={s.p}>After introduction, the draft resolution is available for amendment and formal debate. The working paper phase is over — you are now in the final push to pass your resolution.</p>
+            <p style={s.p}>Once formatted and signed, the primary sponsor submits the draft resolution to the dais. The chair will schedule introduction: a brief period where the primary sponsor presents the document to the committee. Keep introductions short: two minutes maximum, covering the key operative clauses and the coalition that supports it.</p>
+            <p style={s.p}>After introduction, the draft resolution is available for amendment and formal debate. The working paper phase is over. You are now in the final push to pass your resolution.</p>
 
             <RelatedGuides currentSlug="mun-working-paper-guide" />
             <div style={s.cta}>
-              <p style={s.ctaText}>Gavelling lets delegates submit working papers directly to the chair during committee — no paper required.</p>
+              <p style={s.ctaText}>Gavelling lets delegates submit working papers directly to the chair during committee, no paper required.</p>
               <a href="https://gavelling.com" style={s.ctaLink}>Try Gavelling free →</a>
             </div>
           </article>

@@ -4,11 +4,11 @@ import type { Metadata } from 'next';
 import React from 'react';
 
 export const metadata: Metadata = {
-  title: 'MUN Public Speaking Tips — How to Speak Confidently in Committee',
+  title: 'MUN Public Speaking Tips: How to Speak Confidently in Committee',
   description: 'Practical public speaking tips for Model UN delegates: how to structure speeches, manage nerves, use your voice effectively, and make every speech count.',
   alternates: { canonical: 'https://gavelling.com/blog/mun-public-speaking-tips' },
   openGraph: {
-    title: 'MUN Public Speaking Tips — How to Speak Confidently in Committee',
+    title: 'MUN Public Speaking Tips: How to Speak Confidently in Committee',
     description: 'Master public speaking for MUN with these practical techniques.',
     url: 'https://gavelling.com/blog/mun-public-speaking-tips',
     siteName: 'Gavelling',
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
 const articleSchema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
-  headline: 'MUN Public Speaking Tips — How to Speak Confidently in Committee',
+  headline: 'MUN Public Speaking Tips: How to Speak Confidently in Committee',
   description: 'Public speaking tips for MUN delegates.',
   url: 'https://gavelling.com/blog/mun-public-speaking-tips',
   datePublished: '2026-06-07',
@@ -68,26 +68,26 @@ export default function Article() {
       <div style={s.page}>
         <div style={s.wrap}>
           <Link href="/blog" style={s.back}>← MUN Resources</Link>
-          <h1 style={s.h1}>MUN Public Speaking Tips — How to Speak Confidently in Committee</h1>
+          <h1 style={s.h1}>MUN Public Speaking Tips: How to Speak Confidently in Committee</h1>
           <p style={s.meta}>By Gavelling · June 2026 · 9 min read</p>
           <article style={s.article}>
 
             <p style={s.p}>Standing up to address a committee of seventy delegates is nerve-wracking for almost everyone the first time. The good news: effective MUN speaking is a learnable skill, not a personality trait. These techniques work for introverts and extroverts alike, and they improve quickly with practice.</p>
 
             <h2 style={s.h2}>The Structure Every MUN Speech Needs</h2>
-            <p style={s.p}>Rambling speeches lose the room. Every MUN speech — regardless of length — should have three components: a hook, a body, and a close.</p>
+            <p style={s.p}>Rambling speeches lose the room. Every MUN speech (regardless of length) should have three components: a hook, a body, and a close.</p>
             <ul style={s.ul}>
-              <li style={s.li}><strong>Hook (5 seconds):</strong> Grab attention immediately. A striking statistic, a direct statement of position, or a challenge to the previous speaker. "Over 100 million people are currently displaced — more than at any point since World War II."</li>
+              <li style={s.li}><strong>Hook (5 seconds):</strong> Grab attention immediately. A striking statistic, a direct statement of position, or a challenge to the previous speaker. "Over 100 million people are currently displaced, more than at any point since World War II."</li>
               <li style={s.li}><strong>Body (45 seconds):</strong> Your argument. One or two points maximum in a sixty-second speech. Do not try to say everything.</li>
-              <li style={s.li}><strong>Close (10 seconds):</strong> A call to action or a clear statement of what your delegation supports. "France urges this committee to adopt a legally binding framework — and invites like-minded delegations to co-sponsor our working paper."</li>
+              <li style={s.li}><strong>Close (10 seconds):</strong> A call to action or a clear statement of what your delegation supports. "France urges this committee to adopt a legally binding framework, and invites like-minded delegations to co-sponsor our working paper."</li>
             </ul>
             <div style={s.callout}><p style={s.calloutText}>The most common mistake: trying to say too much. One clear argument, delivered well, is more persuasive than five arguments delivered nervously. Cut until it hurts.</p></div>
 
             <h2 style={s.h2}>Managing Nerves</h2>
-            <p style={s.p}>Nerves are not the enemy — unmanaged nerves are. A small amount of adrenaline actually improves performance. Here is how to keep it manageable:</p>
+            <p style={s.p}>Nerves are not the enemy. Unmanaged nerves are. A small amount of adrenaline actually improves performance. Here is how to keep it manageable:</p>
             <ul style={s.ul}>
               <li style={s.li}><strong>Breathe before you stand.</strong> Take two slow breaths before getting up. This lowers your heart rate noticeably and gives your voice time to settle.</li>
-              <li style={s.li}><strong>Plant your feet.</strong> Stand with feet shoulder-width apart. Do not sway or shift weight — it signals nervousness to the audience even when your voice sounds fine.</li>
+              <li style={s.li}><strong>Plant your feet.</strong> Stand with feet shoulder-width apart. Do not sway or shift weight. It signals nervousness to the audience even when your voice sounds fine.</li>
               <li style={s.li}><strong>Speak slower than feels natural.</strong> When nervous, people speed up. Consciously slow down by about 20%. It feels odd from the inside but sounds authoritative from the outside.</li>
               <li style={s.li}><strong>Know your first sentence cold.</strong> Most nervousness peaks in the first ten seconds. If you know your opener word-for-word, the rest becomes easier once you are into it.</li>
             </ul>
@@ -102,7 +102,7 @@ export default function Article() {
             </ul>
 
             <h2 style={s.h2}>Responding in the Moment</h2>
-            <p style={s.p}>Planned speeches are one thing. Spontaneous responses to what another delegate just said are another — and they are what separates good delegates from great ones. When you have thirty seconds to formulate a rebuttal:</p>
+            <p style={s.p}>Planned speeches are one thing. Spontaneous responses to what another delegate just said are another, and they are what separates good delegates from great ones. When you have thirty seconds to formulate a rebuttal:</p>
             <ul style={s.ul}>
               <li style={s.li}>Identify the one thing you disagree with most strongly. Do not try to rebut everything.</li>
               <li style={s.li}>Name the specific claim: "The delegate of Russia asserted that sanctions have been ineffective. The evidence contradicts this."</li>
@@ -111,8 +111,8 @@ export default function Article() {
             </ul>
 
             <h2 style={s.h2}>Eye Contact and Body Language</h2>
-            <p style={s.p}>Look at the committee, not your notes. This is the single most powerful change most delegates can make. You may need notes for statistics and specific facts — glance at them briefly, then look back up. Sustained eye contact with different sections of the room signals confidence and keeps people engaged.</p>
-            <p style={s.p}>Avoid crossing your arms, looking at the floor, or gripping the podium. Open posture — shoulders back, arms at your sides or resting lightly — communicates that you belong at the podium.</p>
+            <p style={s.p}>Look at the committee, not your notes. This is the single most powerful change most delegates can make. You may need notes for statistics and specific facts, so glance at them briefly, then look back up. Sustained eye contact with different sections of the room signals confidence and keeps people engaged.</p>
+            <p style={s.p}>Avoid crossing your arms, looking at the floor, or gripping the podium. Open posture (shoulders back, arms at your sides or resting lightly) communicates that you belong at the podium.</p>
 
             <h2 style={s.h2}>Practise by Watching Others</h2>
             <p style={s.p}>Search for recordings of real UN speeches and MUN award-winning speeches. Watch what effective speakers do differently. Pay attention to pace, structure, and how they handle transitions. Then practise with a timer in front of a mirror or a trusted classmate who will give honest feedback.</p>

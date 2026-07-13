@@ -49,7 +49,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // supabase-js acquires a navigator Web Lock for getSession(); a stale lock or a hung
     // token refresh (aggravated by many GoTrueClient instances sharing the same storage
     // key) can block it FOREVER, wedging every page behind an eternal authLoading spinner.
-    // Same failure class as the signOut hang below — bound it the same way: on timeout,
+    // Same failure class as the signOut hang below, bound it the same way: on timeout,
     // render logged-out; if the SDK resolves later, onAuthStateChange still updates state.
     let resolved = false;
     const failsafe = setTimeout(() => {

@@ -259,9 +259,9 @@ function FeaturedSection() {
 function OrganiserSection() {
   const cards = [
     { icon: Users, title: 'Smart Assignment', desc: 'Preferences + experience scores. One-click auto-assign.' },
-    { icon: FileText, title: 'Document Portal', desc: 'Study guides, position papers, feedback — all in one place.' },
+    { icon: FileText, title: 'Document Portal', desc: 'Study guides, position papers, feedback, all in one place.' },
     { icon: CreditCard, title: 'Transparent Fees', desc: '5% delegate surcharge, waived with Gavelling Unlimited. You keep 100%.' },
-    { icon: Zap, title: 'Automated Comms', desc: 'Acceptance emails, allocation codes, reminders — sent automatically.' },
+    { icon: Zap, title: 'Automated Comms', desc: 'Acceptance emails, allocation codes, reminders, sent automatically.' },
   ];
 
   return (
@@ -292,7 +292,7 @@ function OrganiserSection() {
           </Link>
         </div>
 
-        {/* Right — 2×2 grid */}
+        {/* Right, 2×2 grid */}
         <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-4">
           {cards.map(card => {
             const Icon = card.icon;
@@ -332,7 +332,7 @@ function RolesSection() {
             <span className="block" style={{ fontSize: 'clamp(28px, 3.5vw, 48px)', color: '#1B3828' }}>Find your next role.</span>
           </h2>
           <p className="mt-4 mb-6 text-sm leading-relaxed" style={{ color: '#9A8A78', maxWidth: '420px', fontFamily: "'Outfit', sans-serif" }}>
-            Conferences post open positions for chairs, secretariat, and staff. Apply directly through your Gavelling profile — your MUN CV travels with you.
+            Conferences post open positions for chairs, secretariat, and staff. Apply directly through your Gavelling profile. Your MUN CV travels with you.
           </p>
           <div className="flex flex-wrap gap-2 mb-8">
             {['CHAIRS', 'SECRETARIAT', 'STAFF'].map(pill => (
@@ -356,7 +356,7 @@ function RolesSection() {
           </Link>
         </div>
 
-        {/* Right — stat cards */}
+        {/* Right, stat cards */}
         <div className="flex-1 flex flex-col gap-4">
           {stats.map(stat => (
             <div key={stat.label} className="rounded-2xl p-5 flex items-center gap-4" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
@@ -393,7 +393,7 @@ function GlobeSection() {
         style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px', mixBlendMode: 'overlay', opacity: 0.07 }}
       />
 
-      {/* Globe video — right side, absolutely positioned */}
+      {/* Globe video, right side, absolutely positioned */}
       <div
         style={{
           position: 'absolute',
@@ -414,7 +414,7 @@ function GlobeSection() {
           playsInline
           style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: '30% center', display: 'block', opacity: 0.82 }}
         />
-        {/* Radial vignette — dissolves all edges into forest background */}
+        {/* Radial vignette, dissolves all edges into forest background */}
         <div
           style={{
             position: 'absolute',
@@ -422,7 +422,7 @@ function GlobeSection() {
             background: 'radial-gradient(ellipse 80% 85% at 65% 50%, transparent 35%, rgba(27,56,40,0.45) 58%, rgba(27,56,40,0.82) 75%, #1B3828 95%)',
           }}
         />
-        {/* Left edge hard stop — prevents globe bleeding into text */}
+        {/* Left edge hard stop, prevents globe bleeding into text */}
         <div
           style={{
             position: 'absolute',

@@ -1,20 +1,20 @@
 'use client';
 
 /**
- * Organiser financial dashboard — revenue overview, delegate estimate,
+ * Organiser financial dashboard, revenue overview, delegate estimate,
  * read-only payment pipeline and voucher management. Neumorphic throughout
  * (neu.tsx primitives); money math mirrors src/lib/finance.ts semantics
  * (voucher discounts clamp at zero, waived participants excluded).
  *
  * All figures can be re-displayed in another currency via the header
- * switcher — a static approximate FX table (see VouchersSection.tsx, which
+ * switcher, a static approximate FX table (see VouchersSection.tsx, which
  * mirrors finance.ts USD_FX). Stored values and voucher creation stay in the
  * conference currency; converted figures are prefixed with "≈".
  *
  * The Stripe seam is a single integration point consistent with
  * src/lib/payments.ts: conference.stripe_account_id null → connect teaser
  * (stub, "coming soon"); set → CONNECTED pill. No payment writes happen on
- * this page — marking paid stays on the Applications page.
+ * this page, marking paid stays on the Applications page.
  */
 
 import { useState, useEffect, useMemo } from 'react';
@@ -46,7 +46,7 @@ interface FinRow {
   fee_waiver_source: string | null;
   voucher_discount: number | null;
   submitted_at: string;
-  /** True payment timestamp — set by newer payment flows only, so often null
+  /** True payment timestamp, set by newer payment flows only, so often null
    *  even on paid rows. Never faked: rows without it show the APPLIED date. */
   paid_at: string | null;
   /** Payment provenance (delegation flows, applications page):
@@ -96,7 +96,7 @@ function roleTone(role: string) {
     : { bg: 'rgba(90,110,160,0.13)', color: '#4A5A85', border: 'rgba(90,110,160,0.35)' };
 }
 
-/** Committee shorthand — abbreviation when set, else a monogram of the name. */
+/** Committee shorthand, abbreviation when set, else a monogram of the name. */
 function committeeAbbr(c: { name: string; abbreviation: string | null } | null): string {
   if (!c) return '—';
   if (c.abbreviation) return c.abbreviation;
@@ -120,7 +120,7 @@ function CountryFlag({ name, code, size = 14 }: { name: string | null; code?: st
   );
 }
 
-/** Cumulative sparkline — 12 buckets from first matching row to now. Rows
+/** Cumulative sparkline, 12 buckets from first matching row to now. Rows
  *  are bucketed by paid_at when recorded (newer payment flows), otherwise by
  *  submission time (same approximation as the dashboard chart). */
 function cumulativeSpark(rows: FinRow[], pick: (r: FinRow) => boolean, n = 12): number[] | undefined {
@@ -149,7 +149,7 @@ function formatRowDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-/** HOW the money moved (or didn't) — derived from payment provenance columns.
+/** HOW the money moved (or didn't), derived from payment provenance columns.
  *  Mapping (in priority order):
  *   - paid + stripe_payment_intent_id     → STRIPE      (online checkout)
  *   - paid + self_paid                    → SELF-PAID   (participant funded own fee)
@@ -188,7 +188,7 @@ export default function FinancialsPage() {
   const [filter, setFilter] = useState<PipelineFilter>('all');
   // Overview (tiles/estimate/pipeline/vouchers) vs History (transaction log).
   const [tab, setTab] = useState<'overview' | 'history'>('overview');
-  // Displayed currency — '' until the per-conference localStorage choice is
+  // Displayed currency, '' until the per-conference localStorage choice is
   // loaded; falls back to the conference currency. Display-only: stored
   // values and voucher creation always stay in the conference currency.
   const [displayCurrency, setDisplayCurrency] = useState('');
@@ -228,7 +228,7 @@ export default function FinancialsPage() {
   // ── Derived money figures ────────────────────────────────────────────────
   const fin = useMemo(() => {
     const all = rows ?? [];
-    // Rejected and withdrawn applications drop out of the pipeline entirely —
+    // Rejected and withdrawn applications drop out of the pipeline entirely,
     // except paid ones, whose money was still collected. Withdrawal is only
     // ever allowed while unpaid/waived (see applications/page.tsx), so this
     // exception is defensive rather than load-bearing today, but it keeps the
@@ -246,7 +246,7 @@ export default function FinancialsPage() {
     const waived = roundMoney(waivedRows.length * fee);
     const expectedTotal = roundMoney(collected + pending);
 
-    // Delegate estimate — expected_delegates is the organiser's own estimate
+    // Delegate estimate, expected_delegates is the organiser's own estimate
     // of DELEGATES, so reality is measured on the delegate pool only.
     const delegateRows = live.filter(r => r.role === 'delegate' || r.role === 'head-delegate');
     const acceptedDelegates = delegateRows.filter(r => r.status === 'accepted' || r.status === 'assigned').length;
@@ -294,7 +294,7 @@ export default function FinancialsPage() {
     return true;
   });
 
-  // History — the exact transaction log: every paid/waived application, newest
+  // History, the exact transaction log: every paid/waived application, newest
   // first, dated by paid_at when recorded else the application date.
   const historyRows = fin.live
     .filter(r => r.payment_status === 'paid' || r.payment_status === 'waived')
@@ -323,7 +323,7 @@ export default function FinancialsPage() {
               <h1 style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 26, color: NEU.ink, letterSpacing: '-0.01em' }}>
                 Financials
               </h1>
-              {/* Display-currency switcher — conference currency first, then the
+              {/* Display-currency switcher, conference currency first, then the
                   full CURRENCIES list. Scrollable so 13 codes stay on one clean
                   row without wrapping. */}
               <div
@@ -351,7 +351,7 @@ export default function FinancialsPage() {
             </div>
             {converted && (
               <p className="mt-1" style={mutedCaption}>
-                Approximate conversion — payments settle in {currency}.
+                Approximate conversion: payments settle in {currency}.
               </p>
             )}
           </div>
@@ -379,7 +379,7 @@ export default function FinancialsPage() {
 
         {tab === 'overview' && (<>
 
-        {/* Stripe connect teaser — the single integration seam (payments.ts) */}
+        {/* Stripe connect teaser, the single integration seam (payments.ts) */}
         {!stripeConnected && (
           <div
             className="flex items-center gap-4 flex-wrap rounded-[20px] px-5 py-4 mb-6"
@@ -403,7 +403,7 @@ export default function FinancialsPage() {
                 Connect Stripe to collect payments automatically
               </p>
               <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: 'rgba(250,248,243,0.68)', lineHeight: 1.5 }}>
-                Until then, mark payments manually on the Applications page — every figure below stays accurate either way.
+                Until then, mark payments manually on the Applications page. Every figure below stays accurate either way.
               </p>
             </div>
             <div className="flex flex-col items-end gap-1 flex-shrink-0">
@@ -500,7 +500,7 @@ export default function FinancialsPage() {
                     {money(roundMoney(expectedDelegates * fee))}
                   </p>
                   <p style={mutedCaption}>
-                    {expectedDelegates} delegates × {money(fee)} fee — assumes every
+                    {expectedDelegates} delegates × {money(fee)} fee. Assumes every
                     delegate pays the full fee, before vouchers and waivers.
                   </p>
                 </NeuInset>
@@ -512,8 +512,8 @@ export default function FinancialsPage() {
                     {money(roundMoney(fin.acceptedDelegates * fee))}
                   </p>
                   <p style={mutedCaption}>
-                    {fin.acceptedDelegates} accepted delegate{fin.acceptedDelegates === 1 ? '' : 's'} × {money(fee)} —
-                    same full-fee assumption; the tiles above show actual discounted figures.
+                    {fin.acceptedDelegates} accepted delegate{fin.acceptedDelegates === 1 ? '' : 's'} × {money(fee)}.
+                    Same full-fee assumption; the tiles above show actual discounted figures.
                   </p>
                 </NeuInset>
               </div>
@@ -531,7 +531,7 @@ export default function FinancialsPage() {
                   Payment pipeline
                 </h2>
                 <p style={mutedCaption}>
-                  Read-only here — mark payments on the{' '}
+                  Read-only here. Mark payments on the{' '}
                   <Link
                     href={`/manage/${conference.slug}/applications`}
                     style={{ color: NEU.forest, fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 2 }}
@@ -623,10 +623,10 @@ export default function FinancialsPage() {
                       <CountryFlag name={r.assigned_country_name} code={r.assigned_country_code} />
                     </span>
 
-                    {/* Date — real payment date when recorded, else application date */}
+                    {/* Date, real payment date when recorded, else application date */}
                     <span
                       className="inline-flex items-baseline gap-1.5"
-                      title={hasPaidAt ? 'Payment recorded on this date' : 'Application submitted on this date — no payment date recorded'}
+                      title={hasPaidAt ? 'Payment recorded on this date' : 'Application submitted on this date (no payment date recorded)'}
                       style={{ minWidth: 118 }}
                     >
                       <span style={{ fontFamily: OUTFIT, fontSize: 8, fontWeight: 800, letterSpacing: '0.1em', color: NEU.muted, opacity: 0.85 }}>
@@ -682,7 +682,7 @@ export default function FinancialsPage() {
                       </span>
                     )}
 
-                    {/* Method chip — HOW the payment happened (see paymentMethod) */}
+                    {/* Method chip, HOW the payment happened (see paymentMethod) */}
                     {method && (
                       <span
                         title={method.title}
@@ -717,7 +717,7 @@ export default function FinancialsPage() {
                   Transaction history
                 </h2>
                 <p style={mutedCaption}>
-                  Every collected and waived fee, newest first — dated by payment when recorded, otherwise the application date.
+                  Every collected and waived fee, newest first. Dated by payment when recorded, otherwise the application date.
                 </p>
               </div>
             </div>
@@ -749,10 +749,10 @@ export default function FinancialsPage() {
                       className="flex items-center gap-3 flex-wrap px-5 py-2.5"
                       style={i > 0 ? { borderTop: '1px solid rgba(221,212,192,0.55)' } : undefined}
                     >
-                      {/* Date — leads the log */}
+                      {/* Date, leads the log */}
                       <span
                         className="inline-flex items-baseline gap-1.5 flex-shrink-0"
-                        title={hasPaidAt ? 'Payment recorded on this date' : waived ? 'Fee waived — application date' : 'Application date — no payment date recorded'}
+                        title={hasPaidAt ? 'Payment recorded on this date' : waived ? 'Fee waived (application date)' : 'Application date, no payment date recorded'}
                         style={{ minWidth: 118 }}
                       >
                         <span style={{ fontFamily: OUTFIT, fontSize: 8, fontWeight: 800, letterSpacing: '0.1em', color: NEU.muted, opacity: 0.85 }}>
@@ -807,7 +807,7 @@ export default function FinancialsPage() {
                         {money(waived ? fee : amount)}
                       </span>
 
-                      {/* Method chip — STRIPE / SELF-PAID / DELEGATION / MANUAL / AMBASSADOR / UNLIMITED */}
+                      {/* Method chip, STRIPE / SELF-PAID / DELEGATION / MANUAL / AMBASSADOR / UNLIMITED */}
                       {method && (
                         <span
                           title={method.title}

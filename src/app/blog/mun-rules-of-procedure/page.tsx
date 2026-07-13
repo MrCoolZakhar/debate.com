@@ -4,11 +4,11 @@ import type { Metadata } from 'next';
 import React from 'react';
 
 export const metadata: Metadata = {
-  title: 'MUN Rules of Procedure — Complete Reference Guide',
+  title: 'MUN Rules of Procedure: Complete Reference Guide',
   description: 'A comprehensive reference for Model UN rules of procedure: points, motions, yields, quorum, voting thresholds, and how rules differ across major conferences.',
   alternates: { canonical: 'https://gavelling.com/blog/mun-rules-of-procedure' },
   openGraph: {
-    title: 'MUN Rules of Procedure — Complete Reference Guide',
+    title: 'MUN Rules of Procedure: Complete Reference Guide',
     description: 'Everything you need to know about MUN rules of procedure.',
     url: 'https://gavelling.com/blog/mun-rules-of-procedure',
     siteName: 'Gavelling',
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
 const articleSchema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
-  headline: 'MUN Rules of Procedure — Complete Reference Guide',
+  headline: 'MUN Rules of Procedure: Complete Reference Guide',
   description: 'Comprehensive reference for MUN rules of procedure.',
   url: 'https://gavelling.com/blog/mun-rules-of-procedure',
   datePublished: '2026-06-07',
@@ -68,11 +68,11 @@ export default function Article() {
       <div style={s.page}>
         <div style={s.wrap}>
           <Link href="/blog" style={s.back}>← MUN Resources</Link>
-          <h1 style={s.h1}>MUN Rules of Procedure — Complete Reference Guide</h1>
+          <h1 style={s.h1}>MUN Rules of Procedure: Complete Reference Guide</h1>
           <p style={s.meta}>By Gavelling · June 2026 · 13 min read</p>
           <article style={s.article}>
 
-            <p style={s.p}>Rules of procedure (RoP) are the backbone of every Model UN committee. They determine who can speak, in what order, for how long, and what decisions require a majority. Mastering them gives you procedural power — the ability to shape the pace and direction of debate in ways that raw argumentation cannot. This is a complete reference you can return to throughout your MUN career.</p>
+            <p style={s.p}>Rules of procedure (RoP) are the backbone of every Model UN committee. They determine who can speak, in what order, for how long, and what decisions require a majority. Mastering them gives you procedural power: the ability to shape the pace and direction of debate in ways that raw argumentation cannot. This is a complete reference you can return to throughout your MUN career.</p>
 
             <h2 style={s.h2}>Quorum</h2>
             <p style={s.p}>Quorum is the minimum number of delegates that must be present for a committee to conduct formal business. Most conferences set quorum at a simple majority of enrolled delegations (50% + 1). If quorum is not met, the chair cannot open debate or hold votes. Chairs verify quorum during roll call at the start of each session.</p>
@@ -84,7 +84,7 @@ export default function Article() {
             <p style={s.p}>Points are interruptions made by delegates to address procedural issues or seek information. They take priority over motions and can be raised at any time except while another delegate has the floor (with one exception).</p>
             <ul style={s.ul}>
               <li style={s.li}><strong>Point of Order:</strong> Raised when a delegate believes the chair has made a procedural error. The chair must rule on it immediately. This is the only point that can interrupt a speaker.</li>
-              <li style={s.li}><strong>Point of Personal Privilege:</strong> Raised when a delegate's ability to participate is impaired — they cannot hear, the room is too hot, etc. Cannot interrupt a speaker at most conferences.</li>
+              <li style={s.li}><strong>Point of Personal Privilege:</strong> Raised when a delegate's ability to participate is impaired: they cannot hear, the room is too hot, etc. Cannot interrupt a speaker at most conferences.</li>
               <li style={s.li}><strong>Point of Information to the Chair:</strong> A question directed to the chair about procedure.</li>
               <li style={s.li}><strong>Point of Information to the Delegate:</strong> A question posed to the delegate currently speaking (subject to the speaker's acceptance).</li>
             </ul>
@@ -126,11 +126,11 @@ export default function Article() {
             </ul>
 
             <h2 style={s.h2}>How Rules Differ Across Conferences</h2>
-            <p style={s.p}>NMUN uses a parliamentary procedure adapted from actual UN practice — the most faithful simulation available. NAIMUN and HMUN have their own variations. School conferences often adapt rules further for accessibility. Always read the rules of procedure document for your specific conference before committee begins. When in doubt, ask the chair.</p>
+            <p style={s.p}>NMUN uses a parliamentary procedure adapted from actual UN practice, the most faithful simulation available. NAIMUN and HMUN have their own variations. School conferences often adapt rules further for accessibility. Always read the rules of procedure document for your specific conference before committee begins. When in doubt, ask the chair.</p>
 
             <RelatedGuides currentSlug="mun-rules-of-procedure" />
             <div style={s.cta}>
-              <p style={s.ctaText}>Gavelling enforces rules of procedure automatically — motions, timers, speakers lists, and voting all in one place.</p>
+              <p style={s.ctaText}>Gavelling enforces rules of procedure automatically: motions, timers, speakers lists, and voting all in one place.</p>
               <a href="https://gavelling.com" style={s.ctaLink}>Try Gavelling free →</a>
             </div>
           </article>

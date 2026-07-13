@@ -128,7 +128,7 @@ export default function PointsPage() {
       setUnlimitedRemaining(prev => prev + granted);
       setRedeemResult({
         ok: true,
-        text: `Unlimited unlocked for your next ${granted} conference${granted === 1 ? '' : 's'} — the 5% Gavelling fee is waived automatically at checkout.`,
+        text: `Unlimited unlocked for your next ${granted} conference${granted === 1 ? '' : 's'}. The 5% Gavelling fee is waived automatically at checkout.`,
       });
     } else {
       setRedeemResult({ ok: true, text: 'Code redeemed successfully.' });
@@ -254,7 +254,7 @@ export default function PointsPage() {
               }}
             >
               <Crown size={12} strokeWidth={2.4} style={{ color: NEU.deepGold }} />
-              AMBASSADOR — GAVELLING FEE WAIVED, ALWAYS
+              AMBASSADOR: GAVELLING FEE WAIVED, ALWAYS
             </span>
           )}
           {unlimitedRemaining > 0 && (
@@ -271,7 +271,7 @@ export default function PointsPage() {
           )}
         </div>
         <p className="text-xs mb-3" style={{ color: '#9A8A78', fontFamily: OUTFIT, lineHeight: 1.65 }}>
-          Have a Gavelling code? Redeem it here — subscription codes are single-use per account.
+          Have a Gavelling code? Redeem it here. Subscription codes are single-use per account.
         </p>
         <NeuInset small className="p-2">
           <div className="flex items-stretch gap-2">

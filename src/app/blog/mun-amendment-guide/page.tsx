@@ -4,11 +4,11 @@ import type { Metadata } from 'next';
 import React from 'react';
 
 export const metadata: Metadata = {
-  title: 'MUN Amendments Explained — Friendly vs Unfriendly, How to Submit',
+  title: 'MUN Amendments Explained: Friendly vs Unfriendly, How to Submit',
   description: 'Everything about amendments in Model UN: the difference between friendly and unfriendly amendments, how to submit them, voting order, and strategic use.',
   alternates: { canonical: 'https://gavelling.com/blog/mun-amendment-guide' },
   openGraph: {
-    title: 'MUN Amendments Explained — Friendly vs Unfriendly, How to Submit',
+    title: 'MUN Amendments Explained: Friendly vs Unfriendly, How to Submit',
     description: 'The complete guide to amendments in MUN committees.',
     url: 'https://gavelling.com/blog/mun-amendment-guide',
     siteName: 'Gavelling',
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
 const articleSchema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
-  headline: 'MUN Amendments Explained — Friendly vs Unfriendly, How to Submit',
+  headline: 'MUN Amendments Explained: Friendly vs Unfriendly, How to Submit',
   description: 'Complete guide to MUN amendments.',
   url: 'https://gavelling.com/blog/mun-amendment-guide',
   datePublished: '2026-06-07',
@@ -68,7 +68,7 @@ export default function Article() {
       <div style={s.page}>
         <div style={s.wrap}>
           <Link href="/blog" style={s.back}>← MUN Resources</Link>
-          <h1 style={s.h1}>MUN Amendments Explained — Friendly vs Unfriendly, How to Submit</h1>
+          <h1 style={s.h1}>MUN Amendments Explained: Friendly vs Unfriendly, How to Submit</h1>
           <p style={s.meta}>By Gavelling · June 2026 · 8 min read</p>
           <article style={s.article}>
 
@@ -78,7 +78,7 @@ export default function Article() {
             <p style={s.p}>An amendment is a formal proposal to change the text of a draft resolution that has already been introduced. Amendments can add new operative clauses, delete existing ones, or modify the wording of specific clauses. They are submitted in writing to the dais and voted on before the main resolution vote.</p>
 
             <h2 style={s.h2}>Friendly Amendments</h2>
-            <p style={s.p}>A friendly amendment is one that all sponsors of the draft resolution agree to accept. Because it has unanimous sponsor approval, it does not need a separate committee vote — it is simply incorporated into the resolution text automatically.</p>
+            <p style={s.p}>A friendly amendment is one that all sponsors of the draft resolution agree to accept. Because it has unanimous sponsor approval, it does not need a separate committee vote. It is simply incorporated into the resolution text automatically.</p>
             <p style={s.p}>Friendly amendments are used to:</p>
             <ul style={s.ul}>
               <li style={s.li}>Fix errors in the resolution text</li>
@@ -93,13 +93,13 @@ export default function Article() {
             <p style={s.p}>Unfriendly amendments require a minimum number of sponsors to submit (check your conference's rules). They are voted on separately, in reverse order of submission, before the main resolution vote.</p>
 
             <h3 style={s.h3}>Offensive Use</h3>
-            <p style={s.p}>Submit an unfriendly amendment to an opponent's resolution to force them to vote against something their bloc publicly supports. For example, if the resolution is on refugee protection and you amend it to include binding refugee quotas, you may force a veto from nations that oppose binding commitments — publicly exposing their position.</p>
+            <p style={s.p}>Submit an unfriendly amendment to an opponent's resolution to force them to vote against something their bloc publicly supports. For example, if the resolution is on refugee protection and you amend it to include binding refugee quotas, you may force a veto from nations that oppose binding commitments, publicly exposing their position.</p>
 
             <h3 style={s.h3}>Defensive Use</h3>
-            <p style={s.p}>If someone submits an unfriendly amendment to your resolution that you find unacceptable, you can lobby against it in debate and ensure your sponsor bloc votes it down. Alternatively, consider withdrawing the clause they are targeting and replacing it with a friendly amendment version that is slightly weaker but still acceptable to you — this takes the vote off the table entirely.</p>
+            <p style={s.p}>If someone submits an unfriendly amendment to your resolution that you find unacceptable, you can lobby against it in debate and ensure your sponsor bloc votes it down. Alternatively, consider withdrawing the clause they are targeting and replacing it with a friendly amendment version that is slightly weaker but still acceptable to you. This takes the vote off the table entirely.</p>
 
             <h2 style={s.h2}>Amendment Voting Order</h2>
-            <p style={s.p}>Multiple amendments to the same resolution are voted on in reverse chronological order — the most recently submitted amendment is voted on first. This allows the committee to consider the most recent proposed changes before those that came before. If you want your amendment to have priority, submit it last.</p>
+            <p style={s.p}>Multiple amendments to the same resolution are voted on in reverse chronological order: the most recently submitted amendment is voted on first. This allows the committee to consider the most recent proposed changes before those that came before. If you want your amendment to have priority, submit it last.</p>
 
             <h2 style={s.h2}>How to Submit an Amendment</h2>
             <p style={s.p}>The exact process varies by conference, but generally:</p>

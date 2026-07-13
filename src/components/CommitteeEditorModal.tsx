@@ -1,13 +1,14 @@
 'use client';
 
-// Shared committee editor modal — extracted from manage/[slug]/committees/page.tsx
+// Shared committee editor modal, extracted from manage/[slug]/committees/page.tsx
 // so the organiser committees tab and the public conference page can share it.
 // Exposes: CommitteeEditorModal (create + edit, with built-in type picker for the
 // create flow), MonogramMedallion (fallback emblem), ModalOverlay (house modal
 // backdrop) and mintConferenceSession (session minting for conference committees).
 
 import { useState, useEffect } from 'react';
-import { X, Globe, Users } from 'lucide-react';
+import { X, Globe, Users, Landmark, Scale, Zap } from 'lucide-react';
+import { NEU, NEU_GRADIENTS, OUTFIT, type NeuGradient } from '@/components/neu';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
 import { getCountryByName } from '@/lib/countries';
@@ -46,6 +47,11 @@ const labelStyle: React.CSSProperties = {
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+// Committee type governs rostering: GA + Specialised roster by country slots;
+// Crisis rosters free-text character names. Only Crisis takes the character
+// path, every non-crisis type falls through to countries.
+export type CommitteeType = 'general-assembly' | 'specialised' | 'crisis';
+
 export interface EditableCommittee {
   id: string;
   name: string;
@@ -57,7 +63,7 @@ export interface EditableCommittee {
   logo_url: string | null;
 }
 
-// ── Fallback emblem — gradient monogram disc with grain, matching the public card
+// ── Fallback emblem, gradient monogram disc with grain, matching the public card
 
 export function MonogramMedallion({ text, isCrisis, size }: { text: string; isCrisis: boolean; size: number }) {
   const monogram = text.replace(/[^A-Za-z0-9]/g, '').slice(0, 6).toUpperCase() || '—';
@@ -125,7 +131,7 @@ export async function mintConferenceSession(
       .select('id')
       .single();
     if (sErr) {
-      if (sErr.code === '23505') continue; // code collision — try a new code
+      if (sErr.code === '23505') continue; // code collision, try a new code
       console.error('Error minting conference session:', sErr);
       return null;
     }
@@ -153,7 +159,7 @@ export async function mintConferenceSession(
 
 function CommitteeEditor({ conferenceId, committeeType, existing, initialCountries, onClose, onSaved }: {
   conferenceId: string;
-  committeeType: 'general-assembly' | 'crisis';
+  committeeType: CommitteeType;
   existing?: EditableCommittee | null;
   initialCountries?: string[];
   onClose: () => void;
@@ -187,7 +193,7 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialCountri
     setLogoUrl(matchPresetEmblem(name, abbreviation));
   }, [name, abbreviation, emblemManuallySet]);
 
-  // Mirrors the conference logo upload in manage/[slug]/settings — same bucket, own folder.
+  // Mirrors the conference logo upload in manage/[slug]/settings, same bucket, own folder.
   async function handleEmblemUpload(file: File) {
     if (!session) return;
     if (file.size > 5 * 1024 * 1024) { setError('Emblem must be under 5MB.'); return; }
@@ -389,7 +395,7 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialCountri
                 onChange={e => { const f = e.target.files?.[0]; if (f) handleEmblemUpload(f); e.target.value = ''; }}
               />
             </div>
-            {/* Preset emblem picker — one-click seals for common committees. */}
+            {/* Preset emblem picker, one-click seals for common committees. */}
             <div className="mt-2 flex items-center gap-2 flex-wrap">
               <span style={{ ...labelStyle, marginBottom: 0, textTransform: 'uppercase', letterSpacing: '0.12em' }}>Presets</span>
               {PRESET_EMBLEM_PICKS.map((p) => {
@@ -466,9 +472,65 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialCountri
   );
 }
 
-// ── CommitteeEditorModal — public API ─────────────────────────────────────────
-// committee = null → create flow (opens with the GA/Crisis type picker);
-// committee set    → edit flow (self-loads the committee's country slots).
+// ── Committee-type picker card (neumorphic) ───────────────────────────────────
+// One extruded ivory card per type. Selected = forest ring + gold-tinted seat +
+// gradient icon disc lit; unselected = calm surface + soft-tinted icon seat.
+// Hover lifts the card. Used only in the create flow's three-up type chooser.
+
+const TYPE_OPTIONS: {
+  type: CommitteeType;
+  label: string;
+  desc: string;
+  icon: React.ComponentType<{ size?: number; strokeWidth?: number; style?: React.CSSProperties }>;
+  gradient: NeuGradient;
+}[] = [
+  { type: 'general-assembly', label: 'General Assembly', desc: 'Large committees, country delegates, formal debate.', icon: Landmark, gradient: NEU_GRADIENTS.forest },
+  { type: 'specialised', label: 'Specialised', desc: 'Mid-size expert bodies (ECOSOC, HRC, legal).', icon: Scale, gradient: NEU_GRADIENTS.sage },
+  { type: 'crisis', label: 'Crisis', desc: 'Fast-paced, character roles, live crises.', icon: Zap, gradient: NEU_GRADIENTS.amber },
+];
+
+function TypeCard({ opt, onSelect }: { opt: (typeof TYPE_OPTIONS)[number]; onSelect: () => void }) {
+  const [hovered, setHovered] = useState(false);
+  const { label, desc, icon: Icon, gradient } = opt;
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      className="flex items-center gap-3.5 text-left focus:outline-none w-full"
+      style={{
+        padding: '14px 16px',
+        borderRadius: 18,
+        border: `1.5px solid ${hovered ? NEU.forest : 'transparent'}`,
+        backgroundColor: NEU.surface,
+        boxShadow: hovered ? NEU.outHover : NEU.out,
+        transform: hovered ? 'translateY(-2px)' : 'translateY(0)',
+        transition: `box-shadow 260ms ${EASE}, transform 260ms ${EASE}, border-color 200ms ${EASE}`,
+        cursor: 'pointer',
+      }}
+    >
+      <span
+        className="inline-flex items-center justify-center flex-shrink-0"
+        style={{
+          width: 44, height: 44, borderRadius: 14,
+          background: `linear-gradient(135deg, ${gradient[0]}, ${gradient[1]})`,
+          boxShadow: `0 4px 10px ${gradient[0]}44, ${NEU.outSm}`,
+        }}
+      >
+        <Icon size={21} strokeWidth={2.2} style={{ color: '#FFFFFF' }} />
+      </span>
+      <span className="flex flex-col min-w-0">
+        <span style={{ fontFamily: OUTFIT, fontSize: 14.5, fontWeight: 800, color: NEU.ink, letterSpacing: '0.01em' }}>{label}</span>
+        <span style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 500, color: NEU.muted, lineHeight: 1.35, marginTop: 2 }}>{desc}</span>
+      </span>
+    </button>
+  );
+}
+
+// ── CommitteeEditorModal, public API ─────────────────────────────────────────
+// committee = null → create flow (opens with the GA / Specialised / Crisis
+// type picker); committee set → edit flow (self-loads the committee's slots).
 
 export function CommitteeEditorModal({ conference, committee, onSaved, onClose }: {
   conference: { id: string };
@@ -478,8 +540,8 @@ export function CommitteeEditorModal({ conference, committee, onSaved, onClose }
 }) {
   const { session } = useAuth();
   const isEdit = !!committee;
-  const [pendingType, setPendingType] = useState<'general-assembly' | 'crisis' | null>(
-    committee ? (committee.committee_type === 'crisis' ? 'crisis' : 'general-assembly') : null
+  const [pendingType, setPendingType] = useState<CommitteeType | null>(
+    committee ? (committee.committee_type as CommitteeType) : null
   );
   // Edit flow: null until the committee's current slots are fetched.
   const [initialCountries, setInitialCountries] = useState<string[] | null>(committee ? null : []);
@@ -498,41 +560,26 @@ export function CommitteeEditorModal({ conference, committee, onSaved, onClose }
     return () => { cancelled = true; };
   }, [committee, session]);
 
-  // Create flow — choose committee type first.
+  // Create flow, choose committee type first (GA / Specialised / Crisis).
   if (!isEdit && !pendingType) {
     return (
       <ModalOverlay onClose={onClose}>
-        <div className="rounded-2xl p-8 flex flex-col items-center gap-5" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 360 }}>
-          <div className="w-full flex justify-end">
-            <button onClick={onClose} className="focus:outline-none" style={{ color: '#9A8A78' }}><X size={18} /></button>
+        <div className="rounded-2xl p-7 flex flex-col gap-5" style={{ backgroundColor: NEU.base, border: '1px solid #DDD4C0', width: 400 }}>
+          <div className="flex items-center justify-between">
+            <p className="text-base font-bold" style={{ color: NEU.ink, fontFamily: OUTFIT }}>Choose committee type</p>
+            <button onClick={onClose} className="focus:outline-none" style={{ color: NEU.muted }}><X size={18} /></button>
           </div>
-          <p className="text-base font-bold text-center" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Choose committee type</p>
-          <div className="flex flex-col gap-3 w-full">
-            <button
-              onClick={() => setPendingType('general-assembly')}
-              className="w-full rounded-xl py-4 font-black text-base focus:outline-none transition-colors"
-              style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.04em' }}
-              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-            >
-              GENERAL ASSEMBLY
-            </button>
-            <button
-              onClick={() => setPendingType('crisis')}
-              className="w-full rounded-xl py-4 font-black text-base focus:outline-none transition-colors"
-              style={{ border: '2px solid #1B3828', color: '#1B3828', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.04em' }}
-              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-            >
-              CRISIS
-            </button>
+          <div className="flex flex-col gap-3.5 w-full">
+            {TYPE_OPTIONS.map((opt) => (
+              <TypeCard key={opt.type} opt={opt} onSelect={() => setPendingType(opt.type)} />
+            ))}
           </div>
         </div>
       </ModalOverlay>
     );
   }
 
-  // Edit flow — brief spinner while the current slots load.
+  // Edit flow, brief spinner while the current slots load.
   if (isEdit && initialCountries === null) {
     return (
       <ModalOverlay onClose={onClose}>

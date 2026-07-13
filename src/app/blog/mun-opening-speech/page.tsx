@@ -4,11 +4,11 @@ import type { Metadata } from 'next';
 import React from 'react';
 
 export const metadata: Metadata = {
-  title: 'How to Write a MUN Opening Speech — Templates and Examples',
+  title: 'How to Write a MUN Opening Speech: Templates and Examples',
   description: 'Write a standout MUN opening speech with this complete guide: structure, length, what to include, what to avoid, and real examples for different countries.',
   alternates: { canonical: 'https://gavelling.com/blog/mun-opening-speech' },
   openGraph: {
-    title: 'How to Write a MUN Opening Speech — Templates and Examples',
+    title: 'How to Write a MUN Opening Speech: Templates and Examples',
     description: 'Write a MUN opening speech that leads your bloc from minute one.',
     url: 'https://gavelling.com/blog/mun-opening-speech',
     siteName: 'Gavelling',
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
 const articleSchema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
-  headline: 'How to Write a MUN Opening Speech — Templates and Examples',
+  headline: 'How to Write a MUN Opening Speech: Templates and Examples',
   description: 'Complete guide to writing a MUN opening speech.',
   url: 'https://gavelling.com/blog/mun-opening-speech',
   datePublished: '2026-06-07',
@@ -70,14 +70,14 @@ export default function Article() {
       <div style={s.page}>
         <div style={s.wrap}>
           <Link href="/blog" style={s.back}>← MUN Resources</Link>
-          <h1 style={s.h1}>How to Write a MUN Opening Speech — Templates and Examples</h1>
+          <h1 style={s.h1}>How to Write a MUN Opening Speech: Templates and Examples</h1>
           <p style={s.meta}>By Gavelling · June 2026 · 9 min read</p>
           <article style={s.article}>
 
-            <p style={s.p}>Your opening speech on the General Speakers List is your first — and sometimes only — chance to define your delegation's position and attract bloc members. Most delegates waste it with a generic country summary. This guide shows you how to write one that actually moves the room.</p>
+            <p style={s.p}>Your opening speech on the General Speakers List is your first, and sometimes only, chance to define your delegation's position and attract bloc members. Most delegates waste it with a generic country summary. This guide shows you how to write one that actually moves the room.</p>
 
             <h2 style={s.h2}>How Long Should a MUN Opening Speech Be?</h2>
-            <p style={s.p}>Match your conference's default speaker time — typically sixty to ninety seconds. If the default is sixty seconds, aim for fifty-five. Running over is disrespectful and gets you cut off mid-sentence. Running five seconds short is fine — it shows control. Do not pad.</p>
+            <p style={s.p}>Match your conference's default speaker time, typically sixty to ninety seconds. If the default is sixty seconds, aim for fifty-five. Running over is disrespectful and gets you cut off mid-sentence. Running five seconds short is fine; it shows control. Do not pad.</p>
             <p style={s.p}>At sixty seconds of spoken word, you have approximately 140–160 words. That is not much. Every word must earn its place.</p>
 
             <h2 style={s.h2}>The Four-Part Structure</h2>
@@ -87,7 +87,7 @@ export default function Article() {
             <p style={s.p}>Use instead: a statistic, a provocative claim, or a direct call to action.</p>
 
             <h3 style={s.h3}>2. Country Context (one to two sentences)</h3>
-            <p style={s.p}>Why does this issue matter specifically to your country? Do not explain the issue to the committee — they know what it is. Explain your country's unique stake. "Norway, as a major hydrocarbon producer and simultaneously one of the world's highest per-capita investors in renewable energy, holds a particular responsibility to this debate."</p>
+            <p style={s.p}>Why does this issue matter specifically to your country? Do not explain the issue to the committee; they know what it is. Explain your country's unique stake. "Norway, as a major hydrocarbon producer and simultaneously one of the world's highest per-capita investors in renewable energy, holds a particular responsibility to this debate."</p>
 
             <h3 style={s.h3}>3. Position (two to three sentences)</h3>
             <p style={s.p}>State what your country supports. Be specific. Reference real votes, treaties, or domestic policy if possible. This is what delegates will remember and react to.</p>
@@ -98,7 +98,7 @@ export default function Article() {
             <h2 style={s.h2}>Example Opening Speech: Climate Finance</h2>
             <div style={s.script}>
               <p style={s.scriptText}>
-                "The delegate of Germany rises to address one of the defining failures of the last decade: the developed world's broken promise of $100 billion annually in climate finance. Germany recognises its own obligations here — we have not always delivered. But recognition without action is insufficient. Germany strongly supports a new, binding climate finance architecture with transparent reporting requirements, loss-and-damage provisions, and meaningful technology transfer to the developing world. Germany invites all delegations — particularly fellow Annex II parties — to join us in drafting a resolution that closes the accountability gap. The time for aspirational language has passed."
+                "The delegate of Germany rises to address one of the defining failures of the last decade: the developed world's broken promise of $100 billion annually in climate finance. Germany recognises its own obligations here; we have not always delivered. But recognition without action is insufficient. Germany strongly supports a new, binding climate finance architecture with transparent reporting requirements, loss-and-damage provisions, and meaningful technology transfer to the developing world. Germany invites all delegations, particularly fellow Annex II parties, to join us in drafting a resolution that closes the accountability gap. The time for aspirational language has passed."
               </p>
             </div>
             <p style={s.meta}>Word count: 112. Approximate length at moderate pace: 55 seconds.</p>
@@ -106,13 +106,13 @@ export default function Article() {
             <h2 style={s.h2}>Example Opening Speech: Refugee Protection</h2>
             <div style={s.script}>
               <p style={s.scriptText}>
-                "One hundred and seventeen million people are currently displaced from their homes — a record that shames the international community. Jordan, as the country hosting the highest number of refugees per capita in the world, does not speak about this crisis abstractly. We live it. Jordan calls upon this committee to adopt a binding burden-sharing mechanism that distributes refugee admission quotas equitably among all member states, not just the neighbours of conflict zones. We are prepared to co-sponsor a working paper on this framework and urge delegations from the European Union and the Gulf states to join us at the table."
+                "One hundred and seventeen million people are currently displaced from their homes, a record that shames the international community. Jordan, as the country hosting the highest number of refugees per capita in the world, does not speak about this crisis abstractly. We live it. Jordan calls upon this committee to adopt a binding burden-sharing mechanism that distributes refugee admission quotas equitably among all member states, not just the neighbours of conflict zones. We are prepared to co-sponsor a working paper on this framework and urge delegations from the European Union and the Gulf states to join us at the table."
               </p>
             </div>
 
             <h2 style={s.h2}>Common Mistakes</h2>
             <ul style={s.ul}>
-              <li style={s.li}><strong>Starting with "The delegation of X is honoured/pleased/proud to..."</strong> — every delegate uses this. It wastes your first five seconds.</li>
+              <li style={s.li}><strong>Starting with "The delegation of X is honoured/pleased/proud to..."</strong>: every delegate uses this. It wastes your first five seconds.</li>
               <li style={s.li}><strong>Explaining the topic.</strong> Everyone in the room knows what climate change is. Skip the background.</li>
               <li style={s.li}><strong>No concrete position.</strong> "X supports international cooperation" tells the room nothing.</li>
               <li style={s.li}><strong>No call to action.</strong> If you do not invite people to work with you, they will work with someone who did.</li>
@@ -120,7 +120,7 @@ export default function Article() {
             </ul>
 
             <h2 style={s.h2}>Getting on the GSL Early</h2>
-            <p style={s.p}>Raise your placard the moment the chair opens the speakers list. Early slots matter — delegates make bloc decisions based on what they hear in the first few speeches. Speaking fifth versus speaking fortieth is a significant advantage.</p>
+            <p style={s.p}>Raise your placard the moment the chair opens the speakers list. Early slots matter, because delegates make bloc decisions based on what they hear in the first few speeches. Speaking fifth versus speaking fortieth is a significant advantage.</p>
 
             <RelatedGuides currentSlug="mun-opening-speech" />
             <div style={s.cta}>

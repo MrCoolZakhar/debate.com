@@ -103,7 +103,7 @@ export default function PreRegisterNudge({ onClose }: { onClose: () => void }) {
                 </p>
               </div>
 
-              {/* Spots progress — only render once real count arrives */}
+              {/* Spots progress, only render once real count arrives */}
               {spots !== null && (
                 <div className="flex flex-col gap-1.5">
                   <div className="h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: 'rgba(27,56,40,0.12)' }}>

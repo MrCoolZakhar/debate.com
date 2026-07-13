@@ -1,20 +1,21 @@
 'use client';
 
 /**
- * /conferences/new — page-by-page conference creation wizard.
+ * /conferences/new, page-by-page conference creation wizard.
  *
  * One question per screen, built on the shared wizard kit
  * (src/components/wizard.tsx). The submit logic writes exactly the same
  * columns as the old two-step form and redirects to /manage/{slug}.
- * Optional fields from the old form (description, socials, banner,
- * visibility, previous editions) are deferred to Settings after creation.
+ * Description, socials and banner are collected in their own skippable steps;
+ * the remaining optional fields (visibility, previous editions) are deferred
+ * to Settings after creation.
  *
- * Progress lives in component state only — a refresh restarts the wizard.
+ * Progress lives in component state only, a refresh restarts the wizard.
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AlertTriangle, ArrowRight, Mail, Pencil, Upload, Check, ImagePlus } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Mail, Pencil, Upload, Check, ImagePlus, Camera, ThumbsUp, Music2, MessageCircle, Globe, type LucideIcon } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import { useAuth } from '@/components/AuthProvider';
 import { createClient } from '@supabase/supabase-js';
@@ -27,6 +28,7 @@ import { DatePicker } from '@/components/DatePicker';
 import { LogoCropModal } from '@/components/LogoCropModal';
 import { uploadConferenceAsset } from '@/lib/conferenceAssets';
 import { currencyPickerGroups } from '@/lib/currencies';
+import { normalizeSocialUrl } from '@/lib/socialLinks';
 
 const CURRENCY_GROUPS = currencyPickerGroups();
 
@@ -40,9 +42,11 @@ const ROLE_DEFAULTS = ['delegate', 'chair', 'head-delegate', 'faculty-advisor', 
 const TOTAL_STEPS = 11;
 const REVIEW_STEP = TOTAL_STEPS;
 // 1 name+acronym · 2 format · 3 level · 4 where · 5 when · 6 delegates · 7 fee
-// · 8 logo (mandatory) · 9 banner (skippable) · 10 committees (skippable) · 11 review
+// · 8 logo (mandatory) · 9 banner (skippable) · 10 description + socials (skippable)
+// · 11 review. (The old "set up your committees" prompt was removed, committees
+// are added later in Manage, and the description/socials step took slot 10.)
 
-// Bundled banner artwork — mirrors settings' BANNER_PRESETS so the organiser
+// Bundled banner artwork, mirrors settings' BANNER_PRESETS so the organiser
 // can set a banner during creation exactly as they would afterwards.
 const BANNER_PRESETS = [
   '/banners/preset-1.jpg',
@@ -52,11 +56,15 @@ const BANNER_PRESETS = [
   '/banners/preset-5.jpg',
 ];
 
+// Fluent 3D emoji picked to read small→large at a glance: one silhouette →
+// two silhouettes → a huddle of people → a packed stadium for the flagship
+// tier (all four asset paths verified to resolve; Emoji3D falls back to a
+// lucide glyph if a CDN image ever 404s).
 const DELEGATE_RANGES = [
   { key: '50', label: 'Up to 50', sub: 'Intimate', emoji: 'Bust in silhouette' },
   { key: '100', label: '~100', sub: 'Mid-size', emoji: 'Busts in silhouette' },
-  { key: '250', label: '~250', sub: 'Large', emoji: 'People with bunny ears' },
-  { key: '500', label: '500+', sub: 'Flagship', emoji: 'Globe showing europe-africa' },
+  { key: '250', label: '~250', sub: 'Large', emoji: 'People hugging' },
+  { key: '500', label: '500+', sub: 'Flagship', emoji: 'Stadium' },
 ];
 
 // ── Small shared bits ──────────────────────────────────────────────────────
@@ -156,6 +164,30 @@ function SkipLink({ label, onClick }: { label: string; onClick: () => void }) {
   );
 }
 
+/** A single labelled social-link input with a leading lucide brand glyph. */
+function SocialInput({
+  Icon, label, value, onChange, placeholder,
+}: { Icon: LucideIcon; label: string; value: string; onChange: (v: string) => void; placeholder: string }) {
+  const [focused, setFocused] = useState(false);
+  return (
+    <div className="relative flex items-center">
+      <span className="absolute left-3.5 pointer-events-none" style={{ color: focused ? NEU.forest : NEU.muted, transition: `color 180ms ${EASE}` }}>
+        <Icon size={17} strokeWidth={2.2} />
+      </span>
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onFocus={(e) => { setFocused(true); focusForest(e); }}
+        onBlur={(e) => { setFocused(false); blurClear(e); }}
+        aria-label={label}
+        placeholder={placeholder}
+        style={{ ...bigInputStyle, paddingLeft: 42, fontSize: 14, backgroundColor: NEU.surface, boxShadow: NEU.inSm }}
+      />
+    </div>
+  );
+}
+
 function ContinueButton({ label = 'Continue', disabled, onClick }: { label?: string; disabled?: boolean; onClick: () => void }) {
   return (
     <div className="flex justify-center" style={{ marginTop: 26 }}>
@@ -185,7 +217,7 @@ function suggestAcronym(fullName: string): string {
 function acronymProblem(acr: string): string {
   const upper = acr.toUpperCase();
   if (upper.length < 4) return 'Acronym must be at least 4 characters.';
-  if (!upper.includes('MUN')) return "Acronym must include 'MUN' — e.g. TEIMUN, LIMUN, SMUNC.";
+  if (!upper.includes('MUN')) return "Acronym must include 'MUN', e.g. TEIMUN, LIMUN, SMUNC.";
   return '';
 }
 
@@ -203,7 +235,7 @@ export default function NewConferencePage() {
     );
   }
 
-  // Auth gate — unchanged from the old form.
+  // Auth gate, unchanged from the old form.
   useEffect(() => {
     if (!loading && !user) {
       router.replace('/auth/signin?next=/conferences/new');
@@ -248,6 +280,16 @@ export default function NewConferencePage() {
   const logoInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
 
+  // Description + social links (all skippable). Stored raw here; each social
+  // value is passed through normalizeSocialUrl at insert time so bare handles
+  // ("@mymun") and domains ("mymun.org") become valid absolute URLs.
+  const [description, setDescription] = useState('');
+  const [instagram, setInstagram] = useState('');
+  const [facebook, setFacebook] = useState('');
+  const [tiktok, setTiktok] = useState('');
+  const [whatsapp, setWhatsapp] = useState('');
+  const [website, setWebsite] = useState('');
+
   // Pre-fill email from profile (same behaviour as the old form).
   useEffect(() => {
     if (profile?.email && !contactEmail) setContactEmail(profile.email);
@@ -256,7 +298,7 @@ export default function NewConferencePage() {
 
   const acronymError = acronym ? acronymProblem(acronym) : '';
 
-  // Local "today" (YYYY-MM-DD) — start date can't be before it.
+  // Local "today" (YYYY-MM-DD), start date can't be before it.
   const todayISO = useMemo(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -267,7 +309,7 @@ export default function NewConferencePage() {
       UN_COUNTRIES.map((c) => ({
         key: c.name,
         label: c.name,
-        icon: <FlagImg code={c.code} size={30} />,
+        icon: <FlagImg code={c.code} size={42} />,
       })),
     [],
   );
@@ -325,7 +367,7 @@ export default function NewConferencePage() {
     setBannerUrl(res.url);
   }
 
-  // ── Submit — preserved exactly from the old form ─────────────────────────
+  // ── Submit, preserved exactly from the old form ─────────────────────────
   async function handleCreate() {
     if (!user || !session) {
       setError('You must be signed in to create a conference.');
@@ -346,7 +388,7 @@ export default function NewConferencePage() {
 
       // No .select() after insert: the new row is only SELECT-visible once the
       // ownership trigger has run, so RETURNING fails RLS for private conferences.
-      // We already know the slug — we generated it.
+      // We already know the slug, we generated it.
       const { error: dbError } = await supabase
         .from('conferences')
         .insert({
@@ -365,12 +407,12 @@ export default function NewConferencePage() {
           expected_delegates: parseInt(expectedDelegates),
           fee_amount: feeKind === 'paid' ? parseFloat(feeAmount) || 0 : 0,
           fee_currency: feeCurrency,
-          description: null,
-          instagram_url: null,
-          facebook_url: null,
-          tiktok_url: null,
-          whatsapp_url: null,
-          website_url: null,
+          description: description.trim() || null,
+          instagram_url: normalizeSocialUrl(instagram, 'instagram'),
+          facebook_url: normalizeSocialUrl(facebook, 'facebook'),
+          tiktok_url: normalizeSocialUrl(tiktok, 'tiktok'),
+          whatsapp_url: normalizeSocialUrl(whatsapp, 'whatsapp'),
+          website_url: normalizeSocialUrl(website),
           logo_url: logoUrl || null,
           banner_url: bannerUrl || null,
           is_public: false,
@@ -385,7 +427,7 @@ export default function NewConferencePage() {
       }
 
       // Seed default per-role application configs so the delegate fee
-      // entered above is the role config's fee from day one — otherwise
+      // entered above is the role config's fee from day one, otherwise
       // Settings' own ensureRoleConfigs seeds it lazily with a $0 delegate
       // fee the first time the organizer opens Settings, disagreeing with
       // the fee just entered here. Non-fatal: that lazy fallback still
@@ -425,7 +467,7 @@ export default function NewConferencePage() {
 
   function continueStep4() {
     if (!country) { setStepError('Pick the country your conference is in.'); return; }
-    if (!city.trim()) { setStepError('And the city — delegates will look for it.'); return; }
+    if (!city.trim()) { setStepError('And the city, delegates will look for it.'); return; }
     advance(4);
   }
 
@@ -449,6 +491,14 @@ export default function NewConferencePage() {
     }
     advance(7);
   }
+
+  const socialsSummary = [
+    instagram.trim() && 'Instagram',
+    facebook.trim() && 'Facebook',
+    tiktok.trim() && 'TikTok',
+    whatsapp.trim() && 'WhatsApp',
+    website.trim() && 'Website',
+  ].filter(Boolean).join(', ');
 
   const readyToCreate =
     fullName.trim() && acronym.trim() && !acronymProblem(acronym) && contactEmail.trim() &&
@@ -489,12 +539,12 @@ export default function NewConferencePage() {
         <main className="flex-1 flex justify-center px-5 py-10">
           <div className="w-full">
 
-            {/* ── Step 1 — name + acronym ─────────────────────────────── */}
+            {/* ── Step 1, name + acronym ─────────────────────────────── */}
             {step === 1 && (
               <WizardShell
                 step={1} total={TOTAL_STEPS}
                 title="What's your conference called?"
-                sub="The full name delegates will see — and the short acronym everyone actually uses."
+                sub="The full name delegates will see, and the short acronym everyone actually uses."
                 onBack={returnToReview ? back : undefined}
               >
                 <div className="flex flex-col gap-5">
@@ -532,7 +582,7 @@ export default function NewConferencePage() {
                       <ErrorNote>{acronymError}</ErrorNote>
                     ) : (
                       <p style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.muted, marginTop: 8 }}>
-                        Suggested from your conference name — every Gavelling acronym includes &lsquo;MUN&rsquo;.
+                        Suggested from your conference name. Every Gavelling acronym includes &lsquo;MUN&rsquo;.
                       </p>
                     )}
                   </div>
@@ -542,7 +592,7 @@ export default function NewConferencePage() {
               </WizardShell>
             )}
 
-            {/* ── Step 2 — format ─────────────────────────────────────── */}
+            {/* ── Step 2, format ─────────────────────────────────────── */}
             {step === 2 && (
               <WizardShell
                 step={2} total={TOTAL_STEPS}
@@ -559,14 +609,14 @@ export default function NewConferencePage() {
                   onChange={(k) => { setFormat(k as 'in-person' | 'online'); setStepError(''); }}
                 />
                 <div className="flex justify-center">
-                  <TertiaryPick label="A bit of both — it's hybrid" selected={format === 'hybrid'} onClick={() => { setFormat('hybrid'); setStepError(''); }} />
+                  <TertiaryPick label="A bit of both, it's hybrid" selected={format === 'hybrid'} onClick={() => { setFormat('hybrid'); setStepError(''); }} />
                 </div>
                 {stepError && <ErrorNote>{stepError}</ErrorNote>}
                 <ContinueButton onClick={() => (format ? advance(2) : setStepError('Pick how delegates will attend.'))} disabled={!format} />
               </WizardShell>
             )}
 
-            {/* ── Step 3 — level ──────────────────────────────────────── */}
+            {/* ── Step 3, level ──────────────────────────────────────── */}
             {step === 3 && (
               <WizardShell
                 step={3} total={TOTAL_STEPS}
@@ -590,7 +640,7 @@ export default function NewConferencePage() {
               </WizardShell>
             )}
 
-            {/* ── Step 4 — where ──────────────────────────────────────── */}
+            {/* ── Step 4, where ──────────────────────────────────────── */}
             {step === 4 && (
               <WizardShell
                 step={4} total={TOTAL_STEPS}
@@ -622,7 +672,7 @@ export default function NewConferencePage() {
               </WizardShell>
             )}
 
-            {/* ── Step 5 — when ───────────────────────────────────────── */}
+            {/* ── Step 5, when ───────────────────────────────────────── */}
             {step === 5 && (
               <WizardShell
                 step={5} total={TOTAL_STEPS}
@@ -657,12 +707,12 @@ export default function NewConferencePage() {
               </WizardShell>
             )}
 
-            {/* ── Step 6 — expected delegates ─────────────────────────── */}
+            {/* ── Step 6, expected delegates ─────────────────────────── */}
             {step === 6 && (
               <WizardShell
                 step={6} total={TOTAL_STEPS}
                 title="How many delegates do you expect?"
-                sub="A rough number is fine — you can refine it later."
+                sub="A rough number is fine, you can refine it later."
                 onBack={back}
               >
                 <CardSelect
@@ -670,7 +720,7 @@ export default function NewConferencePage() {
                     key: r.key,
                     label: r.label,
                     sub: r.sub,
-                    icon: <Emoji3D name={r.emoji} size={34} />,
+                    icon: <Emoji3D name={r.emoji} size={48} />,
                   }))}
                   value={delegateRange || null}
                   onChange={(k) => { setDelegateRange(k); setExpectedDelegates(k); setStepError(''); }}
@@ -694,7 +744,7 @@ export default function NewConferencePage() {
               </WizardShell>
             )}
 
-            {/* ── Step 7 — fee ────────────────────────────────────────── */}
+            {/* ── Step 7, fee ────────────────────────────────────────── */}
             {step === 7 && (
               <WizardShell
                 step={7} total={TOTAL_STEPS}
@@ -756,12 +806,12 @@ export default function NewConferencePage() {
               </WizardShell>
             )}
 
-            {/* ── Step 8 — logo (MANDATORY) ───────────────────────────── */}
+            {/* ── Step 8, logo (MANDATORY) ───────────────────────────── */}
             {step === 8 && (
               <WizardShell
                 step={8} total={TOTAL_STEPS}
                 title="Add your conference logo"
-                sub="Every conference needs a logo — it's how delegates recognise you across Gavelling."
+                sub="Every conference needs a logo. It's how delegates recognise you across Gavelling."
                 onBack={back}
               >
                 <input
@@ -816,7 +866,7 @@ export default function NewConferencePage() {
               </WizardShell>
             )}
 
-            {/* ── Step 9 — banner (SKIPPABLE) ─────────────────────────── */}
+            {/* ── Step 9, banner (SKIPPABLE) ─────────────────────────── */}
             {step === 9 && (
               <WizardShell
                 step={9} total={TOTAL_STEPS}
@@ -903,40 +953,60 @@ export default function NewConferencePage() {
               </WizardShell>
             )}
 
-            {/* ── Step 10 — committees (SKIPPABLE prompt) ─────────────── */}
+            {/* ── Step 10, description + socials (SKIPPABLE) ─────────── */}
             {step === 10 && (
               <WizardShell
                 step={10} total={TOTAL_STEPS}
-                title="Set up your committees"
-                sub="Committees are where delegates are allocated and debate happens."
+                title="Tell delegates about it"
+                sub="A short description and your social links for the public page. All optional, skip if you'd rather add them later."
                 onBack={back}
               >
-                <NeuInset style={{ padding: '22px 24px', borderRadius: 20 }}>
-                  <div className="flex items-start gap-4">
-                    <Emoji3D name="Classical building" size={44} />
-                    <div>
-                      <p style={{ fontFamily: OUTFIT, fontSize: 15, fontWeight: 800, color: NEU.ink, lineHeight: 1.4 }}>
-                        Add committees next in Manage
-                      </p>
-                      <p style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 500, color: NEU.muted, marginTop: 6, lineHeight: 1.6 }}>
-                        Once your conference is created you&rsquo;ll land on its Manage dashboard, where you can add
-                        committees — GAs, crisis rooms, ECOSOC bodies — with agendas, country matrices and seat counts.
-                        You can always come back and add more later.
-                      </p>
-                    </div>
+                <div className="flex flex-col gap-5">
+                  <div>
+                    <FieldLabel>Description</FieldLabel>
+                    <textarea
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      placeholder="What makes your conference special? Themes, committees, the experience delegates can expect…"
+                      rows={4}
+                      style={{ ...bigInputStyle, resize: 'vertical', lineHeight: 1.55, minHeight: 108 }}
+                      onFocus={(e) => { e.currentTarget.style.borderColor = NEU.forest; }}
+                      onBlur={(e) => { e.currentTarget.style.borderColor = 'transparent'; }}
+                    />
                   </div>
-                </NeuInset>
+
+                  <NeuInset style={{ padding: '18px 20px', borderRadius: 20 }}>
+                    <FieldLabel>Social links</FieldLabel>
+                    <div className="flex flex-col gap-3" style={{ marginTop: 4 }}>
+                      <SocialInput Icon={Camera} label="Instagram" value={instagram} onChange={setInstagram} placeholder="@yourmun or instagram.com/yourmun" />
+                      <SocialInput Icon={ThumbsUp} label="Facebook" value={facebook} onChange={setFacebook} placeholder="facebook.com/yourmun" />
+                      <SocialInput Icon={Music2} label="TikTok" value={tiktok} onChange={setTiktok} placeholder="@yourmun" />
+                      <SocialInput Icon={MessageCircle} label="WhatsApp" value={whatsapp} onChange={setWhatsapp} placeholder="wa.me/44… or your number" />
+                      <SocialInput Icon={Globe} label="Website" value={website} onChange={setWebsite} placeholder="yourmun.org" />
+                    </div>
+                  </NeuInset>
+                </div>
 
                 <ContinueButton label="Continue to review" onClick={() => advance(10)} />
+                <div className="flex justify-center" style={{ marginTop: 12 }}>
+                  <SkipLink
+                    onClick={() => {
+                      setDescription('');
+                      setInstagram(''); setFacebook(''); setTiktok(''); setWhatsapp(''); setWebsite('');
+                      advance(10);
+                    }}
+                    label="Skip for now"
+                  />
+                </div>
               </WizardShell>
             )}
 
-            {/* ── Step 11 — review + create ───────────────────────────── */}
+            {/* ── Step 11, review + create ───────────────────────────── */}
             {step === REVIEW_STEP && (
               <WizardShell
                 step={REVIEW_STEP} total={TOTAL_STEPS}
                 title="Ready to create it?"
-                sub="Check everything over — tap any row to change it."
+                sub="Check everything over, tap any row to change it."
                 onBack={back}
               >
                 <div className="flex flex-col gap-2.5">
@@ -953,9 +1023,11 @@ export default function NewConferencePage() {
                   />
                   <ReviewRow label="Logo" value={logoUrl ? 'Added' : 'Required'} onEdit={() => editFromReview(8)} />
                   <ReviewRow label="Banner" value={bannerUrl ? 'Added' : 'Skipped'} onEdit={() => editFromReview(9)} />
+                  <ReviewRow label="Description" value={description.trim() ? 'Added' : 'Skipped'} onEdit={() => editFromReview(10)} />
+                  <ReviewRow label="Social links" value={socialsSummary || 'Skipped'} onEdit={() => editFromReview(10)} />
                 </div>
 
-                {/* Contact email — required by the directory, prefilled from your profile */}
+                {/* Contact email, required by the directory, prefilled from your profile */}
                 <div style={{ marginTop: 20 }}>
                   <FieldLabel>Organizer contact email</FieldLabel>
                   <div className="relative">
@@ -980,7 +1052,7 @@ export default function NewConferencePage() {
                     textAlign: 'center', marginTop: 22, padding: '0 12px',
                   }}
                 >
-                  Description, social links, visibility and previous editions —
+                  Visibility, previous editions and finer details:
                   you can set everything else later in Settings. Your conference starts private.
                 </p>
 
@@ -1015,7 +1087,7 @@ export default function NewConferencePage() {
         </main>
       </div>
 
-      {/* Drag-to-fit crop step — flattens the chosen framing into a square
+      {/* Drag-to-fit crop step, flattens the chosen framing into a square
           transparent PNG, then hands off to the storage upload path. */}
       {logoCropFile && (
         <LogoCropModal

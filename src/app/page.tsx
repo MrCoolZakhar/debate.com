@@ -2,9 +2,9 @@ import type { Metadata } from 'next';
 import HomeClient from './HomeClient';
 
 export const metadata: Metadata = {
-  title: 'Gavelling — Modern MUN Committee Software',
+  title: 'Gavelling: Modern MUN Committee Software',
   description:
-    'Gavelling gives chairs and directors everything they need to run professional, efficient Model UN sessions. Roll call, speakers, motions, voting — all in one place.',
+    'Gavelling gives chairs and directors everything they need to run professional, efficient Model UN sessions. Roll call, speakers, motions, voting, all in one place.',
   alternates: { canonical: 'https://gavelling.com' },
   openGraph: { url: 'https://gavelling.com' },
 };
@@ -30,7 +30,7 @@ const organizationSchema = {
     contactType: 'customer support',
   },
   description:
-    'Gavelling builds modern software for the global Model UN community — session management tools for chairs and a full conference management platform.',
+    'Gavelling builds modern software for the global Model UN community: session management tools for chairs and a full conference management platform.',
 };
 
 const softwareSchema = {
@@ -56,7 +56,7 @@ const softwareSchema = {
     'Live delegate-to-chair chat',
     'Resolution document viewer',
     'Session archive',
-    'Multi-device support — no download required',
+    'Multi-device support, no download required',
     'Faculty Advisor view',
   ],
   audience: {
@@ -102,7 +102,7 @@ const faqSchema = {
       name: 'How do delegates join a Gavelling session?',
       acceptedAnswer: {
         '@type': 'Answer',
-        text: 'The chair creates a session and receives a unique session code. Delegates open gavelling.com on any device — phone, tablet, or laptop — and enter the code to join instantly. No download or account required.',
+        text: 'The chair creates a session and receives a unique session code. Delegates open gavelling.com on any device (phone, tablet, or laptop) and enter the code to join instantly. No download or account required.',
       },
     },
     {

@@ -1,6 +1,6 @@
 'use client';
 
-// Questions & Requests — never gated. Participant's own conference_requests
+// Questions & Requests, never gated. Participant's own conference_requests
 // threads (kind='question'). Lightweight: list -> new-request form or thread
 // view, reply box bumps last_message_at. No attachments.
 

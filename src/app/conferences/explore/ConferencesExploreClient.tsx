@@ -189,7 +189,7 @@ function DateSortChip({ sort, onToggle }: { sort: DateSort; onToggle: () => void
     <button
       type="button"
       onClick={onToggle}
-      aria-label={soonest ? 'Sorted by date, soonest first — click for latest first' : 'Sorted by date, latest first — click for soonest first'}
+      aria-label={soonest ? 'Sorted by date, soonest first, click for latest first' : 'Sorted by date, latest first, click for soonest first'}
       title={soonest ? 'Date · soonest first' : 'Date · latest first'}
       className="flex items-center gap-1.5 rounded-full py-2.5 px-4 font-bold text-[12.5px] transition-colors focus:outline-none flex-shrink-0"
       style={{
@@ -391,7 +391,7 @@ function ConferenceListRow({
 }: {
   conf: Conference;
   applied: boolean;
-  /** Viewer is already part of this conference (organizer / chair / delegate) — takes precedence over `applied`. */
+  /** Viewer is already part of this conference (organizer / chair / delegate), takes precedence over `applied`. */
   member: boolean;
   hovered: boolean;
   onHover: () => void;
@@ -432,7 +432,7 @@ function ConferenceListRow({
         transition: 'background-color 160ms ease',
       }}
     >
-      {/* Round logo — near-white disc, forest fallback with acronym initials */}
+      {/* Round logo, near-white disc, forest fallback with acronym initials */}
       <div
         className="flex-shrink-0 flex items-center justify-center overflow-hidden"
         style={{
@@ -490,7 +490,7 @@ function ConferenceListRow({
         </div>
       </div>
 
-      {/* Right rail — the three metadata columns spread evenly across the free
+      {/* Right rail, the three metadata columns spread evenly across the free
           space so the row reads full instead of leaving a wide empty gutter. */}
       <div
         className="hidden sm:flex items-center flex-1 min-w-0"
@@ -513,7 +513,7 @@ function ConferenceListRow({
         </span>
       </div>
 
-      {/* Fee — a gold 3D ticket for paid conferences, forest FREE pill otherwise */}
+      {/* Fee, a gold 3D ticket for paid conferences, forest FREE pill otherwise */}
       <div className="hidden md:flex items-center gap-2 flex-shrink-0" style={{ width: '118px' }}>
         {conf.fee_amount === 0 ? (
           <span
@@ -541,7 +541,7 @@ function ConferenceListRow({
       </div>
       </div>
 
-      {/* CTA — member (part of the conference) > applied > apply */}
+      {/* CTA, member (part of the conference) > applied > apply */}
       <div className="hidden sm:flex justify-end flex-shrink-0" style={{ width: '124px' }}>
         {member ? (
           <button type="button" onClick={onCta} className="inline-flex items-center gap-1.5 focus:outline-none"
@@ -622,16 +622,16 @@ export default function ConferencesExploreClient() {
     setRegionTouched(true);
   }
 
-  // Date sort — soonest-first by default, one click flips to latest-first.
+  // Date sort, soonest-first by default, one click flips to latest-first.
   const [dateSort, setDateSort] = useState<DateSort>('asc');
 
-  // Grid / list view — restored from localStorage after mount (SSR-safe).
+  // Grid / list view, restored from localStorage after mount (SSR-safe).
   const [view, setView] = useState<ExploreView>('grid');
   useEffect(() => {
     try {
       const stored = window.localStorage.getItem(VIEW_STORAGE_KEY);
       if (stored === 'grid' || stored === 'list') setView(stored);
-    } catch { /* private mode etc. — keep default */ }
+    } catch { /* private mode etc., keep default */ }
   }, []);
   function changeView(v: ExploreView) {
     setView(v);
@@ -672,7 +672,7 @@ export default function ConferencesExploreClient() {
     fetchConferences();
   }, []);
 
-  // Visitor's country — /api/geo (Vercel edge headers), falling back to a
+  // Visitor's country, /api/geo (Vercel edge headers), falling back to a
   // keyless IP lookup in local dev. Best-effort; null keeps region = ALL.
   const [userCountry, setUserCountry] = useState<string | null>(null);
   useEffect(() => {
@@ -696,12 +696,12 @@ export default function ConferencesExploreClient() {
           const country = countryNameFromCode(data.country_code) ?? (typeof data.country_name === 'string' && getCountryByName(data.country_name) ? data.country_name : null);
           if (!cancelled && country) setUserCountry(country);
         }
-      } catch { /* geolocation is best-effort — leave null */ }
+      } catch { /* geolocation is best-effort, leave null */ }
     })();
     return () => { cancelled = true; };
   }, []);
 
-  // Default the region to the visitor's country once — when geo resolved and
+  // Default the region to the visitor's country once, when geo resolved and
   // the visitor hasn't touched the control. Zero local conferences shows the
   // country empty state with its "explore all" reset. Geo failure → ALL.
   const geoDefaultApplied = useRef(false);
@@ -711,11 +711,11 @@ export default function ConferencesExploreClient() {
     setRegion('country');
   }, [userCountry, loading, regionTouched]);
 
-  // Conference ids the signed-in viewer already applied to — cards show
+  // Conference ids the signed-in viewer already applied to, cards show
   // APPLIED instead of the APPLY pill. Conference ids the viewer is already
   // PART of (organizer, chair, or delegate with an accepted/assigned/checked-in
   // application) show VIEW instead. RLS returns only the viewer's own rows.
-  // Two batched queries — never per-row lookups. Anonymous viewer → empty sets.
+  // Two batched queries, never per-row lookups. Anonymous viewer → empty sets.
   const { user, session, loading: authLoading } = useAuth();
   const [appliedIds, setAppliedIds] = useState<Set<string>>(new Set());
   const [memberIds, setMemberIds] = useState<Set<string>>(new Set());
@@ -866,7 +866,7 @@ export default function ConferencesExploreClient() {
               >
                 {loading
                   ? 'Loading the directory…'
-                  : `${conferences.length} conference${conferences.length === 1 ? '' : 's'} across every continent — find where you debate next.`}
+                  : `${conferences.length} conference${conferences.length === 1 ? '' : 's'} across every continent. Find where you debate next.`}
               </p>
             </div>
             <button
@@ -885,7 +885,7 @@ export default function ConferencesExploreClient() {
           </div>
         </header>
 
-        {/* ── Floating glass filter bar — one uncrowded row ─────────── */}
+        {/* ── Floating glass filter bar, one uncrowded row ─────────── */}
         <div className="sticky z-30 px-4 md:px-10" style={{ top: '12px' }}>
           <div
             style={{
@@ -920,10 +920,10 @@ export default function ConferencesExploreClient() {
               {/* Hairline divider */}
               <div className="hidden md:block w-px h-7 flex-shrink-0" style={{ backgroundColor: 'rgba(221,212,192,0.9)' }} />
 
-              {/* Region — visitor's country first, then all / continents */}
+              {/* Region, visitor's country first, then all / continents */}
               <RegionControl region={region} userCountry={userCountry} onChange={changeRegion} />
 
-              {/* Date sort — soonest ↔ latest */}
+              {/* Date sort, soonest ↔ latest */}
               <DateSortChip sort={dateSort} onToggle={() => setDateSort(s => (s === 'asc' ? 'desc' : 'asc'))} />
 
               {/* View toggle (grid / list) */}
@@ -932,7 +932,7 @@ export default function ConferencesExploreClient() {
               {/* Hairline divider */}
               <div className="hidden md:block w-px h-7 flex-shrink-0" style={{ backgroundColor: 'rgba(221,212,192,0.9)' }} />
 
-              {/* Filters toggle — format / level / applications live in the drawer */}
+              {/* Filters toggle, format / level / applications live in the drawer */}
               <button
                 onClick={() => setFiltersOpen(v => !v)}
                 className="flex items-center gap-2 rounded-full py-2.5 px-4 font-bold text-[12.5px] transition-colors focus:outline-none flex-shrink-0"
@@ -955,7 +955,7 @@ export default function ConferencesExploreClient() {
               </button>
             </div>
 
-            {/* Expanded filter panel — inside the glass container */}
+            {/* Expanded filter panel, inside the glass container */}
             {filtersOpen && (
               <div
                 className="px-4 md:px-5 py-4 flex flex-wrap items-center gap-2"
@@ -1000,7 +1000,7 @@ export default function ConferencesExploreClient() {
                 {countryMode ? (
                   <>
                     {userCode && <FlagImg code={userCode} size={17} />}
-                    NEAR YOU — {displayed.length < sorted.length
+                    NEAR YOU: {displayed.length < sorted.length
                       ? `${displayed.length} OF ${sorted.length}`
                       : displayed.length} IN {userCountry!.toUpperCase()}
                   </>
@@ -1035,14 +1035,14 @@ export default function ConferencesExploreClient() {
             </div>
           ) : displayed.length === 0 ? (
             countryMode && !searchQuery && !formatFilter && !levelFilter ? (
-              /* Country tab is empty — soft local empty state with a reset. */
+              /* Country tab is empty, soft local empty state with a reset. */
               <div className="flex flex-col items-center justify-center py-24 text-center">
                 {userCode && <FlagImg code={userCode} size={40} />}
                 <h2 className="font-semibold text-lg mt-5 mb-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
                   No conferences in {userCountry} yet
                 </h2>
                 <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                  Be the first to bring one home — or browse the worldwide directory.
+                  Be the first to bring one home, or browse the worldwide directory.
                 </p>
                 <button
                   onClick={() => changeRegion('')}
@@ -1105,7 +1105,7 @@ export default function ConferencesExploreClient() {
             </div>
           )}
 
-          {/* Country tab — subtle reset to the worldwide directory */}
+          {/* Country tab, subtle reset to the worldwide directory */}
           {!loading && countryMode && displayed.length > 0 && (
             <div className="flex justify-center mt-10">
               <button

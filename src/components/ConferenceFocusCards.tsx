@@ -80,7 +80,7 @@ export default function ConferenceFocusCards({ cards }: { cards: FocusCard[] }) 
             }}
           />
 
-          {/* Info overlay — shown only on hover */}
+          {/* Info overlay, shown only on hover */}
           <div
             style={{
               position: 'absolute',

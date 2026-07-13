@@ -1,13 +1,13 @@
 'use client';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// V3 · "First Gavel" — Luma-style supply-side minimalism.
+// V3 · "First Gavel", Luma-style supply-side minimalism.
 //
 // Thesis (landing-research.md §4/V3): a directory is only as good as its supply.
 // Luma's home ignores attendees and sells hosting in one sentence; Ticket Tailor
-// wins on fees. Gavelling's sharpest weapon is zero platform fees — so the page
+// wins on fees. Gavelling's sharpest weapon is zero platform fees, so the page
 // makes exactly one claim to organisers, then proves it with live customer data
-// (Vercel's narrative-proof move: "LIMUN 2027 runs on Gavelling — 1,250
+// (Vercel's narrative-proof move: "LIMUN 2027 runs on Gavelling, 1,250
 // delegates expected"). One memorable move: the split hero whose right half is
 // real customer data, not decoration. Numbered index list instead of icon cards.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -27,7 +27,7 @@ import {
 const CAPABILITIES: { n: string; title: string; desc: string }[] = [
   { n: '01', title: 'Registration & allocations', desc: 'Applications, delegate preferences and one-click committee assignment.' },
   { n: '02', title: 'Document portal', desc: 'Study guides, position papers and chair feedback, all in one place.' },
-  { n: '03', title: 'Live committee sessions', desc: 'Every committee runs on Gavelling’s debate engine — speakers list to final vote.' },
+  { n: '03', title: 'Live committee sessions', desc: 'Every committee runs on Gavelling’s debate engine: speakers list to final vote.'},
   { n: '04', title: 'Automated comms', desc: 'Acceptance emails, allocation codes and reminders, sent for you.' },
 ];
 
@@ -105,7 +105,7 @@ export default function VariantFirstGavel({
               maxWidth: '440px',
             }}
           >
-            Registration, allocations, documents and live committee sessions — end-to-end on Gavelling. Zero platform fees for organisers.
+            Registration, allocations, documents and live committee sessions, end-to-end on Gavelling. Zero platform fees for organisers.
           </p>
 
           <div className="flex flex-col sm:flex-row sm:items-center gap-4" style={{ marginTop: '36px' }}>
@@ -153,12 +153,12 @@ export default function VariantFirstGavel({
           </Link>
         </div>
 
-        {/* Right: proof, not decoration — a real customer's real weekend */}
+        {/* Right: proof, not decoration, a real customer's real weekend */}
         <div className="relative" style={{ minHeight: '420px' }}>
           {flagship?.banner_url ? (
             <img
               src={flagship.banner_url}
-              alt={`${flagship.full_name} — main hall`}
+              alt={`${flagship.full_name}: main hall`}
               className="absolute inset-0 w-full h-full object-cover"
             />
           ) : (
@@ -207,7 +207,7 @@ export default function VariantFirstGavel({
         </div>
       </section>
 
-      {/* ── Editorial pull-quote — a delegate's verbatim words, typeset large ─── */}
+      {/* ── Editorial pull-quote, a delegate's verbatim words, typeset large ─── */}
       {quote && flagship && (
         <section className="px-6 md:px-14" style={{ paddingTop: 'clamp(56px, 8vw, 100px)', paddingBottom: 'clamp(56px, 8vw, 100px)' }}>
           <div style={{ maxWidth: '860px', margin: '0 auto' }}>
@@ -236,7 +236,7 @@ export default function VariantFirstGavel({
         </section>
       )}
 
-      {/* ── Capabilities — a numbered index list, deliberately not icon cards ─── */}
+      {/* ── Capabilities, a numbered index list, deliberately not icon cards ─── */}
       <section
         className="px-6 md:px-14"
         style={{
@@ -265,7 +265,7 @@ export default function VariantFirstGavel({
         </div>
       </section>
 
-      {/* ── Audience flip — delegates get one honest sentence, not a section ──── */}
+      {/* ── Audience flip, delegates get one honest sentence, not a section ──── */}
       <section
         style={{
           backgroundColor: FOREST,

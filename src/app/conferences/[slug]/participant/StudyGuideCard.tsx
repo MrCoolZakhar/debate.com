@@ -1,6 +1,6 @@
 'use client';
 
-// Study guide card — the delegate's committee's study guide(s). Same data
+// Study guide card, the delegate's committee's study guide(s). Same data
 // source the old documents tab used (study_guides table).
 
 import { useState, useEffect, useCallback } from 'react';

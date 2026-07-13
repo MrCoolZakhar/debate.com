@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   SlidersHorizontal, Building2, Users2, ShieldCheck, Upload, ArrowRight,
@@ -19,6 +19,7 @@ import { DatePicker } from '@/components/DatePicker';
 import { sendOrganizerInvite, listPendingOrganizerInvites, revokeOrganizerInvite, type OrganizerInviteRow } from '@/lib/organizerInvites';
 import { activeFeePhase, type FeePhase } from '@/lib/finance';
 import { currencyPickerGroups } from '@/lib/currencies';
+import { normalizeSocialUrl } from '@/lib/socialLinks';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -123,7 +124,7 @@ const SWAP_MODE_OPTIONS: { value: string; label: string; desc: string }[] = [
 const ROLES = ['delegate', 'chair', 'head-delegate', 'faculty-advisor', 'observer'] as const;
 
 // Pinned USD/EUR/GBP + alphabetical rest, split once for every currency
-// picker in this page — mirrors the creation flow's symbol+code display.
+// picker in this page, mirrors the creation flow's symbol+code display.
 const CURRENCY_GROUPS = currencyPickerGroups();
 
 // License-safe banner presets shipped in /public/banners (see its README.md).
@@ -157,9 +158,9 @@ function toDatetimeLocal(iso: string | null): string {
 
 // Standard failure copy for every verified-write save in this page: a write
 // that returns an error OR affects zero rows (RLS silently filtered it, or
-// the row vanished) is treated identically — never a silent false success.
+// the row vanished) is treated identically, never a silent false success.
 function saveFailMessage(error?: { message: string } | null): string {
-  return "Couldn't save — please refresh and try again." + (error?.message ? ' ' + error.message : '');
+  return "Couldn't save, please refresh and try again." + (error?.message ? ' ' + error.message : '');
 }
 
 const inputStyle: React.CSSProperties = {
@@ -355,9 +356,17 @@ function QuestionModal({ existing, onSave, onClose }: {
 
 export default function SettingsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { conference, refreshConferenceQuiet } = useManage();
   const { user, session } = useAuth();
-  const [activeTab, setActiveTab] = useState<'applications' | 'conference' | 'organizers' | 'privacy'>('applications');
+  // Deep-links from the dashboard checklist pass ?tab= to land on the right
+  // sub-tab (e.g. "Set up your conference page" → conference). Falls back to
+  // applications for any missing/unknown value.
+  const initialTab = ((): 'applications' | 'conference' | 'organizers' | 'privacy' => {
+    const t = searchParams.get('tab') ?? searchParams.get('section');
+    return t === 'conference' || t === 'organizers' || t === 'privacy' ? t : 'applications';
+  })();
+  const [activeTab, setActiveTab] = useState<'applications' | 'conference' | 'organizers' | 'privacy'>(initialTab);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
@@ -375,10 +384,10 @@ export default function SettingsPage() {
   const [visualError, setVisualError] = useState('');
   const [logoUploading, setLogoUploading] = useState(false);
   const [logoError, setLogoError] = useState('');
-  // Logo picked but not yet uploaded — the drag-to-fit crop modal is open.
+  // Logo picked but not yet uploaded, the drag-to-fit crop modal is open.
   const [logoCropFile, setLogoCropFile] = useState<File | null>(null);
 
-  // Conference details (identity + logistics — mirrors the creation form)
+  // Conference details (identity + logistics, mirrors the creation form)
   const [fullName, setFullName] = useState('');
   const [acronym, setAcronym] = useState('');
   const [acronymError, setAcronymError] = useState('');
@@ -438,7 +447,7 @@ export default function SettingsPage() {
   const [privacyError, setPrivacyError] = useState('');
   const [archiving, setArchiving] = useState(false);
 
-  // Per-save "saving" flags — every conference-row save below is: click →
+  // Per-save "saving" flags, every conference-row save below is: click →
   // disabled/spinner → awaited + verified write → refreshConferenceQuiet()
   // (so the UI reflects DB truth) → THEN flip to saved. No optimistic
   // pre-confirmation state; see AGENTS.md-adjacent postmortem on silent
@@ -658,7 +667,7 @@ export default function SettingsPage() {
     const supabase = await getFreshAuthedClient();
     if (!supabase) {
       setRoleConfigs(previous);
-      setRoleConfigError('Your session has expired — please refresh and sign in again.');
+      setRoleConfigError('Your session has expired, please refresh and sign in again.');
       return;
     }
 
@@ -670,10 +679,10 @@ export default function SettingsPage() {
       .select('id');
 
     if (error || !data || data.length === 0) {
-      // Revert the optimistic patch and surface the failure — a silent
+      // Revert the optimistic patch and surface the failure, a silent
       // no-op update (0 rows matched, no error) is treated as a failure too.
       setRoleConfigs(previous);
-      setRoleConfigError(error ? error.message : "Couldn't save — that role config wasn't found.");
+      setRoleConfigError(error ? error.message : "Couldn't save, that role config wasn't found.");
     }
   }
 
@@ -694,7 +703,7 @@ export default function SettingsPage() {
     const supabase = await getFreshAuthedClient();
     if (!supabase) {
       setSwapModeSaving(false);
-      setSwapModeError('Your session has expired — please refresh and sign in again.');
+      setSwapModeError('Your session has expired, please refresh and sign in again.');
       return;
     }
 
@@ -725,7 +734,7 @@ export default function SettingsPage() {
     const supabase = await getFreshAuthedClient();
     if (!supabase) {
       setInviting(false);
-      setInviteError('Your session has expired — please refresh and sign in again.');
+      setInviteError('Your session has expired, please refresh and sign in again.');
       return;
     }
 
@@ -736,7 +745,7 @@ export default function SettingsPage() {
       .maybeSingle();
 
     if (!profile) {
-      // No account with that email — offer the token-invite fallback instead
+      // No account with that email, offer the token-invite fallback instead
       // of a dead end. The invite link works whether or not they sign up first.
       setInviteMissEmail(inviteEmail.trim().toLowerCase());
       setInviting(false);
@@ -791,7 +800,7 @@ export default function SettingsPage() {
     const supabase = await getFreshAuthedClient();
     if (!supabase) {
       setSendingInviteLink(false);
-      setInviteError('Your session has expired — please refresh and sign in again.');
+      setInviteError('Your session has expired, please refresh and sign in again.');
       return;
     }
     const res = await sendOrganizerInvite(supabase, { conferenceId: conference.id, email: inviteMissEmail });
@@ -803,21 +812,21 @@ export default function SettingsPage() {
     setInviteMissEmail(null);
     setInviteEmail('');
     setInviteNotice(res.existing
-      ? `An invite for ${res.invitedEmail} was already pending — the original link still works.`
+      ? `An invite for ${res.invitedEmail} was already pending, the original link still works.`
       : `Invite sent to ${res.invitedEmail}. They'll appear on the team once they accept.`);
     void loadPendingInvites();
   }
 
   async function handleRevokeInvite(inviteId: string) {
     if (!session) return;
-    // Optimistic remove with rollback — matches the organizer row pattern.
+    // Optimistic remove with rollback, matches the organizer row pattern.
     const previous = pendingInvites;
     setPendingInvites(prev => prev.filter(i => i.id !== inviteId));
     setInviteError('');
     const supabase = await getFreshAuthedClient();
     if (!supabase) {
       setPendingInvites(previous);
-      setInviteError('Your session has expired — please refresh and sign in again.');
+      setInviteError('Your session has expired, please refresh and sign in again.');
       return;
     }
     const res = await revokeOrganizerInvite(supabase, inviteId);
@@ -851,7 +860,7 @@ export default function SettingsPage() {
       const supabase = await getFreshAuthedClient();
       if (!supabase) {
         setOrganizers(prev => prev.map(o => o.id === orgId ? { ...o, permissions: current } : o));
-        setOrganizersError('Your session has expired — please refresh and sign in again.');
+        setOrganizersError('Your session has expired, please refresh and sign in again.');
         return;
       }
       const { data, error } = await supabase.from('conference_organizers').update({ permissions: next }).eq('id', orgId).select('id');
@@ -868,7 +877,7 @@ export default function SettingsPage() {
     if (idx === -1) return;
     const removed = organizers[idx];
     // Optimistic: drop the row instantly; re-insert it at its old position
-    // (with an inline error) if the delete fails — including a silent
+    // (with an inline error) if the delete fails, including a silent
     // zero-row delete, which is treated as a failure too.
     setOrganizers(prev => prev.filter(o => o.id !== organizerId));
     setOrganizersError('');
@@ -880,7 +889,7 @@ export default function SettingsPage() {
           arr.splice(Math.min(idx, arr.length), 0, removed);
           return arr;
         });
-        setOrganizersError('Your session has expired — please refresh and sign in again.');
+        setOrganizersError('Your session has expired, please refresh and sign in again.');
         return;
       }
       const { data, error } = await supabase.from('conference_organizers').delete().eq('id', organizerId).select('id');
@@ -895,7 +904,7 @@ export default function SettingsPage() {
     })();
   }
 
-  // Public-page curation (owner only — enforced by RLS as well as the UI gate).
+  // Public-page curation (owner only, enforced by RLS as well as the UI gate).
   // A DB trigger recomputes conferences.display_secretariat on every write, so
   // a confirmed write is followed by a quiet conference re-fetch to pick that
   // up in place (no full-screen reload).
@@ -912,7 +921,7 @@ export default function SettingsPage() {
       const supabase = await getFreshAuthedClient();
       if (!supabase) {
         setOrganizers(prev => prev.map(o => o.id === orgId ? { ...o, ...prior } : o));
-        setOrganizersError('Your session has expired — please refresh and sign in again.');
+        setOrganizersError('Your session has expired, please refresh and sign in again.');
         return;
       }
       const { data, error } = await supabase.from('conference_organizers').update(updates).eq('id', orgId).select('id');
@@ -940,7 +949,7 @@ export default function SettingsPage() {
       const supabase = await getFreshAuthedClient();
       if (!supabase) {
         setOrganizers(previous);
-        setOrganizersError('Your session has expired — please refresh and sign in again.');
+        setOrganizersError('Your session has expired, please refresh and sign in again.');
         return;
       }
       // Persist the displayed index as sort_order for every row that drifted —
@@ -971,7 +980,7 @@ export default function SettingsPage() {
       const supabase = await getFreshAuthedClient();
       if (!supabase) {
         setPublicToggleSaving(false);
-        setPrivacyError('Your session has expired — please refresh and sign in again.');
+        setPrivacyError('Your session has expired, please refresh and sign in again.');
         return;
       }
       const { data, error } = await supabase.from('conferences').update({
@@ -998,14 +1007,14 @@ export default function SettingsPage() {
     });
     if (!confirmed) return;
     // The write stays awaited: navigating away must depend on it succeeding,
-    // and on a verified row match — a silent zero-row update must not send
+    // and on a verified row match, a silent zero-row update must not send
     // the user off to /my-conferences believing this archived.
     setArchiving(true);
     setPrivacyError('');
     const supabase = await getFreshAuthedClient();
     if (!supabase) {
       setArchiving(false);
-      setPrivacyError('Your session has expired — please refresh and sign in again.');
+      setPrivacyError('Your session has expired, please refresh and sign in again.');
       return;
     }
     const { data, error } = await supabase.from('conferences').update({
@@ -1039,7 +1048,7 @@ export default function SettingsPage() {
       const supabase = await getFreshAuthedClient();
       if (!supabase) {
         setIncomingClaims(previousClaims);
-        setLineageError('Your session has expired — please refresh and sign in again.');
+        setLineageError('Your session has expired, please refresh and sign in again.');
         setLineageBusy(null);
         return;
       }
@@ -1072,10 +1081,10 @@ export default function SettingsPage() {
     const supabase = await getFreshAuthedClient();
     if (!supabase) {
       setWithdrawingClaim(false);
-      setLineageError('Your session has expired — please refresh and sign in again.');
+      setLineageError('Your session has expired, please refresh and sign in again.');
       return;
     }
-    // Only clear the id — predecessor_approved is reset by the DB trigger.
+    // Only clear the id, predecessor_approved is reset by the DB trigger.
     const { data, error } = await supabase
       .from('conferences')
       .update({ predecessor_conference_id: null })
@@ -1095,7 +1104,7 @@ export default function SettingsPage() {
 
   function handleAddPartner(conf: PartnerConf) {
     if (!conference || !session) return;
-    // Optimistic with a temp id (house pattern — see motions in AGENTS.md):
+    // Optimistic with a temp id (house pattern, see motions in AGENTS.md):
     // the row appears instantly; move/remove are guarded until the real UUID
     // arrives, then the id is swapped in place.
     const tempId = `temp-${Date.now()}`;
@@ -1114,7 +1123,7 @@ export default function SettingsPage() {
       const supabase = await getFreshAuthedClient();
       if (!supabase) {
         setPartners(prev => prev.filter(p => p.id !== tempId));
-        setPartnerError('Your session has expired — please refresh and sign in again.');
+        setPartnerError('Your session has expired, please refresh and sign in again.');
         return;
       }
       const { data, error } = await supabase.from('conference_partners').insert({
@@ -1135,7 +1144,7 @@ export default function SettingsPage() {
     if (!session) return;
     const j = idx + dir;
     if (j < 0 || j >= partners.length) return;
-    // A just-added row is still waiting for its real UUID — skip reorders
+    // A just-added row is still waiting for its real UUID, skip reorders
     // until it lands (moments later) so we never write against a temp id.
     if (partners.some(p => p.id.startsWith('temp-'))) return;
     const previous = partners;
@@ -1147,7 +1156,7 @@ export default function SettingsPage() {
       const supabase = await getFreshAuthedClient();
       if (!supabase) {
         setPartners(previous);
-        setPartnerError('Your session has expired — please refresh and sign in again.');
+        setPartnerError('Your session has expired, please refresh and sign in again.');
         return;
       }
       const results = await Promise.all(
@@ -1176,7 +1185,7 @@ export default function SettingsPage() {
     const idx = partners.findIndex(p => p.id === link.id);
     if (idx === -1) return;
     // Optimistic: drop the row instantly; re-insert at its old position if
-    // the delete fails — including a silent zero-row delete.
+    // the delete fails, including a silent zero-row delete.
     setPartners(prev => prev.filter(p => p.id !== link.id));
     setPartnerError('');
     void (async () => {
@@ -1187,7 +1196,7 @@ export default function SettingsPage() {
           arr.splice(Math.min(idx, arr.length), 0, link);
           return arr;
         });
-        setPartnerError('Your session has expired — please refresh and sign in again.');
+        setPartnerError('Your session has expired, please refresh and sign in again.');
         return;
       }
       const { data, error } = await supabase.from('conference_partners').delete().eq('id', link.id).select('id');
@@ -1214,7 +1223,7 @@ export default function SettingsPage() {
       const supabase = await getFreshAuthedClient();
       if (!supabase) {
         setIncomingPartnerClaims(previousIncoming);
-        setPartnerError('Your session has expired — please refresh and sign in again.');
+        setPartnerError('Your session has expired, please refresh and sign in again.');
         setPartnerBusy(null);
         return;
       }
@@ -1244,7 +1253,7 @@ export default function SettingsPage() {
       ? currentQuestions.map(eq => eq.id === q.id ? q : eq)
       : [...currentQuestions, q];
     // saveRoleConfig patches local state synchronously (optimistic with its
-    // own rollback + inline error) — close the modal immediately.
+    // own rollback + inline error), close the modal immediately.
     void saveRoleConfig(selectedRole, { custom_questions: updated });
     setQuestionModal({ open: false, existing: null });
   }
@@ -1261,7 +1270,7 @@ export default function SettingsPage() {
     const supabase = await getFreshAuthedClient();
     if (!supabase) {
       setBannerUploading(false);
-      setBannerError('Your session has expired — please refresh and sign in again.');
+      setBannerError('Your session has expired, please refresh and sign in again.');
       return;
     }
     const ext = file.name.split('.').pop();
@@ -1273,7 +1282,7 @@ export default function SettingsPage() {
       return;
     }
     const { data: urlData } = supabase.storage.from('conference-assets').getPublicUrl(path);
-    // The banner preview only updates once the row write is verified — no
+    // The banner preview only updates once the row write is verified, no
     // premature preview before the DB confirms the change stuck.
     const { data, error: writeError } = await supabase
       .from('conferences')
@@ -1289,7 +1298,7 @@ export default function SettingsPage() {
     setBannerUploading(false);
   }
 
-  // Preset banner selection — same authed-client update path as the upload,
+  // Preset banner selection, same authed-client update path as the upload,
   // just pointing banner_url at a bundled /banners/preset-N.jpg instead.
   function handleBannerPreset(path: string) {
     if (!session || !conference || bannerUploading) return;
@@ -1300,7 +1309,7 @@ export default function SettingsPage() {
       const supabase = await getFreshAuthedClient();
       if (!supabase) {
         setBannerUploading(false);
-        setBannerError('Your session has expired — please refresh and sign in again.');
+        setBannerError('Your session has expired, please refresh and sign in again.');
         return;
       }
       const { data, error } = await supabase.from('conferences').update({ banner_url: path }).eq('id', conference.id).select('id');
@@ -1322,7 +1331,7 @@ export default function SettingsPage() {
     const supabase = await getFreshAuthedClient();
     if (!supabase) {
       setLogoUploading(false);
-      setLogoError('Your session has expired — please refresh and sign in again.');
+      setLogoError('Your session has expired, please refresh and sign in again.');
       return;
     }
     const ext = file.name.split('.').pop();
@@ -1366,7 +1375,7 @@ export default function SettingsPage() {
     const supabase = await getFreshAuthedClient();
     if (!supabase) {
       setMinAgeSaving(false);
-      setMinAgeError('Your session has expired — please refresh and sign in again.');
+      setMinAgeError('Your session has expired, please refresh and sign in again.');
       return;
     }
     const { data, error } = await supabase.from('conferences').update({ min_age: value }).eq('id', conference.id).select('id');
@@ -1378,7 +1387,7 @@ export default function SettingsPage() {
       return;
     }
     // Success is only declared once the DB write is verified AND the UI has
-    // re-synced to DB truth — never before.
+    // re-synced to DB truth, never before.
     await refreshConferenceQuiet();
     setMinAgeSaving(false);
     setMinAgeSaved(true);
@@ -1389,18 +1398,20 @@ export default function SettingsPage() {
     if (!conference || visualSaving) return;
     setVisualError('');
     setVisualSaving(true);
+    // Normalize bare handles/domains ("@mymun", "instagram.com/mymun", "mymun")
+    // into valid absolute URLs so the public page's links always work.
     const updates = {
       description: description || null,
-      instagram_url: instagramUrl || null,
-      facebook_url: facebookUrl || null,
-      tiktok_url: tiktokUrl || null,
-      whatsapp_url: whatsappUrl || null,
-      website_url: websiteUrl || null,
+      instagram_url: normalizeSocialUrl(instagramUrl, 'instagram'),
+      facebook_url: normalizeSocialUrl(facebookUrl, 'facebook'),
+      tiktok_url: normalizeSocialUrl(tiktokUrl, 'tiktok'),
+      whatsapp_url: normalizeSocialUrl(whatsappUrl, 'whatsapp'),
+      website_url: normalizeSocialUrl(websiteUrl),
     };
     const supabase = await getFreshAuthedClient();
     if (!supabase) {
       setVisualSaving(false);
-      setVisualError('Your session has expired — please refresh and sign in again.');
+      setVisualError('Your session has expired, please refresh and sign in again.');
       return;
     }
     const { data, error } = await supabase.from('conferences').update(updates).eq('id', conference.id).select('id');
@@ -1424,7 +1435,7 @@ export default function SettingsPage() {
       return;
     }
     if (!upperAcr.includes('MUN')) {
-      setAcronymError("Acronym must include 'MUN' — e.g. TEIMUN, LIMUN, SMUNC.");
+      setAcronymError("Acronym must include 'MUN', e.g. TEIMUN, LIMUN, SMUNC.");
       return;
     }
     setAcronymError('');
@@ -1435,7 +1446,7 @@ export default function SettingsPage() {
     const supabase = await getFreshAuthedClient();
     if (!supabase) {
       setDetailsSaving(false);
-      setDetailsError('Your session has expired — please refresh and sign in again.');
+      setDetailsError('Your session has expired, please refresh and sign in again.');
       return;
     }
     const { data, error } = await supabase.from('conferences').update({
@@ -1484,7 +1495,7 @@ export default function SettingsPage() {
   // ── Section rail definition ──────────────────────────────────────────────
   // Mirrors the manage layout rail's language: lucide icon + Outfit label +
   // forest active state. Drives the same `activeTab` state the content blocks
-  // already switch on — no logic change, purely the switcher's new skin.
+  // already switch on, no logic change, purely the switcher's new skin.
   const SECTIONS: {
     key: 'applications' | 'conference' | 'organizers' | 'privacy';
     label: string;
@@ -1592,7 +1603,7 @@ export default function SettingsPage() {
             padding: '22px 22px 24px',
           }}
         >
-          {/* Panel header — echoes the active rail item, gives the panel a protagonist */}
+          {/* Panel header, echoes the active rail item, gives the panel a protagonist */}
           <div className="flex items-center gap-3 mb-6 pb-5" style={{ borderBottom: '1.5px solid rgba(216,205,182,0.75)' }}>
             <span
               className="flex items-center justify-center flex-shrink-0"
@@ -1740,7 +1751,7 @@ export default function SettingsPage() {
                     </div>
                   </div>
 
-                  {/* Fee phases — date-windowed pricing (Early Bird, Phase 1, …).
+                  {/* Fee phases, date-windowed pricing (Early Bird, Phase 1, …).
                       When a phase's window contains today it overrides the flat
                       fee above; gaps between phases fall back to the flat fee. */}
                   {(() => {
@@ -1765,7 +1776,7 @@ export default function SettingsPage() {
                         </div>
                         {phases.length === 0 ? (
                           <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", lineHeight: 1.55 }}>
-                            Optional: charge different amounts by date — e.g. an Early Bird rate. When no phase covers today, the flat fee above applies.
+                            Optional: charge different amounts by date, e.g. an Early Bird rate. When no phase covers today, the flat fee above applies.
                           </p>
                         ) : (
                           <>
@@ -1847,7 +1858,7 @@ export default function SettingsPage() {
                             })}
                             {feePhasesOverlap(phases) && (
                               <p className="text-xs mt-1" style={{ color: '#B8844A', fontFamily: "'Outfit', sans-serif" }}>
-                                Two phases have overlapping date windows — the phase listed first wins on overlapping days.
+                                Two phases have overlapping date windows, the phase listed first wins on overlapping days.
                               </p>
                             )}
                             <p className="text-xs mt-1" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
@@ -2005,7 +2016,7 @@ export default function SettingsPage() {
                   onBlur={(e) => {
                     const upper = e.target.value.toUpperCase().trim();
                     if (!upper) setAcronymError('Acronym is required.');
-                    else if (!upper.includes('MUN')) setAcronymError("Acronym must include 'MUN' — e.g. TEIMUN, LIMUN, SMUNC.");
+                    else if (!upper.includes('MUN')) setAcronymError("Acronym must include 'MUN', e.g. TEIMUN, LIMUN, SMUNC.");
                     else setAcronymError('');
                     e.currentTarget.style.borderColor = '#DDD4C0';
                   }}
@@ -2230,7 +2241,7 @@ export default function SettingsPage() {
               />
             </div>
 
-            {/* Preset picker — one click sets banner_url to a bundled photo */}
+            {/* Preset picker, one click sets banner_url to a bundled photo */}
             <div style={{ marginTop: 14 }}>
               <p style={{ fontFamily: "'Outfit', sans-serif", fontSize: 12, fontWeight: 600, letterSpacing: '0.01em', color: '#7A6E5E', margin: '0 0 8px 0' }}>
                 Or pick a preset
@@ -2322,7 +2333,7 @@ export default function SettingsPage() {
             )}
           </div>
 
-          {/* Registration fee pointer — fees are configured per role now, not at the conference level (columns stay in the DB, just unused by this UI). */}
+          {/* Registration fee pointer, fees are configured per role now, not at the conference level (columns stay in the DB, just unused by this UI). */}
           <div style={cardStyle}>
             <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Registration Fee</p>
             <p className="text-sm" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Fees are configured per role in the Applications tab.</p>
@@ -2336,7 +2347,7 @@ export default function SettingsPage() {
               rows={6}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Tell delegates about your conference — theme, highlights, what to expect..."
+              placeholder="Tell delegates about your conference, theme, highlights, what to expect..."
               style={{ ...inputStyle, resize: 'vertical', lineHeight: '1.6' }}
               onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
               onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
@@ -2683,7 +2694,7 @@ export default function SettingsPage() {
           )}
         </div>
 
-        {/* Pending token invites — sent but not yet accepted */}
+        {/* Pending token invites, sent but not yet accepted */}
         {pendingInvites.length > 0 && (
           <div className="mb-6">
             <p className="font-bold text-[10px] mb-2" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.14em' }}>
@@ -2771,7 +2782,7 @@ export default function SettingsPage() {
             >
               <p className="text-xs flex-1" style={{ color: '#6B5F52', fontFamily: "'Outfit', sans-serif", lineHeight: 1.55, margin: 0 }}>
                 No Gavelling account found for <strong style={{ color: '#1C1410' }}>{inviteMissEmail}</strong>.
-                You can email them an invite link instead — it works even before they create an account.
+                You can email them an invite link instead, it works even before they create an account.
               </p>
               <button
                 onClick={handleSendInviteLink}
@@ -3212,7 +3223,7 @@ export default function SettingsPage() {
                         {claim.requester_full_name}
                       </p>
                       <p className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                        {cityLine ? cityLine + ' — ' : ''}wants to list {view.acronym} as a partner conference
+                        {cityLine ? cityLine + ', ' : ''}wants to list {view.acronym} as a partner conference
                       </p>
                     </div>
                     <div className="flex gap-2 flex-shrink-0">
@@ -3278,7 +3289,7 @@ export default function SettingsPage() {
           </p>
         </div>
         <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-          Bulk-import applicants from a CSV or XLSX spreadsheet — map columns, preview a dry run, then commit. Unclaimed rows are invited to create an account.
+          Bulk-import applicants from a CSV or XLSX spreadsheet, map columns, preview a dry run, then commit. Unclaimed rows are invited to create an account.
         </p>
         <Link
           href={`/manage/${conference.slug}/import`}
@@ -3305,7 +3316,7 @@ export default function SettingsPage() {
         />
       )}
 
-      {/* Drag-to-fit crop step — flattens the chosen framing into a square
+      {/* Drag-to-fit crop step, flattens the chosen framing into a square
           transparent PNG, then hands off to the existing upload path. */}
       {logoCropFile && (
         <LogoCropModal

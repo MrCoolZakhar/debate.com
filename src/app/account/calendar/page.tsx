@@ -205,7 +205,7 @@ export default function CalendarPage() {
         Conference Calendar
       </h1>
       <p className="text-sm mb-8" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-        Every conference you&apos;re part of — organising, chairing, delegating, and more.
+        Every conference you&apos;re part of: organising, chairing, delegating, and more.
       </p>
 
       {loading ? (

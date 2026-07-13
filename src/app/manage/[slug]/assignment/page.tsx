@@ -127,7 +127,7 @@ interface UserHistory {
 //   preference:  1st choice committee +50, 2nd +30, 3rd +15
 //                +25 more if the slot is the exact country they asked for in that preference
 //   experience:  15 - 6 * |experience level - committee difficulty|  (floor 0)
-//   fullness:    12 * (1 - filled/total)  — nudges suggestions toward emptier committees
+//   fullness:    12 * (1 - filled/total) , nudges suggestions toward emptier committees
 
 const LEVELS = ['beginner', 'intermediate', 'advanced', 'expert'];
 function levelIdx(s: string | null | undefined): number {
@@ -184,7 +184,7 @@ interface Suggestion {
 // ── Shared bits ───────────────────────────────────────────────────────────────
 
 const OUTFIT = "'Outfit', sans-serif";
-// Typography rule: no monospace on the conferences side — MONO now resolves to Outfit
+// Typography rule: no monospace on the conferences side, MONO now resolves to Outfit
 // so every stamp/eyebrow/code that referenced it renders in Outfit (family swap only).
 const MONO = "'Outfit', sans-serif";
 
@@ -446,7 +446,7 @@ function DropAllocateModal({ committee, app, onClose, onAssigned }: DropAllocate
           <button onClick={onClose} className="focus:outline-none flex-shrink-0 mt-1" style={{ color: '#9A8A78' }}><X size={18} /></button>
         </div>
         <p className="text-xs mb-4" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-          Open slots, most urgent first — importance tier, then fit for this delegate.
+          Open slots, most urgent first: importance tier, then fit for this delegate.
         </p>
 
         {error && (
@@ -743,7 +743,7 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedApp, o
 }
 
 // ── CommitteeBoardPanel ───────────────────────────────────────────────────────
-// One compact panel per committee — all committees visible at once. Acts as a
+// One compact panel per committee, all committees visible at once. Acts as a
 // drag-and-drop target for applicant cards and a click target when an
 // applicant is selected.
 
@@ -1212,7 +1212,7 @@ export default function AssignmentPage() {
     setTimeout(() => setFlash(f => (f?.msg === msg ? null : f)), 4500);
   }
 
-  // Monotonic sequence for loads — a slow older response never overwrites a
+  // Monotonic sequence for loads, a slow older response never overwrites a
   // newer one (silent background refetches can race with each other and with
   // full loads).
   const loadSeq = useRef(0);
@@ -1221,7 +1221,7 @@ export default function AssignmentPage() {
     if (!conference) return;
     if (!session) return;
     const seq = ++loadSeq.current;
-    // silent: background refresh — never flips the page-level loading flag,
+    // silent: background refresh, never flips the page-level loading flag,
     // so the board stays mounted and interactive while fresh data arrives.
     if (!opts?.silent) setLoading(true);
     const supabase = getAuthedClient(session.access_token);
@@ -1267,7 +1267,7 @@ export default function AssignmentPage() {
         .eq('status', 'pending'),
     ]);
 
-    if (seq !== loadSeq.current) return; // stale response — a newer load superseded this one
+    if (seq !== loadSeq.current) return; // stale response, a newer load superseded this one
 
     const apps = ((appRes.data ?? []) as unknown as AcceptedApp[]).filter(a => a.attending !== false);
     const comms = (commRes.data ?? []) as unknown as CommitteeData[];
@@ -1278,7 +1278,7 @@ export default function AssignmentPage() {
     setChairInvites((inviteRes.data ?? []) as unknown as PendingChairInvite[]);
     setLoading(false);
 
-    // Enrich with MUN history (CV entries + platform awards) — non-blocking
+    // Enrich with MUN history (CV entries + platform awards), non-blocking
     const userIds = Array.from(new Set(apps.map(a => a.profiles?.id).filter(Boolean))) as string[];
     if (userIds.length > 0) {
       const [cvRes, awRes] = await Promise.all([
@@ -1314,7 +1314,7 @@ export default function AssignmentPage() {
 
   // F1: the delegates/chairs board lives inline in this component (unlike
   // DelegationsView/IndependentsView, which remount and refetch on every
-  // switch into them) — so without this it keeps rendering data loaded at
+  // switch into them), so without this it keeps rendering data loaded at
   // page mount even after mutations made in the other two modes. Refetch
   // whenever a switch lands on delegates or chairs; the effect above already
   // covers the very first render.
@@ -1350,8 +1350,8 @@ export default function AssignmentPage() {
   }
 
   // ── Optimistic allocation commit ────────────────────────────────────────────
-  // Applies exactly the change the user made — the allocation appears in the
-  // committee panel and the applicant leaves the unassigned rail — with a temp
+  // Applies exactly the change the user made, the allocation appears in the
+  // committee panel and the applicant leaves the unassigned rail, with a temp
   // row id. The real UUID arrives via a silent background refetch.
   function applyLocalAllocation(committee: CommitteeData, app: AcceptedApp, slot: SlotRow, sent = false): AllocationRow {
     const row: AllocationRow = {
@@ -1459,7 +1459,7 @@ export default function AssignmentPage() {
   function handleRemoveAllocation(allocation: AllocationRow) {
     if (!session || !conference) return;
     if (allocation.id.startsWith('temp-')) {
-      showFlash('err', 'This allocation is still saving — try again in a moment.');
+      showFlash('err', 'This allocation is still saving. Try again in a moment.');
       return;
     }
     if (inFlightRemoveIds.current.has(allocation.id)) return;
@@ -1502,7 +1502,7 @@ export default function AssignmentPage() {
           const result = await queueEventEmail(supabase, conferenceId, 'allocation_removed', [allocation.application_id]);
           notifyIfNeeded(result, pushDraftNotice);
         } catch {
-          // Email queueing is secondary — the removal stands.
+          // Email queueing is secondary, the removal stands.
           showFlash('err', 'Allocation removed, but the notification email could not be queued.');
         }
       }
@@ -1611,7 +1611,7 @@ export default function AssignmentPage() {
   }
 
   // Reverts the removed chair's application to 'accepted' only if they don't
-  // chair any other committee — a chair on two daises stays 'assigned' after
+  // chair any other committee, a chair on two daises stays 'assigned' after
   // losing one of them.
   async function handleRemoveChair(userId: string, committee: CommitteeData, name: string) {
     const label = committee.abbreviation ?? committee.name;
@@ -1783,7 +1783,7 @@ export default function AssignmentPage() {
     .filter(app => (app.profiles?.display_name ?? app.invited_name ?? '').toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => (a.profiles?.display_name ?? a.invited_name ?? '').localeCompare(b.profiles?.display_name ?? b.invited_name ?? ''));
 
-  // Chairs mode — unassigned pool is anyone not currently on any committee's
+  // Chairs mode, unassigned pool is anyone not currently on any committee's
   // dais (chair_user_ids), mirroring how the delegates pool is everyone not
   // yet allocated a slot.
   const allChairIdsOnDais = new Set(committees.flatMap(c => c.chair_user_ids ?? []));
@@ -1981,7 +1981,7 @@ export default function AssignmentPage() {
             >
               <MousePointerClick size={14} style={{ color: '#3D7A52', flexShrink: 0 }} />
               <p className="text-sm min-w-0 truncate" style={{ color: '#1B3828', fontFamily: OUTFIT }}>
-                <span style={{ fontWeight: 700 }}>{selectedApp.profiles?.display_name ?? selectedApp.invited_name}</span> selected — click a committee panel to pick their country, or drag their card.
+                <span style={{ fontWeight: 700 }}>{selectedApp.profiles?.display_name ?? selectedApp.invited_name}</span> selected. Click a committee panel to pick their country, or drag their card.
               </p>
               <button
                 onClick={() => setSelectedAppId(null)}
@@ -1996,7 +1996,7 @@ export default function AssignmentPage() {
 
           {mode === 'delegates' && (
             <div className="flex flex-col xl:flex-row gap-6 items-start">
-              {/* Left rail — unassigned applicants */}
+              {/* Left rail, unassigned applicants */}
               <div className="w-full xl:w-[320px] flex-shrink-0">
                 <div className="flex items-center gap-2 mb-3">
                   <p style={{ fontSize: 11, color: '#B6871F', fontFamily: MONO, letterSpacing: '0.14em', fontWeight: 600 }}>
@@ -2115,7 +2115,7 @@ export default function AssignmentPage() {
                 )}
               </div>
 
-              {/* Board — every committee visible at once */}
+              {/* Board, every committee visible at once */}
               <div className="flex-1 min-w-0 w-full">
                 <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4">
                   {committees.map(c => (
@@ -2139,12 +2139,12 @@ export default function AssignmentPage() {
             </div>
           )}
 
-          {/* Chairs mode — mirrors delegates mode's anatomy: searchable
+          {/* Chairs mode, mirrors delegates mode's anatomy: searchable
               unassigned rail on the left, drag/click-to-select committee
               cards on the right. No suggestions strip (no preference data). */}
           {mode === 'chairs' && (
             <div className="flex flex-col xl:flex-row gap-6 items-start">
-              {/* Left rail — unassigned chair applicants */}
+              {/* Left rail, unassigned chair applicants */}
               <div className="w-full xl:w-[320px] flex-shrink-0">
                 <div className="flex items-center gap-2 mb-3">
                   <p style={{ fontSize: 11, color: '#B6871F', fontFamily: MONO, letterSpacing: '0.14em', fontWeight: 600 }}>
@@ -2224,7 +2224,7 @@ export default function AssignmentPage() {
                 )}
               </div>
 
-              {/* Board — every committee visible at once */}
+              {/* Board, every committee visible at once */}
               <div className="flex-1 min-w-0 w-full">
                 <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4">
                   {committees.map(c => (
@@ -2262,7 +2262,7 @@ export default function AssignmentPage() {
           >
             <MousePointerClick size={14} style={{ color: '#EED98A', flexShrink: 0 }} />
             <p className="text-sm min-w-0" style={{ color: '#FFFFFF', fontFamily: OUTFIT }}>
-              <span style={{ fontWeight: 700 }}>{selectedChairApp.profiles?.display_name}</span> selected — click a committee to assign, or drag their card.
+              <span style={{ fontWeight: 700 }}>{selectedChairApp.profiles?.display_name}</span> selected. Click a committee to assign, or drag their card.
             </p>
             <button
               onClick={() => setSelectedChairAppId(null)}
@@ -2284,14 +2284,14 @@ export default function AssignmentPage() {
           onInvited={name => {
             setInviteModalCommitteeId(null);
             showFlash('ok', `Invite sent to ${name}`);
-            // The invite row (id/token) is server-minted — fetch it silently
+            // The invite row (id/token) is server-minted, fetch it silently
             // instead of wiping the board behind a spinner.
             loadData({ silent: true });
           }}
         />
       )}
 
-      {/* Drop popup — open slots for the target committee, most urgent first */}
+      {/* Drop popup, open slots for the target committee, most urgent first */}
       {dropModal && dropModalCommittee && dropModalApp && (
         <DropAllocateModal
           committee={dropModalCommittee}
@@ -2299,7 +2299,7 @@ export default function AssignmentPage() {
           onClose={() => setDropModal(null)}
           onAssigned={(slot, msg) => {
             // The insert already succeeded inside the modal (its button was
-            // the only busy control) — commit the same change locally and
+            // the only busy control), commit the same change locally and
             // swap in the real row id with a silent refetch.
             applyLocalAllocation(dropModalCommittee, dropModalApp, slot);
             showFlash('ok', msg);
@@ -2326,7 +2326,7 @@ export default function AssignmentPage() {
           preSelectedSlot={assignModal.preSlot}
           onClose={() => setAssignModal(null)}
           onAssigned={(app, slot, sentEmail) => {
-            // Writes already succeeded inside the modal — commit the same
+            // Writes already succeeded inside the modal, commit the same
             // change locally and fetch the real row id silently.
             applyLocalAllocation(assignModalCommittee, app, slot, sentEmail);
             loadData({ silent: true });

@@ -6,7 +6,7 @@ import { getCountryByName } from '@/lib/countries';
 
 const OUTFIT = "'Outfit', sans-serif";
 
-// ── Shared types (page.tsx imports these — page files can't export extras) ──
+// ── Shared types (page.tsx imports these, page files can't export extras) ──
 
 export interface CaucusJson {
   active?: boolean;
@@ -208,7 +208,7 @@ export function RecapModal({ data, onClose }: { data: LiveCommittee; onClose: ()
         <StatTile icon={ScrollText} value={String(drs)} label="Draft resolutions" />
       </div>
       <p className="text-[11px] -mt-4 mb-6" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-        Motions count reflects pending motions only — total motions raised isn&apos;t persisted.
+        Motions count reflects pending motions only. Total motions raised isn&apos;t persisted.
       </p>
 
       {/* Points */}
@@ -237,7 +237,7 @@ export function RecapModal({ data, onClose }: { data: LiveCommittee; onClose: ()
       )}
 
       {/* Chair feedback recap */}
-      {/* TODO(merge): feedback shape changes on main branch — swap this recap to the new format */}
+      {/* TODO(merge): feedback shape changes on main branch, swap this recap to the new format */}
       <div className="mb-6">
         <div className="flex items-center gap-2 flex-wrap">
           <Eyebrow>Chair feedback</Eyebrow>
@@ -245,7 +245,7 @@ export function RecapModal({ data, onClose }: { data: LiveCommittee; onClose: ()
             className="text-[10px] font-bold px-2 py-0.5 rounded-full"
             style={{ backgroundColor: 'rgba(238,217,138,0.25)', color: '#B6871F', border: '1px solid rgba(182,135,31,0.35)', fontFamily: OUTFIT }}
           >
-            Feedback format changes on the production branch — placeholder
+            Feedback format changes on the production branch (placeholder)
           </span>
         </div>
         {feedbackCountries.length === 0 ? (

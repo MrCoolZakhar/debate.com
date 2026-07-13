@@ -3,13 +3,13 @@
 // Organizer-only edit affordances for the public conference page.
 // - variant="corner": quiet 28px icon button pinned to a card corner
 //   (recipe: account/cv edit-entry button).
-// - variant="cover": full-bleed hover overlay for images — transparent at
+// - variant="cover": full-bleed hover overlay for images, transparent at
 //   rest, grey-out + centred pencil-in-circle on hover. The button spans the
 //   whole target (absolute inset-0), so hovering the image hovers the button;
 //   no parent `group` class needed (which lets covers nest, e.g. logo inside
 //   banner).
 //
-// Both variants must only ever be rendered for organizer viewers — the
+// Both variants must only ever be rendered for organizer viewers, the
 // public page keeps zero edit affordances in the DOM for everyone else.
 
 import { Pencil } from 'lucide-react';

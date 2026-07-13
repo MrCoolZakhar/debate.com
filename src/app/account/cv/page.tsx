@@ -1272,7 +1272,7 @@ export default function CVPage() {
             MUN CV
           </h1>
           <p className="text-sm" style={{ color: '#9A8A78', fontFamily: OUTFIT, margin: 0 }}>
-            Your Model UN conference history — typeset, verified, and yours.
+            Your Model UN conference history: typeset, verified, and yours.
           </p>
         </div>
         <button
@@ -1348,8 +1348,8 @@ export default function CVPage() {
         </div>
         <p className="text-[12px]" style={{ color: '#7A5A20', fontFamily: OUTFIT, margin: 0 }}>
           {exp.nextLabel
-            ? `You're ${exp.label} — add ${exp.remaining} more conference${exp.remaining === 1 ? '' : 's'} to reach ${exp.nextLabel}.`
-            : `You've reached Expert — the top tier. Keep adding conferences to grow your record.`}
+            ? `You're ${exp.label}. Add ${exp.remaining} more conference${exp.remaining === 1 ? '' : 's'} to reach ${exp.nextLabel}.`
+            : `You've reached Expert, the top tier. Keep adding conferences to grow your record.`}
         </p>
       </div>
 
@@ -1360,7 +1360,7 @@ export default function CVPage() {
             No entries yet
           </p>
           <p className="text-sm mb-6 max-w-sm mx-auto" style={{ color: '#9A8A78', fontFamily: OUTFIT, lineHeight: 1.7 }}>
-            Add your past conferences manually — or they&apos;ll appear automatically when you attend Gavelling-verified conferences.
+            Add your past conferences manually, or they&apos;ll appear automatically when you attend Gavelling-verified conferences.
           </p>
           <button
             onClick={() => { setModalEntry(null); setModalOpen(true); }}

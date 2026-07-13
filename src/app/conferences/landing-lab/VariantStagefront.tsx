@@ -1,22 +1,22 @@
 'use client';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// V1 · "Stagefront" — the full composition (owner-approved evolution, restructured).
+// V1 · "Stagefront", the full composition (owner-approved evolution, restructured).
 //
 // The LIMUN theatre banner opens the show as a hero backdrop, constrained to
 // the hero zone: everything below sits on clean cream / ivory slabs so each
 // section reads as its own distinct band.
 //
 // Composition, top to bottom:
-//   1. Hero — headline left, "up next" card rail right          — DARK (theatre photo)
-//   2. "Find your seat" role carousel + circuit-in-numbers strip — CREAM
-//   3. "Opportunities beyond delegating" job board              — CREAM (no panel)
-//   4. "Happening near you" regional auto-scroll rail (IP geo)  — IVORY
-//   5. The production globe section, verbatim                   — FOREST
+//   1. Hero, headline left, "up next" card rail right         , DARK (theatre photo)
+//   2. "Find your seat" role carousel + circuit-in-numbers strip, CREAM
+//   3. "Opportunities beyond delegating" job board             , CREAM (no panel)
+//   4. "Happening near you" regional auto-scroll rail (IP geo) , IVORY
+//   5. The production globe section, verbatim                  , FOREST
 //   6. Ivory footer (design rule)
 //
 // The hero rail + the regional rail reuse the SHARED ConferenceCard
-// (../ConferenceCard) — the same definition the explore directory renders;
+// (../ConferenceCard), the same definition the explore directory renders;
 // the hero stack uses its photo-forward `heroCompact` tier (banner photo
 // fills the card) so three fit gracefully, pinned to the right screen edge.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -53,13 +53,13 @@ interface JobStats {
   chairing: number;
 }
 
-// "Find your seat" role carousel — one slide per way to be on the circuit.
+// "Find your seat" role carousel, one slide per way to be on the circuit.
 // Recovered from the pre-neumorphic build (photo card, forest scrim, gold
 // primary pill), with one evolution: each slide LEADS with the ROLE as a
-// huge Outfit-900 uppercase wordmark — the dominant element on the slide —
+// huge Outfit-900 uppercase wordmark, the dominant element on the slide —
 // and the short supporting line sits beneath it.
 interface RoleSlide {
-  role: string; // rendered uppercase, Outfit 900 — the biggest words on the slide
+  role: string; // rendered uppercase, Outfit 900, the biggest words on the slide
   blurb: string;
   image: string;
   imageAlt: string;
@@ -78,7 +78,7 @@ const ROLE_SLIDES: RoleSlide[] = [
   },
   {
     role: 'Chairs',
-    blurb: 'Gavel in hand — scoring, motions and the speakers list, run live from one dashboard.',
+    blurb: 'Gavel in hand: scoring, motions and the speakers list, run live from one dashboard.',
     image: '/landing/podium-speaker.jpg',
     imageAlt: 'A full committee room mid-debate, chair at the podium',
     primary: { label: 'Explore chairing opportunities', href: '/conferences/roles' },
@@ -86,14 +86,14 @@ const ROLE_SLIDES: RoleSlide[] = [
   },
   {
     role: 'Secretariat',
-    blurb: 'The machine behind the weekend — applications, allocations and communications in one place.',
+    blurb: 'The machine behind the weekend: applications, allocations and communications in one place.',
     image: '/landing/organiser-desk.jpg',
     imageAlt: 'A delegation working together on Gavelling at a laptop',
     primary: { label: 'See open roles', href: '/conferences/roles' },
   },
   {
     role: 'Organizers',
-    blurb: 'Registration, allocation, delegations, live committees — the whole show, zero fees.',
+    blurb: 'Registration, allocation, delegations, live committees. The whole show, zero fees.',
     image: '/landing/organiser-desk.jpg',
     imageAlt: 'A delegation working together on Gavelling at a laptop',
     primary: { label: 'List your conference', href: '/conferences/new' },
@@ -101,7 +101,7 @@ const ROLE_SLIDES: RoleSlide[] = [
   },
   {
     role: 'Advisors',
-    blurb: 'Pledge spots, manage payments and keep your delegation organised — all in one place.',
+    blurb: 'Pledge spots, manage payments and keep your delegation organised, all in one place.',
     image: '/landing/organiser-desk.jpg',
     imageAlt: 'A delegation working together on Gavelling at a laptop',
     primary: { label: 'Explore conferences', href: '/conferences/explore' },
@@ -109,7 +109,7 @@ const ROLE_SLIDES: RoleSlide[] = [
   },
   {
     role: 'Observers',
-    blurb: 'Follow committees live and see how the room moves — no placard required.',
+    blurb: 'Follow committees live and see how the room moves, no placard required.',
     image: '/landing/podium-speaker.jpg',
     imageAlt: 'A full committee room mid-debate, chair at the podium',
     primary: { label: 'Explore conferences', href: '/conferences/explore' },
@@ -140,11 +140,11 @@ export default function VariantStagefront({
   const headliner = useMemo(() => pickHeadliner(conferences), [conferences]);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
-  // Conference ids the signed-in viewer already applied to — cards show
+  // Conference ids the signed-in viewer already applied to, cards show
   // APPLIED instead of the APPLY pill. RLS returns only the viewer's own rows.
   // memberIds: conferences the viewer is already PART of (organiser via
   // conferences.organizer_id or a conference_organizers row, or an application
-  // that reached accepted/assigned/checked-in) — those cards show VIEW →
+  // that reached accepted/assigned/checked-in), those cards show VIEW →
   // instead. Three batched queries total, no per-card work; anonymous viewers
   // skip all of it.
   const { user, session, loading: authLoading } = useAuth();
@@ -211,7 +211,7 @@ export default function VariantStagefront({
           const country = data.country_name ?? countryNameFromCode(data.country_code) ?? null;
           if (!cancelled) setGeo({ country, city: data.city ?? null });
         }
-      } catch { /* geolocation is best-effort — leave geo null */ }
+      } catch { /* geolocation is best-effort, leave geo null */ }
     })();
     return () => { cancelled = true; };
   }, []);
@@ -240,10 +240,10 @@ export default function VariantStagefront({
       ? `Conferences around ${geo.city} and across ${geo!.country}.`
       : `Conferences on the board in ${geo!.country} right now.`
     : geo?.country
-      ? `None in ${geo.country} yet — here's what's coming up across the circuit.`
+      ? `None in ${geo.country} yet. Here's what's coming up across the circuit.`
       : `Finding your region… here's what's coming up across the circuit.`;
 
-  // Live job-board stats — one query, fetched dynamically (seed data changes
+  // Live job-board stats, one query, fetched dynamically (seed data changes
   // under us). Feeds the forest stat ledger beside the job-board photo.
   const [jobStats, setJobStats] = useState<JobStats | null>(null);
   useEffect(() => {
@@ -294,12 +294,12 @@ export default function VariantStagefront({
       `}</style>
 
       <div className="relative z-10">
-        {/* ── Hero — headline left, "up next" rail right ─────────────────────
+        {/* ── Hero, headline left, "up next" rail right ─────────────────────
             Sized to EXACTLY one viewport. 100svh keeps the whole hero inside the
             small (chrome-visible) viewport on mobile so nothing is clipped; the
             backdrop covers the full screen and the fade-to-cream lands on the
             hero's bottom edge, where the cream job board begins. Everything —
-            headline, subcopy, CTAs and the three cards — fits with no scroll. */}
+            headline, subcopy, CTAs and the three cards, fits with no scroll. */}
         <section
           className="relative"
           style={{
@@ -310,7 +310,7 @@ export default function VariantStagefront({
             flexDirection: 'column',
           }}
         >
-          {/* Backdrop — sized to the hero zone exactly */}
+          {/* Backdrop, sized to the hero zone exactly */}
           <div className="absolute inset-0 z-0" aria-hidden="true" style={{ overflow: 'hidden' }}>
             {headliner?.banner_url ? (
               <img src={headliner.banner_url} alt="" className="w-full h-full object-cover" />
@@ -375,7 +375,7 @@ export default function VariantStagefront({
                   maxWidth: 'clamp(460px, 36vw, 620px)',
                 }}
               >
-                Real conferences, real committee rooms — from London to San Salvador. Pick your weekend.
+                Real conferences, real committee rooms, from London to San Salvador. Pick your weekend.
               </p>
 
               <div className="flex flex-col sm:flex-row sm:items-center gap-5 sm:gap-8" style={{ marginTop: '32px' }}>
@@ -405,7 +405,7 @@ export default function VariantStagefront({
               </div>
             </div>
 
-            {/* Curated "up next" rail — three photo-forward shared cards
+            {/* Curated "up next" rail, three photo-forward shared cards
                 (heroCompact tier: the banner photo fills the card, name + four
                 facts overlaid on a forest scrim), each with the gold glow +
                 gavel-disc treatment and the gold APPLY pill. On lg the trio
@@ -444,7 +444,7 @@ export default function VariantStagefront({
           </div>
         </section>
 
-        {/* ── Find your seat — role carousel, cream ──────────────────────────
+        {/* ── Find your seat, role carousel, cream ──────────────────────────
             The photo carousel is back (recovered from the pre-neumorphic
             build): center-focus slides, dimmed side-peek neighbors, circular
             arrows, keyboard + drag support. Each slide leads with the ROLE
@@ -473,7 +473,7 @@ export default function VariantStagefront({
           <RoleCarousel slides={ROLE_SLIDES} />
         </section>
 
-        {/* ── The circuit in numbers — slim worlddiplomats-style impact strip:
+        {/* ── The circuit in numbers, slim worlddiplomats-style impact strip:
             three plain figures, no cards, no chrome. Real data from the board. */}
         <section
           className="px-6 md:px-14"
@@ -510,7 +510,7 @@ export default function VariantStagefront({
           </div>
         </section>
 
-        {/* ── Opportunities beyond delegating — job board, cream, no panel ──── */}
+        {/* ── Opportunities beyond delegating, job board, cream, no panel ──── */}
         <section
           className="relative px-6 md:px-14 xl:px-20"
           style={{ backgroundColor: CREAM, paddingTop: 'clamp(64px, 5.5vw, 100px)', paddingBottom: 'clamp(72px, 6vw, 110px)' }}
@@ -535,7 +535,7 @@ export default function VariantStagefront({
               </h2>
               <p style={{ fontFamily: SANS, fontSize: 'clamp(15px, 1.05vw, 18px)', lineHeight: 1.65, color: INK_70, margin: '18px 0 0 0', maxWidth: 'clamp(420px, 30vw, 520px)' }}>
                 The best seat in the room isn&rsquo;t always behind a placard. Conferences on
-                Gavelling hire chairs, secretariat and staff every season — and your MUN CV
+                Gavelling hire chairs, secretariat and staff every season, and your MUN CV
                 is the application.
               </p>
               <Link
@@ -580,7 +580,7 @@ export default function VariantStagefront({
                 />
               </div>
 
-              {/* Live stat ledger — the approved forest ledger straddling the
+              {/* Live stat ledger, the approved forest ledger straddling the
                   photo's left edge: one dark rounded block, three stacked cells
                   (a row of three on mobile), big pale-gold numerals. */}
               <div
@@ -618,7 +618,7 @@ export default function VariantStagefront({
           </div>
         </section>
 
-        {/* ── Happening near you — regional auto-scroll rail (IP geo) ───────── */}
+        {/* ── Happening near you, regional auto-scroll rail (IP geo) ───────── */}
         {regional.list.length > 0 && (
           <section
             className="relative"
@@ -656,7 +656,7 @@ export default function VariantStagefront({
           </section>
         )}
 
-        {/* ── Section: MUN Across the Globe — copied verbatim from production ── */}
+        {/* ── Section: MUN Across the Globe, copied verbatim from production ── */}
         <section
           className="relative"
           style={{
@@ -815,7 +815,7 @@ function HeroTextLink({ href, label }: { href: string; label: string }) {
 }
 
 /**
- * "Find your seat" carousel — Aceternity-style center-focus carousel,
+ * "Find your seat" carousel, Aceternity-style center-focus carousel,
  * recovered from the pre-neumorphic build: large center slide, dimmed/scaled
  * side-peek neighbors, circular prev/next arrows below, keyboard + touch/drag
  * support, loops in both directions. Evolved so each slide leads with the
@@ -909,7 +909,7 @@ function RoleCarousel({ slides }: { slides: RoleSlide[] }) {
               />
 
               <div className="relative z-10 flex flex-col justify-end h-full p-7 sm:p-9">
-                {/* The ROLE — the dominant element on the slide. */}
+                {/* The ROLE, the dominant element on the slide. */}
                 <h3
                   style={{
                     fontFamily: SANS,

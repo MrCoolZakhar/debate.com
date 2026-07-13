@@ -29,12 +29,12 @@ export function useDraftNotices() {
 
   function pushDraftNotice(eventKey: string, outcome: DraftNoticeOutcome = 'unconfigured') {
     setDraftNotices(prev => {
-      // Dedupe: a notice for this event is already visible — don't stack another.
+      // Dedupe: a notice for this event is already visible, don't stack another.
       if (prev.some(n => n.eventKey === eventKey)) return prev;
       const id = `${eventKey}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
       setTimeout(() => setDraftNotices(p => p.filter(n => n.id !== id)), 8000);
       const next = [...prev, { id, eventKey, outcome }];
-      // Cap at MAX_VISIBLE distinct events — the oldest collapses first.
+      // Cap at MAX_VISIBLE distinct events, the oldest collapses first.
       return next.length > MAX_VISIBLE ? next.slice(next.length - MAX_VISIBLE) : next;
     });
   }
@@ -78,7 +78,7 @@ export function DraftNoticeList({
         >
           {n.outcome === 'sent-default' ? (
             <>
-              <span>Default email sent for &lsquo;{getEventLabel(n.eventKey)}&rsquo; —</span>
+              <span>Default email sent for &lsquo;{getEventLabel(n.eventKey)}&rsquo;:</span>
               <Link
                 href={`/manage/${conferenceSlug}/communications?event=${n.eventKey}`}
                 className="font-bold flex-shrink-0"
@@ -89,7 +89,7 @@ export function DraftNoticeList({
             </>
           ) : (
             <>
-              <span>No email was sent for &lsquo;{getEventLabel(n.eventKey)}&rsquo; —</span>
+              <span>No email was sent for &lsquo;{getEventLabel(n.eventKey)}&rsquo;:</span>
               {onTurnOn && (
                 <button
                   onClick={() => handleTurnOn(n.id, n.eventKey)}

@@ -1,5 +1,5 @@
 // Queues outbox rows for a platform event, resolving the conference's enabled
-// template (if any) against each recipient application. Pure DB helper — no
+// template (if any) against each recipient application. Pure DB helper, no
 // delivery happens here, just email_outbox rows with status 'pending'.
 
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -327,7 +327,7 @@ export async function turnOnDefaultEmail(
 
 // ── Chair invite email ──────────────────────────────────────────────────────
 // Unlike queueEventEmail, the recipient here has no application row yet (they
-// may not even have applied) — so this queues a single outbox row directly
+// may not even have applied), so this queues a single outbox row directly
 // against recipient_email rather than resolving applicationIds. Organizers can
 // customize the 'committee_chair_invite' template like any other event; a
 // missing/disabled template falls back to a built-in default so the invite

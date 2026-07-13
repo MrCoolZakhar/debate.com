@@ -3,12 +3,12 @@ import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'How to Chair Your First MUN Committee — Practical Guide for New Chairs',
+  title: 'How to Chair Your First MUN Committee: A Practical Guide for New Chairs',
   description:
     'Nervous about chairing your first Model UN committee? This step-by-step guide covers everything from preparation to running roll call, managing debate, and closing the session.',
   alternates: { canonical: 'https://gavelling.com/blog/how-to-chair-first-mun' },
   openGraph: {
-    title: 'How to Chair Your First MUN Committee — Practical Guide for New Chairs',
+    title: 'How to Chair Your First MUN Committee: A Practical Guide for New Chairs',
     description: 'A practical, encouraging guide for first-time MUN chairs.',
     url: 'https://gavelling.com/blog/how-to-chair-first-mun',
     siteName: 'Gavelling',
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
 const articleSchema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
-  headline: 'How to Chair Your First MUN Committee — Practical Guide for New Chairs',
+  headline: 'How to Chair Your First MUN Committee: A Practical Guide for New Chairs',
   description: 'A step-by-step guide for first-time MUN chairs covering preparation, opening, debate management, and closing.',
   url: 'https://gavelling.com/blog/how-to-chair-first-mun',
   datePublished: '2026-06-01',
@@ -72,7 +72,7 @@ export default function Article5() {
       <div style={s.page}>
         <div style={s.wrap}>
           <Link href="/blog" style={s.back}>← MUN Resources</Link>
-          <h1 style={s.h1}>How to Chair Your First MUN Committee — Practical Guide for New Chairs</h1>
+          <h1 style={s.h1}>How to Chair Your First MUN Committee: A Practical Guide for New Chairs</h1>
           <p style={s.meta}>By Gavelling · June 2026 · 11 min read</p>
           <article style={s.article}>
 
@@ -80,12 +80,12 @@ export default function Article5() {
               Every experienced MUN chair remembers the first time they sat behind the dais. The nerves. The weight of the gavel. The realisation that seventy people are about to look to you for direction.
             </p>
             <p style={s.p}>
-              Here is the truth: you do not need to be perfect. Delegates do not expect perfection — they expect fairness, composure, and forward momentum. This guide will give you everything you need to deliver all three.
+              Here is the truth: you do not need to be perfect. Delegates do not expect perfection. They expect fairness, composure, and forward momentum. This guide will give you everything you need to deliver all three.
             </p>
 
             <h2 style={s.h2}>1. You Don&apos;t Need to Know Everything</h2>
             <p style={s.p}>
-              The most common mistake first-time chairs make is trying to memorise every edge case in the rules of procedure before their first session. That leads to either paralysis or over-confidence — neither is useful.
+              The most common mistake first-time chairs make is trying to memorise every edge case in the rules of procedure before their first session. That leads to either paralysis or over-confidence, and neither is useful.
             </p>
             <p style={s.p}>
               What you do need:
@@ -99,7 +99,7 @@ export default function Article5() {
               Print your rules of procedure and keep them in front of you. No one expects you to have them memorised. Using them shows competence, not weakness.
             </p>
             <p style={s.p}>
-              See also: <Link href="/blog/mun-motions-explained" style={{ color: '#1B3828', fontWeight: 600 }}>MUN Motions Explained</Link> — a complete reference to keep open during your session.
+              See also: <Link href="/blog/mun-motions-explained" style={{ color: '#1B3828', fontWeight: 600 }}>MUN Motions Explained</Link>, a complete reference to keep open during your session.
             </p>
 
             <h2 style={s.h2}>2. Preparation Checklist (Before the Conference)</h2>
@@ -108,7 +108,7 @@ export default function Article5() {
             </p>
             <ul style={s.checklist}>
               {[
-                'Read the study guide for your committee topic at least twice. Know the fault lines — which blocs are likely to emerge, which delegations will be most vocal.',
+                'Read the study guide for your committee topic at least twice. Know the fault lines: which blocs are likely to emerge, which delegations will be most vocal.',
                 'Memorise the 5 most common motion types and their thresholds. You will use these constantly.',
                 'Prepare your delegate roster. Know which country each delegate represents and roughly how many you have.',
                 'Brief your co-chair on roles: who manages the GSL and speaker timing, who manages motion intake, who handles chat and document requests.',
@@ -127,13 +127,13 @@ export default function Article5() {
               <li style={s.li}><strong>Arrange the room.</strong> Placards at each seat. Name plates if available. Enough space for delegates to raise their placards clearly.</li>
               <li style={s.li}><strong>Open Gavelling and confirm your delegate list.</strong> Mark any last-minute additions or withdrawals.</li>
               <li style={s.li}><strong>Send the session code to delegates.</strong> Most conferences do this in a WhatsApp group or by posting a code on the board. Gavelling&apos;s 6-character code is designed to be easy to share and enter on any device.</li>
-              <li style={s.li}><strong>Confirm your co-chair is set up and knows their role.</strong> Run a quick verbal briefing — three sentences is enough.</li>
+              <li style={s.li}><strong>Confirm your co-chair is set up and knows their role.</strong> Run a quick verbal briefing. Three sentences is enough.</li>
               <li style={s.li}><strong>Test your gavel.</strong> This sounds trivial. It is not. A gavel that slips or a surface that absorbs the sound undermines your authority immediately.</li>
             </ul>
 
             <h2 style={s.h2}>4. Opening the Session</h2>
             <p style={s.p}>
-              Call the room to order firmly. Wait for silence — do not speak over noise. The gavel is your tool; use it.
+              Call the room to order firmly. Wait for silence; do not speak over noise. The gavel is your tool; use it.
             </p>
             <div style={s.script}>
               <p style={s.scriptText}>
@@ -149,7 +149,7 @@ export default function Article5() {
               If your committee has a single topic, announce it and move directly to opening the GSL. If there are multiple topics, entertain motions to set the agenda, hold the vote, and announce the result.
             </p>
 
-            <h2 style={s.h2}>5. Managing Debate — The First Hour</h2>
+            <h2 style={s.h2}>5. Managing Debate: The First Hour</h2>
             <p style={s.p}>
               The first hour sets the tone for the entire conference. Move quickly, be consistent, and project calm authority even if you feel anything but.
             </p>
@@ -162,7 +162,7 @@ export default function Article5() {
             </p>
             <h3 style={s.h3}>Recognising delegates</h3>
             <p style={s.p}>
-              Always use the formal recognition: <em>&quot;The chair recognises the delegation of [country].&quot;</em> Never use first names. Never say &quot;you&quot; — it is always &quot;the delegation.&quot; This formal language is not affectation — it creates the psychological structure that keeps delegates in procedural mode.
+              Always use the formal recognition: <em>&quot;The chair recognises the delegation of [country].&quot;</em> Never use first names. Never say &quot;you&quot;; it is always &quot;the delegation.&quot; This formal language is not affectation. It creates the psychological structure that keeps delegates in procedural mode.
             </p>
             <h3 style={s.h3}>Handling the first caucus motions</h3>
             <p style={s.p}>
@@ -170,7 +170,7 @@ export default function Article5() {
             </p>
             <h3 style={s.h3}>Keeping energy up</h3>
             <p style={s.p}>
-              Energy is your product. A slow committee drags — a lively one generates good debate. Move between speakers quickly. If the GSL is thin, consider prompting delegates to add themselves. If an unmod is running long with low productivity, call time early.
+              Energy is your product. A slow committee drags; a lively one generates good debate. Move between speakers quickly. If the GSL is thin, consider prompting delegates to add themselves. If an unmod is running long with low productivity, call time early.
             </p>
 
             <h2 style={s.h2}>6. When Things Go Wrong</h2>
@@ -179,15 +179,15 @@ export default function Article5() {
             </p>
             <h3 style={s.h3}>A delegate challenges your ruling</h3>
             <p style={s.p}>
-              This happens. Stay calm. The standard response is: <em>&quot;The chair&apos;s ruling stands. The committee will proceed.&quot;</em> If the delegate raises a formal Point of Order to appeal the ruling, acknowledge it and, if your rules allow, put the ruling to a committee vote. Do not become defensive or justify yourself at length — that signals uncertainty.
+              This happens. Stay calm. The standard response is: <em>&quot;The chair&apos;s ruling stands. The committee will proceed.&quot;</em> If the delegate raises a formal Point of Order to appeal the ruling, acknowledge it and, if your rules allow, put the ruling to a committee vote. Do not become defensive or justify yourself at length; that signals uncertainty.
             </p>
             <h3 style={s.h3}>Quorum drops mid-session</h3>
             <p style={s.p}>
-              If delegates leave and quorum is no longer met, you cannot continue formal procedure. Call a brief recess, contact absent delegates, and resume when quorum is restored. Gavelling tracks quorum automatically — you will know the moment it drops.
+              If delegates leave and quorum is no longer met, you cannot continue formal procedure. Call a brief recess, contact absent delegates, and resume when quorum is restored. Gavelling tracks quorum automatically, so you will know the moment it drops.
             </p>
             <h3 style={s.h3}>A delegate is out of order</h3>
             <p style={s.p}>
-              Interrupt immediately, firmly, and without elaboration: <em>&quot;The delegation is out of order. Please confine your remarks to the topic at hand.&quot;</em> If the behaviour continues: <em>&quot;The chair asks the delegation to yield the floor.&quot;</em> Do not let it continue — the room is watching how you respond.
+              Interrupt immediately, firmly, and without elaboration: <em>&quot;The delegation is out of order. Please confine your remarks to the topic at hand.&quot;</em> If the behaviour continues: <em>&quot;The chair asks the delegation to yield the floor.&quot;</em> Do not let it continue. The room is watching how you respond.
             </p>
             <h3 style={s.h3}>You don&apos;t know the answer to a procedural question</h3>
             <p style={s.p}>
@@ -196,7 +196,7 @@ export default function Article5() {
 
             <h2 style={s.h2}>7. Closing the Session</h2>
             <p style={s.p}>
-              When time is running short, give the committee a 5-minute warning so delegates can raise any final motions or questions. A motion to adjourn is standard — or the chair may close the session directly if the rules permit.
+              When time is running short, give the committee a 5-minute warning so delegates can raise any final motions or questions. A motion to adjourn is standard, or the chair may close the session directly if the rules permit.
             </p>
             <div style={s.script}>
               <p style={s.scriptText}>
@@ -210,7 +210,7 @@ export default function Article5() {
             <h2 style={s.h2}>8. After the Session</h2>
             <ul style={s.ul}>
               <li style={s.li}><strong>Debrief with your co-chair.</strong> What went well? What would you do differently? This 10-minute conversation is how you improve.</li>
-              <li style={s.li}><strong>Review delegate feedback.</strong> Gavelling collects optional delegate feedback at session end. Reading it — even the harsh comments — accelerates your development faster than anything else.</li>
+              <li style={s.li}><strong>Review delegate feedback.</strong> Gavelling collects optional delegate feedback at session end. Reading it, even the harsh comments, accelerates your development faster than anything else.</li>
               <li style={s.li}><strong>Archive your notes.</strong> Gavelling stores the session record automatically: speaker history, motions, votes, chat. This is useful for writing committee reports and for your own review.</li>
             </ul>
 

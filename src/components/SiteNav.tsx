@@ -74,7 +74,7 @@ export default function SiteNav({ logoOverride, overlay = false }: SiteNavProps 
     <>
       {/*
         Floating pill nav (desktop only). Fixed to the viewport so it stays visible
-        while the rest of the header — logo (left), language toggle + auth (right) —
+        while the rest of the header, logo (left), language toggle + auth (right) —
         scrolls away with the page. The 72px-tall wrapper vertically aligns the pill
         with the logo/CTA row at scroll top; pointer-events are limited to the pill
         itself so the transparent band never blocks clicks on the content behind it.
@@ -371,7 +371,7 @@ export default function SiteNav({ logoOverride, overlay = false }: SiteNavProps 
                   cursor: 'pointer',
                 }}
               >
-                {lang === 'en' ? `EN — ${t('settings_english')}` : lang === 'es' ? `ES — ${t('settings_spanish')}` : lang === 'fr' ? `FR — ${t('settings_french')}` : 'AR — العربية'}
+                {lang === 'en' ? `EN: ${t('settings_english')}` : lang === 'es' ? `ES: ${t('settings_spanish')}` : lang === 'fr' ? `FR: ${t('settings_french')}` : 'AR: العربية'}
               </button>
             ))}
           </div>

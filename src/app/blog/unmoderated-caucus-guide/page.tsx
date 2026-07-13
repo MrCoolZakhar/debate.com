@@ -4,11 +4,11 @@ import type { Metadata } from 'next';
 import React from 'react';
 
 export const metadata: Metadata = {
-  title: 'Unmoderated Caucus in MUN — What It Is and How to Use It',
+  title: 'Unmoderated Caucus in MUN: What It Is and How to Use It',
   description: 'Learn what an unmoderated caucus is in Model UN, how delegates should use the time, and tips for chairs on managing unmod periods effectively.',
   alternates: { canonical: 'https://gavelling.com/blog/unmoderated-caucus-guide' },
   openGraph: {
-    title: 'Unmoderated Caucus in MUN — What It Is and How to Use It',
+    title: 'Unmoderated Caucus in MUN: What It Is and How to Use It',
     description: 'The complete guide to unmoderated caucuses for MUN chairs and delegates.',
     url: 'https://gavelling.com/blog/unmoderated-caucus-guide',
     siteName: 'Gavelling',
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
 const articleSchema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
-  headline: 'Unmoderated Caucus in MUN — What It Is and How to Use It',
+  headline: 'Unmoderated Caucus in MUN: What It Is and How to Use It',
   description: 'The complete guide to unmoderated caucuses for MUN chairs and delegates.',
   url: 'https://gavelling.com/blog/unmoderated-caucus-guide',
   datePublished: '2026-06-07',
@@ -70,32 +70,32 @@ export default function Article() {
       <div style={s.page}>
         <div style={s.wrap}>
           <Link href="/blog" style={s.back}>← MUN Resources</Link>
-          <h1 style={s.h1}>Unmoderated Caucus in MUN — What It Is and How to Use It</h1>
+          <h1 style={s.h1}>Unmoderated Caucus in MUN: What It Is and How to Use It</h1>
           <p style={s.meta}>By Gavelling · June 2026 · 8 min read</p>
           <article style={s.article}>
 
-            <p style={s.p}>If the moderated caucus is structured debate, the unmoderated caucus is everything else. It is the unofficial heartbeat of Model UN — the twenty minutes where working papers get drafted, blocs form, deals are made, and delegates who have not spoken once during formal debate suddenly become the most influential people in the room.</p>
+            <p style={s.p}>If the moderated caucus is structured debate, the unmoderated caucus is everything else. It is the unofficial heartbeat of Model UN: the twenty minutes where working papers get drafted, blocs form, deals are made, and delegates who have not spoken once during formal debate suddenly become the most influential people in the room.</p>
             <p style={s.p}>For new delegates and first-time chairs alike, the unmoderated caucus can feel chaotic. This guide explains exactly what it is, how to make the most of it, and how chairs should manage it.</p>
 
             <h2 style={s.h2}>What Is an Unmoderated Caucus?</h2>
-            <p style={s.p}>An unmoderated caucus (often called an "unmod") is a recess from formal debate. The committee suspends its rules of procedure for a set period — typically ten to thirty minutes — and delegates are free to leave their seats, form groups, and negotiate informally. No speakers list, no timer per delegate, no points of order. Just conversation.</p>
+            <p style={s.p}>An unmoderated caucus (often called an "unmod") is a recess from formal debate. The committee suspends its rules of procedure for a set period (typically ten to thirty minutes) and delegates are free to leave their seats, form groups, and negotiate informally. No speakers list, no timer per delegate, no points of order. Just conversation.</p>
             <p style={s.p}>The purpose is always the same: to advance work that formal debate cannot accomplish quickly. This almost always means drafting working papers or merging blocs.</p>
 
             <h2 style={s.h2}>How to Propose an Unmoderated Caucus</h2>
-            <p style={s.p}>Any delegate can raise a placard and propose: "I move for an unmoderated caucus of [duration]." Some conferences require a stated purpose; others do not. The motion requires a simple majority to pass. There is no speakers list, no amendment — it either passes or fails.</p>
+            <p style={s.p}>Any delegate can raise a placard and propose: "I move for an unmoderated caucus of [duration]." Some conferences require a stated purpose; others do not. The motion requires a simple majority to pass. There is no speakers list, no amendment. It either passes or fails.</p>
             <div style={s.callout}><p style={s.calloutText}>Good timing matters. Proposing an unmod immediately after opening speeches, before any working papers exist, signals that you are ready to lead drafting. Proposing one late in the session when resolution text is nearly finalised signals bloc coordination.</p></div>
 
             <h2 style={s.h2}>What Delegates Should Do During an Unmod</h2>
             <p style={s.p}>The worst thing a delegate can do during an unmoderated caucus is sit at their seat and wait. Here is how experienced delegates use the time:</p>
             <ul style={s.ul}>
               <li style={s.li}><strong>Find your natural bloc.</strong> Identify delegates with similar positions from their opening speeches and approach them directly.</li>
-              <li style={s.li}><strong>Start a working paper.</strong> Even a rough outline — three operative clauses on a shared doc or notepad — gives your bloc something to rally around.</li>
+              <li style={s.li}><strong>Start a working paper.</strong> Even a rough outline (three operative clauses on a shared doc or notepad) gives your bloc something to rally around.</li>
               <li style={s.li}><strong>Approach opposing blocs.</strong> Real diplomacy happens here. You will not move an opposing bloc during formal debate. One short conversation in an unmod can shift the whole dynamic.</li>
               <li style={s.li}><strong>Talk to the chair.</strong> Chairs are accessible during unmods. If you have a procedural question, a complaint about bloc dynamics, or want to flag an issue, this is the moment.</li>
             </ul>
 
             <h2 style={s.h2}>How Long Should an Unmoderated Caucus Be?</h2>
-            <p style={s.p}>Most delegates propose fifteen or twenty minutes. Ten minutes is too short to accomplish anything meaningful — by the time people form groups, five minutes have passed. Thirty minutes is appropriate when you are merging two large working papers. More than thirty minutes usually means the committee has lost focus, and chairs should be cautious about passing such motions.</p>
+            <p style={s.p}>Most delegates propose fifteen or twenty minutes. Ten minutes is too short to accomplish anything meaningful. By the time people form groups, five minutes have passed. Thirty minutes is appropriate when you are merging two large working papers. More than thirty minutes usually means the committee has lost focus, and chairs should be cautious about passing such motions.</p>
 
             <h2 style={s.h2}>Chair's Role During an Unmoderated Caucus</h2>
             <p style={s.p}>You are not on duty in the traditional sense, but you are not idle either. Good chairs use the unmod to:</p>
@@ -108,7 +108,7 @@ export default function Article() {
             <p style={s.p}>When time expires, bring the committee back to order with your gavel and announce: "The unmoderated caucus has concluded. The committee returns to formal debate. The next speaker on the General Speakers List is the delegate of Australia."</p>
 
             <h2 style={s.h2}>The Difference Between Unmod, Consultation, and Tour de Table</h2>
-            <p style={s.p}>Some conferences use "consultation of the whole" as a variant — essentially a named unmod. Tour de Table is different: every delegation speaks in a fixed order, typically alphabetical, for a short fixed time. It is more structured than an unmod but less structured than the GSL. Not all conferences use tour de table; check your rules of procedure.</p>
+            <p style={s.p}>Some conferences use "consultation of the whole" as a variant, essentially a named unmod. Tour de Table is different: every delegation speaks in a fixed order, typically alphabetical, for a short fixed time. It is more structured than an unmod but less structured than the GSL. Not all conferences use tour de table; check your rules of procedure.</p>
 
             <h2 style={s.h2}>Common Mistakes</h2>
             <ul style={s.ul}>

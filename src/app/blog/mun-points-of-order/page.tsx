@@ -4,12 +4,12 @@ import type { Metadata } from 'next';
 import React from 'react';
 
 export const metadata: Metadata = {
-  title: 'Points of Order in MUN — When to Use Them and When Not To',
+  title: 'Points of Order in MUN: When to Use Them and When Not To',
   description: 'A complete guide to points of order in Model UN: what qualifies, how to raise them correctly, how chairs should rule, and the difference between a point of order and a point of information.',
   alternates: { canonical: 'https://gavelling.com/blog/mun-points-of-order' },
   openGraph: {
-    title: 'Points of Order in MUN — When to Use Them and When Not To',
-    description: 'Master points of order in MUN — for delegates and chairs.',
+    title: 'Points of Order in MUN: When to Use Them and When Not To',
+    description: 'Master points of order in MUN, for delegates and chairs.',
     url: 'https://gavelling.com/blog/mun-points-of-order',
     siteName: 'Gavelling',
     images: [{ url: 'https://gavelling.com/og-image.png', width: 1200, height: 630 }],
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
 const articleSchema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
-  headline: 'Points of Order in MUN — When to Use Them and When Not To',
+  headline: 'Points of Order in MUN: When to Use Them and When Not To',
   description: 'Complete guide to points of order in MUN.',
   url: 'https://gavelling.com/blog/mun-points-of-order',
   datePublished: '2026-06-07',
@@ -70,14 +70,14 @@ export default function Article() {
       <div style={s.page}>
         <div style={s.wrap}>
           <Link href="/blog" style={s.back}>← MUN Resources</Link>
-          <h1 style={s.h1}>Points of Order in MUN — When to Use Them and When Not To</h1>
+          <h1 style={s.h1}>Points of Order in MUN: When to Use Them and When Not To</h1>
           <p style={s.meta}>By Gavelling · June 2026 · 8 min read</p>
           <article style={s.article}>
 
-            <p style={s.p}>The point of order is one of the most misused procedures in Model UN. Raised correctly, it demonstrates procedural mastery and earns chairs' respect. Raised incorrectly — or too frequently — it signals inexperience, irritates the room, and wastes everyone's time. This guide clarifies exactly what a point of order is, when it applies, and how both delegates and chairs should handle it.</p>
+            <p style={s.p}>The point of order is one of the most misused procedures in Model UN. Raised correctly, it demonstrates procedural mastery and earns chairs' respect. Raised incorrectly, or too frequently, it signals inexperience, irritates the room, and wastes everyone's time. This guide clarifies exactly what a point of order is, when it applies, and how both delegates and chairs should handle it.</p>
 
             <h2 style={s.h2}>What Is a Point of Order?</h2>
-            <p style={s.p}>A point of order is raised when a delegate believes the chair has made a procedural error — specifically, that the rules of procedure are being violated. It is the only point that can interrupt a speaker mid-speech (at most conferences). This exceptional power comes with a correspondingly high bar: it must address a genuine procedural violation, not a substantive disagreement.</p>
+            <p style={s.p}>A point of order is raised when a delegate believes the chair has made a procedural error: specifically, that the rules of procedure are being violated. It is the only point that can interrupt a speaker mid-speech (at most conferences). This exceptional power comes with a correspondingly high bar: it must address a genuine procedural violation, not a substantive disagreement.</p>
             <div style={s.callout}><p style={s.calloutText}>The test is simple: does the chair's action or ruling violate a specific rule in the rules of procedure document? If yes, a point of order is appropriate. If you simply disagree with the chair's judgement call, it is not.</p></div>
 
             <h2 style={s.h2}>Valid Reasons to Raise a Point of Order</h2>
@@ -104,14 +104,14 @@ export default function Article() {
             <p style={s.p}>State the specific rule being violated if you know it. A point of order that cites a specific rule is significantly more credible than a vague objection.</p>
 
             <h2 style={s.h2}>How Chairs Should Rule on Points of Order</h2>
-            <p style={s.p}>When a point of order is raised, the chair must rule on it immediately — there is no deliberation, no putting it to a committee vote. The chair states:</p>
+            <p style={s.p}>When a point of order is raised, the chair must rule on it immediately. There is no deliberation, no putting it to a committee vote. The chair states:</p>
             <div style={s.script}><p style={s.scriptText}>"The chair rules this point of order well-taken. [Corrective action stated.] The committee will continue."</p></div>
             <p style={s.p}>Or:</p>
             <div style={s.script}><p style={s.scriptText}>"The chair rules this point of order not well-taken. [Brief reason if appropriate.] The committee will continue."</p></div>
             <p style={s.p}>New chairs often feel pressure to accept every point of order to avoid conflict. Do not. If the point does not identify a genuine procedural violation, rule it not well-taken firmly but politely. Accepting spurious points of order encourages more of them.</p>
 
             <h2 style={s.h2}>Appealing a Chair's Ruling</h2>
-            <p style={s.p}>Most rules of procedure allow a delegation to appeal the chair's ruling on a point of order. The appeal is put to a committee vote — if a majority votes to overturn the chair, the ruling is reversed. This is a nuclear option used rarely in practice. Chairs who are consistently overturned on appeals have a credibility problem; delegates who appeal frivolously are burning political capital they need for resolution votes.</p>
+            <p style={s.p}>Most rules of procedure allow a delegation to appeal the chair's ruling on a point of order. The appeal is put to a committee vote: if a majority votes to overturn the chair, the ruling is reversed. This is a nuclear option used rarely in practice. Chairs who are consistently overturned on appeals have a credibility problem; delegates who appeal frivolously are burning political capital they need for resolution votes.</p>
 
             <h2 style={s.h2}>Point of Order vs. Other Points</h2>
             <ul style={s.ul}>
@@ -122,11 +122,11 @@ export default function Article() {
             </ul>
 
             <h2 style={s.h2}>The Credibility Cost</h2>
-            <p style={s.p}>Every point of order you raise is a signal to the chair and to the committee. Raise one legitimate point of order and your procedural knowledge is respected. Raise three spurious ones in a single session and you become the delegate who cried wolf — future valid points are greeted with skepticism. Use this tool deliberately, not reflexively.</p>
+            <p style={s.p}>Every point of order you raise is a signal to the chair and to the committee. Raise one legitimate point of order and your procedural knowledge is respected. Raise three spurious ones in a single session and you become the delegate who cried wolf, and future valid points are greeted with skepticism. Use this tool deliberately, not reflexively.</p>
 
             <RelatedGuides currentSlug="mun-points-of-order" />
             <div style={s.cta}>
-              <p style={s.ctaText}>Gavelling keeps your committee running on procedure — timers, speakers lists, and motions all enforced automatically.</p>
+              <p style={s.ctaText}>Gavelling keeps your committee running on procedure: timers, speakers lists, and motions all enforced automatically.</p>
               <a href="https://gavelling.com" style={s.ctaLink}>Try Gavelling free →</a>
             </div>
           </article>

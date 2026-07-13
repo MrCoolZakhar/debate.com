@@ -451,7 +451,7 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
       {isFull ? (
         <div className="pointer-events-none flex items-center justify-center px-4 py-3 bg-[#FAF8F3] border border-[#B6871F]/30 rounded-xl">
           <p className="text-sm text-amber-400 font-semibold text-center">
-            Queue full — {maxSpeakers} speaker{maxSpeakers !== 1 ? 's' : ''} fit in remaining time
+            Queue full: {maxSpeakers} speaker{maxSpeakers !== 1 ? 's' : ''} fit in remaining time
           </p>
         </div>
       ) : (
@@ -1243,7 +1243,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   committeePhaseRef.current = committee?.phase ?? '';
 
   useEffect(() => {
-    if (committee) document.title = `${abbreviateCommitteeName(committee.name)} — Gavelling Session`;
+    if (committee) document.title = `${abbreviateCommitteeName(committee.name)} - Gavelling Session`;
     return () => { document.title = 'Gavelling'; };
   }, [committee?.name]);
 
@@ -2172,7 +2172,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
             </button>
           </div>
         ) : (
-          <span className="text-[#9A8A78] text-xs hidden sm:block truncate flex-1">{getCommitteeDisplayName(committee.name, language)} — {committee.topic}</span>
+          <span className="text-[#9A8A78] text-xs hidden sm:block truncate flex-1">{getCommitteeDisplayName(committee.name, language)}: {committee.topic}</span>
         )}
 
 
@@ -2255,7 +2255,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       )}
       {!sessionEnded && sessionSuspended && suspendTab === 'session' && (
         <div className="shrink-0 px-4 py-2 text-center text-sm font-bold" style={{ backgroundColor: '#1B3828', borderBottom: '1px solid #3D7A52', color: '#EED98A', fontFamily: "'Outfit', sans-serif" }}>
-          Session is suspended — delegates cannot see this view
+          Session is suspended, delegates cannot see this view
         </div>
       )}
       {/* Waiting Room — delegates awaiting chair admission (chair-approval gate) */}
@@ -2402,7 +2402,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               <aside data-tutorial="speakers-sidebar" className="w-[22rem] flex flex-col overflow-hidden shrink-0" style={{ backgroundColor: '#1B3828', borderRight: '1px solid #3D7A52' }}>
                 {caucusMaxReachedMsg && (
                   <div className="shrink-0 px-3 py-2 bg-amber-900/20 border-b border-amber-700/40 text-amber-300 text-xs text-center font-semibold">
-                    Maximum speakers reached — add more delegates if time remains after current speakers.
+                    Maximum speakers reached. Add more delegates if time remains after current speakers.
                   </div>
                 )}
                 {(caucusPanelLocked || committee.caucus?.type === 'moderated') ? (
@@ -2745,7 +2745,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                   </div>}
                   {belowQuorum && (
                     <p className="text-xs text-[#8B2020] text-center py-2">
-                      ⚠️ Below quorum — speakers cannot be added until {Math.ceil(quorumFraction * totalCount)} delegates are present.
+                      ⚠️ Below quorum: speakers cannot be added until {Math.ceil(quorumFraction * totalCount)} delegates are present.
                     </p>
                   )}
                   {!isViewOnly && (

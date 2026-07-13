@@ -292,7 +292,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   }, [code]);
 
   useEffect(() => {
-    if (committee) document.title = `${abbreviateCommitteeName(committee.name)} — Voting`;
+    if (committee) document.title = `${abbreviateCommitteeName(committee.name)}: Voting`;
     return () => { document.title = 'Gavelling'; };
   }, [committee?.name]);
 

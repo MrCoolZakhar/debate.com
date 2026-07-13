@@ -71,7 +71,7 @@ interface Application {
 }
 
 // Pool accounting (poolForRole, fillFreeSpots, releasePoolSpot, POOL_SPOTS_COLUMN)
-// is imported from delegationShared.tsx — the canonical location (F: fillFreeSpots
+// is imported from delegationShared.tsx, the canonical location (F: fillFreeSpots
 // consolidation). This page no longer keeps its own copy.
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -97,7 +97,7 @@ function RoleIcon({ role, size = 10 }: { role: string; size?: number }) {
   return <Icon size={size} strokeWidth={2.5} />;
 }
 
-/** Small muted chip for applications with no linked profile (user_id null) — imported, unclaimed. */
+/** Small muted chip for applications with no linked profile (user_id null), imported, unclaimed. */
 function NotRegisteredChip() {
   return (
     <span
@@ -119,7 +119,7 @@ function StatusIcon({ status, size = 10 }: { status: string; size?: number }) {
   return <Icon size={size} strokeWidth={2.5} />;
 }
 
-/** Committee shorthand — abbreviation when set, else a monogram of the name. */
+/** Committee shorthand, abbreviation when set, else a monogram of the name. */
 function committeeAbbr(c: { name: string; abbreviation: string | null } | null | undefined): string {
   if (!c) return '—';
   if (c.abbreviation) return c.abbreviation;
@@ -209,11 +209,11 @@ export default function ApplicationsPage() {
   const [rejectNote, setRejectNote] = useState('');
   const [roleConfigs, setRoleConfigs] = useState<RoleConfigLite[]>([]);
   const [reviewId, setReviewId] = useState<string | null>(null);
-  // Conferences done in any capacity, per user — count of their mun_cv_entries
+  // Conferences done in any capacity, per user, count of their mun_cv_entries
   // rows (the same source profiles.mun_experience_level is derived from).
   const [cvCounts, setCvCounts] = useState<Record<string, number>>({});
   const [actionError, setActionError] = useState('');
-  // App ids with a write in flight — double-click guard for row actions.
+  // App ids with a write in flight, double-click guard for row actions.
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
   const { draftNotices, pushDraftNotice, dismissDraftNotice } = useDraftNotices();
   const { confirm, modal: confirmModal } = useConfirmModal();
@@ -228,7 +228,7 @@ export default function ApplicationsPage() {
     });
   }
 
-  // `silent` refetches never touch the page-level loading flag — they
+  // `silent` refetches never touch the page-level loading flag, they
   // reconcile local optimistic state with what the server actually computed
   // (fillFreeSpots promotions, etc) without wiping the list.
   const loadApplications = useCallback(async (opts?: { silent?: boolean }) => {
@@ -261,14 +261,14 @@ export default function ApplicationsPage() {
         .eq('conference_id', conference.id),
     ]);
 
-    if (seq !== loadSeq.current) return; // stale response — a newer load superseded this one
+    if (seq !== loadSeq.current) return; // stale response, a newer load superseded this one
 
     const apps = (appRes.data ?? []) as unknown as Application[];
     setApplications(apps);
     setRoleConfigs((cfgRes.data ?? []) as unknown as RoleConfigLite[]);
     setLoading(false);
 
-    // Batched MUN-history counts — ONE query for every visible applicant.
+    // Batched MUN-history counts, ONE query for every visible applicant.
     const userIds = Array.from(new Set(apps.map(a => a.user_id).filter((id): id is string => !!id)));
     if (userIds.length > 0) {
       const { data: cvRows } = await supabase
@@ -290,7 +290,7 @@ export default function ApplicationsPage() {
 
   // ── Optimistic row helpers ──────────────────────────────────────────────────
   // Patch one application in place (the UI updates instantly), and restore the
-  // exact prior row on rollback — never the whole list, so concurrent actions
+  // exact prior row on rollback, never the whole list, so concurrent actions
   // on other rows are untouched.
   function applyRow(appId: string, patch: Partial<Application>) {
     setApplications(cur => cur.map(a => (a.id === appId ? { ...a, ...patch } : a)));
@@ -314,11 +314,11 @@ export default function ApplicationsPage() {
       const { error } = await supabase.from('applications').update({ status: 'accepted' }).eq('id', appId);
       if (error) throw error;
 
-      // Secondary effects — a failure here must NOT roll back the accept.
+      // Secondary effects, a failure here must NOT roll back the accept.
       try {
         const result = await queueEventEmail(supabase, conference.id, 'application_accepted', [appId]);
         notifyIfNeeded(result, pushDraftNotice);
-        // Consolidation: application_accepted wins over payment_available —
+        // Consolidation: application_accepted wins over payment_available.
         // payment_available only sends alone for this person when acceptance
         // actually resolved to nothing (off/unconfigured) for them.
         const acceptedIds = new Set(result.queuedApplicationIds ?? []);
@@ -329,9 +329,9 @@ export default function ApplicationsPage() {
           notifyIfNeeded(payResult, pushDraftNotice);
         }
 
-        // F13: acceptance is when auto-cover runs — newly accepted pool members
+        // F13: acceptance is when auto-cover runs, newly accepted pool members
         // absorb any free delegation-purchased spots, oldest-first. The fill
-        // helper emails spot_received for whoever it covers — suppress the
+        // helper emails spot_received for whoever it covers, suppressing the
         // just-accepted person's own id so they don't get that on top of
         // application_accepted (rule one wins) if the same action covers them.
         const pool = poolForRole(prevRow.role);
@@ -339,15 +339,15 @@ export default function ApplicationsPage() {
           await fillFreeSpots(supabase, conference.id, prevRow.society_id, pool, { suppressIds: acceptedIds });
         }
       } catch {
-        setActionError('Accepted, but a follow-up step (email / auto-cover) failed — refresh to verify.');
+        setActionError('Accepted, but a follow-up step (email / auto-cover) failed. Refresh to verify.');
       }
 
-      // Auto-cover may have promoted OTHER members to paid — reconcile silently.
+      // Auto-cover may have promoted OTHER members to paid, reconcile silently.
       await loadApplications({ silent: true });
     })()
       .catch(() => {
         restoreRow(prevRow);
-        setActionError('Could not accept the application — the change was reverted. Please try again.');
+        setActionError('Could not accept the application. The change was reverted. Please try again.');
       })
       .finally(() => markBusy(appId, false));
   }
@@ -358,7 +358,7 @@ export default function ApplicationsPage() {
     if (!prevRow) return;
     const pool = poolForRole(prevRow.role);
     // F13: rejecting a pool-covered (not self-paid) paid member releases
-    // their spot back to the delegation — it stays purchased, just open again.
+    // their spot back to the delegation, it stays purchased, just open again.
     const releasesSpot = prevRow.payment_status === 'paid' && !prevRow.self_paid && !!prevRow.society_id && !!pool;
 
     const updates: { status: string; organizer_note: string | null; payment_status?: string } = {
@@ -388,7 +388,7 @@ export default function ApplicationsPage() {
     })()
       .catch(() => {
         restoreRow(prevRow);
-        setActionError('Could not reject the application — the change was reverted. Please try again.');
+        setActionError('Could not reject the application. The change was reverted. Please try again.');
       })
       .finally(() => markBusy(appId, false));
   }
@@ -399,7 +399,7 @@ export default function ApplicationsPage() {
     const { confirmed } = await confirm({
       title: 'Reject this application?',
       body: releasesSpot
-        ? "Their payment used a delegation-purchased spot — rejecting will release that spot back to the delegation as open."
+        ? "Their payment used a delegation-purchased spot. Rejecting will release that spot back to the delegation as open."
         : "This rejects the application. You can reinstate it later if needed.",
       confirmLabel: 'Reject',
       danger: true,
@@ -424,7 +424,7 @@ export default function ApplicationsPage() {
     })()
       .catch(() => {
         restoreRow(prevRow);
-        setActionError('Could not reinstate the application — the change was reverted. Please try again.');
+        setActionError('Could not reinstate the application. The change was reverted. Please try again.');
       })
       .finally(() => markBusy(appId, false));
   }
@@ -558,7 +558,7 @@ export default function ApplicationsPage() {
       const { error } = await supabase.from('applications').update({ payment_status: 'paid', self_paid: true }).eq('id', app.id);
       if (error) throw error;
 
-      // Secondary effects — a failure here must NOT roll back the payment mark.
+      // Secondary effects, a failure here must NOT roll back the payment mark.
       try {
         const pool = poolForRole(app.role);
         if (app.society_id && pool) {
@@ -572,15 +572,15 @@ export default function ApplicationsPage() {
         const result = await queueEventEmail(supabase, conference.id, 'payment_received', [app.id]);
         notifyIfNeeded(result, pushDraftNotice);
       } catch {
-        setActionError('Marked paid, but a follow-up step (spot update / email) failed — refresh to verify.');
+        setActionError('Marked paid, but a follow-up step (spot update / email) failed. Refresh to verify.');
       }
 
-      // fillFreeSpots may have promoted OTHER members to paid — reconcile silently.
+      // fillFreeSpots may have promoted OTHER members to paid, reconcile silently.
       await loadApplications({ silent: true });
     })()
       .catch(() => {
         restoreRow(prevRow);
-        setActionError('Could not mark the application paid — the change was reverted. Please try again.');
+        setActionError('Could not mark the application paid. The change was reverted. Please try again.');
       })
       .finally(() => markBusy(app.id, false));
   }
@@ -614,12 +614,12 @@ export default function ApplicationsPage() {
           await supabase.from('societies').update({ [spotsColumn]: Math.max(0, current - 1) }).eq('id', app.society_id);
         }
       } catch {
-        setActionError('Marked unpaid, but the delegation spot count could not be updated — refresh to verify.');
+        setActionError('Marked unpaid, but the delegation spot count could not be updated. Refresh to verify.');
       }
     })()
       .catch(() => {
         restoreRow(prevRow);
-        setActionError('Could not mark the application unpaid — the change was reverted. Please try again.');
+        setActionError('Could not mark the application unpaid. The change was reverted. Please try again.');
       })
       .finally(() => markBusy(app.id, false));
   }
@@ -646,7 +646,7 @@ export default function ApplicationsPage() {
     })()
       .catch(() => {
         restoreRow(prevRow);
-        setActionError('Could not waive the fee — the change was reverted. Please try again.');
+        setActionError('Could not waive the fee. The change was reverted. Please try again.');
       })
       .finally(() => markBusy(app.id, false));
   }
@@ -673,7 +673,7 @@ export default function ApplicationsPage() {
     })()
       .catch(() => {
         restoreRow(prevRow);
-        setActionError('Could not remove the waiver — the change was reverted. Please try again.');
+        setActionError('Could not remove the waiver. The change was reverted. Please try again.');
       })
       .finally(() => markBusy(app.id, false));
   }
@@ -862,7 +862,7 @@ export default function ApplicationsPage() {
                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
               >
-                {/* Photo band — fills the full height of the card's left edge */}
+                {/* Photo band, fills the full height of the card's left edge */}
                 <div className="flex-shrink-0 relative" style={{ width: 80, minHeight: 96 }}>
                   {app.profiles?.avatar_url ? (
                     <img src={app.profiles.avatar_url} alt={name} className="absolute inset-0 w-full h-full object-cover" />
@@ -947,14 +947,14 @@ export default function ApplicationsPage() {
                   </p>
                 )}
 
-                {/* Row 3: preferences (delegates only) — committee acronym + country flag */}
+                {/* Row 3: preferences (delegates only), committee acronym + country flag */}
                 {isDelegate && prefs.length > 0 && (
                   <div className="flex flex-wrap gap-2 mt-2">
                     {prefs.slice(0, 2).map(p => (
                       <span
                         key={p.preference_order}
                         className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs"
-                        title={`${p.conference_committees?.name ?? 'Unknown'} — ${p.country_name}`}
+                        title={`${p.conference_committees?.name ?? 'Unknown'}, ${p.country_name}`}
                         style={{ backgroundColor: 'rgba(27,56,40,0.06)', border: '1px solid rgba(27,56,40,0.1)', color: '#1C1410', fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}
                       >
                         {p.preference_order}. <span className="font-semibold">{committeeAbbr(p.conference_committees)}</span>
@@ -964,7 +964,7 @@ export default function ApplicationsPage() {
                   </div>
                 )}
 
-                {/* Row 3b: assignment (assigned only) — acronym + flag, full detail in tooltip */}
+                {/* Row 3b: assignment (assigned only), acronym + flag, full detail in tooltip */}
                 {app.status === 'assigned' && (app.assigned_committee || app.assigned_country_name) && (
                   <div className="flex flex-wrap gap-2 mt-2">
                     <span
@@ -979,7 +979,7 @@ export default function ApplicationsPage() {
                   </div>
                 )}
 
-                {/* Row 4: footer — review opens the modal with details + all actions */}
+                {/* Row 4: footer, review opens the modal with details + all actions */}
                 <div className="flex flex-wrap items-center gap-2 mt-3 pt-3" style={{ borderTop: '1px solid #F0EDE6' }}>
                   <button
                     onClick={() => setReviewId(app.id)}
@@ -1004,7 +1004,7 @@ export default function ApplicationsPage() {
         </div>
       )}
 
-      {/* Review modal — application details, custom answers and all actions.
+      {/* Review modal, application details, custom answers and all actions.
           Rendered before confirmModal so confirm dialogs (same z-50) stack on top. */}
       {(() => {
         const app = applications.find(a => a.id === reviewId);
@@ -1022,7 +1022,7 @@ export default function ApplicationsPage() {
         const questions = roleConfig?.custom_questions ?? [];
         const answers = app.custom_answers ?? {};
         const closeReview = () => { setReviewId(null); setRejectingId(null); setRejectNote(''); };
-        // Double-click guard — the row's controls grey out while its write is in flight.
+        // Double-click guard, the row's controls grey out while its write is in flight.
         const rowBusy = busyIds.has(app.id);
         const busyStyle: React.CSSProperties = rowBusy ? { opacity: 0.5, pointerEvents: 'none' } : {};
 
@@ -1208,7 +1208,7 @@ export default function ApplicationsPage() {
                 </p>
               )}
 
-              {/* Preferences (delegates) — full list */}
+              {/* Preferences (delegates), full list */}
               {isDelegate && prefs.length > 0 && (
                 <div className="mb-4">
                   <p className="flex items-center gap-2 text-xs mb-2" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", fontWeight: 700, letterSpacing: '0.12em' }}>
@@ -1220,7 +1220,7 @@ export default function ApplicationsPage() {
                       <span
                         key={p.preference_order}
                         className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs"
-                        title={`${p.conference_committees?.name ?? 'Unknown'} — ${p.country_name}`}
+                        title={`${p.conference_committees?.name ?? 'Unknown'}, ${p.country_name}`}
                         style={{ backgroundColor: 'rgba(27,56,40,0.06)', border: '1px solid rgba(27,56,40,0.1)', color: '#1C1410', fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}
                       >
                         {p.preference_order}. <span className="font-semibold">{committeeAbbr(p.conference_committees)}</span>

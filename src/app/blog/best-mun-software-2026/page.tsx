@@ -3,12 +3,12 @@ import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Best MUN Software in 2026 — Full Comparison for Chairs and Directors',
+  title: 'Best MUN Software in 2026: Full Comparison for Chairs and Directors',
   description:
     'Comparing the best Model UN committee management tools in 2026: Gavelling, spreadsheets, paper procedures, and other options. Which is right for your conference?',
   alternates: { canonical: 'https://gavelling.com/blog/best-mun-software-2026' },
   openGraph: {
-    title: 'Best MUN Software in 2026 — Full Comparison for Chairs and Directors',
+    title: 'Best MUN Software in 2026: Full Comparison for Chairs and Directors',
     description: 'Comparing dedicated MUN tools, spreadsheets, and timer apps for 2026.',
     url: 'https://gavelling.com/blog/best-mun-software-2026',
     siteName: 'Gavelling',
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
 const articleSchema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
-  headline: 'Best MUN Software in 2026 — Full Comparison for Chairs and Directors',
+  headline: 'Best MUN Software in 2026: Full Comparison for Chairs and Directors',
   description: 'Comparing the best Model UN committee management tools in 2026.',
   url: 'https://gavelling.com/blog/best-mun-software-2026',
   datePublished: '2026-06-01',
@@ -70,12 +70,12 @@ export default function Article2() {
       <div style={s.page}>
         <div style={s.wrap}>
           <Link href="/blog" style={s.back}>← MUN Resources</Link>
-          <h1 style={s.h1}>Best MUN Software in 2026 — Full Comparison for Chairs and Directors</h1>
+          <h1 style={s.h1}>Best MUN Software in 2026: Full Comparison for Chairs and Directors</h1>
           <p style={s.meta}>By Gavelling · June 2026 · 11 min read</p>
           <article style={s.article}>
 
             <p style={s.p}>
-              Running a Model UN committee in 2026 with a printed spreadsheet and a phone timer is like navigating with a paper map. It works — barely — but it creates friction at every step: manual roll call, squinting at a stopwatch, losing track of who&apos;s on the speakers list, counting votes by hand. The right software eliminates that friction entirely.
+              Running a Model UN committee in 2026 with a printed spreadsheet and a phone timer is like navigating with a paper map. It works, barely, but it creates friction at every step: manual roll call, squinting at a stopwatch, losing track of who&apos;s on the speakers list, counting votes by hand. The right software eliminates that friction entirely.
             </p>
             <p style={s.p}>
               This guide compares every realistic option available to MUN chairs and conference directors in 2026 so you can make an informed decision.
@@ -86,11 +86,11 @@ export default function Article2() {
               Paper procedures were the norm because there was no alternative. But MUN has grown: conferences now run dozens of committees simultaneously, delegates are more procedurally sophisticated, and the bar for a &quot;professional session&quot; has risen. The problems with manual procedures compound quickly:
             </p>
             <ul style={s.ul}>
-              <li style={s.li}><strong>Roll call</strong> — manually ticking a roster, then re-counting to check quorum, takes 5–10 minutes in a large committee.</li>
-              <li style={s.li}><strong>Speakers list</strong> — a paper list is invisible to delegates. They can&apos;t see their position, which creates repeated interruptions (&quot;Am I still on the list?&quot;).</li>
-              <li style={s.li}><strong>Timer</strong> — a phone stopwatch requires someone to watch it constantly. It can&apos;t automatically advance to the next speaker.</li>
-              <li style={s.li}><strong>Voting</strong> — counting raised placards by hand is error-prone, especially in large GA committees.</li>
-              <li style={s.li}><strong>Co-chair coordination</strong> — two chairs running the same session from different devices with no shared state leads to conflicts.</li>
+              <li style={s.li}><strong>Roll call</strong>: manually ticking a roster, then re-counting to check quorum, takes 5–10 minutes in a large committee.</li>
+              <li style={s.li}><strong>Speakers list</strong>: a paper list is invisible to delegates. They can&apos;t see their position, which creates repeated interruptions (&quot;Am I still on the list?&quot;).</li>
+              <li style={s.li}><strong>Timer</strong>: a phone stopwatch requires someone to watch it constantly. It can&apos;t automatically advance to the next speaker.</li>
+              <li style={s.li}><strong>Voting</strong>: counting raised placards by hand is error-prone, especially in large GA committees.</li>
+              <li style={s.li}><strong>Co-chair coordination</strong>: two chairs running the same session from different devices with no shared state leads to conflicts.</li>
             </ul>
             <p style={s.p}>
               Modern MUN software solves all of these in one place. The question is which option is right for your use case.
@@ -98,13 +98,13 @@ export default function Article2() {
 
             <h2 style={s.h2}>2. What to Look for in MUN Committee Software</h2>
             <ul style={s.ul}>
-              <li style={s.li}><strong>Real-time multi-device sync</strong> — chair, co-chair, and delegates all see the same live state.</li>
-              <li style={s.li}><strong>Roll call with quorum tracking</strong> — automatic quorum calculation, bulk status updates.</li>
-              <li style={s.li}><strong>GSL with built-in timer</strong> — automatic speaker advancement, time warnings, speaker queue visible to all.</li>
-              <li style={s.li}><strong>Caucus management</strong> — moderated and unmoderated caucus timers, separate speaker queues for mod caucuses.</li>
-              <li style={s.li}><strong>Motion and voting support</strong> — motion queue, configurable voting thresholds, P5 veto mode.</li>
-              <li style={s.li}><strong>No-download delegate access</strong> — delegates should be able to join on any device without installing anything.</li>
-              <li style={s.li}><strong>Price</strong> — most conferences operate on tight budgets.</li>
+              <li style={s.li}><strong>Real-time multi-device sync</strong>: chair, co-chair, and delegates all see the same live state.</li>
+              <li style={s.li}><strong>Roll call with quorum tracking</strong>: automatic quorum calculation, bulk status updates.</li>
+              <li style={s.li}><strong>GSL with built-in timer</strong>: automatic speaker advancement, time warnings, speaker queue visible to all.</li>
+              <li style={s.li}><strong>Caucus management</strong>: moderated and unmoderated caucus timers, separate speaker queues for mod caucuses.</li>
+              <li style={s.li}><strong>Motion and voting support</strong>: motion queue, configurable voting thresholds, P5 veto mode.</li>
+              <li style={s.li}><strong>No-download delegate access</strong>: delegates should be able to join on any device without installing anything.</li>
+              <li style={s.li}><strong>Price</strong>: most conferences operate on tight budgets.</li>
             </ul>
 
             <h2 style={s.h2}>3. Option 1: Gavelling (gavelling.com)</h2>
@@ -117,7 +117,7 @@ export default function Article2() {
               <li style={s.li}>General Speakers List with countdown timer, speaker queue visible to all delegates</li>
               <li style={s.li}>Moderated Caucus with separate speaker queue and per-speaker timer</li>
               <li style={s.li}>Unmoderated Caucus and Tour de Table timers</li>
-              <li style={s.li}>Motion queue sorted by disruptiveness — most disruptive voted first automatically</li>
+              <li style={s.li}>Motion queue sorted by disruptiveness: most disruptive voted first automatically</li>
               <li style={s.li}>Voting module with configurable thresholds (simple majority, two-thirds, veto mode)</li>
               <li style={s.li}>Live delegate-to-chair chat with DM support</li>
               <li style={s.li}>Working paper and draft resolution viewer</li>
@@ -148,11 +148,11 @@ export default function Article2() {
             </ul>
             <h3 style={s.h3}>Cons</h3>
             <ul style={s.ul}>
-              <li style={s.li}>No real-time delegate view — delegates cannot see their queue position, which leads to constant interruptions</li>
+              <li style={s.li}>No real-time delegate view: delegates cannot see their queue position, which leads to constant interruptions</li>
               <li style={s.li}>Manual timer management requires dedicated attention from a co-chair</li>
               <li style={s.li}>Voting counts are error-prone in large committees</li>
-              <li style={s.li}>No co-chair state sync — two chairs modifying the same sheet simultaneously leads to conflicts</li>
-              <li style={s.li}>Zero automation — everything is manually tracked</li>
+              <li style={s.li}>No co-chair state sync: two chairs modifying the same sheet simultaneously leads to conflicts</li>
+              <li style={s.li}>Zero automation: everything is manually tracked</li>
             </ul>
             <p style={s.p}><strong>Best for:</strong> small practice committees, ad hoc sessions, or experienced chairs who prefer manual control.<br /><strong>Price:</strong> Free.</p>
 
@@ -161,13 +161,13 @@ export default function Article2() {
               Apps like Timekeeper, various stopwatch apps, or even a projected browser-based timer solve exactly one problem: the speaker countdown. They are better than a phone stopwatch (bigger display, audible warning) but they have no awareness of MUN procedure. They do not track who is speaking, manage the queue, handle quorum, or support voting.
             </p>
             <p style={s.p}>
-              Most chairs who use a timer app still use Google Sheets alongside it — which means you are maintaining two separate tools and a mental model to bridge them.
+              Most chairs who use a timer app still use Google Sheets alongside it, which means you are maintaining two separate tools and a mental model to bridge them.
             </p>
             <p style={s.p}><strong>Best for:</strong> as a supplement to paper procedures when no other option is available.<br /><strong>Price:</strong> Typically free.</p>
 
             <h2 style={s.h2}>6. Option 4: In-House Conference Tools</h2>
             <p style={s.p}>
-              A small number of large, well-resourced conferences have built their own internal committee management tools — typically as web apps or internal dashboards maintained by their technology team. These tools are tailored to their specific rules of procedure and are not available externally.
+              A small number of large, well-resourced conferences have built their own internal committee management tools, typically as web apps or internal dashboards maintained by their technology team. These tools are tailored to their specific rules of procedure and are not available externally.
             </p>
             <p style={s.p}>
               This option is not realistic for most conferences. Building and maintaining a bespoke MUN platform requires a dedicated engineering team, ongoing maintenance, and significant time investment that could otherwise go toward the conference programme itself.
@@ -209,7 +209,7 @@ export default function Article2() {
 
             <h2 style={s.h2}>8. Verdict</h2>
             <p style={s.p}>
-              Gavelling is the only dedicated, free, no-download MUN committee management platform available in 2026. For any conference that values a professional delegate experience — real-time queue visibility, automated timers, structured voting, live chat — it is the clear choice. The fact that it is free removes the only remaining objection.
+              Gavelling is the only dedicated, free, no-download MUN committee management platform available in 2026. For any conference that values a professional delegate experience (real-time queue visibility, automated timers, structured voting, live chat), it is the clear choice. The fact that it is free removes the only remaining objection.
             </p>
             <p style={s.p}>
               Google Sheets remains viable for very small or informal sessions, and timer apps have a supporting role. But for any serious committee session, the all-in-one approach Gavelling provides is simply better.
@@ -220,7 +220,7 @@ export default function Article2() {
 
             <RelatedGuides currentSlug="best-mun-software-2026" />
             <div style={s.cta}>
-              <p style={s.ctaText}>Try Gavelling free — no setup, no download. Start your committee in under a minute.</p>
+              <p style={s.ctaText}>Try Gavelling free: no setup, no download. Start your committee in under a minute.</p>
               <a href="https://gavelling.com" style={s.ctaLink}>Start free at gavelling.com →</a>
             </div>
 

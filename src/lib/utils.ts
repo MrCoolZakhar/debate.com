@@ -24,7 +24,7 @@ export function generateSlug(name: string): string {
 // their own toFixed(0) / duplicated currencySymbol implementations.
 //
 // currencySymbol itself lives in src/lib/currencies.ts (the canonical
-// currency list) — re-exported here since most fee-formatting call sites
+// currency list), re-exported here since most fee-formatting call sites
 // already import it alongside formatFee/formatFeeAmount from this module.
 export { currencySymbol };
 

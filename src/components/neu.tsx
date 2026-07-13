@@ -1,11 +1,11 @@
 'use client';
 
 /**
- * neu.tsx — Gavelling neumorphic primitives.
+ * neu.tsx, Gavelling neumorphic primitives.
  *
  * Pilot design system for the organiser dashboard: one continuous ivory
  * surface (#EDE7D8 page, #F0EBDD cards), elements read as extruded or
- * pressed-in purely via a forest-tinted dual-shadow pair — never neutral
+ * pressed-in purely via a forest-tinted dual-shadow pair, never neutral
  * black, never white cards. Vibrancy lives ONLY in small gradient icon
  * discs and the single accent gradient; everything else stays calm.
  *
@@ -23,7 +23,7 @@ export const EASE = 'cubic-bezier(0.22,1,0.36,1)';
 
 export const NEU = {
   base: '#EDE7D8',      // page background
-  surface: '#F0EBDD',   // card surface — a hair lighter, same family
+  surface: '#F0EBDD',   // card surface, a hair lighter, same family
   ink: '#1C1410',
   forest: '#1B3828',
   gold: '#EED98A',
@@ -31,18 +31,18 @@ export const NEU = {
   amber: '#B8844A',
   green: '#3D7A52',
   muted: '#9A8A78',
-  // Extruded pair — light top-left, forest-tinted dark bottom-right.
+  // Extruded pair, light top-left, forest-tinted dark bottom-right.
   out: '-6px -6px 14px rgba(255,255,255,0.85), 8px 8px 20px rgba(27,56,40,0.16)',
   outHover: '-8px -8px 18px rgba(255,255,255,0.92), 10px 10px 26px rgba(27,56,40,0.21)',
   // Tighter, crisper pair for small chips/discs/buttons.
   outSm: '-3px -3px 7px rgba(255,255,255,0.9), 4px 4px 9px rgba(27,56,40,0.15)',
   outSmHover: '-4px -4px 9px rgba(255,255,255,0.95), 5px 5px 12px rgba(27,56,40,0.2)',
-  // Pressed-in pair — wells, tracks, done rows.
+  // Pressed-in pair, wells, tracks, done rows.
   in: 'inset 4px 4px 10px rgba(27,56,40,0.14), inset -4px -4px 10px rgba(255,255,255,0.8)',
   inSm: 'inset 2px 2px 6px rgba(27,56,40,0.13), inset -2px -2px 6px rgba(255,255,255,0.8)',
 } as const;
 
-/** Saturated two-stop gradients — the only place "vibrant" is allowed. */
+/** Saturated two-stop gradients, the only place "vibrant" is allowed. */
 export const NEU_GRADIENTS = {
   forest: ['#1B3828', '#3D7A52'] as [string, string],
   gold: ['#EED98A', '#B6871F'] as [string, string],
@@ -61,7 +61,7 @@ type LucideIcon = React.ComponentType<{
 
 const grad = (g: NeuGradient) => `linear-gradient(135deg, ${g[0]}, ${g[1]})`;
 
-/** Darker stop of a gradient — readable glyph colour on a soft emoji seat. */
+/** Darker stop of a gradient, readable glyph colour on a soft emoji seat. */
 const darkStop = (g: NeuGradient): string => {
   const lum = (hex: string) => {
     const n = parseInt(hex.slice(1), 16);
@@ -70,9 +70,9 @@ const darkStop = (g: NeuGradient): string => {
   return lum(g[0]) <= lum(g[1]) ? g[0] : g[1];
 };
 
-// ── Emoji3D — Microsoft Fluent 3D emoji from jsDelivr (same CDN family as ──
+// ── Emoji3D, Microsoft Fluent 3D emoji from jsDelivr (same CDN family as ──
 // the Twemoji flags in countries.ts). Peter explicitly asked for colourful
-// 3D emoji icons on the organiser dashboard — this deliberately overrides
+// 3D emoji icons on the organiser dashboard, this deliberately overrides
 // the lucide-only rule for THAT dashboard only. Falls back to a lucide
 // glyph if the CDN image fails to load.
 
@@ -85,7 +85,7 @@ export function Emoji3D({
   fallbackColor = '#FFFFFF',
   style,
 }: {
-  /** Fluent emoji asset folder name, sentence case — e.g. "Money bag", "Globe showing europe-africa". */
+  /** Fluent emoji asset folder name, sentence case, e.g. "Money bag", "Globe showing europe-africa". */
   name: string;
   size?: number;
   fallback?: LucideIcon;
@@ -113,7 +113,7 @@ export function Emoji3D({
         width: size,
         height: size,
         objectFit: 'contain',
-        // Crisper seat shadow — lifts the glyph off its tinted disc so it
+        // Crisper seat shadow, lifts the glyph off its tinted disc so it
         // reads at a glance rather than melting into the surface.
         filter: 'drop-shadow(0 2px 4px rgba(27,56,40,0.30))',
         ...style,
@@ -122,7 +122,7 @@ export function Emoji3D({
   );
 }
 
-// ── NeuCard — extruded container ───────────────────────────────────────────
+// ── NeuCard, extruded container ───────────────────────────────────────────
 
 export function NeuCard({
   children,
@@ -178,7 +178,7 @@ export function NeuCard({
   );
 }
 
-// ── NeuInset — pressed-in well ─────────────────────────────────────────────
+// ── NeuInset, pressed-in well ─────────────────────────────────────────────
 
 export function NeuInset({
   children,
@@ -206,7 +206,7 @@ export function NeuInset({
   );
 }
 
-// ── NeuIconDisc — small vibrant gradient squircle holding a white icon ─────
+// ── NeuIconDisc, small vibrant gradient squircle holding a white icon ─────
 
 export function NeuIconDisc({
   gradient,
@@ -218,14 +218,14 @@ export function NeuIconDisc({
 }: {
   gradient: NeuGradient;
   icon?: LucideIcon;
-  /** Fluent 3D emoji asset name — replaces the lucide glyph inside the disc. */
+  /** Fluent 3D emoji asset name, replaces the lucide glyph inside the disc. */
   emoji?: string;
   size?: number;
   iconColor?: string;
   style?: React.CSSProperties;
 }) {
   // Emoji discs seat the 3D glyph on a soft ~20-25%-opacity tint of the
-  // gradient — the saturated fill fights the emoji's own colours, so the
+  // gradient, the saturated fill fights the emoji's own colours, so the
   // emoji reads as the icon and the disc is just a seat. Lucide-only discs
   // keep the original vibrant gradient + white glyph (used outside the
   // organiser dashboard).
@@ -255,7 +255,7 @@ export function NeuIconDisc({
   );
 }
 
-// ── Sparkline — smooth curve with an emphasised end dot ────────────────────
+// ── Sparkline, smooth curve with an emphasised end dot ────────────────────
 
 /** Catmull-Rom → cubic bezier path through points. Exported for chart reuse. */
 export function smoothPath(pts: { x: number; y: number }[]): string {
@@ -293,7 +293,7 @@ function Sparkline({ data, color }: { data: number[]; color: string }) {
   );
 }
 
-// ── NeuStatTile — icon disc + big number + muted label + sparkline ─────────
+// ── NeuStatTile, icon disc + big number + muted label + sparkline ─────────
 
 export function NeuStatTile({
   icon,
@@ -328,7 +328,7 @@ export function NeuStatTile({
         padding: compact ? '12px 14px' : '15px 17px',
         minWidth: 0,
         // Fill the tile-row height cleanly: disc anchored top, value+label
-        // sink to the bottom — no floating void when the row is tall.
+        // sink to the bottom, no floating void when the row is tall.
         display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
         ...style,
       }}
@@ -359,7 +359,7 @@ export function NeuStatTile({
   );
 }
 
-// ── NeuProgress — inset track + gradient fill, optional thumb ──────────────
+// ── NeuProgress, inset track + gradient fill, optional thumb ──────────────
 
 export function NeuProgress({
   value,
@@ -424,7 +424,7 @@ export function NeuProgress({
   );
 }
 
-// ── NeuRing — donut progress, gradient stroke + rounded caps ───────────────
+// ── NeuRing, donut progress, gradient stroke + rounded caps ───────────────
 
 export function NeuRing({
   value,
@@ -469,7 +469,7 @@ export function NeuRing({
   );
 }
 
-// ── NeuPill — small chip; extruded by default, gradient-filled when active ─
+// ── NeuPill, small chip; extruded by default, gradient-filled when active ─
 
 export function NeuPill({
   children,
@@ -524,7 +524,7 @@ export function NeuPill({
   );
 }
 
-// ── NeuButton — fully-rounded gradient pill CTA ────────────────────────────
+// ── NeuButton, fully-rounded gradient pill CTA ────────────────────────────
 
 export function NeuButton({
   children,
@@ -575,7 +575,7 @@ export function NeuButton({
   );
 }
 
-// ── NeuChecklistRow — journey row: pending = extruded, done = pressed in ───
+// ── NeuChecklistRow, journey row: pending = extruded, done = pressed in ───
 
 export function NeuChecklistRow({
   done,
@@ -596,7 +596,7 @@ export function NeuChecklistRow({
   sub?: string;
   /** Extra node on the right of a pending row (e.g. a secondary inline link). */
   action?: React.ReactNode;
-  /** Gradient for the pending row's icon disc — where "vibrant" lives. */
+  /** Gradient for the pending row's icon disc, where "vibrant" lives. */
   gradient?: NeuGradient;
   /** Tighter row for single-viewport layouts. */
   dense?: boolean;

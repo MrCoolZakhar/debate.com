@@ -123,7 +123,7 @@ function ExpandedDelegateCard({
       'end-debate': mn.endDebate,
     };
     motionDisplay = typeLabel[lastMotion.type] || lastMotion.type;
-    if (lastMotion.topic) motionDisplay += ` — ${lastMotion.topic}`;
+    if (lastMotion.topic) motionDisplay += `: ${lastMotion.topic}`;
   } else {
     motionDisplay = t('advisor_no_motion');
   }

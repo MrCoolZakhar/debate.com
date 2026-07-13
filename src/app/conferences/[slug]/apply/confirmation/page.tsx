@@ -8,7 +8,7 @@ import SiteNav from '@/components/SiteNav';
 
 const OUTFIT = "'Outfit', sans-serif";
 
-// F12: human role names with the correct article — "a delegate", "an observer".
+// F12: human role names with the correct article, "a delegate", "an observer".
 const ROLE_WITH_ARTICLE: Record<string, string> = {
   delegate: 'a delegate',
   'head-delegate': 'a head delegate',
@@ -107,7 +107,7 @@ function ConfirmationInner() {
           </p>
         )}
 
-        {/* What happens next — mini timeline */}
+        {/* What happens next, mini timeline */}
         <div className="w-full mb-9" style={{ maxWidth: 440 }}>
           <div
             className="rounded-2xl px-5 py-6"

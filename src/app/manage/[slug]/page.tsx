@@ -115,7 +115,7 @@ function ShareModal({
     try {
       await navigator.clipboard.writeText(text);
     } catch {
-      // Clipboard API unavailable (http / permissions) — fall back silently.
+      // Clipboard API unavailable (http / permissions), fall back silently.
       const ta = document.createElement('textarea');
       ta.value = text;
       document.body.appendChild(ta);
@@ -145,7 +145,7 @@ function ShareModal({
           </h2>
         </div>
         <p className="text-sm mb-5" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
-          Share your conference page — anyone who opens it can apply as a delegate.
+          Share your conference page. Anyone who opens it can apply as a delegate.
         </p>
 
         {/* Public link + copy */}
@@ -259,10 +259,10 @@ function floorHour(t: number): number {
 /**
  * Buckets applications for the selected range: 24H → hourly, 7D/30D → daily,
  * ALL → weekly from the first application.
- * NOTE: there is no paid_at column on applications — paid rows are bucketed
+ * NOTE: there is no paid_at column on applications, paid rows are bucketed
  * by their submitted_at as an approximation of when the revenue arrived.
  * Also counts paid rows in the previous equivalent window for the delta
- * caption (null for ALL — there is no previous period to compare against).
+ * caption (null for ALL, there is no previous period to compare against).
  */
 function bucketize(rows: AppRow[], range: RangeKey): { buckets: Bucket[]; prevPaid: number | null } {
   const now = Date.now();
@@ -312,7 +312,7 @@ function bucketize(rows: AppRow[], range: RangeKey): { buckets: Bucket[]; prevPa
   return { buckets, prevPaid };
 }
 
-// ── Revenue chart — interactive SVG: gold revenue bars only ────────────────
+// ── Revenue chart, interactive SVG: gold revenue bars only ────────────────
 // Range tabs (24H/7D/30D/ALL), pointer-snapping hover with vertical guide +
 // neumorphic revenue tooltip, gold peak marker, header shows range revenue +
 // delta vs the previous equivalent period. Hand-rolled, no chart libs.
@@ -333,7 +333,7 @@ function RevenueChart({
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const [dims, setDims] = useState({ w: 680, h: 240 });
 
-  // Measure the plot area so the SVG renders at exact pixel size — keeps
+  // Measure the plot area so the SVG renders at exact pixel size, keeps
   // text unscaled and makes pointer → bucket math exact.
   useEffect(() => {
     const el = wrapRef.current;
@@ -403,7 +403,7 @@ function RevenueChart({
 
   return (
     <div className="flex flex-col" style={{ flex: 1, minHeight: 0 }}>
-      {/* Header — links to financials */}
+      {/* Header, links to financials */}
       <div className="flex items-center justify-between gap-3 flex-shrink-0" style={{ marginBottom: 10 }}>
         <Link
           href={financialsHref}
@@ -485,7 +485,7 @@ function RevenueChart({
                   <line x1={xc(hoverI)} x2={xc(hoverI)} y1={padT} y2={baseY} stroke="rgba(27,56,40,0.28)" strokeWidth={1} strokeDasharray="3 3" />
                 )}
 
-                {/* Revenue bars — gold gradient, rounded tops; hovered bar grows */}
+                {/* Revenue bars, gold gradient, rounded tops; hovered bar grows */}
                 {hasRevenue && revenue.map((v, i) => (
                   v > 0 ? (
                     <path
@@ -498,7 +498,7 @@ function RevenueChart({
                   ) : null
                 ))}
 
-                {/* Peak-revenue marker — gold dot + tiny label */}
+                {/* Peak-revenue marker, gold dot + tiny label */}
                 {peakI >= 0 && (
                   <g>
                     <circle cx={xc(peakI)} cy={yRev(revenue[peakI]) - 7} r={3.5} fill={NEU.deepGold} stroke="#FFFFFF" strokeWidth={1.5} />
@@ -533,7 +533,7 @@ function RevenueChart({
                 </p>
               )}
 
-              {/* Neumorphic hover tooltip — revenue only */}
+              {/* Neumorphic hover tooltip, revenue only */}
               {hoverI !== null && hasRevenue && (
                 <div
                   className="pointer-events-none"
@@ -628,7 +628,7 @@ function UnallocatedTile({ count, href }: { count: number; href: string }) {
   );
 }
 
-// ── Pipeline cell — links each stage to its fix ────────────────────────────
+// ── Pipeline cell, links each stage to its fix ────────────────────────────
 
 function PipelineCell({ n, label, href, first }: { n: number; label: string; href: string; first?: boolean }) {
   const [hovered, setHovered] = useState(false);
@@ -668,7 +668,7 @@ interface DashData {
   enabledEmailCount: number;
 }
 
-// ── Dashboard home — single-viewport neumorphic grid, no scroll ────────────
+// ── Dashboard home, single-viewport neumorphic grid, no scroll ────────────
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -718,7 +718,7 @@ export default function DashboardPage() {
     })();
   }, [conference?.id, session?.access_token]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Loading skeleton — mirrors the fixed one-viewport grid ───────────────
+  // ── Loading skeleton, mirrors the fixed one-viewport grid ───────────────
   if (!conference || !dash) {
     return (
       <div className="flex flex-col" style={{ minHeight: 'calc(100vh - 56px)', padding: '14px 20px 20px' }}>
@@ -765,7 +765,7 @@ export default function DashboardPage() {
       title: 'Set up your conference page',
       sub: 'Add a banner and a description delegates will see.',
       done: !!conference.banner_url && !!conference.description?.trim(),
-      onClick: () => router.push(`/manage/${slug}/settings`),
+      onClick: () => router.push(`/manage/${slug}/settings?tab=conference`),
     },
     {
       key: 'committees',
@@ -816,14 +816,14 @@ export default function DashboardPage() {
     {
       key: 'secretariat',
       icon: UsersRound,
-      // "Handshake" reads instantly as bringing co-organizers on board — the
+      // "Handshake" reads instantly as bringing co-organizers on board, the
       // grey "Busts in silhouette" 3D asset was muddy on its tinted seat.
       emoji: 'Handshake',
       gradient: NEU_GRADIENTS.sage,
       title: 'Add your secretariat',
       sub: 'Invite co-organizers and grant them access.',
       done: dash.organizerCount > 1,
-      onClick: () => router.push(`/manage/${slug}/settings`),
+      onClick: () => router.push(`/manage/${slug}/settings?tab=organizers`),
     },
     {
       key: 'financials',
@@ -831,7 +831,7 @@ export default function DashboardPage() {
       emoji: 'Money bag',
       gradient: NEU_GRADIENTS.amber,
       title: 'Add financial information',
-      // fee_amount === 0 is a deliberate free conference — any non-null fee counts as configured.
+      // fee_amount === 0 is a deliberate free conference, any non-null fee counts as configured.
       done: conference.fee_amount !== null || !!conference.stripe_account_id,
       sub: 'Set your delegate fee or connect Stripe.',
       onClick: () => router.push(`/manage/${slug}/financials`),
@@ -844,14 +844,14 @@ export default function DashboardPage() {
       title: 'Get your first delegate',
       sub: delegateApps > 0 ? `${delegateApps} delegate application${delegateApps === 1 ? '' : 's'} received.` : 'Share your page and receive an application.',
       done: delegateApps > 0,
-      // Pending: open the share popup (link + story recipe) — no deep link.
+      // Pending: open the share popup (link + story recipe), no deep link.
       // Done: jump to the applications that came in.
       onClick: delegateApps > 0
         ? () => router.push(`/manage/${slug}/applications`)
         : () => setShowShareModal(true),
     },
     {
-      // Compact publish CTA lives here as the checklist's launch row — the
+      // Compact publish CTA lives here as the checklist's launch row, the
       // big accent quick-actions card was removed with the one-page layout.
       key: 'publish',
       icon: Rocket,
@@ -887,7 +887,7 @@ export default function DashboardPage() {
       style={{ minHeight: 'calc(100vh - 56px)', padding: '14px 20px 20px', fontFamily: OUTFIT }}
     >
 
-      {/* ── Header — compact single row ── */}
+      {/* ── Header, compact single row ── */}
       <div className="flex items-center justify-between gap-4 flex-shrink-0" style={{ marginBottom: 12 }}>
         <div className="flex items-center gap-3 min-w-0">
           <LogoDisc
@@ -898,7 +898,7 @@ export default function DashboardPage() {
           />
           <div className="min-w-0">
             <p style={{ fontFamily: OUTFIT, fontSize: 9, fontWeight: 800, letterSpacing: '0.16em', color: NEU.deepGold }}>
-              {conference.acronym}{confYear ? ` · ${confYear}` : ''} — DASHBOARD
+              {conference.acronym}{confYear ? ` · ${confYear}` : ''} · DASHBOARD
             </p>
             <h1 className="font-black truncate" style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 18, lineHeight: 1.15, marginTop: 1 }}>
               {conference.full_name}
@@ -918,20 +918,20 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ── Main layout — flex, not a stretched grid: the priorities card
+      {/* ── Main layout, flex, not a stretched grid: the priorities card
           sizes to its (snug) content and drives the row height; the right
           column stretches to match, so the revenue graph fills exactly the
           remaining height with no void anywhere. A slightly shorter-than-
-          viewport page is intentional — snug beats stretched-with-holes. ── */}
+          viewport page is intentional, snug beats stretched-with-holes. ── */}
       <div className="flex" style={{ alignItems: 'stretch', gap: 14 }}>
 
-        {/* Set-up priorities — left column, content-sized, pending first */}
+        {/* Set-up priorities, left column, content-sized, pending first */}
         <NeuCard className="flex flex-col" style={{ flexBasis: '32%', flexShrink: 0, minWidth: 300, padding: '14px 15px 11px' }}>
           <div className="flex items-center justify-between gap-3 flex-shrink-0" style={{ marginBottom: 9 }}>
             <div className="min-w-0">
               <h2 style={{ fontFamily: OUTFIT, fontSize: 15, fontWeight: 900, color: NEU.ink }}>Set-up priorities</h2>
               <p style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.muted, marginTop: 1, fontVariantNumeric: 'tabular-nums' }}>
-                {doneCount} of {checklist.length} done{doneCount === checklist.length ? ' — you are all set.' : ''}
+                {doneCount} of {checklist.length} done{doneCount === checklist.length ? '. You are all set.' : ''}
               </p>
             </div>
             <NeuRing value={doneCount} max={checklist.length} size={50} strokeWidth={7} gradient={NEU_GRADIENTS.gold}>
@@ -943,7 +943,7 @@ export default function DashboardPage() {
 
           <NeuProgress value={doneCount} max={checklist.length} gradient={NEU_GRADIENTS.gold} thumb height={9} style={{ marginBottom: 10, flexShrink: 0 }} />
 
-          {/* Natural-height snug stack — the card ends exactly at the last row,
+          {/* Natural-height snug stack, the card ends exactly at the last row,
               no leftover void below (rows sink done items to the bottom). */}
           <div className="flex flex-col" style={{ gap: 5 }}>
             {sortedChecklist.map(item => (
@@ -966,7 +966,7 @@ export default function DashboardPage() {
           )}
         </NeuCard>
 
-        {/* Right column — stretches to the priorities card height */}
+        {/* Right column, stretches to the priorities card height */}
         <div className="flex flex-col" style={{ flex: 1, minWidth: 0, gap: 14 }}>
 
         {/* Top-right row: unallocated alert + delegates pipeline + stat tiles.
@@ -983,7 +983,7 @@ export default function DashboardPage() {
         >
           <UnallocatedTile count={unallocated} href={`/manage/${slug}/assignment`} />
 
-          {/* Delegates pipeline — each stage links to its fix. Content spreads
+          {/* Delegates pipeline, each stage links to its fix. Content spreads
               top-to-bottom (space-between) so it fills the firm row height. */}
           <NeuCard className="flex flex-col" style={{ padding: '13px 15px', minWidth: 0, justifyContent: 'space-between' }}>
             <div className="flex items-center justify-between gap-2 flex-shrink-0">
@@ -1027,7 +1027,7 @@ export default function DashboardPage() {
           />
         </div>
 
-        {/* Revenue graph — full right width, fills the height left over under
+        {/* Revenue graph, full right width, fills the height left over under
             the tile row (shorter now that the priorities card is snug) */}
         <NeuCard className="flex flex-col" style={{ flex: 1, minHeight: 210, padding: '13px 16px 11px' }}>
           <RevenueChart

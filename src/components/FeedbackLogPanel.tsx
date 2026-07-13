@@ -61,7 +61,7 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry 
   const [focusKey, setFocusKey] = useState<string | null>(null);
   const [hoverKey, setHoverKey] = useState<string | null>(null);
 
-  // Live card key — a fresh turn (even same country, e.g. right of reply) gets a new card.
+  // Live card key, a fresh turn (even same country, e.g. right of reply) gets a new card.
   const liveKey = currentCountry ? `live|${currentCountry}|${turnStartRef.current}` : null;
 
   const items: FeedItem[] = useMemo(() => {
@@ -73,7 +73,7 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [past, currentCountry, liveKey, JSON.stringify(upcoming.map((u) => u.delegateId)), ctx]);
 
-  // Prefill from existing 'speech' feedback — greedy match to past speeches by country+context+seconds.
+  // Prefill from existing 'speech' feedback, greedy match to past speeches by country+context+seconds.
   useEffect(() => {
     if (loadedRef.current) return;
     loadedRef.current = true;
@@ -175,7 +175,7 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry 
   const opacityByDist = [1, 0.7, 0.55, 0.45];
   const blurByDist = [0, 0.6, 1.2, 1.6];
 
-  // Qualitative ratings — sliders (lowest 0 … highest max) on the focused pill;
+  // Qualitative ratings, sliders (lowest 0 … highest max) on the focused pill;
   // compact greyed read-only bars on the nearest neighbour.
   // Compact 2×2 grid of small rating sliders (interactive on the focused pill; greyed
   // read-only values on the nearest neighbour). The slider track itself reads low→high.
@@ -245,7 +245,7 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry 
                   style={{ opacity, transition: PILL_TRANSITION }}
                 >
                   {isFocused ? (
-                    /* Active — wide, 2-row writing bubble */
+                    /* Active, wide, 2-row writing bubble */
                     <div
                       className="flex-1 min-w-0"
                       style={{
@@ -272,7 +272,7 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry 
                       />
                     </div>
                   ) : (
-                    /* Collapsed capsule — shows the note written for this delegate */
+                    /* Collapsed capsule, shows the note written for this delegate */
                     <div
                       onMouseEnter={() => setHoverKey(item.key)}
                       onMouseLeave={() => setHoverKey((k) => (k === item.key ? null : k))}
@@ -295,7 +295,7 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry 
                     </div>
                   )}
 
-                  {/* 2×2 metric grid — interactive for focused, greyed read-only for nearest, absent otherwise */}
+                  {/* 2×2 metric grid, interactive for focused, greyed read-only for nearest, absent otherwise */}
                   <div className="shrink-0" style={{ width: GRID_COL }}>
                     {factors.length > 0 && (isFocused || dist === 1) && metricStack(item, rs, isFocused)}
                   </div>

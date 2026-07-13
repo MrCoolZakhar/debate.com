@@ -1,6 +1,6 @@
 'use client';
 
-// Position paper — an expandable unit. Collapsed shows just the submission
+// Position paper, an expandable unit. Collapsed shows just the submission
 // status; expanded shows the upload/submission flow (moved from the old
 // documents tab, same allocation-dependent states) plus a FEEDBACK section
 // that always renders once a paper exists (chair_feedback, or "No feedback
@@ -238,7 +238,7 @@ export default function PositionPaperCard({ conferenceId, myAllocation }: {
             </>
           )}
 
-          {/* Feedback — always present once a paper exists */}
+          {/* Feedback, always present once a paper exists */}
           {myPositionPaper && (
             <div className="mt-5 pt-5" style={{ borderTop: '1px solid rgba(221,212,192,0.6)' }}>
               <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#B6871F', margin: '0 0 8px 0' }}>

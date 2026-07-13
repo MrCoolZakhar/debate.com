@@ -1,6 +1,6 @@
 'use client';
 
-// Advisor participant view — panel + invoicing + spine only. Advisors never
+// Advisor participant view, panel + invoicing + spine only. Advisors never
 // hold a committee allocation themselves, so there's no delegate-style
 // content here beyond the delegation roster and their own pledge.
 

@@ -28,7 +28,7 @@ interface InviteData {
 }
 
 const STATUS_COPY: Record<string, { title: string; body: string }> = {
-  accepted: { title: "You're already chairing this committee", body: 'This invitation was accepted earlier — no further action needed.' },
+  accepted: { title: "You're already chairing this committee", body: 'This invitation was accepted earlier, no further action needed.' },
   declined: { title: 'Invitation declined', body: "You've declined this invitation. If that was a mistake, ask the organizer to send a new one." },
   revoked: { title: 'This invitation was revoked', body: 'The organizer withdrew this invite before it was answered.' },
 };

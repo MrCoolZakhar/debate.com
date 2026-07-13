@@ -5,7 +5,7 @@ import { getTwemojiUrl } from '@/lib/countries';
 
 /**
  * Maps emoji characters (including variation-selector forms) to their Twemoji SVG
- * codepoint path. Only UI-significant emoji are listed here — plain Unicode control
+ * codepoint path. Only UI-significant emoji are listed here, plain Unicode control
  * symbols (✕ ✓ ✗ ▲ ▼ ▶ ⏸ etc.) are intentionally omitted.
  */
 const CODEPOINTS: Record<string, string> = {

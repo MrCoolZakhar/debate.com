@@ -1,6 +1,6 @@
 'use client';
 
-// Delegate participant view — reused for both 'delegate' and 'head-delegate'
+// Delegate participant view, reused for both 'delegate' and 'head-delegate'
 // applications. This whole tree sits inside the spine's PayGate.
 
 import AllocationCard from './AllocationCard';

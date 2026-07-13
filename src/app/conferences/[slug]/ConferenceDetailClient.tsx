@@ -15,6 +15,7 @@ import { LogoCropModal } from '@/components/LogoCropModal';
 import { uploadConferenceAsset } from '@/lib/conferenceAssets';
 import { formatFee } from '@/lib/utils';
 import { activeFeePhase, activePhaseFee, type FeePhase } from '@/lib/finance';
+import { normalizeSocialUrl } from '@/lib/socialLinks';
 import ParticipantView from '@/app/conferences/[slug]/participant/ParticipantView';
 import type { ParticipantAllocation } from '@/app/conferences/[slug]/participant/types';
 import {
@@ -28,7 +29,7 @@ const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'
 
 const EASE = 'cubic-bezier(0.22,1,0.36,1)';
 
-// Bundled banner presets — same list as manage/[slug]/settings BANNER_PRESETS.
+// Bundled banner presets, same list as manage/[slug]/settings BANNER_PRESETS.
 const BANNER_PRESETS = [
   '/banners/preset-1.jpg',
   '/banners/preset-2.jpg',
@@ -37,7 +38,7 @@ const BANNER_PRESETS = [
   '/banners/preset-5.jpg',
 ];
 
-// House modal form styles — same recipe as CommitteeEditorModal.
+// House modal form styles, same recipe as CommitteeEditorModal.
 const modalInputStyle: React.CSSProperties = {
   width: '100%',
   border: '1px solid #DDD4C0',
@@ -378,7 +379,7 @@ export default function ConferenceDetailClient() {
   const [notFound, setNotFound] = useState(false);
   const [myAllocation, setMyAllocation] = useState<ParticipantAllocation | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'participant' | 'reviews'>('overview');
-  // Deep link support for email buttons ("My conference view" — legacy
+  // Deep link support for email buttons ("My conference view", legacy
   // 'documents' destination): ?tab=participant opens straight to the person
   // tab. Read post-mount (not via useSearchParams) to avoid a Suspense
   // boundary requirement on this large top-level client component.
@@ -415,13 +416,13 @@ export default function ConferenceDetailClient() {
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState('');
   const [assetUploading, setAssetUploading] = useState(false);
-  // Logo picked but not yet uploaded — the drag-to-fit crop modal is open.
+  // Logo picked but not yet uploaded, the drag-to-fit crop modal is open.
   const [logoCropFile, setLogoCropFile] = useState<File | null>(null);
   const [descDraft, setDescDraft] = useState('');
   const [aboutDraft, setAboutDraft] = useState({
     contact_email: '', instagram_url: '', facebook_url: '', tiktok_url: '', whatsapp_url: '', website_url: '',
   });
-  // Committee editor — { committee: null } = create flow, set = edit flow
+  // Committee editor, { committee: null } = create flow, set = edit flow
   const [committeeEditor, setCommitteeEditor] = useState<{ committee: EditableCommittee | null } | null>(null);
 
   useEffect(() => {
@@ -447,7 +448,7 @@ export default function ConferenceDetailClient() {
       .single();
 
     if (!confData) {
-      // Retry with authed client — may be a private conference the logged-in user owns
+      // Retry with authed client, may be a private conference the logged-in user owns
       if (session) {
         const authedRetry = getAuthedClient(session.access_token);
         const { data: privateConfData } = await authedRetry
@@ -466,7 +467,7 @@ export default function ConferenceDetailClient() {
           setLoading(false);
           return;
         }
-        // Continue with privateConfData — reassign and fall through
+        // Continue with privateConfData, reassign and fall through
         confData = privateConfData;
       } else {
         setNotFound(true);
@@ -501,7 +502,7 @@ export default function ConferenceDetailClient() {
     setCommittees((committeesRes.data as Committee[]) ?? []);
     setRoleConfigs((roleConfigsRes.data as RoleConfig[]) ?? []);
 
-    // Partner conferences — anon reads; RLS only exposes approved links on
+    // Partner conferences, anon reads; RLS only exposes approved links on
     // public conferences, and private partners drop out of the details select.
     const { data: partnerLinks } = await supabase
       .from('conference_partners')
@@ -525,7 +526,7 @@ export default function ConferenceDetailClient() {
       setPartners([]);
     }
 
-    // Reviews — public content, anon client
+    // Reviews, public content, anon client
     const { data: reviewsData } = await supabase
       .from('conference_reviews')
       .select('id, user_id, rating, review_text, display_name, created_at')
@@ -533,7 +534,7 @@ export default function ConferenceDetailClient() {
       .order('created_at', { ascending: false });
     setReviews((reviewsData as ConferenceReview[]) ?? []);
 
-    // Previous edition — defensive: the predecessor columns may not exist yet.
+    // Previous edition, defensive: the predecessor columns may not exist yet.
     // Separate select so a missing-column error never breaks the page.
     setPredReviews([]);
     setPredAcronym(null);
@@ -558,7 +559,7 @@ export default function ConferenceDetailClient() {
         setPredReviews((predReviewsRes.data as ConferenceReview[]) ?? []);
       }
     } catch {
-      // Columns not deployed yet — ignore.
+      // Columns not deployed yet, ignore.
     }
 
     // Review prompt dismissal persists per conference
@@ -605,7 +606,7 @@ export default function ConferenceDetailClient() {
     if (user && session) {
       const authedSupabase = getAuthedClient(session.access_token);
 
-      // Organizer/secretariat detection — RLS only exposes rows to organizers themselves,
+      // Organizer/secretariat detection, RLS only exposes rows to organizers themselves,
       // so this returns the viewer's own row or nothing.
       const { data: orgRow } = await authedSupabase
         .from('conference_organizers')
@@ -778,7 +779,7 @@ export default function ConferenceDetailClient() {
     if (ok) setEditModal(null);
   }
 
-  // Committee pencil — the public select lacks session_id, so fetch the full
+  // Committee pencil, the public select lacks session_id, so fetch the full
   // editable row with the authed client before opening the shared editor.
   async function openCommitteeEditor(committeeId: string) {
     if (!session) return;
@@ -862,7 +863,7 @@ export default function ConferenceDetailClient() {
   const canReview = !!user && attended && !myReview;
   const showReviewPrompt = canReview && !reviewPromptDismissed;
 
-  // Reviews aggregates — current edition + approved predecessor edition
+  // Reviews aggregates, current edition + approved predecessor edition
   const allReviews = [...reviews, ...predReviews];
   const reviewCount = allReviews.length;
   const avgRating = reviewCount > 0 ? allReviews.reduce((sum, r) => sum + r.rating, 0) / reviewCount : 0;
@@ -903,7 +904,7 @@ export default function ConferenceDetailClient() {
                 alt={conference.full_name}
                 style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
               />
-              {/* Layered scrim — deep at the base, airy on top */}
+              {/* Layered scrim, deep at the base, airy on top */}
               <div
                 style={{
                   position: 'absolute', inset: 0,
@@ -1023,7 +1024,7 @@ export default function ConferenceDetailClient() {
                       />
                     )}
                     <span style={{ fontSize: '14px', color: 'rgba(237,231,216,0.92)', fontFamily: "'Outfit', sans-serif", fontWeight: 500 }}>
-                      {/* City in full, country as its ISO code — the flag already
+                      {/* City in full, country as its ISO code, the flag already
                           names the country, so the full name would repeat it. */}
                       {isOnline ? 'Online' : `${conference.city}, ${(countryObj?.code ?? conference.country).toUpperCase()}`}
                     </span>
@@ -1051,7 +1052,7 @@ export default function ConferenceDetailClient() {
           )}
         </div>
 
-        {/* ── Glass stat strip — overlaps the hero ───────────────────── */}
+        {/* ── Glass stat strip, overlaps the hero ───────────────────── */}
         <div className="relative z-20 px-6 md:px-14" style={{ marginTop: '-44px' }}>
           <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
             <div
@@ -1067,7 +1068,7 @@ export default function ConferenceDetailClient() {
               }}
             >
               {/* Dates + location live in the hero overlay (flag, city, date
-                  range) — only facts NOT already shown above appear here. */}
+                  range), only facts NOT already shown above appear here. */}
               {[
                 { icon: Monitor, label: 'Format', value: capitalize(conference.format.replace('-', ' ')) },
                 { icon: GraduationCap, label: 'Level', value: conference.student_level === 'school' ? 'High School' : capitalize(conference.student_level) },
@@ -1106,7 +1107,7 @@ export default function ConferenceDetailClient() {
             {/* Left column */}
             <div className="flex-1 min-w-0">
 
-              {/* Review prompt — attendees who haven't reviewed yet */}
+              {/* Review prompt, attendees who haven't reviewed yet */}
               {showReviewPrompt && (
                 <div
                   className="relative flex items-center gap-4 rounded-[18px] px-5 py-4 mb-5"
@@ -1220,7 +1221,7 @@ export default function ConferenceDetailClient() {
                       onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.borderColor = '#1B3828'; el.style.color = '#1B3828'; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
                       onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.borderColor = 'rgba(154,138,120,0.6)'; el.style.color = '#9A8A78'; el.style.backgroundColor = 'rgba(237,231,216,0.25)'; }}
                     >
-                      Add a description — tell delegates what your conference is about
+                      Add a description, tell delegates what your conference is about
                     </button>
                   )}
                 </SectionCard>
@@ -1271,7 +1272,7 @@ export default function ConferenceDetailClient() {
                     <div className="flex gap-2 mt-4 pt-4" style={{ borderTop: '1px solid rgba(221,212,192,0.6)' }}>
                       {conference.instagram_url && (
                         <a
-                          href={conference.instagram_url}
+                          href={normalizeSocialUrl(conference.instagram_url, 'instagram') ?? '#'}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center justify-center rounded-full transition-colors"
@@ -1288,7 +1289,7 @@ export default function ConferenceDetailClient() {
                       )}
                       {conference.facebook_url && (
                         <a
-                          href={conference.facebook_url}
+                          href={normalizeSocialUrl(conference.facebook_url, 'facebook') ?? '#'}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center justify-center rounded-full transition-colors"
@@ -1301,7 +1302,7 @@ export default function ConferenceDetailClient() {
                       )}
                       {conference.tiktok_url && (
                         <a
-                          href={conference.tiktok_url}
+                          href={normalizeSocialUrl(conference.tiktok_url, 'tiktok') ?? '#'}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center justify-center rounded-full transition-colors"
@@ -1314,7 +1315,7 @@ export default function ConferenceDetailClient() {
                       )}
                       {conference.whatsapp_url && (
                         <a
-                          href={conference.whatsapp_url}
+                          href={normalizeSocialUrl(conference.whatsapp_url, 'whatsapp') ?? '#'}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center justify-center rounded-full transition-colors"
@@ -1327,7 +1328,7 @@ export default function ConferenceDetailClient() {
                       )}
                       {conference.website_url && (
                         <a
-                          href={conference.website_url}
+                          href={normalizeSocialUrl(conference.website_url) ?? '#'}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center justify-center rounded-full transition-colors"
@@ -1343,7 +1344,7 @@ export default function ConferenceDetailClient() {
                 </SectionCard>
               )}
 
-              {/* The Secretariat — trigger-maintained public roster */}
+              {/* The Secretariat, trigger-maintained public roster */}
               {activeTab === 'overview' && (conference.display_secretariat?.length ?? 0) > 0 && (
                 <SectionCard className="mb-6">
                   <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#B6871F', margin: '0 0 18px 0' }}>
@@ -1389,7 +1390,7 @@ export default function ConferenceDetailClient() {
                 </SectionCard>
               )}
 
-              {/* Person tab — participant view */}
+              {/* Person tab, participant view */}
               {activeTab === 'participant' && (
                 <ParticipantView
                   conferenceId={conference.id}
@@ -1441,7 +1442,7 @@ export default function ConferenceDetailClient() {
                     )}
                   </SectionCard>
 
-                  {/* Write a review — attendees only */}
+                  {/* Write a review, attendees only */}
                   {canReview && (
                     <SectionCard>
                       <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#B6871F', margin: '0 0 12px 0' }}>
@@ -1527,11 +1528,11 @@ export default function ConferenceDetailClient() {
 
             </div>
 
-            {/* Right column — sticky rail */}
+            {/* Right column, sticky rail */}
             <div className="w-full md:w-[340px] md:flex-shrink-0">
               <div className="flex flex-col gap-4 md:sticky" style={{ top: '12px' }}>
 
-                {/* Apply CTA — always first */}
+                {/* Apply CTA, always first */}
                 <div
                   className="relative rounded-[20px] p-6 overflow-hidden"
                   style={{ backgroundColor: '#1B3828', boxShadow: '0 16px 40px rgba(27,56,40,0.28)' }}
@@ -1550,7 +1551,7 @@ export default function ConferenceDetailClient() {
                   />
                   <div className="relative">
                     {isOrganizerViewer ? (
-                      /* 1 — Organizer/secretariat: manage affordances, never apply buttons */
+                      /* 1, Organizer/secretariat: manage affordances, never apply buttons */
                       <>
                         <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#EED98A', margin: '0 0 8px 0' }}>
                           {(organizerRole ?? 'owner').toUpperCase()}
@@ -1586,7 +1587,7 @@ export default function ConferenceDetailClient() {
                         </Link>
                       </>
                     ) : myApp ? (
-                      /* 2 — Existing applicant/participant: status card, no apply buttons */
+                      /* 2, Existing applicant/participant: status card, no apply buttons */
                       (() => {
                         const STATUS_META: Record<string, { label: string; bg: string; color: string; hint: string }> = {
                           submitted:    { label: 'SUBMITTED',    bg: 'rgba(238,217,138,0.15)', color: '#EED98A',              hint: 'Your application is under review.' },
@@ -1649,7 +1650,7 @@ export default function ConferenceDetailClient() {
                         );
                       })()
                     ) : !user ? (
-                      /* 4 — Signed out: one elegant APPLY NOW routing through sign-in */
+                      /* 4, Signed out: one elegant APPLY NOW routing through sign-in */
                       <>
                         <div className="flex items-center justify-between gap-2 mb-1">
                           <p className="font-bold text-base text-white" style={{ fontFamily: "'Outfit', sans-serif", margin: 0 }}>Ready to take the floor?</p>
@@ -1676,7 +1677,7 @@ export default function ConferenceDetailClient() {
                         </p>
                       </>
                     ) : (
-                      /* 3 — Signed in, no involvement: one APPLY NOW revealing a role picker */
+                      /* 3, Signed in, no involvement: one APPLY NOW revealing a role picker */
                       <>
                         <div className="flex items-center justify-between gap-2 mb-1">
                           <p className="font-bold text-base text-white" style={{ fontFamily: "'Outfit', sans-serif", margin: 0 }}>Apply to this Conference</p>
@@ -1823,7 +1824,7 @@ export default function ConferenceDetailClient() {
                                   })()}
                                 </span>
                               </div>
-                              {/* Fee phases breakdown — rendered only when the
+                              {/* Fee phases breakdown, rendered only when the
                                   organizer configured date-windowed pricing */}
                               {phases.length > 0 && (
                                 <div className="pb-2 flex flex-col gap-1">
@@ -1876,7 +1877,7 @@ export default function ConferenceDetailClient() {
                           );
                         })}
                         <p className="text-[10.5px] mt-3" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", lineHeight: 1.65 }}>
-                          A 5% Gavelling surcharge applies at checkout — waived with{' '}
+                          A 5% Gavelling surcharge applies at checkout, waived with{' '}
                           <span style={{ color: '#B6871F', fontWeight: 600 }}>Gavelling Unlimited</span>.
                         </p>
                         {hasUnlimited && (
@@ -1903,7 +1904,7 @@ export default function ConferenceDetailClient() {
             </div>
           </div>
 
-              {/* Committees — sortable horizontal slider */}
+              {/* Committees, sortable horizontal slider */}
               {activeTab === 'overview' && (() => {
                 const committeeStats = (c: Committee) => {
                   const slots = committeeSlots[c.id] ?? [];
@@ -2069,7 +2070,7 @@ export default function ConferenceDetailClient() {
                                   />
                                 )}
                                 <div className="flex flex-col items-center px-5 pt-7 flex-1">
-                                  {/* Emblem — free-floating */}
+                                  {/* Emblem, free-floating */}
                                   {c.logo_url ? (
                                     <img
                                       src={c.logo_url}
@@ -2129,7 +2130,7 @@ export default function ConferenceDetailClient() {
                                     )}
                                   </div>
 
-                                  {/* Topics — roman numerals */}
+                                  {/* Topics, roman numerals */}
                                   {c.topics && c.topics.length > 0 && (
                                     <div className="w-full mt-5 pt-4" style={{ borderTop: '1px solid rgba(221,212,192,0.55)' }}>
                                       {c.topics.map((topic, ti) => (
@@ -2148,7 +2149,7 @@ export default function ConferenceDetailClient() {
                                     </div>
                                   )}
 
-                                  {/* Dais + capacity — pinned to the card bottom */}
+                                  {/* Dais + capacity, pinned to the card bottom */}
                                   <div className="w-full mt-auto">
                                   <div className="w-full mt-4 pt-4" style={{ borderTop: '1px solid rgba(221,212,192,0.55)' }}>
                                     <div className="flex items-start justify-center gap-6">
@@ -2292,7 +2293,7 @@ export default function ConferenceDetailClient() {
                       </div>
                     )}
 
-                    {/* Roster modal — list format */}
+                    {/* Roster modal, list format */}
                     {rosterCommittee && (() => {
                       const c = rosterCommittee;
                       const isCrisis = c.committee_type === 'crisis';
@@ -2399,7 +2400,7 @@ export default function ConferenceDetailClient() {
                 );
               })()}
 
-              {/* Partner conferences — mutually approved, prestige gold cards */}
+              {/* Partner conferences, mutually approved, prestige gold cards */}
               {activeTab === 'overview' && partners.length > 0 && (
                 <div className="mb-6">
                   <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#B6871F', margin: '0 0 14px 0' }}>
@@ -2579,7 +2580,7 @@ export default function ConferenceDetailClient() {
           </ModalOverlay>
         )}
 
-        {/* Drag-to-fit crop step — flattens the chosen framing into a square
+        {/* Drag-to-fit crop step, flattens the chosen framing into a square
             transparent PNG, then hands off to the existing upload path. */}
         {isOrganizerViewer && logoCropFile && (
           <LogoCropModal
@@ -2603,7 +2604,7 @@ export default function ConferenceDetailClient() {
                 value={descDraft}
                 onChange={(e) => setDescDraft(e.target.value)}
                 rows={9}
-                placeholder="Tell delegates what your conference is about — history, venue, what makes it special..."
+                placeholder="Tell delegates what your conference is about: history, venue, what makes it special..."
                 className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none resize-none"
                 style={{ border: '1px solid #DDD4C0', backgroundColor: 'rgba(237,231,216,0.25)', color: '#1C1410', fontFamily: "'Outfit', sans-serif", lineHeight: 1.7 }}
                 onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
@@ -2657,7 +2658,7 @@ export default function ConferenceDetailClient() {
           </ModalOverlay>
         )}
 
-        {/* Shared committee editor — create (committee: null) and edit flows */}
+        {/* Shared committee editor, create (committee: null) and edit flows */}
         {isOrganizerViewer && committeeEditor && (
           <CommitteeEditorModal
             conference={{ id: conference.id }}

@@ -7,7 +7,7 @@ import { hasPreRegistered, PREREG_REGISTERED_KEY } from '@/lib/preregStatus';
 
 const DISMISSED_KEY = 'gavelling-prereg-dismissed';
 // Once the nudge has been shown or dismissed anywhere in this browser-tab session, it must
-// not appear again — not on navigation, not on another page. Lives in sessionStorage so it
+// not appear again, not on navigation, not on another page. Lives in sessionStorage so it
 // survives route changes and reloads within the tab, and clears when the tab is closed.
 const SESSION_KEY = 'gavelling-prereg-session';
 const DISMISS_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -48,7 +48,7 @@ export default function PreRegisterGate() {
 
     const isDev = typeof window !== 'undefined' && window.location.hostname === 'localhost';
 
-    // Persistent cross-session suppression — skipped on localhost so the nudge stays testable
+    // Persistent cross-session suppression, skipped on localhost so the nudge stays testable
     // from a fresh tab during development.
     if (!isDev) {
       if (hasPreRegistered()) return;
@@ -64,7 +64,7 @@ export default function PreRegisterGate() {
       // Re-check registered in case they signed up via the big modal during the delay.
       if (hasPreRegistered()) return;
       triggered = true;
-      markSessionHandled(); // showing it counts as handled — one appearance per session
+      markSessionHandled(); // showing it counts as handled, one appearance per session
       setShow(true);
     };
 

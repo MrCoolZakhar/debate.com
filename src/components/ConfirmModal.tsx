@@ -1,6 +1,6 @@
 'use client';
 
-// Shared confirm dialog — styled replacement for window.confirm/alert across
+// Shared confirm dialog, styled replacement for window.confirm/alert across
 // the manage area. Cream card on the house ModalOverlay backdrop (see
 // CommitteeEditorModal.tsx), forest-green confirm by default, muted-red
 // "danger" variant for destructive actions. Use the useConfirmModal() hook
@@ -25,7 +25,7 @@ export interface ConfirmModalConfig {
   cancelLabel?: string;
   danger?: boolean;
   checkbox?: ConfirmModalCheckboxConfig;
-  /** Optional async work to run before the modal resolves/closes — the confirm
+  /** Optional async work to run before the modal resolves/closes, the confirm
    *  button shows a loading spinner and both buttons disable while it's pending. */
   onConfirm?: (checked: boolean) => void | Promise<void>;
 }
@@ -51,13 +51,13 @@ export interface ConfirmModalProps {
   onCancel: () => void;
 }
 
-// ── Presentational component — usable standalone or via the hook below ──────
+// ── Presentational component, usable standalone or via the hook below ──────
 
 export function ConfirmModal({
   title, body, confirmLabel = 'Confirm', cancelLabel = 'Cancel', danger = false,
   checkbox, checked = false, onCheckedChange, loading = false, confirmDisabled = false, onConfirm, onCancel,
 }: ConfirmModalProps) {
-  // Esc cancels, Enter confirms — scoped to this modal's lifetime.
+  // Esc cancels, Enter confirms, scoped to this modal's lifetime.
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (loading) return;
@@ -148,7 +148,7 @@ export function ConfirmModal({
   );
 }
 
-// ── useConfirmModal() — imperative await-style API ───────────────────────────
+// ── useConfirmModal(), imperative await-style API ───────────────────────────
 
 interface PendingConfirm {
   config: ConfirmModalConfig;

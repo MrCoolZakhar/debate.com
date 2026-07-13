@@ -63,7 +63,7 @@ export default function PreRegisterModal({ open, onClose }: { open: boolean; onC
       setSpotsClaimed((n) => n + 1);
       setSubmitted(true);
     } catch {
-      setApiError('Network error — please try again');
+      setApiError('Network error. Please try again');
     } finally {
       setLoading(false);
     }
@@ -301,7 +301,7 @@ export default function PreRegisterModal({ open, onClose }: { open: boolean; onC
             className="flex flex-col md:w-[45%]"
             style={{ backgroundColor: '#EDE7D8' }}
           >
-            {/* Desktop image — fills full column height */}
+            {/* Desktop image, fills full column height */}
             <div className="hidden md:flex flex-1 relative overflow-hidden items-end justify-center">
               {/* Glass panel behind otter */}
               <div

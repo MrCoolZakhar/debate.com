@@ -2,8 +2,8 @@
 
 // Shared gating wrapper for participant content. Payment timing + status
 // decide whether children render, or a lock-card / under-review card takes
-// their place — see getGateState in shared.tsx for the three-way logic.
-// Never wraps the payment panel or Q&R — those are always visible.
+// their place, see getGateState in shared.tsx for the three-way logic.
+// Never wraps the payment panel or Q&R, those are always visible.
 
 import { Lock, Clock } from 'lucide-react';
 import { SectionCard, OUTFIT, type GateState } from './shared';

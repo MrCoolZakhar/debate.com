@@ -18,7 +18,7 @@ import {
 
 const OUTFIT = "'Outfit', sans-serif";
 
-// Grain texture — same feTurbulence data-URI as conferences/ConferenceCard.tsx
+// Grain texture, same feTurbulence data-URI as conferences/ConferenceCard.tsx
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
 
 const EASE = 'cubic-bezier(0.22,1,0.36,1)';
@@ -105,7 +105,7 @@ function NotStartedCard({
         <p className="text-sm truncate" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>{data.conf.name}</p>
       </div>
 
-      {/* Centered overlay — session code, ready to share */}
+      {/* Centered overlay, session code, ready to share */}
       <div
         className="rounded-2xl px-5 py-7 my-4 flex flex-col items-center text-center"
         style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', boxShadow: '0 8px 24px rgba(27,56,40,0.1)' }}
@@ -120,7 +120,7 @@ function NotStartedCard({
               <CopyButton value={session.code} />
             </div>
             <p className="text-[11px] mt-3" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-              Session code — share with your chairs
+              Session code: share with your chairs
             </p>
           </>
         ) : (
@@ -321,7 +321,7 @@ function LiveCard({
           style={{ backgroundColor: 'rgba(238,217,138,0.25)', border: '1px solid rgba(182,135,31,0.45)' }}
         >
           <p className="text-xs font-extrabold uppercase" style={{ color: '#B6871F', fontFamily: OUTFIT, letterSpacing: '0.06em' }}>
-            Voting procedure — {votingDr.docCode || 'draft resolution'} on the floor
+            Voting procedure: {votingDr.docCode || 'draft resolution'} on the floor
           </p>
         </div>
       )}
@@ -351,7 +351,7 @@ function LiveCard({
         </span>
       </div>
 
-      {/* Up next — flowing speakers strip */}
+      {/* Up next, flowing speakers strip */}
       <div className="mt-4">
         <Eyebrow style={{ fontSize: 10 }}>Up next</Eyebrow>
         <div className="flex items-center mt-1.5" style={{ paddingLeft: 6, minHeight: 22 }}>
@@ -419,7 +419,7 @@ export default function LiveStatusPage() {
       const confRows = confCommittees ?? [];
       const sessionIds = confRows.map((c) => c.session_id).filter((id): id is string => !!id);
 
-      // Batched anon reads — live session tables carry public RLS.
+      // Batched anon reads, live session tables carry public RLS.
       let sessions: Record<string, unknown>[] = [];
       let speakers: Record<string, unknown>[] = [];
       let delegates: Record<string, unknown>[] = [];
@@ -552,7 +552,7 @@ export default function LiveStatusPage() {
     }
   }, [conference?.id, authSession?.access_token]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Initial load + 10s polling (kept simple + robust for N committees — no per-committee channels)
+  // Initial load + 10s polling (kept simple + robust for N committees, no per-committee channels)
   useEffect(() => {
     loadAll();
     const poll = setInterval(loadAll, 10_000);

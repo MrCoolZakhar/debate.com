@@ -4,11 +4,11 @@ import type { Metadata } from 'next';
 import React from 'react';
 
 export const metadata: Metadata = {
-  title: 'How to Write a MUN Position Paper — Format, Tips & Examples',
+  title: 'How to Write a MUN Position Paper: Format, Tips & Examples',
   description: 'Step-by-step guide to writing a Model UN position paper: correct format, what to include, common mistakes, and examples that impress chairs.',
   alternates: { canonical: 'https://gavelling.com/blog/mun-position-paper-guide' },
   openGraph: {
-    title: 'How to Write a MUN Position Paper — Format, Tips & Examples',
+    title: 'How to Write a MUN Position Paper: Format, Tips & Examples',
     description: 'Write position papers that impress chairs and set you up to lead debate.',
     url: 'https://gavelling.com/blog/mun-position-paper-guide',
     siteName: 'Gavelling',
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
 const articleSchema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
-  headline: 'How to Write a MUN Position Paper — Format, Tips & Examples',
+  headline: 'How to Write a MUN Position Paper: Format, Tips & Examples',
   description: 'Step-by-step guide to writing a MUN position paper.',
   url: 'https://gavelling.com/blog/mun-position-paper-guide',
   datePublished: '2026-06-07',
@@ -68,27 +68,27 @@ export default function Article() {
       <div style={s.page}>
         <div style={s.wrap}>
           <Link href="/blog" style={s.back}>← MUN Resources</Link>
-          <h1 style={s.h1}>How to Write a MUN Position Paper — Format, Tips & Examples</h1>
+          <h1 style={s.h1}>How to Write a MUN Position Paper: Format, Tips & Examples</h1>
           <p style={s.meta}>By Gavelling · June 2026 · 10 min read</p>
           <article style={s.article}>
 
-            <p style={s.p}>A position paper is your entry ticket to serious MUN. Many conferences require one before committee even begins. Done well, it forces you to clarify your country's stance before walking in the door — and signals to chairs that you are prepared to lead. Done poorly, it reads like a Wikipedia summary with a flag at the top. This guide shows you how to write one that actually matters.</p>
+            <p style={s.p}>A position paper is your entry ticket to serious MUN. Many conferences require one before committee even begins. Done well, it forces you to clarify your country's stance before walking in the door, and signals to chairs that you are prepared to lead. Done poorly, it reads like a Wikipedia summary with a flag at the top. This guide shows you how to write one that actually matters.</p>
 
             <h2 style={s.h2}>What Is a MUN Position Paper?</h2>
             <p style={s.p}>A position paper is a one-to-two page document written from your assigned country's perspective on the committee topic(s). It is submitted to the dais before the conference and may be graded as part of your overall award. Its purpose is to articulate your country's official stance, the reasoning behind it, and the solutions your delegation will advocate for.</p>
 
             <h2 style={s.h2}>Standard Format</h2>
-            <p style={s.p}>Most conferences follow a similar structure. Always check your specific conference's guidelines — some have strict page limits, required headings, or particular citation formats.</p>
+            <p style={s.p}>Most conferences follow a similar structure. Always check your specific conference's guidelines; some have strict page limits, required headings, or particular citation formats.</p>
 
             <h3 style={s.h3}>Header Block</h3>
-            <p style={s.p}>At the top of the paper include: Committee name, Topic, Country, Delegate name(s), and School/Institution. Keep this concise — it should not take up more than four lines.</p>
+            <p style={s.p}>At the top of the paper include: Committee name, Topic, Country, Delegate name(s), and School/Institution. Keep this concise; it should not take up more than four lines.</p>
 
             <h3 style={s.h3}>Section 1: Country Background and Topic Overview</h3>
-            <p style={s.p}>Briefly establish your country's relevant context. This is not a history lesson — it is a tight paragraph explaining why this issue matters to your country specifically. For example, if the topic is climate change adaptation, and you represent Bangladesh, you would note that Bangladesh is among the most climate-vulnerable nations on earth, with 17% of its territory at risk from a one-metre sea level rise.</p>
+            <p style={s.p}>Briefly establish your country's relevant context. This is not a history lesson. It is a tight paragraph explaining why this issue matters to your country specifically. For example, if the topic is climate change adaptation, and you represent Bangladesh, you would note that Bangladesh is among the most climate-vulnerable nations on earth, with 17% of its territory at risk from a one-metre sea level rise.</p>
 
             <h3 style={s.h3}>Section 2: Country Position</h3>
-            <p style={s.p}>State your country's position explicitly. Not what you personally think — what the government of your assigned country officially supports. Reference actual UN votes, treaties your country has signed, or statements from ministers. This is where research pays off.</p>
-            <div style={s.callout}><p style={s.calloutText}>Avoid writing "Country X believes..." with no evidence. Always cite something — a UN resolution vote, a treaty, a government press release. It shows you did the work.</p></div>
+            <p style={s.p}>State your country's position explicitly. Not what you personally think, but what the government of your assigned country officially supports. Reference actual UN votes, treaties your country has signed, or statements from ministers. This is where research pays off.</p>
+            <div style={s.callout}><p style={s.calloutText}>Avoid writing "Country X believes..." with no evidence. Always cite something: a UN resolution vote, a treaty, a government press release. It shows you did the work.</p></div>
 
             <h3 style={s.h3}>Section 3: Proposed Solutions</h3>
             <p style={s.p}>This is the most important and most under-written section. What does your country actually want the committee to do? Propose specific, actionable solutions that align with your country's interests. These should translate directly into operative clauses in your eventual working paper. Vague proposals ("increase international cooperation") are forgettable. Specific ones ("establish a UN technology transfer fund capitalised at $10 billion annually") are not.</p>

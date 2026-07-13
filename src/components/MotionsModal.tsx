@@ -232,7 +232,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
       <div className="flex-1 px-7 pt-0 pb-4 space-y-4 overflow-y-auto">
         <h2 className="text-3xl font-black tracking-wide" style={{ color: '#1B3828' }}>{editingMotion ? t('motions_edit_heading') : t('motions_raise_heading')}</h2>
 
-        {/* Type tabs — always shown */}
+        {/* Type tabs, always shown */}
         <div className="flex gap-1.5 flex-wrap items-stretch">
           <div className="flex gap-1.5 flex-1 flex-wrap">
             {enabledTypes.map((motionType) => (
@@ -244,7 +244,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
               </button>
             ))}
           </div>
-          {/* Special debate control buttons — half size, red, stacked */}
+          {/* Special debate control buttons, half size, red, stacked */}
           <div className="flex flex-col gap-1 self-stretch">
             <button type="button" onClick={() => setType('suspend-debate')}
               className={`px-2 flex-1 rounded-lg border text-xs font-bold transition-colors ${type === 'suspend-debate' ? 'bg-[#8B2020] border-red-700 text-white' : 'border-[#8B2020]/40 bg-[#8B2020]/20 text-[#8B2020] hover:bg-[#8B2020]/20'}`}>
@@ -259,7 +259,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
 
         {type && (
           <>
-            {/* Tour de Table & Consultation — optional topic at the very top */}
+            {/* Tour de Table & Consultation, optional topic at the very top */}
             {(type === 'tour' || type === 'consultation') && (
               <div>
                 <label className="block text-lg font-semibold text-[#6A5A4A] mb-2">
@@ -278,7 +278,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
               </div>
             )}
 
-            {/* Tour de Table — speaking time per delegate + order */}
+            {/* Tour de Table, speaking time per delegate + order */}
             {type === 'tour' && (
               <>
                 <div className="bg-transparent border border-[#DDD4C0] rounded-2xl p-2.5 space-y-1.5">
@@ -333,7 +333,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
               </>
             )}
 
-            {/* Unmoderated / Consultation — total time */}
+            {/* Unmoderated / Consultation, total time */}
             {(type === 'unmoderated' || type === 'consultation') && (
               <div>
                 <label className="block text-lg font-semibold text-[#6A5A4A] mb-2">{t('motions_total_time_label')}</label>
@@ -362,7 +362,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
               </div>
             )}
 
-            {/* Moderated caucus — Topic first, then Proposed By */}
+            {/* Moderated caucus, Topic first, then Proposed By */}
             {type === 'moderated' && (
               <>
                 <div>
@@ -375,7 +375,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
                   <label className="block text-lg font-semibold mb-2" style={{ color: '#3D7A52' }}>{t('motions_proposed_by')}</label>
                   <ProposerInput candidates={presentCountries} value={proposer} onChange={setProposer} blockedCountries={countriesWithMotions} />
                 </div>
-                {/* Total time + speaking time — side by side to avoid scroll */}
+                {/* Total time + speaking time, side by side to avoid scroll */}
                 <div className="flex gap-4 items-start">
                   <div className="flex-1">
                     <label className="block text-sm font-semibold text-[#6A5A4A] mb-2">{t('motions_total_time_label')}</label>
@@ -469,7 +469,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
 }) {
   const t = useT();
   const { getSettings } = useSettingsStore();
-  // Filter out join-request pseudo-motions — those are handled in the chair banner, not here
+  // Filter out join-request pseudo-motions, those are handled in the chair banner, not here
   const initialSorted = [...(committee.pendingMotions ?? [])]
     .filter((m) => m.type !== ('join-request' as string) && (m.type as string) !== 'gsl-request')
     .sort((a, b) => {
@@ -553,7 +553,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
             : 'p-3 space-y-1 border border-[#DDD4C0]'
         }`}
       >
-        {/* Position badge — straddles the top-right border corner */}
+        {/* Position badge, straddles the top-right border corner */}
         <div
           className="absolute top-0 right-0 translate-x-1/2 -translate-y-1/2 w-6 h-6 rounded-full flex items-center justify-center text-xs font-black z-10 pointer-events-none select-none"
           style={{ backgroundColor: '#1B3828', color: '#EED98A' }}
@@ -589,7 +589,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
           </p>
         )}
 
-        {/* Timings — emphasised */}
+        {/* Timings, emphasised */}
         {m.type !== 'tour' && m.totalTime > 0 && (
           <div className="flex flex-col gap-0.5">
             {large ? (
@@ -646,7 +646,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
           </div>
         )}
 
-        {/* Required votes — primary card only */}
+        {/* Required votes, primary card only */}
         {isPrimary && (
           <div className="flex items-center gap-2 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-3 py-1.5">
             <span className="text-xs font-semibold" style={{ color: '#1B3828' }}>{fraction === 'Simple majority' ? t('motions_simple_majority') : t('motions_supermajority')}</span>
@@ -654,7 +654,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
           </div>
         )}
 
-        {/* Accept/Reject/Edit — primary card only; non-primary has inline pencil */}
+        {/* Accept/Reject/Edit, primary card only; non-primary has inline pencil */}
         {isPrimary && !isViewOnly && (
           <div className="flex gap-2 mt-auto">
             <button onClick={() => onAccepted(m)}
@@ -686,7 +686,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
         <span>{t('motions_drag_hint')}</span>
       </div>
       <div className="flex flex-1 min-h-0">
-        {/* Left column — primary motion being voted on */}
+        {/* Left column, primary motion being voted on */}
         {/* pt-3 pe-4: give room for the badge that translates outside the card's top-right corner */}
         <div className="flex-1 flex flex-col min-w-0 overflow-y-auto pt-3 pe-4">
           {renderCard(primary, true, 0)}
@@ -704,7 +704,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
           </svg>
           <div className="flex-1 w-px" style={{ backgroundColor: '#C8BAA8' }} />
         </div>
-        {/* Right column — queued motions + Raise a Motion button */}
+        {/* Right column, queued motions + Raise a Motion button */}
         {/* pt-3 pe-4: give room for the badge that translates outside each card's top-right corner */}
         <div className="w-72 flex flex-col pt-3 pe-4">
           {rest.map((m, i) => (
@@ -845,7 +845,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
     update((c) => ({ ...c, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== oldId) }));
     if (!oldId.startsWith('temp-')) removePendingMotionInDB(oldId);
 
-    // Add replacement — same logic as handleRaised but NO duplicate check
+    // Add replacement, same logic as handleRaised but NO duplicate check
     const tempId = `temp-${Date.now()}`;
     const disruptiveness = localCalcDisruptiveness(motion.type, motion.totalTime);
 
@@ -866,7 +866,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
   };
 
   const handleMotionAccepted = async (motion: PendingMotion) => {
-    // Clear ALL other pending motions — only the accepted one proceeds
+    // Clear ALL other pending motions, only the accepted one proceeds
     // GSL (speakersList) is NEVER modified here
 
     if (motion.type === 'suspend-debate' || motion.type === 'end-debate') {
@@ -929,15 +929,15 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
       return;
 
     } else if (motion.type === 'tour') {
-      // Tour de Table — all present delegates ordered by tourOrder
-      // GSL is NEVER touched — tour uses caucusQueue exclusively
-      const tourOrder = motion.tourOrder ?? 'asc';   // explicit default — never silently desc
+      // Tour de Table, all present delegates ordered by tourOrder
+      // GSL is NEVER touched, tour uses caucusQueue exclusively
+      const tourOrder = motion.tourOrder ?? 'asc';   // explicit default, never silently desc
       const alphabetical = committee.delegates
         .filter((d) => d.status !== 'absent')
         .sort((a, b) => compareCountryNames(a.country, b.country, language));
 
       if (tourOrder === 'custom') {
-        // Room Order — empty queue, chair calls speakers manually
+        // Room Order, empty queue, chair calls speakers manually
         const n = alphabetical.length;
         const totalTourTime = n * motion.speakingTime;
         const caucus = {
@@ -947,7 +947,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
           speakingTime: motion.speakingTime, speakerTimeRemaining: motion.speakingTime,
           currentSpeaker: null, proposerPosition: null, spokenCountries: [],
         };
-        // Numbered placeholder queue — "Speaker 1", "Speaker 2", etc.
+        // Numbered placeholder queue, "Speaker 1", "Speaker 2", etc.
         const caucusQueue = alphabetical.map((_, i) => ({
           delegateId: `room-order-${i + 1}`,
           country: `Speaker ${i + 1}`,
