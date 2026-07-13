@@ -5,7 +5,6 @@
 
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
-import { getCountryByName } from '@/lib/countries';
 
 // ── Canonical columns ────────────────────────────────────────────────────────
 
@@ -151,12 +150,23 @@ export interface CommitteeLite {
   abbreviation: string | null;
 }
 
+/** A single allocatable row from committee_country_slots — a country for a
+ *  standard committee, or a character for a crisis one (same table, the
+ *  committee editor writes country_code = getCountryByName(name)?.code ??
+ *  name, so a character just carries its own name as the code). */
+export interface RosterSlot {
+  country_code: string;
+  country_name: string;
+}
+
 export interface ClassifyContext {
   committees: CommitteeLite[];
   /** `${lowercased email}|${role}` for every application already on this conference (invited_email or profile email). */
   existingEmailRole: Set<string>;
   /** `${committeeId}|${countryCode}` for every country already allocated in this conference. */
   existingAllocations: Set<string>;
+  /** Every committee's roster (committee_country_slots), keyed by committee id — the single source of truth for what's assignable in that committee, standard or crisis alike. */
+  committeeSlots: Map<string, RosterSlot[]>;
 }
 
 function matchCommittee(committees: CommitteeLite[], value: string): CommitteeLite | null {
@@ -165,6 +175,16 @@ function matchCommittee(committees: CommitteeLite[], value: string): CommitteeLi
   return committees.find(c =>
     c.name.trim().toLowerCase() === v || (c.abbreviation && c.abbreviation.trim().toLowerCase() === v)
   ) ?? null;
+}
+
+/** Matches a raw assignment value against ONE committee's roster,
+ *  case-insensitive on country_name — never against the global country list,
+ *  so a committee's actual matrix (which may omit countries, or list crisis
+ *  characters instead) is the sole authority. */
+function matchRosterSlot(slots: RosterSlot[], value: string): RosterSlot | null {
+  const v = value.trim().toLowerCase();
+  if (!v) return null;
+  return slots.find(s => s.country_name.trim().toLowerCase() === v) ?? null;
 }
 
 function mapPayment(raw: string): { status: 'paid' | 'unpaid' | 'waived'; unknown: boolean } {
@@ -232,19 +252,27 @@ export function classifyImportRows(rows: ParsedImportRow[], ctx: ClassifyContext
       } else {
         committeeLabel = committee.abbreviation ?? committee.name;
         if (raw.country.trim()) {
-          const country = getCountryByName(raw.country.trim());
-          if (!country) {
-            reasons.push({ severity: 'warning', message: `Country "${raw.country}" not recognized, so imported without allocation.` });
+          // Validated against THIS committee's own roster, never the global
+          // country list — the only source of truth for what's assignable
+          // here, a country for a standard committee or a character for a
+          // crisis one.
+          const slots = ctx.committeeSlots.get(committee.id) ?? [];
+          const slot = matchRosterSlot(slots, raw.country);
+          if (!slot) {
+            reasons.push({ severity: 'warning', message: `'${raw.country.trim()}' is not in ${committeeLabel}'s roster, so imported without allocation.` });
           } else {
-            const slotKey = `${committee.id}|${country.code}`;
+            const slotKey = `${committee.id}|${slot.country_code}`;
             const occupied = ctx.existingAllocations.has(slotKey) || claimedInFile.has(slotKey);
             if (occupied) {
-              reasons.push({ severity: 'warning', message: `${country.name} is already allocated in ${committeeLabel}, so imported without allocation.` });
+              reasons.push({ severity: 'warning', message: `${slot.country_name} is already allocated in ${committeeLabel}, so imported without allocation.` });
             } else {
               claimedInFile.add(slotKey);
               committeeId = committee.id;
-              countryCode = country.code;
-              countryName = country.name;
+              // Copied verbatim from the matched slot row, no derivation —
+              // guarantees import-created allocations are byte-identical to
+              // UI-created ones.
+              countryCode = slot.country_code;
+              countryName = slot.country_name;
             }
           }
         }

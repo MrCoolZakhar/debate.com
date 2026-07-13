@@ -12,7 +12,7 @@ import { useConfirmModal } from '@/components/ConfirmModal';
 import { FlagImg } from '@/components/FlagImg';
 import {
   buildImportTemplateCSV, parseImportFile, classifyImportRows, summarizeRows,
-  type ClassifiedImportRow, type CommitteeLite, type ImportableRole,
+  type ClassifiedImportRow, type CommitteeLite, type ImportableRole, type RosterSlot,
 } from '@/lib/applicantImport';
 import { queueImportJoinInviteEmails } from '@/lib/emailEvents';
 
@@ -68,6 +68,7 @@ interface DbContext {
   committees: CommitteeLite[];
   existingEmailRole: Set<string>;
   existingAllocations: Set<string>;
+  committeeSlots: Map<string, RosterSlot[]>;
 }
 
 async function loadContext(supabase: ReturnType<typeof getAuthedClient>, conferenceId: string): Promise<DbContext> {
@@ -88,7 +89,23 @@ async function loadContext(supabase: ReturnType<typeof getAuthedClient>, confere
     existingAllocations.add(`${al.conference_committee_id}|${al.country_code}`);
   }
 
-  return { committees: (committees ?? []) as CommitteeLite[], existingEmailRole, existingAllocations };
+  // Every committee's roster, the sole source of truth for what's
+  // assignable there — a country for a standard committee, or a character
+  // for a crisis one (same table, same shape).
+  const committeeIds = ((committees ?? []) as CommitteeLite[]).map(c => c.id);
+  const committeeSlots = new Map<string, RosterSlot[]>();
+  if (committeeIds.length > 0) {
+    const { data: slots } = await supabase
+      .from('committee_country_slots')
+      .select('conference_committee_id, country_code, country_name')
+      .in('conference_committee_id', committeeIds);
+    for (const s of (slots ?? []) as { conference_committee_id: string; country_code: string; country_name: string }[]) {
+      if (!committeeSlots.has(s.conference_committee_id)) committeeSlots.set(s.conference_committee_id, []);
+      committeeSlots.get(s.conference_committee_id)!.push({ country_code: s.country_code, country_name: s.country_name });
+    }
+  }
+
+  return { committees: (committees ?? []) as CommitteeLite[], existingEmailRole, existingAllocations, committeeSlots };
 }
 
 // ── Row classification pill ──────────────────────────────────────────────────
@@ -562,7 +579,7 @@ export default function ImportPage() {
                 <p><strong>delegation</strong>:society/school name. Blank = independent.</p>
                 <p><strong>payment</strong>:paid, unpaid, or waived. Defaults to unpaid.</p>
                 <p><strong>committee</strong>:an existing committee&apos;s name or abbreviation.</p>
-                <p><strong>country</strong>:requires a matching committee to take effect.</p>
+                <p><strong>country</strong>:a name from the committee&apos;s roster — a country (France) or, for crisis committees, a character (Fidel Castro).</p>
               </div>
             </div>
           </div>
