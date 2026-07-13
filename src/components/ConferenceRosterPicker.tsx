@@ -22,15 +22,15 @@ import { UNSC_MEMBERS, WHO_MEMBERS, IMF_MEMBERS, WORLD_BANK_MEMBERS, UNEP_MEMBER
 export type ImportanceTier = 'standard' | 'high' | 'medium' | 'low';
 // Visible cycle order: standard → high → medium → low → standard, which also
 // walks the dash count 1 → 2 → 3 → 4 → 1.
-const TIER_CYCLE: ImportanceTier[] = ['standard', 'high', 'medium', 'low'];
+const TIER_CYCLE: ImportanceTier[] = ['standard', 'low', 'medium', 'high'];
 // `label` is retained for the accessible title/aria text. `color` doubles as the
 // dash colour; `dashes` is how many vertical bars render for the tier. `bg` is
 // kept because it feeds nothing structural but documents the tier's tint.
 const TIER_META: Record<ImportanceTier, { label: string; color: string; bg: string; dashes: number }> = {
   standard: { label: 'Standard', color: '#9A8A78', bg: 'rgba(154,138,120,0.12)', dashes: 1 },
-  high:     { label: 'High',     color: '#3D7A52', bg: 'rgba(61,122,82,0.12)',   dashes: 2 },
+  low:      { label: 'Low',      color: '#3D7A52', bg: 'rgba(61,122,82,0.12)',   dashes: 2 },
   medium:   { label: 'Medium',   color: '#D4A72C', bg: 'rgba(212,167,44,0.14)',  dashes: 3 },
-  low:      { label: 'Low',      color: '#8B2020', bg: 'rgba(139,32,32,0.10)',   dashes: 4 },
+  high:     { label: 'High',     color: '#8B2020', bg: 'rgba(139,32,32,0.10)',   dashes: 4 },
 };
 
 // A roster row: a country name (or free-text character/entity) plus its
@@ -55,7 +55,7 @@ function ImportanceDashes({ tier, onClick }: { tier: ImportanceTier; onClick: ()
     <button
       type="button"
       onClick={onClick}
-      title={`Importance: ${meta.label}. Click to cycle: standard, high, medium, low.`}
+      title={`Importance: ${meta.label}. Click to cycle: standard, low, medium, high.`}
       aria-label={`Importance: ${meta.label}`}
       className="flex items-end gap-[2px] focus:outline-none transition-opacity"
       style={{ padding: '3px 4px', borderRadius: 5, height: 20, opacity: 0.9 }}
