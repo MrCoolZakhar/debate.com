@@ -16,6 +16,7 @@ import {
   NeuCard, NeuInset, NeuIconDisc, NeuStatTile, NeuProgress, NeuRing,
   NeuPill, NeuButton, NeuChecklistRow, Emoji3D, NEU, NEU_GRADIENTS, OUTFIT, EASE,
 } from '@/components/neu';
+import Portal from '@/components/Portal';
 
 const RED = '#A8442F';
 
@@ -46,7 +47,7 @@ function PublishModal({
   }
 
   return (
-    <div
+    <Portal><div
       className="fixed inset-0 z-50 flex items-center justify-center px-4"
       style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
       onClick={onClose}
@@ -89,7 +90,7 @@ function PublishModal({
           </button>
         </div>
       </div>
-    </div>
+    </div></Portal>
   );
 }
 
@@ -128,7 +129,7 @@ function ShareModal({
   }
 
   return (
-    <div
+    <Portal><div
       className="fixed inset-0 z-50 flex items-center justify-center px-4"
       style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
       onClick={onClose}
@@ -219,7 +220,7 @@ function ShareModal({
           DONE
         </button>
       </div>
-    </div>
+    </div></Portal>
   );
 }
 

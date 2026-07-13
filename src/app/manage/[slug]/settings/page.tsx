@@ -12,7 +12,8 @@ import { useAuth } from '@/components/AuthProvider';
 import { createClient } from '@supabase/supabase-js';
 import { UN_COUNTRIES } from '@/lib/countries';
 import { Pill } from '@/app/account/accountUi';
-import { useConfirmModal } from '@/components/ConfirmModal';
+import { useConfirmModal, ConfirmModal } from '@/components/ConfirmModal';
+import Portal from '@/components/Portal';
 import { LogoDisc } from '@/components/LogoDisc';
 import { LogoCropModal } from '@/components/LogoCropModal';
 import { DatePicker } from '@/components/DatePicker';
@@ -252,7 +253,7 @@ function QuestionModal({ existing, onSave, onClose }: {
   }
 
   return (
-    <div
+    <Portal><div
       className="fixed inset-0 z-50 flex items-center justify-center px-4"
       style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
       onClick={onClose}
@@ -348,7 +349,7 @@ function QuestionModal({ existing, onSave, onClose }: {
           </button>
         </div>
       </div>
-    </div>
+    </div></Portal>
   );
 }
 
@@ -2868,39 +2869,22 @@ export default function SettingsPage() {
           )}
 
           {confirmingDelete && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center px-6" style={{ backgroundColor: 'rgba(28,20,16,0.55)' }} onClick={() => { if (!deleting) setConfirmingDelete(false); }}>
-              <div className="max-w-md w-full rounded-2xl p-6" style={{ backgroundColor: '#FAF8F3' }} onClick={e => e.stopPropagation()}>
-                <p className="font-bold text-lg mb-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Delete this conference?</p>
-                <p className="text-sm mb-6" style={{ color: '#6A5A4A', fontFamily: "'Outfit', sans-serif" }}>
-                  Are you sure you want to delete this conference? This action is irreversible, all data relating to this conference will be lost.
-                </p>
-                <div className="flex gap-2">
-                  <button
-                    onClick={async () => {
-                      if (!session || deleting) return;
-                      setDeleting(true);
-                      const supabase = getAuthedClient(session.access_token);
-                      const { error } = await supabase.rpc('delete_conference', { p_conference_id: view.id });
-                      if (error) { setDeleteError(error.message || 'Could not delete view.'); setConfirmingDelete(false); setDeleting(false); return; }
-                      window.location.href = '/conferences';
-                    }}
-                    disabled={deleting}
-                    className="flex-1 rounded-xl py-2.5 font-bold text-sm text-white focus:outline-none transition-colors"
-                    style={{ backgroundColor: deleting ? '#DDD4C0' : '#8B2020', fontFamily: "'Outfit', sans-serif" }}
-                  >
-                    {deleting ? 'DELETING…' : 'YES, DELETE'}
-                  </button>
-                  <button
-                    onClick={() => setConfirmingDelete(false)}
-                    disabled={deleting}
-                    className="flex-1 rounded-xl py-2.5 font-semibold text-sm focus:outline-none transition-colors"
-                    style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}
-                  >
-                    CANCEL
-                  </button>
-                </div>
-              </div>
-            </div>
+            <ConfirmModal
+              title="Delete this conference?"
+              body="Are you sure you want to delete this conference? This action is irreversible, all data relating to this conference will be lost."
+              confirmLabel="Yes, delete"
+              danger
+              loading={deleting}
+              onConfirm={async () => {
+                if (!session || deleting) return;
+                setDeleting(true);
+                const supabase = getAuthedClient(session.access_token);
+                const { error } = await supabase.rpc('delete_conference', { p_conference_id: view.id });
+                if (error) { setDeleteError(error.message || 'Could not delete view.'); setConfirmingDelete(false); setDeleting(false); return; }
+                window.location.href = '/conferences';
+              }}
+              onCancel={() => { if (!deleting) setConfirmingDelete(false); }}
+            />
           )}
         </div>
       </div>

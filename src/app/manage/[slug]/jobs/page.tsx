@@ -5,6 +5,7 @@ import { Building2, CreditCard, Clock, Users, X, ChevronDown, ChevronUp } from '
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
+import Portal from '@/components/Portal';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -466,7 +467,7 @@ function PostingModal({
   }
 
   return (
-    <div
+    <Portal><div
       className="fixed inset-0 z-50 flex items-center justify-center"
       style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
@@ -637,7 +638,7 @@ function PostingModal({
           </button>
         </div>
       </div>
-    </div>
+    </div></Portal>
   );
 }
 

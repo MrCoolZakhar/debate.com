@@ -2,7 +2,7 @@
 
 import { Suspense, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Mail, AlertTriangle, Send, Bell, Inbox, Copy, X, ChevronDown, Image as ImageIcon, Palette } from 'lucide-react';
+import { Mail, AlertTriangle, Send, Bell, Inbox, Copy, X, ChevronDown, Image as ImageIcon, Palette, Trash2 } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
@@ -61,7 +61,7 @@ interface AppRow {
   assigned_committee_id: string | null;
   assigned_committee: { abbreviation: string | null; name: string } | null;
   assigned_country_name: string | null;
-  profiles: { display_name: string; email: string | null } | null;
+  profiles: { display_name: string; email: string | null; notify_email_marketing: boolean | null } | null;
   invited_email: string | null;
   invited_name: string | null;
 }
@@ -477,6 +477,7 @@ function CommunicationsPageInner() {
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
   const [swapActing, setSwapActing] = useState(false);
   const [swapError, setSwapError] = useState('');
+  const [deletingThread, setDeletingThread] = useState(false);
   const { draftNotices, pushDraftNotice, dismissDraftNotice } = useDraftNotices();
 
   // ── Builder state ──
@@ -575,7 +576,7 @@ function CommunicationsPageInner() {
         assigned_committee_id,
         assigned_committee:conference_committees!assigned_committee_id (abbreviation, name),
         assigned_country_name,
-        profiles (display_name, email),
+        profiles (display_name, email, notify_email_marketing),
         invited_email, invited_name
       `)
       .eq('conference_id', conference.id);
@@ -772,9 +773,19 @@ function CommunicationsPageInner() {
     [applications]
   );
 
+  // Empty delegations (an import typo, or a society nobody ever actually
+  // joined) are silently dropped from the audience picker, `applications`
+  // here is unfiltered by status, so this reflects membership at any stage.
+  const nonEmptySocietyIds = useMemo(
+    () => new Set(applications.filter(a => a.society_id).map(a => a.society_id as string)),
+    [applications]
+  );
   const delegationOptions = useMemo(
-    () => [...societies.map(s => ({ value: s.id, label: s.name })), { value: INDEPENDENT_KEY, label: 'Independents' }],
-    [societies]
+    () => [
+      ...societies.filter(s => nonEmptySocietyIds.has(s.id)).map(s => ({ value: s.id, label: s.name })),
+      { value: INDEPENDENT_KEY, label: 'Independents' },
+    ],
+    [societies, nonEmptySocietyIds]
   );
 
   function matchesAudienceFilters(a: AppRow): boolean {
@@ -808,7 +819,7 @@ function CommunicationsPageInner() {
     [eligibleApplications, selRoles, selPayment, selDelegations, selAttendance, selStatus]
   );
 
-  const finalRecipients = useMemo(() => {
+  const matchedRecipients = useMemo(() => {
     const byId = new Map(applications.map(a => [a.id, a]));
     const result: AppRow[] = [];
     const seen = new Set<string>();
@@ -825,17 +836,29 @@ function CommunicationsPageInner() {
     return result;
   }, [filterMatched, excludedIds, manuallyAddedIds, applications]);
 
+  // GDPR: registered recipients who opted out of marketing emails (Account ->
+  // notify_email_marketing) never receive an ad-hoc/broadcast send, manual
+  // add can't override that consent. Imported/unclaimed applicants (no
+  // profiles row) have no preference to honour yet, so they stay eligible.
+  // `finalRecipients` is the actual send list; the excluded count is
+  // surfaced to the organizer as a "N opted out" note.
+  const finalRecipients = useMemo(
+    () => matchedRecipients.filter(a => a.profiles?.notify_email_marketing !== false),
+    [matchedRecipients]
+  );
+  const optedOutCount = matchedRecipients.length - finalRecipients.length;
+
   const manualMatches = useMemo(() => {
     if (!manualSearch.trim()) return [];
     const q = manualSearch.trim().toLowerCase();
-    const alreadyIn = new Set(finalRecipients.map(a => a.id));
+    const alreadyIn = new Set(matchedRecipients.map(a => a.id));
     return applications
       .filter(a => !alreadyIn.has(a.id) && (
         (a.profiles?.display_name ?? a.invited_name ?? '').toLowerCase().includes(q) ||
         (a.profiles?.email ?? a.invited_email ?? '').toLowerCase().includes(q)
       ))
       .slice(0, 8);
-  }, [applications, manualSearch, finalRecipients]);
+  }, [applications, manualSearch, matchedRecipients]);
 
   function buildContext(app: AppRow): EmailTokenContext {
     if (!conference) return {};
@@ -1546,6 +1569,33 @@ function CommunicationsPageInner() {
       setInboxRequests(prev => prev.map(r => (r.id === req.id ? { ...r, ...prevReq } : r)));
       showFlash('err', e instanceof Error ? e.message : `Could not ${close ? 'close' : 'reopen'} the thread.`);
     });
+  }
+
+  // Organizer-only: hard-deletes a thread and its messages. Participants
+  // never see this action, they keep only close/reopen.
+  async function handleDeleteThread() {
+    if (!session || !selectedRequest || deletingThread) return;
+    const req = selectedRequest;
+    const { confirmed } = await confirmDelete({
+      title: 'Delete this thread?',
+      body: 'The thread and every message in it are permanently deleted. This cannot be undone.',
+      confirmLabel: 'Delete',
+      danger: true,
+    });
+    if (!confirmed) return;
+
+    setDeletingThread(true);
+    const supabase = getAuthedClient(session.access_token);
+    const { error: msgError } = await supabase.from('conference_request_messages').delete().eq('request_id', req.id);
+    if (msgError) { showFlash('err', msgError.message); setDeletingThread(false); return; }
+    const { error } = await supabase.from('conference_requests').delete().eq('id', req.id);
+    setDeletingThread(false);
+    if (error) { showFlash('err', error.message); return; }
+
+    setInboxRequests(prev => prev.filter(r => r.id !== req.id));
+    setInboxMessages(prev => prev.filter(m => m.request_id !== req.id));
+    setSelectedRequestId(null);
+    showFlash('ok', 'Thread deleted.');
   }
 
   async function handleSwapDecision(approve: boolean) {
@@ -2287,13 +2337,25 @@ function CommunicationsPageInner() {
                       {inboxRoles.get(selectedRequest.user_id) ? ` · ${roleLabel(inboxRoles.get(selectedRequest.user_id)!)}` : ''}
                     </p>
                   </div>
-                  <button
-                    onClick={() => (selectedRequest.status === 'open' ? setCloseConfirmOpen(true) : handleCloseReopen(false))}
-                    className="rounded-xl py-2 px-4 text-xs font-bold focus:outline-none flex-shrink-0"
-                    style={{ border: `1px solid ${BORDER}`, color: '#1C1410', backgroundColor: 'transparent', fontFamily: OUTFIT, letterSpacing: '0.05em' }}
-                  >
-                    {selectedRequest.status === 'open' ? 'CLOSE' : 'REOPEN'}
-                  </button>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button
+                      onClick={() => (selectedRequest.status === 'open' ? setCloseConfirmOpen(true) : handleCloseReopen(false))}
+                      className="rounded-xl py-2 px-4 text-xs font-bold focus:outline-none"
+                      style={{ border: `1px solid ${BORDER}`, color: '#1C1410', backgroundColor: 'transparent', fontFamily: OUTFIT, letterSpacing: '0.05em' }}
+                    >
+                      {selectedRequest.status === 'open' ? 'CLOSE' : 'REOPEN'}
+                    </button>
+                    <button
+                      onClick={handleDeleteThread}
+                      disabled={deletingThread}
+                      title="Delete this thread"
+                      aria-label="Delete this thread"
+                      className="rounded-xl py-2 px-3 text-xs font-bold focus:outline-none disabled:opacity-50"
+                      style={{ border: '1px solid rgba(139,32,32,0.3)', color: '#8B2020', backgroundColor: 'transparent', fontFamily: OUTFIT }}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
                 </div>
 
                 {/* Swap details */}
@@ -2513,7 +2575,7 @@ function CommunicationsPageInner() {
 
                 {/* Live recipients */}
                 <div className="rounded-2xl p-5 mb-4" style={CARD_STYLE}>
-                  <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center justify-between mb-1">
                     <p className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
                       Live Recipients
                     </p>
@@ -2524,6 +2586,12 @@ function CommunicationsPageInner() {
                       Sending to {finalRecipients.length}
                     </p>
                   </div>
+                  {optedOutCount > 0 && (
+                    <p className="text-xs mb-3" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+                      {optedOutCount} opted out of marketing emails, excluded automatically.
+                    </p>
+                  )}
+                  {optedOutCount === 0 && <div className="mb-3" />}
 
                   <div className="relative mb-2">
                     <input

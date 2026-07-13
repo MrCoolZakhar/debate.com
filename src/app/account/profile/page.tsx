@@ -9,6 +9,7 @@ import { UN_COUNTRIES, getCountryByName, getFlagUrl } from '@/lib/countries';
 import { deriveExperienceLevel, experienceProgress } from '@/lib/munExperience';
 import { ageAt } from '@/lib/age';
 import { Eyebrow, GlassCard, PillToggle, Pill, ExperienceInfo, OUTFIT, MONO } from '../accountUi';
+import { ConfirmModal } from '@/components/ConfirmModal';
 
 interface ReviewableConference {
   id: string;
@@ -74,6 +75,13 @@ export default function ProfilePage() {
   const [reviewText, setReviewText]         = useState('');
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
   const [reviewError, setReviewError]       = useState('');
+
+  // Delete account
+  const [deleteOpen, setDeleteOpen]         = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deleting, setDeleting]             = useState(false);
+  const [deleteError, setDeleteError]       = useState('');
+  const [soleOwnerConferences, setSoleOwnerConferences] = useState<{ slug: string; full_name: string }[] | null>(null);
 
   useEffect(() => {
     if (authLoading) return;
@@ -262,6 +270,59 @@ export default function ProfilePage() {
   async function handleSignOut() {
     await signOut();
     window.location.href = '/';
+  }
+
+  function openDeleteAccount() {
+    setDeleteError('');
+    setSoleOwnerConferences(null);
+    setDeleteConfirmText('');
+    setDeleteOpen(true);
+  }
+
+  // Calls the deployed `delete-account` edge function (verify_jwt on, reads
+  // the caller off their own session token). It blocks with
+  // {ok:false, reason:'sole_owner', conferences, message} if the account
+  // solely owns any conference, otherwise it deletes the user and everything
+  // cascades server-side, nothing else to clean up client-side.
+  async function handleConfirmDeleteAccount() {
+    if (!session || deleting) return;
+    setDeleting(true);
+    setDeleteError('');
+    const supabase = getAuthedClient(session.access_token);
+    try {
+      const { data, error } = await supabase.functions.invoke('delete-account');
+      if (error) {
+        let body: { ok?: boolean; reason?: string; conferences?: { slug: string; full_name: string }[]; message?: string } | null = null;
+        const ctx = (error as { context?: Response }).context;
+        if (ctx && typeof ctx.json === 'function') {
+          try { body = await ctx.json(); } catch { /* non-JSON error body */ }
+        }
+        if (body?.reason === 'sole_owner') {
+          setSoleOwnerConferences(body.conferences ?? []);
+          setDeleteError(body.message ?? 'You are the sole owner of one or more conferences. Transfer or archive them first.');
+        } else {
+          setDeleteError(body?.message ?? 'Could not delete your account. Please try again.');
+        }
+        setDeleting(false);
+        return;
+      }
+      const result = data as { ok?: boolean; reason?: string; conferences?: { slug: string; full_name: string }[]; message?: string } | null;
+      if (result && result.ok === false) {
+        if (result.reason === 'sole_owner') {
+          setSoleOwnerConferences(result.conferences ?? []);
+          setDeleteError(result.message ?? 'You are the sole owner of one or more conferences. Transfer or archive them first.');
+        } else {
+          setDeleteError(result.message ?? 'Could not delete your account. Please try again.');
+        }
+        setDeleting(false);
+        return;
+      }
+      await signOut();
+      window.location.href = '/?accountDeleted=1';
+    } catch {
+      setDeleteError('Could not delete your account. Please try again.');
+      setDeleting(false);
+    }
   }
 
   const natCountry = getCountryByName(nationality);
@@ -777,28 +838,105 @@ export default function ProfilePage() {
             </div>
           ))}
         </div>
+        {/* Functional emails (chair/import invites, replies to your own
+           requests) aren't gated by these toggles, see ALWAYS_SEND_EVENTS
+           in src/lib/emailEvents.ts, opting out would break the product. */}
+        <p className="text-xs mt-4" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+          Essential emails about invitations and your requests are always sent.
+        </p>
       </GlassCard>
 
       {/* Card 3 — Account */}
       <GlassCard style={{ border: '1.5px solid rgba(139,32,32,0.3)' }}>
         <Eyebrow className="mb-4" color="#8B2020">Account</Eyebrow>
-        <button
-          onClick={handleSignOut}
-          className="w-full rounded-xl py-2.5 font-semibold text-[13px] focus:outline-none transition-colors"
-          style={{
-            border: '1px solid rgba(139,32,32,0.3)',
-            color: '#8B2020',
-            backgroundColor: 'transparent',
-            fontFamily: OUTFIT,
-            letterSpacing: '0.06em',
-            cursor: 'pointer',
-          }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.05)'; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-        >
-          SIGN OUT
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={handleSignOut}
+            className="flex-1 rounded-xl py-2.5 font-semibold text-[13px] focus:outline-none transition-colors"
+            style={{
+              border: '1px solid rgba(139,32,32,0.3)',
+              color: '#8B2020',
+              backgroundColor: 'transparent',
+              fontFamily: OUTFIT,
+              letterSpacing: '0.06em',
+              cursor: 'pointer',
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.05)'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+          >
+            SIGN OUT
+          </button>
+          <button
+            onClick={openDeleteAccount}
+            className="flex-1 rounded-xl py-2.5 font-semibold text-[13px] focus:outline-none transition-colors"
+            style={{
+              border: '1px solid #8B2020',
+              color: '#FFFFFF',
+              backgroundColor: '#8B2020',
+              fontFamily: OUTFIT,
+              letterSpacing: '0.06em',
+              cursor: 'pointer',
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#701919'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#8B2020'; }}
+          >
+            DELETE ACCOUNT
+          </button>
+        </div>
       </GlassCard>
+
+      {deleteOpen && (
+        <ConfirmModal
+          title="Delete your account?"
+          danger
+          loading={deleting}
+          confirmDisabled={deleteConfirmText.trim() !== 'DELETE'}
+          confirmLabel="Delete account"
+          onCancel={() => { if (!deleting) setDeleteOpen(false); }}
+          onConfirm={handleConfirmDeleteAccount}
+          body={
+            <div>
+              <p>
+                Your profile, applications, allocations, documents and requests are permanently removed. This cannot be undone.
+              </p>
+              {deleteError && (
+                <div className="mt-3">
+                  <p className="font-semibold" style={{ color: '#8B2020' }}>{deleteError}</p>
+                  {soleOwnerConferences && soleOwnerConferences.length > 0 && (
+                    <ul className="mt-1.5 ml-4 list-disc">
+                      {soleOwnerConferences.map((c) => (
+                        <li key={c.slug}>
+                          <Link
+                            href={`/manage/${c.slug}/settings`}
+                            className="underline"
+                            style={{ color: '#8B2020' }}
+                          >
+                            {c.full_name || c.slug}
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+              <div className="mt-4">
+                <label className="block text-xs font-semibold mb-1.5" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                  Type DELETE to confirm
+                </label>
+                <input
+                  type="text"
+                  value={deleteConfirmText}
+                  onChange={(e) => setDeleteConfirmText(e.target.value)}
+                  disabled={deleting}
+                  autoFocus
+                  className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none"
+                  style={inputStyle}
+                />
+              </div>
+            </div>
+          }
+        />
+      )}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { ChevronLeft, Check } from 'lucide-react';
+import { ChevronLeft, Check, Trash2 } from 'lucide-react';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
 import type { Conference } from '@/app/manage/[slug]/layout';
@@ -31,54 +31,79 @@ interface Society {
 
 // ── Card grid ────────────────────────────────────────────────────────────────
 
-function DelegationCard({ society, members, hasUnseenSwap, onClick }: { society: Society; members: PoolMember[]; hasUnseenSwap: boolean; onClick: () => void }) {
+function DelegationCard({ society, members, hasUnseenSwap, isEmpty, onClick, onDelete }: {
+  society: Society; members: PoolMember[]; hasUnseenSwap: boolean; isEmpty: boolean; onClick: () => void; onDelete: () => void;
+}) {
   const advisorCount = members.filter(m => m.role === 'faculty-advisor').length;
   const headDelCount = members.filter(m => m.is_head_delegate || m.role === 'head-delegate').length;
   const totalDelegates = members.filter(m => (m.role === 'delegate' || m.role === 'head-delegate') && m.attending).length;
   const pledgePending = members.some(m => !!m.pledge_type && !pledgeSatisfied(m));
 
   return (
-    <button
-      onClick={onClick}
-      className="text-left rounded-2xl p-5 transition-colors focus:outline-none"
+    <div
+      className="relative text-left rounded-2xl p-5 transition-colors"
       style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}
-      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
-      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
     >
-      <div className="flex items-start justify-between gap-2 mb-3">
-        <div className="flex items-center gap-1.5 min-w-0">
-          {hasUnseenSwap && (
-            <span
-              title="New allocation swap activity"
-              className="flex-shrink-0"
-              style={{ width: 7, height: 7, borderRadius: '9999px', backgroundColor: '#B6871F' }}
-            />
-          )}
-          <p className="font-black text-base truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{society.name}</p>
-        </div>
-        {pledgePending && (
-          <span
-            className="flex-shrink-0 px-2 py-0.5 rounded-full"
-            style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', backgroundColor: 'rgba(184,132,74,0.16)', color: '#9A6B2F', border: '1px solid rgba(184,132,74,0.4)', fontFamily: OUTFIT }}
-          >
-            PLEDGE PENDING
-          </span>
-        )}
-      </div>
-      <div className="flex flex-col gap-1.5">
-        {[
-          ['Advisors', advisorCount],
-          ['Head Delegates', headDelCount],
-          ['Total Delegates', totalDelegates],
-          ['Paid Spots', society.spots_purchased],
-        ].map(([label, value]) => (
-          <div key={label as string} className="flex items-center justify-between">
-            <span className="text-xs" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>{label}</span>
-            <span className="text-sm font-bold" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{value}</span>
+      {isEmpty && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onDelete(); }}
+          title="Delete this empty delegation"
+          aria-label="Delete this empty delegation"
+          className="absolute focus:outline-none rounded-lg"
+          style={{ top: 12, right: 12, width: 26, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#8B2020' }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.08)'; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+        >
+          <Trash2 size={14} />
+        </button>
+      )}
+      <button
+        onClick={onClick}
+        className="text-left w-full focus:outline-none"
+      >
+        <div className="flex items-start justify-between gap-2 mb-3">
+          <div className="flex items-center gap-1.5 min-w-0">
+            {hasUnseenSwap && (
+              <span
+                title="New allocation swap activity"
+                className="flex-shrink-0"
+                style={{ width: 7, height: 7, borderRadius: '9999px', backgroundColor: '#B6871F' }}
+              />
+            )}
+            <p className="font-black text-base truncate" style={{ color: '#1C1410', fontFamily: OUTFIT, maxWidth: isEmpty ? '85%' : undefined }}>{society.name}</p>
           </div>
-        ))}
-      </div>
-    </button>
+          {pledgePending && (
+            <span
+              className="flex-shrink-0 px-2 py-0.5 rounded-full"
+              style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', backgroundColor: 'rgba(184,132,74,0.16)', color: '#9A6B2F', border: '1px solid rgba(184,132,74,0.4)', fontFamily: OUTFIT }}
+            >
+              PLEDGE PENDING
+            </span>
+          )}
+          {isEmpty && !pledgePending && (
+            <span
+              className="flex-shrink-0 px-2 py-0.5 rounded-full"
+              style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', backgroundColor: 'rgba(154,138,120,0.12)', color: '#9A8A78', border: '1px solid rgba(154,138,120,0.3)', fontFamily: OUTFIT }}
+            >
+              EMPTY
+            </span>
+          )}
+        </div>
+        <div className="flex flex-col gap-1.5">
+          {[
+            ['Advisors', advisorCount],
+            ['Head Delegates', headDelCount],
+            ['Total Delegates', totalDelegates],
+            ['Paid Spots', society.spots_purchased],
+          ].map(([label, value]) => (
+            <div key={label as string} className="flex items-center justify-between">
+              <span className="text-xs" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>{label}</span>
+              <span className="text-sm font-bold" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{value}</span>
+            </div>
+          ))}
+        </div>
+      </button>
+    </div>
   );
 }
 
@@ -176,6 +201,10 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
   const [swapConfirm, setSwapConfirm] = useState<{ sourceId: string; targetId: string } | null>(null);
   const [advisorTransferPicker, setAdvisorTransferPicker] = useState<PoolMember | null>(null);
   const [unseenSwapSocietyIds, setUnseenSwapSocietyIds] = useState<Set<string>>(new Set());
+  // Total application count per society, ANY status (unlike `members`, which
+  // is accepted/assigned only). A society only counts as empty and eligible
+  // for deletion when nobody, at any stage of the pipeline, references it.
+  const [societyAppCounts, setSocietyAppCounts] = useState<Map<string, number>>(new Map());
   const { draftNotices, pushDraftNotice, dismissDraftNotice } = useDraftNotices();
   const { confirm, modal: confirmModal } = useConfirmModal();
 
@@ -190,7 +219,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
     if (!opts?.silent) setLoading(true);
     const supabase = getAuthedClient(session.access_token);
 
-    const [socRes, memberRes, search, advisors, swapReqRes] = await Promise.all([
+    const [socRes, memberRes, search, advisors, swapReqRes, allSocietyAppsRes] = await Promise.all([
       supabase
         .from('societies')
         .select('id, name, spots_purchased, advisor_spots_purchased')
@@ -210,12 +239,22 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
         .eq('conference_id', conference.id)
         .in('kind', ['swap_request', 'swap_notice'])
         .eq('seen_by_organizer', false),
+      supabase
+        .from('applications')
+        .select('society_id')
+        .eq('conference_id', conference.id)
+        .not('society_id', 'is', null),
     ]);
 
     if (seq !== loadSeqRef.current) return; // stale response
 
     setSocieties((socRes.data ?? []) as unknown as Society[]);
     setMembers((memberRes.data ?? []) as unknown as PoolMember[]);
+    const countMap = new Map<string, number>();
+    for (const row of (allSocietyAppsRes.data ?? []) as { society_id: string }[]) {
+      countMap.set(row.society_id, (countMap.get(row.society_id) ?? 0) + 1);
+    }
+    setSocietyAppCounts(countMap);
     setUnseenSwapSocietyIds(new Set(
       ((swapReqRes.data ?? []) as { metadata: { society_id?: string } }[])
         .map(r => r.metadata?.society_id)
@@ -290,6 +329,33 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
     if (!session) return;
     const supabase = getAuthedClient(session.access_token);
     await turnOnDefaultEmail(supabase, conference.id, eventKey);
+  }
+
+  // Empty delegations (zero applications at any status, an import typo or
+  // an advisor who never actually recruited) can be deleted outright, unlike
+  // a populated one there's nothing to reassign.
+  async function handleDeleteDelegation(society: Society) {
+    if (!session || busyIds.has(society.id)) return;
+    const { confirmed } = await confirm({
+      title: `Delete ${society.name}?`,
+      body: 'This delegation has no members at any stage. Deleting it cannot be undone.',
+      confirmLabel: 'Delete',
+      danger: true,
+    });
+    if (!confirmed) return;
+
+    const supabase = getAuthedClient(session.access_token);
+    markBusy(society.id, true);
+    const prevSocieties = societies;
+    setSocieties(prev => prev.filter(s => s.id !== society.id));
+
+    (async () => {
+      const { error } = await supabase.from('societies').delete().eq('id', society.id);
+      if (error) {
+        setSocieties(prevSocieties);
+        showFlash('err', `Could not delete ${society.name}.`);
+      }
+    })().finally(() => markBusy(society.id, false));
   }
 
   // ── Mutations ────────────────────────────────────────────────────────────
@@ -728,7 +794,9 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
                 society={s}
                 members={membersBySociety.get(s.id) ?? []}
                 hasUnseenSwap={unseenSwapSocietyIds.has(s.id)}
+                isEmpty={(societyAppCounts.get(s.id) ?? 0) === 0}
                 onClick={() => handleExpandSociety(s.id)}
+                onDelete={() => handleDeleteDelegation(s)}
               />
             ))}
           </div>

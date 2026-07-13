@@ -58,6 +58,71 @@ export function getEventLabel(eventKey: string): string {
   return EVENT_REGISTRY.find(e => e.key === eventKey)?.label ?? eventKey;
 }
 
+// ── Notification preference mapping ─────────────────────────────────────────
+// Every EVENT_REGISTRY key maps to one of the toggles on /account/profile.
+// Before an outbox row is written for a recipient, queueEventEmail checks
+// their corresponding notify_email_* preference (default true when unset,
+// same default the profile page uses). Imported/unregistered recipients (no
+// profiles row, user_id null) have never had a chance to set a preference,
+// so they always receive the email. ALWAYS_SEND_EVENTS below skips this
+// check entirely for the handful of emails the product can't function
+// without, the invite itself is the consent.
+
+export type NotificationCategory = 'applications' | 'documents' | 'reminders';
+
+export const NOTIFICATION_CATEGORY: Record<string, NotificationCategory> = {
+  application_received: 'applications',
+  application_accepted: 'applications',
+  application_rejected: 'applications',
+  payment_available: 'applications',
+  payment_received: 'applications',
+  fee_waived: 'applications',
+  allocation_assigned: 'applications',
+  allocation_changed: 'applications',
+  allocation_removed: 'applications',
+  pledge_received: 'applications',
+  added_to_delegation: 'applications',
+  removed_from_delegation: 'applications',
+  spot_received: 'applications',
+  spot_lost: 'applications',
+  not_attending: 'applications',
+  attendance_restored: 'applications',
+  chair_assigned: 'applications',
+  session_chair_invite: 'applications',
+  session_join_invite: 'applications',
+  delegation_swap: 'applications',
+  request_reply: 'applications',
+  documents_published: 'documents',
+  position_paper_feedback: 'documents',
+};
+
+const PREFERENCE_FIELD: Record<NotificationCategory, 'notify_email_applications' | 'notify_email_documents' | 'notify_email_reminders'> = {
+  applications: 'notify_email_applications',
+  documents: 'notify_email_documents',
+  reminders: 'notify_email_reminders',
+};
+
+// Transactional/functional emails a user can't opt out of without breaking
+// the product: clicking INVITE (chair/import) is itself the consent, and a
+// reply to a question the participant asked themselves isn't a marketing
+// choice, it's the answer they're waiting on.
+const ALWAYS_SEND_EVENTS = new Set(['committee_chair_invite', 'import_join_invite', 'request_reply']);
+
+/** True if this recipient should receive eventKey given their notification
+ *  preferences. Unregistered/imported recipients (no profiles row) and
+ *  always-send functional events bypass the check. */
+function recipientAllowsEvent(
+  eventKey: string,
+  profiles: { notify_email_applications?: boolean | null; notify_email_documents?: boolean | null; notify_email_reminders?: boolean | null } | null
+): boolean {
+  if (ALWAYS_SEND_EVENTS.has(eventKey)) return true;
+  if (!profiles) return true; // imported, unclaimed: no preferences to honour yet
+  const category = NOTIFICATION_CATEGORY[eventKey];
+  if (!category) return true;
+  const pref = profiles[PREFERENCE_FIELD[category]];
+  return pref !== false; // default true when null/undefined, same as the profile page
+}
+
 // ── Three-state send outcome ─────────────────────────────────────────────────
 // 'sent-custom':   enabled + a real drafted template -> that draft sent.
 // 'sent-default':  enabled but undrafted (a stub row, or empty content) ->
@@ -154,7 +219,10 @@ interface RecipientRow {
   societies: { name: string } | null;
   assigned_committee: { abbreviation: string | null; name: string } | null;
   assigned_country_name: string | null;
-  profiles: { display_name: string; email: string | null } | null;
+  profiles: {
+    display_name: string; email: string | null;
+    notify_email_applications: boolean | null; notify_email_documents: boolean | null; notify_email_reminders: boolean | null;
+  } | null;
   invited_email: string | null;
   invited_name: string | null;
 }
@@ -223,14 +291,18 @@ export async function queueEventEmail(
         societies (name),
         assigned_committee:conference_committees!assigned_committee_id (abbreviation, name),
         assigned_country_name,
-        profiles (display_name, email),
+        profiles (display_name, email, notify_email_applications, notify_email_documents, notify_email_reminders),
         invited_email, invited_name
       `)
       .in('id', ids),
   ]);
 
   const conference = confData as ConferenceRow | null;
-  const recipients = (recipientsData ?? []) as unknown as RecipientRow[];
+  const allRecipients = (recipientsData ?? []) as unknown as RecipientRow[];
+  // Preference gate: drop recipients who've opted out of this event's
+  // category. Imported/unclaimed applicants and always-send functional
+  // events (see ALWAYS_SEND_EVENTS) pass through untouched.
+  const recipients = allRecipients.filter(app => recipientAllowsEvent(eventKey, app.profiles));
   if (recipients.length === 0) return { outcome, drafted: useDraft, queued: 0, queuedApplicationIds: [], eventKey, eventLabel };
 
   const renderConf: EmailRenderConference = {

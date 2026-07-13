@@ -454,6 +454,20 @@ export default function HomeClient() {
   const [rejoinData, setRejoinData] = useState<{
     code: string; chairName: string; committeeTitle: string; savedAt: number; chairSuffix?: string | null;
   } | null>(null);
+  const [showDeletedNotice, setShowDeletedNotice] = useState(false);
+
+  useEffect(() => {
+    // Read via window.location rather than useSearchParams, so this stays a
+    // plain client-side effect and doesn't force the homepage into a
+    // Suspense boundary just for a one-off post-delete notice.
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('accountDeleted') === '1') {
+      setShowDeletedNotice(true);
+      const url = new URL(window.location.href);
+      url.searchParams.delete('accountDeleted');
+      window.history.replaceState({}, '', url.toString());
+    }
+  }, []);
 
   useEffect(() => {
     try {
@@ -564,6 +578,27 @@ export default function HomeClient() {
           />
 
           <SiteNav />
+
+          {showDeletedNotice && (
+            <div className="fixed top-4 left-1/2 z-[100] -translate-x-1/2 px-4 w-full flex justify-center">
+              <div
+                className="flex items-center gap-3 rounded-xl px-4 py-3 shadow-lg"
+                style={{ backgroundColor: '#1B3828', border: '1px solid rgba(238,217,138,0.35)', maxWidth: 420 }}
+              >
+                <p className="text-sm font-semibold flex-1" style={{ color: '#EED98A', fontFamily: "'Outfit', sans-serif" }}>
+                  Your account has been deleted.
+                </p>
+                <button
+                  onClick={() => setShowDeletedNotice(false)}
+                  aria-label="Dismiss"
+                  className="text-xs font-bold focus:outline-none flex-shrink-0"
+                  style={{ color: 'rgba(238,217,138,0.7)', fontFamily: "'Outfit', sans-serif" }}
+                >
+                  DISMISS
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Hero — pulled up 72px so the video sits behind the transparent nav: the logo +
               Pre-register overlay the video (and scroll away with it), while the fixed pill stays pinned. */}

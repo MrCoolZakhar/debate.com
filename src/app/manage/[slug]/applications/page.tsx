@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   ArrowRight, BadgeCheck, Building2, Check, CircleCheck, Clock, Download, Eye,
   Gavel, Globe, GraduationCap, HandCoins, Inbox, LogOut, MapPin, MessageSquareText,
-  RotateCcw, User, Users, X,
+  RotateCcw, Trash2, User, Users, X,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useManage } from '@/app/manage/[slug]/layout';
@@ -14,6 +14,7 @@ import { queueEventEmail, notifyIfNeeded, turnOnDefaultEmail } from '@/lib/email
 import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
 import { useConfirmModal } from '@/components/ConfirmModal';
 import { FlagImg } from '@/components/FlagImg';
+import Portal from '@/components/Portal';
 import { getCountryByName } from '@/lib/countries';
 import {
   poolForRole, fillFreeSpots, releasePoolSpot, POOL_SPOTS_COLUMN,
@@ -544,6 +545,51 @@ export default function ApplicationsPage() {
       .finally(() => markBusy(appId, false));
   }
 
+  // ── Delete row (imported/unregistered applicants only) ─────────────────────
+  // No account exists for these rows (user_id null, invited_* carries the
+  // data), so a hard delete is safe: nothing else references them. Distinct
+  // from withdraw, which is for real users and preserves their history.
+  async function openDeleteRowConfirm(app: Application) {
+    const { confirmed } = await confirm({
+      title: 'Delete this application?',
+      body: "This applicant never created a Gavelling account, so nothing else is affected. Their application and any committee allocation are permanently deleted. This can't be undone.",
+      confirmLabel: 'Delete',
+      danger: true,
+    });
+    if (!confirmed) return;
+    handleDeleteRow(app.id);
+  }
+
+  function handleDeleteRow(appId: string) {
+    if (!session || busyIds.has(appId)) return;
+    const prevIndex = applications.findIndex(a => a.id === appId);
+    const prevRow = applications[prevIndex];
+    if (!prevRow) return;
+
+    setActionError('');
+    markBusy(appId, true);
+    // Optimistic: the row disappears immediately.
+    setApplications(cur => cur.filter(a => a.id !== appId));
+    setReviewId(cur => (cur === appId ? null : cur));
+
+    (async () => {
+      const supabase = getAuthedClient(session.access_token);
+      await supabase.from('conference_allocations').delete().eq('application_id', appId);
+      const { error } = await supabase.from('applications').delete().eq('id', appId);
+      if (error) throw error;
+    })()
+      .catch(() => {
+        setApplications(cur => {
+          if (cur.some(a => a.id === appId)) return cur;
+          const next = [...cur];
+          next.splice(Math.min(prevIndex, next.length), 0, prevRow);
+          return next;
+        });
+        setActionError('Could not delete the application. Please try again.');
+      })
+      .finally(() => markBusy(appId, false));
+  }
+
   function handleMarkPaid(app: Application) {
     if (!session || !conference || busyIds.has(app.id)) return;
     const prevRow = applications.find(a => a.id === app.id) ?? app;
@@ -853,6 +899,7 @@ export default function ApplicationsPage() {
             const pledgeLine = app.pledge_type === 'delegation'
               ? `Pledged: ${app.spots_pledged ?? 0} delegation spots`
               : null;
+            const rowBusy = busyIds.has(app.id);
 
             return (
               <div
@@ -991,6 +1038,21 @@ export default function ApplicationsPage() {
                     <Eye size={13} />
                     REVIEW
                   </button>
+                  {!app.user_id && (
+                    <button
+                      onClick={() => openDeleteRowConfirm(app)}
+                      disabled={rowBusy}
+                      title="Delete this unregistered applicant's row"
+                      className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
+                      style={{
+                        backgroundColor: 'rgba(139,32,32,0.08)', color: '#8B2020', border: '1px solid rgba(139,32,32,0.2)',
+                        fontFamily: "'Outfit', sans-serif", opacity: rowBusy ? 0.5 : 1, cursor: rowBusy ? 'default' : 'pointer',
+                      }}
+                    >
+                      <Trash2 size={13} />
+                      DELETE ROW
+                    </button>
+                  )}
                   {app.status === 'rejected' && app.organizer_note && (
                     <span className="text-xs italic self-center" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
                       &ldquo;{app.organizer_note}&rdquo;
@@ -1141,7 +1203,7 @@ export default function ApplicationsPage() {
         );
 
         return (
-          <div
+          <Portal><div
             className="fixed inset-0 z-50 flex items-center justify-center px-4 py-10"
             style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
             onClick={closeReview}
@@ -1354,7 +1416,7 @@ export default function ApplicationsPage() {
                 )}
               </div>
             </div>
-          </div>
+          </div></Portal>
         );
       })()}
 

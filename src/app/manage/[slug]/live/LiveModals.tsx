@@ -3,6 +3,7 @@
 import { X, Mic, FileText, ScrollText, Users, Gavel, Trophy, MessageSquareText, ExternalLink } from 'lucide-react';
 import { FlagImg } from '@/components/FlagImg';
 import { getCountryByName } from '@/lib/countries';
+import Portal from '@/components/Portal';
 
 const OUTFIT = "'Outfit', sans-serif";
 
@@ -109,30 +110,34 @@ function Eyebrow({ children }: { children: React.ReactNode }) {
 }
 
 function ModalShell({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+  // Portal'd so the dim backdrop escapes the manage layout's `relative z-10`
+  // content wrapper and covers the header/sidebar too.
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center px-4 py-8"
-      style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
-      onClick={onClose}
-    >
+    <Portal>
       <div
-        className="w-full max-w-2xl rounded-2xl p-8 relative overflow-y-auto"
-        style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', maxHeight: 'calc(100vh - 64px)' }}
-        onClick={(e) => e.stopPropagation()}
+        className="fixed inset-0 z-50 flex items-center justify-center px-4 py-8"
+        style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
+        onClick={onClose}
       >
-        <button
-          onClick={onClose}
-          className="absolute top-5 right-5 focus:outline-none transition-colors"
-          style={{ color: '#9A8A78' }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#1C1410'; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
-          aria-label="Close"
+        <div
+          className="w-full max-w-2xl rounded-2xl p-8 relative overflow-y-auto"
+          style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', maxHeight: 'calc(100vh - 64px)' }}
+          onClick={(e) => e.stopPropagation()}
         >
-          <X size={18} />
-        </button>
-        {children}
+          <button
+            onClick={onClose}
+            className="absolute top-5 right-5 focus:outline-none transition-colors"
+            style={{ color: '#9A8A78' }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#1C1410'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
+            aria-label="Close"
+          >
+            <X size={18} />
+          </button>
+          {children}
+        </div>
       </div>
-    </div>
+    </Portal>
   );
 }
 

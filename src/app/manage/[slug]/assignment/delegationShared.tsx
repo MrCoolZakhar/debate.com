@@ -10,6 +10,7 @@ import { GripVertical, Lock, Check } from 'lucide-react';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { queueEventEmail, type QueueEventEmailResult } from '@/lib/emailEvents';
 import { ConfirmModal } from '@/components/ConfirmModal';
+import Portal from '@/components/Portal';
 
 // ── Shared bits (matches the visual language of the rest of this page) ─────────
 
@@ -479,14 +480,18 @@ export function MemberAvatar({ name, url, size = 28 }: { name: string; url: stri
 }
 
 export function ModalOverlay({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+  // Portal'd so the dim backdrop escapes the manage layout's `relative z-10`
+  // content wrapper and covers the header/sidebar too.
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center px-4"
-      style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
-      onClick={onClose}
-    >
-      <div onClick={e => e.stopPropagation()}>{children}</div>
-    </div>
+    <Portal>
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center px-4"
+        style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
+        onClick={onClose}
+      >
+        <div onClick={e => e.stopPropagation()}>{children}</div>
+      </div>
+    </Portal>
   );
 }
 

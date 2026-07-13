@@ -14,6 +14,7 @@ import { sendChairInvite } from '@/lib/chairInvites';
 import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
 import { useConfirmModal } from '@/components/ConfirmModal';
 import { NotRegisteredChip, MemberAvatar } from '@/app/manage/[slug]/assignment/delegationShared';
+import Portal from '@/components/Portal';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -278,14 +279,18 @@ function DelegationChip({ app }: { app: AcceptedApp }) {
 }
 
 function ModalOverlay({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+  // Portal'd so the dim backdrop escapes the manage layout's `relative z-10`
+  // content wrapper and covers the header/sidebar too.
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center px-4"
-      style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
-      onClick={onClose}
-    >
-      <div onClick={e => e.stopPropagation()}>{children}</div>
-    </div>
+    <Portal>
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center px-4"
+        style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
+        onClick={onClose}
+      >
+        <div onClick={e => e.stopPropagation()}>{children}</div>
+      </div>
+    </Portal>
   );
 }
 

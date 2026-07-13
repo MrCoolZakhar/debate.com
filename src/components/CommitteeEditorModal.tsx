@@ -15,6 +15,7 @@ import { getCountryByName } from '@/lib/countries';
 import { CountryMatrixPicker } from '@/components/CountryMatrixPicker';
 import { CommitteeNameInput } from '@/components/CommitteeNameInput';
 import { PRESET_EMBLEM_PICKS, matchPresetEmblem } from '@/lib/presetNames';
+import Portal from '@/components/Portal';
 
 // ── Design constants ──────────────────────────────────────────────────────────
 
@@ -89,14 +90,20 @@ export function MonogramMedallion({ text, isCrisis, size }: { text: string; isCr
 // ── Shared modal overlay ──────────────────────────────────────────────────────
 
 export function ModalOverlay({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+  // Portal'd to document.body/#fit-root: the manage layout's content wrapper
+  // establishes its own stacking context (`relative z-10`), which traps
+  // `position: fixed` descendants below the header (z-30) and sidebar (z-25).
+  // Portaling out of that subtree is the only way the dim backdrop covers them.
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center px-4 py-10"
-      style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
-      onClick={onClose}
-    >
-      <div onClick={e => e.stopPropagation()}>{children}</div>
-    </div>
+    <Portal>
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center px-4 py-10"
+        style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
+        onClick={onClose}
+      >
+        <div onClick={e => e.stopPropagation()}>{children}</div>
+      </div>
+    </Portal>
   );
 }
 

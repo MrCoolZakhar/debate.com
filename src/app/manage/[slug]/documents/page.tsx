@@ -7,6 +7,7 @@ import { useManage } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { getFlagUrl } from '@/lib/countries';
+import Portal from '@/components/Portal';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -81,14 +82,18 @@ function PdfTile({ size = 40 }: { size?: number }) {
 // ── Modal overlay ──────────────────────────────────────────────────────────────
 
 function ModalOverlay({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+  // Portal'd so the dim backdrop escapes the manage layout's `relative z-10`
+  // content wrapper and covers the header/sidebar too.
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center px-4"
-      style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
-      onClick={onClose}
-    >
-      <div onClick={e => e.stopPropagation()}>{children}</div>
-    </div>
+    <Portal>
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center px-4"
+        style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
+        onClick={onClose}
+      >
+        <div onClick={e => e.stopPropagation()}>{children}</div>
+      </div>
+    </Portal>
   );
 }
 
