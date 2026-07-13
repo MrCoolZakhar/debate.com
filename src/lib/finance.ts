@@ -8,8 +8,12 @@
 // per its F14 comment) — we import and re-export rather than mirror.
 
 import { currencySymbol, formatFee, formatFeeAmount } from '@/lib/utils';
+import { CURRENCIES, CURRENCY_CODES, type CurrencyOption } from '@/lib/currencies';
 
 export { currencySymbol, formatFee, formatFeeAmount };
+// The canonical currency list now lives in src/lib/currencies.ts — re-exported
+// here since most fee/currency call sites already import from '@/lib/finance'.
+export { CURRENCIES, CURRENCY_CODES, type CurrencyOption };
 
 /** Gavelling's platform fee: 5% of the post-discount total. */
 export const PLATFORM_FEE_RATE = 0.05;
@@ -176,34 +180,14 @@ export function computeCheckout({
 // Rates (1 USD ≈): GBP 0.78, EUR 0.92, CAD 1.36, AUD 1.5, INR 84, TRY 34,
 // JPY 155, CHF 0.88, SEK 10.5, NOK 10.7, DKK 6.9, PLN 4.0, CZK 23,
 // MXN 18, BRL 5.5, ZAR 18, SGD 1.34, HKD 7.8, NZD 1.65, KRW 1350, AED 3.67.
-const USD_FX: Record<string, number> = {
+// Exported (as USD_FX) so VouchersSection's own ≈ display re-uses this same
+// table instead of carrying a second, driftable copy.
+export const USD_FX: Record<string, number> = {
   USD: 1, GBP: 0.78, EUR: 0.92, CAD: 1.36, AUD: 1.5, INR: 84, TRY: 34,
   JPY: 155, CHF: 0.88, SEK: 10.5, NOK: 10.7, DKK: 6.9, PLN: 4.0, CZK: 23,
   MXN: 18, BRL: 5.5, ZAR: 18, SGD: 1.34, HKD: 7.8, NZD: 1.65, KRW: 1350,
   AED: 3.67, CNY: 7.2, PKR: 278, IDR: 16000,
 };
-
-// ── Offered currencies ──────────────────────────────────────────────────────
-// The canonical list every currency picker in the app draws from — the world's
-// most-used currencies plus Gavelling's key growth markets (India, Pakistan,
-// Indonesia, the Gulf). Single source of truth so pickers never drift.
-export interface CurrencyOption { code: string; symbol: string; label: string; }
-export const CURRENCIES: CurrencyOption[] = [
-  { code: 'USD', symbol: '$', label: 'US Dollar' },
-  { code: 'EUR', symbol: '€', label: 'Euro' },
-  { code: 'GBP', symbol: '£', label: 'British Pound' },
-  { code: 'JPY', symbol: '¥', label: 'Japanese Yen' },
-  { code: 'CNY', symbol: '¥', label: 'Chinese Yuan' },
-  { code: 'CHF', symbol: 'Fr', label: 'Swiss Franc' },
-  { code: 'CAD', symbol: 'C$', label: 'Canadian Dollar' },
-  { code: 'AUD', symbol: 'A$', label: 'Australian Dollar' },
-  { code: 'INR', symbol: '₹', label: 'Indian Rupee' },
-  { code: 'PKR', symbol: '₨', label: 'Pakistani Rupee' },
-  { code: 'IDR', symbol: 'Rp', label: 'Indonesian Rupiah' },
-  { code: 'AED', symbol: 'AED', label: 'UAE Dirham' },
-  { code: 'SGD', symbol: 'S$', label: 'Singapore Dollar' },
-];
-export const CURRENCY_CODES: string[] = CURRENCIES.map((c) => c.code);
 
 const COUNTRY_CURRENCY: Record<string, string> = {
   US: 'USD', GB: 'GBP', IE: 'EUR', DE: 'EUR', FR: 'EUR', ES: 'EUR', IT: 'EUR',

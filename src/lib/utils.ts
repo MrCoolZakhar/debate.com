@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
+import { currencySymbol } from "@/lib/currencies"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -21,19 +22,11 @@ export function generateSlug(name: string): string {
 // always show exactly two ("44.98") — so conference cards, the apply flow,
 // and manage pages all agree on the same figure instead of drifting via
 // their own toFixed(0) / duplicated currencySymbol implementations.
-
-const CURRENCY_SYMBOLS: Record<string, string> = {
-  GBP: '£', USD: '$', EUR: '€', JPY: '¥', CNY: '¥', INR: '₹', KRW: '₩',
-  CHF: 'Fr', CAD: 'C$', AUD: 'A$', NZD: 'NZ$', SGD: 'S$', HKD: 'HK$',
-  TRY: '₺', SEK: 'kr', NOK: 'kr', DKK: 'kr', PLN: 'zł', CZK: 'Kč',
-  MXN: 'MX$', BRL: 'R$', ZAR: 'R', THB: '฿', PHP: '₱', VND: '₫',
-  RUB: '₽', ILS: '₪', AED: 'AED', PKR: '₨', IDR: 'Rp',
-};
-
-export function currencySymbol(code: string): string {
-  if (!code) return '';
-  return CURRENCY_SYMBOLS[code.toUpperCase()] ?? code;
-}
+//
+// currencySymbol itself lives in src/lib/currencies.ts (the canonical
+// currency list) — re-exported here since most fee-formatting call sites
+// already import it alongside formatFee/formatFeeAmount from this module.
+export { currencySymbol };
 
 /** Exact fee amount, never rounded: whole numbers show no decimals, fractional amounts show exactly two. */
 export function formatFeeAmount(amount: number): string {

@@ -26,7 +26,9 @@ import { NEU, NEU_GRADIENTS, OUTFIT, EASE, NeuButton, NeuInset, Emoji3D } from '
 import { DatePicker } from '@/components/DatePicker';
 import { LogoCropModal } from '@/components/LogoCropModal';
 import { uploadConferenceAsset } from '@/lib/conferenceAssets';
-import { CURRENCIES } from '@/lib/finance';
+import { currencyPickerGroups } from '@/lib/currencies';
+
+const CURRENCY_GROUPS = currencyPickerGroups();
 
 // Mirrors settings' ensureRoleConfigs default set (source of truth there) —
 // seeded here too so a freshly created conference already has per-role fee
@@ -719,8 +721,14 @@ export default function NewConferencePage() {
                         onFocus={focusForest}
                         onBlur={blurClear}
                       >
-                        {CURRENCIES.map((c) => (
-                          <option key={c.code} value={c.code} title={c.label}>
+                        {CURRENCY_GROUPS.pinned.map((c) => (
+                          <option key={c.code} value={c.code} title={c.name}>
+                            {c.symbol} {c.code}
+                          </option>
+                        ))}
+                        <option disabled>──────────</option>
+                        {CURRENCY_GROUPS.rest.map((c) => (
+                          <option key={c.code} value={c.code} title={c.name}>
                             {c.symbol} {c.code}
                           </option>
                         ))}

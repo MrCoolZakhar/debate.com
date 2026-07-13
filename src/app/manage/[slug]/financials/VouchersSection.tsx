@@ -18,29 +18,18 @@ import type { Conference } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useConfirmModal } from '@/components/ConfirmModal';
-import { currencySymbol, formatFeeAmount, roundMoney } from '@/lib/finance';
+import { currencySymbol, formatFeeAmount, roundMoney, USD_FX } from '@/lib/finance';
 import {
   NEU, NEU_GRADIENTS, OUTFIT, EASE,
   NeuCard, NeuInset, NeuPill, NeuButton, NeuIconDisc, NeuProgress,
 } from '@/components/neu';
 
-// ── Approximate FX (display-only) ──────────────────────────────────────────
-// Mirror of USD_FX in src/lib/finance.ts (kept module-local there for the
-// Gavin upsell — update both tables together). Static ≈mid-2026 rates: good
-// enough for the financials page's "≈" display conversion; stored values and
-// voucher creation always stay in the conference currency.
-export const APPROX_USD_FX: Record<string, number> = {
-  USD: 1, GBP: 0.78, EUR: 0.92, CAD: 1.36, AUD: 1.5, INR: 84, TRY: 34,
-  JPY: 155, CHF: 0.88, SEK: 10.5, NOK: 10.7, DKK: 6.9, PLN: 4.0, CZK: 23,
-  MXN: 18, BRL: 5.5, ZAR: 18, SGD: 1.34, HKD: 7.8, NZD: 1.65, KRW: 1350,
-  AED: 3.67, CNY: 7.2, PKR: 278, IDR: 16000,
-};
-
-/** Approximate conversion between two known currencies; null when either
- *  rate is missing (callers then fall back to the original amount). */
+/** Approximate conversion between two known currencies (via finance.ts's
+ *  canonical USD_FX table — no local copy); null when either rate is
+ *  missing (callers then fall back to the original amount). */
 export function convertApprox(amount: number, from: string, to: string): number | null {
-  const rf = APPROX_USD_FX[from.toUpperCase()];
-  const rt = APPROX_USD_FX[to.toUpperCase()];
+  const rf = USD_FX[from.toUpperCase()];
+  const rt = USD_FX[to.toUpperCase()];
   if (!rf || !rt) return null;
   return roundMoney((amount / rf) * rt);
 }

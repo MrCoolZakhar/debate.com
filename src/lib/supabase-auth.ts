@@ -25,3 +25,17 @@ export function getAuthedClient(accessToken: string) {
     }
   );
 }
+
+/**
+ * Same as getAuthedClient, but reads the access token fresh from the auth
+ * SDK at call time instead of trusting a token captured in a React closure
+ * (e.g. from useAuth() at an earlier render). A session held in component
+ * state can go stale between renders; this re-reads supabaseAuthClient's
+ * own session so writes always use its current token. Returns null if
+ * there's no active session (caller should surface a re-auth prompt).
+ */
+export async function getFreshAuthedClient() {
+  const { data: { session } } = await supabaseAuthClient.auth.getSession();
+  if (!session) return null;
+  return getAuthedClient(session.access_token);
+}

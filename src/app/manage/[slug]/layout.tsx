@@ -54,16 +54,32 @@ export interface Conference {
 interface ManageContextType {
   conference: Conference | null;
   refreshConference: () => Promise<void>;
+  /** Re-fetches the conference row and updates context state, without the
+   *  full-screen loading flag `refreshConference` flips (which unmounts the
+   *  page). Use this after a settings save to confirm DB truth in place. */
+  refreshConferenceQuiet: () => Promise<void>;
 }
 
 const ManageContext = createContext<ManageContextType>({
   conference: null,
   refreshConference: async () => {},
+  refreshConferenceQuiet: async () => {},
 });
 
 export function useManage() {
   return useContext(ManageContext);
 }
+
+const CONFERENCE_COLUMNS = [
+  'id', 'slug', 'full_name', 'acronym', 'is_public', 'status',
+  'logo_url', 'banner_url', 'start_date', 'end_date', 'country', 'city',
+  'format', 'expected_delegates', 'fee_amount', 'fee_currency',
+  'contact_email', 'student_level', 'description',
+  'instagram_url', 'facebook_url', 'tiktok_url', 'whatsapp_url', 'website_url',
+  'stripe_account_id', 'organizer_id',
+  'predecessor_conference_id', 'predecessor_approved', 'min_age',
+  'allocation_swap_mode', 'email_theme',
+].join(', ');
 
 // ── Nav definition ─────────────────────────────────────────────────────────
 
@@ -582,16 +598,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
 
     const { data: confData } = await supabase
       .from('conferences')
-      .select([
-        'id', 'slug', 'full_name', 'acronym', 'is_public', 'status',
-        'logo_url', 'banner_url', 'start_date', 'end_date', 'country', 'city',
-        'format', 'expected_delegates', 'fee_amount', 'fee_currency',
-        'contact_email', 'student_level', 'description',
-        'instagram_url', 'facebook_url', 'tiktok_url', 'whatsapp_url', 'website_url',
-        'stripe_account_id', 'organizer_id',
-        'predecessor_conference_id', 'predecessor_approved', 'min_age',
-        'allocation_swap_mode', 'email_theme',
-      ].join(', '))
+      .select(CONFERENCE_COLUMNS)
       .eq('slug', slug)
       .single();
 
@@ -627,6 +634,23 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
   async function refreshConference() {
     if (!user) return;
     await loadConference();
+  }
+
+  // Quiet variant: re-fetches the conference row and swaps it in directly,
+  // without touching loadingConf — so settings saves can confirm DB truth
+  // post-write without unmounting the page behind the full-screen spinner.
+  async function refreshConferenceQuiet() {
+    if (!user || !session) return;
+    const supabase = getAuthedClient(session.access_token);
+    const { data: confData } = await supabase
+      .from('conferences')
+      .select(CONFERENCE_COLUMNS)
+      .eq('slug', slug)
+      .single();
+    if (!confData) return;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { organizer_id: _oid, ...conf } = confData as any;
+    setConference(conf as Conference);
   }
 
   const avatarInitial = profile?.display_name
@@ -710,7 +734,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
   }
 
   return (
-    <ManageContext.Provider value={{ conference, refreshConference }}>
+    <ManageContext.Provider value={{ conference, refreshConference, refreshConferenceQuiet }}>
       {/* Base surface — one continuous ivory behind rail + content (body is white;
           without this the strip behind the rail reads as a different background) */}
       <div className="pointer-events-none fixed inset-0 z-0" style={{ backgroundColor: '#EDE7D8' }} />
