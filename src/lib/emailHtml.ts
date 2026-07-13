@@ -52,6 +52,8 @@ export interface RenderEmailHtmlArgs {
   ctx: EmailTokenContext;
   /** Per-invite token for a 'chair_invite_accept' button block, if one is present. */
   chairInviteToken?: string;
+  /** Per-invite token for an 'organizer_invite_accept' button block, if one is present. */
+  organizerInviteToken?: string;
 }
 
 const FONT_STACK = "Georgia, 'Times New Roman', Arial, sans-serif";
@@ -119,7 +121,8 @@ function renderBlock(
   conference: EmailRenderConference,
   ctx: EmailTokenContext,
   theme: Required<EmailTheme>,
-  chairInviteToken?: string
+  chairInviteToken?: string,
+  organizerInviteToken?: string
 ): string {
   if (block.type === 'paragraph') {
     if (!block.content.trim()) return '';
@@ -127,7 +130,7 @@ function renderBlock(
       ${renderTokenizedHtml(block.content, ctx)}
     </td></tr>`;
   }
-  const url = resolveButtonUrl(block, conference, { chairInviteToken });
+  const url = resolveButtonUrl(block, conference, { chairInviteToken, organizerInviteToken });
   // Bulletproof CTA: background-color + border-radius + padding all live on
   // the <td>, not the <a> — Outlook (and older Gmail app builds) can drop
   // padding/border-radius declared only on an inline <a>, silently
@@ -145,10 +148,10 @@ function renderBlock(
 }
 
 /** Renders a complete, standalone HTML email document from the block model. */
-export function renderEmailHtml({ blocks, conference, ctx, chairInviteToken }: RenderEmailHtmlArgs): string {
+export function renderEmailHtml({ blocks, conference, ctx, chairInviteToken, organizerInviteToken }: RenderEmailHtmlArgs): string {
   const siteUrl = getSiteUrl();
   const theme = resolveEmailTheme(conference.email_theme);
-  const bodyRows = blocks.map(b => renderBlock(b, conference, ctx, theme, chairInviteToken)).join('');
+  const bodyRows = blocks.map(b => renderBlock(b, conference, ctx, theme, chairInviteToken, organizerInviteToken)).join('');
   const footerLine = theme.footerLine.trim();
 
   return `<!doctype html>

@@ -3,7 +3,7 @@
 // mirror so the older resolver/preview/history code paths (which only know
 // about plain text) keep working unchanged.
 
-export type ButtonDestination = 'conference_page' | 'apply_page' | 'documents' | 'custom' | 'chair_invite_accept' | 'signup_page';
+export type ButtonDestination = 'conference_page' | 'apply_page' | 'documents' | 'custom' | 'chair_invite_accept' | 'organizer_invite_accept' | 'signup_page';
 
 export interface ParagraphBlock {
   type: 'paragraph';
@@ -29,6 +29,7 @@ export const BUTTON_DESTINATION_LABELS: Record<ButtonDestination, string> = {
   documents: 'My conference view',
   custom: 'Custom URL',
   chair_invite_accept: 'Accept chair invite link',
+  organizer_invite_accept: 'Accept organizer invite link',
   signup_page: 'Gavelling sign-up page',
 };
 
@@ -36,9 +37,11 @@ export interface ButtonUrlConference {
   slug: string;
 }
 
-/** Per-recipient values a button URL may need beyond the conference — currently just the chair invite token. */
+/** Per-recipient values a button URL may need beyond the conference — the
+ *  chair and organizer invite tokens. */
 export interface ButtonUrlExtra {
   chairInviteToken?: string;
+  organizerInviteToken?: string;
 }
 
 /** NEXT_PUBLIC_SITE_URL with the same production fallback used elsewhere for metadata/sitemap. */
@@ -72,6 +75,8 @@ export function resolveButtonUrl(block: ButtonBlock, conference: ButtonUrlConfer
       return `${siteUrl}/conferences/${conference.slug}/apply${block.role ? `?role=${encodeURIComponent(block.role)}` : ''}`;
     case 'chair_invite_accept':
       return extra?.chairInviteToken ? `${siteUrl}/invites/chair/${extra.chairInviteToken}` : '#';
+    case 'organizer_invite_accept':
+      return extra?.organizerInviteToken ? `${siteUrl}/invites/organizer/${extra.organizerInviteToken}` : '#';
     case 'signup_page':
       return `${siteUrl}/auth/signup`;
     case 'custom':

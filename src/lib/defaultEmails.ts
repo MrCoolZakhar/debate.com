@@ -154,6 +154,13 @@ export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
       { type: 'button', label: 'ACCEPT INVITATION', destination: 'chair_invite_accept' },
     ],
   },
+  organizer_invite: {
+    subject: "You're invited to help organize {{conference_name}}",
+    blocks: [
+      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nYou've been invited to join the organizing team of {{conference_name}} as an organizer. Accepting gives you access to the conference management dashboard, where organizers manage applications, committees, and communications." },
+      { type: 'button', label: 'ACCEPT INVITATION', destination: 'organizer_invite_accept' },
+    ],
+  },
   session_chair_invite: {
     subject: 'Your session details for {{committee}} — {{conference_name}}',
     blocks: [

@@ -89,7 +89,7 @@ export default function OrganizerInvitePage() {
     if (!result.ok) { setError(result.error ?? 'Could not respond to this invite.'); return; }
 
     if (accept) {
-      router.push(`/manage/${result.slug ?? invite?.slug ?? ''}`);
+      router.push(`/manage/${result.slug ?? invite?.slug ?? ''}?organizerInvite=accepted`);
     } else {
       setInvite(prev => (prev ? { ...prev, status: 'declined' } : prev));
     }

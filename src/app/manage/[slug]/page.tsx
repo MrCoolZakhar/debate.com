@@ -679,6 +679,21 @@ export default function DashboardPage() {
   const [showShareModal, setShowShareModal] = useState(false);
   const [publishBlockMsg, setPublishBlockMsg] = useState('');
   const [dash, setDash] = useState<DashData | null>(null);
+  // Success toast for a redirect from /invites/organizer/[token] after
+  // accepting, read via window.location rather than useSearchParams so this
+  // stays a plain client-side effect (matches the pattern used for the
+  // account-deletion and password-reset homepage toasts).
+  const [orgInviteToast, setOrgInviteToast] = useState(false);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('organizerInvite') !== 'accepted') return;
+    setOrgInviteToast(true);
+    const url = new URL(window.location.href);
+    url.searchParams.delete('organizerInvite');
+    window.history.replaceState({}, '', url.toString());
+    const t = setTimeout(() => setOrgInviteToast(false), 5000);
+    return () => clearTimeout(t);
+  }, []);
 
   useEffect(() => {
     if (!conference) return;
@@ -890,6 +905,18 @@ export default function DashboardPage() {
       className="flex flex-col"
       style={{ minHeight: 'calc(100vh - 56px)', padding: '14px 20px 20px', fontFamily: OUTFIT }}
     >
+
+      {orgInviteToast && (
+        <div
+          className="flex items-center gap-2.5 rounded-xl px-4 py-2.5 mb-3 flex-shrink-0"
+          style={{ backgroundColor: 'rgba(61,122,82,0.10)', border: '1px solid rgba(61,122,82,0.35)' }}
+        >
+          <CheckCircle2 size={14} style={{ color: '#3D7A52', flexShrink: 0 }} />
+          <p className="text-sm" style={{ color: '#1B3828', fontFamily: OUTFIT, fontWeight: 600 }}>
+            Invite accepted. You&apos;re now part of the organizing team.
+          </p>
+        </div>
+      )}
 
       {/* ── Header, compact single row ── */}
       <div className="flex items-center justify-between gap-4 flex-shrink-0" style={{ marginBottom: 12 }}>

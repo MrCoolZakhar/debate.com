@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
-  SlidersHorizontal, Building2, Users2, ShieldCheck, Upload, ArrowRight,
+  SlidersHorizontal, Building2, Users2, ShieldCheck, Upload, ArrowRight, X,
 } from 'lucide-react';
 import { useManage, type Conference } from '@/app/manage/[slug]/layout';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
@@ -422,12 +422,11 @@ export default function SettingsPage() {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteError, setInviteError] = useState('');
   const [inviting, setInviting] = useState(false);
-  // Token-invite flow: email lookup missed → offer a "send an invite link"
-  // fallback (works for people without a Gavelling account yet).
-  const [pendingInvites, setPendingInvites] = useState<OrganizerInviteRow[]>([]);
-  const [inviteMissEmail, setInviteMissEmail] = useState<string | null>(null);
-  const [sendingInviteLink, setSendingInviteLink] = useState(false);
   const [inviteNotice, setInviteNotice] = useState('');
+  // Consent-based invite flow, mirrors chair invites: a pending row + email,
+  // accepted/declined by the invitee via /invites/organizer/[token].
+  const [pendingInvites, setPendingInvites] = useState<OrganizerInviteRow[]>([]);
+  const [revokingInviteId, setRevokingInviteId] = useState<string | null>(null);
 
   // Lineage (previous editions)
   const [incomingClaims, setIncomingClaims] = useState<IncomingClaim[]>([]);
@@ -726,11 +725,14 @@ export default function SettingsPage() {
 
   // ── Organizer actions ───────────────────────────────────────────────────
 
+  // Consent-based, mirrors sendChairInvite: always goes through
+  // create_organizer_invite, no direct conference_organizers insert. Works
+  // whether or not the invitee already has a Gavelling account, and the RPC
+  // itself rejects an email already on the team.
   async function handleInvite() {
     if (!conference || !session || !inviteEmail.trim()) return;
     setInviting(true);
     setInviteError('');
-    setInviteMissEmail(null);
     setInviteNotice('');
     const supabase = await getFreshAuthedClient();
     if (!supabase) {
@@ -738,79 +740,12 @@ export default function SettingsPage() {
       setInviteError('Your session has expired, please refresh and sign in again.');
       return;
     }
-
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('id, display_name')
-      .eq('email', inviteEmail.trim().toLowerCase())
-      .maybeSingle();
-
-    if (!profile) {
-      // No account with that email, offer the token-invite fallback instead
-      // of a dead end. The invite link works whether or not they sign up first.
-      setInviteMissEmail(inviteEmail.trim().toLowerCase());
-      setInviting(false);
-      return;
-    }
-
-    const alreadyMember = organizers.some(o => o.user_id === (profile as { id: string }).id);
-    if (alreadyMember) {
-      setInviteError("This person is already on the team.");
-      setInviting(false);
-      return;
-    }
-
-    // The insert stays awaited: the server mints the row id, which the
-    // remove/permission controls need. Only the INVITE button is busy.
-    const { data: inserted, error: insertError } = await supabase.from('conference_organizers').insert({
-      conference_id: conference.id,
-      user_id: (profile as { id: string }).id,
-      role: 'organizer',
-    }).select('id').single();
-
-    if (insertError || !inserted) {
-      setInviteError(insertError?.message ?? "Couldn't add this person. Please try again.");
-      setInviting(false);
-      return;
-    }
-
-    // Show the new member instantly with what we already know; a silent
-    // background reload reconciles avatar and canonical ordering.
-    const prof = profile as { id: string; display_name: string };
-    setOrganizers(prev => [...prev, {
-      id: (inserted as { id: string }).id,
-      role: 'organizer',
-      user_id: prof.id,
-      permissions: {},
-      public_title: null,
-      show_on_public: false,
-      sort_order: 0,
-      profiles: { display_name: prof.display_name, email: inviteEmail.trim().toLowerCase(), avatar_url: null },
-    }]);
-    setInviteEmail('');
+    const res = await sendOrganizerInvite(supabase, { conferenceId: conference.id, email: inviteEmail.trim() });
     setInviting(false);
-    void loadOrganizers();
-  }
-
-  // Token-invite fallback: mints a conference_organizer_invites row via RPC
-  // and queues the outbox email whose button deep-links to /invites/organizer/[token].
-  async function handleSendInviteLink() {
-    if (!conference || !session || !inviteMissEmail) return;
-    setSendingInviteLink(true);
-    setInviteError('');
-    const supabase = await getFreshAuthedClient();
-    if (!supabase) {
-      setSendingInviteLink(false);
-      setInviteError('Your session has expired, please refresh and sign in again.');
-      return;
-    }
-    const res = await sendOrganizerInvite(supabase, { conferenceId: conference.id, email: inviteMissEmail });
-    setSendingInviteLink(false);
     if (!res.ok) {
       setInviteError(res.error ?? "Couldn't send that invite. Please try again.");
       return;
     }
-    setInviteMissEmail(null);
     setInviteEmail('');
     setInviteNotice(res.existing
       ? `An invite for ${res.invitedEmail} was already pending, the original link still works.`
@@ -818,23 +753,34 @@ export default function SettingsPage() {
     void loadPendingInvites();
   }
 
-  async function handleRevokeInvite(inviteId: string) {
-    if (!session) return;
+  async function handleRevokeInvite(invite: OrganizerInviteRow) {
+    if (!session || revokingInviteId) return;
+    const { confirmed } = await confirm({
+      title: 'Revoke invite?',
+      body: `Revoke the invite sent to ${invite.email}? The link they were sent will stop working.`,
+      confirmLabel: 'Revoke',
+      danger: true,
+    });
+    if (!confirmed) return;
+
+    setRevokingInviteId(invite.id);
     // Optimistic remove with rollback, matches the organizer row pattern.
     const previous = pendingInvites;
-    setPendingInvites(prev => prev.filter(i => i.id !== inviteId));
+    setPendingInvites(prev => prev.filter(i => i.id !== invite.id));
     setInviteError('');
     const supabase = await getFreshAuthedClient();
     if (!supabase) {
       setPendingInvites(previous);
       setInviteError('Your session has expired, please refresh and sign in again.');
+      setRevokingInviteId(null);
       return;
     }
-    const res = await revokeOrganizerInvite(supabase, inviteId);
+    const res = await revokeOrganizerInvite(supabase, invite.id);
     if (!res.ok) {
       setPendingInvites(previous);
       setInviteError(res.error ?? "Couldn't revoke that invite. Please try again.");
     }
+    setRevokingInviteId(null);
   }
 
   const SECTION_KEYS: { key: string; label: string }[] = [
@@ -2695,7 +2641,11 @@ export default function SettingsPage() {
           )}
         </div>
 
-        {/* Pending token invites, sent but not yet accepted */}
+        {/* Pending invites, sent but not yet accepted/declined. Declined and
+            revoked invites never appear here (listPendingOrganizerInvites
+            filters status='pending'), and there's no permissions row: those
+            are configured once the invite is accepted and a real
+            conference_organizers row exists. */}
         {pendingInvites.length > 0 && (
           <div className="mb-6">
             <p className="font-bold text-[10px] mb-2" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.14em' }}>
@@ -2720,15 +2670,23 @@ export default function SettingsPage() {
                       Invited {new Date(inv.created_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
                     </p>
                   </div>
-                  <span className="flex-shrink-0">
-                    <Pill tone="gold" size="sm">Pending</Pill>
+                  <span
+                    className="px-2 py-0.5 rounded-full flex-shrink-0"
+                    style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', fontFamily: "'Outfit', sans-serif", backgroundColor: 'rgba(182,135,31,0.18)', color: '#8A6614' }}
+                  >
+                    INVITED
                   </span>
                   <button
-                    onClick={() => handleRevokeInvite(inv.id)}
-                    className="text-xs font-semibold focus:outline-none hover:underline flex-shrink-0"
-                    style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}
+                    onClick={() => handleRevokeInvite(inv)}
+                    disabled={revokingInviteId === inv.id}
+                    title="Revoke invite"
+                    aria-label={`Revoke invite to ${inv.email}`}
+                    className="focus:outline-none flex-shrink-0"
+                    style={{ color: '#9A8A78', lineHeight: 0, opacity: revokingInviteId === inv.id ? 0.5 : 1 }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#8B2020'; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
                   >
-                    REVOKE
+                    <X size={14} />
                   </button>
                 </div>
               ))}
@@ -2745,7 +2703,7 @@ export default function SettingsPage() {
             <input
               type="email"
               value={inviteEmail}
-              onChange={(e) => { setInviteEmail(e.target.value); setInviteError(''); setInviteMissEmail(null); setInviteNotice(''); }}
+              onChange={(e) => { setInviteEmail(e.target.value); setInviteError(''); setInviteNotice(''); }}
               onKeyDown={(e) => { if (e.key === 'Enter') handleInvite(); }}
               placeholder="colleague@example.com"
               style={{ ...inputStyle, flex: 1 }}
@@ -2768,38 +2726,14 @@ export default function SettingsPage() {
               {inviting ? 'INVITING...' : 'INVITE'}
             </button>
           </div>
+          <p className="text-xs mt-2" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+            They&apos;ll get an email with an invite link. It works whether or not they already have a Gavelling account, and they&apos;ll join the team once they accept.
+          </p>
           {inviteError && (
             <p className="text-xs mt-2" style={{ color: '#B8844A', fontFamily: "'Outfit', sans-serif" }}>{inviteError}</p>
           )}
           {inviteNotice && (
             <p className="text-xs mt-2" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{inviteNotice}</p>
-          )}
-
-          {/* Lookup miss → token-invite fallback */}
-          {inviteMissEmail && (
-            <div
-              className="flex flex-col sm:flex-row sm:items-center gap-3 mt-3 rounded-xl px-4 py-3"
-              style={{ backgroundColor: 'rgba(182,135,31,0.07)', border: '1px solid rgba(182,135,31,0.3)' }}
-            >
-              <p className="text-xs flex-1" style={{ color: '#6B5F52', fontFamily: "'Outfit', sans-serif", lineHeight: 1.55, margin: 0 }}>
-                No Gavelling account found for <strong style={{ color: '#1C1410' }}>{inviteMissEmail}</strong>.
-                You can email them an invite link instead, it works even before they create an account.
-              </p>
-              <button
-                onClick={handleSendInviteLink}
-                disabled={sendingInviteLink}
-                className="rounded-xl py-2 px-4 font-bold text-xs focus:outline-none transition-colors flex-shrink-0"
-                style={{
-                  backgroundColor: sendingInviteLink ? '#DDD4C0' : '#1B3828',
-                  color: sendingInviteLink ? '#9A8A78' : '#EED98A',
-                  fontFamily: "'Outfit', sans-serif",
-                  letterSpacing: '0.06em',
-                  cursor: sendingInviteLink ? 'default' : 'pointer',
-                }}
-              >
-                {sendingInviteLink ? 'SENDING…' : 'SEND AN INVITE LINK'}
-              </button>
-            </div>
           )}
         </div>
       </div>}

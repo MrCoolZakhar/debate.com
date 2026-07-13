@@ -45,6 +45,7 @@ export const EVENT_REGISTRY: EventDef[] = [
   { key: 'documents_published', label: 'Documents Published', description: 'Sent when working papers or resolutions are published.', defaultDelivery: 'manual' },
   { key: 'chair_assigned', label: 'Chair Assigned', description: 'Sent when someone is assigned as a committee chair.', defaultDelivery: 'immediate' },
   { key: 'committee_chair_invite', label: 'Chair invite', description: 'Sent when an organizer invites someone to chair a committee. Always sends, clicking INVITE is the consent, using your draft if enabled, otherwise our default.', defaultDelivery: 'immediate', functional: true },
+  { key: 'organizer_invite', label: 'Organizer invite', description: 'Sent when someone is invited to join the organizing team. Always sends, clicking INVITE is the consent, using your draft if enabled, otherwise our default.', defaultDelivery: 'immediate', functional: true },
   { key: 'session_chair_invite', label: 'Session Chair Invite', description: 'Sent to committee chairs with their session code and chair password.', defaultDelivery: 'manual' },
   { key: 'session_join_invite', label: 'Session Join Invite', description: 'Sent to committee participants inviting them to join the live session.', defaultDelivery: 'manual' },
   { key: 'request_reply', label: 'Request reply', description: 'Sent to a participant when the organizing team replies to their question.', defaultDelivery: 'immediate' },
@@ -106,7 +107,7 @@ const PREFERENCE_FIELD: Record<NotificationCategory, 'notify_email_applications'
 // the product: clicking INVITE (chair/import) is itself the consent, and a
 // reply to a question the participant asked themselves isn't a marketing
 // choice, it's the answer they're waiting on.
-const ALWAYS_SEND_EVENTS = new Set(['committee_chair_invite', 'import_join_invite', 'request_reply']);
+const ALWAYS_SEND_EVENTS = new Set(['committee_chair_invite', 'organizer_invite', 'import_join_invite', 'request_reply']);
 
 /** True if this recipient should receive eventKey given their notification
  *  preferences. Unregistered/imported recipients (no profiles row) and
@@ -465,6 +466,79 @@ export async function queueChairInviteEmail(
     subject: resolveTokens(subjectSource, ctx),
     body: resolveTokens(flatBody, ctx),
     body_html: renderEmailHtml({ blocks, conference: renderConf, ctx, chairInviteToken: token }),
+    status: 'pending',
+  });
+  if (error) return;
+
+  triggerEmailDelivery(supabase);
+}
+
+// ── Organizer invite email ──────────────────────────────────────────────────
+// Same shape as queueChairInviteEmail: the invitee has no application row
+// (they may not even have an account yet), so this queues a single outbox
+// row directly against recipient_email. Organizers can customize the
+// 'organizer_invite' template like any other event; a missing/disabled
+// template falls back to the built-in default so the invite is never
+// blocked on template setup.
+
+export interface QueueOrganizerInviteEmailArgs {
+  conferenceId: string;
+  token: string;
+  invitedEmail: string;
+  invitedName: string;
+}
+
+export async function queueOrganizerInviteEmail(
+  supabase: ReturnType<typeof getAuthedClient>,
+  args: QueueOrganizerInviteEmailArgs
+): Promise<void> {
+  const { conferenceId, token, invitedEmail, invitedName } = args;
+
+  const [{ data: confData }, { data: templateData }] = await Promise.all([
+    supabase
+      .from('conferences')
+      .select('slug, acronym, full_name, banner_url, logo_url, contact_email, email_theme')
+      .eq('id', conferenceId)
+      .single(),
+    supabase
+      .from('email_templates')
+      .select('id, subject, body, body_blocks, enabled')
+      .eq('conference_id', conferenceId)
+      .eq('event_key', 'organizer_invite')
+      .maybeSingle(),
+  ]);
+
+  const conference = confData as ConferenceRow | null;
+  const template = templateData as TemplateRow | null;
+  const renderConf: EmailRenderConference = {
+    slug: conference?.slug ?? '',
+    acronym: conference?.acronym ?? '',
+    full_name: conference?.full_name ?? '',
+    banner_url: conference?.banner_url ?? null,
+    logo_url: conference?.logo_url ?? null,
+    contact_email: conference?.contact_email ?? '',
+    email_theme: conference?.email_theme ?? null,
+  };
+
+  const ctx: EmailTokenContext = {
+    delegate_name: invitedName,
+    conference_name: conference?.full_name ?? null,
+  };
+
+  const useTemplate = !!template && template.enabled;
+  const fallback = getDefaultEventEmail('organizer_invite');
+  const blocks: EmailBlock[] = useTemplate ? normalizeBlocks(template!.body_blocks, template!.body) : (fallback?.blocks ?? []);
+  const subjectSource = useTemplate ? template!.subject : (fallback?.subject ?? '');
+  const flatBody = flattenBlocksToPlainText(blocks, renderConf, { organizerInviteToken: token });
+
+  const { error } = await supabase.from('email_outbox').insert({
+    conference_id: conferenceId,
+    template_id: useTemplate ? template!.id : null,
+    recipient_application_id: null,
+    recipient_email: invitedEmail,
+    subject: resolveTokens(subjectSource, ctx),
+    body: resolveTokens(flatBody, ctx),
+    body_html: renderEmailHtml({ blocks, conference: renderConf, ctx, organizerInviteToken: token }),
     status: 'pending',
   });
   if (error) return;

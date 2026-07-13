@@ -1,15 +1,12 @@
-// Secretariat (organizer) token-invite flow — the organizer counterpart of
-// chairInvites.ts. Unlike organizer email lookup (which requires an existing
-// profile), this works for people WITHOUT a Gavelling account: the
+// Organizer token-invite flow — the organizer counterpart of chairInvites.ts.
+// Works whether or not the invitee already has a Gavelling account: the
 // create_organizer_invite RPC mints a token row (invited_user_id null when no
-// profile matches) and we queue an email whose button deep-links to
+// profile matches) and we queue an email (mirroring queueChairInviteEmail,
+// registry + template + default-fallback) whose button deep-links to
 // /invites/organizer/[token], where the invitee signs in/up and accepts.
 
 import type { getAuthedClient } from '@/lib/supabase-auth';
-import { getSiteUrl, flattenBlocksToPlainText, type EmailBlock } from '@/lib/emailBlocks';
-import { renderEmailHtml, type EmailRenderConference } from '@/lib/emailHtml';
-import { resolveTokens, type EmailTokenContext } from '@/lib/emailTokens';
-import { triggerEmailDelivery } from '@/lib/emailDelivery';
+import { queueOrganizerInviteEmail } from '@/lib/emailEvents';
 
 type AuthedClient = ReturnType<typeof getAuthedClient>;
 
@@ -103,78 +100,4 @@ export async function revokeOrganizerInvite(
     .eq('status', 'pending');
   if (error) return { ok: false, error: error.message };
   return { ok: true };
-}
-
-// ── Invite email ─────────────────────────────────────────────────────────────
-// Mirrors emailEvents.queueChairInviteEmail: one outbox row keyed on
-// recipient_email (the invitee may have no application, or no account at all),
-// then a delivery trigger. Uses a 'custom' button block pointing straight at
-// the token URL so no new ButtonDestination is needed.
-
-interface QueueOrganizerInviteEmailArgs {
-  conferenceId: string;
-  token: string;
-  invitedEmail: string;
-  invitedName: string;
-}
-
-interface ConferenceRow {
-  slug: string;
-  acronym: string;
-  full_name: string;
-  banner_url: string | null;
-  logo_url: string | null;
-  contact_email: string | null;
-}
-
-async function queueOrganizerInviteEmail(
-  supabase: AuthedClient,
-  args: QueueOrganizerInviteEmailArgs
-): Promise<void> {
-  const { conferenceId, token, invitedEmail, invitedName } = args;
-
-  const { data: confData } = await supabase
-    .from('conferences')
-    .select('slug, acronym, full_name, banner_url, logo_url, contact_email')
-    .eq('id', conferenceId)
-    .single();
-
-  const conference = confData as ConferenceRow | null;
-  const renderConf: EmailRenderConference = {
-    slug: conference?.slug ?? '',
-    acronym: conference?.acronym ?? '',
-    full_name: conference?.full_name ?? '',
-    banner_url: conference?.banner_url ?? null,
-    logo_url: conference?.logo_url ?? null,
-    contact_email: conference?.contact_email ?? '',
-  };
-
-  const ctx: EmailTokenContext = {
-    delegate_name: invitedName,
-    conference_name: conference?.full_name ?? null,
-  };
-
-  const acceptUrl = `${getSiteUrl()}/invites/organizer/${token}`;
-  const blocks: EmailBlock[] = [
-    { type: 'paragraph', content: `You've been invited to join the organizing team of ${renderConf.acronym}.` },
-    { type: 'paragraph', content: 'Accepting gives you access to the conference management dashboard. If you don’t have a Gavelling account yet, you can create one in a minute when you open the link.' },
-    { type: 'button', label: 'ACCEPT INVITATION', destination: 'custom', url: acceptUrl },
-  ];
-
-  const subject = `You're invited to help organize ${renderConf.acronym}`;
-  const flatBody = flattenBlocksToPlainText(blocks, renderConf);
-
-  const { error } = await supabase.from('email_outbox').insert({
-    conference_id: conferenceId,
-    template_id: null,
-    recipient_application_id: null,
-    recipient_email: invitedEmail,
-    subject: resolveTokens(subject, ctx),
-    body: resolveTokens(flatBody, ctx),
-    body_html: renderEmailHtml({ blocks, conference: renderConf, ctx }),
-    status: 'pending',
-  });
-  if (error) return;
-
-  triggerEmailDelivery(supabase);
 }

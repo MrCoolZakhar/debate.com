@@ -44,6 +44,14 @@ interface ChairInvite {
   committeeName: string;
 }
 
+interface OrganizerInvite {
+  id: string;
+  token: string;
+  conferenceName: string;
+  acronym: string;
+  slug: string;
+}
+
 const TABS: { key: TabKey; label: string }[] = [
   { key: 'delegate', label: 'DELEGATE' },
   { key: 'chair', label: 'CHAIR' },
@@ -251,6 +259,75 @@ function ChairInvitesSection({ invites, onRespond }: { invites: ChairInvite[]; o
   );
 }
 
+// ── Organizer invites (pending, awaiting the signed-in user's response) ────
+
+function OrganizerInviteCard({ invite, onRespond }: { invite: OrganizerInvite; onRespond: (invite: OrganizerInvite, accept: boolean) => void }) {
+  const [responding, setResponding] = useState<'accept' | 'decline' | null>(null);
+
+  async function handle(accept: boolean) {
+    setResponding(accept ? 'accept' : 'decline');
+    await onRespond(invite, accept);
+    setResponding(null);
+  }
+
+  return (
+    <div
+      className="flex items-center gap-3 rounded-2xl px-4 py-3"
+      style={{ backgroundColor: 'rgba(238,217,138,0.14)', border: '1px solid rgba(182,135,31,0.35)' }}
+    >
+      <span
+        className="flex items-center justify-center flex-shrink-0"
+        style={{ width: 38, height: 38, borderRadius: '9999px', backgroundColor: 'rgba(182,135,31,0.16)', border: '1px solid rgba(182,135,31,0.35)' }}
+      >
+        <Mail size={16} style={{ color: '#B6871F' }} />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="font-bold text-sm truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+          Join the organizing team
+        </p>
+        <p className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+          {invite.conferenceName} · {invite.acronym}
+        </p>
+      </div>
+      <div className="flex gap-2 flex-shrink-0">
+        <button
+          onClick={() => handle(false)}
+          disabled={responding !== null}
+          className="rounded-lg py-1.5 px-3 text-xs font-bold focus:outline-none flex items-center gap-1.5"
+          style={{ border: '1px solid #DDD4C0', color: responding ? '#C8BEA8' : '#1C1410', backgroundColor: 'transparent', fontFamily: OUTFIT, cursor: responding ? 'not-allowed' : 'pointer' }}
+        >
+          <X size={12} /> {responding === 'decline' ? '...' : 'DECLINE'}
+        </button>
+        <button
+          onClick={() => handle(true)}
+          disabled={responding !== null}
+          className="rounded-lg py-1.5 px-3 text-xs font-bold focus:outline-none flex items-center gap-1.5"
+          style={{ backgroundColor: responding ? '#DDD4C0' : '#1B3828', color: responding ? '#9A8A78' : '#EED98A', border: 'none', fontFamily: OUTFIT, cursor: responding ? 'not-allowed' : 'pointer' }}
+        >
+          <Check size={12} /> {responding === 'accept' ? '...' : 'ACCEPT'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function OrganizerInvitesSection({ invites, onRespond }: { invites: OrganizerInvite[]; onRespond: (invite: OrganizerInvite, accept: boolean) => void }) {
+  if (invites.length === 0) return null;
+  return (
+    <div className="mb-8">
+      <div className="flex items-center gap-2.5 mb-3">
+        <Eyebrow>Team Invites</Eyebrow>
+        <span style={{ fontFamily: MONO, fontSize: '10px', color: '#B6871F' }}>{invites.length}</span>
+      </div>
+      <div className="flex flex-col gap-2.5">
+        {invites.map(inv => (
+          <OrganizerInviteCard key={inv.id} invite={inv} onRespond={onRespond} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── Grid ─────────────────────────────────────────────────────────────────────
 
 function CardGrid({ entries, tab, muted }: { entries: TabEntry[]; tab: TabKey; muted: boolean }) {
@@ -282,6 +359,7 @@ function MyConferencesInner() {
   const [timeframe, setTimeframe] = useState<'upcoming' | 'past'>('upcoming');
   const [continent, setContinent] = useState<'all' | Continent>('all');
   const [chairInvites, setChairInvites] = useState<ChairInvite[]>([]);
+  const [organizerInvites, setOrganizerInvites] = useState<OrganizerInvite[]>([]);
   const [acceptedToast, setAcceptedToast] = useState(false);
 
   const tabParam = searchParams.get('tab');
@@ -350,6 +428,39 @@ function MyConferencesInner() {
     const result = data as { ok: boolean } | null;
     if (!result?.ok) return;
     setChairInvites(prev => prev.filter(i => i.id !== invite.id));
+    if (accept) await loadAll();
+  }
+
+  const loadOrganizerInvites = useCallback(async () => {
+    if (!user || !session) return;
+    const supabase = getAuthedClient(session.access_token);
+    const { data: rows } = await supabase
+      .from('conference_organizer_invites')
+      .select('id, token, conferences (full_name, acronym, slug)')
+      .eq('invited_user_id', user.id)
+      .eq('status', 'pending');
+    const invites = ((rows ?? []) as unknown as {
+      id: string; token: string;
+      conferences: { full_name: string; acronym: string; slug: string } | { full_name: string; acronym: string; slug: string }[] | null;
+    }[]).map(r => {
+      const conf = first(r.conferences);
+      return {
+        id: r.id, token: r.token,
+        conferenceName: conf?.full_name ?? 'Unknown conference',
+        acronym: conf?.acronym ?? '',
+        slug: conf?.slug ?? '',
+      };
+    });
+    setOrganizerInvites(invites);
+  }, [user, session]);
+
+  async function handleRespondOrganizerInvite(invite: OrganizerInvite, accept: boolean) {
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
+    const { data } = await supabase.rpc('respond_organizer_invite', { p_token: invite.token, p_accept: accept });
+    const result = data as { ok: boolean } | null;
+    if (!result?.ok) return;
+    setOrganizerInvites(prev => prev.filter(i => i.id !== invite.id));
     if (accept) await loadAll();
   }
 
@@ -487,7 +598,8 @@ function MyConferencesInner() {
     if (authLoading || !user) return;
     loadAll();
     loadChairInvites();
-  }, [authLoading, user, loadAll, loadChairInvites]);
+    loadOrganizerInvites();
+  }, [authLoading, user, loadAll, loadChairInvites, loadOrganizerInvites]);
 
   // ── Filtering (timeframe → continent) within the active tab ────────────────
 
@@ -626,6 +738,7 @@ function MyConferencesInner() {
         </div>
 
         {activeTab === 'chair' && <ChairInvitesSection invites={chairInvites} onRespond={handleRespondInvite} />}
+        {activeTab === 'organizer' && <OrganizerInvitesSection invites={organizerInvites} onRespond={handleRespondOrganizerInvite} />}
 
         {loading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
