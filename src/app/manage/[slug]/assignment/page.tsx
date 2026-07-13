@@ -59,16 +59,17 @@ interface AllocationRow {
   applications: { invited_name: string | null } | null;
 }
 
-// Importance tiers. Mapping: green = HIGH importance to the committee,
-// yellow/amber = MEDIUM, red = LOW. 'standard' = unrated (neutral).
+// Importance tiers. Mapping: green = LOW importance to the committee,
+// yellow/gold = MEDIUM, red = HIGH. 'standard' = unrated (neutral). This
+// matches the setup editor's canonical mapping (ConferenceRosterPicker.tsx).
 type ImportanceTier = 'standard' | 'high' | 'medium' | 'low';
-const TIER_CYCLE: ImportanceTier[] = ['standard', 'high', 'medium', 'low'];
+const TIER_CYCLE: ImportanceTier[] = ['standard', 'low', 'medium', 'high'];
 // Urgency order for the drop popup: high > medium > low > standard
 const TIER_RANK: Record<ImportanceTier, number> = { high: 0, medium: 1, low: 2, standard: 3 };
 const TIER_META: Record<ImportanceTier, { label: string; color: string; bg: string }> = {
-  high:     { label: 'HIGH', color: '#3D7A52', bg: 'rgba(61,122,82,0.12)' },
-  medium:   { label: 'MED',  color: '#B8844A', bg: 'rgba(184,132,74,0.14)' },
-  low:      { label: 'LOW',  color: '#8B2020', bg: 'rgba(139,32,32,0.10)' },
+  high:     { label: 'HIGH', color: '#8B2020', bg: 'rgba(139,32,32,0.10)' },
+  medium:   { label: 'MED',  color: '#D4A72C', bg: 'rgba(212,167,44,0.14)' },
+  low:      { label: 'LOW',  color: '#3D7A52', bg: 'rgba(61,122,82,0.12)' },
   standard: { label: 'STD',  color: '#9A8A78', bg: 'rgba(154,138,120,0.12)' },
 };
 
@@ -238,7 +239,7 @@ function TierBadge({ tier, onCycle }: { tier: ImportanceTier; onCycle?: () => vo
   return (
     <button
       onClick={e => { e.stopPropagation(); onCycle?.(); }}
-      title="Country importance to this committee. Click to cycle: standard, high, medium, low."
+      title="Country importance to this committee. Click to cycle: standard, low, medium, high."
       className="focus:outline-none flex items-center gap-1.5"
       style={{
         padding: '2px 8px',
