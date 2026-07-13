@@ -77,15 +77,11 @@ export const metadata: Metadata = {
       'ar': 'https://gavelling.com?lang=ar',
     },
   },
-  icons: {
-    icon: [
-      { url: '/favicon.ico' },
-      { url: '/favicon-16x16.png', sizes: '16x16', type: 'image/png' },
-      { url: '/favicon-32x32.png', sizes: '32x32', type: 'image/png' },
-    ],
-    apple: [{ url: '/apple-touch-icon.png', sizes: '180x180' }],
-    other: [{ rel: 'manifest', url: '/site.webmanifest' }],
-  },
+  // Favicon + apple-touch icon are served by the App Router file convention
+  // (src/app/icon.png, src/app/apple-icon.png) — the gavel mark on a
+  // transparent background, so no broken white square in the tab. We must NOT
+  // set metadata.icons here: defining it suppresses the file-convention link.
+  manifest: '/site.webmanifest',
 };
 
 export const viewport: Viewport = {
@@ -96,8 +92,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className="h-full">
       <head>
-        <link rel="icon" href="/favicon.jpg" type="image/jpeg" />
-        <link rel="apple-touch-icon" href="/favicon.jpg" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital@1&display=swap" rel="stylesheet" />
