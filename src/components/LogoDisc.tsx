@@ -58,7 +58,7 @@ export function LogoDisc({
         style={{
           ...base,
           backgroundColor: '#FDFCF9',
-          border: '1px solid rgba(221,212,192,0.8)',
+          border: '0.5px solid rgba(221,212,192,0.8)',
           // 12% of the diameter, the artwork never reaches the rim.
           padding: `${Math.round(size * 0.12)}px`,
           ...style,

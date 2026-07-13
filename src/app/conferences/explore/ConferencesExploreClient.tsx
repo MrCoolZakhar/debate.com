@@ -438,7 +438,7 @@ function ConferenceListRow({
         style={{
           width: '64px', height: '64px', borderRadius: '9999px',
           backgroundColor: conf.logo_url ? '#FDFCF9' : '#1B3828',
-          border: '1px solid rgba(221,212,192,0.8)',
+          border: '0.5px solid rgba(221,212,192,0.8)',
           boxShadow: hovered ? '0 6px 16px rgba(27,56,40,0.16)' : '0 3px 8px rgba(27,56,40,0.10)',
           padding: conf.logo_url ? '8px' : 0,
           transition: 'box-shadow 160ms ease',

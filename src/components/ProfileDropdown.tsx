@@ -341,7 +341,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
                             height: '20px',
                             borderRadius: '50%',
                             backgroundColor: '#FFFEFA',
-                            border: '1px solid #E7E0CF',
+                            border: '0.5px solid #E7E0CF',
                             display: 'inline-flex',
                             alignItems: 'center',
                             justifyContent: 'center',
