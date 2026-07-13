@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Globe, MessageCircle, Music, CalendarDays, MapPin, Users, GraduationCap, Monitor, Mail, Landmark, ChevronDown, ChevronLeft, ChevronRight, Check, X, Plus, ArrowUp, ArrowDown, ArrowUpDown, Star, LayoutDashboard, ArrowRight, UserRound } from 'lucide-react';
+import { Globe, MessageCircle, Music, Users, GraduationCap, Monitor, Mail, Landmark, ChevronDown, ChevronLeft, ChevronRight, Check, X, Plus, ArrowUp, ArrowDown, ArrowUpDown, Star, LayoutDashboard, ArrowRight, UserRound } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -14,6 +14,7 @@ import { LogoDisc } from '@/components/LogoDisc';
 import { LogoCropModal } from '@/components/LogoCropModal';
 import { uploadConferenceAsset } from '@/lib/conferenceAssets';
 import { formatFee } from '@/lib/utils';
+import { activeFeePhase, activePhaseFee, type FeePhase } from '@/lib/finance';
 import ParticipantView from '@/app/conferences/[slug]/participant/ParticipantView';
 import type { ParticipantAllocation } from '@/app/conferences/[slug]/participant/types';
 import {
@@ -141,6 +142,7 @@ interface RoleConfig {
   auto_accept: boolean;
   payment_timing: string;
   allow_partial_payments: boolean;
+  fee_phases: FeePhase[] | null;
 }
 
 interface MyApplication {
@@ -492,7 +494,7 @@ export default function ConferenceDetailClient() {
         .order('name', { ascending: true }),
       supabase
         .from('application_role_configs')
-        .select('role, is_enabled, applications_open_at, applications_close_at, fee_amount, fee_currency, auto_accept, payment_timing, allow_partial_payments')
+        .select('role, is_enabled, applications_open_at, applications_close_at, fee_amount, fee_currency, auto_accept, payment_timing, allow_partial_payments, fee_phases')
         .eq('conference_id', conf.id),
     ]);
 
@@ -1021,7 +1023,9 @@ export default function ConferenceDetailClient() {
                       />
                     )}
                     <span style={{ fontSize: '14px', color: 'rgba(237,231,216,0.92)', fontFamily: "'Outfit', sans-serif", fontWeight: 500 }}>
-                      {isOnline ? 'Online' : `${conference.city}, ${conference.country}`}
+                      {/* City in full, country as its ISO code — the flag already
+                          names the country, so the full name would repeat it. */}
+                      {isOnline ? 'Online' : `${conference.city}, ${(countryObj?.code ?? conference.country).toUpperCase()}`}
                     </span>
                   </span>
                   <span aria-hidden style={{ color: 'rgba(238,217,138,0.5)', fontSize: '10px' }}>◆</span>
@@ -1051,7 +1055,7 @@ export default function ConferenceDetailClient() {
         <div className="relative z-20 px-6 md:px-14" style={{ marginTop: '-44px' }}>
           <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
             <div
-              className="grid grid-cols-2 md:grid-cols-5"
+              className="grid grid-cols-3"
               style={{
                 backgroundColor: 'rgba(250,248,243,0.94)',
                 backdropFilter: 'blur(14px)',
@@ -1062,9 +1066,9 @@ export default function ConferenceDetailClient() {
                 overflow: 'hidden',
               }}
             >
+              {/* Dates + location live in the hero overlay (flag, city, date
+                  range) — only facts NOT already shown above appear here. */}
               {[
-                { icon: CalendarDays, label: 'Dates', value: formatDateRange(conference.start_date, conference.end_date) },
-                { icon: MapPin, label: 'Location', value: isOnline ? 'Online' : `${conference.city}, ${conference.country}` },
                 { icon: Monitor, label: 'Format', value: capitalize(conference.format.replace('-', ' ')) },
                 { icon: GraduationCap, label: 'Level', value: conference.student_level === 'school' ? 'High School' : capitalize(conference.student_level) },
                 { icon: Users, label: 'Delegates', value: conference.expected_delegates.toLocaleString() },
@@ -1704,8 +1708,11 @@ export default function ConferenceDetailClient() {
                             {enabledRoles.map(r => {
                               const windowStatus = getRoleWindowStatus(r);
                               const open = windowStatus === 'open' || windowStatus === 'open-always';
-                              const fee = r.fee_amount != null && r.fee_amount > 0
-                                ? formatFee(r.fee_amount, r.fee_currency ?? conference.fee_currency)
+                              // Today's price: the active fee phase when one covers
+                              // today's date, otherwise the flat role fee.
+                              const resolved = activePhaseFee({ fee_amount: r.fee_amount, fee_phases: r.fee_phases });
+                              const fee = resolved.amount > 0
+                                ? formatFee(resolved.amount, r.fee_currency ?? conference.fee_currency)
                                 : 'Free';
                               const reason = windowStatus === 'closed'
                                 ? 'Applications closed'
@@ -1761,13 +1768,21 @@ export default function ConferenceDetailClient() {
                         boxShadow: '0 10px 30px rgba(27,56,40,0.1), 0 0 0 8px rgba(238,217,138,0.12)',
                       }}
                     >
-                      {heroFeeAmount === 0 ? (
-                        <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: '30px', color: '#1B3828', lineHeight: 1 }}>FREE</span>
-                      ) : (
-                        <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: '38px', color: '#1C1410', lineHeight: 1 }}>
-                          {formatFee(heroFeeAmount, heroFeeCurrency)}
-                        </span>
-                      )}
+                      {(() => {
+                        // Headline = today's delegate price: the delegate role's
+                        // active fee phase when one covers today, else the
+                        // unified role-config flat fee (falls back to the
+                        // conference fee when no role config exists).
+                        const delegatePhase = activeFeePhase(roleConfigs.find(r => r.role === 'delegate')?.fee_phases);
+                        const headlineFee = delegatePhase ? Number(delegatePhase.amount) : heroFeeAmount;
+                        return headlineFee === 0 ? (
+                          <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: '30px', color: '#1B3828', lineHeight: 1 }}>FREE</span>
+                        ) : (
+                          <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: '38px', color: '#1C1410', lineHeight: 1 }}>
+                            {formatFee(headlineFee, heroFeeCurrency)}
+                          </span>
+                        );
+                      })()}
                       <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '8.5px', letterSpacing: '0.14em', color: '#9A8A78', marginTop: '7px' }}>
                         PER DELEGATE
                       </span>
@@ -1789,22 +1804,77 @@ export default function ConferenceDetailClient() {
 
                     {pricingOpen && (
                       <div className="w-full mt-4 pt-3" style={{ borderTop: '1px solid rgba(221,212,192,0.6)' }}>
-                        {enabledRoles.map((r, i) => (
-                          <div
-                            key={r.role}
-                            className="flex items-center justify-between py-2"
-                            style={{ borderTop: i === 0 ? 'none' : '1px solid rgba(221,212,192,0.4)' }}
-                          >
-                            <span className="text-[13px] font-medium" style={{ color: '#4A4238', fontFamily: "'Outfit', sans-serif" }}>
-                              {capitalize(r.role.replace(/-/g, ' '))}
-                            </span>
-                            <span className="text-[13px] font-bold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}>
-                              {r.fee_amount != null && r.fee_amount > 0
-                                ? formatFee(r.fee_amount, r.fee_currency ?? conference.fee_currency)
-                                : 'Free'}
-                            </span>
-                          </div>
-                        ))}
+                        {enabledRoles.map((r, i) => {
+                          const phases = r.fee_phases ?? [];
+                          const activePhase = activeFeePhase(phases);
+                          const currency = r.fee_currency ?? conference.fee_currency;
+                          const fmtPhaseDate = (iso: string) =>
+                            new Date(iso + 'T00:00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+                          return (
+                            <div key={r.role} style={{ borderTop: i === 0 ? 'none' : '1px solid rgba(221,212,192,0.4)' }}>
+                              <div className="flex items-center justify-between py-2">
+                                <span className="text-[13px] font-medium" style={{ color: '#4A4238', fontFamily: "'Outfit', sans-serif" }}>
+                                  {capitalize(r.role.replace(/-/g, ' '))}
+                                </span>
+                                <span className="text-[13px] font-bold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}>
+                                  {(() => {
+                                    const resolved = activePhaseFee({ fee_amount: r.fee_amount, fee_phases: phases });
+                                    return resolved.amount > 0 ? formatFee(resolved.amount, currency) : 'Free';
+                                  })()}
+                                </span>
+                              </div>
+                              {/* Fee phases breakdown — rendered only when the
+                                  organizer configured date-windowed pricing */}
+                              {phases.length > 0 && (
+                                <div className="pb-2 flex flex-col gap-1">
+                                  {phases.map((p, pi) => {
+                                    const isCurrent = activePhase !== null && p === activePhase;
+                                    return (
+                                      <div
+                                        key={pi}
+                                        className="flex items-center justify-between gap-2 rounded-lg px-2.5 py-1.5"
+                                        style={{
+                                          backgroundColor: isCurrent ? 'rgba(27,56,40,0.08)' : 'transparent',
+                                          border: isCurrent ? '1px solid rgba(27,56,40,0.25)' : '1px solid transparent',
+                                        }}
+                                      >
+                                        <span className="flex items-center gap-1.5 min-w-0">
+                                          <span
+                                            className="text-[11.5px] font-semibold truncate"
+                                            style={{ color: isCurrent ? '#1B3828' : '#4A4238', fontFamily: "'Outfit', sans-serif" }}
+                                          >
+                                            {p.label || 'Phase'}
+                                          </span>
+                                          {isCurrent && (
+                                            <span
+                                              className="flex-shrink-0 text-[8.5px] font-bold px-1.5 py-0.5 rounded-full"
+                                              style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.1em' }}
+                                            >
+                                              CURRENT
+                                            </span>
+                                          )}
+                                        </span>
+                                        <span className="flex items-center gap-2 flex-shrink-0">
+                                          {p.start_date && p.end_date && (
+                                            <span className="text-[10.5px]" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                                              {fmtPhaseDate(p.start_date)} – {fmtPhaseDate(p.end_date)}
+                                            </span>
+                                          )}
+                                          <span
+                                            className="text-[11.5px] font-bold"
+                                            style={{ color: isCurrent ? '#1B3828' : '#1C1410', fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}
+                                          >
+                                            {p.amount > 0 ? formatFee(p.amount, currency) : 'Free'}
+                                          </span>
+                                        </span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
                         <p className="text-[10.5px] mt-3" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", lineHeight: 1.65 }}>
                           A 5% Gavelling surcharge applies at checkout — waived with{' '}
                           <span style={{ color: '#B6871F', fontWeight: 600 }}>Gavelling Unlimited</span>.

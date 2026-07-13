@@ -14,6 +14,8 @@ import { Pill } from '@/app/account/accountUi';
 import { useConfirmModal } from '@/components/ConfirmModal';
 import { LogoDisc } from '@/components/LogoDisc';
 import { LogoCropModal } from '@/components/LogoCropModal';
+import { sendOrganizerInvite, listPendingOrganizerInvites, revokeOrganizerInvite, type OrganizerInviteRow } from '@/lib/organizerInvites';
+import { activeFeePhase, type FeePhase } from '@/lib/finance';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -37,6 +39,7 @@ interface RoleConfig {
   auto_accept: boolean;
   payment_timing: 'after_application' | 'after_acceptance' | 'anytime';
   custom_questions: CustomQuestion[];
+  fee_phases: FeePhase[] | null;
 }
 
 interface Organizer {
@@ -127,6 +130,17 @@ const BANNER_PRESETS = [
 
 function roleLabel(role: string): string {
   return role.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+/** True when any two dated fee phases have intersecting [start, end] windows. */
+function feePhasesOverlap(phases: FeePhase[]): boolean {
+  const dated = phases.filter(p => p.start_date && p.end_date);
+  for (let i = 0; i < dated.length; i++) {
+    for (let j = i + 1; j < dated.length; j++) {
+      if (dated[i].start_date <= dated[j].end_date && dated[j].start_date <= dated[i].end_date) return true;
+    }
+  }
+  return false;
 }
 
 function toDatetimeLocal(iso: string | null): string {
@@ -384,6 +398,12 @@ export default function SettingsPage() {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteError, setInviteError] = useState('');
   const [inviting, setInviting] = useState(false);
+  // Token-invite flow: email lookup missed → offer a "send an invite link"
+  // fallback (works for people without a Gavelling account yet).
+  const [pendingInvites, setPendingInvites] = useState<OrganizerInviteRow[]>([]);
+  const [inviteMissEmail, setInviteMissEmail] = useState<string | null>(null);
+  const [sendingInviteLink, setSendingInviteLink] = useState(false);
+  const [inviteNotice, setInviteNotice] = useState('');
 
   // Lineage (previous editions)
   const [incomingClaims, setIncomingClaims] = useState<IncomingClaim[]>([]);
@@ -437,6 +457,7 @@ export default function SettingsPage() {
   // bails after every await if a newer call has started since.
   const roleSeq = useRef(0);
   const orgSeq = useRef(0);
+  const invitesSeq = useRef(0);
   const lineageSeq = useRef(0);
   const partnersSeq = useRef(0);
   const incomingSeq = useRef(0);
@@ -473,6 +494,15 @@ export default function SettingsPage() {
     if (seq !== orgSeq.current) return;
     if (data) setOrganizers(data as unknown as Organizer[]);
   }, [conference]);
+
+  const loadPendingInvites = useCallback(async () => {
+    if (!conference || !session) return;
+    const seq = ++invitesSeq.current;
+    const supabase = getAuthedClient(session.access_token);
+    const rows = await listPendingOrganizerInvites(supabase, conference.id);
+    if (seq !== invitesSeq.current) return;
+    setPendingInvites(rows);
+  }, [conference, session]);
 
   const loadLineage = useCallback(async () => {
     if (!conference || !session) return;
@@ -564,6 +594,7 @@ export default function SettingsPage() {
     if (!conference) return;
     loadRoleConfigs();
     loadOrganizers();
+    loadPendingInvites();
     loadLineage();
     loadPartners();
     loadIncomingPartnerClaims();
@@ -587,7 +618,7 @@ export default function SettingsPage() {
     setCity(conference.city ?? '');
     setFormat((conference.format as 'in-person' | 'online' | 'hybrid' | '') ?? '');
     setExpectedDelegates(conference.expected_delegates != null ? String(conference.expected_delegates) : '');
-  }, [conference?.id, loadRoleConfigs, loadOrganizers, loadLineage, loadPartners, loadIncomingPartnerClaims]);
+  }, [conference?.id, loadRoleConfigs, loadOrganizers, loadPendingInvites, loadLineage, loadPartners, loadIncomingPartnerClaims]);
 
   // Partner typeahead: debounced authed search over public conferences,
   // excluding this conference and anything already linked.
@@ -643,6 +674,12 @@ export default function SettingsPage() {
     }
   }
 
+  // Patch one field of one fee phase and persist the whole jsonb array —
+  // rides saveRoleConfig's optimistic-update-with-rollback.
+  function updateFeePhase(role: string, phases: FeePhase[], idx: number, patch: Partial<FeePhase>) {
+    void saveRoleConfig(role, { fee_phases: phases.map((p, i) => (i === idx ? { ...p, ...patch } : p)) });
+  }
+
   // Same optimistic + error-capture pattern as saveRoleConfig, for the
   // single conference-level allocation_swap_mode field.
   async function saveSwapMode(mode: string) {
@@ -676,6 +713,8 @@ export default function SettingsPage() {
     if (!conference || !session || !inviteEmail.trim()) return;
     setInviting(true);
     setInviteError('');
+    setInviteMissEmail(null);
+    setInviteNotice('');
     const supabase = getAuthedClient(session.access_token);
 
     const { data: profile } = await supabase
@@ -685,7 +724,9 @@ export default function SettingsPage() {
       .maybeSingle();
 
     if (!profile) {
-      setInviteError("No Gavelling account found with that email. They need to create an account first.");
+      // No account with that email — offer the token-invite fallback instead
+      // of a dead end. The invite link works whether or not they sign up first.
+      setInviteMissEmail(inviteEmail.trim().toLowerCase());
       setInviting(false);
       return;
     }
@@ -727,6 +768,41 @@ export default function SettingsPage() {
     setInviteEmail('');
     setInviting(false);
     void loadOrganizers();
+  }
+
+  // Token-invite fallback: mints a conference_organizer_invites row via RPC
+  // and queues the outbox email whose button deep-links to /invites/organizer/[token].
+  async function handleSendInviteLink() {
+    if (!conference || !session || !inviteMissEmail) return;
+    setSendingInviteLink(true);
+    setInviteError('');
+    const supabase = getAuthedClient(session.access_token);
+    const res = await sendOrganizerInvite(supabase, { conferenceId: conference.id, email: inviteMissEmail });
+    setSendingInviteLink(false);
+    if (!res.ok) {
+      setInviteError(res.error ?? "Couldn't send that invite. Please try again.");
+      return;
+    }
+    setInviteMissEmail(null);
+    setInviteEmail('');
+    setInviteNotice(res.existing
+      ? `An invite for ${res.invitedEmail} was already pending — the original link still works.`
+      : `Invite sent to ${res.invitedEmail}. They'll appear on the team once they accept.`);
+    void loadPendingInvites();
+  }
+
+  async function handleRevokeInvite(inviteId: string) {
+    if (!session) return;
+    // Optimistic remove with rollback — matches the organizer row pattern.
+    const previous = pendingInvites;
+    setPendingInvites(prev => prev.filter(i => i.id !== inviteId));
+    setInviteError('');
+    const supabase = getAuthedClient(session.access_token);
+    const res = await revokeOrganizerInvite(supabase, inviteId);
+    if (!res.ok) {
+      setPendingInvites(previous);
+      setInviteError(res.error ?? "Couldn't revoke that invite. Please try again.");
+    }
   }
 
   const SECTION_KEYS: { key: string; label: string }[] = [
@@ -1551,6 +1627,131 @@ export default function SettingsPage() {
                     </div>
                   </div>
 
+                  {/* Fee phases — date-windowed pricing (Early Bird, Phase 1, …).
+                      When a phase's window contains today it overrides the flat
+                      fee above; gaps between phases fall back to the flat fee. */}
+                  {(() => {
+                    const phases = config.fee_phases ?? [];
+                    const active = activeFeePhase(phases);
+                    return (
+                      <div className="mt-4">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <label className="text-xs font-semibold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                            Fee phases
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => saveRoleConfig(role, {
+                              fee_phases: [...phases, { label: `Phase ${phases.length + 1}`, start_date: '', end_date: '', amount: config.fee_amount }],
+                            })}
+                            className="text-[11px] font-bold focus:outline-none hover:underline"
+                            style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', background: 'none', border: 'none', cursor: 'pointer' }}
+                          >
+                            + ADD PHASE
+                          </button>
+                        </div>
+                        {phases.length === 0 ? (
+                          <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", lineHeight: 1.55 }}>
+                            Optional: charge different amounts by date — e.g. an Early Bird rate. When no phase covers today, the flat fee above applies.
+                          </p>
+                        ) : (
+                          <>
+                            {phases.map((phase, pi) => {
+                              const isActive = active !== null && phase === active;
+                              return (
+                                <div
+                                  key={`${pi}-${phases.length}-${configVersion}`}
+                                  className="grid gap-2 items-center mb-2 rounded-[10px] px-2.5 py-2"
+                                  style={{
+                                    gridTemplateColumns: 'minmax(0,1.3fr) minmax(0,1fr) minmax(0,1fr) minmax(0,0.8fr) 24px',
+                                    backgroundColor: isActive ? 'rgba(27,56,40,0.06)' : 'rgba(27,56,40,0.02)',
+                                    border: isActive ? '1.5px solid rgba(27,56,40,0.35)' : '1px solid #F0EDE6',
+                                  }}
+                                >
+                                  <div className="flex items-center gap-1.5 min-w-0">
+                                    <input
+                                      type="text"
+                                      placeholder="e.g. Early Bird"
+                                      defaultValue={phase.label}
+                                      onFocus={fgInput}
+                                      onBlur={(e) => {
+                                        e.currentTarget.style.borderColor = '#DDD4C0';
+                                        if (e.target.value.trim() !== phase.label) updateFeePhase(role, phases, pi, { label: e.target.value.trim() });
+                                      }}
+                                      style={{ ...inputStyle, padding: '6px 10px', fontSize: '12.5px', minWidth: 0 }}
+                                    />
+                                    {isActive && (
+                                      <span
+                                        className="flex-shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-full"
+                                        style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.1em' }}
+                                      >
+                                        CURRENT
+                                      </span>
+                                    )}
+                                  </div>
+                                  <input
+                                    type="date"
+                                    aria-label="Phase start date"
+                                    defaultValue={phase.start_date}
+                                    onFocus={fgInput}
+                                    onBlur={(e) => {
+                                      e.currentTarget.style.borderColor = '#DDD4C0';
+                                      if (e.target.value !== phase.start_date) updateFeePhase(role, phases, pi, { start_date: e.target.value });
+                                    }}
+                                    style={{ ...inputStyle, padding: '6px 8px', fontSize: '12px', minWidth: 0 }}
+                                  />
+                                  <input
+                                    type="date"
+                                    aria-label="Phase end date"
+                                    defaultValue={phase.end_date}
+                                    onFocus={fgInput}
+                                    onBlur={(e) => {
+                                      e.currentTarget.style.borderColor = '#DDD4C0';
+                                      if (e.target.value !== phase.end_date) updateFeePhase(role, phases, pi, { end_date: e.target.value });
+                                    }}
+                                    style={{ ...inputStyle, padding: '6px 8px', fontSize: '12px', minWidth: 0 }}
+                                  />
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    step={0.01}
+                                    aria-label="Phase fee amount"
+                                    placeholder="0.00"
+                                    defaultValue={phase.amount}
+                                    onFocus={fgInput}
+                                    onBlur={(e) => {
+                                      e.currentTarget.style.borderColor = '#DDD4C0';
+                                      const next = parseFloat(e.target.value) || 0;
+                                      if (next !== phase.amount) updateFeePhase(role, phases, pi, { amount: next });
+                                    }}
+                                    style={{ ...inputStyle, padding: '6px 8px', fontSize: '12.5px', minWidth: 0, fontVariantNumeric: 'tabular-nums' }}
+                                  />
+                                  <button
+                                    type="button"
+                                    aria-label={`Remove ${phase.label || 'phase'}`}
+                                    onClick={() => saveRoleConfig(role, { fee_phases: phases.filter((_, i) => i !== pi) })}
+                                    className="text-sm font-bold focus:outline-none justify-self-center"
+                                    style={{ color: '#8B2020', background: 'none', border: 'none', cursor: 'pointer', lineHeight: 1 }}
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                              );
+                            })}
+                            {feePhasesOverlap(phases) && (
+                              <p className="text-xs mt-1" style={{ color: '#B8844A', fontFamily: "'Outfit', sans-serif" }}>
+                                Two phases have overlapping date windows — the phase listed first wins on overlapping days.
+                              </p>
+                            )}
+                            <p className="text-xs mt-1" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                              Dates are inclusive. When no phase covers today, the flat fee above applies ({config.fee_currency} {config.fee_amount}).
+                            </p>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })()}
+
                   {/* Acceptance */}
                   <div className="mt-4">
                     <label className="block text-xs font-semibold mb-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
@@ -2354,6 +2555,47 @@ export default function SettingsPage() {
           )}
         </div>
 
+        {/* Pending token invites — sent but not yet accepted */}
+        {pendingInvites.length > 0 && (
+          <div className="mb-6">
+            <p className="font-bold text-[10px] mb-2" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.14em' }}>
+              PENDING INVITES
+            </p>
+            <div className="flex flex-col">
+              {pendingInvites.map((inv, idx) => (
+                <div
+                  key={inv.id}
+                  className="flex items-center gap-3 py-2.5"
+                  style={{ borderBottom: idx === pendingInvites.length - 1 ? 'none' : '1px solid #F0EDE6' }}
+                >
+                  <div
+                    className="flex items-center justify-center rounded-full flex-shrink-0"
+                    style={{ width: '36px', height: '36px', backgroundColor: 'rgba(182,135,31,0.10)', border: '1.5px dashed rgba(182,135,31,0.45)' }}
+                  >
+                    <Users2 size={15} style={{ color: '#B6871F' }} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-sm truncate" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>{inv.email}</p>
+                    <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                      Invited {new Date(inv.created_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </p>
+                  </div>
+                  <span className="flex-shrink-0">
+                    <Pill tone="gold" size="sm">Pending</Pill>
+                  </span>
+                  <button
+                    onClick={() => handleRevokeInvite(inv.id)}
+                    className="text-xs font-semibold focus:outline-none hover:underline flex-shrink-0"
+                    style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}
+                  >
+                    REVOKE
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Invite row */}
         <div>
           <label className="block font-semibold text-sm mb-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
@@ -2363,7 +2605,7 @@ export default function SettingsPage() {
             <input
               type="email"
               value={inviteEmail}
-              onChange={(e) => { setInviteEmail(e.target.value); setInviteError(''); }}
+              onChange={(e) => { setInviteEmail(e.target.value); setInviteError(''); setInviteMissEmail(null); setInviteNotice(''); }}
               onKeyDown={(e) => { if (e.key === 'Enter') handleInvite(); }}
               placeholder="colleague@example.com"
               style={{ ...inputStyle, flex: 1 }}
@@ -2388,6 +2630,36 @@ export default function SettingsPage() {
           </div>
           {inviteError && (
             <p className="text-xs mt-2" style={{ color: '#B8844A', fontFamily: "'Outfit', sans-serif" }}>{inviteError}</p>
+          )}
+          {inviteNotice && (
+            <p className="text-xs mt-2" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{inviteNotice}</p>
+          )}
+
+          {/* Lookup miss → token-invite fallback */}
+          {inviteMissEmail && (
+            <div
+              className="flex flex-col sm:flex-row sm:items-center gap-3 mt-3 rounded-xl px-4 py-3"
+              style={{ backgroundColor: 'rgba(182,135,31,0.07)', border: '1px solid rgba(182,135,31,0.3)' }}
+            >
+              <p className="text-xs flex-1" style={{ color: '#6B5F52', fontFamily: "'Outfit', sans-serif", lineHeight: 1.55, margin: 0 }}>
+                No Gavelling account found for <strong style={{ color: '#1C1410' }}>{inviteMissEmail}</strong>.
+                You can email them an invite link instead — it works even before they create an account.
+              </p>
+              <button
+                onClick={handleSendInviteLink}
+                disabled={sendingInviteLink}
+                className="rounded-xl py-2 px-4 font-bold text-xs focus:outline-none transition-colors flex-shrink-0"
+                style={{
+                  backgroundColor: sendingInviteLink ? '#DDD4C0' : '#1B3828',
+                  color: sendingInviteLink ? '#9A8A78' : '#EED98A',
+                  fontFamily: "'Outfit', sans-serif",
+                  letterSpacing: '0.06em',
+                  cursor: sendingInviteLink ? 'default' : 'pointer',
+                }}
+              >
+                {sendingInviteLink ? 'SENDING…' : 'SEND AN INVITE LINK'}
+              </button>
+            </div>
           )}
         </div>
       </div>}

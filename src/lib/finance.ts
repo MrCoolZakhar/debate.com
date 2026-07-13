@@ -56,6 +56,40 @@ export interface CheckoutBreakdown {
   voucher: VoucherInput | null;
 }
 
+// ── Phased fees ─────────────────────────────────────────────────────────────
+// application_role_configs.fee_phases: jsonb array of
+//   { label, start_date 'YYYY-MM-DD', end_date 'YYYY-MM-DD', amount }.
+// If any phase's [start_date, end_date] window contains "today", that phase's
+// amount is the role fee; empty array or a gap between phases falls back to
+// the flat fee_amount.
+
+export interface FeePhase {
+  label: string;
+  start_date: string;
+  end_date: string;
+  amount: number;
+}
+
+/** The phase whose date window contains `today` (local date), or null. */
+export function activeFeePhase(phases: FeePhase[] | null | undefined, today: Date = new Date()): FeePhase | null {
+  if (!phases || phases.length === 0) return null;
+  const iso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  return phases.find(p => p.start_date && p.end_date && p.start_date <= iso && iso <= p.end_date) ?? null;
+}
+
+/**
+ * Resolve the fee a role charges today: the ACTIVE phase's amount when one
+ * exists, otherwise the flat fee. Returns the resolved amount plus the phase
+ * (for "Phase 1 Delegate Fee" style labels).
+ */
+export function activePhaseFee(
+  roleConfig: { fee_amount: number | null; fee_phases?: FeePhase[] | null },
+  today: Date = new Date()
+): { amount: number; phase: FeePhase | null } {
+  const phase = activeFeePhase(roleConfig.fee_phases, today);
+  return { amount: phase ? Number(phase.amount) : (roleConfig.fee_amount ?? 0), phase };
+}
+
 // ── Math ───────────────────────────────────────────────────────────────────
 
 /** Round to 2dp, avoiding float dust (0.1 + 0.2 style). */

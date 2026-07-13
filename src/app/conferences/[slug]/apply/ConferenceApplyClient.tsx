@@ -10,7 +10,7 @@ import { getFlagUrl } from '@/lib/countries';
 import { ageAt } from '@/lib/age';
 import { formatFee } from '@/lib/utils';
 import { Pill } from '@/app/account/accountUi';
-import { computeCheckout, localizedApproxSavings, type VoucherInput } from '@/lib/finance';
+import { computeCheckout, localizedApproxSavings, activePhaseFee, type VoucherInput, type FeePhase } from '@/lib/finance';
 import { NEU, NeuInset, OUTFIT } from '@/components/neu';
 import {
   Gavel, Mic, Users, Eye, Building2, User, ListOrdered, Sprout,
@@ -46,6 +46,7 @@ interface RoleConfig {
   pay_at_application: boolean;
   payment_timing: 'after_application' | 'after_acceptance' | 'anytime' | string;
   custom_questions: Array<{ id: string; label: string; required: boolean; type: string }>;
+  fee_phases: FeePhase[] | null;
 }
 
 interface CommitteeOption {
@@ -582,7 +583,10 @@ function ConferenceApplyInner() {
       // is only decremented by the DB trigger when payment_status flips to
       // 'paid' (server-side, so it can't be gamed from the client).
       const breakdown = computeCheckout({
-        feeAmount: roleConfig?.fee_amount ?? 0,
+        // Phased pricing: charge the fee phase active TODAY (falls back to the
+        // flat role fee when no phase window covers today) — same resolution
+        // the order summary rendered in step 1.
+        feeAmount: roleConfig ? activePhaseFee(roleConfig).amount : 0,
         feeCurrency: roleConfig?.fee_currency ?? conference!.fee_currency,
         voucher: appliedVoucher,
         profile: financeProfile,
@@ -659,9 +663,13 @@ function ConferenceApplyInner() {
   function renderStep1() {
     const rc = roleConfig!;
     const RoleIcon = roleIcon(role);
-    const isFree = !(rc.fee_amount > 0);
+    // Today's price: the fee phase whose date window covers today (e.g. Early
+    // Bird), falling back to the flat role fee. The phase label surfaces on
+    // the order summary's fee line so applicants see WHY this price applies.
+    const { amount: resolvedFee, phase: currentPhase } = activePhaseFee(rc);
+    const isFree = !(resolvedFee > 0);
     const breakdown = computeCheckout({
-      feeAmount: rc.fee_amount,
+      feeAmount: resolvedFee,
       feeCurrency: rc.fee_currency,
       voucher: appliedVoucher,
       profile: financeProfile,
@@ -722,7 +730,7 @@ function ConferenceApplyInner() {
               <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: '22px', color: '#1B3828', lineHeight: 1 }}>FREE</span>
             ) : (
               <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: '27px', color: '#1C1410', lineHeight: 1 }}>
-                {formatFee(rc.fee_amount, rc.fee_currency)}
+                {formatFee(resolvedFee, rc.fee_currency)}
               </span>
             )}
             <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '7.5px', letterSpacing: '0.15em', color: '#9A8A78', marginTop: '6px' }}>
@@ -738,9 +746,14 @@ function ConferenceApplyInner() {
               ORDER SUMMARY
             </p>
 
-            {/* Fee line */}
+            {/* Fee line — names the active fee phase when one applies */}
             <div style={{ ...summaryRow, marginBottom: 10 }}>
-              <span style={{ color: 'rgba(28,20,16,0.75)' }}>Registration fee</span>
+              <span style={{ color: 'rgba(28,20,16,0.75)' }}>
+                Registration fee
+                {currentPhase && (
+                  <span style={{ color: NEU.muted, fontWeight: 600 }}> — {currentPhase.label || 'Current phase'}</span>
+                )}
+              </span>
               <span style={amountStyle}>{formatFee(breakdown.baseFee, breakdown.currency)}</span>
             </div>
 
