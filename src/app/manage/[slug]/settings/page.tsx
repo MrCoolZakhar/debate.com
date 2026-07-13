@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   SlidersHorizontal, Building2, Users2, ShieldCheck, Upload, ArrowRight,
@@ -17,8 +17,8 @@ import { LogoDisc } from '@/components/LogoDisc';
 import { LogoCropModal } from '@/components/LogoCropModal';
 import { DatePicker } from '@/components/DatePicker';
 import { sendOrganizerInvite, listPendingOrganizerInvites, revokeOrganizerInvite, type OrganizerInviteRow } from '@/lib/organizerInvites';
-import { activeFeePhase, type FeePhase } from '@/lib/finance';
-import { currencyPickerGroups } from '@/lib/currencies';
+import { activeFeePhase, type FeePhase, CURRENCY_CODES } from '@/lib/finance';
+import { normalizeSocialUrl } from '@/lib/socialLinks';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -355,9 +355,17 @@ function QuestionModal({ existing, onSave, onClose }: {
 
 export default function SettingsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { conference, refreshConferenceQuiet } = useManage();
   const { user, session } = useAuth();
-  const [activeTab, setActiveTab] = useState<'applications' | 'conference' | 'organizers' | 'privacy'>('applications');
+  // Deep-links from the dashboard checklist pass ?tab= to land on the right
+  // sub-tab (e.g. "Set up your conference page" → conference). Falls back to
+  // applications for any missing/unknown value.
+  const initialTab = ((): 'applications' | 'conference' | 'organizers' | 'privacy' => {
+    const t = searchParams.get('tab') ?? searchParams.get('section');
+    return t === 'conference' || t === 'organizers' || t === 'privacy' ? t : 'applications';
+  })();
+  const [activeTab, setActiveTab] = useState<'applications' | 'conference' | 'organizers' | 'privacy'>(initialTab);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
@@ -1389,13 +1397,15 @@ export default function SettingsPage() {
     if (!conference || visualSaving) return;
     setVisualError('');
     setVisualSaving(true);
+    // Normalize bare handles/domains ("@mymun", "instagram.com/mymun", "mymun")
+    // into valid absolute URLs so the public page's links always work.
     const updates = {
       description: description || null,
-      instagram_url: instagramUrl || null,
-      facebook_url: facebookUrl || null,
-      tiktok_url: tiktokUrl || null,
-      whatsapp_url: whatsappUrl || null,
-      website_url: websiteUrl || null,
+      instagram_url: normalizeSocialUrl(instagramUrl, 'instagram'),
+      facebook_url: normalizeSocialUrl(facebookUrl, 'facebook'),
+      tiktok_url: normalizeSocialUrl(tiktokUrl, 'tiktok'),
+      whatsapp_url: normalizeSocialUrl(whatsappUrl, 'whatsapp'),
+      website_url: normalizeSocialUrl(websiteUrl),
     };
     const supabase = await getFreshAuthedClient();
     if (!supabase) {

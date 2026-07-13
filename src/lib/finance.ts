@@ -186,7 +186,7 @@ export const USD_FX: Record<string, number> = {
   USD: 1, GBP: 0.78, EUR: 0.92, CAD: 1.36, AUD: 1.5, INR: 84, TRY: 34,
   JPY: 155, CHF: 0.88, SEK: 10.5, NOK: 10.7, DKK: 6.9, PLN: 4.0, CZK: 23,
   MXN: 18, BRL: 5.5, ZAR: 18, SGD: 1.34, HKD: 7.8, NZD: 1.65, KRW: 1350,
-  AED: 3.67, CNY: 7.2, PKR: 278, IDR: 16000,
+  AED: 3.67, CNY: 7.2, PKR: 278, IDR: 16000, JOD: 0.71,
 };
 
 const COUNTRY_CURRENCY: Record<string, string> = {

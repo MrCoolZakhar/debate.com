@@ -120,7 +120,7 @@ function NotStartedCard({
               <CopyButton value={session.code} />
             </div>
             <p className="text-[11px] mt-3" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-              Session code — share with your chairs
+              Session code: share with your chairs
             </p>
           </>
         ) : (
@@ -321,7 +321,7 @@ function LiveCard({
           style={{ backgroundColor: 'rgba(238,217,138,0.25)', border: '1px solid rgba(182,135,31,0.45)' }}
         >
           <p className="text-xs font-extrabold uppercase" style={{ color: '#B6871F', fontFamily: OUTFIT, letterSpacing: '0.06em' }}>
-            Voting procedure — {votingDr.docCode || 'draft resolution'} on the floor
+            Voting procedure: {votingDr.docCode || 'draft resolution'} on the floor
           </p>
         </div>
       )}

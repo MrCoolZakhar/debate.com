@@ -6,15 +6,16 @@
  * One question per screen, built on the shared wizard kit
  * (src/components/wizard.tsx). The submit logic writes exactly the same
  * columns as the old two-step form and redirects to /manage/{slug}.
- * Optional fields from the old form (description, socials, banner,
- * visibility, previous editions) are deferred to Settings after creation.
+ * Description, socials and banner are collected in their own skippable steps;
+ * the remaining optional fields (visibility, previous editions) are deferred
+ * to Settings after creation.
  *
  * Progress lives in component state only — a refresh restarts the wizard.
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AlertTriangle, ArrowRight, Mail, Pencil, Upload, Check, ImagePlus } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Mail, Pencil, Upload, Check, ImagePlus, Camera, ThumbsUp, Music2, MessageCircle, Globe, type LucideIcon } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import { useAuth } from '@/components/AuthProvider';
 import { createClient } from '@supabase/supabase-js';
@@ -26,9 +27,8 @@ import { NEU, NEU_GRADIENTS, OUTFIT, EASE, NeuButton, NeuInset, Emoji3D } from '
 import { DatePicker } from '@/components/DatePicker';
 import { LogoCropModal } from '@/components/LogoCropModal';
 import { uploadConferenceAsset } from '@/lib/conferenceAssets';
-import { currencyPickerGroups } from '@/lib/currencies';
-
-const CURRENCY_GROUPS = currencyPickerGroups();
+import { CURRENCIES } from '@/lib/finance';
+import { normalizeSocialUrl } from '@/lib/socialLinks';
 
 // Mirrors settings' ensureRoleConfigs default set (source of truth there) —
 // seeded here too so a freshly created conference already has per-role fee
@@ -40,7 +40,9 @@ const ROLE_DEFAULTS = ['delegate', 'chair', 'head-delegate', 'faculty-advisor', 
 const TOTAL_STEPS = 11;
 const REVIEW_STEP = TOTAL_STEPS;
 // 1 name+acronym · 2 format · 3 level · 4 where · 5 when · 6 delegates · 7 fee
-// · 8 logo (mandatory) · 9 banner (skippable) · 10 committees (skippable) · 11 review
+// · 8 logo (mandatory) · 9 banner (skippable) · 10 description + socials (skippable)
+// · 11 review. (The old "set up your committees" prompt was removed — committees
+// are added later in Manage — and the description/socials step took slot 10.)
 
 // Bundled banner artwork — mirrors settings' BANNER_PRESETS so the organiser
 // can set a banner during creation exactly as they would afterwards.
@@ -52,11 +54,15 @@ const BANNER_PRESETS = [
   '/banners/preset-5.jpg',
 ];
 
+// Fluent 3D emoji picked to read small→large at a glance: one silhouette →
+// two silhouettes → a huddle of people → a packed stadium for the flagship
+// tier (all four asset paths verified to resolve; Emoji3D falls back to a
+// lucide glyph if a CDN image ever 404s).
 const DELEGATE_RANGES = [
   { key: '50', label: 'Up to 50', sub: 'Intimate', emoji: 'Bust in silhouette' },
   { key: '100', label: '~100', sub: 'Mid-size', emoji: 'Busts in silhouette' },
-  { key: '250', label: '~250', sub: 'Large', emoji: 'People with bunny ears' },
-  { key: '500', label: '500+', sub: 'Flagship', emoji: 'Globe showing europe-africa' },
+  { key: '250', label: '~250', sub: 'Large', emoji: 'People hugging' },
+  { key: '500', label: '500+', sub: 'Flagship', emoji: 'Stadium' },
 ];
 
 // ── Small shared bits ──────────────────────────────────────────────────────
@@ -156,6 +162,30 @@ function SkipLink({ label, onClick }: { label: string; onClick: () => void }) {
   );
 }
 
+/** A single labelled social-link input with a leading lucide brand glyph. */
+function SocialInput({
+  Icon, label, value, onChange, placeholder,
+}: { Icon: LucideIcon; label: string; value: string; onChange: (v: string) => void; placeholder: string }) {
+  const [focused, setFocused] = useState(false);
+  return (
+    <div className="relative flex items-center">
+      <span className="absolute left-3.5 pointer-events-none" style={{ color: focused ? NEU.forest : NEU.muted, transition: `color 180ms ${EASE}` }}>
+        <Icon size={17} strokeWidth={2.2} />
+      </span>
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onFocus={(e) => { setFocused(true); focusForest(e); }}
+        onBlur={(e) => { setFocused(false); blurClear(e); }}
+        aria-label={label}
+        placeholder={placeholder}
+        style={{ ...bigInputStyle, paddingLeft: 42, fontSize: 14, backgroundColor: NEU.surface, boxShadow: NEU.inSm }}
+      />
+    </div>
+  );
+}
+
 function ContinueButton({ label = 'Continue', disabled, onClick }: { label?: string; disabled?: boolean; onClick: () => void }) {
   return (
     <div className="flex justify-center" style={{ marginTop: 26 }}>
@@ -248,6 +278,16 @@ export default function NewConferencePage() {
   const logoInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
 
+  // Description + social links (all skippable). Stored raw here; each social
+  // value is passed through normalizeSocialUrl at insert time so bare handles
+  // ("@mymun") and domains ("mymun.org") become valid absolute URLs.
+  const [description, setDescription] = useState('');
+  const [instagram, setInstagram] = useState('');
+  const [facebook, setFacebook] = useState('');
+  const [tiktok, setTiktok] = useState('');
+  const [whatsapp, setWhatsapp] = useState('');
+  const [website, setWebsite] = useState('');
+
   // Pre-fill email from profile (same behaviour as the old form).
   useEffect(() => {
     if (profile?.email && !contactEmail) setContactEmail(profile.email);
@@ -267,7 +307,7 @@ export default function NewConferencePage() {
       UN_COUNTRIES.map((c) => ({
         key: c.name,
         label: c.name,
-        icon: <FlagImg code={c.code} size={30} />,
+        icon: <FlagImg code={c.code} size={42} />,
       })),
     [],
   );
@@ -365,12 +405,12 @@ export default function NewConferencePage() {
           expected_delegates: parseInt(expectedDelegates),
           fee_amount: feeKind === 'paid' ? parseFloat(feeAmount) || 0 : 0,
           fee_currency: feeCurrency,
-          description: null,
-          instagram_url: null,
-          facebook_url: null,
-          tiktok_url: null,
-          whatsapp_url: null,
-          website_url: null,
+          description: description.trim() || null,
+          instagram_url: normalizeSocialUrl(instagram, 'instagram'),
+          facebook_url: normalizeSocialUrl(facebook, 'facebook'),
+          tiktok_url: normalizeSocialUrl(tiktok, 'tiktok'),
+          whatsapp_url: normalizeSocialUrl(whatsapp, 'whatsapp'),
+          website_url: normalizeSocialUrl(website),
           logo_url: logoUrl || null,
           banner_url: bannerUrl || null,
           is_public: false,
@@ -449,6 +489,14 @@ export default function NewConferencePage() {
     }
     advance(7);
   }
+
+  const socialsSummary = [
+    instagram.trim() && 'Instagram',
+    facebook.trim() && 'Facebook',
+    tiktok.trim() && 'TikTok',
+    whatsapp.trim() && 'WhatsApp',
+    website.trim() && 'Website',
+  ].filter(Boolean).join(', ');
 
   const readyToCreate =
     fullName.trim() && acronym.trim() && !acronymProblem(acronym) && contactEmail.trim() &&
@@ -670,7 +718,7 @@ export default function NewConferencePage() {
                     key: r.key,
                     label: r.label,
                     sub: r.sub,
-                    icon: <Emoji3D name={r.emoji} size={34} />,
+                    icon: <Emoji3D name={r.emoji} size={48} />,
                   }))}
                   value={delegateRange || null}
                   onChange={(k) => { setDelegateRange(k); setExpectedDelegates(k); setStepError(''); }}
@@ -903,31 +951,51 @@ export default function NewConferencePage() {
               </WizardShell>
             )}
 
-            {/* ── Step 10 — committees (SKIPPABLE prompt) ─────────────── */}
+            {/* ── Step 10 — description + socials (SKIPPABLE) ─────────── */}
             {step === 10 && (
               <WizardShell
                 step={10} total={TOTAL_STEPS}
-                title="Set up your committees"
-                sub="Committees are where delegates are allocated and debate happens."
+                title="Tell delegates about it"
+                sub="A short description and your social links for the public page. All optional — skip if you'd rather add them later."
                 onBack={back}
               >
-                <NeuInset style={{ padding: '22px 24px', borderRadius: 20 }}>
-                  <div className="flex items-start gap-4">
-                    <Emoji3D name="Classical building" size={44} />
-                    <div>
-                      <p style={{ fontFamily: OUTFIT, fontSize: 15, fontWeight: 800, color: NEU.ink, lineHeight: 1.4 }}>
-                        Add committees next in Manage
-                      </p>
-                      <p style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 500, color: NEU.muted, marginTop: 6, lineHeight: 1.6 }}>
-                        Once your conference is created you&rsquo;ll land on its Manage dashboard, where you can add
-                        committees — GAs, crisis rooms, ECOSOC bodies — with agendas, country matrices and seat counts.
-                        You can always come back and add more later.
-                      </p>
-                    </div>
+                <div className="flex flex-col gap-5">
+                  <div>
+                    <FieldLabel>Description</FieldLabel>
+                    <textarea
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      placeholder="What makes your conference special? Themes, committees, the experience delegates can expect…"
+                      rows={4}
+                      style={{ ...bigInputStyle, resize: 'vertical', lineHeight: 1.55, minHeight: 108 }}
+                      onFocus={(e) => { e.currentTarget.style.borderColor = NEU.forest; }}
+                      onBlur={(e) => { e.currentTarget.style.borderColor = 'transparent'; }}
+                    />
                   </div>
-                </NeuInset>
+
+                  <NeuInset style={{ padding: '18px 20px', borderRadius: 20 }}>
+                    <FieldLabel>Social links</FieldLabel>
+                    <div className="flex flex-col gap-3" style={{ marginTop: 4 }}>
+                      <SocialInput Icon={Camera} label="Instagram" value={instagram} onChange={setInstagram} placeholder="@yourmun or instagram.com/yourmun" />
+                      <SocialInput Icon={ThumbsUp} label="Facebook" value={facebook} onChange={setFacebook} placeholder="facebook.com/yourmun" />
+                      <SocialInput Icon={Music2} label="TikTok" value={tiktok} onChange={setTiktok} placeholder="@yourmun" />
+                      <SocialInput Icon={MessageCircle} label="WhatsApp" value={whatsapp} onChange={setWhatsapp} placeholder="wa.me/44… or your number" />
+                      <SocialInput Icon={Globe} label="Website" value={website} onChange={setWebsite} placeholder="yourmun.org" />
+                    </div>
+                  </NeuInset>
+                </div>
 
                 <ContinueButton label="Continue to review" onClick={() => advance(10)} />
+                <div className="flex justify-center" style={{ marginTop: 12 }}>
+                  <SkipLink
+                    onClick={() => {
+                      setDescription('');
+                      setInstagram(''); setFacebook(''); setTiktok(''); setWhatsapp(''); setWebsite('');
+                      advance(10);
+                    }}
+                    label="Skip for now"
+                  />
+                </div>
               </WizardShell>
             )}
 
@@ -953,6 +1021,8 @@ export default function NewConferencePage() {
                   />
                   <ReviewRow label="Logo" value={logoUrl ? 'Added' : 'Required'} onEdit={() => editFromReview(8)} />
                   <ReviewRow label="Banner" value={bannerUrl ? 'Added' : 'Skipped'} onEdit={() => editFromReview(9)} />
+                  <ReviewRow label="Description" value={description.trim() ? 'Added' : 'Skipped'} onEdit={() => editFromReview(10)} />
+                  <ReviewRow label="Social links" value={socialsSummary || 'Skipped'} onEdit={() => editFromReview(10)} />
                 </div>
 
                 {/* Contact email — required by the directory, prefilled from your profile */}
@@ -980,7 +1050,7 @@ export default function NewConferencePage() {
                     textAlign: 'center', marginTop: 22, padding: '0 12px',
                   }}
                 >
-                  Description, social links, visibility and previous editions —
+                  Visibility, previous editions and finer details —
                   you can set everything else later in Settings. Your conference starts private.
                 </p>
 

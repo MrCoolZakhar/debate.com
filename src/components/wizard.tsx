@@ -229,7 +229,7 @@ export function TwoTabPick({
   return (
     <div
       role="radiogroup"
-      className="grid gap-5"
+      className="grid gap-6"
       style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', padding: '4px' }}
     >
       {options.map((opt, idx) => {
@@ -249,8 +249,8 @@ export function TwoTabPick({
             className="flex flex-col items-center justify-start focus-visible:ring-2"
             style={{
               ...cardBaseStyle(selected, hovered),
-              minHeight: 216,
-              padding: opt.image ? '0 0 20px' : '30px 18px 26px',
+              minHeight: 308,
+              padding: opt.image ? '0 0 28px' : '42px 22px 34px',
               overflow: 'hidden',
             }}
           >
@@ -262,8 +262,8 @@ export function TwoTabPick({
                 style={{
                   display: 'block',
                   width: '100%',
-                  height: 128,
-                  marginBottom: 16,
+                  height: 190,
+                  marginBottom: 22,
                   backgroundImage: `url(${opt.image})`,
                   backgroundSize: 'cover',
                   backgroundPosition: 'center',
@@ -276,7 +276,7 @@ export function TwoTabPick({
               <span
                 aria-hidden
                 className="flex items-center justify-center"
-                style={{ fontSize: 58, height: 72, marginBottom: 14 }}
+                style={{ fontSize: 84, height: 104, marginBottom: 20 }}
               >
                 {opt.icon}
               </span>
@@ -286,7 +286,7 @@ export function TwoTabPick({
               style={{
                 fontFamily: OUTFIT,
                 fontWeight: 800,
-                fontSize: 16,
+                fontSize: 20,
                 color: selected ? NEU.forest : NEU.ink,
                 padding: '0 12px',
               }}
@@ -297,11 +297,11 @@ export function TwoTabPick({
               <span
                 style={{
                   fontFamily: OUTFIT,
-                  fontSize: 12,
+                  fontSize: 13.5,
                   fontWeight: 500,
                   color: NEU.muted,
-                  marginTop: 5,
-                  padding: '0 14px',
+                  marginTop: 7,
+                  padding: '0 16px',
                   lineHeight: 1.45,
                 }}
               >
@@ -427,8 +427,8 @@ export function CardSelect({
               className="flex flex-col items-center justify-center"
               style={{
                 ...cardBaseStyle(selected, hovered),
-                minHeight: 110,
-                padding: opt.image ? '0 0 14px' : '20px 12px 16px',
+                minHeight: 156,
+                padding: opt.image ? '0 0 18px' : '28px 14px 22px',
                 overflow: 'hidden',
               }}
             >
@@ -439,8 +439,8 @@ export function CardSelect({
                   style={{
                     display: 'block',
                     width: '100%',
-                    height: 74,
-                    marginBottom: 11,
+                    height: 110,
+                    marginBottom: 15,
                     backgroundImage: `url(${opt.image})`,
                     backgroundSize: 'cover',
                     backgroundPosition: 'center',
@@ -452,7 +452,7 @@ export function CardSelect({
                 <span
                   aria-hidden
                   className="flex items-center justify-center"
-                  style={{ fontSize: 30, height: 38, marginBottom: 9 }}
+                  style={{ fontSize: 46, height: 58, marginBottom: 13 }}
                 >
                   {opt.icon}
                 </span>
@@ -462,9 +462,9 @@ export function CardSelect({
                 style={{
                   fontFamily: OUTFIT,
                   fontWeight: 700,
-                  fontSize: 13,
+                  fontSize: 14.5,
                   color: selected ? NEU.forest : NEU.ink,
-                  padding: '0 8px',
+                  padding: '0 10px',
                 }}
               >
                 {opt.label}
@@ -474,11 +474,11 @@ export function CardSelect({
                   className="truncate w-full"
                   style={{
                     fontFamily: OUTFIT,
-                    fontSize: 11,
+                    fontSize: 12,
                     fontWeight: 500,
                     color: NEU.muted,
-                    marginTop: 3,
-                    padding: '0 8px',
+                    marginTop: 4,
+                    padding: '0 10px',
                     fontVariantNumeric: 'tabular-nums',
                   }}
                 >

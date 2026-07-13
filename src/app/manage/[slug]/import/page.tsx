@@ -177,7 +177,7 @@ export default function ImportPage() {
     if (!conference || !session || repairing || orphanRows.length === 0) return;
     const { confirmed } = await confirm({
       title: `Repair ${orphanRows.length} allocation${orphanRows.length === 1 ? '' : 's'}?`,
-      body: 'These applications were assigned a committee and country before allocation rows existed. This creates the missing allocation rows now — any that conflict with an existing allocation are downgraded back to accepted with no allocation.',
+      body: 'These applications were assigned a committee and country before allocation rows existed. This creates the missing allocation rows now. Any that conflict with an existing allocation are downgraded back to accepted with no allocation.',
       confirmLabel: 'Repair',
     });
     if (!confirmed) return;
@@ -242,7 +242,7 @@ export default function ImportPage() {
       setClassifiedRows(classified);
       setPhase('preview');
     } catch {
-      setFileError('Could not read that file — make sure it\'s a valid .csv or .xlsx.');
+      setFileError('Could not read that file. Make sure it\'s a valid .csv or .xlsx.');
       setPhase('upload');
     }
   }
@@ -557,12 +557,12 @@ export default function ImportPage() {
             <div className="pt-4" style={{ borderTop: '1px solid #F0EDE6' }}>
               <p className="text-xs font-bold mb-2" style={{ color: '#6B5F52', fontFamily: OUTFIT, letterSpacing: '0.08em' }}>COLUMNS</p>
               <div className="flex flex-col gap-1.5" style={{ fontSize: 12, color: '#4A4238', fontFamily: OUTFIT, lineHeight: 1.6 }}>
-                <p><strong>email, name</strong> — required.</p>
-                <p><strong>role</strong> — one of: delegate, head delegate, faculty advisor, observer. Chairs aren&apos;t importable — use the chair invite flow in Committees.</p>
-                <p><strong>delegation</strong> — society/school name. Blank = independent.</p>
-                <p><strong>payment</strong> — paid, unpaid, or waived. Defaults to unpaid.</p>
-                <p><strong>committee</strong> — an existing committee&apos;s name or abbreviation.</p>
-                <p><strong>country</strong> — requires a matching committee to take effect.</p>
+                <p><strong>email, name</strong>:required.</p>
+                <p><strong>role</strong>:one of: delegate, head delegate, faculty advisor, observer. Chairs aren&apos;t importable. Use the chair invite flow in Committees.</p>
+                <p><strong>delegation</strong>:society/school name. Blank = independent.</p>
+                <p><strong>payment</strong>:paid, unpaid, or waived. Defaults to unpaid.</p>
+                <p><strong>committee</strong>:an existing committee&apos;s name or abbreviation.</p>
+                <p><strong>country</strong>:requires a matching committee to take effect.</p>
               </div>
             </div>
           </div>
@@ -736,7 +736,7 @@ function RowTable({ rows }: { rows: ClassifiedImportRow[] }) {
                       {r.resolved.countryName}
                     </span>
                   ) : r.raw.committee ? (
-                    <span style={{ color: '#9A8A78' }}>{r.raw.committee}{r.raw.country ? ` — ${r.raw.country}` : ''}</span>
+                    <span style={{ color: '#9A8A78' }}>{r.raw.committee}{r.raw.country ? `, ${r.raw.country}` : ''}</span>
                   ) : '—'}
                 </td>
                 <td className="px-3 py-2.5" style={{ maxWidth: 280 }}>

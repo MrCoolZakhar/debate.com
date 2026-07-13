@@ -601,7 +601,7 @@ export function PaidSlotChip({
         </div>
         {member.assigned_committee_id && (
           <p className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-            {member.assigned_committee?.abbreviation ?? member.assigned_committee?.name} — {member.assigned_country_name}
+            {member.assigned_committee?.abbreviation ?? member.assigned_committee?.name}, {member.assigned_country_name}
           </p>
         )}
       </div>
@@ -671,7 +671,7 @@ export function SwapConfirmModal({
       checkbox={
         target.assigned_committee_id
           ? {
-              label: `Transfer committee assignment (${targetCommittee} — ${target.assigned_country_name}) to ${sourceName}`,
+              label: `Transfer committee assignment (${targetCommittee}, ${target.assigned_country_name}) to ${sourceName}`,
               defaultChecked: !sourceHasAllocation,
               disabled: sourceHasAllocation,
               disabledNote: sourceHasAllocation

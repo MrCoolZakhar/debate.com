@@ -482,7 +482,7 @@ export default function DocumentsPage() {
       markBusy(paperId, false);
       if (error) {
         setPositionPapers(previous);
-        setActionError("Couldn't update the paper status — the change was reverted.");
+        setActionError("Couldn't update the paper status. The change was reverted.");
       }
     });
   }
@@ -504,7 +504,7 @@ export default function DocumentsPage() {
       if (error) {
         setPositionPapers(previous);
         setFeedbackEditing(prev => ({ ...prev, [paperId]: true }));
-        setActionError("Couldn't save the feedback — please try again.");
+        setActionError("Couldn't save the feedback. Please try again.");
       }
     });
   }
@@ -520,7 +520,7 @@ export default function DocumentsPage() {
     supabase.from('conference_committees').update(updates).eq('id', committeeId).then(({ error }) => {
       if (error) {
         setCommittees(previous);
-        setActionError("Couldn't save the position paper settings — the change was reverted.");
+        setActionError("Couldn't save the position paper settings. The change was reverted.");
       }
     });
   }

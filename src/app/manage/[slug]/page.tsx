@@ -765,7 +765,7 @@ export default function DashboardPage() {
       title: 'Set up your conference page',
       sub: 'Add a banner and a description delegates will see.',
       done: !!conference.banner_url && !!conference.description?.trim(),
-      onClick: () => router.push(`/manage/${slug}/settings`),
+      onClick: () => router.push(`/manage/${slug}/settings?tab=conference`),
     },
     {
       key: 'committees',
@@ -823,7 +823,7 @@ export default function DashboardPage() {
       title: 'Add your secretariat',
       sub: 'Invite co-organizers and grant them access.',
       done: dash.organizerCount > 1,
-      onClick: () => router.push(`/manage/${slug}/settings`),
+      onClick: () => router.push(`/manage/${slug}/settings?tab=organizers`),
     },
     {
       key: 'financials',

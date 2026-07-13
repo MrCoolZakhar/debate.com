@@ -15,6 +15,7 @@ import { LogoCropModal } from '@/components/LogoCropModal';
 import { uploadConferenceAsset } from '@/lib/conferenceAssets';
 import { formatFee } from '@/lib/utils';
 import { activeFeePhase, activePhaseFee, type FeePhase } from '@/lib/finance';
+import { normalizeSocialUrl } from '@/lib/socialLinks';
 import ParticipantView from '@/app/conferences/[slug]/participant/ParticipantView';
 import type { ParticipantAllocation } from '@/app/conferences/[slug]/participant/types';
 import {
@@ -1271,7 +1272,7 @@ export default function ConferenceDetailClient() {
                     <div className="flex gap-2 mt-4 pt-4" style={{ borderTop: '1px solid rgba(221,212,192,0.6)' }}>
                       {conference.instagram_url && (
                         <a
-                          href={conference.instagram_url}
+                          href={normalizeSocialUrl(conference.instagram_url, 'instagram') ?? '#'}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center justify-center rounded-full transition-colors"
@@ -1288,7 +1289,7 @@ export default function ConferenceDetailClient() {
                       )}
                       {conference.facebook_url && (
                         <a
-                          href={conference.facebook_url}
+                          href={normalizeSocialUrl(conference.facebook_url, 'facebook') ?? '#'}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center justify-center rounded-full transition-colors"
@@ -1301,7 +1302,7 @@ export default function ConferenceDetailClient() {
                       )}
                       {conference.tiktok_url && (
                         <a
-                          href={conference.tiktok_url}
+                          href={normalizeSocialUrl(conference.tiktok_url, 'tiktok') ?? '#'}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center justify-center rounded-full transition-colors"
@@ -1314,7 +1315,7 @@ export default function ConferenceDetailClient() {
                       )}
                       {conference.whatsapp_url && (
                         <a
-                          href={conference.whatsapp_url}
+                          href={normalizeSocialUrl(conference.whatsapp_url, 'whatsapp') ?? '#'}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center justify-center rounded-full transition-colors"
@@ -1327,7 +1328,7 @@ export default function ConferenceDetailClient() {
                       )}
                       {conference.website_url && (
                         <a
-                          href={conference.website_url}
+                          href={normalizeSocialUrl(conference.website_url) ?? '#'}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center justify-center rounded-full transition-colors"

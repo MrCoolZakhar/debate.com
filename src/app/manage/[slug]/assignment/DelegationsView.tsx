@@ -463,9 +463,9 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
     const outcome = member.payment_status === 'waived'
       ? 'Their fee waiver is personal and stays with them.'
       : selfFundedPaidSpot
-      ? 'Their paid spot was self-funded, so it leaves with them — they become a paid independent.'
+      ? 'Their paid spot was self-funded, so it leaves with them. They become a paid independent.'
       : member.payment_status === 'paid'
-      ? "Their spot was covered by the delegation's purchased spots, so it stays behind — it will show as open."
+      ? "Their spot was covered by the delegation's purchased spots, so it stays behind. It will show as open."
       : 'They leave unpaid.';
 
     const { confirmed, checked } = await confirm({
@@ -879,7 +879,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
                     <p className="text-sm font-semibold truncate" style={{ color: '#EED98A', fontFamily: OUTFIT }}>{name}</p>
                     {m.assigned_committee_id && (
                       <p className="text-xs truncate" style={{ color: 'rgba(238,217,138,0.7)', fontFamily: OUTFIT }}>
-                        {m.assigned_committee?.abbreviation ?? m.assigned_committee?.name} — {m.assigned_country_name}
+                        {m.assigned_committee?.abbreviation ?? m.assigned_committee?.name}, {m.assigned_country_name}
                       </p>
                     )}
                   </div>

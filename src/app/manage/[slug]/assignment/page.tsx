@@ -446,7 +446,7 @@ function DropAllocateModal({ committee, app, onClose, onAssigned }: DropAllocate
           <button onClick={onClose} className="focus:outline-none flex-shrink-0 mt-1" style={{ color: '#9A8A78' }}><X size={18} /></button>
         </div>
         <p className="text-xs mb-4" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-          Open slots, most urgent first — importance tier, then fit for this delegate.
+          Open slots, most urgent first: importance tier, then fit for this delegate.
         </p>
 
         {error && (
@@ -1455,7 +1455,7 @@ export default function AssignmentPage() {
   function handleRemoveAllocation(allocation: AllocationRow) {
     if (!session || !conference) return;
     if (allocation.id.startsWith('temp-')) {
-      showFlash('err', 'This allocation is still saving — try again in a moment.');
+      showFlash('err', 'This allocation is still saving. Try again in a moment.');
       return;
     }
     if (inFlightRemoveIds.current.has(allocation.id)) return;
@@ -1966,7 +1966,7 @@ export default function AssignmentPage() {
             >
               <MousePointerClick size={14} style={{ color: '#3D7A52', flexShrink: 0 }} />
               <p className="text-sm min-w-0 truncate" style={{ color: '#1B3828', fontFamily: OUTFIT }}>
-                <span style={{ fontWeight: 700 }}>{selectedApp.profiles?.display_name ?? selectedApp.invited_name}</span> selected — click a committee panel to pick their country, or drag their card.
+                <span style={{ fontWeight: 700 }}>{selectedApp.profiles?.display_name ?? selectedApp.invited_name}</span> selected. Click a committee panel to pick their country, or drag their card.
               </p>
               <button
                 onClick={() => setSelectedAppId(null)}
@@ -2247,7 +2247,7 @@ export default function AssignmentPage() {
           >
             <MousePointerClick size={14} style={{ color: '#EED98A', flexShrink: 0 }} />
             <p className="text-sm min-w-0" style={{ color: '#FFFFFF', fontFamily: OUTFIT }}>
-              <span style={{ fontWeight: 700 }}>{selectedChairApp.profiles?.display_name}</span> selected — click a committee to assign, or drag their card.
+              <span style={{ fontWeight: 700 }}>{selectedChairApp.profiles?.display_name}</span> selected. Click a committee to assign, or drag their card.
             </p>
             <button
               onClick={() => setSelectedChairAppId(null)}

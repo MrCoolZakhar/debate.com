@@ -1304,7 +1304,7 @@ function CommunicationsPageInner() {
     setSendConfirmOpen(false);
     setSendConfirmText('');
     closeBuilder();
-    showFlash('ok', `Queued ${rows.length} email${rows.length === 1 ? '' : 's'} — sending now.`);
+    showFlash('ok', `Queued ${rows.length} email${rows.length === 1 ? '' : 's'}, sending now.`);
     void loadTemplates();
     void loadEmailSends();
     void loadOutboxPending();
@@ -2499,7 +2499,7 @@ function CommunicationsPageInner() {
                   <div className="flex flex-col gap-1" style={{ maxHeight: 280, overflowY: 'auto' }}>
                     {finalRecipients.length === 0 && (
                       <p className="text-xs py-2" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-                        No recipients match yet — adjust filters or add someone manually.
+                        No recipients match yet. Adjust filters or add someone manually.
                       </p>
                     )}
                     {finalRecipients.map(a => (
