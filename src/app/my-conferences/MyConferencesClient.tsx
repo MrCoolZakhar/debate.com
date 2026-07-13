@@ -3,7 +3,7 @@
 import { Suspense, useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Compass, Check, X, Mail } from 'lucide-react';
+import { Compass, Check, X, Mail, Plus } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import SiteNav from '@/components/SiteNav';
@@ -540,13 +540,27 @@ function MyConferencesInner() {
       <SiteNav />
 
       <div className="relative z-10 flex-1 px-6 py-10" style={{ maxWidth: '1000px', margin: '0 auto', width: '100%' }}>
-        <Eyebrow className="mb-2">Every Role, One Place</Eyebrow>
-        <h1 className="font-black text-[26px] mb-1" style={{ color: '#1C1410', fontFamily: OUTFIT, letterSpacing: '-0.01em' }}>
-          My Conferences
-        </h1>
-        <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-          Every conference you&apos;re part of, sorted by the role you hold there.
-        </p>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <Eyebrow className="mb-2">Every Role, One Place</Eyebrow>
+            <h1 className="font-black text-[26px] mb-1" style={{ color: '#1C1410', fontFamily: OUTFIT, letterSpacing: '-0.01em' }}>
+              My Conferences
+            </h1>
+            <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+              Every conference you&apos;re part of, sorted by the role you hold there.
+            </p>
+          </div>
+          <Link
+            href="/conferences/new"
+            className="flex-shrink-0 inline-flex items-center gap-2 rounded-xl py-2.5 px-5 font-bold text-[12.5px] uppercase transition-colors mt-1"
+            style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, letterSpacing: '0.06em' }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+          >
+            <Plus size={15} strokeWidth={2.5} />
+            Organise a conference
+          </Link>
+        </div>
 
         {acceptedToast && (
           <div

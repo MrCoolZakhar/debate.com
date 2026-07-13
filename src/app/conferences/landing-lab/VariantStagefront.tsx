@@ -21,22 +21,17 @@
 // fills the card) so three fit gracefully, pinned to the right screen edge.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import {
-  ArrowRight, ArrowUpRight, MapPin,
-  Users, Gavel, ClipboardList, CalendarPlus, GraduationCap, Eye,
-  type LucideIcon,
-} from 'lucide-react';
+import { motion, type PanInfo } from 'framer-motion';
+import { ArrowRight, ArrowUpRight, ChevronLeft, ChevronRight, MapPin } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { supabase } from '@/lib/supabase';
 import { UN_COUNTRIES } from '@/lib/countries';
-import { NeuCard, NeuIconDisc, NEU, NEU_GRADIENTS, EASE, type NeuGradient } from '@/components/neu';
 import { ConferenceCard } from '../ConferenceCard';
-import { LogoDisc } from '@/components/LogoDisc';
 import {
   LabConference, RatingSummary,
   CREAM, FOREST, GOLD, IVORY, PALE_GOLD, SANS, GRAIN,
@@ -58,88 +53,65 @@ interface JobStats {
   chairing: number;
 }
 
-// The three most recent open postings, rendered as tiny "notification" chips
-// fanned above the SEE OPEN ROLES CTA.
-interface RoleChip {
-  id: string;
-  role: string;
-  acronym: string;
-  logoUrl: string | null;
-  category: string; // normalised: 'chairs' | 'secretariat' | 'staff' | …
-}
-
-// Category tints — same palette logic as /conferences/roles
-// (chairs = gold, secretariat = slate-blue, staff = forest-green).
-const CHIP_TINTS: Record<string, { color: string; border: string }> = {
-  chairs: { color: '#8A6614', border: 'rgba(182,135,31,0.38)' },
-  secretariat: { color: '#46617A', border: 'rgba(70,97,122,0.30)' },
-  staff: { color: '#2A5A3C', border: 'rgba(42,90,60,0.30)' },
-};
-
-// Fan layout for the three chips: playful offsets + slight rotations.
-const CHIP_FAN = [
-  { left: '0px', bottom: '2px', rot: '-5deg', delay: '80ms', z: 3 },
-  { left: '96px', bottom: '46px', rot: '3.5deg', delay: '260ms', z: 2 },
-  { left: '176px', bottom: '0px', rot: '-2deg', delay: '440ms', z: 1 },
-] as const;
-
-// "Find your seat" — one neumorphic card per way to be on the circuit.
-// The ROLE is the hero: big Outfit-900 ink wordmark, muted supporting line,
-// the same primary/secondary links the old carousel slides carried.
-interface RoleCardDef {
-  role: string; // rendered uppercase, Outfit 900 — the biggest words in the card
+// "Find your seat" role carousel — one slide per way to be on the circuit.
+// Recovered from the pre-neumorphic build (photo card, forest scrim, gold
+// primary pill), with one evolution: each slide LEADS with the ROLE as a
+// huge Outfit-900 uppercase wordmark — the dominant element on the slide —
+// and the short supporting line sits beneath it.
+interface RoleSlide {
+  role: string; // rendered uppercase, Outfit 900 — the biggest words on the slide
   blurb: string;
-  icon: LucideIcon;
-  gradient: NeuGradient;
+  image: string;
+  imageAlt: string;
   primary: { label: string; href: string };
   secondary?: { label: string; href: string };
 }
 
-const ROLE_CARDS: RoleCardDef[] = [
+const ROLE_SLIDES: RoleSlide[] = [
   {
     role: 'Delegates',
     blurb: 'Browse the circuit, apply once with your Gavelling profile, and build a MUN CV that writes itself.',
-    icon: Users,
-    gradient: NEU_GRADIENTS.forest,
+    image: '/landing/podium-speaker.jpg',
+    imageAlt: 'A full committee room mid-debate, chair at the podium',
     primary: { label: 'Explore conferences', href: '/conferences/explore' },
     secondary: { label: 'View your conferences', href: '/my-conferences?tab=delegate' },
   },
   {
     role: 'Chairs',
     blurb: 'Gavel in hand — scoring, motions and the speakers list, run live from one dashboard.',
-    icon: Gavel,
-    gradient: NEU_GRADIENTS.gold,
+    image: '/landing/podium-speaker.jpg',
+    imageAlt: 'A full committee room mid-debate, chair at the podium',
     primary: { label: 'Explore chairing opportunities', href: '/conferences/roles' },
     secondary: { label: 'View your conferences', href: '/my-conferences?tab=chair' },
   },
   {
     role: 'Secretariat',
     blurb: 'The machine behind the weekend — applications, allocations and communications in one place.',
-    icon: ClipboardList,
-    gradient: NEU_GRADIENTS.amber,
+    image: '/landing/organiser-desk.jpg',
+    imageAlt: 'A delegation working together on Gavelling at a laptop',
     primary: { label: 'See open roles', href: '/conferences/roles' },
   },
   {
     role: 'Organizers',
     blurb: 'Registration, allocation, delegations, live committees — the whole show, zero fees.',
-    icon: CalendarPlus,
-    gradient: NEU_GRADIENTS.green,
+    image: '/landing/organiser-desk.jpg',
+    imageAlt: 'A delegation working together on Gavelling at a laptop',
     primary: { label: 'List your conference', href: '/conferences/new' },
     secondary: { label: 'View your conferences', href: '/my-conferences?tab=organizer' },
   },
   {
     role: 'Advisors',
     blurb: 'Pledge spots, manage payments and keep your delegation organised — all in one place.',
-    icon: GraduationCap,
-    gradient: NEU_GRADIENTS.sage,
+    image: '/landing/organiser-desk.jpg',
+    imageAlt: 'A delegation working together on Gavelling at a laptop',
     primary: { label: 'Explore conferences', href: '/conferences/explore' },
     secondary: { label: 'View your conferences', href: '/my-conferences?tab=advisor' },
   },
   {
     role: 'Observers',
     blurb: 'Follow committees live and see how the room moves — no placard required.',
-    icon: Eye,
-    gradient: NEU_GRADIENTS.forest,
+    image: '/landing/podium-speaker.jpg',
+    imageAlt: 'A full committee room mid-debate, chair at the podium',
     primary: { label: 'Explore conferences', href: '/conferences/explore' },
     secondary: { label: 'View your conferences', href: '/my-conferences?tab=observer' },
   },
@@ -271,35 +243,20 @@ export default function VariantStagefront({
       ? `None in ${geo.country} yet — here's what's coming up across the circuit.`
       : `Finding your region… here's what's coming up across the circuit.`;
 
-  // Live job-board stats + the three most recent open roles (for the CTA
-  // pop-up chips) — one query, fetched dynamically (seed data changes under us).
+  // Live job-board stats — one query, fetched dynamically (seed data changes
+  // under us). Feeds the forest stat ledger beside the job-board photo.
   const [jobStats, setJobStats] = useState<JobStats | null>(null);
-  const [roleChips, setRoleChips] = useState<RoleChip[]>([]);
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const { data } = await supabase
         .from('job_postings')
-        .select('id, category, role_name, conference_id, created_at, conferences (acronym, logo_url)')
-        .eq('is_open', true)
-        .order('created_at', { ascending: false });
+        .select('id, category, conference_id')
+        .eq('is_open', true);
       if (cancelled || !data) return;
       const hiring = new Set(data.map(r => r.conference_id)).size;
       const chairing = data.filter(r => String(r.category ?? '').toLowerCase().includes('chair')).length;
       setJobStats({ open: data.length, hiring, chairing });
-      setRoleChips(
-        data.slice(0, 3).map(r => {
-          // Supabase types to-one joins loosely — normalise object-or-array.
-          const conf = Array.isArray(r.conferences) ? r.conferences[0] : r.conferences;
-          return {
-            id: String(r.id),
-            role: String(r.role_name ?? 'Open role'),
-            acronym: String(conf?.acronym ?? 'MUN'),
-            logoUrl: (conf?.logo_url as string | null) ?? null,
-            category: String(r.category ?? 'staff').trim().toLowerCase().replace(/[\s_]+/g, '-'),
-          };
-        }),
-      );
     })();
     return () => { cancelled = true; };
   }, []);
@@ -315,11 +272,6 @@ export default function VariantStagefront({
         }
         .sf-rail-track { animation: sfRailScroll 46s linear infinite; }
         .sf-rail:hover .sf-rail-track { animation-play-state: paused; }
-        @keyframes sfChipIn {
-          from { opacity: 0; transform: translateY(14px) scale(0.9) rotate(var(--sf-rot, 0deg)); }
-          to { opacity: 1; transform: translateY(0) scale(1) rotate(var(--sf-rot, 0deg)); }
-        }
-        .sf-chip { animation: sfChipIn 640ms cubic-bezier(0.22,1,0.36,1) both; }
         /* Hero "up next" rail: horizontal snap on narrow screens, vertical stack ≥lg. */
         .sf-hero-rail { scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
         .sf-hero-rail::-webkit-scrollbar { display: none; }
@@ -333,35 +285,11 @@ export default function VariantStagefront({
           .sf-hero-aside { width: clamp(340px, 23.5vw, 476px); }
           .sf-hero-rail .gv-photo-card { height: clamp(180px, 12.5vw, 252px) !important; }
         }
-        /* Roles grid: 1 → 2 → 3 fluid columns; cards grow with the container. */
-        .sf-roles-grid {
-          display: grid;
-          grid-template-columns: 1fr;
-          gap: clamp(16px, 1.6vw, 28px);
-          max-width: 1560px;
-          margin: 0 auto;
-        }
-        @media (min-width: 640px) { .sf-roles-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-        @media (min-width: 1024px) { .sf-roles-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-        .sf-role-link svg { transition: transform 260ms cubic-bezier(0.22,1,0.36,1); }
-        .sf-role-link:hover { color: #2A5A3C !important; }
-        .sf-role-link:hover svg { transform: translateX(3px); }
-        .sf-role-sub:hover { color: #1B3828 !important; }
-        /* Job-board chip fan: the desktop offsets (up to 176px) push the ~230px
-           chips past a 375px viewport. Below 560px restack them as a gentle
-           cascade pinned to the left edge so nothing overflows. */
-        @media (max-width: 560px) {
-          .sf-chip-fan { height: 158px !important; }
-          .sf-chip:nth-of-type(1) { left: 0 !important; bottom: 0 !important; }
-          .sf-chip:nth-of-type(2) { left: 14px !important; bottom: 54px !important; }
-          .sf-chip:nth-of-type(3) { left: 28px !important; bottom: 108px !important; }
-        }
         @media (prefers-reduced-motion: reduce) {
           .sf-rail { overflow-x: auto; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; }
           .sf-rail-track { animation: none !important; transform: none !important; }
           .sf-rail-track > * { scroll-snap-align: start; }
           .sf-rail-dupe { display: none !important; }
-          .sf-chip { animation: none !important; }
         }
       `}</style>
 
@@ -424,7 +352,18 @@ export default function VariantStagefront({
                   textShadow: '0 2px 24px rgba(0,0,0,0.35)',
                 }}
               >
-                Go where<br />the debate is.
+                Go where<br />the{' '}
+                <span
+                  style={{
+                    fontFamily: "'Playfair Display', serif",
+                    fontStyle: 'italic',
+                    fontWeight: 400,
+                    color: PALE_GOLD,
+                  }}
+                >
+                  debate
+                </span>{' '}
+                is.
               </h1>
               <p
                 style={{
@@ -505,13 +444,15 @@ export default function VariantStagefront({
           </div>
         </section>
 
-        {/* ── Find your seat — neumorphic role grid, ivory ────────────────────
-            Soft extruded NeuCards on the ivory base; each card leads with the
-            ROLE as an Outfit-900 ink wordmark over a vibrant gradient icon
-            disc, with a muted line describing what that role gets. */}
+        {/* ── Find your seat — role carousel, cream ──────────────────────────
+            The photo carousel is back (recovered from the pre-neumorphic
+            build): center-focus slides, dimmed side-peek neighbors, circular
+            arrows, keyboard + drag support. Each slide leads with the ROLE
+            as a huge Outfit-900 uppercase wordmark over the photo, with the
+            short supporting line and the same links beneath. */}
         <section
-          className="px-6 md:px-14 xl:px-20"
-          style={{ backgroundColor: NEU.base, paddingTop: 'clamp(64px, 6vw, 108px)', paddingBottom: 'clamp(56px, 5vw, 96px)' }}
+          className="px-6 md:px-14"
+          style={{ backgroundColor: CREAM, paddingTop: 'clamp(64px, 6vw, 108px)', paddingBottom: 'clamp(8px, 1vw, 16px)' }}
         >
           <p style={{ fontFamily: SANS, fontWeight: 700, fontSize: 'clamp(12px, 0.8vw, 14px)', letterSpacing: '0.14em', textTransform: 'uppercase', color: GOLD, margin: '0 0 8px 0', textAlign: 'center' }}>
             Find your seat
@@ -529,9 +470,7 @@ export default function VariantStagefront({
           >
             One platform, every role.
           </h2>
-          <div className="sf-roles-grid">
-            {ROLE_CARDS.map(rc => <RoleNeuCard key={rc.role} def={rc} />)}
-          </div>
+          <RoleCarousel slides={ROLE_SLIDES} />
         </section>
 
         {/* ── The circuit in numbers — slim worlddiplomats-style impact strip:
@@ -599,21 +538,11 @@ export default function VariantStagefront({
                 Gavelling hire chairs, secretariat and staff every season — and your MUN CV
                 is the application.
               </p>
-              {/* Three tiny "notification" previews of the freshest open roles,
-                  fanned playfully above the CTA. Real data, all roads lead to /roles. */}
-              {roleChips.length > 0 && (
-                <div className="sf-chip-fan" style={{ position: 'relative', height: '96px', marginTop: '24px', maxWidth: '360px' }}>
-                  {roleChips.map((chip, i) => {
-                    const fan = CHIP_FAN[i] ?? CHIP_FAN[0];
-                    return <RolePopChip key={chip.id} chip={chip} fan={fan} />;
-                  })}
-                </div>
-              )}
               <Link
                 href="/conferences/roles"
                 className="inline-flex items-center gap-2.5"
                 style={{
-                  marginTop: roleChips.length > 0 ? '10px' : '28px',
+                  marginTop: '28px',
                   fontFamily: SANS,
                   fontSize: '14px',
                   fontWeight: 800,
@@ -649,22 +578,6 @@ export default function VariantStagefront({
                   className="w-full object-cover"
                   style={{ display: 'block', aspectRatio: '3 / 2' }}
                 />
-                <div
-                  className="absolute bottom-0 left-0 right-0 flex items-center justify-between px-5 py-3"
-                  style={{
-                    backgroundColor: 'rgba(10,22,16,0.72)',
-                    backdropFilter: 'blur(10px)',
-                    WebkitBackdropFilter: 'blur(10px)',
-                    borderTop: '1px solid rgba(238,217,138,0.25)',
-                  }}
-                >
-                  <span style={{ fontFamily: SANS, fontWeight: 700, fontSize: '10px', letterSpacing: '0.15em', color: PALE_GOLD }}>
-                    THE DAIS, MID-SESSION
-                  </span>
-                  <span style={{ fontFamily: SANS, fontWeight: 700, fontSize: '10px', letterSpacing: '0.14em', color: IVORY_55 }}>
-                    CHAIRS · SECRETARIAT · STAFF
-                  </span>
-                </div>
               </div>
 
               {/* Live stat ledger — the approved forest ledger straddling the
@@ -902,88 +815,197 @@ function HeroTextLink({ href, label }: { href: string; label: string }) {
 }
 
 /**
- * One neumorphic role card: vibrant gradient icon disc + the ROLE as the
- * hero wordmark (Outfit 900, ink, uppercase), a muted supporting line, and
- * the same primary/secondary links the old carousel slides carried.
+ * "Find your seat" carousel — Aceternity-style center-focus carousel,
+ * recovered from the pre-neumorphic build: large center slide, dimmed/scaled
+ * side-peek neighbors, circular prev/next arrows below, keyboard + touch/drag
+ * support, loops in both directions. Evolved so each slide leads with the
+ * ROLE as a huge Outfit-900 uppercase wordmark over the photo.
  */
-function RoleNeuCard({ def }: { def: RoleCardDef }) {
+const DRAG_THRESHOLD = 60;
+const VELOCITY_THRESHOLD = 400;
+
+function RoleCarousel({ slides }: { slides: RoleSlide[] }) {
+  const [active, setActive] = useState(0);
+  const total = slides.length;
+
+  const goToSlide = useCallback((i: number) => setActive(((i % total) + total) % total), [total]);
+  const next = useCallback(() => goToSlide(active + 1), [active, goToSlide]);
+  const prev = useCallback(() => goToSlide(active - 1), [active, goToSlide]);
+
+  // Signed distance from the active slide, wrapped to the shortest direction.
+  const getOffset = (i: number) => {
+    let diff = i - active;
+    if (diff > total / 2) diff -= total;
+    else if (diff < -total / 2) diff += total;
+    return diff;
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowLeft') { e.preventDefault(); prev(); }
+    if (e.key === 'ArrowRight') { e.preventDefault(); next(); }
+  };
+
+  const handleDragEnd = (_: unknown, info: PanInfo) => {
+    if (info.offset.x < -DRAG_THRESHOLD || info.velocity.x < -VELOCITY_THRESHOLD) next();
+    else if (info.offset.x > DRAG_THRESHOLD || info.velocity.x > VELOCITY_THRESHOLD) prev();
+  };
+
+  if (total === 0) return null;
+
   return (
-    <NeuCard
-      hover
-      style={{
-        padding: 'clamp(22px, 1.9vw, 34px)',
-        display: 'flex',
-        flexDirection: 'column',
-        minWidth: 0,
-      }}
-    >
-      <div className="flex items-center" style={{ gap: 'clamp(14px, 1.1vw, 20px)' }}>
-        <NeuIconDisc gradient={def.gradient} icon={def.icon} size={48} />
-        <h3
-          style={{
-            fontFamily: SANS,
-            fontWeight: 900,
-            fontSize: 'clamp(26px, 1.9vw, 36px)',
-            lineHeight: 1,
-            letterSpacing: '0.015em',
-            textTransform: 'uppercase',
-            color: NEU.ink,
-            margin: 0,
-            minWidth: 0,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {def.role}
-        </h3>
-      </div>
-      <p
-        style={{
-          fontFamily: SANS,
-          fontSize: 'clamp(13.5px, 0.95vw, 16px)',
-          lineHeight: 1.6,
-          color: INK_70,
-          margin: 'clamp(14px, 1.2vw, 20px) 0 clamp(18px, 1.5vw, 26px) 0',
-        }}
+    <div>
+      <div
+        role="region"
+        aria-roledescription="carousel"
+        tabIndex={0}
+        onKeyDown={handleKeyDown}
+        className="relative w-full outline-none"
+        style={{ height: 'clamp(440px, 50vw, 560px)' }}
       >
-        {def.blurb}
-      </p>
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-2" style={{ marginTop: 'auto' }}>
-        <Link
-          href={def.primary.href}
-          className="sf-role-link inline-flex items-center gap-1.5"
-          style={{
-            fontFamily: SANS,
-            fontWeight: 800,
-            fontSize: 'clamp(12.5px, 0.85vw, 14px)',
-            letterSpacing: '0.06em',
-            textTransform: 'uppercase',
-            color: FOREST,
-            textDecoration: 'none',
-            transition: `color 200ms ${EASE}`,
-          }}
-        >
-          {def.primary.label} <ArrowRight size={15} strokeWidth={2.5} />
-        </Link>
-        {def.secondary && (
-          <Link
-            href={def.secondary.href}
-            className="sf-role-sub"
-            style={{
-              fontFamily: SANS,
-              fontWeight: 600,
-              fontSize: 'clamp(11.5px, 0.8vw, 13px)',
-              color: NEU.muted,
-              textDecoration: 'none',
-              transition: `color 200ms ${EASE}`,
-            }}
-          >
-            {def.secondary.label}
-          </Link>
-        )}
+        {slides.map((slide, i) => {
+          const offset = getOffset(i);
+          if (Math.abs(offset) > 2) return null;
+          const isActive = offset === 0;
+
+          return (
+            <motion.div
+              key={slide.role}
+              className="absolute inset-y-0 left-1/2 rounded-[30px] overflow-hidden select-none"
+              style={{
+                width: 'min(640px, 82vw)',
+                marginLeft: 'calc(min(640px, 82vw) / -2)',
+                boxShadow: isActive
+                  ? '0 32px 70px rgba(15,26,19,0.38), 0 0 0 1px rgba(250,248,243,0.14)'
+                  : '0 18px 40px rgba(15,26,19,0.22), 0 0 0 1px rgba(250,248,243,0.10)',
+                cursor: isActive ? 'grab' : 'pointer',
+              }}
+              animate={{
+                x: `${offset * 78}%`,
+                scale: isActive ? 1 : 0.82,
+                opacity: Math.abs(offset) > 1 ? 0 : isActive ? 1 : 0.5,
+                zIndex: 10 - Math.abs(offset),
+              }}
+              transition={{ type: 'spring', stiffness: 300, damping: 32 }}
+              drag={isActive ? 'x' : false}
+              dragConstraints={{ left: 0, right: 0 }}
+              dragElastic={0.15}
+              onDragEnd={isActive ? handleDragEnd : undefined}
+              onClick={() => { if (!isActive) goToSlide(i); }}
+              aria-hidden={!isActive}
+            >
+              <img
+                src={slide.image}
+                alt={slide.imageAlt}
+                className="absolute inset-0 w-full h-full object-cover"
+                draggable={false}
+              />
+              <div
+                aria-hidden="true"
+                className="absolute inset-0"
+                style={{
+                  background:
+                    'linear-gradient(to bottom, rgba(11,20,15,0.10) 0%, rgba(11,20,15,0.18) 34%, rgba(9,17,13,0.74) 70%, rgba(8,15,11,0.94) 100%)',
+                }}
+              />
+
+              <div className="relative z-10 flex flex-col justify-end h-full p-7 sm:p-9">
+                {/* The ROLE — the dominant element on the slide. */}
+                <h3
+                  style={{
+                    fontFamily: SANS,
+                    fontWeight: 900,
+                    fontSize: 'clamp(32px, 6.5vw, 72px)',
+                    lineHeight: 0.98,
+                    letterSpacing: '0.01em',
+                    textTransform: 'uppercase',
+                    color: CREAM,
+                    margin: 0,
+                  }}
+                >
+                  {slide.role}
+                </h3>
+                <p
+                  style={{
+                    fontFamily: SANS, fontSize: 'clamp(13.5px, 1vw, 16px)', lineHeight: 1.6,
+                    color: 'rgba(250,248,243,0.86)', margin: '12px 0 0 0', maxWidth: '480px',
+                  }}
+                >
+                  {slide.blurb}
+                </p>
+
+                <div className="flex flex-wrap items-center gap-3" style={{ marginTop: '22px' }}>
+                  <Link
+                    href={slide.primary.href}
+                    onClick={(e) => e.stopPropagation()}
+                    tabIndex={isActive ? 0 : -1}
+                    style={{
+                      fontFamily: SANS, fontWeight: 800, fontSize: '13px', letterSpacing: '0.04em',
+                      color: '#14100B', backgroundColor: PALE_GOLD, padding: '13px 22px', borderRadius: '9999px',
+                      textDecoration: 'none', boxShadow: '0 10px 26px rgba(0,0,0,0.3)',
+                      transition: 'transform 160ms ease, background-color 160ms ease',
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.backgroundColor = '#F3E3A1'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.backgroundColor = PALE_GOLD; }}
+                  >
+                    {slide.primary.label}
+                  </Link>
+                  {slide.secondary && (
+                    <Link
+                      href={slide.secondary.href}
+                      onClick={(e) => e.stopPropagation()}
+                      tabIndex={isActive ? 0 : -1}
+                      style={{
+                        fontFamily: SANS, fontWeight: 700, fontSize: '13px', letterSpacing: '0.04em',
+                        color: CREAM, backgroundColor: 'transparent', padding: '12px 21px', borderRadius: '9999px',
+                        textDecoration: 'none', border: '1.5px solid rgba(250,248,243,0.55)',
+                        transition: 'background-color 160ms ease, border-color 160ms ease',
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(250,248,243,0.12)'; e.currentTarget.style.borderColor = 'rgba(250,248,243,0.85)'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.borderColor = 'rgba(250,248,243,0.55)'; }}
+                    >
+                      {slide.secondary.label}
+                    </Link>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          );
+        })}
       </div>
-    </NeuCard>
+
+      <div className="flex items-center justify-center gap-4 mt-8">
+        <CarouselArrow direction="left" onClick={prev} label="Previous slide" />
+        <CarouselArrow direction="right" onClick={next} label="Next slide" />
+      </div>
+    </div>
+  );
+}
+
+function CarouselArrow({
+  direction, onClick, label,
+}: {
+  direction: 'left' | 'right';
+  onClick: () => void;
+  label: string;
+}) {
+  const Icon = direction === 'left' ? ChevronLeft : ChevronRight;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      className="inline-flex items-center justify-center rounded-full"
+      style={{
+        width: '48px', height: '48px', backgroundColor: CREAM,
+        border: '1.5px solid rgba(27,56,40,0.18)', color: FOREST,
+        boxShadow: '0 8px 22px rgba(27,56,40,0.14)',
+        transition: 'background-color 160ms ease, transform 160ms ease',
+      }}
+      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = FOREST; e.currentTarget.style.color = PALE_GOLD; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = CREAM; e.currentTarget.style.color = FOREST; e.currentTarget.style.transform = 'translateY(0)'; }}
+    >
+      <Icon size={20} strokeWidth={2.25} />
+    </button>
   );
 }
 
@@ -1044,50 +1066,3 @@ function RegionalRail({
   );
 }
 
-/**
- * A tiny "notification pop-up" preview of one open role: conference logo (or
- * monogram), role name, category-tinted meta line. Fanned above the job-board
- * CTA; clicking goes to /conferences/roles like the button itself.
- */
-function RolePopChip({
-  chip, fan,
-}: {
-  chip: RoleChip;
-  fan: { left: string; bottom: string; rot: string; delay: string; z: number };
-}) {
-  const tint = CHIP_TINTS[chip.category] ?? CHIP_TINTS.staff;
-  return (
-    <Link
-      href="/conferences/roles"
-      className="sf-chip inline-flex items-center gap-2"
-      aria-label={`Open role: ${chip.role} at ${chip.acronym}`}
-      style={{
-        position: 'absolute',
-        left: fan.left,
-        bottom: fan.bottom,
-        zIndex: fan.z,
-        ['--sf-rot' as string]: fan.rot,
-        transform: `rotate(${fan.rot})`,
-        animationDelay: fan.delay,
-        backgroundColor: CREAM,
-        border: `1px solid ${tint.border}`,
-        borderLeft: `3px solid ${tint.color}`,
-        borderRadius: '12px',
-        padding: '7px 13px 7px 9px',
-        boxShadow: '0 10px 26px rgba(27,56,40,0.18), 0 2px 6px rgba(27,56,40,0.08)',
-        textDecoration: 'none',
-        whiteSpace: 'nowrap',
-      }}
-    >
-      <LogoDisc src={chip.logoUrl} size={24} fallbackText={chip.acronym.slice(0, 2)} />
-      <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-        <span style={{ fontFamily: SANS, fontSize: '12px', fontWeight: 700, color: INK, lineHeight: 1.2, maxWidth: '170px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {chip.role}
-        </span>
-        <span style={{ fontFamily: SANS, fontWeight: 700, fontSize: '8.5px', letterSpacing: '0.14em', color: tint.color, marginTop: '2px' }}>
-          {chip.acronym.toUpperCase()} · {chip.category.replace(/-/g, ' ').toUpperCase()}
-        </span>
-      </span>
-    </Link>
-  );
-}

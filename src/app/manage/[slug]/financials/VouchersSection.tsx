@@ -18,11 +18,32 @@ import type { Conference } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useConfirmModal } from '@/components/ConfirmModal';
-import { currencySymbol, formatFeeAmount } from '@/lib/finance';
+import { currencySymbol, formatFeeAmount, roundMoney } from '@/lib/finance';
 import {
   NEU, NEU_GRADIENTS, OUTFIT, EASE,
   NeuCard, NeuInset, NeuPill, NeuButton, NeuIconDisc, NeuProgress,
 } from '@/components/neu';
+
+// ── Approximate FX (display-only) ──────────────────────────────────────────
+// Mirror of USD_FX in src/lib/finance.ts (kept module-local there for the
+// Gavin upsell — update both tables together). Static ≈mid-2026 rates: good
+// enough for the financials page's "≈" display conversion; stored values and
+// voucher creation always stay in the conference currency.
+export const APPROX_USD_FX: Record<string, number> = {
+  USD: 1, GBP: 0.78, EUR: 0.92, CAD: 1.36, AUD: 1.5, INR: 84, TRY: 34,
+  JPY: 155, CHF: 0.88, SEK: 10.5, NOK: 10.7, DKK: 6.9, PLN: 4.0, CZK: 23,
+  MXN: 18, BRL: 5.5, ZAR: 18, SGD: 1.34, HKD: 7.8, NZD: 1.65, KRW: 1350,
+  AED: 3.67,
+};
+
+/** Approximate conversion between two known currencies; null when either
+ *  rate is missing (callers then fall back to the original amount). */
+export function convertApprox(amount: number, from: string, to: string): number | null {
+  const rf = APPROX_USD_FX[from.toUpperCase()];
+  const rt = APPROX_USD_FX[to.toUpperCase()];
+  if (!rf || !rt) return null;
+  return roundMoney((amount / rf) * rt);
+}
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -59,10 +80,16 @@ function formatExpiry(iso: string): string {
   return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-function discountLabel(v: Voucher): string {
-  return v.kind === 'percent'
-    ? `${formatFeeAmount(v.amount)}% OFF`
-    : `${currencySymbol(v.currency ?? '')}${formatFeeAmount(v.amount)} OFF`;
+/** Voucher chip label — flat amounts re-display in the chosen currency
+ *  (≈-prefixed) when it differs from the voucher's own currency. */
+function discountLabel(v: Voucher, displayCurrency?: string): string {
+  if (v.kind === 'percent') return `${formatFeeAmount(v.amount)}% OFF`;
+  const vCur = v.currency ?? '';
+  if (displayCurrency && vCur && displayCurrency.toUpperCase() !== vCur.toUpperCase()) {
+    const conv = convertApprox(v.amount, vCur, displayCurrency);
+    if (conv !== null) return `≈ ${currencySymbol(displayCurrency)}${formatFeeAmount(conv)} OFF`;
+  }
+  return `${currencySymbol(vCur)}${formatFeeAmount(v.amount)} OFF`;
 }
 
 // Neumorphic input well — pressed-in, transparent field inside.
@@ -88,7 +115,15 @@ const fieldLabelStyle: React.CSSProperties = {
 
 // ── Section ────────────────────────────────────────────────────────────────
 
-export default function VouchersSection({ conference }: { conference: Conference }) {
+export default function VouchersSection({
+  conference,
+  displayCurrency,
+}: {
+  conference: Conference;
+  /** Display-only currency for flat amounts in the list — creation stays in
+   *  the conference currency regardless. */
+  displayCurrency?: string;
+}) {
   const { session, user } = useAuth();
   const { confirm, modal: confirmModal } = useConfirmModal();
 
@@ -437,7 +472,7 @@ export default function VouchersSection({ conference }: { conference: Conference
 
                     {/* Kind/amount chip */}
                     <NeuPill gradient={NEU_GRADIENTS.gold} active>
-                      {discountLabel(v)}
+                      {discountLabel(v, displayCurrency)}
                     </NeuPill>
 
                     {/* Redemptions */}
@@ -520,9 +555,7 @@ export default function VouchersSection({ conference }: { conference: Conference
 
       {/* Footnote */}
       <p className="mt-3" style={{ fontFamily: OUTFIT, fontSize: 10.5, color: NEU.muted, lineHeight: 1.6 }}>
-        Discounts apply at signup — participants enter a code in the application flow and the
-        reduced fee is locked into their application. The 5% Gavelling platform fee is computed
-        after discounts, so vouchers reduce it proportionally.
+        Discounts apply at signup.
       </p>
 
       {confirmModal}

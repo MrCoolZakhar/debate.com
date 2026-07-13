@@ -4,7 +4,12 @@
  * Organiser financial dashboard — revenue overview, delegate estimate,
  * read-only payment pipeline and voucher management. Neumorphic throughout
  * (neu.tsx primitives); money math mirrors src/lib/finance.ts semantics
- * (5% platform fee after discounts, waived participants excluded).
+ * (voucher discounts clamp at zero, waived participants excluded).
+ *
+ * All figures can be re-displayed in another currency via the header
+ * switcher — a static approximate FX table (see VouchersSection.tsx, which
+ * mirrors finance.ts USD_FX). Stored values and voucher creation stay in the
+ * conference currency; converted figures are prefixed with "≈".
  *
  * The Stripe seam is a single integration point consistent with
  * src/lib/payments.ts: conference.stripe_account_id null → connect teaser
@@ -16,20 +21,20 @@ import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import {
   ArrowRight, BadgePercent, CircleCheck, Clock, CreditCard, Eye, Gavel,
-  GraduationCap, HandCoins, Hourglass, Landmark, PiggyBank, TrendingUp,
+  GraduationCap, HandCoins, Hourglass, PiggyBank, TrendingUp,
   User, Users, Wallet,
 } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
-import { PLATFORM_FEE_RATE, roundMoney, formatFee, currencySymbol } from '@/lib/finance';
+import { roundMoney, formatFee, currencySymbol } from '@/lib/finance';
 import { FlagImg } from '@/components/FlagImg';
 import { getCountryByName } from '@/lib/countries';
 import {
   NEU, NEU_GRADIENTS, OUTFIT,
   NeuCard, NeuInset, NeuStatTile, NeuProgress, NeuPill, NeuButton, NeuIconDisc,
 } from '@/components/neu';
-import VouchersSection from './VouchersSection';
+import VouchersSection, { convertApprox } from './VouchersSection';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -41,6 +46,15 @@ interface FinRow {
   fee_waiver_source: string | null;
   voucher_discount: number | null;
   submitted_at: string;
+  /** True payment timestamp — set by newer payment flows only, so often null
+   *  even on paid rows. Never faked: rows without it show the APPLIED date. */
+  paid_at: string | null;
+  /** Payment provenance (delegation flows, applications page):
+   *  self_paid=true → participant funded their own fee; paid + self_paid=false
+   *  + society_id → covered by a delegation pledge spot. */
+  self_paid: boolean | null;
+  society_id: string | null;
+  stripe_payment_intent_id: string | null;
   assigned_country_code: string | null;
   assigned_country_name: string | null;
   profiles: { display_name: string } | null;
@@ -106,13 +120,13 @@ function CountryFlag({ name, code, size = 14 }: { name: string | null; code?: st
   );
 }
 
-/** Cumulative sparkline over submitted_at — 12 buckets from first matching
- *  row to now. Cheap approximation: there is no paid_at column, so paid rows
- *  are bucketed by submission time (same note as the dashboard chart). */
+/** Cumulative sparkline — 12 buckets from first matching row to now. Rows
+ *  are bucketed by paid_at when recorded (newer payment flows), otherwise by
+ *  submission time (same approximation as the dashboard chart). */
 function cumulativeSpark(rows: FinRow[], pick: (r: FinRow) => boolean, n = 12): number[] | undefined {
   const times = rows
     .filter(pick)
-    .map(r => new Date(r.submitted_at).getTime())
+    .map(r => new Date(r.paid_at ?? r.submitted_at).getTime())
     .filter(t => Number.isFinite(t))
     .sort((a, b) => a - b);
   if (times.length < 2) return undefined;
@@ -131,6 +145,35 @@ const chipStyle: React.CSSProperties = {
   padding: '3px 9px', borderRadius: 999, whiteSpace: 'nowrap',
 };
 
+function formatRowDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+/** HOW the money moved (or didn't) — derived from payment provenance columns.
+ *  Mapping (in priority order):
+ *   - paid + stripe_payment_intent_id     → STRIPE      (online checkout)
+ *   - paid + self_paid                    → SELF-PAID   (participant funded own fee)
+ *   - paid + !self_paid + society_id      → DELEGATION  (covered by a delegation pledge spot)
+ *   - paid otherwise                      → MANUAL      (organiser marked paid, no provenance)
+ *   - waived                              → fee_waiver_source (AMBASSADOR / UNLIMITED) when set
+ *   - unpaid                              → no chip
+ */
+function paymentMethod(r: FinRow): { label: string; title: string } | null {
+  if (r.payment_status === 'paid') {
+    if (r.stripe_payment_intent_id) return { label: 'STRIPE', title: 'Paid online via Stripe checkout' };
+    if (r.self_paid) return { label: 'SELF-PAID', title: 'Participant funded their own fee' };
+    if (r.society_id) return { label: 'DELEGATION', title: 'Covered by a delegation pledge spot' };
+    return { label: 'MANUAL', title: 'Marked paid manually on the Applications page' };
+  }
+  if (r.payment_status === 'waived' && r.fee_waiver_source) {
+    return { label: r.fee_waiver_source.toUpperCase(), title: 'Fee waived by this entitlement' };
+  }
+  return null;
+}
+
+/** Displayed-currency options: conference currency first, then the majors. */
+const BASE_CURRENCY_OPTIONS = ['USD', 'EUR', 'GBP'];
+
 const PIPELINE_FILTERS = [
   { label: 'ALL', value: 'all' },
   { label: 'PAID', value: 'paid' },
@@ -146,6 +189,10 @@ export default function FinancialsPage() {
   const { session } = useAuth();
   const [rows, setRows] = useState<FinRow[] | null>(null);
   const [filter, setFilter] = useState<PipelineFilter>('all');
+  // Displayed currency — '' until the per-conference localStorage choice is
+  // loaded; falls back to the conference currency. Display-only: stored
+  // values and voucher creation always stay in the conference currency.
+  const [displayCurrency, setDisplayCurrency] = useState('');
 
   useEffect(() => {
     if (!conference || !session) return;
@@ -157,6 +204,7 @@ export default function FinancialsPage() {
         .from('applications')
         .select(`
           id, role, status, payment_status, fee_waiver_source, voucher_discount, submitted_at,
+          paid_at, self_paid, society_id, stripe_payment_intent_id,
           assigned_country_code, assigned_country_name,
           profiles (display_name),
           assigned_committee:conference_committees!assigned_committee_id (name, abbreviation)
@@ -169,6 +217,14 @@ export default function FinancialsPage() {
 
   const fee = conference?.fee_amount ?? 0;
   const currency = conference?.fee_currency ?? 'USD';
+
+  // Load the persisted per-conference display currency (client-only).
+  useEffect(() => {
+    if (!conference) return;
+    const stored = window.localStorage.getItem(`gavelling-fin-currency-${conference.slug}`);
+    const options = [conference.fee_currency, ...BASE_CURRENCY_OPTIONS];
+    setDisplayCurrency(stored && options.includes(stored) ? stored : conference.fee_currency);
+  }, [conference?.slug, conference?.fee_currency]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Derived money figures ────────────────────────────────────────────────
   const fin = useMemo(() => {
@@ -188,13 +244,6 @@ export default function FinancialsPage() {
     const waived = roundMoney(waivedRows.length * fee);
     const expectedTotal = roundMoney(collected + pending);
 
-    // Platform fee estimate — mirrors finance.ts: 5% of each paid
-    // participant's post-discount fee, zero when their fee_waiver_source is
-    // set (ambassador / unlimited waivers exempt the platform fee).
-    const platformFee = roundMoney(
-      paidRows.reduce((s, r) => s + (r.fee_waiver_source ? 0 : rowAmount(fee, r) * PLATFORM_FEE_RATE), 0)
-    );
-
     // Delegate estimate — expected_delegates is the organiser's own estimate
     // of DELEGATES, so reality is measured on the delegate pool only.
     const delegateRows = live.filter(r => r.role === 'delegate' || r.role === 'head-delegate');
@@ -203,7 +252,7 @@ export default function FinancialsPage() {
 
     return {
       live, paidRows, pendingRows, waivedRows,
-      collected, pending, waived, expectedTotal, platformFee,
+      collected, pending, waived, expectedTotal,
       acceptedDelegates, paidDelegates,
     };
   }, [rows, fee]);
@@ -213,6 +262,28 @@ export default function FinancialsPage() {
   const loading = rows === null;
   const stripeConnected = !!conference.stripe_account_id;
   const expectedDelegates = conference.expected_delegates || 0;
+
+  // ── Display-currency conversion (approximate, display-only) ─────────────
+  // Switcher only renders when the conference currency has a known FX rate.
+  const dispCur = displayCurrency || currency;
+  const converted = dispCur !== currency;
+  const fxAvailable = convertApprox(1, currency, 'USD') !== null;
+  const currencyOptions = fxAvailable
+    ? [currency, ...BASE_CURRENCY_OPTIONS.filter(c => c !== currency)]
+    : [currency];
+
+  function pickCurrency(c: string) {
+    setDisplayCurrency(c);
+    window.localStorage.setItem(`gavelling-fin-currency-${conference!.slug}`, c);
+  }
+
+  /** Format an amount (stored in the conference currency) for display —
+   *  converted values carry an "≈" prefix; unconvertible ones stay as-is. */
+  const money = (n: number): string => {
+    if (!converted) return formatFee(n, currency);
+    const c = convertApprox(n, currency, dispCur);
+    return c === null ? formatFee(n, currency) : `≈ ${formatFee(c, dispCur)}`;
+  };
 
   const pipelineRows = fin.live.filter(r => {
     if (filter === 'paid') return r.payment_status === 'paid';
@@ -242,9 +313,19 @@ export default function FinancialsPage() {
               <h1 style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 26, color: NEU.ink, letterSpacing: '-0.01em' }}>
                 Financials
               </h1>
-              <NeuPill>
-                {currencySymbol(currency)} {currency}
-              </NeuPill>
+              {/* Display-currency switcher — conference currency + majors. */}
+              <div className="flex items-center gap-1.5">
+                {currencyOptions.map(c => (
+                  <NeuPill
+                    key={c}
+                    active={dispCur === c}
+                    gradient={NEU_GRADIENTS.forest}
+                    onClick={currencyOptions.length > 1 ? () => pickCurrency(c) : undefined}
+                  >
+                    {currencySymbol(c)} {c}
+                  </NeuPill>
+                ))}
+              </div>
               {stripeConnected && (
                 <NeuPill active gradient={NEU_GRADIENTS.green}>
                   <CircleCheck size={11} strokeWidth={2.6} />
@@ -252,6 +333,11 @@ export default function FinancialsPage() {
                 </NeuPill>
               )}
             </div>
+            {converted && (
+              <p className="mt-1" style={mutedCaption}>
+                Approximate conversion — payments settle in {currency}.
+              </p>
+            )}
           </div>
         </div>
 
@@ -306,7 +392,7 @@ export default function FinancialsPage() {
               emoji="Money bag"
               icon={PiggyBank}
               gradient={NEU_GRADIENTS.green}
-              value={formatFee(fin.collected, currency)}
+              value={money(fin.collected)}
               label={`Collected · ${fin.paidRows.length} paid`}
               spark={cumulativeSpark(rows ?? [], r => r.payment_status === 'paid')}
             />
@@ -314,7 +400,7 @@ export default function FinancialsPage() {
               emoji="Hourglass not done"
               icon={Hourglass}
               gradient={NEU_GRADIENTS.amber}
-              value={formatFee(fin.pending, currency)}
+              value={money(fin.pending)}
               label={`Pending · ${fin.pendingRows.length} accepted unpaid`}
               spark={cumulativeSpark(rows ?? [], r => (r.status === 'accepted' || r.status === 'assigned') && r.payment_status === 'unpaid')}
             />
@@ -322,7 +408,7 @@ export default function FinancialsPage() {
               emoji="Money with wings"
               icon={HandCoins}
               gradient={NEU_GRADIENTS.sage}
-              value={formatFee(fin.waived, currency)}
+              value={money(fin.waived)}
               label={`Waived · ${fin.waivedRows.length} fee${fin.waivedRows.length === 1 ? '' : 's'} forgone`}
               style={{ opacity: 0.72 }}
             />
@@ -330,7 +416,7 @@ export default function FinancialsPage() {
               emoji="Chart increasing"
               icon={TrendingUp}
               gradient={NEU_GRADIENTS.gold}
-              value={formatFee(fin.expectedTotal, currency)}
+              value={money(fin.expectedTotal)}
               label="Expected total · collected + pending"
               spark={cumulativeSpark(rows ?? [], r =>
                 r.payment_status === 'paid'
@@ -339,26 +425,8 @@ export default function FinancialsPage() {
           </div>
         )}
 
-        {/* ── 6 · Platform fee estimate line ── */}
-        {!loading && (
-          <NeuInset small className="flex items-center gap-3 flex-wrap px-4 py-3 mb-8">
-            <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={Landmark} size={30} />
-            <span style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: NEU.ink }}>
-              Gavelling platform fee ({Math.round(PLATFORM_FEE_RATE * 100)}%)
-            </span>
-            <span style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 900, color: NEU.forest, fontVariantNumeric: 'tabular-nums' }}>
-              ≈ {formatFee(fin.platformFee, currency)}
-            </span>
-            <span className="flex-1" style={{ minWidth: 160, ...mutedCaption }}>
-              Estimated on collected revenue after voucher discounts; participants with an
-              ambassador or unlimited waiver excluded. Paid by participants at checkout — it never
-              comes out of your fee.
-            </span>
-          </NeuInset>
-        )}
-
         {/* ── 3 · Delegate estimate block ── */}
-        <NeuCard style={{ padding: '20px 22px', marginBottom: 32 }}>
+        <NeuCard style={{ padding: '20px 22px', marginTop: 20, marginBottom: 32 }}>
           <div className="flex items-center gap-3 mb-4">
             <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={Users} emoji="Busts in silhouette" size={36} />
             <div>
@@ -391,10 +459,10 @@ export default function FinancialsPage() {
                     Projected revenue at estimate
                   </p>
                   <p style={{ fontFamily: OUTFIT, fontSize: 20, fontWeight: 900, color: NEU.ink, fontVariantNumeric: 'tabular-nums', marginTop: 4 }}>
-                    {formatFee(roundMoney(expectedDelegates * fee), currency)}
+                    {money(roundMoney(expectedDelegates * fee))}
                   </p>
                   <p style={mutedCaption}>
-                    {expectedDelegates} delegates × {formatFee(fee, currency)} fee — assumes every
+                    {expectedDelegates} delegates × {money(fee)} fee — assumes every
                     delegate pays the full fee, before vouchers and waivers.
                   </p>
                 </NeuInset>
@@ -403,10 +471,10 @@ export default function FinancialsPage() {
                     Revenue at current acceptance
                   </p>
                   <p style={{ fontFamily: OUTFIT, fontSize: 20, fontWeight: 900, color: NEU.forest, fontVariantNumeric: 'tabular-nums', marginTop: 4 }}>
-                    {formatFee(roundMoney(fin.acceptedDelegates * fee), currency)}
+                    {money(roundMoney(fin.acceptedDelegates * fee))}
                   </p>
                   <p style={mutedCaption}>
-                    {fin.acceptedDelegates} accepted delegate{fin.acceptedDelegates === 1 ? '' : 's'} × {formatFee(fee, currency)} —
+                    {fin.acceptedDelegates} accepted delegate{fin.acceptedDelegates === 1 ? '' : 's'} × {money(fee)} —
                     same full-fee assumption; the tiles above show actual discounted figures.
                   </p>
                 </NeuInset>
@@ -475,6 +543,10 @@ export default function FinancialsPage() {
                 const waived = r.payment_status === 'waived';
                 const amount = rowAmount(fee, r);
                 const discounted = (Number(r.voucher_discount) || 0) > 0;
+                // True paid_at when recorded; otherwise the application date,
+                // labelled APPLIED so it never masquerades as a payment date.
+                const hasPaidAt = paid && !!r.paid_at;
+                const method = paymentMethod(r);
                 return (
                   <div
                     key={r.id}
@@ -513,9 +585,23 @@ export default function FinancialsPage() {
                       <CountryFlag name={r.assigned_country_name} code={r.assigned_country_code} />
                     </span>
 
+                    {/* Date — real payment date when recorded, else application date */}
+                    <span
+                      className="inline-flex items-baseline gap-1.5"
+                      title={hasPaidAt ? 'Payment recorded on this date' : 'Application submitted on this date — no payment date recorded'}
+                      style={{ minWidth: 118 }}
+                    >
+                      <span style={{ fontFamily: OUTFIT, fontSize: 8, fontWeight: 800, letterSpacing: '0.1em', color: NEU.muted, opacity: 0.85 }}>
+                        {hasPaidAt ? 'PAID' : 'APPLIED'}
+                      </span>
+                      <span style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 600, color: NEU.muted, fontVariantNumeric: 'tabular-nums' }}>
+                        {formatRowDate(hasPaidAt ? r.paid_at! : r.submitted_at)}
+                      </span>
+                    </span>
+
                     {/* Amount */}
                     <span
-                      title={discounted ? `Voucher discount of ${formatFee(Number(r.voucher_discount) || 0, currency)} applied` : undefined}
+                      title={discounted ? `Voucher discount of ${money(Number(r.voucher_discount) || 0)} applied` : undefined}
                       style={{
                         fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 900,
                         color: waived ? NEU.muted : NEU.ink,
@@ -525,7 +611,7 @@ export default function FinancialsPage() {
                         minWidth: 64, textAlign: 'right', marginLeft: 'auto',
                       }}
                     >
-                      {formatFee(waived ? fee : amount, currency)}
+                      {money(waived ? fee : amount)}
                       {discounted && !waived && (
                         <BadgePercent size={11} strokeWidth={2.5} style={{ display: 'inline', marginLeft: 4, color: NEU.deepGold, verticalAlign: '-1.5px' }} />
                       )}
@@ -558,13 +644,17 @@ export default function FinancialsPage() {
                       </span>
                     )}
 
-                    {/* Waiver source badge — platform-fee entitlement */}
-                    {r.fee_waiver_source && (
+                    {/* Method chip — HOW the payment happened (see paymentMethod) */}
+                    {method && (
                       <span
-                        title="Their 5% Gavelling platform fee is waived by this entitlement"
-                        style={{ ...chipStyle, backgroundColor: 'rgba(238,217,138,0.35)', color: '#7A5A10', border: '1px solid rgba(182,135,31,0.45)' }}
+                        title={method.title}
+                        style={{
+                          ...chipStyle, fontSize: 8.5,
+                          backgroundColor: 'rgba(154,138,120,0.13)', color: '#6B5E4E',
+                          border: '1px solid rgba(154,138,120,0.35)',
+                        }}
                       >
-                        {r.fee_waiver_source.toUpperCase()}
+                        {method.label}
                       </span>
                     )}
                   </div>
@@ -575,7 +665,7 @@ export default function FinancialsPage() {
         </section>
 
         {/* ── 5 · Vouchers ── */}
-        <VouchersSection conference={conference} />
+        <VouchersSection conference={conference} displayCurrency={dispCur} />
       </div>
     </div>
   );

@@ -887,7 +887,7 @@ export default function SettingsPage() {
       setArchiving(false);
       return;
     }
-    router.push('/conferences/organise');
+    router.push('/my-conferences');
   }
 
   // ── Lineage actions ─────────────────────────────────────────────────────

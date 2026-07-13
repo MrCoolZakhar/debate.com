@@ -1112,7 +1112,7 @@ export default function ConferencesRolesClient() {
                     Conferences will post open positions here. Check back soon.
                   </p>
                   <Link
-                    href="/conferences/organise"
+                    href="/my-conferences"
                     className="rounded-xl py-3 px-6 font-bold text-sm tracking-widest focus:outline-none"
                     style={{
                       backgroundColor: FOREST,

@@ -585,7 +585,7 @@ export default function SiteNav({ logoOverride, overlay = false }: SiteNavProps 
                             ))}
 
                             <Link
-                              href="/conferences/organise"
+                              href="/my-conferences"
                               onClick={() => setAccountMenuOpen(false)}
                               className="flex items-center gap-2.5 px-4 py-2 font-semibold transition-colors"
                               style={{ color: '#1B3828', fontSize: '11px', letterSpacing: '0.05em', fontFamily: "'Outfit', sans-serif", textDecoration: 'none' }}

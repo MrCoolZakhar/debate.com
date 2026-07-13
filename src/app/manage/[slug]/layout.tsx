@@ -737,7 +737,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
         {/* Right: status pill + view page + avatar */}
         <div className="flex items-center gap-4">
           <Link
-            href="/conferences/organise"
+            href="/my-conferences"
             className="text-xs font-semibold hidden sm:inline-flex items-center gap-1 transition-colors focus:outline-none"
             style={{ color: 'rgba(238,217,138,0.7)', textDecoration: 'none' }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#EED98A'; }}
