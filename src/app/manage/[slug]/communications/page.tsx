@@ -2,7 +2,7 @@
 
 import { Suspense, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Mail, AlertTriangle, Send, Bell, Inbox, Copy, X } from 'lucide-react';
+import { Mail, AlertTriangle, Send, Bell, Inbox, Copy, X, ChevronDown, Image as ImageIcon, Palette } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
@@ -11,13 +11,15 @@ import {
   resolveTokens, EMAIL_TOKEN_KEYS, EMAIL_TOKEN_LABELS,
   type EmailTokenContext, type EmailTokenKey,
 } from '@/lib/emailTokens';
-import { EVENT_REGISTRY, queueEventEmail, type EventDef } from '@/lib/emailEvents';
+import { EVENT_REGISTRY, queueEventEmail, getEventLabel, type EventDef } from '@/lib/emailEvents';
 import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
 import { type EmailBlock, normalizeBlocks, flattenBlocksToPlainText } from '@/lib/emailBlocks';
-import { renderEmailHtml } from '@/lib/emailHtml';
+import { renderEmailHtml, resolveEmailTheme, type EmailTheme } from '@/lib/emailHtml';
 import { triggerEmailDelivery } from '@/lib/emailDelivery';
 import EmailComposer, { type PreviewCandidate } from '@/components/EmailComposer';
 import { formatFee } from '@/lib/utils';
+import { getDefaultEventEmail } from '@/lib/defaultEmails';
+import DefaultEmailPreviewModal from '@/components/DefaultEmailPreviewModal';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -372,10 +374,75 @@ function MultiChipGroup({
   );
 }
 
+const COLOR_PALETTE = ['#1B3828', '#8A6614', '#8B2020', '#2A4B7C', '#5C3A72', '#1C1410'];
+const BUTTON_COLOR_PALETTE = ['#EED98A', '#F3E3A1', '#B6871F', '#9AC6A8', '#DCEAF5', '#F5D6C6'];
+
+function ColorField({
+  label, value, onChange, palette,
+}: {
+  label: string; value: string; onChange: (v: string) => void; palette: string[];
+}) {
+  return (
+    <div className="mb-4">
+      <p className="text-xs font-bold mb-1.5" style={{ color: '#9A8A78', fontFamily: OUTFIT, letterSpacing: '0.06em' }}>
+        {label.toUpperCase()}
+      </p>
+      <div className="flex items-center gap-2 flex-wrap">
+        {palette.map(c => {
+          const active = value.toLowerCase() === c.toLowerCase();
+          return (
+            <button
+              key={c}
+              type="button"
+              onClick={() => onChange(c)}
+              title={c}
+              className="flex-shrink-0 rounded-full focus:outline-none"
+              style={{
+                width: 26, height: 26, backgroundColor: c,
+                border: active ? '2.5px solid #1B3828' : '1px solid rgba(0,0,0,0.15)',
+                boxShadow: active ? '0 0 0 2px rgba(238,217,138,0.55)' : 'none',
+              }}
+            />
+          );
+        })}
+        <input
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          placeholder="#000000"
+          className="rounded-lg px-2.5 py-1.5 text-xs focus:outline-none"
+          style={{ border: `1px solid ${BORDER}`, color: '#1C1410', fontFamily: OUTFIT, width: 92 }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function SegButton({
+  active, onClick, icon: Icon, children,
+}: {
+  active: boolean; onClick: () => void; icon: typeof ChevronDown; children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex-1 flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold focus:outline-none transition-colors"
+      style={{
+        border: active ? '1px solid #1B3828' : `1px solid ${BORDER}`,
+        backgroundColor: active ? '#1B3828' : 'transparent',
+        color: active ? '#EED98A' : '#4A4238',
+        fontFamily: OUTFIT,
+      }}
+    >
+      <Icon size={13} /> {children}
+    </button>
+  );
+}
+
 // ── CommunicationsPage ────────────────────────────────────────────────────────
 
 function CommunicationsPageInner() {
-  const { conference } = useManage();
+  const { conference, refreshConference } = useManage();
   const { user, session, profile } = useAuth();
   const searchParams = useSearchParams();
 
@@ -432,6 +499,18 @@ function CommunicationsPageInner() {
   const { confirm: confirmDelete, modal: deleteConfirmModal } = useConfirmModal();
   // Restored a saved audience (email_templates.audience) into the picker below.
   const [audienceRestored, setAudienceRestored] = useState(false);
+
+  // ── Notifications: PREVIEW DEFAULT modal ──
+  const [previewDefaultKey, setPreviewDefaultKey] = useState<string | null>(null);
+
+  // ── Design section (conferences.email_theme) ──
+  const [designOpen, setDesignOpen] = useState(false);
+  const [themeDraft, setThemeDraft] = useState<Required<EmailTheme>>(resolveEmailTheme(null));
+  const [themeSaving, setThemeSaving] = useState(false);
+  const [themeSaved, setThemeSaved] = useState(false);
+  const [themeError, setThemeError] = useState('');
+  const themeSeededRef = useRef(false);
+  const skipNextThemeAutosaveRef = useRef(false);
 
   // ── Audience state (ad-hoc only) ──
   const [selRoles, setSelRoles] = useState<Set<string>>(new Set());
@@ -602,6 +681,17 @@ function CommunicationsPageInner() {
     Promise.all([loadTemplates(), loadApplications(), loadCommittees(), loadSocieties(), loadEmailSends(), loadOutboxPending(), loadInbox()])
       .finally(() => setLoading(false));
   }, [conference, loadTemplates, loadApplications, loadCommittees, loadSocieties, loadEmailSends, loadOutboxPending, loadInbox]);
+
+  // Seed the design draft from the conference's saved theme once (not on
+  // every refreshConference() — that would clobber an in-progress edit).
+  // Marks the autosave effect below to skip the resulting themeDraft change
+  // so mounting the page never re-writes back the value it just read.
+  useEffect(() => {
+    if (!conference || themeSeededRef.current) return;
+    themeSeededRef.current = true;
+    skipNextThemeAutosaveRef.current = true;
+    setThemeDraft(resolveEmailTheme(conference.email_theme));
+  }, [conference]);
 
   // Sweep the outbox once on mount: retries anything still pending from an
   // earlier session (a page that closed before delivery fired, a prior sweep
@@ -781,6 +871,20 @@ function CommunicationsPageInner() {
     }
     return ctx;
   }, [conference, profile]);
+
+  // Live shell preview for the Design section — a representative sample
+  // (allocation_assigned) rendered through the in-progress theme draft, not
+  // yet-saved conference.email_theme.
+  const designPreviewHtml = useMemo(() => {
+    if (!conference) return '';
+    const sample = getDefaultEventEmail('allocation_assigned');
+    if (!sample) return '';
+    return renderEmailHtml({
+      blocks: sample.blocks,
+      conference: { ...conference, email_theme: themeDraft },
+      ctx: testSendContext,
+    });
+  }, [conference, themeDraft, testSendContext]);
 
   function buildRecipientFilterPayload() {
     return {
@@ -1071,6 +1175,32 @@ function CommunicationsPageInner() {
     }
     showFlash('ok', 'Deleted.');
   }
+
+  function patchTheme(patch: Partial<EmailTheme>) {
+    setThemeDraft(t => ({ ...t, ...patch }));
+  }
+
+  // Debounced autosave to conferences.email_theme — same pattern as the
+  // builder's body autosave. renderEmailHtml reads the theme with
+  // current-look defaults, so every send/preview path picks this up with no
+  // content migration once it lands.
+  useEffect(() => {
+    if (!conference || !session || !themeSeededRef.current) return;
+    if (skipNextThemeAutosaveRef.current) { skipNextThemeAutosaveRef.current = false; return; }
+    const t = setTimeout(async () => {
+      setThemeSaving(true);
+      setThemeError('');
+      const supabase = getAuthedClient(session.access_token);
+      const { error } = await supabase.from('conferences').update({ email_theme: themeDraft }).eq('id', conference.id);
+      setThemeSaving(false);
+      if (error) { setThemeError(error.message); return; }
+      setThemeSaved(true);
+      setTimeout(() => setThemeSaved(false), 2000);
+      void refreshConference();
+    }, 700);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [themeDraft]);
 
   function handleExcludeRecipient(id: string) {
     if (manuallyAddedIds.has(id)) {
@@ -1612,6 +1742,70 @@ function CommunicationsPageInner() {
           {/* ═══ EMAILS TAB ═══ */}
           {!loading && activeTab === 'emails' && (
             <>
+              <section className="mb-8">
+                <button
+                  type="button"
+                  onClick={() => setDesignOpen(v => !v)}
+                  className="flex items-center gap-2 focus:outline-none"
+                  style={{ background: 'none', border: 'none' }}
+                >
+                  <ChevronDown size={15} style={{ color: '#1C1410', transform: designOpen ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform 200ms ease' }} />
+                  <p className="font-semibold text-base" style={{ color: '#1C1410', fontFamily: OUTFIT }}>Design</p>
+                </button>
+                <p className="text-sm mt-0.5 mb-3" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+                  How every email from this conference looks — header, colors, logo, and footer.
+                </p>
+                {designOpen && (
+                  <div className="rounded-2xl p-5 flex flex-col md:flex-row gap-6" style={CARD_STYLE}>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold mb-1.5" style={{ color: '#9A8A78', fontFamily: OUTFIT, letterSpacing: '0.06em' }}>
+                        HEADER STYLE
+                      </p>
+                      <div className="flex gap-2 mb-4">
+                        <SegButton active={themeDraft.headerStyle === 'banner'} onClick={() => patchTheme({ headerStyle: 'banner' })} icon={ImageIcon}>
+                          BANNER IMAGE
+                        </SegButton>
+                        <SegButton active={themeDraft.headerStyle === 'solid'} onClick={() => patchTheme({ headerStyle: 'solid' })} icon={Palette}>
+                          SOLID BAR
+                        </SegButton>
+                      </div>
+
+                      <ColorField label="Accent color" value={themeDraft.accentColor} onChange={c => patchTheme({ accentColor: c })} palette={COLOR_PALETTE} />
+                      <ColorField label="Button color" value={themeDraft.buttonColor} onChange={c => patchTheme({ buttonColor: c })} palette={BUTTON_COLOR_PALETTE} />
+
+                      <div className="flex items-center justify-between mb-4">
+                        <span className="text-sm font-semibold" style={{ color: '#1C1410', fontFamily: OUTFIT }}>Show logo</span>
+                        <PillToggle value={themeDraft.showLogo} onChange={() => patchTheme({ showLogo: !themeDraft.showLogo })} />
+                      </div>
+
+                      <p className="text-xs font-bold mb-1.5" style={{ color: '#9A8A78', fontFamily: OUTFIT, letterSpacing: '0.06em' }}>
+                        CUSTOM FOOTER LINE
+                      </p>
+                      <input
+                        value={themeDraft.footerLine}
+                        onChange={e => patchTheme({ footerLine: e.target.value })}
+                        placeholder="Optional — shown above the standard footer"
+                        className="w-full rounded-xl px-3.5 py-2 text-sm focus:outline-none mb-2"
+                        style={{ border: `1px solid ${BORDER}`, color: '#1C1410', backgroundColor: '#FFFFFF', fontFamily: OUTFIT }}
+                      />
+
+                      <p className="text-xs font-semibold" style={{ color: themeError ? '#8B2020' : '#3D7A52', fontFamily: OUTFIT, minHeight: 16 }}>
+                        {themeError || (themeSaving ? 'Saving…' : themeSaved ? 'Saved ✓' : '')}
+                      </p>
+                    </div>
+
+                    <div className="flex-1 min-w-0 flex justify-center">
+                      <iframe
+                        srcDoc={designPreviewHtml}
+                        sandbox="allow-same-origin"
+                        title="Design preview"
+                        style={{ width: '100%', maxWidth: 420, height: 460, border: `1px solid ${BORDER}`, borderRadius: 12, backgroundColor: '#FFFFFF' }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </section>
+
               <section className="mb-10">
                 <div className="flex items-center justify-between mb-1">
                   <p className="font-semibold text-base" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
@@ -1852,6 +2046,15 @@ function CommunicationsPageInner() {
                             </span>
                           </div>
                         )}
+                        <button
+                          onClick={() => setPreviewDefaultKey(ev.key)}
+                          className="rounded-lg py-1.5 px-3 text-xs font-bold focus:outline-none transition-colors"
+                          style={{ border: `1px solid ${BORDER}`, color: '#1C1410', backgroundColor: 'transparent', fontFamily: OUTFIT }}
+                          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
+                          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                        >
+                          PREVIEW DEFAULT
+                        </button>
                         <button
                           onClick={() => openBuilderForEvent(ev)}
                           className="rounded-lg py-1.5 px-3 text-xs font-bold focus:outline-none transition-colors"
@@ -2445,6 +2648,18 @@ function CommunicationsPageInner() {
         />
       )}
       {deleteConfirmModal}
+      {previewDefaultKey && (
+        <DefaultEmailPreviewModal
+          eventKey={previewDefaultKey}
+          eventLabel={getEventLabel(previewDefaultKey)}
+          conference={conference}
+          conferenceId={conference.id}
+          previewCandidates={previewCandidates}
+          accessToken={session?.access_token ?? null}
+          organizerEmail={profile?.email ?? null}
+          onClose={() => setPreviewDefaultKey(null)}
+        />
+      )}
     </div>
   );
 }

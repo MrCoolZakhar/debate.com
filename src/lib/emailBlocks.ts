@@ -46,6 +46,21 @@ export function getSiteUrl(): string {
   return process.env.NEXT_PUBLIC_SITE_URL || 'https://gavelling.com';
 }
 
+/**
+ * Prefixes a relative path (e.g. a bundled banner preset like
+ * "/banners/preset-1.jpg") with the site origin so it resolves outside a
+ * browser context — an email client has no page origin to resolve a
+ * relative URL against. Absolute URLs (http/https/protocol-relative) and
+ * data:/mailto:/tel: URIs pass through unchanged.
+ */
+export function absolutizeUrl(url: string | null | undefined, siteUrl: string): string | null {
+  if (!url) return null;
+  const trimmed = url.trim();
+  if (!trimmed) return null;
+  if (/^([a-z]+:)?\/\//i.test(trimmed) || /^(data|mailto|tel):/i.test(trimmed)) return trimmed;
+  return `${siteUrl}${trimmed.startsWith('/') ? '' : '/'}${trimmed}`;
+}
+
 export function resolveButtonUrl(block: ButtonBlock, conference: ButtonUrlConference, extra?: ButtonUrlExtra): string {
   const siteUrl = getSiteUrl();
   switch (block.destination) {
@@ -60,7 +75,7 @@ export function resolveButtonUrl(block: ButtonBlock, conference: ButtonUrlConfer
     case 'signup_page':
       return `${siteUrl}/auth/signup`;
     case 'custom':
-      return block.url?.trim() || '#';
+      return absolutizeUrl(block.url, siteUrl) ?? '#';
   }
 }
 

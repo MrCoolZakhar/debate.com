@@ -12,6 +12,7 @@ import { getAuthedClient } from '@/lib/supabase-auth';
 import { LogoDisc } from '@/components/LogoDisc';
 import { BrandConferences } from '@/components/Brand';
 import ProfileDropdown from '@/components/ProfileDropdown';
+import type { EmailTheme } from '@/lib/emailHtml';
 
 // ── Conference type ────────────────────────────────────────────────────────
 
@@ -45,6 +46,7 @@ export interface Conference {
   predecessor_approved: boolean;
   min_age: number | null;
   allocation_swap_mode: string;
+  email_theme: EmailTheme;
 }
 
 // ── Context ────────────────────────────────────────────────────────────────
@@ -588,7 +590,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
         'instagram_url', 'facebook_url', 'tiktok_url', 'whatsapp_url', 'website_url',
         'stripe_account_id', 'organizer_id',
         'predecessor_conference_id', 'predecessor_approved', 'min_age',
-        'allocation_swap_mode',
+        'allocation_swap_mode', 'email_theme',
       ].join(', '))
       .eq('slug', slug)
       .single();

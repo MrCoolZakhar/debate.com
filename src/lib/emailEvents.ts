@@ -5,9 +5,10 @@
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { resolveTokens, type EmailTokenContext } from '@/lib/emailTokens';
 import { normalizeBlocks, flattenBlocksToPlainText, type EmailBlock } from '@/lib/emailBlocks';
-import { renderEmailHtml, type EmailRenderConference } from '@/lib/emailHtml';
+import { renderEmailHtml, type EmailRenderConference, type EmailTheme } from '@/lib/emailHtml';
 import { formatFee } from '@/lib/utils';
 import { triggerEmailDelivery } from '@/lib/emailDelivery';
+import { getDefaultEventEmail } from '@/lib/defaultEmails';
 
 // ── Event registry ────────────────────────────────────────────────────────────
 // Single source of truth for platform email events, shared by this lib
@@ -120,6 +121,7 @@ interface ConferenceRow {
   banner_url: string | null;
   logo_url: string | null;
   contact_email: string;
+  email_theme: EmailTheme | null;
 }
 
 /**
@@ -150,7 +152,7 @@ export async function queueEventEmail(
   const [{ data: confData }, { data: recipientsData }] = await Promise.all([
     supabase
       .from('conferences')
-      .select('slug, acronym, full_name, start_date, end_date, fee_amount, fee_currency, banner_url, logo_url, contact_email')
+      .select('slug, acronym, full_name, start_date, end_date, fee_amount, fee_currency, banner_url, logo_url, contact_email, email_theme')
       .eq('id', conferenceId)
       .single(),
     supabase
@@ -177,6 +179,7 @@ export async function queueEventEmail(
     banner_url: conference?.banner_url ?? null,
     logo_url: conference?.logo_url ?? null,
     contact_email: conference?.contact_email ?? '',
+    email_theme: conference?.email_theme ?? null,
   };
   const blocks = normalizeBlocks(template.body_blocks, template.body);
   const flatBody = flattenBlocksToPlainText(blocks, renderConf);
@@ -239,7 +242,7 @@ export async function queueChairInviteEmail(
   const [{ data: confData }, { data: templateData }] = await Promise.all([
     supabase
       .from('conferences')
-      .select('slug, acronym, full_name, banner_url, logo_url, contact_email')
+      .select('slug, acronym, full_name, banner_url, logo_url, contact_email, email_theme')
       .eq('id', conferenceId)
       .single(),
     supabase
@@ -259,6 +262,7 @@ export async function queueChairInviteEmail(
     banner_url: conference?.banner_url ?? null,
     logo_url: conference?.logo_url ?? null,
     contact_email: conference?.contact_email ?? '',
+    email_theme: conference?.email_theme ?? null,
   };
 
   const ctx: EmailTokenContext = {
@@ -268,15 +272,9 @@ export async function queueChairInviteEmail(
   };
 
   const useTemplate = !!template && template.enabled;
-  const blocks: EmailBlock[] = useTemplate
-    ? normalizeBlocks(template!.body_blocks, template!.body)
-    : [
-        { type: 'paragraph', content: `You've been invited to chair ${committeeName} at ${renderConf.acronym}.` },
-        { type: 'paragraph', content: 'Accepting adds this conference to your Gavelling account.' },
-        { type: 'button', label: 'ACCEPT INVITATION', destination: 'chair_invite_accept' },
-      ];
-
-  const subjectSource = useTemplate ? template!.subject : `You're invited to chair ${committeeName} at ${renderConf.acronym}`;
+  const fallback = getDefaultEventEmail('committee_chair_invite');
+  const blocks: EmailBlock[] = useTemplate ? normalizeBlocks(template!.body_blocks, template!.body) : (fallback?.blocks ?? []);
+  const subjectSource = useTemplate ? template!.subject : (fallback?.subject ?? '');
   const flatBody = flattenBlocksToPlainText(blocks, renderConf, { chairInviteToken: token });
 
   const { error } = await supabase.from('email_outbox').insert({
@@ -315,7 +313,7 @@ export async function queueImportJoinInviteEmails(
   const [{ data: confData }, { data: templateData }] = await Promise.all([
     supabase
       .from('conferences')
-      .select('slug, acronym, full_name, banner_url, logo_url, contact_email')
+      .select('slug, acronym, full_name, banner_url, logo_url, contact_email, email_theme')
       .eq('id', conferenceId)
       .single(),
     supabase
@@ -335,16 +333,13 @@ export async function queueImportJoinInviteEmails(
     banner_url: conference?.banner_url ?? null,
     logo_url: conference?.logo_url ?? null,
     contact_email: conference?.contact_email ?? '',
+    email_theme: conference?.email_theme ?? null,
   };
 
   const useTemplate = !!template && template.enabled;
-  const blocks: EmailBlock[] = useTemplate
-    ? normalizeBlocks(template!.body_blocks, template!.body)
-    : [
-        { type: 'paragraph', content: `${renderConf.full_name || renderConf.acronym} now runs on Gavelling — create your account with this email address and your registration will be attached automatically.` },
-        { type: 'button', label: 'CREATE YOUR ACCOUNT', destination: 'signup_page' },
-      ];
-  const subjectSource = useTemplate ? template!.subject : `${renderConf.acronym} now runs on Gavelling`;
+  const fallback = getDefaultEventEmail('import_join_invite');
+  const blocks: EmailBlock[] = useTemplate ? normalizeBlocks(template!.body_blocks, template!.body) : (fallback?.blocks ?? []);
+  const subjectSource = useTemplate ? template!.subject : (fallback?.subject ?? '');
   const flatBody = flattenBlocksToPlainText(blocks, renderConf);
 
   const rows = recipients.map(r => {
