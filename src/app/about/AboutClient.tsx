@@ -51,6 +51,16 @@ const AMBASSADORS = [
   // Latin America
   { name: 'Diego Aldana',            country: 'Honduras',       initials: 'DA', photo: '/ambassador-photos/diego_ambassador.png', photoPosition: 'center 22%' },
   { name: 'Isabella Romero',         country: 'Honduras',       initials: 'IR', photo: '/ambassador-photos/isabella_ambassador.png' },
+  // Asia
+  { name: 'El Fatiarrazzy Sena',     country: 'Indonesia',      initials: 'ES', photo: '/ambassador-photos/el_ambassador.png', photoPosition: '44% 62%' },
+  { name: 'Hasan Ali Hilaly',        country: 'Pakistan',       initials: 'HH', photo: '/ambassador-photos/hasan_ambassador.png', photoPosition: 'center 40%' },
+  // Europe
+  { name: 'Eva Dubost',              country: 'France',         initials: 'ED', photo: '/ambassador-photos/eva_ambassador.png', photoPosition: 'center 42%' },
+  { name: 'Sophia Baah',             country: 'United Kingdom', initials: 'SB', photo: '/ambassador-photos/sophia_ambassador.png', photoPosition: 'center 45%' },
+  { name: 'Yağmur Akman',            country: 'Turkey',         initials: 'YA', photo: '/ambassador-photos/yagmur_ambassador.png', photoPosition: '46% 42%' },
+  { name: 'Petru-Serban Radulescu',  country: 'Romania',        initials: 'PR', photo: '/ambassador-photos/petru_ambassador.png', photoPosition: 'center 13%' },
+  // North America
+  { name: 'Adam Epstein',            country: 'Canada',         initials: 'AE', photo: '/ambassador-photos/adam_ambassador.png', photoPosition: 'center 40%' },
 ];
 
 const inputStyle: React.CSSProperties = {
