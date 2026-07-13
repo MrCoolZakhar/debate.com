@@ -31,7 +31,7 @@ function startOfDay(d: Date): Date {
 }
 
 export function DatePicker({
-  value, onChange, min, max, placeholder = 'Select a date', disabled,
+  value, onChange, min, max, placeholder = 'Select a date', disabled, initialView,
 }: {
   value: string;
   onChange: (iso: string) => void;
@@ -39,12 +39,16 @@ export function DatePicker({
   max?: string;
   placeholder?: string;
   disabled?: boolean;
+  // Seeds the visible month when there is no value yet (ISO 'YYYY-MM-DD').
+  // Handy for far-past pickers like date of birth so the calendar doesn't
+  // open on today and force a long trek backwards.
+  initialView?: string;
 }) {
   const [open, setOpen] = useState(false);
   const selected = useMemo(() => parseISO(value), [value]);
   const minDate = useMemo(() => parseISO(min), [min]);
   const maxDate = useMemo(() => parseISO(max), [max]);
-  const [view, setView] = useState<Date>(() => selected ?? new Date());
+  const [view, setView] = useState<Date>(() => selected ?? parseISO(initialView) ?? new Date());
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { if (selected) setView(selected); }, [selected]);

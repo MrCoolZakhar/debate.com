@@ -10,6 +10,7 @@ import { deriveExperienceLevel, experienceProgress } from '@/lib/munExperience';
 import { ageAt } from '@/lib/age';
 import { Eyebrow, GlassCard, PillToggle, Pill, ExperienceInfo, OUTFIT, MONO } from '../accountUi';
 import { ConfirmModal } from '@/components/ConfirmModal';
+import { DatePicker } from '@/components/DatePicker';
 
 interface ReviewableConference {
   id: string;
@@ -743,15 +744,12 @@ export default function ProfilePage() {
                   ) : null;
                 })()}
               </div>
-              <input
-                type="date"
+              <DatePicker
                 value={dateOfBirth}
+                onChange={(iso) => { setDateOfBirth(iso); setDobError(''); }}
                 max={new Date().toISOString().slice(0, 10)}
-                onChange={(e) => { setDateOfBirth(e.target.value); setDobError(''); }}
-                className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none"
-                style={inputStyle}
-                onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
-                onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
+                initialView="2005-06-15"
+                placeholder="Select your date of birth"
               />
               {dobError ? (
                 <p className="text-xs mt-1" style={{ color: '#8B2020', fontFamily: OUTFIT }}>

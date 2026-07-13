@@ -23,6 +23,7 @@ import {
   NEU, NEU_GRADIENTS, OUTFIT, EASE,
   NeuCard, NeuInset, NeuPill, NeuButton, NeuIconDisc, NeuProgress,
 } from '@/components/neu';
+import { DatePicker } from '@/components/DatePicker';
 
 /** Approximate conversion between two known currencies (via finance.ts's
  *  canonical USD_FX table, no local copy); null when either rate is
@@ -397,12 +398,11 @@ export default function VouchersSection({
           {/* Expiry */}
           <div>
             <label htmlFor="voucher-expiry" style={fieldLabelStyle}>Expiry date · optional</label>
-            <input
-              id="voucher-expiry"
-              type="date"
+            <DatePicker
               value={expiry}
-              onChange={e => setExpiry(e.target.value)}
-              style={inputStyle}
+              onChange={setExpiry}
+              min={new Date().toISOString().slice(0, 10)}
+              placeholder="No expiry"
             />
           </div>
 

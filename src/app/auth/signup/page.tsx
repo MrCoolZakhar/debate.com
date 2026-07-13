@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createAuthClient } from '@/lib/supabase-auth';
 import { ageAt } from '@/lib/age';
+import { DatePicker } from '@/components/DatePicker';
 import {
   AuthLayout,
   CardHeading,
@@ -20,109 +21,29 @@ import {
   PrimaryActionButton,
   PrimaryButton,
   TextField,
-  blurInput,
-  focusInput,
-  inputStyle,
   isValidEmail,
 } from '../authUi';
 
-const MONTHS = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
-];
+// Today's date as an ISO 'YYYY-MM-DD' string — the latest birthday we allow.
+const TODAY_ISO = new Date().toISOString().slice(0, 10);
 
 /**
- * Three friendly selects (Day / Month / Year) instead of a raw date input.
- * Year list runs newest→oldest starting at (thisYear − 8), down 100 years.
+ * Date-of-birth field built on the shared friendly DatePicker.
+ * `max` = today (nobody is born in the future) and the calendar seeds around
+ * 2005 so the typical delegate isn't stranded on the current month; the year
+ * <input> inside the picker lets them jump decades in one keystroke.
  */
-function DobPicker({
-  day, month, year,
-  onDay, onMonth, onYear,
-}: {
-  day: string; month: string; year: string;
-  onDay: (v: string) => void; onMonth: (v: string) => void; onYear: (v: string) => void;
-}) {
-  const thisYear = new Date().getFullYear();
-  const years = useMemo(
-    () => Array.from({ length: 93 }, (_, i) => String(thisYear - 8 - i)),
-    [thisYear],
-  );
-  const daysInMonth = useMemo(() => {
-    if (!month) return 31;
-    const y = year ? parseInt(year, 10) : 2000; // leap-friendly default
-    return new Date(y, parseInt(month, 10), 0).getDate();
-  }, [month, year]);
-  const days = useMemo(
-    () => Array.from({ length: daysInMonth }, (_, i) => String(i + 1)),
-    [daysInMonth],
-  );
-
-  const selectStyle: React.CSSProperties = {
-    ...inputStyle,
-    appearance: 'none',
-    WebkitAppearance: 'none',
-    backgroundImage:
-      `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%239A8A78' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`,
-    backgroundRepeat: 'no-repeat',
-    backgroundPosition: 'right 14px center',
-  };
-
+function DobField({ value, onChange }: { value: string; onChange: (iso: string) => void }) {
   return (
     <div>
       <FieldLabel>Date of birth</FieldLabel>
-      <div className="grid gap-2" style={{ gridTemplateColumns: '1.6fr 1fr 1.2fr' }}>
-        <select
-          required
-          value={month}
-          onChange={(e) => {
-            onMonth(e.target.value);
-            // Clamp the day if the new month is shorter.
-            const y = year ? parseInt(year, 10) : 2000;
-            const max = new Date(y, parseInt(e.target.value || '1', 10), 0).getDate();
-            if (day && parseInt(day, 10) > max) onDay(String(max));
-          }}
-          aria-label="Month of birth"
-          className="w-full rounded-xl px-4 py-3 text-sm transition-colors focus:outline-none"
-          style={selectStyle}
-          onFocus={focusInput}
-          onBlur={blurInput}
-        >
-          <option value="" disabled>Month</option>
-          {MONTHS.map((m, i) => (
-            <option key={m} value={String(i + 1)}>{m}</option>
-          ))}
-        </select>
-        <select
-          required
-          value={day}
-          onChange={(e) => onDay(e.target.value)}
-          aria-label="Day of birth"
-          className="w-full rounded-xl px-4 py-3 text-sm transition-colors focus:outline-none"
-          style={selectStyle}
-          onFocus={focusInput}
-          onBlur={blurInput}
-        >
-          <option value="" disabled>Day</option>
-          {days.map((d) => (
-            <option key={d} value={d}>{d}</option>
-          ))}
-        </select>
-        <select
-          required
-          value={year}
-          onChange={(e) => onYear(e.target.value)}
-          aria-label="Year of birth"
-          className="w-full rounded-xl px-4 py-3 text-sm transition-colors focus:outline-none"
-          style={selectStyle}
-          onFocus={focusInput}
-          onBlur={blurInput}
-        >
-          <option value="" disabled>Year</option>
-          {years.map((y) => (
-            <option key={y} value={y}>{y}</option>
-          ))}
-        </select>
-      </div>
+      <DatePicker
+        value={value}
+        onChange={onChange}
+        max={TODAY_ISO}
+        initialView="2005-06-15"
+        placeholder="Select your date of birth"
+      />
       <p className="text-xs mt-1" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
         You must be at least 13. Some conferences use this to check age requirements.
       </p>
@@ -136,9 +57,7 @@ function SignUpInner() {
   const router = useRouter();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [dobDay, setDobDay] = useState('');
-  const [dobMonth, setDobMonth] = useState('');
-  const [dobYear, setDobYear] = useState('');
+  const [dob, setDob] = useState(''); // ISO 'YYYY-MM-DD' from the DatePicker
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [emailError, setEmailError] = useState('');
@@ -236,11 +155,11 @@ function SignUpInner() {
       setError('Password must be at least 8 characters.');
       return;
     }
-    if (!dobDay || !dobMonth || !dobYear) {
+    if (!dob) {
       setError('Please enter your date of birth.');
       return;
     }
-    const dateOfBirth = `${dobYear}-${dobMonth.padStart(2, '0')}-${dobDay.padStart(2, '0')}`;
+    const dateOfBirth = dob; // already 'YYYY-MM-DD' from the DatePicker
     const age = ageAt(dateOfBirth);
     if (age === null || age < 0 || age > 120) {
       setError('That date of birth doesn’t look right. Please double-check it.');
@@ -359,10 +278,7 @@ function SignUpInner() {
                 </p>
               )}
             </div>
-            <DobPicker
-              day={dobDay} month={dobMonth} year={dobYear}
-              onDay={setDobDay} onMonth={setDobMonth} onYear={setDobYear}
-            />
+            <DobField value={dob} onChange={setDob} />
             <PasswordField
               label="Password"
               value={password}

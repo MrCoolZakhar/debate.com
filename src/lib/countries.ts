@@ -15,6 +15,10 @@ export function getFlagEmoji(code: string): string {
 // Input: ISO 3166-1 alpha-2 country code e.g. 'GB', 'US', 'DE'
 // Output: URL to a 72×72 PNG on jsDelivr's Twemoji mirror.
 export function getFlagUrl(code: string): string {
+  // Null-safe: committee-only preferences (delegate_preference_mode
+  // 'committees_only') carry no country, so callers may pass an empty code.
+  // Fall back to the globe glyph rather than building a broken flag URL.
+  if (!code) return getTwemojiUrl('1f310');
   const points = code
     .toUpperCase()
     .split('')
