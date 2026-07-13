@@ -12,7 +12,7 @@
 // Reuses shared logic (findCountryFlexible, UN_COUNTRIES) rather than copying.
 
 import { useState, useRef } from 'react';
-import { Globe, Users, PenLine, ArrowUp, ArrowDown } from 'lucide-react';
+import { Globe, Users, PenLine, ArrowUp, ArrowDown, Megaphone } from 'lucide-react';
 import { UN_COUNTRIES, getFlagUrl, getCountryByName, findCountryFlexible } from '@/lib/countries';
 import { UNSC_MEMBERS, WHO_MEMBERS, IMF_MEMBERS, WORLD_BANK_MEMBERS, UNEP_MEMBERS } from '@/lib/presets';
 
@@ -20,22 +20,54 @@ import { UNSC_MEMBERS, WHO_MEMBERS, IMF_MEMBERS, WORLD_BANK_MEMBERS, UNEP_MEMBER
 // Mirrors the assignment page's model so tiers set here round-trip through the
 // same committee_country_slots.importance column the allocator reads/cycles.
 export type ImportanceTier = 'standard' | 'high' | 'medium' | 'low';
+// Visible cycle order: standard → high → medium → low → standard, which also
+// walks the dash count 1 → 2 → 3 → 4 → 1.
 const TIER_CYCLE: ImportanceTier[] = ['standard', 'high', 'medium', 'low'];
-const TIER_META: Record<ImportanceTier, { label: string; color: string; bg: string }> = {
-  high:     { label: 'HIGH', color: '#3D7A52', bg: 'rgba(61,122,82,0.12)' },
-  medium:   { label: 'MED',  color: '#B8844A', bg: 'rgba(184,132,74,0.14)' },
-  low:      { label: 'LOW',  color: '#8B2020', bg: 'rgba(139,32,32,0.10)' },
-  standard: { label: 'STD',  color: '#9A8A78', bg: 'rgba(154,138,120,0.12)' },
+// `label` is retained for the accessible title/aria text. `color` doubles as the
+// dash colour; `dashes` is how many vertical bars render for the tier. `bg` is
+// kept because it feeds nothing structural but documents the tier's tint.
+const TIER_META: Record<ImportanceTier, { label: string; color: string; bg: string; dashes: number }> = {
+  standard: { label: 'Standard', color: '#9A8A78', bg: 'rgba(154,138,120,0.12)', dashes: 1 },
+  high:     { label: 'High',     color: '#3D7A52', bg: 'rgba(61,122,82,0.12)',   dashes: 2 },
+  medium:   { label: 'Medium',   color: '#D4A72C', bg: 'rgba(212,167,44,0.14)',  dashes: 3 },
+  low:      { label: 'Low',      color: '#8B2020', bg: 'rgba(139,32,32,0.10)',   dashes: 4 },
 };
 
 // A roster row: a country name (or free-text character/entity) plus its
-// importance tier. Characters always carry the neutral 'standard' tier.
+// importance tier and observer flag. Characters always carry the neutral
+// 'standard' tier. Observers apply to both countries and characters, mirroring
+// the standalone session flow (src/app/create/page.tsx).
 export interface RosterEntry {
   name: string;
   importance: ImportanceTier;
+  isObserver?: boolean;
 }
 
-export const entry = (name: string, importance: ImportanceTier = 'standard'): RosterEntry => ({ name, importance });
+export const entry = (name: string, importance: ImportanceTier = 'standard', isObserver = false): RosterEntry => ({ name, importance, isObserver });
+
+// ── Importance dashes ─────────────────────────────────────────────────────────
+// A small clickable stack of vertical bars. Dash count + colour both encode the
+// tier (1 grey / 2 green / 3 yellow / 4 red). Country mode only — characters
+// keep the neutral 'standard' tier with no control.
+function ImportanceDashes({ tier, onClick }: { tier: ImportanceTier; onClick: () => void }) {
+  const meta = TIER_META[tier];
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={`Importance: ${meta.label}. Click to cycle: standard, high, medium, low.`}
+      aria-label={`Importance: ${meta.label}`}
+      className="flex items-end gap-[2px] focus:outline-none transition-opacity"
+      style={{ padding: '3px 4px', borderRadius: 5, height: 20, opacity: 0.9 }}
+      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; (e.currentTarget as HTMLElement).style.opacity = '1'; }}
+      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; (e.currentTarget as HTMLElement).style.opacity = '0.9'; }}
+    >
+      {Array.from({ length: meta.dashes }).map((_, i) => (
+        <span key={i} style={{ width: 2, height: 11, borderRadius: 1, backgroundColor: meta.color, display: 'inline-block' }} />
+      ))}
+    </button>
+  );
+}
 
 // ── Committee-name presets (kept in sync with src/app/create/page.tsx) ─────────
 export interface CommitteePreset {
@@ -229,6 +261,10 @@ export function ConferenceRosterPicker({ mode, value, onChange }: {
     const cur = value[idx].importance;
     const nextTier = TIER_CYCLE[(TIER_CYCLE.indexOf(cur) + 1) % TIER_CYCLE.length];
     onChange(value.map((r, i) => (i === idx ? { ...r, importance: nextTier } : r)));
+  };
+
+  const toggleObserver = (idx: number) => {
+    onChange(value.map((r, i) => (i === idx ? { ...r, isObserver: !r.isObserver } : r)));
   };
 
   const commitRename = (idx: number, raw: string) => {
@@ -456,7 +492,7 @@ export function ConferenceRosterPicker({ mode, value, onChange }: {
               const found = isCharacter ? undefined : getCountryByName(row.name);
               const isCustom = !found;
               const isEditing = editingIdx === idx;
-              const tier = TIER_META[row.importance];
+              const isObserver = !!row.isObserver;
               return (
                 <div
                   key={`${row.name}-${idx}`}
@@ -482,22 +518,29 @@ export function ConferenceRosterPicker({ mode, value, onChange }: {
                       style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", borderBottom: '1px solid #1B3828' }}
                     />
                   ) : (
-                    <span className="flex-1 text-xs truncate" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>{row.name}</span>
+                    <span className="flex-1 text-xs truncate flex items-center gap-1.5 min-w-0" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                      <span className="truncate">{row.name}</span>
+                      {isObserver && (
+                        <span className="shrink-0 font-bold uppercase tracking-wide px-1 py-0.5 rounded" style={{ fontSize: 8, backgroundColor: 'rgba(182,135,31,0.15)', color: '#B6871F', border: '1px solid rgba(182,135,31,0.35)', letterSpacing: '0.06em' }}>OBSERVER</span>
+                      )}
+                    </span>
                   )}
                   {!isEditing && (
                     <div className="flex items-center gap-1 shrink-0">
-                      {/* Importance tier — country mode only */}
+                      {/* Importance — country mode only. Vertical dashes: count + colour encode the tier. */}
                       {!isCharacter && (
-                        <button
-                          onClick={() => cycleTier(idx)}
-                          title="Importance to this committee. Click to cycle: standard, high, medium, low."
-                          className="flex items-center gap-1 focus:outline-none"
-                          style={{ padding: '1px 5px', borderRadius: 999, border: `1px solid ${tier.color}40`, backgroundColor: tier.bg }}
-                        >
-                          <span style={{ width: 5, height: 5, borderRadius: 999, backgroundColor: tier.color, display: 'inline-block' }} />
-                          <span style={{ fontSize: 8, fontWeight: 700, color: tier.color, fontFamily: "'Outfit', sans-serif", letterSpacing: '0.04em' }}>{tier.label}</span>
-                        </button>
+                        <ImportanceDashes tier={row.importance} onClick={() => cycleTier(idx)} />
                       )}
+                      {/* Observer toggle — countries AND characters, mirrors /create's megaphone */}
+                      <button
+                        onClick={() => toggleObserver(idx)}
+                        title={isObserver ? 'Observer — click to make a voting delegate' : 'Mark as observer'}
+                        aria-pressed={isObserver}
+                        className="focus:outline-none transition-transform active:scale-90 shrink-0"
+                        style={{ color: isObserver ? '#B6871F' : '#9A8A78', opacity: isObserver ? 1 : undefined }}
+                      >
+                        <Megaphone size={12} strokeWidth={1.75} className={isObserver ? '' : 'opacity-0 group-hover:opacity-100 transition-opacity'} />
+                      </button>
                       {/* Reorder */}
                       <button onClick={() => moveIdx(idx, -1)} disabled={idx === 0} className="opacity-0 group-hover:opacity-100 transition-opacity focus:outline-none disabled:opacity-0" style={{ color: '#9A8A78' }} title="Move up"><ArrowUp size={12} /></button>
                       <button onClick={() => moveIdx(idx, 1)} disabled={idx === value.length - 1} className="opacity-0 group-hover:opacity-100 transition-opacity focus:outline-none disabled:opacity-0" style={{ color: '#9A8A78' }} title="Move down"><ArrowDown size={12} /></button>

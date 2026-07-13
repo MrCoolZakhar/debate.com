@@ -123,6 +123,10 @@ export async function mintConferenceSession(
   name: string,
   topic: string,
   countries: string[],
+  // Names (countries or characters) flagged as observers. Mirrors the standalone
+  // session flow: delegates.is_observer carries the flag on the live session, so
+  // the chair/roll-call/voting views treat these rows as observers identically.
+  observers: string[] = [],
 ): Promise<string | null> {
   for (let attempt = 0; attempt < 5; attempt++) {
     const code = Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -153,8 +157,9 @@ export async function mintConferenceSession(
       time_remaining: 90,
     });
     if (countries.length > 0) {
+      const observerSet = new Set(observers.map((o) => o.toLowerCase()));
       await supabase.from('delegates').insert(
-        countries.map((country) => ({ committee_id: sessionRow.id, country, status: 'absent' }))
+        countries.map((country) => ({ committee_id: sessionRow.id, country, status: 'absent', is_observer: observerSet.has(country.toLowerCase()) }))
       );
     }
     await supabase
@@ -247,9 +252,14 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
         country_name: r.name,
         delegation_size: 1,
         importance: r.importance,
+        is_observer: !!r.isObserver,
       }))
     );
-    await mintConferenceSession(supabase, created.id, name.trim(), topics[0] ?? '', roster.map((r) => r.name));
+    await mintConferenceSession(
+      supabase, created.id, name.trim(), topics[0] ?? '',
+      roster.map((r) => r.name),
+      roster.filter((r) => r.isObserver).map((r) => r.name),
+    );
     return true;
   }
 
@@ -258,10 +268,13 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
     const baseNames = baselineRoster.map(r => r.name);
     const nextNames = roster.map(r => r.name);
     const baseTier = new Map(baselineRoster.map(r => [r.name, r.importance]));
+    const baseObs = new Map(baselineRoster.map(r => [r.name, !!r.isObserver]));
     const added = roster.filter(r => !baseNames.includes(r.name));
     const removed = baseNames.filter(c => !nextNames.includes(c));
     // Rows kept across the edit whose importance tier the organiser changed.
     const retiered = roster.filter(r => baseTier.has(r.name) && baseTier.get(r.name) !== r.importance);
+    // Rows kept across the edit whose observer flag the organiser toggled.
+    const reobserved = roster.filter(r => baseObs.has(r.name) && baseObs.get(r.name) !== !!r.isObserver);
 
     if (removed.length > 0 && !force) {
       const { data: allocs } = await supabase
@@ -290,11 +303,12 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
           country_name: r.name,
           delegation_size: 1,
           importance: r.importance,
+          is_observer: !!r.isObserver,
         }))
       );
       if (ex.session_id) {
         await supabase.from('delegates').insert(
-          added.map((r) => ({ committee_id: ex.session_id, country: r.name, status: 'absent' }))
+          added.map((r) => ({ committee_id: ex.session_id, country: r.name, status: 'absent', is_observer: !!r.isObserver }))
         );
       }
     }
@@ -304,6 +318,20 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
         .update({ importance: r.importance })
         .eq('conference_committee_id', ex.id)
         .eq('country_name', r.name);
+    }
+    // Persist observer-flag changes on kept rows, on both the slot (edit-prefill
+    // home) and the live session delegate (so the session treats it identically).
+    for (const r of reobserved) {
+      await supabase.from('committee_country_slots')
+        .update({ is_observer: !!r.isObserver })
+        .eq('conference_committee_id', ex.id)
+        .eq('country_name', r.name);
+      if (ex.session_id) {
+        await supabase.from('delegates')
+          .update({ is_observer: !!r.isObserver })
+          .eq('committee_id', ex.session_id)
+          .eq('country', r.name);
+      }
     }
     await supabase.from('conference_committees').update({
       name: name.trim(),
@@ -578,13 +606,14 @@ export function CommitteeEditorModal({ conference, committee, onSaved, onClose }
       const supabase = getAuthedClient(session.access_token);
       const { data } = await supabase
         .from('committee_country_slots')
-        .select('country_name, importance')
+        .select('country_name, importance, is_observer')
         .eq('conference_committee_id', committee.id);
       if (!cancelled) {
         setInitialRoster(
-          (data ?? []).map((r: { country_name: string; importance: string | null }) => ({
+          (data ?? []).map((r: { country_name: string; importance: string | null; is_observer: boolean | null }) => ({
             name: r.country_name,
             importance: (r.importance as RosterEntry['importance']) ?? 'standard',
+            isObserver: r.is_observer ?? false,
           }))
         );
       }
