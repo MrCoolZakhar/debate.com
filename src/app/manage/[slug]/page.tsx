@@ -753,17 +753,10 @@ export default function DashboardPage() {
   const fee = conference.fee_amount ?? 0;
 
   // ── Set-up priorities: 8 detection checks, in journey order ──────────────
+  // Base order = the natural build journey (page → committees → chairs → email →
+  // secretariat → financials → delegate → launch). Pending-first sort runs on top
+  // of this and breaks ties by this order (see sortedChecklist).
   const checklist = [
-    {
-      key: 'email',
-      icon: Mail,
-      emoji: 'Envelope',
-      gradient: NEU_GRADIENTS.gold,
-      title: 'Design an email',
-      sub: 'Set up an automated email template for applicants.',
-      done: dash.enabledEmailCount > 0,
-      onClick: () => router.push(`/manage/${slug}/communications`),
-    },
     {
       key: 'page',
       icon: Palette,
@@ -811,6 +804,16 @@ export default function DashboardPage() {
       ),
     },
     {
+      key: 'email',
+      icon: Mail,
+      emoji: 'Envelope',
+      gradient: NEU_GRADIENTS.gold,
+      title: 'Design an email',
+      sub: 'Set up an automated email template for applicants.',
+      done: dash.enabledEmailCount > 0,
+      onClick: () => router.push(`/manage/${slug}/communications`),
+    },
+    {
       key: 'secretariat',
       icon: UsersRound,
       // "Handshake" reads instantly as bringing co-organizers on board — the
@@ -821,6 +824,17 @@ export default function DashboardPage() {
       sub: 'Invite co-organizers and grant them access.',
       done: dash.organizerCount > 1,
       onClick: () => router.push(`/manage/${slug}/settings`),
+    },
+    {
+      key: 'financials',
+      icon: Wallet,
+      emoji: 'Money bag',
+      gradient: NEU_GRADIENTS.amber,
+      title: 'Add financial information',
+      // fee_amount === 0 is a deliberate free conference — any non-null fee counts as configured.
+      done: conference.fee_amount !== null || !!conference.stripe_account_id,
+      sub: 'Set your delegate fee or connect Stripe.',
+      onClick: () => router.push(`/manage/${slug}/financials`),
     },
     {
       key: 'delegate',
@@ -835,17 +849,6 @@ export default function DashboardPage() {
       onClick: delegateApps > 0
         ? () => router.push(`/manage/${slug}/applications`)
         : () => setShowShareModal(true),
-    },
-    {
-      key: 'financials',
-      icon: Wallet,
-      emoji: 'Money bag',
-      gradient: NEU_GRADIENTS.amber,
-      title: 'Add financial information',
-      // fee_amount === 0 is a deliberate free conference — any non-null fee counts as configured.
-      done: conference.fee_amount !== null || !!conference.stripe_account_id,
-      sub: 'Set your delegate fee or connect Stripe.',
-      onClick: () => router.push(`/manage/${slug}/financials`),
     },
     {
       // Compact publish CTA lives here as the checklist's launch row — the

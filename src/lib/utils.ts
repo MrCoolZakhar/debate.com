@@ -27,7 +27,7 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
   CHF: 'Fr', CAD: 'C$', AUD: 'A$', NZD: 'NZ$', SGD: 'S$', HKD: 'HK$',
   TRY: '₺', SEK: 'kr', NOK: 'kr', DKK: 'kr', PLN: 'zł', CZK: 'Kč',
   MXN: 'MX$', BRL: 'R$', ZAR: 'R', THB: '฿', PHP: '₱', VND: '₫',
-  RUB: '₽', ILS: '₪', AED: 'AED',
+  RUB: '₽', ILS: '₪', AED: 'AED', PKR: '₨', IDR: 'Rp',
 };
 
 export function currencySymbol(code: string): string {

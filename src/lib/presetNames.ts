@@ -66,6 +66,78 @@ export const PRESET_NAME_AR: Record<string, string> = {
   'ASEAN': 'رابطة دول جنوب شرق آسيا',
 };
 
+// ── Committee emblem presets ──────────────────────────────────────────────────
+// A curated set of committee emblems the organiser can one-click apply in the
+// editor, plus the aliases used to AUTO-ASSIGN a default emblem when a committee's
+// name/abbreviation matches a known body. Logos reuse the existing /logos assets
+// (real seals) where they exist; the generic CRISIS emblem lives under
+// /committee-emblems. DISEC/SPECPOL/LEGAL/ECOSOC are UN main committees and
+// correctly wear the UN emblem.
+export interface PresetEmblem {
+  key: string;
+  label: string; // short acronym shown under the picker swatch
+  logo: string;
+  aliases: string[]; // lowercase tokens matched against name + abbreviation
+}
+
+export const PRESET_EMBLEMS: PresetEmblem[] = [
+  { key: 'unsc',   label: 'UNSC',   logo: '/logos/un.svg',                    aliases: ['unsc', 'security council', 'un security council'] },
+  { key: 'unga',   label: 'GA',     logo: '/logos/un.svg',                    aliases: ['unga', 'ga', 'general assembly', 'un general assembly'] },
+  { key: 'disec',  label: 'DISEC',  logo: '/logos/un.svg',                    aliases: ['disec', 'disarmament', 'first committee', 'ga1', 'international security'] },
+  { key: 'specpol',label: 'SPECPOL',logo: '/logos/un.svg',                    aliases: ['specpol', 'special political', 'decolonization', 'fourth committee', 'ga4'] },
+  { key: 'legal',  label: 'LEGAL',  logo: '/logos/un.svg',                    aliases: ['legal', 'sixth committee', 'ga6', 'ilc', 'international law'] },
+  { key: 'ecosoc', label: 'ECOSOC', logo: '/logos/un.svg',                    aliases: ['ecosoc', 'economic and social', 'economic and social council'] },
+  { key: 'hrc',    label: 'HRC',    logo: '/logos/UNHRC.png',                 aliases: ['hrc', 'unhrc', 'human rights', 'human rights council'] },
+  { key: 'who',    label: 'WHO',    logo: '/logos/who.png',                   aliases: ['who', 'world health', 'world health organization', 'world health organisation'] },
+  { key: 'unep',   label: 'UNEP',   logo: '/logos/UNEP.png',                  aliases: ['unep', 'environment programme', 'environment program', 'unea'] },
+  { key: 'unicef', label: 'UNICEF', logo: '/logos/unicef.png',               aliases: ['unicef', "children's fund", 'childrens fund'] },
+  { key: 'imf',    label: 'IMF',    logo: '/logos/IMF.png',                   aliases: ['imf', 'monetary fund', 'international monetary fund'] },
+  { key: 'wb',     label: 'WB',     logo: '/logos/worldbank.svg',            aliases: ['wb', 'world bank'] },
+  { key: 'iaea',   label: 'IAEA',   logo: '/logos/iaea.png',                  aliases: ['iaea', 'atomic energy'] },
+  { key: 'nato',   label: 'NATO',   logo: '/logos/nato.png',                  aliases: ['nato', 'north atlantic'] },
+  { key: 'eu',     label: 'EU',     logo: '/logos/eu.png',                    aliases: ['eu', 'european union', 'european council'] },
+  { key: 'au',     label: 'AU',     logo: '/logos/au.svg',                    aliases: ['au', 'african union'] },
+  { key: 'g20',    label: 'G20',    logo: '/logos/g20.svg',                   aliases: ['g20', 'group of twenty'] },
+  { key: 'arab',   label: 'LAS',    logo: '/logos/arab-league.png',          aliases: ['arab league', 'las', 'league of arab states'] },
+  { key: 'asean',  label: 'ASEAN',  logo: '/logos/asean.png',                aliases: ['asean', 'southeast asian nations'] },
+  { key: 'crisis', label: 'CRISIS', logo: '/committee-emblems/crisis.svg',    aliases: ['crisis', 'jcc', 'joint crisis', 'cabinet', 'ad hoc', 'ad-hoc'] },
+];
+
+// A short, high-signal subset surfaced as one-click swatches in the editor.
+export const PRESET_EMBLEM_PICKS: PresetEmblem[] = PRESET_EMBLEMS.filter((e) =>
+  ['unsc', 'disec', 'specpol', 'legal', 'ecosoc', 'hrc', 'who', 'crisis'].includes(e.key)
+);
+
+// Match a committee's name + abbreviation to a preset emblem logo, or null.
+// Abbreviation is weighted first (exact acronym), then name substring.
+export function matchPresetEmblem(name: string | null | undefined, abbreviation?: string | null): string | null {
+  const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+  const abbr = abbreviation ? norm(abbreviation) : '';
+  const nm = name ? norm(name) : '';
+  if (!abbr && !nm) return null;
+  // 1) Exact acronym match on the abbreviation field.
+  if (abbr) {
+    for (const e of PRESET_EMBLEMS) {
+      if (e.aliases.some((a) => a === abbr)) return e.logo;
+    }
+  }
+  // 2) Alias appears in the name (or abbreviation). Multi-word aliases match as a
+  // phrase; single short tokens must match on a word boundary so e.g. "eu" does
+  // not fire inside "museum".
+  const hay = `${nm} ${abbr}`.trim();
+  for (const e of PRESET_EMBLEMS) {
+    for (const a of e.aliases) {
+      if (a.includes(' ')) {
+        if (hay.includes(a)) return e.logo;
+      } else {
+        const esc = a.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        if (new RegExp(`\\b${esc}\\b`).test(hay)) return e.logo;
+      }
+    }
+  }
+  return null;
+}
+
 export function getCommitteeDisplayName(name: string, language: string): string {
   if (language === 'ar') return PRESET_NAME_AR[name] ?? name;
   if (language === 'fr') return PRESET_NAME_FR[name] ?? name;

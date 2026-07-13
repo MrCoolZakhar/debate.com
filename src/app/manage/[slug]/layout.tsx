@@ -5,7 +5,7 @@ import { useRouter, usePathname, useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   LayoutDashboard, Building2, Users, MapPin, FileText,
-  Mail, CreditCard, Settings, Briefcase, Menu, X, Radio, Upload,
+  Mail, CreditCard, Settings, Briefcase, Menu, X, Radio,
 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -78,7 +78,6 @@ const NAV_SECTIONS = (slug: string, communicationsBadge = 0) => [
     items: [
       { icon: Building2, label: 'Committees',   href: `/manage/${slug}/committees`,   external: false, badge: 0 },
       { icon: Users,     label: 'Applications', href: `/manage/${slug}/applications`, external: false, badge: 0 },
-      { icon: Upload,    label: 'Import',       href: `/manage/${slug}/import`,       external: false, badge: 0 },
       { icon: MapPin,    label: 'Assignment',   href: `/manage/${slug}/assignment`,   external: false, badge: 0 },
       { icon: FileText,  label: 'Documents',    href: `/manage/${slug}/documents`,    external: false, badge: 0 },
     ],

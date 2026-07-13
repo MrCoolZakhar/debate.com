@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120" role="img" aria-label="Crisis committee emblem">
+  <defs>
+    <linearGradient id="crisisSeal" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#6E1E1E"/>
+      <stop offset="1" stop-color="#3C1414"/>
+    </linearGradient>
+  </defs>
+  <circle cx="60" cy="60" r="58" fill="url(#crisisSeal)"/>
+  <circle cx="60" cy="60" r="49" fill="none" stroke="#EED98A" stroke-width="2" opacity="0.85"/>
+  <g fill="none" stroke="#EED98A" stroke-width="6" stroke-linecap="round">
+    <path d="M60 30 L60 66"/>
+  </g>
+  <circle cx="60" cy="84" r="5.5" fill="#EED98A"/>
+</svg>

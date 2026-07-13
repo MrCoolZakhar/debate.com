@@ -21,13 +21,13 @@ import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import {
   ArrowRight, BadgePercent, CircleCheck, Clock, CreditCard, Eye, Gavel,
-  GraduationCap, HandCoins, Hourglass, PiggyBank, TrendingUp,
-  User, Users, Wallet,
+  GraduationCap, HandCoins, History, Hourglass, LayoutGrid, PiggyBank,
+  Receipt, TrendingUp, User, Users, Wallet,
 } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
-import { roundMoney, formatFee, currencySymbol } from '@/lib/finance';
+import { roundMoney, formatFee, currencySymbol, CURRENCY_CODES } from '@/lib/finance';
 import { FlagImg } from '@/components/FlagImg';
 import { getCountryByName } from '@/lib/countries';
 import {
@@ -171,9 +171,6 @@ function paymentMethod(r: FinRow): { label: string; title: string } | null {
   return null;
 }
 
-/** Displayed-currency options: conference currency first, then the majors. */
-const BASE_CURRENCY_OPTIONS = ['USD', 'EUR', 'GBP'];
-
 const PIPELINE_FILTERS = [
   { label: 'ALL', value: 'all' },
   { label: 'PAID', value: 'paid' },
@@ -189,6 +186,8 @@ export default function FinancialsPage() {
   const { session } = useAuth();
   const [rows, setRows] = useState<FinRow[] | null>(null);
   const [filter, setFilter] = useState<PipelineFilter>('all');
+  // Overview (tiles/estimate/pipeline/vouchers) vs History (transaction log).
+  const [tab, setTab] = useState<'overview' | 'history'>('overview');
   // Displayed currency — '' until the per-conference localStorage choice is
   // loaded; falls back to the conference currency. Display-only: stored
   // values and voucher creation always stay in the conference currency.
@@ -222,7 +221,7 @@ export default function FinancialsPage() {
   useEffect(() => {
     if (!conference) return;
     const stored = window.localStorage.getItem(`gavelling-fin-currency-${conference.slug}`);
-    const options = [conference.fee_currency, ...BASE_CURRENCY_OPTIONS];
+    const options = [conference.fee_currency, ...CURRENCY_CODES];
     setDisplayCurrency(stored && options.includes(stored) ? stored : conference.fee_currency);
   }, [conference?.slug, conference?.fee_currency]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -269,7 +268,7 @@ export default function FinancialsPage() {
   const converted = dispCur !== currency;
   const fxAvailable = convertApprox(1, currency, 'USD') !== null;
   const currencyOptions = fxAvailable
-    ? [currency, ...BASE_CURRENCY_OPTIONS.filter(c => c !== currency)]
+    ? [currency, ...CURRENCY_CODES.filter(c => c !== currency)]
     : [currency];
 
   function pickCurrency(c: string) {
@@ -292,6 +291,14 @@ export default function FinancialsPage() {
     return true;
   });
 
+  // History — the exact transaction log: every paid/waived application, newest
+  // first, dated by paid_at when recorded else the application date.
+  const historyRows = fin.live
+    .filter(r => r.payment_status === 'paid' || r.payment_status === 'waived')
+    .slice()
+    .sort((a, b) =>
+      new Date(b.paid_at ?? b.submitted_at).getTime() - new Date(a.paid_at ?? a.submitted_at).getTime());
+
   const mutedCaption: React.CSSProperties = {
     fontFamily: OUTFIT, fontSize: 10.5, color: NEU.muted, lineHeight: 1.55,
   };
@@ -313,17 +320,23 @@ export default function FinancialsPage() {
               <h1 style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 26, color: NEU.ink, letterSpacing: '-0.01em' }}>
                 Financials
               </h1>
-              {/* Display-currency switcher — conference currency + majors. */}
-              <div className="flex items-center gap-1.5">
+              {/* Display-currency switcher — conference currency first, then the
+                  full CURRENCIES list. Scrollable so 13 codes stay on one clean
+                  row without wrapping. */}
+              <div
+                className="flex items-center gap-1.5 overflow-x-auto"
+                style={{ maxWidth: 320, scrollbarWidth: 'none', paddingBottom: 2 }}
+              >
                 {currencyOptions.map(c => (
-                  <NeuPill
-                    key={c}
-                    active={dispCur === c}
-                    gradient={NEU_GRADIENTS.forest}
-                    onClick={currencyOptions.length > 1 ? () => pickCurrency(c) : undefined}
-                  >
-                    {currencySymbol(c)} {c}
-                  </NeuPill>
+                  <span key={c} className="flex-shrink-0">
+                    <NeuPill
+                      active={dispCur === c}
+                      gradient={NEU_GRADIENTS.forest}
+                      onClick={currencyOptions.length > 1 ? () => pickCurrency(c) : undefined}
+                    >
+                      {currencySymbol(c)} {c}
+                    </NeuPill>
+                  </span>
                 ))}
               </div>
               {stripeConnected && (
@@ -340,6 +353,28 @@ export default function FinancialsPage() {
             )}
           </div>
         </div>
+
+        {/* ── View tabs · Overview / History ── */}
+        <div className="flex items-center gap-2 mb-6">
+          <NeuPill
+            active={tab === 'overview'}
+            gradient={NEU_GRADIENTS.forest}
+            onClick={() => setTab('overview')}
+          >
+            <LayoutGrid size={12} strokeWidth={2.5} />
+            OVERVIEW
+          </NeuPill>
+          <NeuPill
+            active={tab === 'history'}
+            gradient={NEU_GRADIENTS.forest}
+            onClick={() => setTab('history')}
+          >
+            <History size={12} strokeWidth={2.5} />
+            HISTORY
+          </NeuPill>
+        </div>
+
+        {tab === 'overview' && (<>
 
         {/* Stripe connect teaser — the single integration seam (payments.ts) */}
         {!stripeConnected && (
@@ -666,6 +701,129 @@ export default function FinancialsPage() {
 
         {/* ── 5 · Vouchers ── */}
         <VouchersSection conference={conference} displayCurrency={dispCur} />
+
+        </>)}
+
+        {/* ── History · exact transaction log ── */}
+        {tab === 'history' && (
+          <section>
+            <div className="flex items-center gap-3 mb-3">
+              <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={Receipt} emoji="Receipt" size={36} />
+              <div>
+                <h2 style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 18, color: NEU.ink, lineHeight: 1.15 }}>
+                  Transaction history
+                </h2>
+                <p style={mutedCaption}>
+                  Every collected and waived fee, newest first — dated by payment when recorded, otherwise the application date.
+                </p>
+              </div>
+            </div>
+
+            {loading ? (
+              <div className="rounded-[22px] animate-pulse" style={{ height: 180, backgroundColor: NEU.surface, boxShadow: NEU.out }} />
+            ) : historyRows.length === 0 ? (
+              <NeuInset className="flex flex-col items-center text-center px-6 py-10">
+                <p style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: NEU.ink }}>
+                  No transactions yet
+                </p>
+                <p className="mt-1 max-w-sm" style={{ ...mutedCaption, fontSize: 11.5 }}>
+                  Paid and waived fees appear here as a detailed chronological log.
+                </p>
+              </NeuInset>
+            ) : (
+              <NeuCard style={{ padding: '6px 0', overflow: 'hidden' }}>
+                {historyRows.map((r, i) => {
+                  const waived = r.payment_status === 'waived';
+                  const amount = rowAmount(fee, r);
+                  const discount = Number(r.voucher_discount) || 0;
+                  const discounted = discount > 0;
+                  const hasPaidAt = !waived && !!r.paid_at;
+                  const method = paymentMethod(r);
+                  const dateIso = r.paid_at ?? r.submitted_at;
+                  return (
+                    <div
+                      key={r.id}
+                      className="flex items-center gap-3 flex-wrap px-5 py-2.5"
+                      style={i > 0 ? { borderTop: '1px solid rgba(221,212,192,0.55)' } : undefined}
+                    >
+                      {/* Date — leads the log */}
+                      <span
+                        className="inline-flex items-baseline gap-1.5 flex-shrink-0"
+                        title={hasPaidAt ? 'Payment recorded on this date' : waived ? 'Fee waived — application date' : 'Application date — no payment date recorded'}
+                        style={{ minWidth: 118 }}
+                      >
+                        <span style={{ fontFamily: OUTFIT, fontSize: 8, fontWeight: 800, letterSpacing: '0.1em', color: NEU.muted, opacity: 0.85 }}>
+                          {hasPaidAt ? 'PAID' : waived ? 'WAIVED' : 'APPLIED'}
+                        </span>
+                        <span style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 600, color: NEU.muted, fontVariantNumeric: 'tabular-nums' }}>
+                          {formatRowDate(dateIso)}
+                        </span>
+                      </span>
+
+                      {/* Name */}
+                      <span
+                        className="truncate"
+                        style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: NEU.ink, flex: '1 1 140px', minWidth: 120 }}
+                      >
+                        {r.profiles?.display_name ?? 'Unknown'}
+                      </span>
+
+                      {/* Committee + flag */}
+                      <span
+                        className="inline-flex items-center gap-1.5"
+                        title={r.assigned_committee?.name ?? undefined}
+                        style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, color: NEU.muted, minWidth: 64 }}
+                      >
+                        {committeeAbbr(r.assigned_committee)}
+                        <CountryFlag name={r.assigned_country_name} code={r.assigned_country_code} />
+                      </span>
+
+                      {/* Voucher discount, when applied */}
+                      {discounted && (
+                        <span
+                          className="inline-flex items-center gap-1"
+                          title={`Voucher discount of ${money(discount)} applied`}
+                          style={{ ...chipStyle, fontSize: 8.5, backgroundColor: 'rgba(182,135,31,0.14)', color: NEU.deepGold, border: '1px solid rgba(182,135,31,0.36)' }}
+                        >
+                          <BadgePercent size={10} strokeWidth={2.5} />
+                          −{money(discount)}
+                        </span>
+                      )}
+
+                      {/* Amount */}
+                      <span
+                        style={{
+                          fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 900,
+                          color: waived ? NEU.muted : NEU.ink,
+                          textDecoration: waived ? 'line-through' : 'none',
+                          textDecorationColor: 'rgba(154,138,120,0.55)',
+                          fontVariantNumeric: 'tabular-nums',
+                          minWidth: 64, textAlign: 'right', marginLeft: 'auto',
+                        }}
+                      >
+                        {money(waived ? fee : amount)}
+                      </span>
+
+                      {/* Method chip — STRIPE / SELF-PAID / DELEGATION / MANUAL / AMBASSADOR / UNLIMITED */}
+                      {method && (
+                        <span
+                          title={method.title}
+                          style={{
+                            ...chipStyle, fontSize: 8.5,
+                            backgroundColor: 'rgba(154,138,120,0.13)', color: '#6B5E4E',
+                            border: '1px solid rgba(154,138,120,0.35)',
+                          }}
+                        >
+                          {method.label}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </NeuCard>
+            )}
+          </section>
+        )}
       </div>
     </div>
   );

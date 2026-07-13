@@ -14,7 +14,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AlertTriangle, ArrowRight, CalendarDays, Mail, Pencil } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Mail, Pencil, Upload, Check, ImagePlus } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import { useAuth } from '@/components/AuthProvider';
 import { createClient } from '@supabase/supabase-js';
@@ -23,6 +23,10 @@ import { UN_COUNTRIES } from '@/lib/countries';
 import { FlagImg } from '@/components/FlagImg';
 import { WizardShell, TwoTabPick, CardSelect } from '@/components/wizard';
 import { NEU, NEU_GRADIENTS, OUTFIT, EASE, NeuButton, NeuInset, Emoji3D } from '@/components/neu';
+import { DatePicker } from '@/components/DatePicker';
+import { LogoCropModal } from '@/components/LogoCropModal';
+import { uploadConferenceAsset } from '@/lib/conferenceAssets';
+import { CURRENCIES } from '@/lib/finance';
 
 // Mirrors settings' ensureRoleConfigs default set (source of truth there) —
 // seeded here too so a freshly created conference already has per-role fee
@@ -31,8 +35,20 @@ const ROLE_DEFAULTS = ['delegate', 'chair', 'head-delegate', 'faculty-advisor', 
 
 // ── Step model ─────────────────────────────────────────────────────────────
 
-const TOTAL_STEPS = 8;
-// 1 name+acronym · 2 format · 3 level · 4 where · 5 when · 6 delegates · 7 fee · 8 review
+const TOTAL_STEPS = 11;
+const REVIEW_STEP = TOTAL_STEPS;
+// 1 name+acronym · 2 format · 3 level · 4 where · 5 when · 6 delegates · 7 fee
+// · 8 logo (mandatory) · 9 banner (skippable) · 10 committees (skippable) · 11 review
+
+// Bundled banner artwork — mirrors settings' BANNER_PRESETS so the organiser
+// can set a banner during creation exactly as they would afterwards.
+const BANNER_PRESETS = [
+  '/banners/preset-1.jpg',
+  '/banners/preset-2.jpg',
+  '/banners/preset-3.jpg',
+  '/banners/preset-4.jpg',
+  '/banners/preset-5.jpg',
+];
 
 const DELEGATE_RANGES = [
   { key: '50', label: 'Up to 50', sub: 'Intimate', emoji: 'Bust in silhouette' },
@@ -108,6 +124,29 @@ function TertiaryPick({ label, selected, onClick }: { label: string; selected: b
         fontFamily: OUTFIT, fontSize: 13, fontWeight: 700,
         cursor: 'pointer',
         transition: `all 220ms ${EASE}`,
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+/** Muted text button for skippable steps. */
+function SkipLink({ label, onClick }: { label: string; onClick: () => void }) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      className="focus:outline-none"
+      style={{
+        background: 'none', border: 'none', cursor: 'pointer',
+        fontFamily: OUTFIT, fontSize: 13, fontWeight: 700,
+        color: hovered ? NEU.forest : NEU.muted,
+        textDecoration: 'underline', textDecorationColor: 'rgba(154,138,120,0.5)',
+        textUnderlineOffset: 3, transition: `color 200ms ${EASE}`,
       }}
     >
       {label}
@@ -192,6 +231,21 @@ export default function NewConferencePage() {
   const [feeAmount, setFeeAmount] = useState('');
   const [feeCurrency, setFeeCurrency] = useState('GBP');
 
+  // Logo (mandatory) + banner (skippable). Assets upload to storage during
+  // their step under a client-minted conference id, reused verbatim by the
+  // insert below so logo_url / banner_url land on the created row.
+  const conferenceIdRef = useRef<string>('');
+  if (!conferenceIdRef.current) conferenceIdRef.current = crypto.randomUUID();
+  const [logoUrl, setLogoUrl] = useState('');
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [logoError, setLogoError] = useState('');
+  const [logoCropFile, setLogoCropFile] = useState<File | null>(null);
+  const [bannerUrl, setBannerUrl] = useState('');
+  const [bannerUploading, setBannerUploading] = useState(false);
+  const [bannerError, setBannerError] = useState('');
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const bannerInputRef = useRef<HTMLInputElement>(null);
+
   // Pre-fill email from profile (same behaviour as the old form).
   useEffect(() => {
     if (profile?.email && !contactEmail) setContactEmail(profile.email);
@@ -199,6 +253,12 @@ export default function NewConferencePage() {
   }, [profile?.email]);
 
   const acronymError = acronym ? acronymProblem(acronym) : '';
+
+  // Local "today" (YYYY-MM-DD) — start date can't be before it.
+  const todayISO = useMemo(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }, []);
 
   const countryOptions = useMemo(
     () =>
@@ -219,7 +279,7 @@ export default function NewConferencePage() {
   function advance(from: number) {
     if (returnToReview) {
       setReturnToReview(false);
-      goTo(8);
+      goTo(REVIEW_STEP);
     } else {
       goTo(from + 1);
     }
@@ -233,10 +293,34 @@ export default function NewConferencePage() {
   function back() {
     if (returnToReview) {
       setReturnToReview(false);
-      goTo(8);
+      goTo(REVIEW_STEP);
     } else if (step > 1) {
       goTo(step - 1);
     }
+  }
+
+  // ── Logo + banner uploads (same recipe as Settings) ──────────────────────
+  async function handleLogoUpload(file: File) {
+    if (!session) { setLogoError('You must be signed in to upload a logo.'); return; }
+    setLogoUploading(true);
+    setLogoError('');
+    const supabase = getAuthedClient();
+    const res = await uploadConferenceAsset(supabase, 'logos', conferenceIdRef.current, file);
+    setLogoUploading(false);
+    if (res.error || !res.url) { setLogoError(res.error || 'Upload failed.'); return; }
+    setLogoUrl(res.url);
+    setStepError('');
+  }
+
+  async function handleBannerUpload(file: File) {
+    if (!session) { setBannerError('You must be signed in to upload a banner.'); return; }
+    setBannerUploading(true);
+    setBannerError('');
+    const supabase = getAuthedClient();
+    const res = await uploadConferenceAsset(supabase, 'banners', conferenceIdRef.current, file);
+    setBannerUploading(false);
+    if (res.error || !res.url) { setBannerError(res.error || 'Upload failed.'); return; }
+    setBannerUrl(res.url);
   }
 
   // ── Submit — preserved exactly from the old form ─────────────────────────
@@ -253,10 +337,10 @@ export default function NewConferencePage() {
 
       const baseSlug = generateSlug(fullName);
       const slug = baseSlug + '-' + Math.random().toString(36).substring(2, 7);
-      // Minted client-side so the role-config seeding insert below can
-      // reference this conference without reading it back (see the
-      // RETURNING/RLS note just below).
-      const conferenceId = crypto.randomUUID();
+      // Minted client-side (at mount) so the logo/banner uploads earlier in the
+      // wizard, the role-config seeding insert below, and this row all share one
+      // id without reading it back (see the RETURNING/RLS note just below).
+      const conferenceId = conferenceIdRef.current;
 
       // No .select() after insert: the new row is only SELECT-visible once the
       // ownership trigger has run, so RETURNING fails RLS for private conferences.
@@ -285,7 +369,8 @@ export default function NewConferencePage() {
           tiktok_url: null,
           whatsapp_url: null,
           website_url: null,
-          banner_url: null,
+          logo_url: logoUrl || null,
+          banner_url: bannerUrl || null,
           is_public: false,
           status: 'private',
           predecessor_conference_id: null,
@@ -367,7 +452,8 @@ export default function NewConferencePage() {
     fullName.trim() && acronym.trim() && !acronymProblem(acronym) && contactEmail.trim() &&
     studentLevel && startDate && endDate && country && city.trim() && format &&
     expectedDelegates && parseInt(expectedDelegates) > 0 &&
-    (feeKind === 'free' || (feeKind === 'paid' && parseFloat(feeAmount) > 0));
+    (feeKind === 'free' || (feeKind === 'paid' && parseFloat(feeAmount) > 0)) &&
+    logoUrl;
 
   // Loading / auth spinner
   if (loading || !user) {
@@ -546,36 +632,21 @@ export default function NewConferencePage() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <FieldLabel>First day</FieldLabel>
-                      <div className="relative">
-                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: NEU.muted }}>
-                          <CalendarDays size={16} />
-                        </span>
-                        <input
-                          type="date"
-                          value={startDate}
-                          onChange={(e) => { setStartDate(e.target.value); if (!endDate || endDate < e.target.value) setEndDate(e.target.value); }}
-                          style={{ ...bigInputStyle, backgroundColor: NEU.surface, boxShadow: NEU.outSm, paddingLeft: 40, fontVariantNumeric: 'tabular-nums' }}
-                          onFocus={focusForest}
-                          onBlur={blurClear}
-                        />
-                      </div>
+                      <DatePicker
+                        value={startDate}
+                        min={todayISO}
+                        onChange={(iso) => { setStartDate(iso); if (!endDate || endDate < iso) setEndDate(iso); setStepError(''); }}
+                        placeholder="First day"
+                      />
                     </div>
                     <div>
                       <FieldLabel>Last day</FieldLabel>
-                      <div className="relative">
-                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: NEU.muted }}>
-                          <CalendarDays size={16} />
-                        </span>
-                        <input
-                          type="date"
-                          value={endDate}
-                          min={startDate || undefined}
-                          onChange={(e) => setEndDate(e.target.value)}
-                          style={{ ...bigInputStyle, backgroundColor: NEU.surface, boxShadow: NEU.outSm, paddingLeft: 40, fontVariantNumeric: 'tabular-nums' }}
-                          onFocus={focusForest}
-                          onBlur={blurClear}
-                        />
-                      </div>
+                      <DatePicker
+                        value={endDate}
+                        min={startDate || todayISO}
+                        onChange={(iso) => { setEndDate(iso); setStepError(''); }}
+                        placeholder="Last day"
+                      />
                     </div>
                   </div>
                 </NeuInset>
@@ -644,12 +715,14 @@ export default function NewConferencePage() {
                       <select
                         value={feeCurrency}
                         onChange={(e) => setFeeCurrency(e.target.value)}
-                        style={{ ...bigInputStyle, width: 110, cursor: 'pointer', backgroundColor: NEU.surface, boxShadow: NEU.outSm }}
+                        style={{ ...bigInputStyle, width: 132, cursor: 'pointer', backgroundColor: NEU.surface, boxShadow: NEU.outSm }}
                         onFocus={focusForest}
                         onBlur={blurClear}
                       >
-                        {['GBP', 'USD', 'EUR', 'CHF'].map((c) => (
-                          <option key={c} value={c}>{c}</option>
+                        {CURRENCIES.map((c) => (
+                          <option key={c.code} value={c.code} title={c.label}>
+                            {c.symbol} {c.code}
+                          </option>
                         ))}
                       </select>
                       <input
@@ -665,24 +738,195 @@ export default function NewConferencePage() {
                         onBlur={blurClear}
                       />
                     </div>
-                    <p style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.muted, marginTop: 10, lineHeight: 1.5 }}>
-                      Gavelling adds a 5% surcharge for delegates without Gavelling Unlimited.
-                    </p>
                   </NeuInset>
                 )}
                 {stepError && <ErrorNote>{stepError}</ErrorNote>}
                 <ContinueButton
-                  label="Review"
                   onClick={continueStep7}
                   disabled={!feeKind || (feeKind === 'paid' && !(parseFloat(feeAmount) > 0))}
                 />
               </WizardShell>
             )}
 
-            {/* ── Step 8 — review + create ────────────────────────────── */}
+            {/* ── Step 8 — logo (MANDATORY) ───────────────────────────── */}
             {step === 8 && (
               <WizardShell
                 step={8} total={TOTAL_STEPS}
+                title="Add your conference logo"
+                sub="Every conference needs a logo — it's how delegates recognise you across Gavelling."
+                onBack={back}
+              >
+                <input
+                  ref={logoInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) setLogoCropFile(f); e.target.value = ''; }}
+                />
+                <div className="flex flex-col items-center" style={{ gap: 20 }}>
+                  <button
+                    type="button"
+                    onClick={() => logoInputRef.current?.click()}
+                    aria-label={logoUrl ? 'Replace logo' : 'Upload logo'}
+                    className="flex items-center justify-center focus:outline-none"
+                    style={{
+                      width: 168, height: 168, borderRadius: 999,
+                      backgroundColor: '#FDFCF9',
+                      border: logoUrl ? `2px solid ${NEU.forest}` : `2px dashed rgba(27,56,40,0.28)`,
+                      boxShadow: NEU.out,
+                      cursor: 'pointer', overflow: 'hidden', position: 'relative',
+                      transition: `border-color 220ms ${EASE}`,
+                    }}
+                  >
+                    {logoUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={logoUrl} alt="Conference logo" style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 14 }} />
+                    ) : (
+                      <span className="flex flex-col items-center" style={{ gap: 8, color: NEU.muted }}>
+                        <Emoji3D name="Framed picture" size={46} fallback={ImagePlus} fallbackColor={NEU.forest} />
+                        <span style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700 }}>Choose an image</span>
+                      </span>
+                    )}
+                  </button>
+
+                  <NeuButton
+                    onClick={() => logoInputRef.current?.click()}
+                    icon={logoUploading ? undefined : Upload}
+                    disabled={logoUploading}
+                    style={{ padding: '11px 26px', fontSize: 13 }}
+                  >
+                    {logoUploading ? 'UPLOADING…' : logoUrl ? 'REPLACE LOGO' : 'UPLOAD LOGO'}
+                  </NeuButton>
+                </div>
+
+                {logoError && <ErrorNote>{logoError}</ErrorNote>}
+                {stepError && <ErrorNote>{stepError}</ErrorNote>}
+                <ContinueButton
+                  onClick={() => (logoUrl ? advance(8) : setStepError('A logo is required to continue.'))}
+                  disabled={!logoUrl || logoUploading}
+                />
+              </WizardShell>
+            )}
+
+            {/* ── Step 9 — banner (SKIPPABLE) ─────────────────────────── */}
+            {step === 9 && (
+              <WizardShell
+                step={9} total={TOTAL_STEPS}
+                title="Add a banner"
+                sub="A wide header image for your conference page. Pick a preset, upload your own, or skip for now."
+                onBack={back}
+              >
+                <input
+                  ref={bannerInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handleBannerUpload(f); e.target.value = ''; }}
+                />
+
+                <NeuInset style={{ padding: 10, borderRadius: 18, marginBottom: 16 }}>
+                  <div
+                    style={{
+                      width: '100%', height: 150, borderRadius: 12, overflow: 'hidden',
+                      backgroundColor: NEU.base, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}
+                  >
+                    {bannerUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={bannerUrl} alt="Conference banner" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      <span style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, color: NEU.muted }}>No banner yet</span>
+                    )}
+                  </div>
+                </NeuInset>
+
+                <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(5, minmax(0, 1fr))' }}>
+                  {BANNER_PRESETS.map((p) => {
+                    const selected = bannerUrl === p;
+                    return (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => { setBannerUrl(p); setBannerError(''); }}
+                        aria-label="Use this banner preset"
+                        aria-pressed={selected}
+                        className="focus:outline-none"
+                        style={{
+                          position: 'relative', height: 52, borderRadius: 12, overflow: 'hidden',
+                          border: selected ? `2px solid ${NEU.forest}` : '2px solid rgba(27,56,40,0.10)',
+                          backgroundImage: `url(${p})`, backgroundSize: 'cover', backgroundPosition: 'center',
+                          boxShadow: selected ? NEU.outSm : 'none',
+                          cursor: 'pointer', transition: `border-color 200ms ${EASE}`,
+                        }}
+                      >
+                        {selected && (
+                          <span
+                            className="absolute flex items-center justify-center"
+                            style={{
+                              top: 4, right: 4, width: 18, height: 18, borderRadius: 999,
+                              background: `linear-gradient(135deg, ${NEU.gold}, ${NEU.deepGold})`,
+                            }}
+                          >
+                            <Check size={11} strokeWidth={3.2} style={{ color: NEU.forest }} />
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="flex justify-center" style={{ marginTop: 16 }}>
+                  <NeuButton
+                    onClick={() => bannerInputRef.current?.click()}
+                    icon={bannerUploading ? undefined : Upload}
+                    disabled={bannerUploading}
+                    gradient={NEU_GRADIENTS.forest}
+                    style={{ padding: '10px 22px', fontSize: 13 }}
+                  >
+                    {bannerUploading ? 'UPLOADING…' : 'UPLOAD YOUR OWN'}
+                  </NeuButton>
+                </div>
+
+                {bannerError && <ErrorNote>{bannerError}</ErrorNote>}
+                <ContinueButton onClick={() => advance(9)} />
+                <div className="flex justify-center" style={{ marginTop: 12 }}>
+                  <SkipLink onClick={() => { setBannerUrl(''); advance(9); }} label="Skip for now" />
+                </div>
+              </WizardShell>
+            )}
+
+            {/* ── Step 10 — committees (SKIPPABLE prompt) ─────────────── */}
+            {step === 10 && (
+              <WizardShell
+                step={10} total={TOTAL_STEPS}
+                title="Set up your committees"
+                sub="Committees are where delegates are allocated and debate happens."
+                onBack={back}
+              >
+                <NeuInset style={{ padding: '22px 24px', borderRadius: 20 }}>
+                  <div className="flex items-start gap-4">
+                    <Emoji3D name="Classical building" size={44} />
+                    <div>
+                      <p style={{ fontFamily: OUTFIT, fontSize: 15, fontWeight: 800, color: NEU.ink, lineHeight: 1.4 }}>
+                        Add committees next in Manage
+                      </p>
+                      <p style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 500, color: NEU.muted, marginTop: 6, lineHeight: 1.6 }}>
+                        Once your conference is created you&rsquo;ll land on its Manage dashboard, where you can add
+                        committees — GAs, crisis rooms, ECOSOC bodies — with agendas, country matrices and seat counts.
+                        You can always come back and add more later.
+                      </p>
+                    </div>
+                  </div>
+                </NeuInset>
+
+                <ContinueButton label="Continue to review" onClick={() => advance(10)} />
+              </WizardShell>
+            )}
+
+            {/* ── Step 11 — review + create ───────────────────────────── */}
+            {step === REVIEW_STEP && (
+              <WizardShell
+                step={REVIEW_STEP} total={TOTAL_STEPS}
                 title="Ready to create it?"
                 sub="Check everything over — tap any row to change it."
                 onBack={back}
@@ -699,6 +943,8 @@ export default function NewConferencePage() {
                     value={feeKind === 'free' ? 'Free' : `${feeCurrency} ${parseFloat(feeAmount || '0').toFixed(2)} per delegate`}
                     onEdit={() => editFromReview(7)}
                   />
+                  <ReviewRow label="Logo" value={logoUrl ? 'Added' : 'Required'} onEdit={() => editFromReview(8)} />
+                  <ReviewRow label="Banner" value={bannerUrl ? 'Added' : 'Skipped'} onEdit={() => editFromReview(9)} />
                 </div>
 
                 {/* Contact email — required by the directory, prefilled from your profile */}
@@ -726,7 +972,7 @@ export default function NewConferencePage() {
                     textAlign: 'center', marginTop: 22, padding: '0 12px',
                   }}
                 >
-                  Description, banner, social links, visibility and previous editions —
+                  Description, social links, visibility and previous editions —
                   you can set everything else later in Settings. Your conference starts private.
                 </p>
 
@@ -760,6 +1006,19 @@ export default function NewConferencePage() {
           </div>
         </main>
       </div>
+
+      {/* Drag-to-fit crop step — flattens the chosen framing into a square
+          transparent PNG, then hands off to the storage upload path. */}
+      {logoCropFile && (
+        <LogoCropModal
+          file={logoCropFile}
+          onCancel={() => setLogoCropFile(null)}
+          onSave={(blob) => {
+            setLogoCropFile(null);
+            handleLogoUpload(new File([blob], 'logo.png', { type: 'image/png' }));
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -169,19 +169,28 @@ function GoldCheck({ visible }: { visible: boolean }) {
   );
 }
 
+// Floating card look: a soft forest-tinted drop shadow lifts every option off
+// the ivory page; hover grows the card (~1.04) and deepens the shadow so it
+// reads as picked-up. Selected stays clearly distinct (forest border + the
+// gold check overlay). Motion rides the house cubic-bezier easing.
+const CARD_FLOAT = '-4px -5px 12px rgba(255,255,255,0.6), 6px 10px 24px rgba(27,56,40,0.14)';
+const CARD_LIFT = '-5px -6px 16px rgba(255,255,255,0.72), 10px 16px 38px rgba(27,56,40,0.24)';
+
 function cardBaseStyle(selected: boolean, hovered: boolean): React.CSSProperties {
   return {
     position: 'relative',
     border: selected ? `2px solid ${NEU.forest}` : '2px solid rgba(27,56,40,0.10)',
-    borderRadius: 20,
+    borderRadius: 22,
     backgroundColor: selected ? NEU.surface : NEU.base,
-    boxShadow: selected
-      ? NEU.out
-      : hovered
-        ? NEU.outSm
-        : '-2px -2px 5px rgba(255,255,255,0.55), 3px 3px 7px rgba(27,56,40,0.08)',
-    transform: selected || hovered ? 'translateY(-2px)' : 'translateY(0)',
-    transition: `all 260ms ${EASE}`,
+    boxShadow: hovered ? CARD_LIFT : selected ? NEU.out : CARD_FLOAT,
+    transform: hovered
+      ? 'translateY(-4px) scale(1.04)'
+      : selected
+        ? 'translateY(-2px) scale(1.01)'
+        : 'translateY(0) scale(1)',
+    transition: `transform 320ms ${EASE}, box-shadow 320ms ${EASE}, border-color 320ms ${EASE}`,
+    transformOrigin: 'center',
+    willChange: 'transform',
     cursor: 'pointer',
     fontFamily: OUTFIT,
     textAlign: 'center',
@@ -220,8 +229,8 @@ export function TwoTabPick({
   return (
     <div
       role="radiogroup"
-      className="grid gap-4"
-      style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}
+      className="grid gap-5"
+      style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', padding: '4px' }}
     >
       {options.map((opt, idx) => {
         const selected = value === opt.key;
@@ -240,8 +249,8 @@ export function TwoTabPick({
             className="flex flex-col items-center justify-start focus-visible:ring-2"
             style={{
               ...cardBaseStyle(selected, hovered),
-              minHeight: 190,
-              padding: opt.image ? '0 0 18px' : '26px 16px 22px',
+              minHeight: 216,
+              padding: opt.image ? '0 0 20px' : '30px 18px 26px',
               overflow: 'hidden',
             }}
           >
@@ -253,8 +262,8 @@ export function TwoTabPick({
                 style={{
                   display: 'block',
                   width: '100%',
-                  height: 110,
-                  marginBottom: 14,
+                  height: 128,
+                  marginBottom: 16,
                   backgroundImage: `url(${opt.image})`,
                   backgroundSize: 'cover',
                   backgroundPosition: 'center',
@@ -267,7 +276,7 @@ export function TwoTabPick({
               <span
                 aria-hidden
                 className="flex items-center justify-center"
-                style={{ fontSize: 52, height: 64, marginBottom: 12 }}
+                style={{ fontSize: 58, height: 72, marginBottom: 14 }}
               >
                 {opt.icon}
               </span>
@@ -395,12 +404,12 @@ export function CardSelect({
 
       <div
         role={multiple ? 'group' : 'radiogroup'}
-        className="grid gap-3"
+        className="grid gap-4"
         style={{
           gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
-          maxHeight: searchable ? 340 : undefined,
+          maxHeight: searchable ? 360 : undefined,
           overflowY: searchable ? 'auto' : undefined,
-          padding: searchable ? '4px' : undefined,
+          padding: '6px',
         }}
       >
         {shown.map((opt) => {
@@ -418,8 +427,8 @@ export function CardSelect({
               className="flex flex-col items-center justify-center"
               style={{
                 ...cardBaseStyle(selected, hovered),
-                minHeight: 92,
-                padding: opt.image ? '0 0 12px' : '16px 10px 14px',
+                minHeight: 110,
+                padding: opt.image ? '0 0 14px' : '20px 12px 16px',
                 overflow: 'hidden',
               }}
             >
@@ -430,8 +439,8 @@ export function CardSelect({
                   style={{
                     display: 'block',
                     width: '100%',
-                    height: 62,
-                    marginBottom: 9,
+                    height: 74,
+                    marginBottom: 11,
                     backgroundImage: `url(${opt.image})`,
                     backgroundSize: 'cover',
                     backgroundPosition: 'center',
@@ -443,7 +452,7 @@ export function CardSelect({
                 <span
                   aria-hidden
                   className="flex items-center justify-center"
-                  style={{ fontSize: 26, height: 32, marginBottom: 7 }}
+                  style={{ fontSize: 30, height: 38, marginBottom: 9 }}
                 >
                   {opt.icon}
                 </span>

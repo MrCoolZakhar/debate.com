@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import {
-  SlidersHorizontal, Building2, Users2, ShieldCheck,
+  SlidersHorizontal, Building2, Users2, ShieldCheck, Upload, ArrowRight,
 } from 'lucide-react';
 import { useManage, type Conference } from '@/app/manage/[slug]/layout';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -14,8 +15,9 @@ import { Pill } from '@/app/account/accountUi';
 import { useConfirmModal } from '@/components/ConfirmModal';
 import { LogoDisc } from '@/components/LogoDisc';
 import { LogoCropModal } from '@/components/LogoCropModal';
+import { DatePicker } from '@/components/DatePicker';
 import { sendOrganizerInvite, listPendingOrganizerInvites, revokeOrganizerInvite, type OrganizerInviteRow } from '@/lib/organizerInvites';
-import { activeFeePhase, type FeePhase } from '@/lib/finance';
+import { activeFeePhase, type FeePhase, CURRENCY_CODES } from '@/lib/finance';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -1608,7 +1610,7 @@ export default function SettingsPage() {
                           }}
                           style={{ ...inputStyle, width: '30%', cursor: 'pointer' }}
                         >
-                          {['GBP', 'USD', 'EUR', 'CHF'].map(c => <option key={c} value={c}>{c}</option>)}
+                          {CURRENCY_CODES.map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
                         <input
                           type="number"
@@ -1689,27 +1691,21 @@ export default function SettingsPage() {
                                       </span>
                                     )}
                                   </div>
-                                  <input
-                                    type="date"
-                                    aria-label="Phase start date"
-                                    defaultValue={phase.start_date}
-                                    onFocus={fgInput}
-                                    onBlur={(e) => {
-                                      e.currentTarget.style.borderColor = '#DDD4C0';
-                                      if (e.target.value !== phase.start_date) updateFeePhase(role, phases, pi, { start_date: e.target.value });
+                                  <DatePicker
+                                    value={phase.start_date}
+                                    max={phase.end_date || undefined}
+                                    placeholder="Start date"
+                                    onChange={(iso) => {
+                                      if (iso !== phase.start_date) updateFeePhase(role, phases, pi, { start_date: iso });
                                     }}
-                                    style={{ ...inputStyle, padding: '6px 8px', fontSize: '12px', minWidth: 0 }}
                                   />
-                                  <input
-                                    type="date"
-                                    aria-label="Phase end date"
-                                    defaultValue={phase.end_date}
-                                    onFocus={fgInput}
-                                    onBlur={(e) => {
-                                      e.currentTarget.style.borderColor = '#DDD4C0';
-                                      if (e.target.value !== phase.end_date) updateFeePhase(role, phases, pi, { end_date: e.target.value });
+                                  <DatePicker
+                                    value={phase.end_date}
+                                    min={phase.start_date || undefined}
+                                    placeholder="End date"
+                                    onChange={(iso) => {
+                                      if (iso !== phase.end_date) updateFeePhase(role, phases, pi, { end_date: iso });
                                     }}
-                                    style={{ ...inputStyle, padding: '6px 8px', fontSize: '12px', minWidth: 0 }}
                                   />
                                   <input
                                     type="number"
@@ -3124,6 +3120,36 @@ export default function SettingsPage() {
             {partnerError}
           </p>
         )}
+      </div>
+
+      {/* ── Data import ── */}
+      {/* Launches the bulk applicant import (CSV / XLSX). The flow itself lives
+          on its own page; this card is the entry point from Settings. */}
+      <div style={cardStyle}>
+        <div className="flex items-center gap-3 mb-1">
+          <span
+            className="flex items-center justify-center flex-shrink-0"
+            style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: 'rgba(27,56,40,0.08)' }}
+          >
+            <Upload size={17} strokeWidth={2.1} style={{ color: '#1B3828' }} />
+          </span>
+          <p className="font-semibold text-base" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+            Data Import
+          </p>
+        </div>
+        <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+          Bulk-import applicants from a CSV or XLSX spreadsheet — map columns, preview a dry run, then commit. Unclaimed rows are invited to create an account.
+        </p>
+        <Link
+          href={`/manage/${conference.slug}/import`}
+          className="inline-flex items-center gap-2 rounded-xl py-2.5 px-5 font-bold text-xs tracking-widest transition-colors focus:outline-none"
+          style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.07em', textDecoration: 'none' }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+        >
+          OPEN IMPORT
+          <ArrowRight size={14} strokeWidth={2.5} />
+        </Link>
       </div>
       </>}
 

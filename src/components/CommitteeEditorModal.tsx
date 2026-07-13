@@ -6,15 +6,14 @@
 // create flow), MonogramMedallion (fallback emblem), ModalOverlay (house modal
 // backdrop) and mintConferenceSession (session minting for conference committees).
 
-import { useState, useEffect, useMemo } from 'react';
-import { X, Globe, Users, ClipboardList } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { X, Globe, Users } from 'lucide-react';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
-import { getCountryByName, findCountryFlexible, UN_COUNTRIES } from '@/lib/countries';
-import { UNSC_MEMBERS } from '@/lib/presets';
-import { FlagImg } from '@/components/FlagImg';
+import { getCountryByName } from '@/lib/countries';
 import { CountryMatrixPicker } from '@/components/CountryMatrixPicker';
 import { CommitteeNameInput } from '@/components/CommitteeNameInput';
+import { PRESET_EMBLEM_PICKS, matchPresetEmblem } from '@/lib/presetNames';
 
 // ── Design constants ──────────────────────────────────────────────────────────
 
@@ -56,294 +55,6 @@ export interface EditableCommittee {
   committee_type: string;
   session_id: string | null;
   logo_url: string | null;
-}
-
-// ── Quick roster templates ────────────────────────────────────────────────────
-// Country-name arrays validated against UN_COUNTRIES at module load (dev warn on
-// misses). Clicking a chip REPLACES the current selection (confirmed if the
-// organiser already hand-picked >3 countries). Hidden for crisis committees.
-
-// Non-UN-member entries in UN_COUNTRIES — excluded from the "UN Full" roster.
-const NON_UN_MEMBER_CODES = new Set(['TW', 'XK', 'PS', 'VA', 'CK', 'NU', 'EU']);
-const UN_FULL_MEMBERS: string[] = UN_COUNTRIES.filter((c) => !NON_UN_MEMBER_CODES.has(c.code)).map((c) => c.name);
-
-// A geographically balanced 60-country General Assembly / DISEC sample.
-const GA_SAMPLE_60: string[] = [
-  // Africa (14)
-  'Algeria', 'DR Congo', 'Egypt', 'Ethiopia', 'Ghana', 'Kenya', 'Morocco', 'Nigeria',
-  'Rwanda', 'Senegal', 'South Africa', 'Sudan', 'Tanzania', 'Tunisia',
-  // Asia (16)
-  'Bangladesh', 'China', 'India', 'Indonesia', 'Iran', 'Iraq', 'Israel', 'Japan',
-  'Kazakhstan', 'Malaysia', 'Pakistan', 'Philippines', 'Qatar', 'Saudi Arabia', 'South Korea', 'Vietnam',
-  // Europe (14)
-  'France', 'Germany', 'Greece', 'Italy', 'Netherlands', 'Norway', 'Poland', 'Romania',
-  'Russia', 'Spain', 'Sweden', 'Switzerland', 'Ukraine', 'United Kingdom',
-  // Americas (12)
-  'Argentina', 'Brazil', 'Canada', 'Chile', 'Colombia', 'Cuba', 'Guatemala', 'Jamaica',
-  'Mexico', 'Peru', 'United States', 'Venezuela',
-  // Oceania (4)
-  'Australia', 'Fiji', 'New Zealand', 'Papua New Guinea',
-];
-
-// 54-seat ECOSOC roster following the UN regional-group distribution
-// (14 African, 11 Asia-Pacific, 6 Eastern European, 10 GRULAC, 13 WEOG).
-const ECOSOC_54: string[] = [
-  // African states (14)
-  'Algeria', 'Cameroon', "Côte d'Ivoire", 'DR Congo', 'Egypt', 'Ethiopia', 'Ghana',
-  'Kenya', 'Libya', 'Mauritius', 'Nigeria', 'Senegal', 'South Africa', 'Zimbabwe',
-  // Asia-Pacific states (11)
-  'China', 'India', 'Indonesia', 'Japan', 'Pakistan', 'Qatar', 'Saudi Arabia',
-  'Solomon Islands', 'South Korea', 'Turkmenistan', 'Vietnam',
-  // Eastern European states (6)
-  'Armenia', 'Bulgaria', 'Poland', 'Russia', 'Serbia', 'Ukraine',
-  // Latin American and Caribbean states (10)
-  'Argentina', 'Bolivia', 'Brazil', 'Chile', 'Colombia', 'Costa Rica', 'Haiti',
-  'Mexico', 'Paraguay', 'Peru',
-  // Western European and other states (13)
-  'Canada', 'Denmark', 'France', 'Germany', 'Italy', 'Netherlands', 'New Zealand',
-  'Norway', 'Spain', 'Sweden', 'Switzerland', 'United Kingdom', 'United States',
-];
-
-const EU_27: string[] = [
-  'Austria', 'Belgium', 'Bulgaria', 'Croatia', 'Cyprus', 'Czech Republic', 'Denmark',
-  'Estonia', 'Finland', 'France', 'Germany', 'Greece', 'Hungary', 'Ireland', 'Italy',
-  'Latvia', 'Lithuania', 'Luxembourg', 'Malta', 'Netherlands', 'Poland', 'Portugal',
-  'Romania', 'Slovakia', 'Slovenia', 'Spain', 'Sweden',
-];
-
-const G20_MEMBERS: string[] = [
-  'Argentina', 'Australia', 'Brazil', 'Canada', 'China', 'France', 'Germany', 'India',
-  'Indonesia', 'Italy', 'Japan', 'Mexico', 'South Korea', 'Russia', 'Saudi Arabia',
-  'South Africa', 'Turkey', 'United Kingdom', 'United States',
-];
-
-const NATO_32: string[] = [
-  'Albania', 'Belgium', 'Bulgaria', 'Canada', 'Croatia', 'Czech Republic', 'Denmark',
-  'Estonia', 'Finland', 'France', 'Germany', 'Greece', 'Hungary', 'Iceland', 'Italy',
-  'Latvia', 'Lithuania', 'Luxembourg', 'Montenegro', 'Netherlands', 'North Macedonia',
-  'Norway', 'Poland', 'Portugal', 'Romania', 'Slovakia', 'Slovenia', 'Spain', 'Sweden',
-  'Turkey', 'United Kingdom', 'United States',
-];
-
-const ROSTER_TEMPLATES: { key: string; label: string; members: string[] }[] = [
-  { key: 'unsc',   label: 'UNSC 2026', members: UNSC_MEMBERS },
-  { key: 'ga60',   label: 'GA Sample', members: GA_SAMPLE_60 },
-  { key: 'un193',  label: 'UN Full',   members: UN_FULL_MEMBERS },
-  { key: 'ecosoc', label: 'ECOSOC',    members: ECOSOC_54 },
-  { key: 'eu',     label: 'EU',        members: EU_27 },
-  { key: 'g20',    label: 'G20',       members: G20_MEMBERS },
-  { key: 'nato',   label: 'NATO',      members: NATO_32 },
-];
-
-// Dev-time validation: every template member must resolve in UN_COUNTRIES.
-if (process.env.NODE_ENV !== 'production') {
-  for (const tpl of ROSTER_TEMPLATES) {
-    for (const m of tpl.members) {
-      if (!getCountryByName(m)) console.warn(`[CommitteeEditorModal] Roster template "${tpl.label}" has unknown country: "${m}"`);
-    }
-  }
-  if (UN_FULL_MEMBERS.length !== 193) console.warn(`[CommitteeEditorModal] UN Full roster has ${UN_FULL_MEMBERS.length} members, expected 193`);
-}
-
-// ── Paste-list parsing ────────────────────────────────────────────────────────
-
-// Common shorthands findCountryFlexible can't resolve on its own ("UK" would
-// otherwise prefix-match Ukraine). Checked before the flexible matcher.
-const COUNTRY_ALIASES: Record<string, string> = {
-  'uk': 'United Kingdom', 'gb': 'United Kingdom', 'britain': 'United Kingdom', 'great britain': 'United Kingdom',
-  'us': 'United States', 'usa': 'United States', 'america': 'United States', 'united states of america': 'United States',
-  'uae': 'United Arab Emirates', 'drc': 'DR Congo', 'roc': 'Taiwan', 'rok': 'South Korea',
-  'dprk': 'North Korea', 'car': 'Central African Republic', 'png': 'Papua New Guinea',
-  'holland': 'Netherlands', 'ivory coast': "Côte d'Ivoire", 'turkiye': 'Turkey', 'czechia': 'Czech Republic',
-  // Official UN names that differ from our canonical short names.
-  'republic of korea': 'South Korea', "democratic people's republic of korea": 'North Korea',
-  'russian federation': 'Russia', 'viet nam': 'Vietnam',
-};
-
-function matchCountryToken(raw: string): string | null {
-  // Fold accents so e.g. "Türkiye" hits the 'turkiye' alias.
-  const n = raw.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
-  if (!n) return null;
-  if (COUNTRY_ALIASES[n]) return COUNTRY_ALIASES[n];
-  return findCountryFlexible(raw);
-}
-
-// Split pasted text on newlines / commas / semicolons / tabs / bullets and strip
-// list markers ("1.", "-", "•") off each token.
-function parsePasteTokens(text: string): string[] {
-  return text
-    .split(/\r?\n|[,;\t]|[·•]/)
-    .map((s) => s.trim().replace(/^\d+[.)]\s*/, '').replace(/^[-–—*]\s*/, '').trim())
-    .filter(Boolean);
-}
-
-function dedupeNames(names: string[]): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const n of names) {
-    const k = n.trim().toLowerCase();
-    if (!k || seen.has(k)) continue;
-    seen.add(k);
-    out.push(n.trim());
-  }
-  return out;
-}
-
-// ── Paste-list modal — house recipe of the sessions paste-review flow ─────────
-// Non-crisis: fuzzy-matches each token via matchCountryToken and shows a review
-// list (matched = flag + resolved name; unmatched = red, editable or discard).
-// Crisis: skips country matching entirely — every token is a raw character name.
-
-function PasteListModal({ isCrisis, existingCount, onCancel, onCommit }: {
-  isCrisis: boolean;
-  existingCount: number;
-  onCancel: () => void;
-  onCommit: (names: string[], mode: 'add' | 'replace') => void;
-}) {
-  const [text, setText] = useState('');
-  const [overrides, setOverrides] = useState<Record<number, { name?: string; discarded?: boolean }>>({});
-
-  // Parsed on the fly as the organiser types; edits/discards live in `overrides`
-  // (reset whenever the raw text changes).
-  const baseRows = useMemo(() => {
-    const tokens = parsePasteTokens(text);
-    const seen = new Set<string>();
-    const rows: { original: string; name: string; matched: boolean }[] = [];
-    for (const tok of tokens) {
-      const found = isCrisis ? null : matchCountryToken(tok);
-      const name = found ?? tok;
-      const key = name.toLowerCase();
-      if (seen.has(key)) continue;
-      seen.add(key);
-      rows.push({ original: tok, name, matched: !!found });
-    }
-    return rows;
-  }, [text, isCrisis]);
-
-  const rows = baseRows.map((r, i) => {
-    const ov = overrides[i];
-    if (!ov) return { ...r, discarded: false };
-    const name = ov.name !== undefined ? ov.name : r.name;
-    return {
-      original: r.original,
-      name,
-      matched: ov.name !== undefined ? (!isCrisis && !!getCountryByName(name.trim())) : r.matched,
-      discarded: !!ov.discarded,
-    };
-  });
-
-  const kept = rows.filter((r) => !r.discarded && r.name.trim());
-  const matchedCount = kept.filter((r) => r.matched).length;
-  const unmatchedCount = kept.length - matchedCount;
-
-  const commit = (mode: 'add' | 'replace') => {
-    if (kept.length === 0) return;
-    onCommit(kept.map((r) => r.name.trim()), mode);
-  };
-
-  const noun = isCrisis ? 'character' : 'country';
-
-  return (
-    <ModalOverlay onClose={onCancel}>
-      <div className="w-full flex flex-col rounded-2xl overflow-hidden" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 460, maxWidth: '92vw', maxHeight: '80vh' }}>
-        <div className="px-6 py-4 shrink-0 flex items-start justify-between gap-3" style={{ borderBottom: '1px solid #DDD4C0' }}>
-          <div>
-            <h2 className="text-base font-black uppercase tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.04em' }}>
-              Paste {noun} list
-            </h2>
-            <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-              {isCrisis
-                ? 'One character per line — commas and semicolons work too.'
-                : 'One country per line — names are matched automatically as you type.'}
-            </p>
-          </div>
-          <button onClick={onCancel} className="focus:outline-none shrink-0 mt-0.5" style={{ color: '#9A8A78' }}><X size={18} /></button>
-        </div>
-        <div className="px-6 pt-4 shrink-0">
-          <textarea
-            value={text}
-            onChange={(e) => { setText(e.target.value); setOverrides({}); }}
-            autoFocus
-            placeholder={isCrisis ? 'Napoleon Bonaparte\nTalleyrand, Joseph Fouché...' : 'France\nGermany, brazil; UK...'}
-            className="w-full rounded-xl px-3 py-2 text-sm resize-none focus:outline-none"
-            style={{ border: '1px solid #DDD4C0', backgroundColor: '#FFFFFF', color: '#1C1410', fontFamily: "'Outfit', sans-serif", height: 104 }}
-          />
-        </div>
-        {rows.length > 0 && (
-          <div className="mx-6 mt-3 rounded-xl overflow-y-auto min-h-0" style={{ border: '1px solid #DDD4C0', backgroundColor: '#FFFFFF', maxHeight: 240 }}>
-            {rows.map((r, idx) => {
-              if (r.discarded) return null;
-              const found = !isCrisis ? getCountryByName(r.name.trim()) : undefined;
-              return (
-                <div key={idx} className="flex items-center gap-2.5 px-4 py-2" style={{ borderBottom: '1px solid #F0EDE6' }}>
-                  {isCrisis
-                    ? <Users size={14} strokeWidth={1.5} style={{ color: '#9A8A78', flexShrink: 0 }} />
-                    : found
-                      ? <FlagImg code={found.code} size={18} />
-                      : <Globe size={14} strokeWidth={1.5} style={{ color: '#8B2020', flexShrink: 0 }} />}
-                  {r.matched || isCrisis ? (
-                    <span className="text-sm flex-1 truncate" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-                      {r.name}
-                      {!isCrisis && r.original.trim().toLowerCase() !== r.name.trim().toLowerCase() && (
-                        <span className="text-xs ml-1.5" style={{ color: '#9A8A78' }}>from &quot;{r.original}&quot;</span>
-                      )}
-                    </span>
-                  ) : (
-                    <input
-                      value={r.name}
-                      onChange={(e) => setOverrides((prev) => ({ ...prev, [idx]: { ...prev[idx], name: e.target.value } }))}
-                      className="text-sm flex-1 min-w-0 rounded-lg px-2 py-1 focus:outline-none"
-                      style={{ border: '1px solid #C46A6A', backgroundColor: '#FAF8F3', color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}
-                    />
-                  )}
-                  {!isCrisis && (
-                    <span className="text-[10px] font-bold uppercase tracking-wide shrink-0 px-2 py-0.5 rounded-full" style={{ fontFamily: "'Outfit', sans-serif", ...(r.matched ? { color: '#1B3828', backgroundColor: 'rgba(27,56,40,0.1)' } : { color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.1)' }) }}>
-                      {r.matched ? 'Matched' : 'No match'}
-                    </span>
-                  )}
-                  <button
-                    onClick={() => setOverrides((prev) => ({ ...prev, [idx]: { ...prev[idx], discarded: true } }))}
-                    className="text-xs shrink-0 focus:outline-none"
-                    style={{ color: '#9A8A78' }}
-                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#8B2020'; }}
-                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
-                  >
-                    ✕
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        )}
-        <div className="px-6 py-4 shrink-0 flex items-center gap-3">
-          <p className="text-xs flex-1" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-            {kept.length === 0
-              ? 'Nothing to add yet.'
-              : isCrisis
-                ? `${kept.length} character${kept.length === 1 ? '' : 's'}`
-                : `${matchedCount} matched${unmatchedCount > 0 ? `, ${unmatchedCount} unmatched` : ''}`}
-          </p>
-          <button
-            onClick={() => commit('add')}
-            disabled={kept.length === 0}
-            className="rounded-xl py-2 px-4 font-bold text-xs focus:outline-none disabled:opacity-30 disabled:cursor-not-allowed"
-            style={{ border: '1.5px solid #1B3828', color: '#1B3828', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.07em' }}
-          >
-            ADD {kept.length > 0 ? kept.length : ''}
-          </button>
-          <button
-            onClick={() => commit('replace')}
-            disabled={kept.length === 0}
-            className="rounded-xl py-2 px-4 font-bold text-xs focus:outline-none disabled:opacity-30 disabled:cursor-not-allowed"
-            style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.07em' }}
-            title={existingCount > 0 ? `Replaces the ${existingCount} currently selected` : undefined}
-          >
-            REPLACE {kept.length > 0 ? `WITH ${kept.length}` : ''}
-          </button>
-        </div>
-      </div>
-    </ModalOverlay>
-  );
 }
 
 // ── Fallback emblem — gradient monogram disc with grain, matching the public card
@@ -459,12 +170,22 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialCountri
   const [countries, setCountries] = useState<string[]>(initialCountries ?? []);
   const [baselineCountries] = useState<string[]>(initialCountries ?? []);
   const [pendingRemovalCount, setPendingRemovalCount] = useState<number | null>(null);
-  const [pasteOpen, setPasteOpen] = useState(false);
-  const [pendingTemplate, setPendingTemplate] = useState<{ label: string; members: string[] } | null>(null);
   const [logoUrl, setLogoUrl] = useState<string | null>(existing?.logo_url ?? null);
   const [logoUploading, setLogoUploading] = useState(false);
+  // Once the organiser uploads, clears, or picks an emblem, we stop auto-filling
+  // the default from the name. An existing committee that already has an emblem
+  // counts as manually set.
+  const [emblemManuallySet, setEmblemManuallySet] = useState<boolean>(!!existing?.logo_url);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  // Auto-assign a preset emblem as the default when the committee's name /
+  // abbreviation matches a known body (UNSC, DISEC, WHO, …) and the organiser
+  // has not set their own. Never overrides a manual choice.
+  useEffect(() => {
+    if (emblemManuallySet) return;
+    setLogoUrl(matchPresetEmblem(name, abbreviation));
+  }, [name, abbreviation, emblemManuallySet]);
 
   // Mirrors the conference logo upload in manage/[slug]/settings — same bucket, own folder.
   async function handleEmblemUpload(file: File) {
@@ -478,20 +199,8 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialCountri
     if (upErr) { setError('Upload failed: ' + upErr.message); setLogoUploading(false); return; }
     const { data: urlData } = supabase.storage.from('conference-assets').getPublicUrl(path);
     setLogoUrl(urlData.publicUrl);
+    setEmblemManuallySet(true);
     setLogoUploading(false);
-  }
-
-  // Quick roster chips REPLACE the selection; ask first if the organiser
-  // already has more than a few countries picked.
-  function applyTemplate(label: string, members: string[]) {
-    if (countries.length > 3) { setPendingTemplate({ label, members }); return; }
-    setCountries(dedupeNames(members));
-  }
-
-  function commitPaste(names: string[], mode: 'add' | 'replace') {
-    if (mode === 'replace') setCountries(dedupeNames(names));
-    else setCountries((prev) => dedupeNames([...prev, ...names]));
-    setPasteOpen(false);
   }
 
   function addTopic() {
@@ -658,7 +367,7 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialCountri
                   </button>
                   {logoUrl && !logoUploading && (
                     <button
-                      onClick={() => setLogoUrl(null)}
+                      onClick={() => { setLogoUrl(null); setEmblemManuallySet(true); }}
                       className="rounded-lg py-1.5 px-3.5 font-bold text-[11px] focus:outline-none"
                       style={{ border: '1.5px solid #DDD4C0', color: '#6E5F4E', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.07em', cursor: 'pointer', transition: `background-color 250ms ${EASE}` }}
                       onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
@@ -680,6 +389,31 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialCountri
                 onChange={e => { const f = e.target.files?.[0]; if (f) handleEmblemUpload(f); e.target.value = ''; }}
               />
             </div>
+            {/* Preset emblem picker — one-click seals for common committees. */}
+            <div className="mt-2 flex items-center gap-2 flex-wrap">
+              <span style={{ ...labelStyle, marginBottom: 0, textTransform: 'uppercase', letterSpacing: '0.12em' }}>Presets</span>
+              {PRESET_EMBLEM_PICKS.map((p) => {
+                const active = logoUrl === p.logo;
+                return (
+                  <button
+                    key={p.key}
+                    onClick={() => { setLogoUrl(p.logo); setEmblemManuallySet(true); }}
+                    title={p.label}
+                    className="flex items-center justify-center rounded-lg focus:outline-none"
+                    style={{
+                      width: 34, height: 34, flexShrink: 0,
+                      border: active ? '1.5px solid #1B3828' : '1px solid #DDD4C0',
+                      backgroundColor: active ? 'rgba(27,56,40,0.06)' : '#FAF8F3',
+                      cursor: 'pointer', transition: `all 200ms ${EASE}`,
+                    }}
+                    onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.borderColor = '#B6871F'; }}
+                    onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
+                  >
+                    <img src={p.logo} alt={p.label} style={{ width: 22, height: 22, objectFit: 'contain' }} onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                  </button>
+                );
+              })}
+            </div>
           </div>
           <div>
             <label style={labelStyle}>Topics * (at least one, up to 3)</label>
@@ -700,51 +434,12 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialCountri
           </div>
         </div>
         <div className="mt-5 pt-5" style={{ borderTop: '1px solid #EDE7D8' }}>
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center mb-3">
             <p className="flex items-center gap-1.5 text-sm font-bold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
               {isCrisis ? <Users size={15} style={{ color: '#B6871F' }} /> : <Globe size={15} style={{ color: '#B6871F' }} />}
               {isCrisis ? 'Committee Characters' : 'Committee Countries'}
             </p>
-            <button
-              onClick={() => setPasteOpen(true)}
-              className="flex items-center gap-1.5 rounded-lg py-1.5 px-3 font-bold text-[11px] focus:outline-none"
-              style={{ border: '1.5px solid #DDD4C0', color: '#1B3828', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.07em', cursor: 'pointer', transition: `background-color 250ms ${EASE}` }}
-              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-            >
-              <ClipboardList size={13} strokeWidth={2} />
-              PASTE LIST
-            </button>
           </div>
-          {!isCrisis && (
-            <div className="mb-3">
-              <label style={{ ...labelStyle, textTransform: 'uppercase', letterSpacing: '0.12em', color: '#9A8A78' }}>Quick Rosters</label>
-              <div className="flex flex-wrap gap-1.5">
-                {ROSTER_TEMPLATES.map((tpl) => (
-                  <button
-                    key={tpl.key}
-                    onClick={() => applyTemplate(tpl.label, tpl.members)}
-                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wide transition-all focus:outline-none"
-                    style={{ backgroundColor: '#FAF8F3', color: '#1B3828', border: '1px solid #DDD4C0', fontFamily: "'Outfit', sans-serif" }}
-                    onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = '#1B3828'; el.style.color = '#EED98A'; el.style.borderColor = '#1B3828'; }}
-                    onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = '#FAF8F3'; el.style.color = '#1B3828'; el.style.borderColor = '#DDD4C0'; }}
-                  >
-                    <span>{tpl.label}</span>
-                    <span style={{ fontSize: 9, color: 'inherit', opacity: 0.6 }}>{tpl.members.length}</span>
-                  </button>
-                ))}
-                <button
-                  onClick={() => applyTemplate('Clear', [])}
-                  className="px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wide transition-all focus:outline-none"
-                  style={{ backgroundColor: 'transparent', color: '#9A8A78', border: '1px dashed #DDD4C0', fontFamily: "'Outfit', sans-serif" }}
-                  onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#8B2020'; el.style.borderColor = '#C46A6A'; }}
-                  onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#9A8A78'; el.style.borderColor = '#DDD4C0'; }}
-                >
-                  Clear
-                </button>
-              </div>
-            </div>
-          )}
           <CountryMatrixPicker value={countries} onChange={setCountries} noun={isCrisis ? 'character' : 'country'} />
         </div>
         {error && <p className="text-xs mt-3" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{error}</p>}
@@ -754,35 +449,6 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialCountri
         </div>
       </div>
     </ModalOverlay>
-    {pasteOpen && (
-      <PasteListModal
-        isCrisis={isCrisis}
-        existingCount={countries.length}
-        onCancel={() => setPasteOpen(false)}
-        onCommit={commitPaste}
-      />
-    )}
-    {pendingTemplate && (
-      <ModalOverlay onClose={() => setPendingTemplate(null)}>
-        <div className="rounded-2xl p-6 flex flex-col gap-4" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 380 }}>
-          <p className="text-sm" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", lineHeight: 1.5 }}>
-            {pendingTemplate.members.length === 0
-              ? `Clear all ${countries.length} selected countries?`
-              : `Replace the ${countries.length} selected countries with the ${pendingTemplate.label} roster (${pendingTemplate.members.length} countries)?`}
-          </p>
-          <div className="flex gap-3">
-            <button onClick={() => setPendingTemplate(null)} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ border: '1.5px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}>CANCEL</button>
-            <button
-              onClick={() => { setCountries(dedupeNames(pendingTemplate.members)); setPendingTemplate(null); }}
-              className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none"
-              style={{ backgroundColor: pendingTemplate.members.length === 0 ? '#8B2020' : '#1B3828', color: pendingTemplate.members.length === 0 ? '#FFFFFF' : '#EED98A', fontFamily: "'Outfit', sans-serif" }}
-            >
-              {pendingTemplate.members.length === 0 ? 'CLEAR' : 'REPLACE'}
-            </button>
-          </div>
-        </div>
-      </ModalOverlay>
-    )}
     {pendingRemovalCount !== null && (
       <ModalOverlay onClose={() => setPendingRemovalCount(null)}>
         <div className="rounded-2xl p-6 flex flex-col gap-4" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 380 }}>
