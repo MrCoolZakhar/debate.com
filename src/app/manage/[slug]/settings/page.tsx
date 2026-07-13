@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
-  SlidersHorizontal, Building2, Users2, ShieldCheck, Upload, ArrowRight, X,
+  SlidersHorizontal, Building2, Users2, ShieldCheck, X,
 } from 'lucide-react';
 import { useManage, type Conference } from '@/app/manage/[slug]/layout';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
@@ -112,6 +112,16 @@ const PAYMENT_TIMING_OPTIONS: { value: RoleConfig['payment_timing']; label: stri
   { value: 'after_application', label: 'AFTER APPLICATION', desc: 'Payment opens as soon as the application is submitted.' },
   { value: 'after_acceptance', label: 'AFTER ACCEPTANCE', desc: 'Payment opens only once the applicant is accepted.' },
   { value: 'anytime', label: 'PAY AT ANY TIME', desc: 'Applicants can view everything and pay whenever.' },
+];
+
+// What a delegate may express as preferences on the apply form. Persisted on
+// conferences.delegate_preference_mode; read by the apply flow to decide which
+// pickers (committees / countries / neither) to show.
+const PREF_MODE_OPTIONS: { value: string; label: string; desc: string }[] = [
+  { value: 'committees_and_countries', label: 'COMMITTEES + COUNTRIES', desc: 'Delegates rank committee-and-country pairings — the fullest picture for allocation.' },
+  { value: 'committees_only', label: 'COMMITTEES', desc: 'Delegates rank committees only; you assign the countries.' },
+  { value: 'countries_only', label: 'COUNTRIES', desc: 'Delegates rank countries only; committees follow from the country.' },
+  { value: 'none', label: 'NONE', desc: 'No preference step — you allocate everyone manually.' },
 ];
 
 const SWAP_MODE_OPTIONS: { value: string; label: string; desc: string }[] = [
@@ -411,6 +421,12 @@ export default function SettingsPage() {
   // Delegation allocation swaps (Applications tab)
   const [swapMode, setSwapMode] = useState('request');
   const [swapModeError, setSwapModeError] = useState('');
+
+  // Delegate preference mode (Applications tab). Not part of the layout's
+  // conference column allowlist, so it's loaded + saved directly here.
+  const [prefMode, setPrefMode] = useState('committees_and_countries');
+  const [prefModeSaving, setPrefModeSaving] = useState(false);
+  const [prefModeError, setPrefModeError] = useState('');
 
   const [roleConfigs, setRoleConfigs] = useState<RoleConfig[]>([]);
   const [configVersion, setConfigVersion] = useState(0);
@@ -721,6 +737,54 @@ export default function SettingsPage() {
     await refreshConferenceQuiet();
     setSwapMode(mode);
     setSwapModeSaving(false);
+  }
+
+  // delegate_preference_mode isn't in the layout's conference column allowlist,
+  // so read it straight from the row when the conference loads.
+  useEffect(() => {
+    if (!conference || !session) return;
+    let cancelled = false;
+    (async () => {
+      const supabase = getAuthedClient(session.access_token);
+      const { data } = await supabase
+        .from('conferences')
+        .select('delegate_preference_mode')
+        .eq('id', conference.id)
+        .maybeSingle();
+      if (cancelled) return;
+      const mode = (data as { delegate_preference_mode: string } | null)?.delegate_preference_mode;
+      if (mode) setPrefMode(mode);
+    })();
+    return () => { cancelled = true; };
+  }, [conference?.id, session]);
+
+  // Same verified-write pattern as saveSwapMode: control-busy, exact rollback
+  // (local prefMode only flips after the DB write is confirmed).
+  async function savePrefMode(mode: string) {
+    if (!conference || prefModeSaving) return;
+    setPrefModeSaving(true);
+    setPrefModeError('');
+
+    const supabase = await getFreshAuthedClient();
+    if (!supabase) {
+      setPrefModeSaving(false);
+      setPrefModeError('Your session has expired, please refresh and sign in again.');
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('conferences')
+      .update({ delegate_preference_mode: mode })
+      .eq('id', conference.id)
+      .select('id');
+
+    if (error || !data || data.length !== 1) {
+      setPrefModeSaving(false);
+      setPrefModeError(saveFailMessage(error));
+      return;
+    }
+    setPrefMode(mode);
+    setPrefModeSaving(false);
   }
 
   // ── Organizer actions ───────────────────────────────────────────────────
@@ -1887,6 +1951,52 @@ export default function SettingsPage() {
         })}
       </div>}
 
+      {/* ── Delegate preference mode card ── */}
+      {activeTab === 'applications' && <div style={cardStyle}>
+        <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+          Delegate Preferences
+        </p>
+        <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+          Choose what delegates rank when they apply. The application form shows only the pickers you enable here.
+        </p>
+        <div className="grid grid-cols-2 gap-2">
+          {PREF_MODE_OPTIONS.map(opt => {
+            const active = prefMode === opt.value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => savePrefMode(opt.value)}
+                disabled={prefModeSaving}
+                className="py-2.5 px-3 rounded-[10px] font-bold text-xs focus:outline-none transition-all"
+                style={{
+                  backgroundColor: active ? '#1B3828' : 'transparent',
+                  color: active ? '#EED98A' : '#1C1410',
+                  border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
+                  fontFamily: "'Outfit', sans-serif",
+                  letterSpacing: '0.04em',
+                  opacity: prefModeSaving ? 0.6 : 1,
+                  cursor: prefModeSaving ? 'wait' : 'pointer',
+                }}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+        <div className="flex items-center gap-2 mt-2">
+          {prefModeSaving && (
+            <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin flex-shrink-0" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
+          )}
+          <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+            {PREF_MODE_OPTIONS.find(o => o.value === prefMode)?.desc}
+          </p>
+        </div>
+        {prefModeError && (
+          <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{prefModeError}</p>
+        )}
+      </div>}
+
       {/* ── Delegation allocation swaps card ── */}
       {activeTab === 'applications' && <div style={cardStyle}>
         <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
@@ -2049,24 +2159,22 @@ export default function SettingsPage() {
             <div className="flex gap-3 mb-4">
               <div className="flex-1">
                 <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Start date</label>
-                <input
-                  type="date"
+                <DatePicker
                   value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  style={inputStyle}
-                  onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
-                  onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
+                  onChange={(iso) => {
+                    setStartDate(iso);
+                    // Keep end ≥ start: clear a now-invalid end date.
+                    if (endDate && iso && endDate < iso) setEndDate('');
+                  }}
                 />
               </div>
               <div className="flex-1">
                 <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>End date</label>
-                <input
-                  type="date"
+                <DatePicker
                   value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  style={inputStyle}
-                  onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
-                  onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
+                  min={startDate || undefined}
+                  initialView={startDate || undefined}
+                  onChange={(iso) => setEndDate(iso)}
                 />
               </div>
             </div>
@@ -3191,35 +3299,9 @@ export default function SettingsPage() {
         )}
       </div>
 
-      {/* ── Data import ── */}
-      {/* Launches the bulk applicant import (CSV / XLSX). The flow itself lives
-          on its own page; this card is the entry point from Settings. */}
-      <div style={cardStyle}>
-        <div className="flex items-center gap-3 mb-1">
-          <span
-            className="flex items-center justify-center flex-shrink-0"
-            style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: 'rgba(27,56,40,0.08)' }}
-          >
-            <Upload size={17} strokeWidth={2.1} style={{ color: '#1B3828' }} />
-          </span>
-          <p className="font-semibold text-base" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-            Data Import
-          </p>
-        </div>
-        <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-          Bulk-import applicants from a CSV or XLSX spreadsheet, map columns, preview a dry run, then commit. Unclaimed rows are invited to create an account.
-        </p>
-        <Link
-          href={`/manage/${conference.slug}/import`}
-          className="inline-flex items-center gap-2 rounded-xl py-2.5 px-5 font-bold text-xs tracking-widest transition-colors focus:outline-none"
-          style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.07em', textDecoration: 'none' }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-        >
-          OPEN IMPORT
-          <ArrowRight size={14} strokeWidth={2.5} />
-        </Link>
-      </div>
+      {/* Data import moved to the sidebar nav (Manage → Import); the launch
+          card that used to sit here has been removed. The import page itself
+          (/manage/[slug]/import) is unchanged. */}
       </>}
 
         </section>

@@ -6,22 +6,32 @@ import Link from 'next/link';
 import SiteNav from '@/components/SiteNav';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
-import { getFlagUrl } from '@/lib/countries';
+import { getFlagUrl, getCountryByName } from '@/lib/countries';
 import { ageAt } from '@/lib/age';
 import { formatFee } from '@/lib/utils';
 import { Pill } from '@/app/account/accountUi';
 import { computeCheckout, localizedApproxSavings, activePhaseFee, type VoucherInput, type FeePhase } from '@/lib/finance';
-import { NEU, NeuInset, OUTFIT } from '@/components/neu';
+import { NEU, NeuInset, NeuCard, OUTFIT, EASE } from '@/components/neu';
+import { LogoDisc } from '@/components/LogoDisc';
+import { FlagImg } from '@/components/FlagImg';
+import { DatePicker } from '@/components/DatePicker';
 import {
   Gavel, Mic, Users, Eye, Building2, User, ListOrdered, Sprout,
   GraduationCap, Trophy, Crown, ClipboardList, BadgeCheck, Sparkles,
   MapPin, Landmark, Check, X, Plus, ArrowLeft, ArrowRight, CalendarClock,
-  Ticket, Infinity as InfinityIcon,
+  Ticket, Infinity as InfinityIcon, Globe, Lock, ChevronUp, ChevronDown,
 } from 'lucide-react';
 
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
 
 // ── Types ──────────────────────────────────────────────────────────────────
+
+/** Organiser-controlled: what a delegate may express as preferences. */
+type PreferenceMode =
+  | 'committees_and_countries'
+  | 'committees_only'
+  | 'countries_only'
+  | 'none';
 
 interface Conference {
   id: string;
@@ -33,6 +43,7 @@ interface Conference {
   start_date: string;
   min_age: number | null;
   logo_url: string | null;
+  delegate_preference_mode: PreferenceMode;
 }
 
 interface RoleConfig {
@@ -56,6 +67,8 @@ interface CommitteeOption {
   topics: string[];
   difficulty: string;
   total_slots: number;
+  logo_url: string | null;
+  committee_type: string | null;
 }
 
 interface CountrySlot {
@@ -102,6 +115,16 @@ const EXPERIENCE_ACCENT: Record<string, string> = {
   intermediate: '#2A5A3C',
   advanced: '#B8844A',
   expert: '#B6871F',
+};
+
+/** Committee difficulty tier → label, accent colour and insignia. The four
+ *  difficulty values map 1:1 to the experience tiers, so they reuse the same
+ *  escalating insignia language. */
+const DIFFICULTY_META: Record<string, { label: string; accent: string; icon: IconType }> = {
+  beginner: { label: 'Beginner', accent: '#4A7896', icon: Sprout },
+  intermediate: { label: 'Intermediate', accent: '#2A5A3C', icon: GraduationCap },
+  advanced: { label: 'Advanced', accent: '#B8844A', icon: Trophy },
+  expert: { label: 'Expert', accent: '#B6871F', icon: Crown },
 };
 
 /**
@@ -168,6 +191,301 @@ function useReducedMotion(): boolean {
   return reduced;
 }
 
+// ── Preference-picker building blocks ─────────────────────────────────────
+
+/** Difficulty tier chip: escalating insignia + accent, tabular label. */
+function DifficultyBadge({ difficulty }: { difficulty: string }) {
+  const meta = DIFFICULTY_META[difficulty];
+  if (!meta) return null;
+  const { label, accent, icon: Icon } = meta;
+  return (
+    <span
+      className="inline-flex items-center gap-1"
+      style={{
+        padding: '3px 9px 3px 7px',
+        borderRadius: 999,
+        background: `${accent}14`,
+        border: `1px solid ${accent}44`,
+        fontFamily: OUTFIT,
+        fontWeight: 800,
+        fontSize: 10,
+        letterSpacing: '0.05em',
+        color: accent,
+      }}
+    >
+      <Icon size={12} strokeWidth={2.4} style={{ color: accent }} />
+      {label}
+    </span>
+  );
+}
+
+/**
+ * Rich, image-forward committee card. The committee emblem (logo_url via
+ * LogoDisc, monogram fallback) leads; abbreviation, difficulty, topics and a
+ * live availability meter follow. Tactile neumorphic press; a gold rank
+ * medallion or check marks selection.
+ */
+function CommitteeCard({
+  committee, openCount, totalCount, rank, active, disabled, showAvailability, onClick, reducedMotion,
+}: {
+  committee: CommitteeOption;
+  openCount: number;
+  totalCount: number;
+  rank: number | null;
+  active: boolean;
+  disabled: boolean;
+  showAvailability: boolean;
+  onClick: () => void;
+  reducedMotion: boolean;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const selected = rank != null || active;
+  const monogram = (committee.abbreviation || committee.name).slice(0, 3).toUpperCase();
+  const pct = totalCount > 0 ? Math.max(0, Math.min(1, openCount / totalCount)) : 0;
+  const meterColor = openCount <= 0 ? '#8B2020' : openCount <= 2 ? '#B8844A' : NEU.green;
+
+  return (
+    <button
+      type="button"
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
+      aria-pressed={selected}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      className="relative w-full text-left focus:outline-none"
+      style={{
+        display: 'flex',
+        gap: 14,
+        alignItems: 'flex-start',
+        padding: '16px 16px 15px',
+        borderRadius: 20,
+        backgroundColor: NEU.surface,
+        border: selected ? '1.5px solid rgba(182,135,31,0.55)' : '1.5px solid transparent',
+        boxShadow: selected
+          ? `0 0 0 1px rgba(182,135,31,0.25), ${NEU.out}`
+          : disabled ? NEU.inSm : hovered ? NEU.outHover : NEU.out,
+        transform: !disabled && !reducedMotion && (hovered || selected) ? 'translateY(-2px)' : 'translateY(0)',
+        opacity: disabled ? 0.6 : 1,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        transition: reducedMotion ? 'none' : `box-shadow 240ms ${EASE}, transform 240ms ${EASE}, border-color 200ms ${EASE}`,
+      }}
+    >
+      <LogoDisc src={committee.logo_url} alt={committee.name} size={54} fallbackText={monogram} />
+
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2 flex-wrap" style={{ marginBottom: 3 }}>
+          {committee.abbreviation && (
+            <span style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 15, color: NEU.ink, letterSpacing: '0.01em' }}>
+              {committee.abbreviation}
+            </span>
+          )}
+          <DifficultyBadge difficulty={committee.difficulty} />
+        </div>
+        <p className="truncate" style={{ fontFamily: OUTFIT, fontWeight: 600, fontSize: 12.5, color: NEU.muted, marginBottom: committee.topics?.length ? 8 : 0 }}>
+          {committee.name}
+        </p>
+
+        {committee.topics?.length > 0 && (
+          <div className="flex flex-wrap gap-1.5" style={{ marginBottom: showAvailability ? 10 : 0 }}>
+            {committee.topics.slice(0, 2).map((t, i) => (
+              <span
+                key={i}
+                className="truncate"
+                style={{
+                  maxWidth: 190, padding: '2.5px 8px', borderRadius: 999,
+                  backgroundColor: 'rgba(27,56,40,0.06)', color: 'rgba(28,20,16,0.7)',
+                  fontFamily: OUTFIT, fontWeight: 600, fontSize: 10.5,
+                }}
+              >
+                {t}
+              </span>
+            ))}
+            {committee.topics.length > 2 && (
+              <span style={{ padding: '2.5px 6px', fontFamily: OUTFIT, fontWeight: 700, fontSize: 10.5, color: NEU.muted }}>
+                +{committee.topics.length - 2}
+              </span>
+            )}
+          </div>
+        )}
+
+        {showAvailability && (
+          <div className="flex items-center gap-2.5">
+            <div style={{ flex: 1, height: 6, borderRadius: 999, backgroundColor: NEU.base, boxShadow: NEU.inSm, overflow: 'hidden', maxWidth: 150 }}>
+              <div style={{ width: `${pct * 100}%`, height: '100%', borderRadius: 999, background: meterColor, transition: reducedMotion ? 'none' : `width 500ms ${EASE}` }} />
+            </div>
+            <span style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10.5, color: meterColor, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+              {openCount <= 0 ? 'FULL' : `${openCount} of ${totalCount} open`}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Selection insignia: gold rank medallion (committees_only) or a check. */}
+      {rank != null ? (
+        <span
+          className="flex items-center justify-center flex-shrink-0"
+          style={{
+            width: 28, height: 28, borderRadius: 999,
+            background: 'linear-gradient(150deg, #EED98A, #B6871F)',
+            boxShadow: '0 3px 8px rgba(182,135,31,0.4)',
+            fontFamily: OUTFIT, fontWeight: 900, fontSize: 13, color: '#3A2A08',
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
+          {rank}
+        </span>
+      ) : active ? (
+        <span className="flex items-center justify-center flex-shrink-0" style={{ width: 28, height: 28, borderRadius: 999, backgroundColor: NEU.forest }}>
+          <Check size={16} strokeWidth={3} style={{ color: NEU.gold }} />
+        </span>
+      ) : disabled ? (
+        <span className="flex items-center justify-center flex-shrink-0" style={{ width: 28, height: 28, borderRadius: 999, backgroundColor: 'rgba(139,32,32,0.1)' }}>
+          <Lock size={13} strokeWidth={2.4} style={{ color: '#8B2020' }} />
+        </span>
+      ) : (
+        <ChevronDown
+          size={20}
+          strokeWidth={2.4}
+          style={{ color: NEU.muted, flexShrink: 0, transform: active ? 'rotate(180deg)' : 'none', transition: reducedMotion ? 'none' : `transform 200ms ${EASE}` }}
+        />
+      )}
+    </button>
+  );
+}
+
+/** Country slot as a flag chip. Taken → greyed + lock; selectable → tactile. */
+function CountryChip({
+  code, name, committeeLabel, taken, selected, onClick, reducedMotion,
+}: {
+  code: string;
+  name: string;
+  committeeLabel?: string;
+  taken: boolean;
+  selected: boolean;
+  onClick: () => void;
+  reducedMotion: boolean;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const resolved = code || getCountryByName(name)?.code || '';
+  return (
+    <button
+      type="button"
+      onClick={taken ? undefined : onClick}
+      disabled={taken}
+      aria-pressed={selected}
+      title={taken ? `${name} — already taken` : name}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      className="relative inline-flex items-center gap-2 focus:outline-none"
+      style={{
+        padding: '7px 12px 7px 9px',
+        borderRadius: 999,
+        backgroundColor: selected ? NEU.forest : NEU.surface,
+        border: selected ? '1.5px solid transparent' : taken ? '1.5px solid transparent' : '1.5px solid transparent',
+        boxShadow: taken ? NEU.inSm : selected ? `0 3px 8px rgba(27,56,40,0.28), ${NEU.outSm}` : hovered ? NEU.outSmHover : NEU.outSm,
+        opacity: taken ? 0.5 : 1,
+        cursor: taken ? 'not-allowed' : 'pointer',
+        transform: !taken && !reducedMotion && hovered && !selected ? 'translateY(-1px)' : 'none',
+        transition: reducedMotion ? 'none' : `box-shadow 200ms ${EASE}, transform 200ms ${EASE}`,
+        filter: taken ? 'grayscale(1)' : 'none',
+      }}
+    >
+      <FlagImg code={resolved} size={22} />
+      <span className="min-w-0">
+        <span className="block truncate" style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 12.5, color: selected ? NEU.gold : NEU.ink, maxWidth: 150 }}>
+          {name}
+        </span>
+        {committeeLabel && (
+          <span className="block truncate" style={{ fontFamily: OUTFIT, fontWeight: 600, fontSize: 9.5, color: selected ? 'rgba(238,217,138,0.7)' : NEU.muted, maxWidth: 150 }}>
+            {committeeLabel}
+          </span>
+        )}
+      </span>
+      {taken ? (
+        <Lock size={12} strokeWidth={2.4} style={{ color: '#8B2020', flexShrink: 0 }} />
+      ) : selected ? (
+        <Check size={14} strokeWidth={3} style={{ color: NEU.gold, flexShrink: 0 }} />
+      ) : (
+        <Plus size={14} strokeWidth={2.6} style={{ color: NEU.muted, flexShrink: 0 }} />
+      )}
+    </button>
+  );
+}
+
+/** A confirmed preference in the ranked list: rank medallion + emblem/flag. */
+function RankedRow({
+  index, total, committee, countryCode, countryName, onUp, onDown, onRemove, reducedMotion,
+}: {
+  index: number;
+  total: number;
+  committee: CommitteeOption | undefined;
+  countryCode: string;
+  countryName: string;
+  onUp: () => void;
+  onDown: () => void;
+  onRemove: () => void;
+  reducedMotion: boolean;
+}) {
+  const monogram = committee ? (committee.abbreviation || committee.name).slice(0, 3).toUpperCase() : '?';
+  const resolved = countryCode || (countryName ? getCountryByName(countryName)?.code || '' : '');
+  return (
+    <div
+      className="flex items-center gap-3"
+      style={{ padding: '10px 12px', borderRadius: 16, backgroundColor: NEU.surface, boxShadow: NEU.outSm }}
+    >
+      <span
+        className="flex items-center justify-center flex-shrink-0"
+        style={{
+          width: 26, height: 26, borderRadius: 999,
+          background: 'linear-gradient(150deg, #EED98A, #B6871F)',
+          fontFamily: OUTFIT, fontWeight: 900, fontSize: 12.5, color: '#3A2A08',
+          fontVariantNumeric: 'tabular-nums', boxShadow: '0 2px 6px rgba(182,135,31,0.35)',
+        }}
+      >
+        {index + 1}
+      </span>
+
+      {committee && <LogoDisc src={committee.logo_url} alt={committee.name} size={34} fallbackText={monogram} />}
+      {countryCode ? <FlagImg code={resolved} size={22} /> : null}
+
+      <div className="min-w-0 flex-1">
+        <p className="truncate" style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 13, color: NEU.ink }}>
+          {countryName || committee?.abbreviation || committee?.name || 'Preference'}
+        </p>
+        <p className="truncate" style={{ fontFamily: OUTFIT, fontWeight: 600, fontSize: 10.5, color: NEU.muted }}>
+          {countryName && committee ? (committee.abbreviation || committee.name) : committee ? committee.name : ''}
+        </p>
+      </div>
+
+      <div className="flex items-center gap-0.5 flex-shrink-0">
+        <button
+          type="button" onClick={onUp} disabled={index === 0} aria-label="Move up"
+          className="flex items-center justify-center rounded-lg focus:outline-none"
+          style={{ width: 26, height: 26, color: index === 0 ? 'rgba(154,138,120,0.35)' : NEU.muted, cursor: index === 0 ? 'default' : 'pointer' }}
+        >
+          <ChevronUp size={16} strokeWidth={2.4} />
+        </button>
+        <button
+          type="button" onClick={onDown} disabled={index === total - 1} aria-label="Move down"
+          className="flex items-center justify-center rounded-lg focus:outline-none"
+          style={{ width: 26, height: 26, color: index === total - 1 ? 'rgba(154,138,120,0.35)' : NEU.muted, cursor: index === total - 1 ? 'default' : 'pointer' }}
+        >
+          <ChevronDown size={16} strokeWidth={2.4} />
+        </button>
+        <button
+          type="button" onClick={onRemove} aria-label="Remove preference"
+          className="flex items-center justify-center rounded-lg focus:outline-none"
+          style={{ width: 26, height: 26, color: NEU.muted }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#8B2020'; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = NEU.muted; }}
+        >
+          <X size={15} strokeWidth={2.4} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Inner component (requires Suspense for useSearchParams) ────────────────
 
 function ConferenceApplyInner() {
@@ -215,8 +533,15 @@ function ConferenceApplyInner() {
 
   // ── Step 3, Preferences
   const [preferences, setPreferences] = useState<Preference[]>([]);
-  const [loadingSlots, setLoadingSlots] = useState(false);
   const [countrySlots, setCountrySlots] = useState<Record<string, CountrySlot[]>>({});
+  // Taken country_codes per committee (from get_taken_allocations RPC —
+  // conference_allocations RLS hides other people's allocations, so a
+  // privacy-safe SECURITY DEFINER function returns only the taken pairs).
+  const [takenByCommittee, setTakenByCommittee] = useState<Record<string, Set<string>>>({});
+  const [prefDataLoading, setPrefDataLoading] = useState(false);
+  const [prefDataLoaded, setPrefDataLoaded] = useState(false);
+  // full mode: which committee's country tray is expanded for picking.
+  const [expandedCommitteeId, setExpandedCommitteeId] = useState<string | null>(null);
   const [prefError, setPrefError] = useState('');
 
   // ── Step 4, Experience & Questions
@@ -295,6 +620,28 @@ function ConferenceApplyInner() {
   const isObserver = role === 'observer';
   const isInvoicingRole = role === 'head-delegate' || role === 'faculty-advisor';
 
+  // ── Preference mode (organiser-controlled). Governs whether the Preferences
+  // step appears at all, and which pickers it shows.
+  const prefMode: PreferenceMode = conference?.delegate_preference_mode ?? 'committees_and_countries';
+  const showPreferenceStep = isPreferenceRole && prefMode !== 'none';
+  const showCommitteePick = prefMode === 'committees_and_countries' || prefMode === 'committees_only';
+  const showCountryPick = prefMode === 'committees_and_countries' || prefMode === 'countries_only';
+  const committeesOnly = prefMode === 'committees_only';
+  const countriesOnly = prefMode === 'countries_only';
+
+  // Availability, derived from the loaded slot + taken-allocation data.
+  const committeeSlotInfo = (id: string) => {
+    const slots = countrySlots[id] ?? [];
+    const taken = takenByCommittee[id] ?? new Set<string>();
+    const openCount = slots.filter(s => !taken.has(s.country_code)).length;
+    return { slots, taken, total: slots.length, openCount, full: slots.length > 0 && openCount === 0 };
+  };
+  // committees_only ranks whole committees; the other modes rank countries.
+  const availableUnitCount = committeesOnly
+    ? committees.filter(c => !committeeSlotInfo(c.id).full).length
+    : committees.reduce((n, c) => n + committeeSlotInfo(c.id).openCount, 0);
+  const minPrefs = Math.min(3, availableUnitCount);
+
   // F15: faculty advisors skip Experience entirely, MUN experience level
   // doesn't apply to them, so experience_level submits null for this role.
   const skipExperience = role === 'faculty-advisor';
@@ -303,7 +650,7 @@ function ConferenceApplyInner() {
     'role',
     'society',
     ...(isInvoicingRole ? ['invoicing'] : []),
-    ...(isPreferenceRole ? ['preferences'] : []),
+    ...(showPreferenceStep ? ['preferences'] : []),
     ...(skipExperience ? [] : ['experience']),
   ] as const;
   type StepKind = (typeof stepSequence)[number];
@@ -337,7 +684,7 @@ function ConferenceApplyInner() {
 
     const { data: confData } = await supabase
       .from('conferences')
-      .select('id, slug, full_name, acronym, fee_amount, fee_currency, start_date, min_age, logo_url')
+      .select('id, slug, full_name, acronym, fee_amount, fee_currency, start_date, min_age, logo_url, delegate_preference_mode')
       .eq('slug', slug)
       .single();
 
@@ -358,7 +705,7 @@ function ConferenceApplyInner() {
         .maybeSingle(),
       supabase
         .from('conference_committees')
-        .select('id, name, abbreviation, topics, difficulty, total_slots')
+        .select('id, name, abbreviation, topics, difficulty, total_slots, logo_url, committee_type')
         .eq('conference_id', confData.id)
         .order('name', { ascending: true }),
       supabase
@@ -411,18 +758,51 @@ function ConferenceApplyInner() {
     setSocietyDropdownOpen(true);
   }, [societyInput, societies]);
 
-  async function fetchSlotsForCommittee(committeeId: string) {
-    if (countrySlots[committeeId]) return;
-    if (!session) return;
-    setLoadingSlots(true);
+  // Load committee slots + availability once, as soon as we know a preference
+  // step will be shown (mode-gated). Skipped entirely for mode 'none'.
+  useEffect(() => {
+    if (!showPreferenceStep || prefDataLoaded || prefDataLoading) return;
+    if (!conference || !session) return;
+    loadPreferenceData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showPreferenceStep, prefDataLoaded, prefDataLoading, conference?.id, committees.length]);
+
+  /**
+   * Bulk-loads everything the preference picker needs: every committee's
+   * country slots, plus which of those are already TAKEN. Availability comes
+   * from get_taken_allocations (a privacy-safe RPC — the delegate can't read
+   * conference_allocations directly under RLS).
+   */
+  async function loadPreferenceData() {
+    if (!session || !conference) return;
+    if (committees.length === 0) { setPrefDataLoaded(true); return; }
+    setPrefDataLoading(true);
     const supabase = getAuthedClient(session.access_token);
-    const { data } = await supabase
-      .from('committee_country_slots')
-      .select('id, country_code, country_name')
-      .eq('conference_committee_id', committeeId)
-      .order('country_name', { ascending: true });
-    setCountrySlots(prev => ({ ...prev, [committeeId]: (data as CountrySlot[]) ?? [] }));
-    setLoadingSlots(false);
+    const ids = committees.map(c => c.id);
+    const [slotsRes, takenRes] = await Promise.all([
+      supabase
+        .from('committee_country_slots')
+        .select('id, conference_committee_id, country_code, country_name')
+        .in('conference_committee_id', ids)
+        .order('country_name', { ascending: true }),
+      supabase.rpc('get_taken_allocations', { p_conference_id: conference.id }),
+    ]);
+
+    const byCommittee: Record<string, CountrySlot[]> = {};
+    for (const id of ids) byCommittee[id] = [];
+    for (const s of (slotsRes.data as Array<CountrySlot & { conference_committee_id: string }> | null) ?? []) {
+      (byCommittee[s.conference_committee_id] ??= []).push({ id: s.id, country_code: s.country_code, country_name: s.country_name });
+    }
+
+    const taken: Record<string, Set<string>> = {};
+    for (const t of (takenRes.data as Array<{ conference_committee_id: string; country_code: string }> | null) ?? []) {
+      (taken[t.conference_committee_id] ??= new Set()).add(t.country_code);
+    }
+
+    setCountrySlots(byCommittee);
+    setTakenByCommittee(taken);
+    setPrefDataLoading(false);
+    setPrefDataLoaded(true);
   }
 
   async function handleSaveDob() {
@@ -483,13 +863,12 @@ function ConferenceApplyInner() {
       return;
     }
     if (currentStepKind === 'preferences') {
-      if (preferences.length < 3) {
-        setPrefError('Please add at least 3 preferences.');
-        return;
-      }
-      const allFilled = preferences.every(p => p.committeeId && p.countryCode);
-      if (!allFilled) {
-        setPrefError('Please complete all preferences (select a committee and country for each).');
+      if (minPrefs > 0 && preferences.length < minPrefs) {
+        setPrefError(
+          minPrefs === 1
+            ? 'Please add at least one preference.'
+            : `Please add at least ${minPrefs} preferences, ranked in order of priority.`
+        );
         return;
       }
       setPrefError('');
@@ -638,13 +1017,16 @@ function ConferenceApplyInner() {
         });
       }
 
-      if (isPreferenceRole && preferences.length > 0) {
+      if (showPreferenceStep && preferences.length > 0) {
+        // country_code/country_name are null for committees_only rows (the
+        // delegate ranked committees without a country). conference_committee_id
+        // is always present in every mode.
         const prefRows = preferences.map((p, i) => ({
           application_id: (app as { id: string }).id,
           preference_order: i + 1,
           conference_committee_id: p.committeeId,
-          country_code: p.countryCode,
-          country_name: p.countryName,
+          country_code: p.countryCode || null,
+          country_name: p.countryName || null,
         }));
         await supabase.from('application_preferences').insert(prefRows);
       }
@@ -1190,136 +1572,222 @@ function ConferenceApplyInner() {
   }
 
   function renderStep3Preferences() {
+    const subtitle = committeesOnly
+      ? 'Rank the committees you would most like to sit in.'
+      : countriesOnly
+      ? 'Rank the countries you would most like to represent.'
+      : 'Rank the committee-and-country pairings you would most like to represent.';
+    const atMax = preferences.length >= 8;
+
+    const addPref = (entry: Preference) =>
+      setPreferences(prev => (prev.length >= 8 ? prev : [...prev, entry]));
+    const removeAt = (i: number) =>
+      setPreferences(prev => prev.filter((_, x) => x !== i));
+    const move = (i: number, dir: -1 | 1) =>
+      setPreferences(prev => {
+        const j = i + dir;
+        if (j < 0 || j >= prev.length) return prev;
+        const next = [...prev];
+        [next[i], next[j]] = [next[j], next[i]];
+        return next;
+      });
+    const committeeRank = (id: string) => {
+      const i = preferences.findIndex(p => p.committeeId === id);
+      return i < 0 ? null : i + 1;
+    };
+    const isCountrySelected = (id: string, code: string) =>
+      preferences.some(p => p.committeeId === id && p.countryCode === code);
+    const toggleCommitteeOnly = (c: CommitteeOption) => {
+      setPrefError('');
+      const i = preferences.findIndex(p => p.committeeId === c.id);
+      if (i >= 0) removeAt(i);
+      else addPref({ committeeId: c.id, committeeName: c.name, countryCode: '', countryName: '' });
+    };
+    const toggleCountry = (c: CommitteeOption, slot: CountrySlot) => {
+      setPrefError('');
+      const i = preferences.findIndex(p => p.committeeId === c.id && p.countryCode === slot.country_code);
+      if (i >= 0) removeAt(i);
+      else addPref({ committeeId: c.id, committeeName: c.name, countryCode: slot.country_code, countryName: slot.country_name });
+    };
+
+    const rankedPanel = preferences.length > 0 && (
+      <NeuInset className="mb-5" style={{ padding: 12 }}>
+        <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.2em', color: NEU.muted, marginBottom: 10, marginLeft: 2 }}>
+          YOUR RANKING · {preferences.length}
+        </p>
+        <div className="flex flex-col gap-2">
+          {preferences.map((p, i) => (
+            <RankedRow
+              key={`${p.committeeId}-${p.countryCode}-${i}`}
+              index={i}
+              total={preferences.length}
+              committee={committees.find(c => c.id === p.committeeId)}
+              countryCode={p.countryCode}
+              countryName={p.countryName}
+              onUp={() => move(i, -1)}
+              onDown={() => move(i, 1)}
+              onRemove={() => removeAt(i)}
+              reducedMotion={reducedMotion}
+            />
+          ))}
+        </div>
+      </NeuInset>
+    );
+
+    // ── Loading skeleton while slots + availability load.
+    if (prefDataLoading && !prefDataLoaded) {
+      return (
+        <>
+          <StepHeading icon={ListOrdered} title="Your Preferences" subtitle={subtitle} />
+          <div className="flex items-center justify-center py-16">
+            <div className="w-6 h-6 rounded-full border-2 animate-spin" style={{ borderColor: NEU.forest, borderTopColor: 'transparent' }} />
+          </div>
+        </>
+      );
+    }
+
     return (
       <>
-        <StepHeading
-          icon={ListOrdered}
-          title="Your Preferences"
-          subtitle="Add at least 3 preferences in order of priority: each is a committee + country."
-        />
+        <StepHeading icon={ListOrdered} title="Your Preferences" subtitle={subtitle} />
 
-        {preferences.map((pref, idx) => (
-          <div key={idx} className="mb-3 p-4 rounded-xl" style={{ backgroundColor: 'rgba(27,56,40,0.04)', border: '1.5px solid rgba(27,56,40,0.12)' }}>
-            <div className="flex items-center justify-between">
-              <span className="flex items-center gap-2.5">
-                <span
-                  className="flex items-center justify-center flex-shrink-0"
-                  style={{
-                    width: 26, height: 26, borderRadius: '9999px',
-                    background: 'linear-gradient(150deg, rgba(238,217,138,0.3), rgba(182,135,31,0.16))',
-                    border: '1.5px solid rgba(182,135,31,0.42)',
-                    fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '12px', color: '#7A5A20',
-                  }}
-                >
-                  {idx + 1}
-                </span>
-                <span className="text-sm font-bold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-                  Preference
-                </span>
-              </span>
-              <button
-                onClick={() => setPreferences(prev => prev.filter((_, i) => i !== idx))}
-                aria-label="Remove preference"
-                className="flex items-center justify-center rounded-lg focus:outline-none transition-colors"
-                style={{ width: 26, height: 26, color: '#9A8A78' }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#8B2020'; (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.08)'; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-              >
-                <X size={15} strokeWidth={2.4} />
-              </button>
-            </div>
+        {minPrefs > 0 && (
+          <p className="mb-4" style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.muted }}>
+            Pick and order at least <span style={{ fontWeight: 800, color: NEU.ink, fontVariantNumeric: 'tabular-nums' }}>{minPrefs}</span>
+            {atMax ? ' · maximum of 8 reached' : ' · rank up to 8'}. Taken options are greyed out.
+          </p>
+        )}
 
-            <div className="mt-2">
-              <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Committee</label>
-              <select
-                value={pref.committeeId}
-                onChange={(e) => {
-                  const selected = committees.find(c => c.id === e.target.value);
-                  setPreferences(prev => prev.map((p, i) =>
-                    i === idx ? { ...p, committeeId: e.target.value, committeeName: selected?.name ?? '', countryCode: '', countryName: '' } : p
-                  ));
-                  if (e.target.value) fetchSlotsForCommittee(e.target.value);
-                }}
-                className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none"
-                style={{ border: '1.5px solid #DDD4C0', backgroundColor: '#FAF8F3', color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}
-              >
-                <option value="" disabled>Select a committee...</option>
-                {committees.map(c => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}{c.abbreviation ? ` (${c.abbreviation})` : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
+        {rankedPanel}
 
-            {pref.committeeId && (
-              <div className="mt-2">
-                <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Country / Portfolio</label>
-                <div className="relative">
-                  {pref.countryCode && (
-                    <img
-                      src={getFlagUrl(pref.countryCode)}
-                      alt={pref.countryName}
-                      style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', width: 18, height: 13, borderRadius: 3, objectFit: 'cover', zIndex: 1, pointerEvents: 'none' }}
-                    />
-                  )}
-                  <select
-                    value={pref.countryCode}
-                    onChange={(e) => {
-                      const slot = (countrySlots[pref.committeeId] ?? []).find(s => s.country_code === e.target.value);
-                      setPreferences(prev => prev.map((p, i) =>
-                        i === idx ? { ...p, countryCode: e.target.value, countryName: slot?.country_name ?? '' } : p
-                      ));
-                    }}
-                    disabled={loadingSlots && !countrySlots[pref.committeeId]}
-                    className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none"
-                    style={{
-                      border: '1.5px solid #DDD4C0',
-                      backgroundColor: '#FAF8F3',
-                      color: '#1C1410',
-                      fontFamily: "'Outfit', sans-serif",
-                      paddingLeft: pref.countryCode ? 36 : 16,
-                    }}
-                  >
-                    <option value="" disabled>
-                      {loadingSlots && !countrySlots[pref.committeeId] ? 'Loading countries...' : 'Select a country...'}
-                    </option>
-                    {countrySlots[pref.committeeId]?.length === 0 && (
-                      <option value="" disabled>No countries available</option>
-                    )}
-                    {(countrySlots[pref.committeeId] ?? []).map(slot => (
-                      <option key={slot.id} value={slot.country_code}>{slot.country_name}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            )}
+        {/* ── Picker ──────────────────────────────────────────────────────── */}
+        {committees.length === 0 ? (
+          <NeuInset style={{ padding: 20 }}>
+            <p style={{ fontFamily: OUTFIT, fontSize: 13, color: NEU.muted, textAlign: 'center' }}>
+              This conference hasn&apos;t published its committees yet. You can still submit — the organisers will assign you.
+            </p>
+          </NeuInset>
+        ) : committeesOnly ? (
+          <div className="flex flex-col gap-3">
+            {committees.map(c => {
+              const info = committeeSlotInfo(c.id);
+              return (
+                <CommitteeCard
+                  key={c.id}
+                  committee={c}
+                  openCount={info.openCount}
+                  totalCount={info.total}
+                  rank={committeeRank(c.id)}
+                  active={false}
+                  disabled={info.full || (atMax && committeeRank(c.id) == null)}
+                  showAvailability
+                  onClick={() => toggleCommitteeOnly(c)}
+                  reducedMotion={reducedMotion}
+                />
+              );
+            })}
           </div>
-        ))}
-
-        {preferences.length < 8 && (
-          <button
-            onClick={() => setPreferences(prev => [...prev, { committeeId: '', committeeName: '', countryCode: '', countryName: '' }])}
-            className="w-full rounded-xl py-3 text-sm font-semibold focus:outline-none mb-2 flex items-center justify-center gap-2"
-            style={{ border: '1.5px dashed #C8BEA8', backgroundColor: 'transparent', color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#C8BEA8'; (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
-          >
-            <Plus size={16} strokeWidth={2.4} /> ADD PREFERENCE
-          </button>
+        ) : countriesOnly ? (
+          <div className="flex flex-col gap-5">
+            {committees.map(c => {
+              const info = committeeSlotInfo(c.id);
+              if (info.total === 0) return null;
+              const monogram = (c.abbreviation || c.name).slice(0, 3).toUpperCase();
+              return (
+                <div key={c.id}>
+                  <div className="flex items-center gap-2.5 mb-2.5">
+                    <LogoDisc src={c.logo_url} alt={c.name} size={30} fallbackText={monogram} />
+                    <span style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 13, color: NEU.ink }}>
+                      {c.abbreviation || c.name}
+                    </span>
+                    <DifficultyBadge difficulty={c.difficulty} />
+                    {info.full && (
+                      <span style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, color: '#8B2020', letterSpacing: '0.06em' }}>FULL</span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {info.slots.map(slot => {
+                      const taken = info.taken.has(slot.country_code);
+                      return (
+                        <CountryChip
+                          key={slot.id}
+                          code={slot.country_code}
+                          name={slot.country_name}
+                          taken={taken || (atMax && !isCountrySelected(c.id, slot.country_code))}
+                          selected={isCountrySelected(c.id, slot.country_code)}
+                          onClick={() => toggleCountry(c, slot)}
+                          reducedMotion={reducedMotion}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          // full mode: committee card → expand → country tray
+          <div className="flex flex-col gap-3">
+            {committees.map(c => {
+              const info = committeeSlotInfo(c.id);
+              const expanded = expandedCommitteeId === c.id;
+              const chosenHere = preferences.filter(p => p.committeeId === c.id).length;
+              return (
+                <div key={c.id}>
+                  <CommitteeCard
+                    committee={c}
+                    openCount={info.openCount}
+                    totalCount={info.total}
+                    rank={null}
+                    active={expanded || chosenHere > 0}
+                    disabled={info.full && chosenHere === 0}
+                    showAvailability
+                    onClick={() => setExpandedCommitteeId(prev => (prev === c.id ? null : c.id))}
+                    reducedMotion={reducedMotion}
+                  />
+                  {expanded && (
+                    <NeuInset className="mt-2" style={{ padding: 12 }}>
+                      {info.total === 0 ? (
+                        <p style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.muted, textAlign: 'center', padding: '6px 0' }}>
+                          No countries listed for this committee yet.
+                        </p>
+                      ) : (
+                        <div className="flex flex-wrap gap-2">
+                          {info.slots.map(slot => {
+                            const taken = info.taken.has(slot.country_code);
+                            const selected = isCountrySelected(c.id, slot.country_code);
+                            return (
+                              <CountryChip
+                                key={slot.id}
+                                code={slot.country_code}
+                                name={slot.country_name}
+                                taken={taken || (atMax && !selected)}
+                                selected={selected}
+                                onClick={() => toggleCountry(c, slot)}
+                                reducedMotion={reducedMotion}
+                              />
+                            );
+                          })}
+                        </div>
+                      )}
+                    </NeuInset>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         )}
 
         {prefError && (
-          <p className="mb-3 text-xs" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>
+          <p className="mt-4 text-xs" style={{ color: '#8B2020', fontFamily: OUTFIT }}>
             {prefError}
           </p>
         )}
 
-        <div className="flex justify-between mt-4">
+        <div className="flex justify-between mt-6">
           <button
             onClick={() => setStep(s => s - 1)}
             className="rounded-xl py-2.5 px-5 text-sm font-bold focus:outline-none transition-colors flex items-center gap-1.5"
-            style={{ border: '1.5px solid #C8BEA8', color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}
+            style={{ border: '1.5px solid #C8BEA8', color: '#1C1410', fontFamily: OUTFIT }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
           >
@@ -1328,7 +1796,7 @@ function ConferenceApplyInner() {
           <button
             onClick={handleContinue}
             className="rounded-xl py-2.5 px-6 text-sm font-bold focus:outline-none transition-colors flex items-center gap-2"
-            style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', boxShadow: '0 6px 18px rgba(27,56,40,0.22)' }}
+            style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, letterSpacing: '0.08em', boxShadow: '0 6px 18px rgba(27,56,40,0.22)' }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
           >
@@ -1588,20 +2056,12 @@ function ConferenceApplyInner() {
             <label className="block font-semibold text-sm mb-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
               Date of birth
             </label>
-            <input
-              type="date"
+            <DatePicker
               value={dobInput}
               max={new Date().toISOString().slice(0, 10)}
-              onChange={(e) => { setDobInput(e.target.value); setDobError(''); }}
-              className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none"
-              style={{
-                border: dobError ? '1.5px solid #8B2020' : '1.5px solid #DDD4C0',
-                backgroundColor: '#FAF8F3',
-                color: '#1C1410',
-                fontFamily: "'Outfit', sans-serif",
-              }}
-              onFocus={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
-              onBlur={(e) => { (e.currentTarget as HTMLElement).style.borderColor = dobError ? '#8B2020' : '#DDD4C0'; }}
+              initialView="2005-06-15"
+              placeholder="Select your date of birth"
+              onChange={(iso) => { setDobInput(iso); setDobError(''); }}
             />
             {dobError && (
               <p className="mt-1.5 text-xs" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>
