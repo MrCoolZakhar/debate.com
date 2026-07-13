@@ -10,6 +10,8 @@ import {
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { LogoDisc } from '@/components/LogoDisc';
+import { BrandConferences } from '@/components/Brand';
+import ProfileDropdown from '@/components/ProfileDropdown';
 
 // ── Conference type ────────────────────────────────────────────────────────
 
@@ -719,8 +721,9 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
       >
         {/* Left: logo + divider + acronym */}
         <div className="flex items-center gap-3">
-          <Link href="/">
-            <img src="/GavellingLogo.png" alt="Gavelling" className="h-6 w-auto object-contain brightness-200 saturate-0" />
+          <Link href="/" style={{ textDecoration: 'none' }}>
+            {/* Conferences brand, greyed for the quiet /manage chrome */}
+            <BrandConferences tone="dark" size={28} monochrome />
           </Link>
           <span style={{ color: 'rgba(238,217,138,0.3)', fontSize: '16px' }}>/</span>
           <Link
@@ -756,17 +759,28 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
             VIEW PAGE →
           </Link>
 
-          <Link
-            href="/account/profile"
-            className="flex items-center justify-center w-7 h-7 rounded-full text-xs font-black focus:outline-none transition-opacity hover:opacity-80 flex-shrink-0"
-            style={{ backgroundColor: '#EED98A', color: '#1B3828', fontFamily: "'Outfit', sans-serif", textDecoration: 'none' }}
-          >
-            {profile?.avatar_url ? (
-              <img src={profile.avatar_url} alt="Avatar" className="w-7 h-7 rounded-full object-cover" />
-            ) : (
-              avatarInitial
+          {/* Shared account menu (same hover-open dropdown as SiteNav) */}
+          <ProfileDropdown
+            panelStyle={{ zIndex: 60 }}
+            trigger={(open, toggle) => (
+              <button
+                onClick={toggle}
+                aria-label="Account menu"
+                className="flex items-center justify-center w-7 h-7 rounded-full text-xs font-black focus:outline-none transition-opacity hover:opacity-80 flex-shrink-0"
+                style={{
+                  backgroundColor: '#EED98A', color: '#1B3828',
+                  fontFamily: "'Outfit', sans-serif",
+                  border: 'none', cursor: 'pointer', padding: 0,
+                }}
+              >
+                {profile?.avatar_url ? (
+                  <img src={profile.avatar_url} alt="Avatar" className="w-7 h-7 rounded-full object-cover" />
+                ) : (
+                  avatarInitial
+                )}
+              </button>
             )}
-          </Link>
+          />
 
           {/* Mobile hamburger */}
           <button

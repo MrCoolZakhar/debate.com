@@ -93,6 +93,136 @@ function PublishModal({
   );
 }
 
+// ── First-delegate share modal ─────────────────────────────────────────────
+// House recipe for "Get your first delegate": copy the public conference
+// link, plus an Instagram-story prompt with a pre-written caption.
+
+function ShareModal({
+  conference,
+  onClose,
+}: {
+  conference: { slug: string; full_name: string; acronym: string };
+  onClose: () => void;
+}) {
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [copiedCaption, setCopiedCaption] = useState(false);
+
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://gavelling.com';
+  const publicUrl = `${origin}/conferences/${conference.slug}`;
+  const caption = `Applications for ${conference.full_name} are open! Apply as a delegate here ↓\n${publicUrl}`;
+
+  async function copy(text: string, setFlag: (v: boolean) => void) {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // Clipboard API unavailable (http / permissions) — fall back silently.
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+    setFlag(true);
+    setTimeout(() => setFlag(false), 2000);
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center px-4"
+      style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md rounded-2xl p-7"
+        style={{ backgroundColor: NEU.surface, boxShadow: NEU.out }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-3 mb-1.5">
+          <Emoji3D name="Megaphone" size={30} fallback={UserPlus} fallbackColor={NEU.forest} />
+          <h2 className="font-black text-xl" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
+            Get your first delegate
+          </h2>
+        </div>
+        <p className="text-sm mb-5" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+          Share your conference page — anyone who opens it can apply as a delegate.
+        </p>
+
+        {/* Public link + copy */}
+        <p style={{ fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, letterSpacing: '0.14em', color: NEU.deepGold, marginBottom: 6 }}>
+          YOUR PUBLIC LINK
+        </p>
+        <div className="flex items-center gap-2 mb-5">
+          <NeuInset className="flex-1 min-w-0" style={{ padding: '9px 12px', borderRadius: 12 }}>
+            <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 600, color: NEU.ink }}>
+              {publicUrl}
+            </p>
+          </NeuInset>
+          <button
+            onClick={() => copy(publicUrl, setCopiedLink)}
+            className="flex-shrink-0 rounded-xl py-2.5 px-4 font-bold text-xs tracking-widest transition-colors focus:outline-none"
+            style={{
+              backgroundColor: copiedLink ? '#3D7A52' : '#1B3828',
+              color: NEU.gold, fontFamily: OUTFIT, letterSpacing: '0.06em',
+              border: 'none', cursor: 'pointer',
+            }}
+            onMouseEnter={(e) => { if (!copiedLink) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+            onMouseLeave={(e) => { if (!copiedLink) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+          >
+            {copiedLink ? 'COPIED ✓' : 'COPY'}
+          </button>
+        </div>
+
+        {/* Instagram story prompt */}
+        <div className="rounded-xl p-4 mb-5" style={{ border: '1.5px solid rgba(182,135,31,0.35)', backgroundColor: 'rgba(238,217,138,0.14)' }}>
+          <div className="flex items-center gap-2 mb-2">
+            <Emoji3D name="Camera with flash" size={20} fallback={ArrowRight} fallbackColor={NEU.deepGold} />
+            <p style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 900, letterSpacing: '0.08em', color: NEU.ink }}>
+              SHARE TO YOUR STORY
+            </p>
+          </div>
+          <p
+            className="rounded-lg p-2.5 mb-2.5"
+            style={{
+              fontFamily: OUTFIT, fontSize: 12, color: NEU.ink, lineHeight: 1.45,
+              backgroundColor: 'rgba(255,255,255,0.55)', whiteSpace: 'pre-line', wordBreak: 'break-word',
+            }}
+          >
+            {caption}
+          </p>
+          <div className="flex items-center justify-between gap-3">
+            <p style={{ fontFamily: OUTFIT, fontSize: 10.5, color: NEU.muted, lineHeight: 1.4 }}>
+              Paste the link into your story&apos;s link sticker.
+            </p>
+            <button
+              onClick={() => copy(caption, setCopiedCaption)}
+              className="flex-shrink-0 rounded-xl py-2 px-3.5 font-bold text-xs tracking-widest transition-colors focus:outline-none"
+              style={{
+                backgroundColor: 'transparent',
+                color: copiedCaption ? '#3D7A52' : NEU.deepGold,
+                border: `1.5px solid ${copiedCaption ? '#3D7A52' : 'rgba(182,135,31,0.5)'}`,
+                fontFamily: OUTFIT, letterSpacing: '0.06em', cursor: 'pointer',
+              }}
+            >
+              {copiedCaption ? 'CAPTION COPIED ✓' : 'COPY CAPTION'}
+            </button>
+          </div>
+        </div>
+
+        <button
+          onClick={onClose}
+          className="w-full rounded-xl py-2.5 font-bold text-sm tracking-widest transition-colors focus:outline-none"
+          style={{ border: '1.5px solid #DDD4C0', color: NEU.ink, backgroundColor: 'transparent', fontFamily: OUTFIT, letterSpacing: '0.06em', cursor: 'pointer' }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
+        >
+          DONE
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Time-series bucketing ──────────────────────────────────────────────────
 
 interface AppRow {
@@ -545,6 +675,7 @@ export default function DashboardPage() {
   const { conference, refreshConference } = useManage();
   const { session } = useAuth();
   const [showPublishModal, setShowPublishModal] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
   const [publishBlockMsg, setPublishBlockMsg] = useState('');
   const [dash, setDash] = useState<DashData | null>(null);
 
@@ -699,7 +830,11 @@ export default function DashboardPage() {
       title: 'Get your first delegate',
       sub: delegateApps > 0 ? `${delegateApps} delegate application${delegateApps === 1 ? '' : 's'} received.` : 'Share your page and receive an application.',
       done: delegateApps > 0,
-      onClick: () => router.push(`/manage/${slug}/applications`),
+      // Pending: open the share popup (link + story recipe) — no deep link.
+      // Done: jump to the applications that came in.
+      onClick: delegateApps > 0
+        ? () => router.push(`/manage/${slug}/applications`)
+        : () => setShowShareModal(true),
     },
     {
       key: 'financials',
@@ -908,6 +1043,13 @@ export default function DashboardPage() {
           conference={conference}
           onClose={() => setShowPublishModal(false)}
           onPublished={handlePublished}
+        />
+      )}
+
+      {showShareModal && (
+        <ShareModal
+          conference={conference}
+          onClose={() => setShowShareModal(false)}
         />
       )}
     </div>
