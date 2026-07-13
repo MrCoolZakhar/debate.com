@@ -40,6 +40,16 @@ const AMBASSADORS = [
   { name: 'Andrew Mailoa',           country: 'Indonesia',      initials: 'AM', photo: '/ambassador-photos/andrew_ambassador.png' },
   { name: 'Charlito Gunawan',        country: 'Indonesia',      initials: 'CG', photo: '/ambassador-photos/charlito_ambassador.png' },
   { name: 'Victor Mikusek',          country: 'Hong Kong',      initials: 'VM', photo: '/ambassador-photos/victor_ambassador.png' },
+  { name: 'Alman Ahmad',             country: 'UAE',            initials: 'AA', photo: '/ambassador-photos/alman_ambassador.png', photoPosition: 'center 25%' },
+  { name: 'Farhan Arbab',            country: 'Bangladesh',     initials: 'FA', photo: '/ambassador-photos/farhan_ambassador.png', photoPosition: 'center 33%' },
+  { name: 'Anushka Arora',           country: 'India',          initials: 'AA', photo: '/ambassador-photos/anushka_ambassador.png', photoPosition: 'center 38%' },
+  { name: 'Ridhi Sareen',            country: 'India',          initials: 'RS', photo: '/ambassador-photos/ridhi_ambassador.png', photoPosition: 'center 22%' },
+  { name: 'Myesha',                  country: 'Thailand',       initials: 'MY', photo: '/ambassador-photos/myesha_ambassador.png', photoPosition: 'center 40%' },
+  { name: 'Reem Ghazal',             country: 'France',         initials: 'RG', photo: '/ambassador-photos/reem_ambassador.png', photoPosition: 'center 30%' },
+  // Africa
+  { name: 'Lealem Tayework',         country: 'Ethiopia',       initials: 'LT', photo: '/ambassador-photos/lealem_ambassador.png', photoPosition: 'center 22%' },
+  // Latin America
+  { name: 'Diego Aldana',            country: 'Honduras',       initials: 'DA', photo: '/ambassador-photos/diego_ambassador.png', photoPosition: 'center 22%' },
   { name: 'Isabella Romero',         country: 'Honduras',       initials: 'IR', photo: '/ambassador-photos/isabella_ambassador.png' },
 ];
 
