@@ -79,7 +79,7 @@ export async function fillFreeSpots(
   const freeSpots = spotsPurchased - (occupancy ?? 0);
   if (freeSpots <= 0) return { filledIds: [] };
 
-  // Unpaid only — waived members are already covered and skipped.
+  // Unpaid only, waived members are already covered and skipped.
   const { data: candidates } = await supabase
     .from('applications')
     .select('id')

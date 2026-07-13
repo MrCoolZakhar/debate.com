@@ -9,12 +9,12 @@
 // Drafting a template overrides the default for that event, as before.
 //   - queueEventEmail's three-state semantics: an ENABLED row with no real
 //     content (a stub created by TURN ON, or an empty draft) falls back to
-//     this map and actually sends it — 'sent-default' outcome. A row that's
-//     disabled skips silently; no row at all skips with an 'unconfigured'
-//     nudge. See the QueueOutcome docs in emailEvents.ts.
+//     this map and actually sends it, the 'sent-default' outcome. A row
+//     that's disabled skips silently; no row at all skips with an
+//     'unconfigured' nudge. See the QueueOutcome docs in emailEvents.ts.
 //   - The two functional invites (committee_chair_invite, import_join_invite)
-//     always consult this map when their own template isn't enabled+drafted
-//     — they never gate sending on template state at all.
+//     always consult this map when their own template isn't enabled+drafted;
+//     they never gate sending on template state at all.
 
 import type { EmailBlock } from './emailBlocks';
 

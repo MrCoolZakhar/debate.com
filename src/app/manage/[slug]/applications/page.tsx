@@ -430,7 +430,7 @@ export default function ApplicationsPage() {
   }
 
   // ── Withdraw from conference (accepted/assigned, unpaid or waived only) ────
-  // Paid applications render this action disabled — refunds come with
+  // Paid applications render this action disabled: refunds come with
   // finances, so payment must be handled first (Danger ConfirmModal spells
   // this out; the button itself is also disabled, see the review modal JSX).
 
@@ -444,14 +444,14 @@ export default function ApplicationsPage() {
     if (inDelegation && pool) {
       parts.push(
         selfFundedPaidSpot
-          ? "Their paid spot was self-funded, so it leaves with them — the delegation's purchased-spots count goes down by one."
+          ? "Their paid spot was self-funded, so it leaves with them: the delegation's purchased-spots count goes down by one."
           : app.payment_status === 'paid'
-          ? "Their spot was covered by the delegation's purchased spots, so it stays behind — it will show as open."
+          ? "Their spot was covered by the delegation's purchased spots, so it stays behind: it will show as open."
           : 'They will leave their delegation.'
       );
     }
     if (app.role === 'chair') parts.push('If they chair a committee, they will be removed from its dais.');
-    parts.push('This cannot be undone from here — reinstating only restores their application to Accepted, nothing else.');
+    parts.push('This cannot be undone from here. Reinstating only restores their application to Accepted, nothing else.');
 
     const { confirmed } = await confirm({
       title: 'Remove from conference?',
@@ -500,7 +500,7 @@ export default function ApplicationsPage() {
         await supabase.from('conference_allocations').delete().eq('application_id', appId);
       }
 
-      // If they chair any committee, drop them from its dais — mirrors
+      // If they chair any committee, drop them from its dais: mirrors
       // committees/page.tsx & assignment/page.tsx's handleRemoveChair.
       if (prevRow.role === 'chair' && prevRow.user_id) {
         const { data: chaired } = await supabase
@@ -516,7 +516,7 @@ export default function ApplicationsPage() {
     })()
       .catch(() => {
         restoreRow(prevRow);
-        setActionError('Could not withdraw the application — the change was reverted. Please try again.');
+        setActionError('Could not withdraw the application. The change was reverted. Please try again.');
       })
       .finally(() => markBusy(appId, false));
   }
@@ -528,7 +528,7 @@ export default function ApplicationsPage() {
 
     setActionError('');
     markBusy(appId, true);
-    // Only the status is restored — nothing else (allocation, delegation,
+    // Only the status is restored: nothing else (allocation, delegation,
     // dais seat) comes back automatically.
     applyRow(appId, { status: 'accepted' });
 
@@ -539,7 +539,7 @@ export default function ApplicationsPage() {
     })()
       .catch(() => {
         restoreRow(prevRow);
-        setActionError('Could not reinstate the application — the change was reverted. Please try again.');
+        setActionError('Could not reinstate the application. The change was reverted. Please try again.');
       })
       .finally(() => markBusy(appId, false));
   }
@@ -1117,7 +1117,7 @@ export default function ApplicationsPage() {
           </button>
         );
 
-        // Withdraw (F: PART 2 item 1) — accepted/assigned only, and only when
+        // Withdraw (F: PART 2 item 1): accepted/assigned only, and only when
         // payment_status is 'unpaid' or 'waived'. Paid applicants must have
         // their payment handled first (refunds come with finances).
         const canWithdraw = app.payment_status !== 'paid';

@@ -20,7 +20,7 @@ export interface EventDef {
   description: string;
   defaultDelivery: 'immediate' | 'manual';
   /** Functional invites (committee_chair_invite, import_join_invite) always
-   *  send — clicking INVITE is the consent — so the Notifications registry
+   *  send, clicking INVITE is the consent, so the Notifications registry
    *  hides their toggle and shows a fixed "always sends" note instead. */
   functional?: boolean;
 }
@@ -29,7 +29,7 @@ export const EVENT_REGISTRY: EventDef[] = [
   { key: 'application_received', label: 'Application Received', description: 'Sent to a delegate when their application is submitted.', defaultDelivery: 'immediate' },
   { key: 'application_accepted', label: 'Application Accepted', description: 'Sent when an application is accepted.', defaultDelivery: 'immediate' },
   { key: 'application_rejected', label: 'Application Rejected', description: 'Sent when an application is rejected.', defaultDelivery: 'immediate' },
-  { key: 'payment_available', label: 'Payment Available', description: "Sent when payment opens up for a delegate. Companion to Application Accepted: on acceptance, this is suppressed for anyone who was actually emailed Application Accepted for the same action — it only sends alone when that email resolved to nothing (off or unconfigured) for them.", defaultDelivery: 'immediate' },
+  { key: 'payment_available', label: 'Payment Available', description: "Sent when payment opens up for a delegate. Companion to Application Accepted: on acceptance, this is suppressed for anyone who was actually emailed Application Accepted for the same action. It only sends alone when that email resolved to nothing (off or unconfigured) for them.", defaultDelivery: 'immediate' },
   { key: 'payment_received', label: 'Payment Received', description: "Sent when a delegate is marked paid.", defaultDelivery: 'immediate' },
   { key: 'fee_waived', label: 'Fee Waived', description: "Sent when a delegate's fee is waived.", defaultDelivery: 'immediate' },
   { key: 'allocation_assigned', label: 'Allocation Assigned', description: 'Sent when a delegate is allocated a committee and country.', defaultDelivery: 'immediate' },
@@ -44,13 +44,13 @@ export const EVENT_REGISTRY: EventDef[] = [
   { key: 'attendance_restored', label: 'Attendance Restored', description: "Sent when a delegate's attendance is restored.", defaultDelivery: 'immediate' },
   { key: 'documents_published', label: 'Documents Published', description: 'Sent when working papers or resolutions are published.', defaultDelivery: 'manual' },
   { key: 'chair_assigned', label: 'Chair Assigned', description: 'Sent when someone is assigned as a committee chair.', defaultDelivery: 'immediate' },
-  { key: 'committee_chair_invite', label: 'Chair invite', description: 'Sent when an organizer invites someone to chair a committee. Always sends — clicking INVITE is the consent — using your draft if enabled, otherwise our default.', defaultDelivery: 'immediate', functional: true },
+  { key: 'committee_chair_invite', label: 'Chair invite', description: 'Sent when an organizer invites someone to chair a committee. Always sends, clicking INVITE is the consent, using your draft if enabled, otherwise our default.', defaultDelivery: 'immediate', functional: true },
   { key: 'session_chair_invite', label: 'Session Chair Invite', description: 'Sent to committee chairs with their session code and chair password.', defaultDelivery: 'manual' },
   { key: 'session_join_invite', label: 'Session Join Invite', description: 'Sent to committee participants inviting them to join the live session.', defaultDelivery: 'manual' },
   { key: 'request_reply', label: 'Request reply', description: 'Sent to a participant when the organizing team replies to their question.', defaultDelivery: 'immediate' },
   { key: 'delegation_swap', label: 'Delegation swap', description: 'Sent to both delegates when their committee allocations are swapped within a delegation.', defaultDelivery: 'immediate' },
   { key: 'position_paper_feedback', label: 'Position Paper Feedback', description: 'Sent to a delegate when their chair leaves feedback on their position paper.', defaultDelivery: 'immediate' },
-  { key: 'import_join_invite', label: 'Import: join Gavelling', description: 'Sent to imported applicants asking them to create a Gavelling account so their registration attaches automatically. Always sends — clicking INVITE is the consent — using your draft if enabled, otherwise our default.', defaultDelivery: 'immediate', functional: true },
+  { key: 'import_join_invite', label: 'Import: join Gavelling', description: 'Sent to imported applicants asking them to create a Gavelling account so their registration attaches automatically. Always sends, clicking INVITE is the consent, using your draft if enabled, otherwise our default.', defaultDelivery: 'immediate', functional: true },
 ];
 
 /** Looks up a registry event's display label, falling back to the raw key if unknown. */
@@ -59,24 +59,24 @@ export function getEventLabel(eventKey: string): string {
 }
 
 // ── Three-state send outcome ─────────────────────────────────────────────────
-// 'sent-custom'   — enabled + a real drafted template -> that draft sent.
-// 'sent-default'  — enabled but undrafted (a stub row, or empty content) ->
-//                    getDefaultEventEmail sent instead.
-// 'off'           — a row exists with enabled=false -> skip SILENTLY, no notice.
-// 'unconfigured'  — no row at all -> nothing sent; the UI nudges the organizer
-//                    to TURN ON (send our default) or DRAFT their own.
-// 'no-recipients' — applicationIds was empty, or every id was suppressed by
-//                    the caller's consolidation rule -> nothing to notice.
+// 'sent-custom':   enabled + a real drafted template -> that draft sent.
+// 'sent-default':  enabled but undrafted (a stub row, or empty content) ->
+//                  getDefaultEventEmail sent instead.
+// 'off':           a row exists with enabled=false -> skip SILENTLY, no notice.
+// 'unconfigured':  no row at all -> nothing sent; the UI nudges the organizer
+//                  to TURN ON (send our default) or DRAFT their own.
+// 'no-recipients': applicationIds was empty, or every id was suppressed by
+//                  the caller's consolidation rule -> nothing to notice.
 export type QueueOutcome = 'sent-custom' | 'sent-default' | 'off' | 'unconfigured' | 'no-recipients';
 
 export interface QueueEventEmailResult {
   outcome: QueueOutcome;
   /** True iff outcome === 'sent-custom'. Kept for callers that only care
    *  whether their OWN drafted copy went out (e.g. removeFromDelegation's
-   *  return shape) — prefer `outcome` for anything UI-facing. */
+   *  return shape); prefer `outcome` for anything UI-facing. */
   drafted: boolean;
   queued?: number;
-  /** Application ids that actually received an outbox row this call — the
+  /** Application ids that actually received an outbox row this call, the
    *  suppression set a subsequent lower-priority queueEventEmail call should
    *  pass so it doesn't double-email the same people (e.g. payment_available
    *  after application_accepted). */
@@ -85,7 +85,7 @@ export interface QueueEventEmailResult {
   eventLabel?: string;
 }
 
-/** True when the outcome should surface a DraftNotice-style nudge — the two
+/** True when the outcome should surface a DraftNotice-style nudge, the two
  *  "something's missing" states. 'off' and 'sent-custom' never notice: OFF is
  *  an explicit organizer choice, and a real draft sending is just success. */
 export function shouldNotify(outcome: QueueOutcome): outcome is 'unconfigured' | 'sent-default' {
@@ -102,7 +102,7 @@ export function notifyIfNeeded(
   if (shouldNotify(result.outcome)) push(result.eventKey ?? '', result.outcome);
 }
 
-/** A template row counts as "drafted" only once it actually has content — a
+/** A template row counts as "drafted" only once it actually has content, a
  *  stub row created by TURN ON (enabled, empty body) is still "undrafted"
  *  and falls back to the default copy. */
 function hasDraftContent(template: TemplateRow): boolean {
@@ -179,7 +179,7 @@ interface ConferenceRow {
  * enabled+undrafted falls back to getDefaultEventEmail, a disabled row skips
  * silently, and no row at all skips with an 'unconfigured' nudge. `opts.suppressIds`
  * lets a caller drop recipients another higher-priority event already emailed
- * in the same action (consolidation rules) — suppressed recipients are simply
+ * in the same action (consolidation rules); suppressed recipients are simply
  * excluded before anything is looked up, never counted as a failure.
  */
 export async function queueEventEmail(
@@ -288,7 +288,7 @@ export async function queueEventEmail(
 
 // ── Turn-on-default helper ───────────────────────────────────────────────────
 // Creates (or re-enables) a conference's stub template for an event so
-// queueEventEmail's "enabled + undrafted" default-send path activates —
+// queueEventEmail's "enabled + undrafted" default-send path activates,
 // shared by the Notifications registry's toggle-on-an-unconfigured-row action
 // and the "TURN ON" affordance on the 'unconfigured' DraftNotice.
 

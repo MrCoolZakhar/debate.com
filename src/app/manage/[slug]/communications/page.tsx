@@ -497,7 +497,7 @@ function CommunicationsPageInner() {
   const [togglingLifecycleIds, setTogglingLifecycleIds] = useState<Set<string>>(new Set());
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
   // Busy set for the Notifications registry toggle when it has to create the
-  // stub row first (never-configured event -> TURN ON) — an insert, unlike
+  // stub row first (never-configured event -> TURN ON), an insert, unlike
   // the instant optimistic flip for an already-existing template row.
   const [togglingEventKeys, setTogglingEventKeys] = useState<Set<string>>(new Set());
   const { confirm: confirmDelete, modal: deleteConfirmModal } = useConfirmModal();
@@ -1098,7 +1098,7 @@ function CommunicationsPageInner() {
   }
 
   // Toggling ON an event with no template row yet creates the stub (F:
-  // three-state events) — an awaited insert, busy-scoped to that row's
+  // three-state events), an awaited insert, busy-scoped to that row's
   // toggle. Toggling an existing row (either direction) stays the instant
   // optimistic flip.
   function handleToggleEnabled(ev: EventDef, template: EmailTemplate | undefined) {
@@ -1595,7 +1595,7 @@ function CommunicationsPageInner() {
       }).eq('id', req.id);
       if (reqError) throw reqError;
 
-      // Consolidation: delegation_swap only fires on APPROVE — nothing was
+      // Consolidation: delegation_swap only fires on APPROVE. Nothing was
       // actually swapped on decline, so no swap email goes out for it. If the
       // organizer wants to notify a decline, the normal reply flow (request_reply)
       // carries that news instead.

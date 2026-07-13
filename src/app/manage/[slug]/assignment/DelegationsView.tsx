@@ -262,7 +262,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
   // Mutate exactly the affected rows; rollbacks restore the exact snapshots.
 
   // In-flight guard for this view's per-member mutations (swap, remove, not
-  // attending, transfer, pledge) — every handler below early-returns while
+  // attending, transfer, pledge); every handler below early-returns while
   // its own key is busy, and the relevant chip/button dims via busyIds.has(...).
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
   function markBusy(id: string, busy: boolean) {
