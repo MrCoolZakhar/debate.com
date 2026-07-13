@@ -363,6 +363,12 @@ export default function EmailComposer({
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [sendingTest, setSendingTest] = useState(false);
   const [testSentMessage, setTestSentMessage] = useState<string | null>(null);
+  // "Send test to me" resolves tokens either as the organizer (testSendContext,
+  // the default) or as a picked sample applicant — the recipient is always
+  // the organizer's own address either way.
+  const [testAsId, setTestAsId] = useState<string | null>(null);
+  const [testAsOpen, setTestAsOpen] = useState(false);
+  const [testAsQuery, setTestAsQuery] = useState('');
 
   const blockRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const subjectRef = useRef<HTMLInputElement | null>(null);
@@ -442,11 +448,19 @@ export default function EmailComposer({
     updateParagraphContent(activeTarget, serializeParagraphDom(el));
   }
 
+  const testAsCandidate = testAsId ? previewCandidates.find(c => c.id === testAsId) ?? null : null;
+  const testAsMatches = useMemo(() => {
+    if (!testAsQuery.trim()) return previewCandidates.slice(0, 6);
+    const q = testAsQuery.trim().toLowerCase();
+    return previewCandidates.filter(c => c.label.toLowerCase().includes(q)).slice(0, 6);
+  }, [previewCandidates, testAsQuery]);
+
   async function handleSendTest() {
     if (!accessToken || !organizerEmail || sendingTest) return;
     setSendingTest(true);
     setTestSentMessage(null);
 
+    const ctx = testAsCandidate?.ctx ?? testSendContext;
     const liveBlocks = stripIds(blocks);
     const supabase = getAuthedClient(accessToken);
     const { error } = await supabase.from('email_outbox').insert({
@@ -454,9 +468,9 @@ export default function EmailComposer({
       template_id: null,
       recipient_application_id: null,
       recipient_email: organizerEmail,
-      subject: '[TEST] ' + resolveTokens(subject, testSendContext),
-      body: resolveTokens(flattenBlocksToPlainText(liveBlocks, conference), testSendContext),
-      body_html: renderEmailHtml({ blocks: liveBlocks, conference, ctx: testSendContext }),
+      subject: '[TEST] ' + resolveTokens(subject, ctx),
+      body: resolveTokens(flattenBlocksToPlainText(liveBlocks, conference), ctx),
+      body_html: renderEmailHtml({ blocks: liveBlocks, conference, ctx }),
       status: 'pending',
     });
 
@@ -493,6 +507,60 @@ export default function EmailComposer({
             {testSentMessage}
           </span>
         )}
+
+        {/* "Test as" picker — resolves tokens as this applicant; the test
+            email itself always goes to the organizer's own address. */}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => { setTestAsOpen(v => !v); setTestAsQuery(''); }}
+            className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold focus:outline-none transition-colors"
+            style={{ border: `1px solid ${BORDER}`, color: INK, backgroundColor: 'transparent', fontFamily: OUTFIT }}
+          >
+            Test as: <strong>{testAsCandidate?.label ?? 'Myself'}</strong>
+          </button>
+          {testAsOpen && (
+            <div
+              className="absolute right-0 rounded-xl shadow-lg overflow-hidden"
+              style={{ top: 'calc(100% + 4px)', width: 240, backgroundColor: '#FFFFFF', border: `1px solid ${BORDER}`, zIndex: 20 }}
+            >
+              <input
+                autoFocus
+                value={testAsQuery}
+                onChange={e => setTestAsQuery(e.target.value)}
+                placeholder="Search applicants..."
+                className="w-full px-3 py-2 text-xs focus:outline-none"
+                style={{ borderBottom: `1px solid ${BORDER}`, color: INK, fontFamily: OUTFIT }}
+              />
+              <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+                <button
+                  type="button"
+                  onClick={() => { setTestAsId(null); setTestAsOpen(false); }}
+                  className="w-full text-left px-3 py-2 text-xs focus:outline-none"
+                  style={{ color: INK, fontFamily: OUTFIT, fontWeight: testAsId === null ? 700 : 500 }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                >
+                  As myself
+                </button>
+                {testAsMatches.map(c => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => { setTestAsId(c.id); setTestAsOpen(false); }}
+                    className="w-full text-left px-3 py-2 text-xs focus:outline-none truncate"
+                    style={{ color: INK, fontFamily: OUTFIT, fontWeight: testAsId === c.id ? 700 : 500 }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
         <button
           type="button"
           onClick={handleSendTest}

@@ -23,7 +23,10 @@ export type EmailBlock = ParagraphBlock | ButtonBlock;
 export const BUTTON_DESTINATION_LABELS: Record<ButtonDestination, string> = {
   conference_page: 'Conference page',
   apply_page: 'Apply page',
-  documents: 'Documents',
+  // 'documents' is a legacy key — that tab is now the participant person-view.
+  // Kept as-is (no migration) so templates saved with this destination keep
+  // resolving, just to the current URL.
+  documents: 'My conference view',
   custom: 'Custom URL',
   chair_invite_accept: 'Accept chair invite link',
   signup_page: 'Gavelling sign-up page',
@@ -47,8 +50,9 @@ export function resolveButtonUrl(block: ButtonBlock, conference: ButtonUrlConfer
   const siteUrl = getSiteUrl();
   switch (block.destination) {
     case 'conference_page':
-    case 'documents':
       return `${siteUrl}/conferences/${conference.slug}`;
+    case 'documents':
+      return `${siteUrl}/conferences/${conference.slug}?tab=participant`;
     case 'apply_page':
       return `${siteUrl}/conferences/${conference.slug}/apply${block.role ? `?role=${encodeURIComponent(block.role)}` : ''}`;
     case 'chair_invite_accept':

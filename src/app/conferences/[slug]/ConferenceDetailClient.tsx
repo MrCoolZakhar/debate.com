@@ -376,6 +376,13 @@ export default function ConferenceDetailClient() {
   const [notFound, setNotFound] = useState(false);
   const [myAllocation, setMyAllocation] = useState<ParticipantAllocation | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'participant' | 'reviews'>('overview');
+  // Deep link support for email buttons ("My conference view" — legacy
+  // 'documents' destination): ?tab=participant opens straight to the person
+  // tab. Read post-mount (not via useSearchParams) to avoid a Suspense
+  // boundary requirement on this large top-level client component.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('tab') === 'participant') setActiveTab('participant');
+  }, []);
   // Committee roster / occupancy / chair-recruitment (public reads)
   const [committeeSlots, setCommitteeSlots] = useState<Record<string, CommitteeSlot[]>>({});
   const [committeeOccupied, setCommitteeOccupied] = useState<Record<string, string[]>>({});

@@ -6,7 +6,7 @@ import { Mail, AlertTriangle, Send, Bell, Inbox, Copy, X } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
-import { ConfirmModal } from '@/components/ConfirmModal';
+import { ConfirmModal, useConfirmModal } from '@/components/ConfirmModal';
 import {
   resolveTokens, EMAIL_TOKEN_KEYS, EMAIL_TOKEN_LABELS,
   type EmailTokenContext, type EmailTokenKey,
@@ -21,6 +21,18 @@ import { formatFee } from '@/lib/utils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+/** Full restorable audience selection, persisted to email_templates.audience. */
+interface SavedAudience {
+  roles: string[];
+  paymentStatuses: string[];
+  delegationIds: string[];
+  includeIndependents: boolean;
+  attendance: string[];
+  applicationStatuses: string[];
+  manualIds: string[];
+  excludedIds: string[];
+}
+
 interface EmailTemplate {
   id: string;
   conference_id: string;
@@ -33,6 +45,7 @@ interface EmailTemplate {
   delivery: 'immediate' | 'manual';
   lifecycle: 'draft' | 'ready';
   updated_at: string;
+  audience: SavedAudience | null;
 }
 
 interface AppRow {
@@ -79,6 +92,7 @@ interface OutboxDetailRow {
   recipient_email: string | null;
   status: string;
   error: string | null;
+  sent_at: string | null;
 }
 
 // ── Inbox (Q&R threads) ──────────────────────────────────────────────────────
@@ -164,6 +178,15 @@ const CARD_STYLE = { backgroundColor: '#FAF8F3', border: `1.5px solid #D8CDB6`, 
 
 function formatDate(d: string) {
   return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+/** Recipient delivery timestamp: bare time when sent today, time + date otherwise. */
+function formatSentAt(iso: string | null): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  const time = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  const isToday = d.toDateString() === new Date().toDateString();
+  return isToday ? time : `${time} · ${formatDate(iso)}`;
 }
 
 function formatDateRange(start: string, end: string): string {
@@ -404,6 +427,11 @@ function CommunicationsPageInner() {
   const [markingReady, setMarkingReady] = useState(false);
   const [openingSend, setOpeningSend] = useState(false);
   const [duplicatingIds, setDuplicatingIds] = useState<Set<string>>(new Set());
+  const [togglingLifecycleIds, setTogglingLifecycleIds] = useState<Set<string>>(new Set());
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
+  const { confirm: confirmDelete, modal: deleteConfirmModal } = useConfirmModal();
+  // Restored a saved audience (email_templates.audience) into the picker below.
+  const [audienceRestored, setAudienceRestored] = useState(false);
 
   // ── Audience state (ad-hoc only) ──
   const [selRoles, setSelRoles] = useState<Set<string>>(new Set());
@@ -446,7 +474,7 @@ function CommunicationsPageInner() {
     const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase
       .from('email_templates')
-      .select('id, conference_id, event_key, name, subject, body, body_blocks, enabled, delivery, lifecycle, updated_at')
+      .select('id, conference_id, event_key, name, subject, body, body_blocks, enabled, delivery, lifecycle, updated_at, audience')
       .eq('conference_id', conference.id);
     if (!fresh()) return;
     setTemplates((data ?? []) as EmailTemplate[]);
@@ -767,6 +795,20 @@ function CommunicationsPageInner() {
     };
   }
 
+  /** Full restorable audience selection — filters re-resolve live, manual adds/exclusions restore by id. */
+  function buildAudienceState(): SavedAudience {
+    return {
+      roles: [...selRoles],
+      paymentStatuses: [...selPayment],
+      delegationIds: [...selDelegations].filter(id => id !== INDEPENDENT_KEY),
+      includeIndependents: selDelegations.has(INDEPENDENT_KEY),
+      attendance: [...selAttendance],
+      applicationStatuses: [...selStatus],
+      manualIds: [...manuallyAddedIds],
+      excludedIds: [...excludedIds],
+    };
+  }
+
   // ── Builder open/close ────────────────────────────────────────────────────
 
   function resetAudience() {
@@ -778,6 +820,30 @@ function CommunicationsPageInner() {
     setExcludedIds(new Set());
     setManuallyAddedIds(new Set());
     setManualSearch('');
+    setAudienceRestored(false);
+  }
+
+  /** Restores a saved audience by id/value against CURRENT data — filters
+   *  re-resolve naturally; manual adds/exclusions silently drop ids that no
+   *  longer resolve to a live application. */
+  function restoreAudience(saved: SavedAudience) {
+    setSelRoles(new Set(saved.roles ?? []));
+    setSelPayment(new Set(saved.paymentStatuses ?? []));
+    const delegations = new Set(saved.delegationIds ?? []);
+    if (saved.includeIndependents) delegations.add(INDEPENDENT_KEY);
+    setSelDelegations(delegations);
+    setSelAttendance(new Set(saved.attendance ?? []));
+    setSelStatus(new Set(saved.applicationStatuses ?? []));
+    const liveIds = new Set(applications.map(a => a.id));
+    setManuallyAddedIds(new Set((saved.manualIds ?? []).filter(id => liveIds.has(id))));
+    setExcludedIds(new Set((saved.excludedIds ?? []).filter(id => liveIds.has(id))));
+    setManualSearch('');
+    const hasAnySelection =
+      (saved.roles?.length ?? 0) > 0 || (saved.paymentStatuses?.length ?? 0) > 0 ||
+      (saved.delegationIds?.length ?? 0) > 0 || saved.includeIndependents ||
+      (saved.attendance?.length ?? 0) > 0 || (saved.applicationStatuses?.length ?? 0) > 0 ||
+      (saved.manualIds?.length ?? 0) > 0 || (saved.excludedIds?.length ?? 0) > 0;
+    setAudienceRestored(hasAnySelection);
   }
 
   const openBuilderForEvent = useCallback((ev: EventDef) => {
@@ -804,6 +870,7 @@ function CommunicationsPageInner() {
     setBuilderDelivery('manual');
     setBuilderLifecycle(template?.lifecycle ?? 'draft');
     resetAudience();
+    if (template?.audience) restoreAudience(template.audience);
     setBuilderError('');
     builderJustOpenedRef.current = true;
     setBuilderOpen(true);
@@ -842,7 +909,7 @@ function CommunicationsPageInner() {
     if (!subject.trim() || blocks.length === 0) { if (!opts.silent) setBuilderError('Subject and message are required.'); return null; }
 
     const supabase = getAuthedClient(session.access_token);
-    const payload = {
+    const payload: Record<string, unknown> = {
       subject,
       body: flattenBlocksToPlainText(blocks, conference),
       body_blocks: blocks,
@@ -850,6 +917,7 @@ function CommunicationsPageInner() {
       name,
       updated_at: new Date().toISOString(),
     };
+    if (isAdHoc) payload.audience = buildAudienceState();
 
     if (builderTemplateId) {
       const { error } = await supabase.from('email_templates').update(payload).eq('id', builderTemplateId);
@@ -954,11 +1022,54 @@ function CommunicationsPageInner() {
       lifecycle: 'draft',
       enabled: false,
       updated_at: new Date().toISOString(),
-    }).select('id, conference_id, event_key, name, subject, body, body_blocks, enabled, delivery, lifecycle, updated_at').single();
+    }).select('id, conference_id, event_key, name, subject, body, body_blocks, enabled, delivery, lifecycle, updated_at, audience').single();
     setDuplicatingIds(prev => { const nextSet = new Set(prev); nextSet.delete(t.id); return nextSet; });
     if (error || !data) { showFlash('err', error?.message ?? 'Could not duplicate the template.'); return; }
     setTemplates(prev => [...prev, data as EmailTemplate]);
     showFlash('ok', 'Duplicated as a new draft.');
+  }
+
+  // Row-level MARK READY / BACK TO DRAFT — same optimistic-flip pattern as
+  // handleToggleEnabled, but for lifecycle, and independent of builder state
+  // so it works directly from the EMAILS tab list.
+  function handleToggleRowLifecycle(t: EmailTemplate) {
+    if (!session || togglingLifecycleIds.has(t.id)) return;
+    const prev = t.lifecycle;
+    const next: 'draft' | 'ready' = prev === 'ready' ? 'draft' : 'ready';
+    setTogglingLifecycleIds(s => new Set(s).add(t.id));
+    setTemplates(ts => ts.map(x => (x.id === t.id ? { ...x, lifecycle: next } : x)));
+    const supabase = getAuthedClient(session.access_token);
+    (async () => {
+      const { error } = await supabase.from('email_templates').update({ lifecycle: next }).eq('id', t.id);
+      if (error) throw error;
+    })().catch((e: unknown) => {
+      setTemplates(ts => ts.map(x => (x.id === t.id ? { ...x, lifecycle: prev } : x)));
+      showFlash('err', e instanceof Error ? e.message : 'Could not update the template status.');
+    }).finally(() => {
+      setTogglingLifecycleIds(s => { const next2 = new Set(s); next2.delete(t.id); return next2; });
+    });
+  }
+
+  async function handleDeleteTemplate(t: EmailTemplate) {
+    if (!session || deletingIds.has(t.id)) return;
+    const { confirmed } = await confirmDelete({
+      title: `Delete "${t.name}"? This can't be undone.`,
+      confirmLabel: 'Delete',
+      danger: true,
+    });
+    if (!confirmed) return;
+    setDeletingIds(s => new Set(s).add(t.id));
+    const snapshot = templates;
+    setTemplates(ts => ts.filter(x => x.id !== t.id));
+    const supabase = getAuthedClient(session.access_token);
+    const { error } = await supabase.from('email_templates').delete().eq('id', t.id);
+    setDeletingIds(s => { const next = new Set(s); next.delete(t.id); return next; });
+    if (error) {
+      setTemplates(snapshot);
+      showFlash('err', error.message);
+      return;
+    }
+    showFlash('ok', 'Deleted.');
   }
 
   function handleExcludeRecipient(id: string) {
@@ -1077,7 +1188,7 @@ function CommunicationsPageInner() {
     const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase
       .from('email_outbox')
-      .select('id, recipient_email, status, error')
+      .select('id, recipient_email, status, error, sent_at')
       .eq('email_send_id', sendId);
     setOutboxBySend(prev => ({ ...prev, [sendId]: (data ?? []) as OutboxDetailRow[] }));
   }
@@ -1132,6 +1243,16 @@ function CommunicationsPageInner() {
             <Copy size={13} />
           </button>
           <button
+            onClick={() => handleToggleRowLifecycle(t)}
+            disabled={togglingLifecycleIds.has(t.id)}
+            className="rounded-lg py-1.5 px-3 text-xs font-bold focus:outline-none transition-colors disabled:opacity-50"
+            style={{ border: `1px solid ${BORDER}`, color: '#1C1410', backgroundColor: 'transparent', fontFamily: OUTFIT }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+          >
+            {ready ? 'BACK TO DRAFT' : 'MARK READY'}
+          </button>
+          <button
             onClick={() => openBuilderForAdHoc(t)}
             className="rounded-lg py-1.5 px-3 text-xs font-bold focus:outline-none transition-colors"
             style={{ border: `1px solid ${BORDER}`, color: '#1C1410', backgroundColor: 'transparent', fontFamily: OUTFIT }}
@@ -1151,6 +1272,17 @@ function CommunicationsPageInner() {
               SEND
             </button>
           )}
+          <button
+            onClick={() => handleDeleteTemplate(t)}
+            title="Delete"
+            disabled={deletingIds.has(t.id)}
+            className="rounded-lg p-1.5 focus:outline-none transition-colors disabled:opacity-50"
+            style={{ border: '1px solid rgba(139,32,32,0.25)', color: '#8B2020', backgroundColor: 'transparent' }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.06)'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+          >
+            <X size={13} />
+          </button>
         </div>
       </div>
     );
@@ -1421,9 +1553,9 @@ function CommunicationsPageInner() {
           {/* Stat medallions */}
           <div className="grid grid-cols-3 gap-4 mb-6">
             {[
-              { label: 'Emails Sent', value: sentCount, Icon: Send, accent: '#1B3828', primary: true },
-              { label: 'Notifications On', value: enabledCount, Icon: Bell, accent: '#B6871F', primary: false },
-              { label: 'Outbox Pending', value: outboxPending, Icon: Inbox, accent: '#4A7896', primary: false },
+              { label: 'Emails Sent', value: sentCount, Icon: Send, accent: '#1B3828', primary: true, subcopy: null },
+              { label: 'Notifications On', value: enabledCount, Icon: Bell, accent: '#B6871F', primary: false, subcopy: null },
+              { label: 'Sending queue', value: outboxPending, Icon: Inbox, accent: '#4A7896', primary: false, subcopy: 'Emails queued and being delivered' },
             ].map(s => (
               <div
                 key={s.label}
@@ -1452,6 +1584,11 @@ function CommunicationsPageInner() {
                   <p className="mt-1" style={{ fontSize: 12, color: '#9A8A78', fontFamily: OUTFIT, fontWeight: 600 }}>
                     {s.label}
                   </p>
+                  {s.subcopy && (
+                    <p className="truncate" style={{ fontSize: 10.5, color: '#B0A594', fontFamily: OUTFIT }}>
+                      {s.subcopy}
+                    </p>
+                  )}
                 </div>
               </div>
             ))}
@@ -1638,6 +1775,11 @@ function CommunicationsPageInner() {
                                           {r.status === 'failed' && r.error && (
                                             <span className="text-xs truncate" style={{ color: '#8B2020', fontFamily: OUTFIT, maxWidth: 260 }} title={r.error}>
                                               {r.error}
+                                            </span>
+                                          )}
+                                          {formatSentAt(r.sent_at) && (
+                                            <span className="text-xs flex-shrink-0" style={{ color: '#9A8A78', fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>
+                                              {formatSentAt(r.sent_at)}
                                             </span>
                                           )}
                                           <span
@@ -2054,9 +2196,26 @@ function CommunicationsPageInner() {
               <>
                 {/* Audience filters */}
                 <div className="rounded-2xl p-5 mb-4" style={CARD_STYLE}>
-                  <p className="font-semibold text-sm mb-3" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                    Recipients
-                  </p>
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                      Recipients
+                    </p>
+                    {audienceRestored && (
+                      <div className="flex items-center gap-2">
+                        <span style={{ fontSize: 10.5, color: '#9A8A78', fontFamily: OUTFIT, fontWeight: 600 }}>
+                          Saved audience loaded
+                        </span>
+                        <button
+                          type="button"
+                          onClick={resetAudience}
+                          className="text-xs font-bold focus:outline-none"
+                          style={{ color: '#1B3828', backgroundColor: 'transparent', border: 'none', fontFamily: OUTFIT }}
+                        >
+                          CLEAR
+                        </button>
+                      </div>
+                    )}
+                  </div>
                   <MultiChipGroup label="Roles" options={ROLE_OPTIONS} selected={selRoles} onToggle={v => setSelRoles(s => toggleInSet(s, v))} />
                   <MultiChipGroup label="Payment status" options={PAYMENT_OPTIONS} selected={selPayment} onToggle={v => setSelPayment(s => toggleInSet(s, v))} />
                   <div className="mb-3">
@@ -2285,6 +2444,7 @@ function CommunicationsPageInner() {
           onCancel={() => { if (!sending) setSendConfirmOpen(false); }}
         />
       )}
+      {deleteConfirmModal}
     </div>
   );
 }
