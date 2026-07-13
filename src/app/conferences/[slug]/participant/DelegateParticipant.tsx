@@ -33,7 +33,6 @@ export default function DelegateParticipant({ conferenceId, application, myAlloc
       </div>
 
       <DelegationPlacard
-        isIndependent={application.is_independent}
         societyId={application.society_id}
         paymentStatus={application.payment_status}
         selfPaid={application.self_paid}

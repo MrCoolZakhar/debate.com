@@ -149,7 +149,6 @@ interface MyApplication {
   status: string;
   payment_status: string;
   amount_paid: number;
-  is_independent: boolean;
   society_id: string | null;
   self_paid: boolean;
   pledge_type: 'delegation' | null;
@@ -611,7 +610,7 @@ export default function ConferenceDetailClient() {
 
       const { data: appsData } = await authedSupabase
         .from('applications')
-        .select('id, role, status, payment_status, is_independent, society_id, self_paid, pledge_type, spots_pledged, pledge_confirmed_at')
+        .select('id, role, status, payment_status, society_id, self_paid, pledge_type, spots_pledged, pledge_confirmed_at')
         .eq('conference_id', conf.id)
         .eq('user_id', user.id);
 
@@ -820,6 +819,12 @@ export default function ConferenceDetailClient() {
   const hasUnlimited = profile?.unlimited_status && profile.unlimited_status !== 'none';
   const enabledRoles = roleConfigs.filter(r => r.is_enabled);
   const now = new Date();
+  // Single source of truth for public fee displays (hero circle, cards): the
+  // delegate role config's fee, falling back to the conference-level fee
+  // only when no delegate role config exists yet.
+  const delegateRoleConfig = roleConfigs.find(r => r.role === 'delegate') ?? null;
+  const heroFeeAmount = delegateRoleConfig ? (delegateRoleConfig.fee_amount ?? 0) : conference.fee_amount;
+  const heroFeeCurrency = delegateRoleConfig ? (delegateRoleConfig.fee_currency ?? conference.fee_currency) : conference.fee_currency;
 
   function getRoleWindowStatus(r: RoleConfig): 'open' | 'closed' | 'opens-soon' | 'open-always' {
     if (!r.applications_open_at && !r.applications_close_at) return 'open-always';
@@ -1749,11 +1754,11 @@ export default function ConferenceDetailClient() {
                         boxShadow: '0 10px 30px rgba(27,56,40,0.1), 0 0 0 8px rgba(238,217,138,0.12)',
                       }}
                     >
-                      {conference.fee_amount === 0 ? (
+                      {heroFeeAmount === 0 ? (
                         <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: '30px', color: '#1B3828', lineHeight: 1 }}>FREE</span>
                       ) : (
                         <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: '38px', color: '#1C1410', lineHeight: 1 }}>
-                          {formatFee(conference.fee_amount, conference.fee_currency)}
+                          {formatFee(heroFeeAmount, heroFeeCurrency)}
                         </span>
                       )}
                       <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '8.5px', letterSpacing: '0.14em', color: '#9A8A78', marginTop: '7px' }}>

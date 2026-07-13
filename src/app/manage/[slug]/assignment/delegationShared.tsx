@@ -126,6 +126,8 @@ export interface SearchApp {
   user_id: string;
   role: string;
   society_id: string | null;
+  payment_status: string | null;
+  attending: boolean;
   assigned_committee_id: string | null;
   societies: { name: string } | null;
   profiles: { display_name: string; avatar_url: string | null } | null;
@@ -151,7 +153,7 @@ export async function fetchSearchPool(
   const { data } = await supabase
     .from('applications')
     .select(`
-      id, user_id, role, society_id, status, assigned_committee_id,
+      id, user_id, role, society_id, status, payment_status, attending, assigned_committee_id,
       societies (name),
       profiles (display_name, avatar_url),
       invited_email, invited_name
@@ -162,6 +164,14 @@ export async function fetchSearchPool(
   return (data ?? []) as unknown as SearchApp[];
 }
 
+/**
+ * Candidates worth transferring a paid spot to: unpaid and attending — a
+ * waived or already-paid recipient has no use for someone else's spot.
+ */
+export function eligibleTransferRecipients(pool: SearchApp[]): SearchApp[] {
+  return pool.filter(a => a.payment_status === 'unpaid' && a.attending);
+}
+
 /** All accepted/assigned faculty advisors across the conference — used by the TRANSFER SPOT picker (F18). */
 export async function fetchAdvisorPool(
   supabase: ReturnType<typeof getAuthedClient>,
@@ -170,7 +180,7 @@ export async function fetchAdvisorPool(
   const { data } = await supabase
     .from('applications')
     .select(`
-      id, user_id, role, society_id, status, assigned_committee_id,
+      id, user_id, role, society_id, status, payment_status, attending, assigned_committee_id,
       societies (name),
       profiles (display_name, avatar_url),
       invited_email, invited_name
@@ -322,6 +332,9 @@ export async function removeFromDelegation(
 
   const updates: Record<string, unknown> = {
     society_id: null,
+    // Derived convenience, kept in sync for read paths that haven't been
+    // ported — society_id IS NULL is the actual source of truth, never read
+    // is_independent for logic.
     is_independent: true,
   };
   if (member.payment_status === 'paid' && !member.self_paid) {

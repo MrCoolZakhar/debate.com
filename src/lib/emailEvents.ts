@@ -99,7 +99,7 @@ interface TemplateRow {
 interface RecipientRow {
   id: string;
   role: string;
-  is_independent: boolean;
+  society_id: string | null;
   payment_status: string | null;
   societies: { name: string } | null;
   assigned_committee: { abbreviation: string | null; name: string } | null;
@@ -156,7 +156,7 @@ export async function queueEventEmail(
     supabase
       .from('applications')
       .select(`
-        id, role, is_independent, payment_status,
+        id, role, society_id, payment_status,
         societies (name),
         assigned_committee:conference_committees!assigned_committee_id (abbreviation, name),
         assigned_country_name,
@@ -185,7 +185,7 @@ export async function queueEventEmail(
     const ctx: EmailTokenContext = {
       delegate_name: app.profiles?.display_name ?? app.invited_name ?? null,
       role: roleLabel(app.role),
-      delegation_name: app.societies?.name ?? (app.is_independent ? 'Independent' : null),
+      delegation_name: app.societies?.name ?? (app.society_id == null ? 'Independent' : null),
       committee: app.assigned_committee?.abbreviation ?? app.assigned_committee?.name ?? null,
       country: app.assigned_country_name ?? null,
       payment_status: paymentStatusLabel(app.payment_status),

@@ -349,10 +349,6 @@ export default function SettingsPage() {
   const [logoError, setLogoError] = useState('');
   // Logo picked but not yet uploaded — the drag-to-fit crop modal is open.
   const [logoCropFile, setLogoCropFile] = useState<File | null>(null);
-  const [feeAmount, setFeeAmount] = useState('');
-  const [feeCurrency, setFeeCurrency] = useState('GBP');
-  const [feeSaved, setFeeSaved] = useState(false);
-  const [feeError, setFeeError] = useState('');
 
   // Conference details (identity + logistics — mirrors the creation form)
   const [fullName, setFullName] = useState('');
@@ -577,8 +573,6 @@ export default function SettingsPage() {
     setTiktokUrl(conference.tiktok_url ?? '');
     setWhatsappUrl(conference.whatsapp_url ?? '');
     setWebsiteUrl(conference.website_url ?? '');
-    setFeeAmount(conference.fee_amount != null ? String(conference.fee_amount) : '');
-    setFeeCurrency(conference.fee_currency ?? 'GBP');
     setMinAge(conference.min_age != null ? String(conference.min_age) : '');
     setSwapMode(conference.allocation_swap_mode ?? 'request');
     setSwapModeError('');
@@ -1161,33 +1155,6 @@ export default function SettingsPage() {
         setConfPatch(p => ({ ...p, ...prior }));
         setLogoError("Couldn't save the logo: " + writeError.message);
       }
-    })();
-  }
-
-  function handleSaveFee() {
-    if (!session || !conference || feeSaved) return;
-    setFeeError('');
-    const amount = parseFloat(feeAmount) || 0;
-    // Optimistic: flash SAVED instantly (the flash doubles as the re-click
-    // guard), persist in the background, and roll only these two overlay
-    // fields back — with an inline error — if the write fails. Never
-    // refreshConference() mid-session: the overlay renders the new value.
-    const prior = priorConfValues(['fee_amount', 'fee_currency']);
-    patchConf({ fee_amount: amount, fee_currency: feeCurrency });
-    setFeeSaved(true);
-    const supabase = getAuthedClient(session.access_token);
-    void (async () => {
-      const { error } = await supabase.from('conferences').update({
-        fee_amount: amount,
-        fee_currency: feeCurrency,
-      }).eq('id', conference.id);
-      if (error) {
-        setConfPatch(p => ({ ...p, ...prior }));
-        setFeeSaved(false);
-        setFeeError("Couldn't save the fee: " + error.message);
-        return;
-      }
-      setTimeout(() => setFeeSaved(false), 2500);
     })();
   }
 
@@ -2036,56 +2003,10 @@ export default function SettingsPage() {
             )}
           </div>
 
-          {/* Registration fee card */}
+          {/* Registration fee pointer — fees are configured per role now, not at the conference level (columns stay in the DB, just unused by this UI). */}
           <div style={cardStyle}>
             <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Registration Fee</p>
-            <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>The headline delegate fee and the currency you charge in. Per-role fees are set in the Applications tab.</p>
-            <div className="flex items-end gap-3">
-              <div style={{ width: '30%' }}>
-                <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Currency</label>
-                <select
-                  value={feeCurrency}
-                  onChange={(e) => setFeeCurrency(e.target.value)}
-                  style={{ ...inputStyle, cursor: 'pointer' }}
-                  onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
-                  onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
-                >
-                  {['GBP', 'USD', 'EUR', 'CHF', 'CAD', 'AUD', 'JPY', 'CNY', 'INR', 'BRL', 'MXN'].map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
-              <div className="flex-1">
-                <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Fee per delegate</label>
-                <input
-                  type="number"
-                  min={0}
-                  step={0.01}
-                  value={feeAmount}
-                  onChange={(e) => setFeeAmount(e.target.value)}
-                  placeholder="0.00"
-                  style={inputStyle}
-                  onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
-                  onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
-                />
-              </div>
-              <button
-                onClick={handleSaveFee}
-                disabled={feeSaved}
-                className="rounded-xl py-2.5 px-5 font-bold text-xs tracking-widest transition-colors focus:outline-none flex-shrink-0"
-                style={{
-                  backgroundColor: feeSaved ? '#3D7A52' : '#1B3828',
-                  color: '#EED98A',
-                  fontFamily: "'Outfit', sans-serif",
-                  letterSpacing: '0.07em',
-                }}
-                onMouseEnter={(e) => { if (!feeSaved) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-                onMouseLeave={(e) => { if (!feeSaved) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-              >
-                {feeSaved ? 'SAVED ✓' : 'SAVE'}
-              </button>
-            </div>
-            {feeError && (
-              <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{feeError}</p>
-            )}
+            <p className="text-sm" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Fees are configured per role in the Applications tab.</p>
           </div>
 
           {/* Description + socials card */}

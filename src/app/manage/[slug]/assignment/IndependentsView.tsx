@@ -19,7 +19,7 @@ import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
 import { useConfirmModal } from '@/components/ConfirmModal';
 import {
   OUTFIT, MONO, POOL_MEMBER_SELECT,
-  fetchSearchPool, performSwap, markNotAttending, undoNotAttending,
+  fetchSearchPool, performSwap, markNotAttending, undoNotAttending, eligibleTransferRecipients,
   MemberAvatar, ModalOverlay,
   type PoolMember, type SearchApp,
 } from '@/app/manage/[slug]/assignment/delegationShared';
@@ -36,8 +36,10 @@ function TransferSpotModal({
   holder: PoolMember; pool: SearchApp[]; onClose: () => void; onPick: (recipient: SearchApp) => void;
 }) {
   const [query, setQuery] = useState('');
-  const results = pool
-    .filter(a => a.id !== holder.id)
+  // Only unpaid, attending candidates can meaningfully receive a paid spot —
+  // waived or already-paid delegates have no use for it.
+  const eligible = eligibleTransferRecipients(pool).filter(a => a.id !== holder.id);
+  const results = eligible
     .filter(a => (a.profiles?.display_name ?? a.invited_name ?? '').toLowerCase().includes(query.trim().toLowerCase()));
 
   return (
@@ -59,7 +61,9 @@ function TransferSpotModal({
           style={{ border: '1px solid #DDD4C0', backgroundColor: '#FFFFFF', color: '#1C1410', fontFamily: OUTFIT }}
         />
         <div className="flex flex-col gap-1.5" style={{ maxHeight: 260, overflowY: 'auto' }}>
-          {results.length === 0 ? (
+          {eligible.length === 0 ? (
+            <p className="text-xs py-2" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>No unpaid delegates to receive this spot.</p>
+          ) : results.length === 0 ? (
             <p className="text-xs py-2" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>No matches.</p>
           ) : results.map(a => (
             <div key={a.id} className="flex items-center justify-between gap-2 rounded-lg px-3 py-2" style={{ backgroundColor: '#FFFFFF', border: '1px solid #F0EDE6' }}>
@@ -214,7 +218,7 @@ export default function IndependentsView({ conference, showFlash }: Independents
         .from('applications')
         .select(POOL_MEMBER_SELECT)
         .eq('conference_id', conference.id)
-        .eq('is_independent', true)
+        .is('society_id', null)
         .eq('role', 'delegate')
         .in('status', ['accepted', 'assigned']),
       fetchSearchPool(supabase, conference.id),

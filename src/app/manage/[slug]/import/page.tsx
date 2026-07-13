@@ -307,6 +307,8 @@ export default function ImportPage() {
       invited_name: r.resolved.name,
       role: r.resolved.role,
       society_id: r.resolved.societyName ? societyMap.get(r.resolved.societyName.trim().toLowerCase()) ?? null : null,
+      // Derived convenience, kept in sync — society_id IS NULL is the actual
+      // source of truth, never read is_independent for logic.
       is_independent: !r.resolved.societyName,
       is_head_delegate: r.resolved.role === 'head-delegate',
       status: 'accepted',

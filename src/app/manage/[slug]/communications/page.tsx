@@ -41,7 +41,6 @@ interface AppRow {
   status: string;
   payment_status: string | null;
   attending: boolean;
-  is_independent: boolean;
   society_id: string | null;
   societies: { name: string } | null;
   assigned_committee_id: string | null;
@@ -460,7 +459,7 @@ function CommunicationsPageInner() {
     const { data } = await supabase
       .from('applications')
       .select(`
-        id, role, status, payment_status, attending, is_independent, society_id,
+        id, role, status, payment_status, attending, society_id,
         societies (name),
         assigned_committee_id,
         assigned_committee:conference_committees!assigned_committee_id (abbreviation, name),
@@ -670,7 +669,7 @@ function CommunicationsPageInner() {
     if (selDelegations.size > 0) {
       const wantsIndependent = selDelegations.has(INDEPENDENT_KEY);
       const societyIds = [...selDelegations].filter(id => id !== INDEPENDENT_KEY);
-      const ok = (wantsIndependent && a.is_independent) || (a.society_id != null && societyIds.includes(a.society_id));
+      const ok = (wantsIndependent && a.society_id == null) || (a.society_id != null && societyIds.includes(a.society_id));
       if (!ok) return false;
     }
     if (selAttendance.size > 0) {
@@ -721,7 +720,7 @@ function CommunicationsPageInner() {
     return {
       delegate_name: app.profiles?.display_name ?? app.invited_name ?? null,
       role: roleLabel(app.role),
-      delegation_name: app.societies?.name ?? (app.is_independent ? 'Independent' : null),
+      delegation_name: app.societies?.name ?? (app.society_id == null ? 'Independent' : null),
       committee: app.assigned_committee?.abbreviation ?? app.assigned_committee?.name ?? null,
       country: app.assigned_country_name ?? null,
       payment_status: paymentStatusLabel(app.payment_status),

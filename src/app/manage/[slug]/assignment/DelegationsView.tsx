@@ -11,7 +11,7 @@ import { useConfirmModal } from '@/components/ConfirmModal';
 import {
   OUTFIT, MONO, POOL_MEMBER_SELECT, POOL_SPOTS_COLUMN,
   poolForRole, fillFreeSpots, fetchSearchPool, fetchAdvisorPool, performSwap, markApplicationPaid,
-  markNotAttending, undoNotAttending, removeFromDelegation, pledgeSatisfied,
+  markNotAttending, undoNotAttending, removeFromDelegation, pledgeSatisfied, eligibleTransferRecipients,
   SectionLabel, MemberAvatar, DraggableChip, WaivedChip, NotAttendingChip, PaidSlotChip, OpenSlot, SwapConfirmModal, ModalOverlay, pledgeText,
   type PoolMember, type SearchApp,
 } from '@/app/manage/[slug]/assignment/delegationShared';
@@ -92,8 +92,10 @@ function AdvisorTransferModal({
   advisor: PoolMember; pool: SearchApp[]; onClose: () => void; onPick: (recipient: SearchApp) => void;
 }) {
   const [query, setQuery] = useState('');
-  const results = pool
-    .filter(a => a.id !== advisor.id)
+  // Only unpaid, attending advisors can meaningfully receive a paid spot —
+  // waived or already-paid advisors have no use for it.
+  const eligible = eligibleTransferRecipients(pool).filter(a => a.id !== advisor.id);
+  const results = eligible
     .filter(a => (a.profiles?.display_name ?? a.invited_name ?? '').toLowerCase().includes(query.trim().toLowerCase()));
 
   return (
@@ -115,7 +117,9 @@ function AdvisorTransferModal({
           style={{ border: '1px solid #DDD4C0', backgroundColor: '#FFFFFF', color: '#1C1410', fontFamily: OUTFIT }}
         />
         <div className="flex flex-col gap-1.5" style={{ maxHeight: 260, overflowY: 'auto' }}>
-          {results.length === 0 ? (
+          {eligible.length === 0 ? (
+            <p className="text-xs py-2" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>No unpaid delegates to receive this spot.</p>
+          ) : results.length === 0 ? (
             <p className="text-xs py-2" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>No matches.</p>
           ) : results.map(a => (
             <div key={a.id} className="flex items-center justify-between gap-2 rounded-lg px-3 py-2" style={{ backgroundColor: '#FFFFFF', border: '1px solid #F0EDE6' }}>
@@ -294,7 +298,10 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
     setSearchQuery('');
 
     (async () => {
-      const { error } = await supabase.from('applications').update({ society_id: society.id }).eq('id', app.id);
+      // is_independent is a derived convenience kept in sync on every
+      // mutation for read paths that haven't been ported — society_id IS
+      // NULL is the actual source of truth, never read is_independent for logic.
+      const { error } = await supabase.from('applications').update({ society_id: society.id, is_independent: false }).eq('id', app.id);
       if (error) {
         if (prevSearchEntry) setSearchPool(prev => prev.map(a => (a.id === app.id ? prevSearchEntry : a)));
         showFlash('err', `Could not add ${app.profiles?.display_name ?? 'this delegate'} to ${society.name}.`);

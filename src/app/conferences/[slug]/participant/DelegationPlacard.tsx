@@ -19,15 +19,16 @@ import { getAuthedClient } from '@/lib/supabase-auth';
 import { SectionCard, OUTFIT, CHIP_STYLES, derivePaymentChip } from './shared';
 
 export interface DelegationPlacardProps {
-  isIndependent: boolean;
   societyId: string | null;
   paymentStatus: string;
   selfPaid: boolean;
   amountPaid: number;
 }
 
-export default function DelegationPlacard({ isIndependent, societyId, paymentStatus, selfPaid, amountPaid }: DelegationPlacardProps) {
+export default function DelegationPlacard({ societyId, paymentStatus, selfPaid, amountPaid }: DelegationPlacardProps) {
   const { session } = useAuth();
+  // society_id IS NULL is the single source of truth for independence.
+  const isIndependent = !societyId;
   const [societyName, setSocietyName] = useState<string | null>(null);
   const [advisorNames, setAdvisorNames] = useState<string[]>([]);
 

@@ -12,6 +12,11 @@ import { createClient } from '@supabase/supabase-js';
 import { generateSlug } from '@/lib/utils';
 import { UN_COUNTRIES } from '@/lib/countries';
 
+// Mirrors settings' ensureRoleConfigs default set (source of truth there) —
+// seeded here too so a freshly created conference already has per-role fee
+// configs instead of relying on that lazy $0-delegate-fee fallback.
+const ROLE_DEFAULTS = ['delegate', 'chair', 'head-delegate', 'faculty-advisor', 'observer'] as const;
+
 // License-safe banner presets shipped in /public/banners (see its README.md).
 const BANNER_PRESETS = [
   '/banners/preset-1.jpg',
@@ -374,6 +379,10 @@ export default function NewConferencePage() {
 
       const baseSlug = generateSlug(fullName);
       const slug = baseSlug + '-' + Math.random().toString(36).substring(2, 7);
+      // Minted client-side so the role-config seeding insert below can
+      // reference this conference without reading it back (see the
+      // RETURNING/RLS note just below).
+      const conferenceId = crypto.randomUUID();
 
       // No .select() after insert: the new row is only SELECT-visible once the
       // ownership trigger has run, so RETURNING fails RLS for private conferences.
@@ -381,6 +390,7 @@ export default function NewConferencePage() {
       const { error: dbError } = await supabase
         .from('conferences')
         .insert({
+          id: conferenceId,
           slug,
           organizer_id: user.id,
           full_name: fullName,
@@ -407,13 +417,35 @@ export default function NewConferencePage() {
           predecessor_conference_id: hasPredecessor === 'yes' && predecessor ? predecessor.id : null,
         });
 
-      setSubmitting(false);
-
       if (dbError) {
+        setSubmitting(false);
         setError('Failed to create conference: ' + dbError.message);
         return;
       }
 
+      // Seed default per-role application configs so the delegate fee
+      // entered above is the role config's fee from day one — otherwise
+      // Settings' own ensureRoleConfigs seeds it lazily with a $0 delegate
+      // fee the first time the organizer opens Settings, disagreeing with
+      // the fee just entered here. Non-fatal: that lazy fallback still
+      // covers this conference if the insert below fails.
+      const { error: roleConfigError } = await supabase.from('application_role_configs').insert(
+        ROLE_DEFAULTS.map(role => ({
+          conference_id: conferenceId,
+          role,
+          is_enabled: role === 'delegate' || role === 'chair',
+          fee_amount: role === 'delegate' ? (parseFloat(feeAmount) || 0) : 0,
+          fee_currency: feeCurrency,
+          auto_accept: false,
+          payment_timing: 'anytime' as const,
+          custom_questions: [],
+        }))
+      );
+      if (roleConfigError) {
+        console.error('Failed to seed role configs:', roleConfigError.message);
+      }
+
+      setSubmitting(false);
       router.push('/manage/' + slug);
     } catch (err) {
       setSubmitting(false);

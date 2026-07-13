@@ -593,6 +593,8 @@ function ConferenceApplyInner() {
         user_id: user!.id,
         role,
         status: roleConfig?.auto_accept ? 'accepted' : 'submitted',
+        // Derived convenience, kept in sync — society_id IS NULL is the
+        // actual source of truth, never read is_independent for logic.
         is_independent: isIndependent,
         society_id: societyId,
         is_head_delegate: role === 'head-delegate',

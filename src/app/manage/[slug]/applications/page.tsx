@@ -46,7 +46,6 @@ interface Application {
   invited_name: string | null;
   role: string;
   status: string;
-  is_independent: boolean;
   is_head_delegate: boolean;
   experience_level: string | null;
   payment_status: string | null;
@@ -301,7 +300,7 @@ export default function ApplicationsPage() {
       supabase
         .from('applications')
         .select(`
-          id, user_id, invited_email, invited_name, role, status, is_independent, is_head_delegate, experience_level,
+          id, user_id, invited_email, invited_name, role, status, is_head_delegate, experience_level,
           payment_status, submitted_at, organizer_note, custom_answers,
           assigned_committee_id, assigned_country_code, assigned_country_name,
           self_paid, attending, pledge_type, spots_pledged, pledge_confirmed_at, society_id,

@@ -646,7 +646,27 @@ export default function ConferencesExploreClient() {
         .select('id, slug, full_name, acronym, country, city, start_date, end_date, expected_delegates, fee_amount, fee_currency, format, student_level, logo_url, banner_url, is_public, organizer_id')
         .eq('is_public', true)
         .order('start_date', { ascending: true });
-      setConferences((data as Conference[]) ?? []);
+      const confs = (data as Conference[]) ?? [];
+
+      // Single source of truth for the fee shown on cards: the delegate role
+      // config's fee, falling back to the conference-level fee only when no
+      // delegate role config exists yet (mirrors the conference detail hero).
+      const ids = confs.map(c => c.id);
+      const { data: delegateFees } = ids.length > 0
+        ? await supabase
+            .from('application_role_configs')
+            .select('conference_id, fee_amount, fee_currency')
+            .eq('role', 'delegate')
+            .in('conference_id', ids)
+        : { data: [] as { conference_id: string; fee_amount: number | null; fee_currency: string | null }[] };
+      const feeByConference = new Map((delegateFees ?? []).map(r => [r.conference_id, r]));
+
+      setConferences(confs.map(c => {
+        const df = feeByConference.get(c.id);
+        return df
+          ? { ...c, fee_amount: df.fee_amount ?? 0, fee_currency: df.fee_currency ?? c.fee_currency }
+          : c;
+      }));
       setLoading(false);
     }
     fetchConferences();

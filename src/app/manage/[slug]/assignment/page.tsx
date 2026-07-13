@@ -30,7 +30,7 @@ interface AcceptedApp {
   role: string;
   experience_level: string | null;
   is_head_delegate: boolean;
-  is_independent: boolean;
+  society_id: string | null;
   payment_status: string | null;
   attending: boolean;
   invited_email: string | null;
@@ -256,9 +256,9 @@ function TierBadge({ tier, onCycle }: { tier: ImportanceTier; onCycle?: () => vo
 }
 
 function DelegationChip({ app }: { app: AcceptedApp }) {
-  const label = app.is_independent ? 'Independent' : app.societies?.name ?? null;
+  const indep = app.society_id == null;
+  const label = indep ? 'Independent' : app.societies?.name ?? null;
   if (!label) return null;
-  const indep = app.is_independent;
   return (
     <span
       className="px-2 py-0.5 rounded-full truncate inline-block"
@@ -1230,7 +1230,7 @@ export default function AssignmentPage() {
       supabase
         .from('applications')
         .select(`
-          id, role, experience_level, is_head_delegate, is_independent, payment_status,
+          id, role, experience_level, is_head_delegate, society_id, payment_status,
           attending, invited_email, invited_name,
           profiles (id, display_name, email, nationality, mun_experience_level, avatar_url),
           societies (name),

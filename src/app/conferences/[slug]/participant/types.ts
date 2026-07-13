@@ -8,7 +8,6 @@ export interface ParticipantApplication {
   status: string;
   payment_status: string;
   amount_paid: number;
-  is_independent: boolean;
   society_id: string | null;
   self_paid: boolean;
   pledge_type: 'delegation' | null;
