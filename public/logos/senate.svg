@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100" role="img" aria-label="United States Senate emblem">
+  <circle cx="50" cy="50" r="48" fill="#10244C" stroke="#C8A84B" stroke-width="3"/>
+  <g fill="#EED98A">
+    <polygon points="50,28 54.2,40.9 67.8,40.9 56.8,48.9 61,61.8 50,53.8 39,61.8 43.2,48.9 32.2,40.9 45.8,40.9"/>
+  </g>
+  <text x="50" y="78" font-family="Arial, sans-serif" font-weight="bold" font-size="13" letter-spacing="1.5" fill="#EED98A" text-anchor="middle">SENATE</text>
+</svg>

@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { createCommittee as createCommitteeInDB } from '@/lib/committeeService';
 import { useSettingsStore } from '@/lib/settingsStore';
 import { UN_COUNTRIES, getFlagUrl, getCountryByName, getCountryDisplayName, matchesSearch, findCountryFlexible, compareCountryNames } from '@/lib/countries';
-import { UNSC_MEMBERS, WHO_MEMBERS, IMF_MEMBERS, WORLD_BANK_MEMBERS, UNEP_MEMBERS } from '@/lib/presets';
+import { UNSC_MEMBERS, WHO_MEMBERS, IMF_MEMBERS, WORLD_BANK_MEMBERS, UNEP_MEMBERS, ICC_ROLES, ICJ_ROLES, CRISIS_MEMBERS, FIFA_MEMBERS, HOUSE_OF_COMMONS_ROLES, US_SENATE_MEMBERS, PRESS_ROLES, EUROPEAN_PARLIAMENT_MEMBERS } from '@/lib/presets';
 import { Globe, PenLine, ChevronLeft, Megaphone } from 'lucide-react';
 import { FlagImg } from '@/components/FlagImg';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
@@ -42,6 +42,14 @@ const COMMITTEE_PRESETS = [
   { name: 'UN Development Programme',                   acronym: 'UNDP',    logoPath: '/logos/un.svg',       members: [] },
   { name: 'UN Entity for Gender Equality (UN Women)',   acronym: 'UNW',     logoPath: '/logos/un.svg',       members: [] },
   { name: 'UN Office on Drugs and Crime',               acronym: 'UNODC',   logoPath: '/logos/un.svg',       members: [] },
+  { name: 'International Criminal Court',                acronym: 'ICC',       logoPath: '/logos/icc.svg',                 members: ICC_ROLES },
+  { name: 'International Court of Justice',              acronym: 'ICJ',       logoPath: '/logos/icj.svg',                 members: ICJ_ROLES },
+  { name: 'Crisis Committee',                           acronym: 'Crisis',    logoPath: '/committee-emblems/crisis.svg',  members: CRISIS_MEMBERS },
+  { name: 'FIFA Congress',                              acronym: 'FIFA',      logoPath: '/logos/fifa.svg',                members: FIFA_MEMBERS },
+  { name: 'House of Commons',                           acronym: 'HoC',       logoPath: '/logos/commons.svg',             members: HOUSE_OF_COMMONS_ROLES },
+  { name: 'United States Senate',                       acronym: 'US Senate', logoPath: '/logos/senate.svg',              members: US_SENATE_MEMBERS },
+  { name: 'International Press Corps',                   acronym: 'IPC',       logoPath: '/logos/press.svg',               members: PRESS_ROLES },
+  { name: 'European Parliament',                        acronym: 'EP',        logoPath: '/logos/eu.png',                  members: EUROPEAN_PARLIAMENT_MEMBERS },
 ];
 
 function getPresetDisplayName(name: string, lang: string): string {

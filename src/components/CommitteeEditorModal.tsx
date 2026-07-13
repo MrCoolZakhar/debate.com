@@ -6,8 +6,8 @@
 // create flow), MonogramMedallion (fallback emblem), ModalOverlay (house modal
 // backdrop) and mintConferenceSession (session minting for conference committees).
 
-import { useState, useEffect } from 'react';
-import { X, Globe, Users, Landmark, Scale, Zap } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { X, Globe, Users, Landmark, Scale, Zap, UserPlus, Mail } from 'lucide-react';
 import { NEU, NEU_GRADIENTS, OUTFIT, type NeuGradient } from '@/components/neu';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
@@ -18,7 +18,10 @@ import {
   entry,
   type RosterEntry,
 } from '@/components/ConferenceRosterPicker';
-import { PRESET_EMBLEM_PICKS, matchPresetEmblem } from '@/lib/presetNames';
+import { matchPresetEmblem, committeeDisplayName } from '@/lib/presetNames';
+import { LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
+import { LogoDisc } from '@/components/LogoDisc';
+import { sendChairInvite } from '@/lib/chairInvites';
 import Portal from '@/components/Portal';
 
 // ── Design constants ──────────────────────────────────────────────────────────
@@ -171,6 +174,199 @@ export async function mintConferenceSession(
   return null;
 }
 
+// ── ChairsDock (side popover, docked outside the main editor modal) ───────────
+// A small distinct panel showing the committee's seated chairs (avatars), plus
+// entry points to add an accepted applicant or invite a chair by email. Reuses
+// the existing chair flow: the create_chair_invite RPC via sendChairInvite, and
+// the chair_user_ids append the committees page assigns with.
+
+interface DisplayChair { name: string; avatar_url: string | null }
+interface ChairApplicant {
+  id: string;
+  user_id: string;
+  assigned_committee_id: string | null;
+  profiles: { display_name: string; email: string; avatar_url: string | null } | null;
+}
+
+function ChairsDock({ conferenceId, committeeId, committeeName }: {
+  conferenceId: string;
+  committeeId: string;
+  committeeName: string;
+}) {
+  const { session } = useAuth();
+  const [chairs, setChairs] = useState<DisplayChair[] | null>(null);
+  const [chairIds, setChairIds] = useState<string[]>([]);
+  const [expanded, setExpanded] = useState(false);
+  const [applicants, setApplicants] = useState<ChairApplicant[] | null>(null);
+  const [email, setEmail] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState('');
+  const [err, setErr] = useState('');
+
+  const load = useCallback(async () => {
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
+    const { data } = await supabase
+      .from('conference_committees')
+      .select('display_chairs, chair_user_ids')
+      .eq('id', committeeId)
+      .single();
+    setChairs(((data?.display_chairs as DisplayChair[] | null) ?? []));
+    setChairIds(((data?.chair_user_ids as string[] | null) ?? []));
+  }, [session, committeeId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (!expanded || !session || applicants !== null) return;
+    let cancelled = false;
+    (async () => {
+      const supabase = getAuthedClient(session.access_token);
+      const { data } = await supabase
+        .from('applications')
+        .select('id, user_id, assigned_committee_id, profiles (display_name, email, avatar_url)')
+        .eq('conference_id', conferenceId)
+        .eq('role', 'chair')
+        .in('status', ['accepted', 'assigned']);
+      if (!cancelled) setApplicants((data ?? []) as unknown as ChairApplicant[]);
+    })();
+    return () => { cancelled = true; };
+  }, [expanded, session, applicants, conferenceId]);
+
+  async function invite() {
+    const em = email.trim();
+    if (!em || !session) return;
+    setBusy(true); setErr(''); setNote('');
+    const supabase = getAuthedClient(session.access_token);
+    const res = await sendChairInvite(supabase, { conferenceId, committeeId, committeeName, email: em });
+    setBusy(false);
+    if (!res.ok) { setErr(res.error ?? 'Could not invite that chair.'); return; }
+    setNote(`Invited ${res.invitedName ?? em}.`);
+    setEmail('');
+    load();
+  }
+
+  async function assign(app: ChairApplicant) {
+    if (!session || chairIds.includes(app.user_id)) return;
+    setBusy(true); setErr(''); setNote('');
+    const supabase = getAuthedClient(session.access_token);
+    const nextIds = Array.from(new Set([...chairIds, app.user_id]));
+    const { error } = await supabase.from('conference_committees').update({ chair_user_ids: nextIds }).eq('id', committeeId);
+    if (error) { setBusy(false); setErr('Could not seat that chair.'); return; }
+    await supabase.from('applications').update({ status: 'assigned', assigned_committee_id: committeeId }).eq('id', app.id);
+    setChairIds(nextIds);
+    setApplicants((prev) => prev ? prev.filter((a) => a.id !== app.id) : prev);
+    setBusy(false);
+    setNote(`Seated ${app.profiles?.display_name ?? 'chair'}.`);
+    load();
+  }
+
+  const visibleApplicants = (applicants ?? []).filter((a) => !chairIds.includes(a.user_id));
+
+  return (
+    <div
+      className="rounded-2xl flex flex-col"
+      style={{ width: 236, flexShrink: 0, backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 12px 32px rgba(27,56,40,0.16)' }}
+    >
+      <div className="px-4 pt-4 pb-3" style={{ borderBottom: '1px solid #EDE7D8' }}>
+        <p style={{ margin: 0, fontFamily: OUTFIT, fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', color: '#B6871F' }}>THE DAIS</p>
+        <p className="font-bold text-[13.5px] mt-0.5" style={{ color: '#1C1410', fontFamily: OUTFIT }}>Chairs</p>
+      </div>
+
+      <div className="px-4 py-3 flex flex-col gap-2">
+        {chairs === null ? (
+          <div className="flex justify-center py-4"><div className="w-4 h-4 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} /></div>
+        ) : chairs.length === 0 ? (
+          <p className="text-[11px]" style={{ color: '#9A8A78', fontFamily: OUTFIT, lineHeight: 1.45 }}>No chairs seated yet.</p>
+        ) : (
+          chairs.map((c, i) => (
+            <div key={i} className="flex items-center gap-2.5">
+              {c.avatar_url ? (
+                <img src={c.avatar_url} alt={c.name} style={{ width: 28, height: 28, borderRadius: '9999px', objectFit: 'cover', backgroundColor: '#EDE7D8', flexShrink: 0 }} />
+              ) : (
+                <span className="flex items-center justify-center flex-shrink-0" style={{ width: 28, height: 28, borderRadius: '9999px', backgroundColor: '#1B3828', color: '#EED98A', fontSize: 11, fontWeight: 700, fontFamily: OUTFIT }}>{c.name.charAt(0)}</span>
+              )}
+              <span className="text-[12.5px] truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{c.name}</span>
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="px-4 pb-4 mt-auto">
+        {!expanded ? (
+          <button
+            onClick={() => setExpanded(true)}
+            className="w-full flex items-center justify-center gap-1.5 rounded-xl py-2 font-bold text-[11px] focus:outline-none"
+            style={{ border: '1.5px solid #1B3828', color: '#1B3828', backgroundColor: 'transparent', fontFamily: OUTFIT, letterSpacing: '0.06em', cursor: 'pointer', transition: `background-color 200ms ${EASE}` }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+          >
+            <UserPlus size={13} /> ADD CHAIR
+          </button>
+        ) : (
+          <div className="flex flex-col gap-3 pt-3" style={{ borderTop: '1px solid #EDE7D8' }}>
+            {/* Invite by email */}
+            <div>
+              <p style={{ margin: '0 0 6px 0', fontFamily: OUTFIT, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', color: '#6B5F52' }}>INVITE BY EMAIL</p>
+              <div className="flex gap-1.5">
+                <input
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); invite(); } }}
+                  placeholder="chair@example.com"
+                  style={{ flex: 1, minWidth: 0, border: '1px solid #DDD4C0', borderRadius: 8, padding: '6px 9px', fontSize: 12, color: '#1C1410', backgroundColor: '#FAF8F3', outline: 'none', fontFamily: OUTFIT }}
+                />
+                <button
+                  onClick={invite}
+                  disabled={busy || !email.trim()}
+                  className="rounded-lg px-2.5 flex items-center justify-center focus:outline-none flex-shrink-0"
+                  style={{ backgroundColor: busy || !email.trim() ? '#DDD4C0' : '#1B3828', color: busy || !email.trim() ? '#9A8A78' : '#EED98A', cursor: 'pointer' }}
+                  title="Send invite"
+                >
+                  <Mail size={13} />
+                </button>
+              </div>
+            </div>
+            {/* Accepted applicants to seat */}
+            <div>
+              <p style={{ margin: '0 0 6px 0', fontFamily: OUTFIT, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', color: '#6B5F52' }}>ACCEPTED APPLICANTS</p>
+              {applicants === null ? (
+                <div className="flex justify-center py-3"><div className="w-4 h-4 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} /></div>
+              ) : visibleApplicants.length === 0 ? (
+                <p className="text-[11px]" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>None available.</p>
+              ) : (
+                <div className="flex flex-col gap-1.5">
+                  {visibleApplicants.map((app) => (
+                    <button
+                      key={app.id}
+                      onClick={() => assign(app)}
+                      disabled={busy}
+                      className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-left focus:outline-none"
+                      style={{ border: '1px solid #EDE7D8', backgroundColor: 'rgba(237,231,216,0.3)', cursor: 'pointer' }}
+                      title={`Seat ${app.profiles?.display_name ?? 'chair'}`}
+                    >
+                      {app.profiles?.avatar_url ? (
+                        <img src={app.profiles.avatar_url} alt="" style={{ width: 22, height: 22, borderRadius: '9999px', objectFit: 'cover', flexShrink: 0 }} />
+                      ) : (
+                        <span className="flex items-center justify-center flex-shrink-0" style={{ width: 22, height: 22, borderRadius: '9999px', backgroundColor: '#1B3828', color: '#EED98A', fontSize: 10, fontWeight: 700, fontFamily: OUTFIT }}>{(app.profiles?.display_name ?? '?').charAt(0)}</span>
+                      )}
+                      <span className="text-[11.5px] truncate flex-1 min-w-0" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{app.profiles?.display_name ?? 'Unknown'}</span>
+                      <UserPlus size={12} style={{ color: '#1B3828', flexShrink: 0 }} />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+        {note && <p className="text-[10.5px] mt-2" style={{ color: '#2A5A3C', fontFamily: OUTFIT }}>{note}</p>}
+        {err && <p className="text-[10.5px] mt-2" style={{ color: '#8B2020', fontFamily: OUTFIT }}>{err}</p>}
+      </div>
+    </div>
+  );
+}
+
 // ── CommitteeEditor (create + edit) ───────────────────────────────────────────
 
 function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster, onClose, onSaved }: {
@@ -200,6 +396,12 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
   const [emblemManuallySet, setEmblemManuallySet] = useState<boolean>(!!existing?.logo_url);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  // A selected preset can force the roster path (ICC/ICJ/Crisis/HoC/Senate/Press
+  // roster free-text seats even under a non-crisis type). Null → fall back to the
+  // committee_type default. Cleared to 'country'/'character' on preset select.
+  const [presetRosterMode, setPresetRosterMode] = useState<'country' | 'character' | null>(null);
+  const rosterMode: 'country' | 'character' = presetRosterMode ?? (isCrisis ? 'character' : 'country');
+  const isCharacterRoster = rosterMode === 'character';
 
   // Auto-assign a preset emblem as the default when the committee's name /
   // abbreviation matches a known body (UNSC, DISEC, WHO, …) and the organiser
@@ -350,7 +552,7 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
   async function handleSave(force = false) {
     if (!name.trim()) { setError('Committee name is required.'); return; }
     if (topics.length === 0) { setError('Add at least one topic.'); return; }
-    if (roster.length === 0) { setError(isCrisis ? 'Add at least one character.' : 'Add at least one country.'); return; }
+    if (roster.length === 0) { setError(isCharacterRoster ? 'Add at least one character.' : 'Add at least one country.'); return; }
     if (!session) return;
     setSaving(true); setError('');
     const supabase = getAuthedClient(session.access_token);
@@ -371,75 +573,106 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
   return (
     <>
     <ModalOverlay onClose={onClose}>
-      <div className="w-full max-w-2xl rounded-2xl p-6" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', maxHeight: '85vh', overflowY: 'auto' }}>
-        <div className="flex items-center justify-end mb-2">
+      <div className="flex items-start gap-3">
+      <div className="rounded-2xl p-6" style={{ width: 'min(920px, calc(100vw - 32px))', backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', maxHeight: '85vh', overflowY: 'auto' }}>
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-[15px] font-bold" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{isEdit ? 'Edit committee' : 'New committee'}</p>
           <button onClick={onClose} className="focus:outline-none" style={{ color: '#9A8A78' }}><X size={18} /></button>
         </div>
-        <div className="flex flex-col gap-4">
-          <div>
-            <label style={labelStyle}>Committee Name *</label>
-            {!isCrisis ? (
-              <ConferenceCommitteeNameInput
-                value={name}
-                onChange={setName}
-                onPresetSelect={(p) => { setName(p.name); setAbbreviation(p.acronym); if (!isEdit) setRoster(p.members.map((m) => entry(m))); }}
-              />
-            ) : (
-              <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. The Cuban Missile Crisis, 1962" style={inputStyle} />
-            )}
-          </div>
-          <div>
-            <label style={labelStyle}>Difficulty</label>
-            <select value={difficulty} onChange={e => setDifficulty(e.target.value)} style={inputStyle}>
-              <option value="beginner">Beginner</option>
-              <option value="intermediate">Intermediate</option>
-              <option value="advanced">Advanced</option>
-              <option value="expert">Expert</option>
-            </select>
-          </div>
-          <div>
-            <label style={labelStyle}>Committee Emblem</label>
-            <div className="flex items-center gap-4 rounded-xl p-3" style={{ border: '1px solid #EDE7D8', backgroundColor: 'rgba(237,231,216,0.35)' }}>
+        <div className="flex flex-col gap-5">
+          {/* Top row — name + difficulty on the left, live emblem preview on the right. */}
+          <div className="flex gap-5 items-start">
+            <div className="flex-1 min-w-0 flex flex-col gap-4">
+              <div>
+                <label style={labelStyle}>Committee Name *</label>
+                {!isCrisis ? (
+                  <ConferenceCommitteeNameInput
+                    value={name}
+                    onChange={setName}
+                    onPresetSelect={(p) => {
+                      setName(committeeDisplayName(p.name, p.acronym));
+                      setAbbreviation(p.acronym);
+                      setPresetRosterMode(p.rosterMode ?? 'country');
+                      if (!isEdit) setRoster(p.members.map((m) => entry(m)));
+                    }}
+                  />
+                ) : (
+                  <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. The Cuban Missile Crisis, 1962" style={inputStyle} />
+                )}
+              </div>
+              <div>
+                <label style={labelStyle}>Difficulty</label>
+                {/* Same MUN-level insignia the applications/account pages use to rank
+                    delegates (beginner chevron → crowned-star expert), for consistency. */}
+                <div className="flex gap-2">
+                  {(['beginner', 'intermediate', 'advanced', 'expert'] as const).map((lvl) => {
+                    const active = difficulty === lvl;
+                    const accent = LEVEL_ACCENT[lvl] ?? '#9A8A78';
+                    const lbl = lvl.charAt(0).toUpperCase() + lvl.slice(1);
+                    return (
+                      <button
+                        key={lvl}
+                        type="button"
+                        onClick={() => setDifficulty(lvl)}
+                        className="flex-1 flex flex-col items-center gap-1.5 rounded-xl py-2.5 focus:outline-none"
+                        style={{
+                          border: active ? `1.5px solid ${accent}` : '1px solid #DDD4C0',
+                          backgroundColor: active ? `${accent}14` : '#FAF8F3',
+                          cursor: 'pointer', transition: `all 180ms ${EASE}`,
+                        }}
+                      >
+                        <span
+                          className="flex items-center justify-center"
+                          style={{ width: 30, height: 30, borderRadius: '9999px', background: `linear-gradient(150deg, ${accent}22, ${accent}12)`, border: `1px solid ${accent}55` }}
+                        >
+                          <LevelInsignia level={lvl} size={18} />
+                        </span>
+                        <span style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, color: active ? accent : '#6E5F4E', letterSpacing: '0.01em' }}>{lbl}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+            {/* Emblem — auto-derived from the committee NAME (matchPresetEmblem), with
+                an upload override. No manual preset swatches. */}
+            <div className="flex flex-col items-center gap-2.5" style={{ width: 148, flexShrink: 0 }}>
+              <label style={{ ...labelStyle, alignSelf: 'flex-start' }}>Emblem</label>
               {logoUploading ? (
-                <div className="flex items-center justify-center flex-shrink-0" style={{ width: 72, height: 72 }}>
-                  <div className="w-5 h-5 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
+                <div className="flex items-center justify-center" style={{ width: 96, height: 96 }}>
+                  <div className="w-6 h-6 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
                 </div>
               ) : logoUrl ? (
-                <img
-                  src={logoUrl}
-                  alt="Committee emblem"
-                  style={{ width: 72, height: 72, objectFit: 'contain', flexShrink: 0, filter: 'drop-shadow(0 6px 12px rgba(27,56,40,0.24))' }}
-                />
+                <LogoDisc src={logoUrl} alt="Committee emblem" size={96} fallbackText={(abbreviation || name).replace(/[^A-Za-z0-9]/g, '').slice(0, 3)} />
               ) : (
-                <MonogramMedallion text={abbreviation || name} isCrisis={isCrisis} size={72} />
+                <MonogramMedallion text={abbreviation || name} isCrisis={isCrisis} size={96} />
               )}
-              <div className="flex flex-col gap-2 min-w-0">
-                <div className="flex flex-wrap gap-2">
+              <div className="flex flex-col gap-1.5 w-full">
+                <button
+                  onClick={() => { if (!logoUploading) document.getElementById('committee-emblem-upload')?.click(); }}
+                  className="w-full rounded-lg py-1.5 font-bold text-[10.5px] focus:outline-none"
+                  style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, letterSpacing: '0.07em', cursor: 'pointer', transition: `background-color 250ms ${EASE}` }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+                >
+                  {logoUploading ? 'UPLOADING…' : logoUrl ? 'REPLACE ART' : 'UPLOAD ART'}
+                </button>
+                {emblemManuallySet && !logoUploading && (
                   <button
-                    onClick={() => { if (!logoUploading) document.getElementById('committee-emblem-upload')?.click(); }}
-                    className="rounded-lg py-1.5 px-3.5 font-bold text-[11px] focus:outline-none"
-                    style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.07em', cursor: 'pointer', transition: `background-color 250ms ${EASE}` }}
-                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+                    onClick={() => setEmblemManuallySet(false)}
+                    title="Re-derive the emblem from the committee name"
+                    className="w-full rounded-lg py-1.5 font-bold text-[10.5px] focus:outline-none"
+                    style={{ border: '1.5px solid #DDD4C0', color: '#6E5F4E', backgroundColor: 'transparent', fontFamily: OUTFIT, letterSpacing: '0.07em', cursor: 'pointer', transition: `background-color 250ms ${EASE}` }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                   >
-                    {logoUploading ? 'UPLOADING...' : logoUrl ? 'REPLACE ART' : 'UPLOAD ART'}
+                    RESET TO AUTO
                   </button>
-                  {logoUrl && !logoUploading && (
-                    <button
-                      onClick={() => { setLogoUrl(null); setEmblemManuallySet(true); }}
-                      className="rounded-lg py-1.5 px-3.5 font-bold text-[11px] focus:outline-none"
-                      style={{ border: '1.5px solid #DDD4C0', color: '#6E5F4E', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.07em', cursor: 'pointer', transition: `background-color 250ms ${EASE}` }}
-                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
-                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                    >
-                      USE MONOGRAM
-                    </button>
-                  )}
-                </div>
-                <p className="text-[11px]" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", lineHeight: 1.45 }}>
-                  Square transparent PNG works best, max 5MB. Without art, the committee wears its monogram medallion.
-                </p>
+                )}
               </div>
+              <p className="text-[10.5px] text-center" style={{ color: '#9A8A78', fontFamily: OUTFIT, lineHeight: 1.4 }}>
+                Auto-set from the name. Square transparent PNG works best, max 5MB.
+              </p>
               <input
                 id="committee-emblem-upload"
                 type="file"
@@ -447,31 +680,6 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
                 style={{ display: 'none' }}
                 onChange={e => { const f = e.target.files?.[0]; if (f) handleEmblemUpload(f); e.target.value = ''; }}
               />
-            </div>
-            {/* Preset emblem picker, one-click seals for common committees. */}
-            <div className="mt-2 flex items-center gap-2 flex-wrap">
-              <span style={{ ...labelStyle, marginBottom: 0, textTransform: 'uppercase', letterSpacing: '0.12em' }}>Presets</span>
-              {PRESET_EMBLEM_PICKS.map((p) => {
-                const active = logoUrl === p.logo;
-                return (
-                  <button
-                    key={p.key}
-                    onClick={() => { setLogoUrl(p.logo); setEmblemManuallySet(true); }}
-                    title={p.label}
-                    className="flex items-center justify-center rounded-lg focus:outline-none"
-                    style={{
-                      width: 34, height: 34, flexShrink: 0,
-                      border: active ? '1.5px solid #1B3828' : '1px solid #DDD4C0',
-                      backgroundColor: active ? 'rgba(27,56,40,0.06)' : '#FAF8F3',
-                      cursor: 'pointer', transition: `all 200ms ${EASE}`,
-                    }}
-                    onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.borderColor = '#B6871F'; }}
-                    onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
-                  >
-                    <img src={p.logo} alt={p.label} style={{ width: 22, height: 22, objectFit: 'contain' }} onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                  </button>
-                );
-              })}
             </div>
           </div>
           <div>
@@ -495,11 +703,11 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
         <div className="mt-5 pt-5" style={{ borderTop: '1px solid #EDE7D8' }}>
           <div className="flex items-center mb-3">
             <p className="flex items-center gap-1.5 text-sm font-bold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-              {isCrisis ? <Users size={15} style={{ color: '#B6871F' }} /> : <Globe size={15} style={{ color: '#B6871F' }} />}
-              {isCrisis ? 'Committee Characters' : 'Committee Countries'}
+              {isCharacterRoster ? <Users size={15} style={{ color: '#B6871F' }} /> : <Globe size={15} style={{ color: '#B6871F' }} />}
+              {isCharacterRoster ? 'Committee Characters' : 'Committee Countries'}
             </p>
           </div>
-          <ConferenceRosterPicker mode={isCrisis ? 'character' : 'country'} value={roster} onChange={setRoster} />
+          <ConferenceRosterPicker mode={isCharacterRoster ? 'character' : 'country'} value={roster} onChange={setRoster} />
         </div>
         {error && <p className="text-xs mt-3" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{error}</p>}
         <div className="flex gap-3 mt-6">
@@ -507,12 +715,18 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
           <button onClick={() => handleSave(false)} disabled={saving} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ backgroundColor: saving ? '#DDD4C0' : '#1B3828', color: saving ? '#9A8A78' : '#EED98A', fontFamily: "'Outfit', sans-serif" }}>{saving ? 'SAVING...' : (isEdit ? 'SAVE CHANGES' : 'ADD COMMITTEE')}</button>
         </div>
       </div>
+      {/* Chairs — a distinct side element docked outside the main modal. Only in
+          edit mode (a real committee id is needed to seat/invite chairs). */}
+      {isEdit && existing && (
+        <ChairsDock conferenceId={conferenceId} committeeId={existing.id} committeeName={name.trim() || existing.name} />
+      )}
+      </div>
     </ModalOverlay>
     {pendingRemovalCount !== null && (
       <ModalOverlay onClose={() => setPendingRemovalCount(null)}>
         <div className="rounded-2xl p-6 flex flex-col gap-4" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 380 }}>
           <p className="text-sm" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", lineHeight: 1.5 }}>
-            {pendingRemovalCount} of the {isCrisis ? 'characters' : 'countries'} you removed {pendingRemovalCount === 1 ? 'has' : 'have'} an allocated delegate. Removing {pendingRemovalCount === 1 ? 'it' : 'them'} will return {pendingRemovalCount === 1 ? 'that delegate' : 'those delegates'} to the allocation pool. Proceed?
+            {pendingRemovalCount} of the {isCharacterRoster ? 'characters' : 'countries'} you removed {pendingRemovalCount === 1 ? 'has' : 'have'} an allocated delegate. Removing {pendingRemovalCount === 1 ? 'it' : 'them'} will return {pendingRemovalCount === 1 ? 'that delegate' : 'those delegates'} to the allocation pool. Proceed?
           </p>
           <div className="flex gap-3">
             <button onClick={() => setPendingRemovalCount(null)} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ border: '1.5px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}>CANCEL</button>

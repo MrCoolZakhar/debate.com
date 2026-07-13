@@ -12,9 +12,13 @@
 // Reuses shared logic (findCountryFlexible, UN_COUNTRIES) rather than copying.
 
 import { useState, useRef } from 'react';
-import { Globe, Users, PenLine, ArrowUp, ArrowDown, Megaphone } from 'lucide-react';
+import { Globe, Users, PenLine, Megaphone } from 'lucide-react';
 import { UN_COUNTRIES, getFlagUrl, getCountryByName, findCountryFlexible } from '@/lib/countries';
-import { UNSC_MEMBERS, WHO_MEMBERS, IMF_MEMBERS, WORLD_BANK_MEMBERS, UNEP_MEMBERS } from '@/lib/presets';
+import {
+  UNSC_MEMBERS, WHO_MEMBERS, IMF_MEMBERS, WORLD_BANK_MEMBERS, UNEP_MEMBERS,
+  ICC_ROLES, ICJ_ROLES, CRISIS_MEMBERS, FIFA_MEMBERS, HOUSE_OF_COMMONS_ROLES,
+  US_SENATE_MEMBERS, PRESS_ROLES, EUROPEAN_PARLIAMENT_MEMBERS,
+} from '@/lib/presets';
 
 // ── Importance tiers ──────────────────────────────────────────────────────────
 // Mirrors the assignment page's model so tiers set here round-trip through the
@@ -75,9 +79,15 @@ export interface CommitteePreset {
   acronym: string;
   logoPath: string;
   members: string[];
+  // Which roster path this preset feeds. 'country' → flag-matched country slots;
+  // 'character' → free-text role/character seats (judges, cabinet posts, press
+  // outlets, US-state seats). Defaults to 'country' when omitted.
+  rosterMode?: 'country' | 'character';
 }
 
-export const CONFERENCE_COMMITTEE_PRESETS: CommitteePreset[] = [
+// Raw list — order preserved. Deduped by name below (defends against merge dupes
+// re-introducing UNGA/ECOSOC/etc. twice).
+const RAW_COMMITTEE_PRESETS: CommitteePreset[] = [
   { name: 'UN Security Council', acronym: 'UNSC', logoPath: '/logos/un.svg', members: UNSC_MEMBERS },
   { name: 'UN Environment Programme', acronym: 'UNEP', logoPath: '/logos/UNEP.png', members: UNEP_MEMBERS },
   { name: 'World Health Organization', acronym: 'WHO', logoPath: '/logos/who.png', members: WHO_MEMBERS },
@@ -92,10 +102,13 @@ export const CONFERENCE_COMMITTEE_PRESETS: CommitteePreset[] = [
   { name: 'African Union', acronym: 'AU', logoPath: '/logos/AU.png', members: ['Algeria','Angola','Benin','Botswana','Burkina Faso','Burundi','Cabo Verde','Cameroon','Central African Republic','Chad','Comoros','Congo','Côte d\'Ivoire','DR Congo','Djibouti','Egypt','Equatorial Guinea','Eritrea','Eswatini','Ethiopia','Gabon','Gambia','Ghana','Guinea','Guinea-Bissau','Kenya','Lesotho','Liberia','Libya','Madagascar','Malawi','Mali','Mauritania','Mauritius','Morocco','Mozambique','Namibia','Niger','Nigeria','Rwanda','São Tomé and Príncipe','Senegal','Seychelles','Sierra Leone','Somalia','South Africa','South Sudan','Sudan','Tanzania','Togo','Tunisia','Uganda','Zambia','Zimbabwe'] },
   { name: 'Arab League', acronym: 'LAS', logoPath: '/logos/arab-league.png', members: ['Algeria','Bahrain','Comoros','Djibouti','Egypt','Iraq','Jordan','Kuwait','Lebanon','Libya','Mauritania','Morocco','Oman','Palestine','Qatar','Saudi Arabia','Somalia','Sudan','Syria','Tunisia','United Arab Emirates','Yemen'] },
   { name: 'ASEAN', acronym: 'ASEAN', logoPath: '/logos/asean.png', members: ['Brunei','Cambodia','Indonesia','Laos','Malaysia','Myanmar','Philippines','Singapore','Thailand','Timor-Leste','Vietnam'] },
-  { name: 'GA First Committee (Disarmament)',          acronym: 'DISEC',   logoPath: '/logos/un.svg',     members: [] },
-  { name: 'GA Fourth Committee (Special Political)',   acronym: 'SPECPOL', logoPath: '/logos/un.svg',     members: [] },
-  { name: 'GA Third Committee (Social, Humanitarian)', acronym: 'SOCHUM',  logoPath: '/logos/un.svg',     members: [] },
-  { name: 'GA Sixth Committee (Legal)',                acronym: 'LEGAL',   logoPath: '/logos/un.svg',     members: [] },
+  // GA main committees. Canonical long-form names so committeeDisplayName's
+  // ">4 words → acronym" rule collapses them to how delegates actually refer to
+  // them (DISEC, SPECPOL, SOCHUM, LEGAL). Emblem still resolves to the UN seal.
+  { name: 'Disarmament and International Security Committee', acronym: 'DISEC',   logoPath: '/logos/un.svg',     members: [] },
+  { name: 'Special Political and Decolonization Committee',   acronym: 'SPECPOL', logoPath: '/logos/un.svg',     members: [] },
+  { name: 'Social, Humanitarian and Cultural Committee',      acronym: 'SOCHUM',  logoPath: '/logos/un.svg',     members: [] },
+  { name: 'International Law and Legal Affairs Committee',     acronym: 'LEGAL',   logoPath: '/logos/un.svg',     members: [] },
   { name: 'UN Children\'s Fund',                       acronym: 'UNICEF',  logoPath: '/logos/unicef.png', members: [] },
   { name: 'UN Educational, Scientific & Cultural Org.', acronym: 'UNESCO', logoPath: '/logos/unesco.png', members: [] },
   { name: 'UN Refugee Agency',                         acronym: 'UNHCR',   logoPath: '/logos/un.svg',     members: [] },
@@ -106,7 +119,31 @@ export const CONFERENCE_COMMITTEE_PRESETS: CommitteePreset[] = [
   { name: 'UN Development Programme',                   acronym: 'UNDP',    logoPath: '/logos/un.svg',     members: [] },
   { name: 'UN Entity for Gender Equality (UN Women)',   acronym: 'UNW',     logoPath: '/logos/un.svg',     members: [] },
   { name: 'UN Office on Drugs and Crime',              acronym: 'UNODC',   logoPath: '/logos/un.svg',     members: [] },
+  // ── New shared presets (src/lib/presets.ts). ICC/ICJ/Crisis/HoC/Senate/Press
+  // roster free-text role/character seats; FIFA + European Parliament roster
+  // flag-matched countries.
+  { name: 'International Criminal Court',  acronym: 'ICC',       logoPath: '/logos/icc.svg',                  members: ICC_ROLES,                   rosterMode: 'character' },
+  { name: 'International Court of Justice', acronym: 'ICJ',      logoPath: '/logos/icj.svg',                  members: ICJ_ROLES,                   rosterMode: 'character' },
+  { name: 'Crisis Committee',             acronym: 'Crisis',    logoPath: '/committee-emblems/crisis.svg',   members: CRISIS_MEMBERS,              rosterMode: 'character' },
+  { name: 'FIFA Congress',                acronym: 'FIFA',      logoPath: '/logos/fifa.svg',                 members: FIFA_MEMBERS,                rosterMode: 'country' },
+  { name: 'House of Commons',             acronym: 'HoC',       logoPath: '/logos/commons.svg',              members: HOUSE_OF_COMMONS_ROLES,     rosterMode: 'character' },
+  { name: 'United States Senate',         acronym: 'US Senate', logoPath: '/logos/senate.svg',               members: US_SENATE_MEMBERS,          rosterMode: 'character' },
+  { name: 'International Press Corps',     acronym: 'IPC',       logoPath: '/logos/press.svg',                members: PRESS_ROLES,                 rosterMode: 'character' },
+  { name: 'European Parliament',          acronym: 'EP',        logoPath: '/logos/eu.png',                   members: EUROPEAN_PARLIAMENT_MEMBERS, rosterMode: 'country' },
 ];
+
+// Deduped by lowercased name — one card per committee, first occurrence wins.
+export const CONFERENCE_COMMITTEE_PRESETS: CommitteePreset[] = (() => {
+  const seen = new Set<string>();
+  const out: CommitteePreset[] = [];
+  for (const p of RAW_COMMITTEE_PRESETS) {
+    const key = p.name.trim().toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(p);
+  }
+  return out;
+})();
 
 // ── Country bundles (kept in sync with /create) ───────────────────────────────
 const BUNDLES: Record<string, { label: string; logoPath?: string; members: string[] }> = {
@@ -248,14 +285,6 @@ export function ConferenceRosterPicker({ mode, value, onChange }: {
   };
 
   const removeIdx = (idx: number) => onChange(value.filter((_, i) => i !== idx));
-
-  const moveIdx = (idx: number, dir: -1 | 1) => {
-    const target = idx + dir;
-    if (target < 0 || target >= value.length) return;
-    const next = [...value];
-    [next[idx], next[target]] = [next[target], next[idx]];
-    onChange(next);
-  };
 
   const cycleTier = (idx: number) => {
     const cur = value[idx].importance;
@@ -428,8 +457,9 @@ export function ConferenceRosterPicker({ mode, value, onChange }: {
             value={pasteText}
             onChange={(e) => { setPasteText(e.target.value); setPasteError(''); }}
             placeholder={isCharacter ? 'Fidel Castro\nNikita Khrushchev\nJohn F. Kennedy…' : 'France\nGermany\nBrazil, India…'}
-            className="flex-1 rounded-xl px-3 py-2 text-sm resize-none focus:outline-none"
-            style={{ border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3', color: '#1C1410', fontFamily: "'Outfit', sans-serif", minHeight: 72 }}
+            rows={8}
+            className="flex-1 rounded-xl px-3 py-2.5 text-sm resize-y focus:outline-none"
+            style={{ border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3', color: '#1C1410', fontFamily: "'Outfit', sans-serif", minHeight: 150, lineHeight: 1.55 }}
           />
           <div className="flex items-center gap-2 mt-2">
             <button
@@ -518,11 +548,8 @@ export function ConferenceRosterPicker({ mode, value, onChange }: {
                       style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", borderBottom: '1px solid #1B3828' }}
                     />
                   ) : (
-                    <span className="flex-1 text-xs truncate flex items-center gap-1.5 min-w-0" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                    <span className="flex-1 text-xs truncate min-w-0" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
                       <span className="truncate">{row.name}</span>
-                      {isObserver && (
-                        <span className="shrink-0 font-bold uppercase tracking-wide px-1 py-0.5 rounded" style={{ fontSize: 8, backgroundColor: 'rgba(182,135,31,0.15)', color: '#B6871F', border: '1px solid rgba(182,135,31,0.35)', letterSpacing: '0.06em' }}>OBSERVER</span>
-                      )}
                     </span>
                   )}
                   {!isEditing && (
@@ -541,9 +568,6 @@ export function ConferenceRosterPicker({ mode, value, onChange }: {
                       >
                         <Megaphone size={12} strokeWidth={1.75} className={isObserver ? '' : 'opacity-0 group-hover:opacity-100 transition-opacity'} />
                       </button>
-                      {/* Reorder */}
-                      <button onClick={() => moveIdx(idx, -1)} disabled={idx === 0} className="opacity-0 group-hover:opacity-100 transition-opacity focus:outline-none disabled:opacity-0" style={{ color: '#9A8A78' }} title="Move up"><ArrowUp size={12} /></button>
-                      <button onClick={() => moveIdx(idx, 1)} disabled={idx === value.length - 1} className="opacity-0 group-hover:opacity-100 transition-opacity focus:outline-none disabled:opacity-0" style={{ color: '#9A8A78' }} title="Move down"><ArrowDown size={12} /></button>
                       {/* Rename — custom entries & all characters */}
                       {(isCustom || isCharacter) && (
                         <button onClick={() => { setEditingIdx(idx); setEditDraft(row.name); }} className="opacity-0 group-hover:opacity-100 transition-opacity focus:outline-none" style={{ color: '#9A8A78' }} title="Rename"><PenLine size={12} /></button>
