@@ -157,6 +157,7 @@ interface MyApplication {
   pledge_type: 'delegation' | null;
   spots_pledged: number | null;
   pledge_confirmed_at: string | null;
+  aid_status: 'none' | 'pending' | 'approved' | 'denied';
 }
 
 interface ConferenceReview {
@@ -620,7 +621,7 @@ export default function ConferenceDetailClient() {
 
       const { data: appsData } = await authedSupabase
         .from('applications')
-        .select('id, role, status, payment_status, society_id, self_paid, pledge_type, spots_pledged, pledge_confirmed_at')
+        .select('id, role, status, payment_status, society_id, self_paid, pledge_type, spots_pledged, pledge_confirmed_at, aid_status')
         .eq('conference_id', conf.id)
         .eq('user_id', user.id);
 

@@ -13,6 +13,7 @@ export interface ParticipantApplication {
   pledge_type: 'delegation' | null;
   spots_pledged: number | null;
   pledge_confirmed_at: string | null;
+  aid_status: 'none' | 'pending' | 'approved' | 'denied';
 }
 
 export interface ParticipantRoleConfig {

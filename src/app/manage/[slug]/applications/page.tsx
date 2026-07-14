@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   ArrowRight, BadgeCheck, Building2, Cake, CalendarDays, Check, CircleCheck, Clock,
-  Download, Eye, Filter, Gavel, Globe, GraduationCap, HandCoins, Inbox, LogOut, MapPin,
+  Download, Eye, Filter, Gavel, Globe, GraduationCap, HandCoins, HeartHandshake, Inbox, LogOut, MapPin,
   MessageSquareText, RotateCcw, SlidersHorizontal, Trash2, Undo2, User, UserRoundCheck,
   Users, X,
 } from 'lucide-react';
@@ -78,6 +78,9 @@ interface Application {
   spots_pledged: number | null;
   pledge_confirmed_at: string | null;
   society_id: string | null;
+  aid_requested: boolean;
+  aid_statement: string | null;
+  aid_status: 'none' | 'pending' | 'approved' | 'denied';
 }
 
 // Pool accounting (poolForRole, fillFreeSpots, releasePoolSpot, POOL_SPOTS_COLUMN)
@@ -210,6 +213,12 @@ const PAYMENT_OPTIONS = [
   { label: 'Waived', value: 'waived' },
 ];
 
+const AID_OPTIONS = [
+  { label: 'Pending', value: 'pending' },
+  { label: 'Approved', value: 'approved' },
+  { label: 'Denied', value: 'denied' },
+];
+
 // ── Filter panel ──────────────────────────────────────────────────────────────
 // Peter: "the filters could be more of a hover and they appear". A single
 // neumorphic FILTERS control reveals the whole rich set on hover (and can be
@@ -220,6 +229,7 @@ interface FilterState {
   status: Set<string>;
   role: Set<string>;
   payment: Set<string>;
+  aid: Set<string>;
   dateFrom: string;
   dateTo: string;
 }
@@ -376,7 +386,7 @@ function FilterPanel({
             </div>
             {activeCount > 0 && (
               <button
-                onClick={() => setFilters({ status: new Set(), role: new Set(), payment: new Set(), dateFrom: '', dateTo: '' })}
+                onClick={() => setFilters({ status: new Set(), role: new Set(), payment: new Set(), aid: new Set(), dateFrom: '', dateTo: '' })}
                 className="focus:outline-none"
                 style={{ fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, letterSpacing: '0.06em', color: '#8B2020', background: 'none', border: 'none', cursor: 'pointer' }}
               >
@@ -404,6 +414,12 @@ function FilterPanel({
               onAll={() => setFilters(f => ({ ...f, payment: new Set(PAYMENT_OPTIONS.map(o => o.value)) }))}
               onNone={() => setFilters(f => ({ ...f, payment: new Set() }))}
             />
+            <FilterGroup
+              title="Aid" options={AID_OPTIONS} selected={filters.aid}
+              onToggle={v => setFilters(f => ({ ...f, aid: toggleIn(f.aid, v) }))}
+              onAll={() => setFilters(f => ({ ...f, aid: new Set(AID_OPTIONS.map(o => o.value)) }))}
+              onNone={() => setFilters(f => ({ ...f, aid: new Set() }))}
+            />
             <div>
               <p className="mb-2" style={{ fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', color: NEU.muted, textTransform: 'uppercase' }}>
                 Submitted between
@@ -429,7 +445,7 @@ export default function ApplicationsPage() {
   const [applications, setApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState<FilterState>({
-    status: new Set(), role: new Set(), payment: new Set(), dateFrom: '', dateTo: '',
+    status: new Set(), role: new Set(), payment: new Set(), aid: new Set(), dateFrom: '', dateTo: '',
   });
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectNote, setRejectNote] = useState('');
@@ -469,6 +485,7 @@ export default function ApplicationsPage() {
         .select(`
           id, user_id, invited_email, invited_name, role, status, is_head_delegate, experience_level,
           payment_status, submitted_at, checked_in_at, organizer_note, resubmitted_at, custom_answers,
+          aid_requested, aid_statement, aid_status,
           assigned_committee_id, assigned_country_code, assigned_country_name,
           self_paid, attending, pledge_type, spots_pledged, pledge_confirmed_at, society_id,
           assigned_committee:conference_committees!assigned_committee_id (name, abbreviation, topics, logo_url),
@@ -949,6 +966,62 @@ export default function ApplicationsPage() {
       .finally(() => markBusy(app.id, false));
   }
 
+  // ── Financial aid review ────────────────────────────────────────────────────
+  // Deliberately scoped: this only records the decision. Actually granting aid
+  // is a separate, explicit organizer action — WAIVE for full aid, or a
+  // discount voucher (Financials) for partial — never automatic here.
+
+  async function openApproveAidConfirm(app: Application) {
+    if (!session || busyIds.has(app.id)) return;
+    const { confirmed } = await confirm({
+      title: 'Approve this aid request?',
+      body: "Approving records the decision. To grant full aid, use WAIVE on this application; for partial aid, create a discount voucher in Financials.",
+      confirmLabel: 'Approve Aid',
+    });
+    if (!confirmed) return;
+    handleAidDecision(app, 'approved');
+  }
+
+  async function openDenyAidConfirm(app: Application) {
+    if (!session || busyIds.has(app.id)) return;
+    const { confirmed } = await confirm({
+      title: 'Deny this aid request?',
+      body: 'The applicant will be notified. The registration fee still applies as normal.',
+      confirmLabel: 'Deny Aid',
+      danger: true,
+    });
+    if (!confirmed) return;
+    handleAidDecision(app, 'denied');
+  }
+
+  function handleAidDecision(app: Application, decision: 'approved' | 'denied') {
+    if (!session || !conference || busyIds.has(app.id)) return;
+    const prevRow = applications.find(a => a.id === app.id) ?? app;
+
+    setActionError('');
+    markBusy(app.id, true);
+    applyRow(app.id, { aid_status: decision });
+
+    (async () => {
+      const supabase = getAuthedClient(session.access_token);
+      const { data, error } = await supabase.from('applications').update({ aid_status: decision }).eq('id', app.id).select('id');
+      if (error || !data || data.length === 0) throw error ?? new Error('No matching row.');
+
+      try {
+        const eventKey = decision === 'approved' ? 'aid_approved' : 'aid_denied';
+        const result = await queueEventEmail(supabase, conference.id, eventKey, [app.id]);
+        notifyIfNeeded(result, pushDraftNotice);
+      } catch {
+        setActionError(`Aid ${decision}, but the notification email could not be queued.`);
+      }
+    })()
+      .catch(() => {
+        restoreRow(prevRow);
+        setActionError(`Could not ${decision === 'approved' ? 'approve' : 'deny'} the aid request. The change was reverted. Please try again.`);
+      })
+      .finally(() => markBusy(app.id, false));
+  }
+
   // ── Check-in (on-site attendance) ──────────────────────────────────────────
   // Optimistic like every other row action: flip to 'checked-in' immediately,
   // write via the shared checkIn helper, exact rollback on error. checked_in_at
@@ -1039,6 +1112,7 @@ export default function ApplicationsPage() {
         (filters.payment.has('unpaid') && (ps === 'unpaid' || ps == null));
       if (!match) return false;
     }
+    if (filters.aid.size > 0 && !filters.aid.has(a.aid_status)) return false;
     if (filters.dateFrom && a.submitted_at && a.submitted_at.slice(0, 10) < filters.dateFrom) return false;
     if (filters.dateTo && a.submitted_at && a.submitted_at.slice(0, 10) > filters.dateTo) return false;
     return true;
@@ -1048,6 +1122,7 @@ export default function ApplicationsPage() {
     (filters.status.size > 0 ? 1 : 0) +
     (filters.role.size > 0 ? 1 : 0) +
     (filters.payment.size > 0 ? 1 : 0) +
+    (filters.aid.size > 0 ? 1 : 0) +
     (filters.dateFrom || filters.dateTo ? 1 : 0);
 
   const stats = {
@@ -1325,6 +1400,24 @@ export default function ApplicationsPage() {
                         >
                           <RotateCcw size={10} strokeWidth={2.5} />
                           RESUBMITTED {formatDate(app.resubmitted_at)}
+                        </span>
+                      )}
+                      {app.aid_status === 'pending' && (
+                        <span className="inline-flex items-center gap-1" style={chip('rgba(184,132,74,0.16)', '#9A6B2F', 'rgba(184,132,74,0.42)')}>
+                          <HeartHandshake size={10} strokeWidth={2.5} />
+                          AID REQUESTED
+                        </span>
+                      )}
+                      {app.aid_status === 'approved' && (
+                        <span className="inline-flex items-center gap-1" style={chip('rgba(61,122,82,0.17)', '#2A5A3C', 'rgba(61,122,82,0.45)')}>
+                          <HeartHandshake size={10} strokeWidth={2.5} />
+                          AID APPROVED
+                        </span>
+                      )}
+                      {app.aid_status === 'denied' && (
+                        <span className="inline-flex items-center gap-1" style={chip('rgba(154,138,120,0.16)', '#6B5F52', 'rgba(154,138,120,0.35)')}>
+                          <HeartHandshake size={10} strokeWidth={2.5} />
+                          AID DENIED
                         </span>
                       )}
                       {waived ? (
@@ -1629,6 +1722,24 @@ export default function ApplicationsPage() {
                         RESUBMITTED {formatDate(app.resubmitted_at)}
                       </span>
                     )}
+                    {app.aid_status === 'pending' && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold" style={{ fontSize: 9, fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', backgroundColor: 'rgba(184,132,74,0.16)', color: '#9A6B2F', border: '1px solid rgba(184,132,74,0.42)' }}>
+                        <HeartHandshake size={10} strokeWidth={2.5} />
+                        AID REQUESTED
+                      </span>
+                    )}
+                    {app.aid_status === 'approved' && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold" style={{ fontSize: 9, fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', backgroundColor: 'rgba(61,122,82,0.17)', color: '#2A5A3C', border: '1px solid rgba(61,122,82,0.45)' }}>
+                        <HeartHandshake size={10} strokeWidth={2.5} />
+                        AID APPROVED
+                      </span>
+                    )}
+                    {app.aid_status === 'denied' && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold" style={{ fontSize: 9, fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', backgroundColor: 'rgba(154,138,120,0.16)', color: '#6B5F52', border: '1px solid rgba(154,138,120,0.35)' }}>
+                        <HeartHandshake size={10} strokeWidth={2.5} />
+                        AID DENIED
+                      </span>
+                    )}
                     {expLabel && (
                       <span
                         className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold"
@@ -1711,6 +1822,59 @@ export default function ApplicationsPage() {
                 <p className="text-xs italic mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
                   &ldquo;{app.organizer_note}&rdquo;
                 </p>
+              )}
+
+              {/* Financial aid request — shown prominently, above the custom
+                  answers, only when the applicant actually requested aid. */}
+              {app.aid_requested && (
+                <div className="rounded-xl p-4 mb-4" style={{ backgroundColor: 'rgba(184,132,74,0.08)', border: '1px solid rgba(184,132,74,0.3)' }}>
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <p className="flex items-center gap-2 text-xs" style={{ color: '#9A6B2F', fontFamily: "'Outfit', sans-serif", fontWeight: 700, letterSpacing: '0.12em' }}>
+                      <HeartHandshake size={12} />
+                      FINANCIAL AID REQUEST
+                    </p>
+                    {app.aid_status === 'pending' && (
+                      <span className="px-2 py-0.5 rounded-full font-bold" style={{ fontSize: 9, fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', backgroundColor: 'rgba(184,132,74,0.16)', color: '#9A6B2F', border: '1px solid rgba(184,132,74,0.42)' }}>
+                        PENDING
+                      </span>
+                    )}
+                    {app.aid_status === 'approved' && (
+                      <span className="px-2 py-0.5 rounded-full font-bold" style={{ fontSize: 9, fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', backgroundColor: 'rgba(61,122,82,0.17)', color: '#2A5A3C', border: '1px solid rgba(61,122,82,0.45)' }}>
+                        APPROVED
+                      </span>
+                    )}
+                    {app.aid_status === 'denied' && (
+                      <span className="px-2 py-0.5 rounded-full font-bold" style={{ fontSize: 9, fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', backgroundColor: 'rgba(154,138,120,0.16)', color: '#6B5F52', border: '1px solid rgba(154,138,120,0.35)' }}>
+                        DENIED
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm whitespace-pre-wrap mb-3" style={{ color: app.aid_statement ? '#1C1410' : '#9A8A78', fontFamily: "'Outfit', sans-serif", fontStyle: app.aid_statement ? 'normal' : 'italic' }}>
+                    {app.aid_statement || 'No statement provided.'}
+                  </p>
+                  {app.aid_status === 'pending' && (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => openApproveAidConfirm(app)}
+                        disabled={rowBusy}
+                        className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
+                        style={{ backgroundColor: 'rgba(61,122,82,0.12)', color: '#3D7A52', border: '1px solid rgba(61,122,82,0.3)', fontFamily: "'Outfit', sans-serif", ...busyStyle }}
+                      >
+                        <Check size={13} />
+                        APPROVE AID
+                      </button>
+                      <button
+                        onClick={() => openDenyAidConfirm(app)}
+                        disabled={rowBusy}
+                        className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
+                        style={{ backgroundColor: 'rgba(139,32,32,0.1)', color: '#8B2020', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "'Outfit', sans-serif", ...busyStyle }}
+                      >
+                        <X size={13} />
+                        DENY AID
+                      </button>
+                    </div>
+                  )}
+                </div>
               )}
 
               {/* Custom answers */}

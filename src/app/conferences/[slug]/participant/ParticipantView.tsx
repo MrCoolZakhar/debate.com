@@ -142,6 +142,7 @@ export default function ParticipantView({
             amountPaid={selected.amount_paid}
             payableNow={payableNow}
             contactEmail={contactEmail}
+            aidStatus={selected.aid_status}
           />
 
           <PayGate gateState={gateState}>

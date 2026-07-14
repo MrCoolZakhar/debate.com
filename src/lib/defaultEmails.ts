@@ -67,6 +67,19 @@ export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
       VIEW_CONFERENCE_BUTTON,
     ],
   },
+  aid_approved: {
+    subject: 'Your financial aid request for {{conference_name}} has been approved',
+    blocks: [
+      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nGood news — your financial aid request for {{conference_name}} has been approved. The organizing team will apply the support to your balance; you don't need to do anything further right now." },
+      VIEW_CONFERENCE_BUTTON,
+    ],
+  },
+  aid_denied: {
+    subject: 'An update on your financial aid request for {{conference_name}}',
+    blocks: [
+      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nThank you for requesting financial aid for {{conference_name}}. After review, the organizing team isn't able to offer aid at this time, and the standard registration fee applies. If your circumstances change, feel free to reach out to the organizing team." },
+    ],
+  },
   allocation_assigned: {
     subject: 'Your committee allocation for {{conference_name}}',
     blocks: [

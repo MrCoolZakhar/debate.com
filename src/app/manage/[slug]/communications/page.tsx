@@ -31,6 +31,7 @@ interface SavedAudience {
   includeIndependents: boolean;
   attendance: string[];
   applicationStatuses: string[];
+  aidStatuses?: string[];
   manualIds: string[];
   excludedIds: string[];
 }
@@ -64,6 +65,7 @@ interface AppRow {
   profiles: { display_name: string; email: string | null; notify_email_marketing: boolean | null } | null;
   invited_email: string | null;
   invited_name: string | null;
+  aid_status: string | null;
 }
 
 interface Committee {
@@ -171,6 +173,10 @@ const APP_STATUS_OPTIONS = [
   { value: 'submitted', label: 'Submitted' },
 ];
 
+const AID_OPTIONS = [
+  { value: 'pending', label: 'Aid requested' },
+];
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const OUTFIT = "'Outfit', sans-serif";
@@ -267,6 +273,8 @@ function formatFilter(filter: Record<string, unknown> | null, societies: Society
   if (attendance.length) parts.push(attendance.map(a => (a === 'attending' ? 'Attending' : 'Not attending')).join('/'));
   const appStatus = (filter.applicationStatuses as string[] | undefined) ?? [];
   if (appStatus.length) parts.push(appStatus.map(s => APP_STATUS_OPTIONS.find(o => o.value === s)?.label ?? s).join('/'));
+  const aidStatuses = (filter.aidStatuses as string[] | undefined) ?? [];
+  if (aidStatuses.length) parts.push(aidStatuses.map(s => AID_OPTIONS.find(o => o.value === s)?.label ?? s).join('/'));
 
   let base = parts.length ? parts.join(' · ') : 'All participants';
   const manualCount = Number(filter.manualCount ?? 0);
@@ -532,6 +540,7 @@ function CommunicationsPageInner() {
   const [selDelegations, setSelDelegations] = useState<Set<string>>(new Set());
   const [selAttendance, setSelAttendance] = useState<Set<string>>(new Set());
   const [selStatus, setSelStatus] = useState<Set<string>>(new Set());
+  const [selAid, setSelAid] = useState<Set<string>>(new Set());
   const [excludedIds, setExcludedIds] = useState<Set<string>>(new Set());
   const [manuallyAddedIds, setManuallyAddedIds] = useState<Set<string>>(new Set());
   const [manualSearch, setManualSearch] = useState('');
@@ -586,7 +595,7 @@ function CommunicationsPageInner() {
         assigned_committee:conference_committees!assigned_committee_id (abbreviation, name),
         assigned_country_name,
         profiles (display_name, email, notify_email_marketing),
-        invited_email, invited_name
+        invited_email, invited_name, aid_status
       `)
       .eq('conference_id', conference.id);
     if (!fresh()) return;
@@ -824,13 +833,14 @@ function CommunicationsPageInner() {
       if (!ok) return false;
     }
     if (selStatus.size > 0 && !selStatus.has(a.status)) return false;
+    if (selAid.size > 0 && !selAid.has(a.aid_status ?? '')) return false;
     return true;
   }
 
   const filterMatched = useMemo(
     () => eligibleApplications.filter(matchesAudienceFilters),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [eligibleApplications, selRoles, selPayment, selDelegations, selAttendance, selStatus]
+    [eligibleApplications, selRoles, selPayment, selDelegations, selAttendance, selStatus, selAid]
   );
 
   const matchedRecipients = useMemo(() => {
@@ -935,6 +945,7 @@ function CommunicationsPageInner() {
       includeIndependents: selDelegations.has(INDEPENDENT_KEY),
       attendance: [...selAttendance],
       applicationStatuses: [...selStatus],
+      aidStatuses: [...selAid],
       manualCount: manuallyAddedIds.size,
       excludedCount: excludedIds.size,
     };
@@ -949,6 +960,7 @@ function CommunicationsPageInner() {
       includeIndependents: selDelegations.has(INDEPENDENT_KEY),
       attendance: [...selAttendance],
       applicationStatuses: [...selStatus],
+      aidStatuses: [...selAid],
       manualIds: [...manuallyAddedIds],
       excludedIds: [...excludedIds],
     };
@@ -962,6 +974,7 @@ function CommunicationsPageInner() {
     setSelDelegations(new Set());
     setSelAttendance(new Set());
     setSelStatus(new Set());
+    setSelAid(new Set());
     setExcludedIds(new Set());
     setManuallyAddedIds(new Set());
     setManualSearch('');
@@ -979,6 +992,7 @@ function CommunicationsPageInner() {
     setSelDelegations(delegations);
     setSelAttendance(new Set(saved.attendance ?? []));
     setSelStatus(new Set(saved.applicationStatuses ?? []));
+    setSelAid(new Set(saved.aidStatuses ?? []));
     const liveIds = new Set(applications.map(a => a.id));
     setManuallyAddedIds(new Set((saved.manualIds ?? []).filter(id => liveIds.has(id))));
     setExcludedIds(new Set((saved.excludedIds ?? []).filter(id => liveIds.has(id))));
@@ -987,6 +1001,7 @@ function CommunicationsPageInner() {
       (saved.roles?.length ?? 0) > 0 || (saved.paymentStatuses?.length ?? 0) > 0 ||
       (saved.delegationIds?.length ?? 0) > 0 || saved.includeIndependents ||
       (saved.attendance?.length ?? 0) > 0 || (saved.applicationStatuses?.length ?? 0) > 0 ||
+      (saved.aidStatuses?.length ?? 0) > 0 ||
       (saved.manualIds?.length ?? 0) > 0 || (saved.excludedIds?.length ?? 0) > 0;
     setAudienceRestored(hasAnySelection);
   }
@@ -2599,6 +2614,7 @@ function CommunicationsPageInner() {
                   </div>
                   <MultiChipGroup label="Attendance" options={ATTENDANCE_OPTIONS} selected={selAttendance} onToggle={v => setSelAttendance(s => toggleInSet(s, v))} />
                   <MultiChipGroup label="Application status" options={APP_STATUS_OPTIONS} selected={selStatus} onToggle={v => setSelStatus(s => toggleInSet(s, v))} />
+                  <MultiChipGroup label="Financial aid" options={AID_OPTIONS} selected={selAid} onToggle={v => setSelAid(s => toggleInSet(s, v))} />
                 </div>
 
                 {/* Live recipients */}

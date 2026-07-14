@@ -39,10 +39,11 @@ export interface PaymentPanelProps {
   /** false when payment_timing is after_acceptance and the application is still 'submitted' */
   payableNow: boolean;
   contactEmail: string | null;
+  aidStatus?: 'none' | 'pending' | 'approved' | 'denied';
 }
 
 export default function PaymentPanel({
-  applicationId, feeAmount, feeCurrency, allowPartial, paymentStatus, amountPaid, payableNow, contactEmail,
+  applicationId, feeAmount, feeCurrency, allowPartial, paymentStatus, amountPaid, payableNow, contactEmail, aidStatus,
 }: PaymentPanelProps) {
   const fee = feeAmount ?? 0;
   const currency = feeCurrency ?? 'GBP';
@@ -86,6 +87,31 @@ export default function PaymentPanel({
       {allowPartial && fee > 0 && (
         <p className="text-xs mb-4" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
           Remaining balance: <span style={{ fontWeight: 700, color: '#1C1410' }}>{formatFee(remaining, currency)}</span>
+        </p>
+      )}
+
+      {aidStatus === 'pending' && (
+        <p
+          className="text-[13px] rounded-xl px-4 py-3 mb-3"
+          style={{ color: '#B8844A', fontFamily: OUTFIT, backgroundColor: 'rgba(184,132,74,0.1)', border: '1px solid rgba(184,132,74,0.24)', lineHeight: 1.6 }}
+        >
+          Your financial aid request is under review.
+        </p>
+      )}
+      {aidStatus === 'approved' && (
+        <p
+          className="text-[13px] rounded-xl px-4 py-3 mb-3"
+          style={{ color: '#2A5A3C', fontFamily: OUTFIT, backgroundColor: 'rgba(61,122,82,0.1)', border: '1px solid rgba(61,122,82,0.24)', lineHeight: 1.6 }}
+        >
+          Financial aid approved — the organizing team will apply it to your balance.
+        </p>
+      )}
+      {aidStatus === 'denied' && (
+        <p
+          className="text-[13px] rounded-xl px-4 py-3 mb-3"
+          style={{ color: '#6E5F4E', fontFamily: OUTFIT, backgroundColor: 'rgba(154,138,120,0.1)', border: '1px solid rgba(154,138,120,0.24)', lineHeight: 1.6 }}
+        >
+          Your financial aid request was not approved — the standard fee applies.
         </p>
       )}
 
