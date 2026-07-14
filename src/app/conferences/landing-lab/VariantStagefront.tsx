@@ -510,8 +510,8 @@ export default function VariantStagefront({
           className="relative px-6 md:px-14 xl:px-20"
           style={{ backgroundColor: CREAM, paddingTop: 'clamp(64px, 5.5vw, 100px)', paddingBottom: 'clamp(72px, 6vw, 110px)' }}
         >
-          <div className="mx-auto flex flex-col lg:flex-row lg:items-center gap-10 lg:gap-0" style={{ maxWidth: '1720px' }}>
-            <div className="lg:w-[42%]" style={{ position: 'relative', zIndex: 2 }}>
+          <div className="mx-auto flex flex-col lg:flex-row lg:items-center gap-10 lg:gap-16" style={{ maxWidth: '1720px' }}>
+            <div className="lg:w-[40%] lg:flex-shrink-0" style={{ position: 'relative', zIndex: 2 }}>
               <p style={{ fontFamily: SANS, fontWeight: 700, fontSize: '12px', letterSpacing: '0.14em', textTransform: 'uppercase', color: GOLD, margin: '0 0 14px 0' }}>
                 The job board
               </p>
@@ -557,7 +557,7 @@ export default function VariantStagefront({
               </Link>
             </div>
 
-            <div className="lg:w-[58%]" style={{ position: 'relative' }}>
+            <div className="lg:flex-1 lg:min-w-0" style={{ position: 'relative' }}>
               {/*
                 Photo: Miguel Henriques via Unsplash (license-safe, free to use)
                 https://unsplash.com/photos/9OKGEVJiTKk
@@ -579,7 +579,7 @@ export default function VariantStagefront({
                   photo's left edge: one dark rounded block, three stacked cells
                   (a row of three on mobile), big pale-gold numerals. */}
               <div
-                className="lg:absolute lg:-left-16 lg:bottom-14 mt-5 lg:mt-0 grid grid-cols-3 lg:grid-cols-1 gap-px overflow-hidden rounded-2xl"
+                className="lg:absolute lg:-left-12 lg:bottom-14 mt-5 lg:mt-0 grid grid-cols-3 lg:grid-cols-1 gap-px overflow-hidden rounded-2xl"
                 style={{
                   border: '1px solid rgba(27,56,40,0.9)',
                   backgroundColor: 'rgba(27,56,40,0.9)',
